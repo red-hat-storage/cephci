@@ -86,6 +86,14 @@ def run(ceph_cluster, **kw):
             )
             raise Exception("Mon not in quorum error")
 
+        # Checking for crashes in the cluster
+        crash = rados_obj.do_crash_ls()
+        if crash:
+            log.error(
+                f"Crashes seen on cluster post addition of new mon daemons on cluster. Crash : {crash}"
+            )
+            raise Exception("Service crash on cluster error")
+        log.debug("No crashes seen on cluster post mon addition")
         log.info("Completed workflow 1. Addition of new mon daemon")
 
         log.info("---------- starting workflow 2 - Removal of new mons --------")
@@ -110,6 +118,15 @@ def run(ceph_cluster, **kw):
                 f"selected host : {alt_mon_host.hostname} is present as part of Quorum post removal"
             )
             raise Exception("Mon in quorum error post removal")
+
+        # Checking for crashes in the cluster
+        crash = rados_obj.do_crash_ls()
+        if crash:
+            log.error(
+                f"Crashes seen on cluster post removal of mon daemons on cluster. Crash : {crash}"
+            )
+            raise Exception("Service crash on cluster error")
+        log.debug("No crashes seen on cluster post mon removal")
 
         log.info("Completed Scenario 2")
 
@@ -169,6 +186,14 @@ def run(ceph_cluster, **kw):
             log.error("Checks failed post mon removal and OSD rebalance")
             raise Exception("Secnario 3 of Mon tests failed")
 
+        # Checking for crashes in the cluster
+        crash = rados_obj.do_crash_ls()
+        if crash:
+            log.error(
+                f"Crashes seen on cluster post removal of mon daemons during OSD down Crash : {crash}"
+            )
+            raise Exception("Service crash on cluster error")
+        log.debug("No crashes seen on cluster post mon removal with OSD failures")
         log.info("Completed scenario 3. Pass")
 
         log.info(
@@ -224,6 +249,14 @@ def run(ceph_cluster, **kw):
             log.error("Checks failed post mon addition and OSD rebalance")
             raise Exception("Secnario 4 of Mon tests failed")
 
+        # Checking for crashes in the cluster
+        crash = rados_obj.do_crash_ls()
+        if crash:
+            log.error(
+                f"Crashes seen on cluster post addition of new mon daemons with OSD Failures. Crash : {crash}"
+            )
+            raise Exception("Service crash on cluster error")
+        log.debug("No crashes seen on cluster post mon removal during OSD failures")
         log.info("Completed scenario 4. Pass")
 
         log.info(
@@ -241,6 +274,15 @@ def run(ceph_cluster, **kw):
         rados_obj.bench_write(
             pool_name=pool_name, byte_size=1024, rados_write_duration=50, check_ec=False
         )
+
+        # Checking for crashes in the cluster
+        crash = rados_obj.do_crash_ls()
+        if crash:
+            log.error(
+                f"Crashes seen on cluster post mon daemons shut down on cluster. Crash : {crash}"
+            )
+            raise Exception("Service crash on cluster error")
+        log.debug("No crashes seen on cluster post mon shut down")
 
         if not rados_obj.run_pool_sanity_check():
             log.error("Checks failed post mon down")
@@ -260,6 +302,15 @@ def run(ceph_cluster, **kw):
         if not rados_obj.run_pool_sanity_check():
             log.error("Checks failed post mon Up")
             raise Exception("Sanity check failed post mon start")
+
+        # Checking for crashes in the cluster
+        crash = rados_obj.do_crash_ls()
+        if crash:
+            log.error(
+                f"Crashes seen on cluster post mon daemons restart on cluster. Crash : {crash}"
+            )
+            raise Exception("Service crash on cluster error")
+        log.debug("No crashes seen on cluster post mon reboots")
 
         log.info("Completed scenario 5. Pass")
 
@@ -286,11 +337,19 @@ def run(ceph_cluster, **kw):
                 log.error("Checks failed post mon reboots")
                 raise Exception("Sanity check failed post mon reboots")
             log.debug(f"Successfully restarted mon : {mon_node.hostname}")
+
+        # Checking for crashes in the cluster
+        crash = rados_obj.do_crash_ls()
+        if crash:
+            log.error(
+                f"Crashes seen on cluster post mon daemons rolling reboots on cluster. Crash : {crash}"
+            )
+            raise Exception("Service crash on cluster error")
+        log.debug("No crashes seen on cluster post mon rolling reboots")
+
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
-        mon_obj.remove_mon_service(host=alt_mon_host.hostname)
-        mon_obj.add_mon_service(host=test_mon_host)
         return 1
     finally:
         log.info(
@@ -298,11 +357,16 @@ def run(ceph_cluster, **kw):
         )
         # setting the backfill & recovery rate to default
         rados_obj.change_recovery_threads(config={}, action="rm")
-        rados_obj.change_daemon_systemctl_state(
-            action="start", daemon_type="mon", daemon_id=test_mon_host.hostname
-        )
         mon_obj.set_mon_service_managed_type(unmanaged=False)
-        rados_obj.change_osd_state(action="stop", target=osd_id)
+
+        if "alt_mon_host" in locals() or "alt_mon_host" in globals():
+            mon_obj.remove_mon_service(host=alt_mon_host.hostname)
+
+        if "test_mon_host" in locals() or "test_mon_host" in globals():
+            mon_obj.add_mon_service(host=test_mon_host)
+
+        if "osd_id" in locals() or "osd_id" in globals():
+            rados_obj.change_osd_state(action="restart", target=osd_id)
 
         # removal of rados pools
         rados_obj.rados_pool_cleanup()
