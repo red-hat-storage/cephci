@@ -156,6 +156,10 @@ def run(ceph_cluster, **kw):
             remote_dir="/root/results",
             local_dir=f"{log_dir}/spec_storage_{benchmark}_results/",
         )
+        spec_clients[0].exec_command(
+            sudo=True,
+            cmd="mkdir -p /root/tmp_results;mv /root/results/* /root/tmp_results/",
+        )
 
 
 def download_dir(client, remote_dir, local_dir):
