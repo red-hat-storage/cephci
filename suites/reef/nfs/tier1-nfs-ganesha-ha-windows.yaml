@@ -132,3 +132,21 @@ tests:
             hostname: DESKTOP-TJEJHP2
             user: manisha
             password: Redhat
+
+  - test:
+      name: NFS Ganesha test HA with export delete windows client
+      desc: Verify failover with export delete
+      polarion-id: CEPH-83581309
+      module: nfs_ha_export_delete_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        servers: 3
+        ha: true
+        vip: 10.8.128.200/21
+        windows_clients:
+          - ip: 10.70.46.165
+            hostname: DESKTOP-TJEJHP2
+            user: manisha
+            password: Redhat
+      abort-on-fail: false
