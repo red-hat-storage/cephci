@@ -1,3 +1,6 @@
+from copy import deepcopy
+
+from ceph.rbd.utils import random_string
 from cli.rbd.rbd import Rbd
 from utility.log import Log
 
@@ -135,3 +138,101 @@ def add_image_to_group_and_verify(**kw):
     else:
         log.info(f"Image {image} to the group {group} verification failed")
         return 1
+
+
+def create_snap_and_verify(**kw):
+    """
+    Create a snapshot for group of images
+    Args:
+        kw(dict): Key/value pairs that needs to be provided to this method
+            Example::
+            Supported keys:
+                pool(str): pool nane where group should be created
+                namespace(str): pool|[namespace] where greoup should be created
+                group(str): group name to be created
+                snap(str): snap to be created to the group
+    """
+    rbd = Rbd(kw["client"])
+    pool = kw.get("pool", "rbd")
+    namespace = kw.get("namespace", None)
+    group = kw.get("group", None)
+    snap = kw.get("snap", None)
+    snap_create_kw = {}
+    if pool is not None:
+        snap_create_kw.update({"pool": pool})
+    if namespace is not None:
+        snap_create_kw.update({"namespace": namespace})
+    if group is not None:
+        snap_create_kw.update({"group": group})
+    else:
+        log.error(f"Group is the must param for snap create but given {group}")
+        return 1
+    if snap is None:
+        snap = random_string(len=5)
+    snap_create_kw.update({"snap": snap})
+
+    # create group snapshot
+    (_, snap_c_err) = rbd.group.snap.create(**snap_create_kw)
+    if not snap_c_err:
+        log.info(f"{snap} successfully created for the group {group}")
+    else:
+        log.error(f"{snap} creation failed for the group {group} {snap_c_err}")
+        return 1
+
+    # snap creation validation by rbd group snap list
+    snap_list_kw = deepcopy(snap_create_kw)
+    _ = snap_list_kw.pop("snap")
+    (snap_l_out, _) = rbd.group.snap.list(**snap_list_kw)
+    if snap in snap_l_out:
+        log.info(
+            f"{snap} creation successfully verified by snap list for the group {group}"
+        )
+        return 0
+    else:
+        log.error(
+            f"{snap} creation validation by snap list failed for the group {group} {snap_c_err}"
+        )
+        return 1
+
+
+def rollback_to_snap(**kw):
+    """
+    Rollbacks group of ima to the given snapshot
+    Args:
+        kw(dict): Key/value pairs that needs to be provided to this method
+            Example::
+            Supported keys:
+                pool(str): pool nane where group should be created
+                namespace(str): pool|[namespace] where greoup should be created
+                group(str): group name to be created
+                snap(str): snap to be rollbacked to the group
+    """
+    rbd = Rbd(kw["client"])
+    pool = kw.get("pool", "rbd")
+    namespace = kw.get("namespace", None)
+    group = kw.get("group", None)
+    snap = kw.get("snap", None)
+    snap_rollback_kw = {}
+    if pool is not None:
+        snap_rollback_kw.update({"pool": pool})
+    if namespace is not None:
+        snap_rollback_kw.update({"namespace": namespace})
+    if group is not None:
+        snap_rollback_kw.update({"group": group})
+    else:
+        log.error(f"Group is the must param for snap create but given {group}")
+        return 1
+    if snap is not None:
+        snap_rollback_kw.update({"snap": snap})
+    else:
+        log.error(f"Snap is the must param for snap rollback but given {snap}")
+        return 1
+
+    # rollback to given snap
+    (snap_r_out, snap_r_err) = rbd.group.snap.rollback(**snap_rollback_kw)
+    if snap_r_err and "100% complete" not in snap_r_out + snap_r_err:
+        log.error(f"Group {group} rollbacked to {snap} failed {snap_r_err}")
+        return 1
+    else:
+        log.info(f"SUCCESS: Group {group} rollbacked to {snap} successfully")
+        return 0

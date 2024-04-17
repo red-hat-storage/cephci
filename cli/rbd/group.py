@@ -254,3 +254,22 @@ class Group(Cli):
             cmd = f"{self.base_cmd} rename {group_snap_spec}  {dest_snap_spec} {build_cmd_from_args(**kw_copy)}"
 
             return self.parent.execute_as_sudo(cmd=cmd)
+
+        def rollback(self, **kw):
+            """
+            Rollbacks the group images to snap for a [pool]/[namespace]<group>@<snap>
+            Args:
+            kw(dict): Key/value pairs that needs to be provided to the installer
+                Example::
+                Supported keys:
+                    pool(str) : name of the pool into which namespace should be stored,default pool is rbd
+                    namespace(str): namespace in the pool
+                    group(str): group name in the pool
+                    snap(str): snap to be rollbacked to
+                    group-snap-spec(str): <pool-name>/[<namespace>/]]<group-name>@<snap-name>
+            """
+            kw_copy = deepcopy(kw)
+            group_snap_spec = kw_copy.pop("group-snap-spec", "")
+            cmd = f"{self.base_cmd} rollback {group_snap_spec} {build_cmd_from_args(**kw_copy)}"
+
+            return self.parent.execute_as_sudo(cmd=cmd)
