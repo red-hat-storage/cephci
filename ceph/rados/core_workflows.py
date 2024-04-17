@@ -2298,7 +2298,9 @@ class RadosOrchestrator:
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id
 
-    def start_check_scrub_complete(self, pg_id):
+    def start_check_scrub_complete(
+        self, pg_id, user_initiated: bool = True, wait_time: int = 900
+    ):
         """
         Initiates scrubbing on the PG provided and waits until the scrubbing is complete.
 
@@ -2313,14 +2315,18 @@ class RadosOrchestrator:
         init_scrub_stamp = datetime.datetime.strptime(
             init_pool_pg_dump["last_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
         )
-
-        # Running scrub on the PG provided
-        log.debug(f"Initiating scrubbing on pg : {pg_id}")
-        self.run_scrub(pgid=pg_id)
-        time.sleep(2)
+        if user_initiated is True:
+            # Running scrub on the PG provided
+            log.debug(f"Initiating scrubbing on pg : {pg_id}")
+            self.run_scrub(pgid=pg_id)
+            time.sleep(2)
+        else:
+            log.debug("Initiated scheduled scrub")
 
         start_time = datetime.datetime.now()
-        while datetime.datetime.now() <= start_time + datetime.timedelta(seconds=2000):
+        while datetime.datetime.now() <= start_time + datetime.timedelta(
+            seconds=wait_time
+        ):
             pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
             current_scrub_stamp = datetime.datetime.strptime(
                 pool_pg_dump["last_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
@@ -2348,10 +2354,12 @@ class RadosOrchestrator:
                 )
                 time.sleep(30)
         else:
-            log.error(f"PG : {pg_id} could not be scrubbed in time")
+            log.error(f"PG :{pg_id} could not be scrubbed in time")
             raise Exception("Objects not scrubbed error")
 
-    def start_check_deep_scrub_complete(self, pg_id):
+    def start_check_deep_scrub_complete(
+        self, pg_id, user_initiated: bool = True, wait_time: int = 900
+    ):
         """
         Initiates deep-scrubbing on the PG provided and waits until the deep-scrubbing is complete.
 
@@ -2367,13 +2375,18 @@ class RadosOrchestrator:
             init_pool_pg_dump["last_deep_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
         )
 
-        # Running deep-scrub on the PG provided
-        log.debug(f"Initiating deep-scrubbing on pg : {pg_id}")
-        self.run_deep_scrub(pgid=pg_id)
-        time.sleep(2)
+        if user_initiated:
+            # Running deep-scrub on the PG provided
+            log.debug(f"Initiating deep-scrubbing on pg : {pg_id}")
+            self.run_deep_scrub(pgid=pg_id)
+            time.sleep(2)
+        else:
+            log.debug("Initiated scheduled deep-scrub")
 
         start_time = datetime.datetime.now()
-        while datetime.datetime.now() <= start_time + datetime.timedelta(seconds=2000):
+        while datetime.datetime.now() <= start_time + datetime.timedelta(
+            seconds=wait_time
+        ):
             pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
             # Parse the timestamp string into a datetime object
             current_scrub_stamp = datetime.datetime.strptime(
@@ -3407,3 +3420,74 @@ class RadosOrchestrator:
         health_detail, _ = self.node.shell(args=["ceph health detail"])
         log.info(f"\n****\n Cluster health detail: \n {health_detail} \n ****")
         return health_detail
+
+    def create_ecpool_inconsistent_obj(
+        self, pool_object, client_node, pool_name, no_of_objects
+    ):
+        """
+        The method converts the object into inconsistent object in EC pool
+        The logic implemented in the code is-
+        1. Get the target osd and pg_id
+        2. Get the object details by using the ceph-objectstore-tool
+        3. Remove the “hinfo_key” of the object
+        4. perform scrub
+        Args:
+            pool_object: pool object
+            client_node: client object
+            pool_name: pool name
+            no_of_objects: no of objcts to convert in to inconsistent objects
+        Returns: After converting the object in to inconsistent,method returns the pg id
+                 If it fail returns None
+        """
+        for obj_num in range(no_of_objects):
+            object_name = f"object_{obj_num}"
+            cmd_create_obj = f"rados -p {pool_name} put {object_name} /etc/group"
+            client_node.exec_command(cmd=cmd_create_obj, sudo=True)
+
+        osd_map_output = self.get_osd_map(pool=pool_name, obj="object_1")
+        log.debug(
+            f"\nThe acting set details for the object : {object_name}"
+            f" on pool : {pool_name} is {osd_map_output}\n"
+        )
+        target_osd = osd_map_output["acting_primary"]
+
+        log.info(f"The object stored in the target osd number-{target_osd}")
+        pg_id = osd_map_output["pgid"]
+        log.info(f"The object {object_name} is created in the pg-{pg_id}")
+
+        acting_osd_node = self.fetch_host_node(daemon_type="osd", daemon_id=target_osd)
+        # stoping the OSD
+        if not self.change_osd_state(action="stop", target=target_osd):
+            log.error(f"Unable to stop the OSD : {target_osd}")
+            return None
+
+        for obj_num in range(no_of_objects):
+            time.sleep(3)
+            object_name = f"object_{obj_num}"
+            object_head = self.get_object_details_head(target_osd, object_name)
+            if object_head is None:
+                log.error("The object head is None.Cannot execute further tests")
+                return None
+            data_list = json.loads(object_head)
+            ec_pg_id = data_list[0]
+            obj_attr = data_list[1]
+            json_str = json.dumps(obj_attr)
+
+            cmd = (
+                f"cephadm shell --name osd.{target_osd} -- ceph-objectstore-tool --data-path "
+                f"/var/lib/ceph/osd/ceph-{target_osd} --pgid {ec_pg_id}  '{json_str}' rm-attr hinfo_key"
+            )
+            acting_osd_node.exec_command(sudo=True, cmd=cmd)
+
+        if not self.change_osd_state(action="start", target=target_osd):
+            log.error(f"Unable to stop the OSD : {target_osd}")
+            return None
+        log.info(f"Performing the scrub on the pg-{pg_id}")
+        self.run_scrub(pgid=pg_id)
+        # sleeping for 10 seconds, waiting for scrubbing to be over
+        time.sleep(10)
+        inconsistent_details = self.get_inconsistent_object_details(pg_id)
+        obj_count = len(inconsistent_details["inconsistents"])
+        log.info(f"The inconsistent object count is -{obj_count}")
+        log.info(f"The inconsistent object is created in the pg{pg_id}")
+        return pg_id
