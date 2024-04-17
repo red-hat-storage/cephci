@@ -1332,7 +1332,7 @@ class RadosOrchestrator:
             crash_list = obj.do_crash_ls()
         """
 
-        cmd = "ceph crash ls"
+        cmd = "ceph crash ls-new"
         return self.run_ceph_command(cmd=cmd)
 
     def get_cluster_date(self):

@@ -59,6 +59,15 @@ def run(ceph_cluster, **kw):
             )
             raise Exception("Mon in quorum error post removal")
 
+        # Checking for crashes in the cluster
+        crash = rados_obj.do_crash_ls()
+        if crash:
+            log.error(
+                f"Crashes seen on cluster post mon daemons Removal. Crash : {crash}"
+            )
+            raise Exception("Service crash on cluster error")
+        log.debug("No crashes seen on cluster post mon removal")
+
         # Adding the mon back to the cluster
         if not mon_obj.add_mon_service(host=mon_host):
             log.error("Could not add mon service")
@@ -70,6 +79,16 @@ def run(ceph_cluster, **kw):
                 f"selected host : {mon_host.hostname} is not present as part of Quorum post addition"
             )
             raise Exception("Mon not in quorum error post addition")
+
+        # Checking for crashes in the cluster
+        crash = rados_obj.do_crash_ls()
+        if crash:
+            log.error(
+                f"Crashes seen on cluster post mon daemons Addition. Crash : {crash}"
+            )
+            raise Exception("Service crash on cluster error")
+        log.debug("No crashes seen on cluster post mon Addition")
+
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
