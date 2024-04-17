@@ -201,18 +201,25 @@ if __name__ == "__main__":
         _set_polarion_env(config, project)
 
     # Create testrun template
-    create_testrun_template(
-        project, testrun_template, query if query else DEFAULT_QUERY
-    )
+    if testrun_template:
+        create_testrun_template(
+            project, testrun_template, query if query else DEFAULT_QUERY
+        )
 
     # Check for testrun id
     if not testrun_id:
         sys.exit(0)
 
-    # Create testrun
-    create_testrun(
-        project, testrun_id, testrun_title, testrun_template, testplan_id=testplan_id
-    )
+    # TODO (vamahaja): Add separate options to update these reports
+    if testrun_template and testrun_id:
+        # Create testrun
+        create_testrun(
+            project,
+            testrun_id,
+            testrun_title,
+            testrun_template,
+            testplan_id=testplan_id,
+        )
 
     # Update results with testrun
     for xunit in xunit_results:
