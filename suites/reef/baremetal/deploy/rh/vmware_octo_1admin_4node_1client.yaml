@@ -1,0 +1,48 @@
+# Test suite for deploying ceph cluster to test ceph integration with vmware.
+# tested with conf file: /conf/baremetal/vmware_octo_1admin_4node_1client.yaml
+---
+tests:
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster

@@ -1,0 +1,45 @@
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public:
+          - 10.8.128.0/21
+      nodes:
+        - hostname: cali001.ceph.redhat.com
+          id: node1
+          ip: 10.8.130.1
+          role:
+          - _admin
+          - installer
+          - mon
+          root_password: passwd
+          volumes:
+            - /dev/sda
+        - hostname: cali005.ceph.redhat.com
+          id: node2
+          ip: 10.8.130.5
+          role:
+            - mgr
+            - mds
+            - mon
+          root_password: passwd
+          volumes:
+            - /dev/sda
+        - hostname: cali003.ceph.redhat.com
+          id: node3
+          ip: 10.8.130.8
+          role:
+            - mds
+            - mon
+          root_password: passwd
+          volumes:
+            - /dev/sda
+        - hostname: cali004.ceph.redhat.com
+          id: node4
+          ip: 10.8.130.4
+          role:
+            - nvmeof-gw
+          root_password: passwd
+          volumes:
+            - /dev/sda
