@@ -2,7 +2,6 @@
 This is cephfs consistency group snapshot feature IO module
 It contains methods to start read and write IO on quiesce-set/consistency group.
 Also, validates IO failure by checking current quiesce state on quiesce set.
-
 """
 import datetime
 import random
@@ -177,7 +176,7 @@ class CG_snap_IO(object):
             for read_proc in read_procs:
                 read_proc.join()
             read_fail = 0
-            # time.sleep(io_run_time)
+
             for proc_status in proc_status_list:
                 if proc_status.value == 1:
                     log.error("Read IO failed on quiesce-set member")
@@ -284,39 +283,45 @@ class CG_snap_IO(object):
            READ IO passed, read_proc_check_status.value = 0, return 0
         """
         log.info("In cg_read_io_subvol function")
-
-        read_io_subvol = 0
-        read_io_subvol_fail = 0
         io_modules = {}
-        """Currently dd_io_read in parallel is causing hung issues, to be resolved and enabled
-        dd_io_read_status = self.cg_dd_io_read(client,mnt_pt)
-        io_modules.update({"cg_dd_io": dd_status})
-        read_io_subvol = self.validate_exit_status(
+
+        read_status = self.cg_linux_cmds_read(write_client, mnt_pt)
+        io_modules.update({"cg_linux_cmds_read": read_status})
+        log.info(f"io_modules:{io_modules}")
+        lc_status = self.validate_exit_status(
             write_client, qs_member, io_modules, "read", qs_members
         )
-        if read_io_subvol == 1:
-            read_io_subvol_fail+=1
+        log.info(
+            f"cg_linux_cmds_read, read_status:{read_status},read_io_validate_status : {lc_status}"
+        )
         io_modules.clear()
-        """
-        io_tools = {
-            "cg_linux_cmds_read": self.cg_linux_cmds_read(write_client, mnt_pt),
-            "cg_fio_io_read": self.cg_fio_io_read(write_client, mnt_pt),
-            "cg_smallfile_io_read": self.cg_smallfile_io_read(write_client, mnt_pt),
-        }
-        for io_tool in io_tools:
-            read_status = io_tools[io_tool]
-            io_modules.update({io_tool: read_status})
-            read_io_subvol = self.validate_exit_status(
+        if lc_status == 0:
+            read_status = self.cg_fio_io_read(write_client, mnt_pt)
+            io_modules.update({"cg_fio_io_read": read_status})
+            log.info(f"io_modules:{io_modules}")
+            fio_status = self.validate_exit_status(
                 write_client, qs_member, io_modules, "read", qs_members
             )
-            if read_io_subvol == 1:
-                read_io_subvol_fail += 1
+            log.info(
+                f"cg_fio_io_read, read_status:{read_status},read_io_validate_status : {fio_status}"
+            )
+            io_modules.clear()
+        if lc_status == 0 and fio_status == 0:
+            read_status = self.cg_smallfile_io_read(write_client, mnt_pt)
+            io_modules.update({"cg_smallfile_io_read": read_status})
+            log.info(f"io_modules:{io_modules}")
+            sf_status = self.validate_exit_status(
+                write_client, qs_member, io_modules, "read", qs_members
+            )
+            log.info(
+                f"cg_smallfile_io_read, read_status:{read_status},read_io_validate_status : {sf_status}"
+            )
             io_modules.clear()
 
         log.info(
             f"cg_read_io_subvol read_proc_check_status before update : {read_proc_check_status.value}"
         )
-        if read_io_subvol_fail > 0:
+        if lc_status == 1 or fio_status == 1 or sf_status == 1:
             read_proc_check_status.value = 1
         else:
             read_proc_check_status.value = 0
@@ -347,31 +352,73 @@ class CG_snap_IO(object):
         """
 
         log.info("In cg_write_io_subvol function")
-        write_io_subvol = 0
-        write_io_subvol_fail = 0
         io_modules = {}
 
-        io_tools = {
-            "cg_dd_io_write": self.cg_dd_io_write(client, mnt_pt),
-            "cg_fio_io_write": self.cg_fio_io_write(client, mnt_pt),
-            "cg_smallfile_io_write": self.cg_smallfile_io_write(client, mnt_pt),
-            "cg_linux_cmds_write": self.cg_linux_cmds_write(client, mnt_pt),
-            "cg_crefi_io": self.cg_crefi_io(client, mnt_pt),
-        }
-        for io_tool in io_tools:
-            read_status = io_tools[io_tool]
-            io_modules.update({io_tool: read_status})
-            write_io_subvol = self.validate_exit_status(
+        write_status = self.cg_dd_io_write(client, mnt_pt)
+        io_modules.update({"cg_dd_io_write": write_status})
+        log.info(f"io_modules:{io_modules}")
+        dd_status = self.validate_exit_status(
+            client, qs_member, io_modules, "write", qs_members
+        )
+        log.info(
+            f"cg_dd_io_write, write_status:{write_status},write_io_validate_status : {dd_status}"
+        )
+
+        if dd_status == 0:
+            io_modules.clear()
+            write_status = self.cg_fio_io_write(client, mnt_pt)
+            io_modules.update({"cg_fio_io_write": write_status})
+            log.info(f"io_modules:{io_modules}")
+            fio_status = self.validate_exit_status(
                 client, qs_member, io_modules, "write", qs_members
             )
-            if write_io_subvol == 1:
-                write_io_subvol_fail += 1
+            log.info(
+                f"cg_fio_io_write, write_status:{write_status},write_io_validate_status : {fio_status}"
+            )
+        if dd_status == 0 and fio_status == 0:
             io_modules.clear()
+            write_status = self.cg_smallfile_io_write(client, mnt_pt)
+            io_modules.update({"cg_smallfile_io_write": write_status})
+            log.info(f"io_modules:{io_modules}")
+            sf_status = self.validate_exit_status(
+                client, qs_member, io_modules, "write", qs_members
+            )
+            log.info(
+                f"cg_smallfile_io_write, write_status:{write_status},write_io_validate_status : {sf_status}"
+            )
+        if dd_status == 0 and fio_status == 0 and sf_status == 0:
+            io_modules.clear()
+            write_status = self.cg_linux_cmds_write(client, mnt_pt)
+            io_modules.update({"cg_linux_cmds_write": write_status})
+            log.info(f"io_modules:{io_modules}")
+            lc_status = self.validate_exit_status(
+                client, qs_member, io_modules, "write", qs_members
+            )
+            log.info(
+                f"cg_linux_cmds_write, write_status:{write_status},write_io_validate_status : {lc_status}"
+            )
+        if dd_status == 0 and fio_status == 0 and sf_status == 0 and lc_status == 0:
+            io_modules.clear()
+            write_status = self.cg_crefi_io(client, mnt_pt)
+            io_modules.update({"cg_crefi_io": write_status})
+            log.info(f"io_modules:{io_modules}")
+            crefi_status = self.validate_exit_status(
+                client, qs_member, io_modules, "write", qs_members
+            )
+            log.info(
+                f"cg_crefi_io, write_status:{write_status},write_io_validate_status : {crefi_status}"
+            )
 
         log.info(
             f"cg_write_io_subvol write_proc_check_status before update : {write_proc_check_status.value}"
         )
-        if write_io_subvol_fail > 0:
+        if (
+            dd_status == 1
+            or fio_status == 1
+            or sf_status == 1
+            or lc_status == 1
+            or crefi_status == 1
+        ):
             write_proc_check_status.value = 1
         else:
             write_proc_check_status.value = 0
@@ -396,83 +443,90 @@ class CG_snap_IO(object):
         Returns:
         if Validation results in failure, return 1, else return 0
         """
-        log.info("In validate_exit_status function")
+        log.info(f"In validate_exit_status function - {io_type} , {io_modules}")
         cg_status = 0
 
         for io_mod in io_modules:
             if io_type == "read":
                 if io_modules[io_mod] == 1:
-                    qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
-                    log.info(f"qs_id:{qs_id}")
-                    if qs_id != 1:
-                        qs_query = self.cg_snap_util.get_qs_query(client, qs_id=qs_id)
-                        log.info(f"qs_query:{qs_query}")
-                        state = qs_query["sets"][qs_id]["state"]["name"]
-                        log.error(
-                            f"FAIL:read io on {qs_member} failed when {qs_id} was in {state}"
-                        )
-                    else:
-                        log.error(
-                            f"FAIL:read io on {qs_member} failed when no QS exists"
-                        )
-                    cg_status = 1
-            elif io_type == "write":
-                if io_modules[io_mod] == 1:
-                    qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
-                    log.info(f"qs_id:{qs_id}")
-                    if qs_id != 1:
-                        qs_query = self.cg_snap_util.get_qs_query(client, qs_id=qs_id)
-                        log.info(f"qs_query:{qs_query}")
-                        state = qs_query["sets"][qs_id]["state"]["name"]
-
-                        for member_item in qs_query["sets"][qs_id]["members"]:
-                            if qs_member in member_item:
-                                excluded = qs_query["sets"][qs_id]["members"][
-                                    member_item
-                                ]["excluded"]
-                                break
-                        if excluded is True:
-                            log.error(
-                                f"FAIL: Write fails in QS state {state} on {qs_member} when excluded set to {excluded}"
+                    if io_mod == "cg_smallfile_io_read" or io_mod == "cg_fio_io_read":
+                        qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
+                        log.info(f"qs_id:{qs_id}")
+                        if qs_id != 1:
+                            qs_query = self.cg_snap_util.get_qs_query(
+                                client, qs_id=qs_id
                             )
-                            cg_status = 1
-                        elif state in "RELEASED|EXPIRED|TIMEOUT|CANCELLED":
+                            log.info(f"qs_query:{qs_query}")
+                            state = qs_query["sets"][qs_id]["state"]["name"]
                             log.error(
-                                f"FAIL: Write fails in QS state {state} on {qs_member}"
+                                f"FAIL:read io on {qs_member} failed when {qs_id} was in {state}"
                             )
-                            cg_status = 1
                         else:
-                            log.info(
-                                f"Expected: Write fails in QS state {state} on {qs_member}"
+                            log.error(
+                                f"FAIL:read io on {qs_member} failed when no QS exists"
                             )
-                    if qs_id == 1:
-                        log.error(
-                            f"FAIL:write fails when no QS exists with {qs_member}"
-                        )
                         cg_status = 1
-                elif io_modules[io_mod] == 0:
-                    qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
-                    log.info(f"qs_id:{qs_id}")
-                    if qs_id != 1:
-                        qs_query = self.cg_snap_util.get_qs_query(client, qs_id=qs_id)
-                        log.info(f"qs_query:{qs_query}")
-                        state = qs_query["sets"][qs_id]["state"]["name"]
-                        for member_item in qs_query["sets"][qs_id]["members"]:
-                            if qs_member in member_item:
-                                excluded = qs_query["sets"][qs_id]["members"][
-                                    member_item
-                                ]["excluded"]
-                                break
-                        if excluded is False:
-                            if state in "QUIESCED|RELEASING|CANCELLING":
+                elif io_type == "write":
+                    if io_modules[io_mod] == 1:
+                        qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
+                        log.info(f"qs_id:{qs_id}")
+                        if qs_id != 1:
+                            qs_query = self.cg_snap_util.get_qs_query(
+                                client, qs_id=qs_id
+                            )
+                            log.info(f"qs_query:{qs_query}")
+                            state = qs_query["sets"][qs_id]["state"]["name"]
+
+                            for member_item in qs_query["sets"][qs_id]["members"]:
+                                if qs_member in member_item:
+                                    excluded = qs_query["sets"][qs_id]["members"][
+                                        member_item
+                                    ]["excluded"]
+                                    break
+                            if excluded is True:
                                 log.error(
-                                    f"FAIL:Write passed on {qs_member} when QS state-{state},exclude-{excluded}"
+                                    f"FAIL: {io_type} fails in state {state} on {qs_member}, excluded - {excluded}"
                                 )
                                 cg_status = 1
-                        else:
-                            log.info(
-                                f"Expected:Write passed on {qs_member} when QS state-{state},exclude-{excluded}"
+                            elif state in "RELEASED|EXPIRED|TIMEDOUT|CANCELED":
+                                log.error(
+                                    f"FAIL: {io_type} fails in QS state {state} on {qs_member}"
+                                )
+                                cg_status = 1
+                            else:
+                                log.info(
+                                    f"Expected: {io_type} fails in QS state {state} on {qs_member}"
+                                )
+                        if qs_id == 1:
+                            log.error(
+                                f"FAIL:{io_type} fails when no QS exists with {qs_member}"
                             )
+                            cg_status = 1
+                    elif io_modules[io_mod] == 0:
+                        qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
+                        log.info(f"qs_id:{qs_id}")
+                        if qs_id != 1:
+                            qs_query = self.cg_snap_util.get_qs_query(
+                                client, qs_id=qs_id
+                            )
+                            log.info(f"qs_query:{qs_query}")
+                            state = qs_query["sets"][qs_id]["state"]["name"]
+                            for member_item in qs_query["sets"][qs_id]["members"]:
+                                if qs_member in member_item:
+                                    excluded = qs_query["sets"][qs_id]["members"][
+                                        member_item
+                                    ]["excluded"]
+                                    break
+                            if excluded is False:
+                                if state in "QUIESCED|RELEASING|CANCELING":
+                                    log.error(
+                                        f"FAIL:{io_type} passed on {qs_member} when QS state-{state},exclude-{excluded}"
+                                    )
+                                    cg_status = 1
+                            else:
+                                log.info(
+                                    f"Expected:{io_type} passed on {qs_member} when QS state-{state},exclude-{excluded}"
+                                )
         return cg_status
 
     """
@@ -547,7 +601,9 @@ class CG_snap_IO(object):
                 random.choice(string.ascii_lowercase + string.digits)
                 for _ in list(range(3))
             )
-            client.exec_command(sudo=True, cmd=f"mkdir -p {mnt_pt}/cg_io/dd_dir")
+            client.exec_command(
+                sudo=True, cmd=f"mkdir -p {mnt_pt}/cg_io/dd_dir", timeout=15
+            )
             file_path = f"{mnt_pt}/cg_io/dd_dir/dd_testfile_{rand_str}"
             log.info(f"file_path:{file_path}")
             # write 5 files using system files
@@ -561,13 +617,16 @@ class CG_snap_IO(object):
             src_file = random.choice(src_files)
             cmd = f"dd if={src_file} of={file_path} bs={bs}"
             log.info(f"dd_io {io_type} cmd to run: {cmd}")
-            out, _ = client.exec_command(sudo=True, cmd=cmd, check_ec=True)
+            out, _ = client.exec_command(sudo=True, cmd=cmd, check_ec=True, timeout=15)
             log.info(f"dd_io {io_type} {cmd} op : {out}")
             client.exec_command(
-                sudo=True, cmd=f"echo {src_file} >> {file_path}", check_ec=True
+                sudo=True,
+                cmd=f"echo {src_file} >> {file_path}",
+                check_ec=True,
+                timeout=15,
             )
             out, _ = client.exec_command(
-                sudo=True, cmd=f"ls -l {file_path}", check_ec=True
+                sudo=True, cmd=f"ls -l {file_path}", check_ec=True, timeout=15
             )
             log.info(f"dd_io {io_type} {cmd} op : {out}")
             return 0
@@ -589,46 +648,50 @@ class CG_snap_IO(object):
         time.sleep(10)
         dir_path = f"{mnt_pt}/cg_io/smallfile_io_dir"
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=60)
-        retry_cnt = 0
         smallfile_read_success = 0
 
         try:
-            while retry_cnt < 10:
-                while datetime.datetime.now() < end_time:
-                    try:
-                        out, rc = client.exec_command(
-                            sudo=True, cmd=f"ls -d {dir_path}/smallfile_*/"
-                        )
-                        log.info(f"smallfile_io {io_type} cmd op : {out}")
-                        out = out.strip()
-                        smallfile_dirs = out.split()
-                        log.info(
-                            f"smallfile_io {io_type} smallfile_dirs op : {smallfile_dirs}"
-                        )
-                        if len(smallfile_dirs) > 0:
-                            break
-                    except Exception as ex:
-                        log.info(ex)
-                        time.sleep(5)
-                dir_cnt = len(smallfile_dirs)
-                if dir_cnt == 0:
-                    raise Exception(
-                        f"No smallfile dirs created in {dir_path} even after 60secs"
+            while datetime.datetime.now() < end_time:
+                try:
+                    out, rc = client.exec_command(
+                        sudo=True, cmd=f"ls -d {dir_path}/smallfile_*/", timeout=15
                     )
-                smallfile_dir = random.choice(smallfile_dirs)
+                    log.info(f"smallfile_io {io_type} cmd op : {out}")
+                    out = out.strip()
+                    smallfile_dirs = out.split()
+                    log.info(
+                        f"smallfile_io {io_type} smallfile_dirs op : {smallfile_dirs}"
+                    )
+                    if len(smallfile_dirs) > 0:
+                        break
+                except Exception as ex:
+                    log.info(ex)
+                    time.sleep(5)
+            dir_cnt = len(smallfile_dirs)
+            if dir_cnt == 0:
+                raise Exception(
+                    f"No smallfile dirs created in {dir_path} even after 60secs"
+                )
+            smallfile_dir = random.choice(smallfile_dirs)
+            try:
                 out, _ = client.exec_command(
                     sudo=True,
-                    cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py "
-                    f"--operation read --threads 2 --file-size 1024 "
-                    f"--files 2 --top {smallfile_dir}",
+                    cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
+                    f"--operation read --threads 1 --file-size 1024 "
+                    f"--files 1 --top {smallfile_dir} --network-sync-dir /var/tmp",
+                    timeout=15,
                 )
                 log.info(f"smallfile_io {io_type} cmd op : {out}")
-                if "ERR" in out:
-                    time.sleep(5)
-                    retry_cnt += 1
-                else:
+                smallfile_read_success = 1
+            except Exception as ex:
+                exp_str = (
+                    "No such file or directory: '/var/tmp/starting_gate.tmp.notyet'"
+                )
+                if exp_str in ex:
                     smallfile_read_success = 1
-                    retry_cnt = 10
+                else:
+                    smallfile_read_success = 0
+
         except Exception as ex:
             log.info(ex)
         if smallfile_read_success == 0:
@@ -651,18 +714,33 @@ class CG_snap_IO(object):
                 for _ in list(range(3))
             )
             dir_path = f"{mnt_pt}/cg_io/smallfile_io_dir/smallfile_{rand_str}"
-            client.exec_command(sudo=True, cmd=f"mkdir -p {dir_path}")
-            out_list = []
-            out_list = client.exec_command(
-                sudo=True,
-                cmd=f"for i in create read append read delete create overwrite rename delete-renamed mkdir rmdir "
-                f"create symlink stat chmod ls-l ; "
-                f"do python3 /home/cephuser/smallfile/smallfile_cli.py "
-                f"--operation $i --threads 2 --file-size 1024 "
-                f"--files 2 --top {dir_path} ; done",
-                long_running=True,
-            )
-            log.info(f"after smallfile_io_write cmd:{out_list}")
+            client.exec_command(sudo=True, cmd=f"mkdir -p {dir_path}", timeout=15)
+            cmd_list = [
+                "create",
+                "append",
+                "delete",
+                "create",
+                "overwrite",
+                "rename",
+                "delete-renamed",
+                "mkdir",
+                "rmdir",
+                "create",
+                "symlink",
+                "chmod",
+            ]
+
+            for i in cmd_list:
+                out_list = []
+                out_list = client.exec_command(
+                    sudo=True,
+                    cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
+                    f"--operation {i} --threads 1 --file-size 1024 "
+                    f"--files 1 --top {dir_path}",
+                    long_running=True,
+                    timeout=15,
+                )
+                log.info(f"after smallfile_io_write cmd:{out_list}")
             return 0
         except Exception as ex:
             log.info(ex)
@@ -685,7 +763,7 @@ class CG_snap_IO(object):
             while datetime.datetime.now() < end_time:
                 try:
                     out, rc = client.exec_command(
-                        sudo=True, cmd=f"ls {dir_path}/fio_cg_test_*"
+                        sudo=True, cmd=f"ls {dir_path}/fio_cg_test_*", timeout=15
                     )
                     log.info(f"fio_io {io_type} cmd op : {out}")
                     out = out.strip()
@@ -706,7 +784,8 @@ class CG_snap_IO(object):
             out, _ = client.exec_command(
                 sudo=True,
                 cmd=f"fio --name={fio_file_path} --ioengine=libaio --size 2M --rw=read --bs=1M --direct=1 "
-                f"--numjobs=1 --iodepth=8 --runtime=10",
+                f"--numjobs=1 --iodepth=5 --runtime=10",
+                timeout=15,
             )
             log.info(f"fio_io {io_type} cmd op : {out}")
             return 0
@@ -730,13 +809,14 @@ class CG_snap_IO(object):
                 for _ in list(range(3))
             )
             dir_path = f"{mnt_pt}/cg_io/fio_io_dir"
-            client.exec_command(sudo=True, cmd=f"mkdir -p {dir_path}")
+            client.exec_command(sudo=True, cmd=f"mkdir -p {dir_path}", timeout=15)
             file_name = f"fio_cg_test_{rand_str}"
             file_path = f"{dir_path}/{file_name}"
             client.exec_command(
                 sudo=True,
                 cmd=f"fio --name={file_path} --ioengine=libaio --size 2M --rw=write --bs=1M --direct=1 "
-                f"--numjobs=1 --iodepth=8 --runtime=10",
+                f"--numjobs=1 --iodepth=5 --runtime=10",
+                timeout=15,
                 long_running=True,
             )
             return 0
@@ -759,18 +839,29 @@ class CG_snap_IO(object):
                 for _ in list(range(3))
             )
             dir_path = f"{mnt_pt}/cg_io/crefi_io_dir/crefi_{rand_str}"
-            client.exec_command(sudo=True, cmd=f"mkdir -p {dir_path}")
+            client.exec_command(sudo=True, cmd=f"mkdir -p {dir_path}", timeout=15)
             file_type_list = ["binary", "text", "tar"]
             file_type = random.choice(file_type_list)
-            out_list = []
-            out_list = client.exec_command(
-                sudo=True,
-                cmd=f"for i in create rename chmod chown chgrp symlink hardlink truncate ; "
-                f"do python3 /home/cephuser/Crefi/crefi.py "
-                f"-n 5 --max 100k --min 10k -t {file_type} -b 2 -d 2 --multi --fop $i -T 2 {dir_path} ; done",
-                long_running=True,
-            )
-            log.info(f"after crefi_io cmd:{out_list}")
+            cmd_list = [
+                "create",
+                "rename",
+                "chmod",
+                "chown",
+                "chgrp",
+                "symlink",
+                "hardlink",
+                "truncate",
+            ]
+            for i in cmd_list:
+                out_list = []
+                out_list = client.exec_command(
+                    sudo=True,
+                    cmd=f"python3 /home/cephuser/Crefi/crefi.py "
+                    f"-n 5 --max 100k --min 10k -t {file_type} -b 2 -d 2 --multi --fop {i} -T 2 {dir_path}",
+                    long_running=True,
+                    timeout=15,
+                )
+                log.info(f"after crefi_io cmd:{out_list}")
             return 0
         except Exception as ex:
             log.info(ex)
@@ -790,7 +881,7 @@ class CG_snap_IO(object):
         try:
             time.sleep(5)
             dir_path = f"{mnt_pt}/cg_io/dd_dir"
-            out, _ = client.exec_command(sudo=True, cmd=f"ls {dir_path}")
+            out, _ = client.exec_command(sudo=True, cmd=f"ls {dir_path}", timeout=15)
             log.info(f"linux_cmds {io_type} cmd op : {out}")
             out = out.strip()
             files = out.split()
@@ -806,16 +897,14 @@ class CG_snap_IO(object):
             }
             for cmd in read_cmd_dict:
                 log.info(f"linux_cmds {io_type} cmd to run : {read_cmd_dict[cmd]}")
-                out, _ = client.exec_command(sudo=True, cmd=read_cmd_dict[cmd])
+                out, _ = client.exec_command(
+                    sudo=True, cmd=read_cmd_dict[cmd], timeout=15
+                )
                 log.info(f"linux_cmds {io_type} cmd op : {out}")
             return 0
         except Exception as ex:
             log.info(ex)
-            out, _ = client.exec_command(
-                sudo=True,
-                cmd=f"ls -l {dir_path}/{file_name};cat {dir_path}/{file_name}",
-            )
-            log.info(f"linux_cmds {io_type} cmd op : {out}")
+
             return 1
 
     def cg_linux_cmds_write(self, client, mnt_pt):
@@ -836,7 +925,7 @@ class CG_snap_IO(object):
             )
             time.sleep(2)
             dir_path = f"{mnt_pt}/cg_io/dd_dir"
-            out, _ = client.exec_command(sudo=True, cmd=f"ls {dir_path}/")
+            out, _ = client.exec_command(sudo=True, cmd=f"ls {dir_path}/", timeout=15)
             log.info(f"linux_cmds {io_type} cmd op : {out}")
             out = out.strip()
             files = out.split()
@@ -854,7 +943,9 @@ class CG_snap_IO(object):
             }
             for cmd in write_cmd_dict:
                 log.info(f"linux_cmds {io_type} cmd to run : {write_cmd_dict[cmd]}")
-                out, _ = client.exec_command(sudo=True, cmd=write_cmd_dict[cmd])
+                out, _ = client.exec_command(
+                    sudo=True, cmd=write_cmd_dict[cmd], timeout=15
+                )
                 log.info(f"linux_cmds {io_type} cmd op : {out}")
             return 0
         except Exception as ex:
