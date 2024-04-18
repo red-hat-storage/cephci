@@ -2017,7 +2017,7 @@ class RadosOrchestrator:
         # capture current start time for each daemon part of the services
         for service in daemon_services:
             daemon_status_ls = self.run_ceph_command(
-                cmd=f"ceph orch ps --service_name {service}"
+                cmd=f"ceph orch ps --service_name {service} --refresh"
             )
             for entry in daemon_status_ls:
                 start_time, _ = self.client.exec_command(
@@ -2027,14 +2027,14 @@ class RadosOrchestrator:
 
         # restart each service for the input daemon
         for service in daemon_services:
-            self.node.shell([f"ceph orch restart {service}"])
+            self.client.exec_command(cmd=f"ceph orch restart {service}", sudo=True)
 
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
         # wait for each daemon to restart
         for service in daemon_services:
             while datetime.datetime.now() <= end_time:
                 daemon_status_ls = self.run_ceph_command(
-                    cmd=f"ceph orch ps --service_name {service}"
+                    cmd=f"ceph orch ps --service_name {service} --refresh"
                 )
                 for entry in daemon_status_ls:
                     try:
@@ -2043,11 +2043,16 @@ class RadosOrchestrator:
                         )
                         assert restart_time > daemon_map[entry["daemon_name"]]
                         assert entry["status_desc"] != "stopped"
+                        log.info(f"{entry['daemon_name']} has started")
                         success = True
                     except AssertionError:
                         log.info(
                             f"{daemon} daemon {entry['daemon_name']} is yet to restart. "
                             f"Sleeping for 30 secs"
+                        )
+                        self.client.exec_command(
+                            cmd=f"ceph orch daemon restart {entry['daemon_name']}",
+                            sudo=True,
                         )
                         time.sleep(30)
                         success = False
@@ -2056,7 +2061,7 @@ class RadosOrchestrator:
                     break
             else:
                 log.error(
-                    f"All the daemons part of the service {service} did not restart within"
+                    f"All the daemons part of the service {service} did not restart within "
                     f"timeout of 5 mins"
                 )
                 return False

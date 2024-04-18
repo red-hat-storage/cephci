@@ -24,10 +24,10 @@ def run(ceph_cluster, **kw):
     2. Check the default value of osd config parameter 'osd_max_pg_log_entries'
         should default to 10K
     3. Set the OSD level flag 'pglog_hardlimit'
-    4. Set OSD config parameter 'osd_pg_max_log_entries' to 5000
-    5. Trigger sequential I/Os followed by OSD restart untill PG log size reaches 5000
+    4. Set OSD config parameter 'osd_pg_max_log_entries' to 2000
+    5. Trigger sequential I/Os followed by OSD restart until PG log size reaches 2000
     6. Trigger background IOPS on the created pool and monitor PG log size growth and trimming
-    7. Ensure pg log does not increase beyond value set in 'osd_max_pg_log_entries', i.e. 5000
+    7. Ensure pg log does not increase beyond value set in 'osd_max_pg_log_entries', i.e. 2000
     """
     log.info(run.__doc__)
     config = kw["config"]
@@ -40,7 +40,7 @@ def run(ceph_cluster, **kw):
     try:
         # create pool with given config
         log.info("Creating a replicated pool with default config")
-        assert rados_obj.create_pool(pool_name=_pool_name)
+        assert rados_obj.create_pool(pool_name=_pool_name, pg_num=1, pg_num_max=1)
 
         # set OSD log level to 10 to capture pg log trimming
         assert mon_obj.set_config(section="osd", name="debug_osd", value="10/10")
@@ -49,10 +49,10 @@ def run(ceph_cluster, **kw):
         log.info(f"Default value of parameter osd_max_pg_log_entries: {def_value}")
         assert int(def_value) == 10000
 
-        # set pglog_hardlimit flag and 5000 value for 'osd_max_pg_log_entries'
+        # set pglog_hardlimit flag and 2000 value for 'osd_max_pg_log_entries'
         out, _ = cephadm.shell(args=["ceph osd set pglog_hardlimit"])
         assert mon_obj.set_config(
-            section="osd", name="osd_max_pg_log_entries", value="5000"
+            section="osd", name="osd_max_pg_log_entries", value="2000"
         )
 
         pg_id = rados_obj.get_pgid(pool_name=_pool_name)[0]
@@ -73,29 +73,29 @@ def run(ceph_cluster, **kw):
         }
 
         # while loop to decide start time of capturing OSD logs
-        endtime = datetime.datetime.now() + datetime.timedelta(seconds=2000)
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=1800)
         while datetime.datetime.now() < endtime:
             curr_pg_query = rados_obj.run_ceph_command(cmd=f"ceph pg {pg_id} query")
             curr_log_size = curr_pg_query["info"]["stats"]["log_size"]
-            if int(curr_log_size) >= 5000:
+            if int(curr_log_size) >= 2000:
                 log.info(
-                    f"PG log size is now greater than or equal to 5000: {curr_log_size}"
+                    f"PG log size is now greater than or equal to 2000: {curr_log_size}"
                 )
                 log.info("Fetching machine time to determine OSD log start time")
                 init_time, _ = osd_host.exec_command(
                     cmd="date '+%Y-%m-%d %H:%M:%S'", sudo=True
                 )
                 break
-            log.info(f"PG log is increasing but currently below 5000: {curr_log_size}")
+            log.info(f"PG log is increasing but currently below 2000: {curr_log_size}")
             log.info("Triggering bench IOPS for 90 secs followed by recovery")
             rados_obj.bench_write(**fore_bench_cfg)
             rados_obj.change_osd_state(action="restart", target=primary_osd)
         else:
-            log.error("PG logs could not increase beyond 5000 within timeout 2000 secs")
-            raise Exception("PG logs could not increase beyond 9000 within timeout.")
+            log.error("PG logs could not increase beyond 2000 within timeout 1800 secs")
+            raise Exception("PG logs could not increase beyond 2000 within timeout.")
 
-        """ Now that PG log count has reached 5K, we trigger background IOPS for a
-        duration of 120 secs and observe the trimming of these log beyond 9500."""
+        """ Now that PG log count has reached 2K, we trigger background IOPS for a
+        duration of 120 secs and observe the trimming of these log beyond 2000."""
         # initiate background iops on the pool
         back_bench_cfg = {
             "pool_name": _pool_name,
@@ -112,13 +112,13 @@ def run(ceph_cluster, **kw):
             curr_log_size = curr_pg_query["info"]["stats"]["log_size"]
             # Trimming of pg log is not absolute and immediate, therefore
             # to avoid false failures, a margin of 150 has been provided on top
-            # of set limit of 5000. PG log growth beyond 5150 would suggest
+            # of set limit of 2000. PG log growth beyond 2100 would suggest
             # irregular trimming.
-            if int(curr_log_size) >= 5150:
+            if int(curr_log_size) >= 2100:
                 error_msg = (
                     f"Excepted trimming of PG log did not take place."
                     f"\n Current value of PG log: {curr_log_size}, ideally should"
-                    f"have been below 5150."
+                    f"have been below 2100."
                 )
                 log.error(error_msg)
                 raise Exception(error_msg)

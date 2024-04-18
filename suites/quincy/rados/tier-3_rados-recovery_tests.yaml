@@ -128,6 +128,14 @@ tests:
 #          desc: Verification of the async recovery
 
   - test:
+      name: Change Mon weight for Mgr
+      polarion-id: CEPH-83588304
+      module: test_mon_mgr_weight.py
+      desc: Verify Mgr stability when mon-weight is modified
+
+# PG log limit parameter cannot be unset,
+# this test should always run at the last
+  - test:
       name: Limit PG log size
       polarion-id: CEPH-83573252
       module: test_pg_log_limit.py
