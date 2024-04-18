@@ -6,6 +6,7 @@ AS part of verification the script  perform the following tasks-
 """
 
 import random
+import time
 import traceback
 
 from ceph.ceph_admin import CephAdmin
@@ -88,6 +89,7 @@ def run(ceph_cluster, **kw):
             pg_id = rados_obj.create_inconsistent_object(pool_name, oname)
         except Exception as err:
             log.error(f"Unable to create inconsistent object. error {err}")
+            raise Exception("inconsistent object not generated error")
         # Restarting the mon
         log.info("Restarting the mon services")
         mon_service = client_node.exec_command(cmd="ceph orch ls | grep mon")
@@ -112,6 +114,7 @@ def run(ceph_cluster, **kw):
                 log.info(
                     f"Checking the error messages of the inconsistent object {obj_id} "
                 )
+                log.debug(f"The error list obtained : {errors_list}")
                 if "omap_digest_mismatch" not in errors_list:
                     log.error(
                         f"The inconsistent object {obj_id} is not reported with the omap_digest_mismatch error"
@@ -134,7 +137,7 @@ def run(ceph_cluster, **kw):
         log.info(f"Performing the repair on the osd-{primary_osd}")
         repair_output = bluestore_obj.repair(primary_osd)
         log.info(f"The repair status is:{repair_output}")
-        health_check = rados_obj.check_inconsistent_health(False)
+        health_check = rados_obj.check_inconsistent_health(inconsistent_present=False)
         log.info(f"The health status after the repair is ::{health_check}")
         assert health_check
         log.info("The inconsistent objects are repaired")
@@ -152,8 +155,10 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Execution of finally block")
         if config.get("delete_pool"):
-            method_should_succeed(rados_obj.delete_pool, pool_name)
-            log.info("deleted the pool successfully")
+            for pool_name in pools:
+                method_should_succeed(rados_obj.delete_pool, pool_name)
+                log.info(f"Pool {pool_name} deleted the pool successfully")
+                time.sleep(2)
         # log cluster health
         rados_obj.log_cluster_health()
     return 0

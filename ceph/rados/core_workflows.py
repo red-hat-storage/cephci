@@ -2206,11 +2206,14 @@ class RadosOrchestrator:
         start_time = time.time()
         while time.time() - start_time < time_check:
             health_detail = self.node.shell(args=["ceph health detail"])
-            log.info(f"Health warning: \n {health_detail}")
-            if "inconsistent" not in health_detail and inconsistent_present is False:
+            log.info(f"Health warning on cluster: \n {health_detail} \n\n")
+            status_report = self.run_ceph_command(cmd="ceph report", client_exec=True)
+            ceph_health_status = list(status_report["health"]["checks"].keys())
+            health_warn = "PG_DAMAGED"
+            if health_warn not in ceph_health_status and inconsistent_present is False:
                 log.info("pg inconsistent not exists in the cluster")
                 return True
-            elif "inconsistent" in health_detail and inconsistent_present is True:
+            elif health_warn in ceph_health_status and inconsistent_present is True:
                 log.info("pg inconsistent generated in the cluster")
                 return True
             else:
@@ -2275,7 +2278,7 @@ class RadosOrchestrator:
         log.debug(f"Key list After deletion : {key_list}")
         if not self.change_osd_state(action="start", target=primary_osd):
             log.error(f"Unable to start the OSD : {primary_osd}")
-            raise Exception("Execution error")
+            raise Exception("OSD could not be started error")
         log.debug(
             f"Started the OSD: {primary_osd} and performing deep scrubs on the PG"
         )
@@ -2286,8 +2289,7 @@ class RadosOrchestrator:
         log.debug(f"Completed deep-scrubbing the pg : {pg_id}")
         # sleeping for 10 seconds
         time.sleep(10)
-        health_check = self.check_inconsistent_health(True)
-        assert health_check
+        assert self.check_inconsistent_health(inconsistent_present=True)
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id
 
@@ -3004,11 +3006,12 @@ class RadosOrchestrator:
             log.error(f"Unable to start the OSD : {target_osd}")
             return None
         log.info(f"Performing the deep-scrub on the pg-{pg_id}")
-        self.run_deep_scrub(pgid=pg_id)
-        # sleeping for 10 seconds, waiting for scrubbing to be over
-        time.sleep(10)
-        health_check = self.check_inconsistent_health()
-        if health_check is False:
+        if not self.start_check_deep_scrub_complete(pg_id=pg_id):
+            log.debug(f"deep-scrubbing could not be completed on PG : {pg_id}")
+            raise Exception("PG not deep-scrubbed error")
+        log.debug(f"Completed deep-scrubbing the pg : {pg_id}")
+
+        if not self.check_inconsistent_health(inconsistent_present=True):
             log.error(
                 "Inconsistent object details not exist in the health detail output"
             )

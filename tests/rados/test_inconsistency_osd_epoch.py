@@ -65,7 +65,12 @@ def run(ceph_cluster, **kw):
         log.info(f"Initial epoch before generating inconsistency is {init_epoch}")
 
         # Create inconsistency objects
-        pg_id = rados_obj.create_inconsistent_object(pool_name, oname)
+        try:
+            pg_id = rados_obj.create_inconsistent_object(pool_name, oname)
+        except Exception as err:
+            log.error(f"Failed to generate inconsistent object. Error : {err}")
+            raise Exception("Inconsistent object not generated error")
+
         log.debug(f"PG ID {pg_id} has inconsistent object generated on it.")
 
         # Checking for inconsistency in the PG list
