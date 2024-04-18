@@ -102,3 +102,27 @@ tests:
               size: 4G
         fio:
           size: 100M
+
+  - test:
+      desc: Run group snap creation and rollback
+      module: test_rbd_group_snapshot_usecase.py
+      name: RBD group snap creation and rollback
+      polarion-id: CEPH-83588302
+      config:
+        group: image_group
+        snap: group_snap
+        rep_pool_config:
+          rbd_pool:
+            rbd_image1_group:
+              size: 4G
+            rbd_image2_group:
+              size: 4G
+        ec_pool_config:
+          rbd_ec_pool1:
+            data_pool: rbd_ec_pool
+            rbd_ec_image1_group:
+              size: 4G
+            rbd_ec_image2_group:
+              size: 4G
+        fio:
+          size: 100M
