@@ -1444,8 +1444,10 @@ class CephNode(object):
         self.rssh().exec_command("echo 20 > /proc/sys/net/ipv4/tcp_keepalive_probes")
         self.exec_command(cmd="ls / ; uptime ; date")
         self.ssh_transport().set_keepalive(15)
-
-        out, err = self.exec_command(cmd="hostname")
+        if self.vm_node.node_type == "baremetal":
+            out, err = self.exec_command(cmd="hostname -s")
+        else:
+            out, err = self.exec_command(cmd="hostname")
         self.hostname = out.strip()
 
         shortname = self.hostname.split(".")
@@ -1490,6 +1492,9 @@ class CephNode(object):
         )
         self.exec_command(cmd="ssh-keygen -b 2048 -f ~/.ssh/id_rsa -t rsa -q -N ''")
         self.id_rsa_pub, _ = self.exec_command(cmd="cat ~/.ssh/id_rsa.pub")
+        out, rc = self.exec_command(cmd="sudo hostname")
+        logger.info(out)
+        self.exec_command(cmd="sudo hostnamectl set-hostname $(hostname -s)")
 
     def long_running(self, **kw):
         """Method to execute long-running command.
