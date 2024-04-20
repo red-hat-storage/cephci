@@ -23,6 +23,7 @@ ToDo:
   - support TLS
   - support token auth method
 """
+
 from json import loads
 from typing import Dict
 
@@ -116,7 +117,7 @@ def run(ceph_cluster: Ceph, config: Dict, **kwargs) -> int:
     """
     if "agent" in config["install"]:
         vault_cfg = get_cephci_config().get("vault")
-        _install_agent(ceph_cluster, config, vault_cfg)
+        _install_agent(ceph_cluster, vault_cfg)
 
         client = ceph_cluster.get_nodes(role="client")[0]
         _configure_rgw_daemons(client, vault_cfg)
@@ -149,7 +150,7 @@ def _write_remote_file(node: CephNode, file_name: str, content: str) -> None:
     file_handle.close()
 
 
-def _install_agent(cluster: Ceph, config: Dict, vault_cfg: Dict) -> None:
+def _install_agent(cluster: Ceph, config: Dict) -> None:
     """
     Installs and configures the vault-agent on all RGW nodes
 
@@ -167,12 +168,12 @@ def _install_agent(cluster: Ceph, config: Dict, vault_cfg: Dict) -> None:
     rgw_nodes = cluster.get_nodes(role="rgw")
     for node in rgw_nodes:
         LOG.debug(f"Vault install and configuration on {node.shortname}")
-        _install_vault_packages(node, config)
-        _create_agent_config(node, vault_cfg)
+        _install_vault_packages(node)
+        _create_agent_config(node, config)
         _create_agent_systemd(node)
 
 
-def _install_vault_packages(node: CephNode, config: Dict) -> None:
+def _install_vault_packages(node: CephNode) -> None:
     """
     Installs the required packages for vault
 
@@ -186,16 +187,10 @@ def _install_vault_packages(node: CephNode, config: Dict) -> None:
     Raises:
         CommandFailed
     """
-    vault_repo = "https://rpm.releases.hashicorp.com/RHEL/hashicorp.repo"
-    # Pass os_ver in config if needed to be run on rhel 8
-    os_ver = config.get("os_ver", "9")
-    commands = [
-        f"yum-config-manager --add-repo {vault_repo}",
-        rf'sudo sed -i -e "s/\$releasever/{os_ver}/g" "/etc/yum.repos.d/hashicorp.repo"',
-        "yum install -y vault",
-    ]
-    for command in commands:
-        node.exec_command(sudo=True, cmd=command, check_ec=False)
+    wget_cmd = "curl -o /etc/yum.repos.d/hashicorp.repo http://magna002.ceph.redhat.com/cephci-jenkins/hashicorp.repo"
+    node.exec_command(sudo=True, cmd=wget_cmd, check_ec=False)
+    install_vault_cmd = "yum install -y vault"
+    node.exec_command(sudo=True, cmd=install_vault_cmd, check_ec=False)
 
 
 def _create_agent_config(node: CephNode, config: Dict) -> None:
