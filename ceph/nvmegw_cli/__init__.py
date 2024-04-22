@@ -45,27 +45,28 @@ class NVMeGWCLI(ExecuteCommandMixin):
             password = registry_details.get("registry-password")
             Registry(self.node).login(url, username, password)
 
-    def fetch_gateway_client_name(self):
-        """Return Gateway Client name/id."""
+    def fetch_gateway(self):
+        """Return Gateway info"""
         gwinfo = {"base_cmd_args": {"format": "json"}}
         _, out = self.gateway.info(**gwinfo)
         out = loads(out)
+        return out
+
+    def fetch_gateway_client_name(self):
+        """Return Gateway Client name/id."""
+        out = self.fetch_gateway()
         return out["name"]
 
     def fetch_gateway_lb_group_id(self):
         """Return Gateway Load balancing group Id."""
-        gwinfo = {"base_cmd_args": {"format": "json"}}
-        _, out = self.gateway.info(**gwinfo)
-        out = loads(out)
+        out = self.fetch_gateway()
         return out["load_balancing_group"]
 
     def fetch_gateway_hostname(self):
         """Return Gateway load balancing group host name"""
-        gwinfo = {"base_cmd_args": {"format": "json"}}
-        _, out = self.gateway.info(**gwinfo)
-        out = loads(out)
+        out = self.fetch_gateway()
         return out["hostname"]
 
     def get_subsystems(self, **kwargs):
         """Nvme CLI get_subsystems"""
-        return self.run_nvme_cli(**kwargs)
+        return self.run_nvme_cli("get_subsystems", **kwargs)
