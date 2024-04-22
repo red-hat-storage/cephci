@@ -94,7 +94,7 @@ globals:
           ip: 10.8.129.9
           root_password: passwd
           role:
-            - Client
+            - client
         - hostname: clara010
           id: node8
           ip: 10.8.129.10
