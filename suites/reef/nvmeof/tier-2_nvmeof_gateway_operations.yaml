@@ -108,12 +108,6 @@ tests:
         port: 5500
         steps:
           - config:
-              service: version          # CLI Version
-              command: version
-              base_cmd_args:
-                format: json
-                output: log
-          - config:
               service: gateway
               command: version         # gateway Version
               base_cmd_args:
@@ -123,13 +117,13 @@ tests:
               service: gateway
               command: info             # gateway info
           - config:
-              service: log_level
+              service: loglevel
               command: get
               base_cmd_args:
                 format: json
                 output: stdio
           - config:
-              service: log_level
+              service: loglevel
               command: set
               base_cmd_args:
                 format: json
@@ -138,7 +132,7 @@ tests:
                 level: error
                 print: error
           - config:
-              service: log_level
+              service: loglevel
               command: disable
               base_cmd_args:
                 format: json
@@ -166,7 +160,7 @@ tests:
               command: add                # Listener add
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
-                gateway-name: node6
+                host-name: node6
                 trsvcid: 5001
                 traddr: node6
               base_cmd_args:
@@ -181,7 +175,7 @@ tests:
               command: delete             # listener del
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
-                gateway-name: node6
+                host-name: node6
                 trsvcid: 5001
                 traddr: node6
           - config:
@@ -259,6 +253,12 @@ tests:
               command: delete           # subsystem delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: version          # CLI Version
+              command: version
+              base_cmd_args:
+                format: json
+                output: log
       desc: Manage NVMeoF Subsystem entities
       destroy-cluster: false
       module: test_nvme_cli.py

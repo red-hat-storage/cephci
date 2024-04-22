@@ -8,31 +8,12 @@ from copy import deepcopy
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin.common import fetch_method
+from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmegw_cli.common import find_gateway_hostname
-from ceph.nvmegw_cli.connection import Connection
-from ceph.nvmegw_cli.gateway import Gateway
-from ceph.nvmegw_cli.host import Host
-from ceph.nvmegw_cli.listener import Listener
-from ceph.nvmegw_cli.log_level import LogLevel
-from ceph.nvmegw_cli.namespace import Namespace
-from ceph.nvmegw_cli.subsystem import Subsystem
-from ceph.nvmegw_cli.version import Version
 from ceph.utils import get_node_by_id
 from utility.log import Log
 
 LOG = Log(__name__)
-
-
-services = {
-    "log_level": LogLevel,
-    "version": Version,
-    "gateway": Gateway,
-    "connection": Connection,
-    "subsystem": Subsystem,
-    "listener": Listener,
-    "host": Host,
-    "namespace": Namespace,
-}
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
@@ -74,12 +55,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     port = config.get("port", 5500)
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
-    cli_image = None
     for key, value in dict(item.split("=") for item in overrides).items():
         if key == "nvmeof_cli_image":
-            cli_image = value
+            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
             break
 
+    nvmegwcli = NVMeGWCLI(node, port)
     try:
         steps = config.get("steps", [])
         for step in steps:
@@ -87,15 +68,14 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             service = cfg.pop("service")
             command = cfg.pop("command")
 
-            _cls = services[service](node, port)
-            if cli_image:
-                _cls.NVMEOF_CLI_IMAGE = cli_image
+            _cls = fetch_method(nvmegwcli, service)
             if service in "listener" and command in ["add", "delete"]:
-                gw_node = get_node_by_id(ceph_cluster, cfg["args"]["gateway-name"])
+                gw_node = get_node_by_id(ceph_cluster, cfg["args"]["host-name"])
                 hostname = find_gateway_hostname(gw_node)
                 cfg["args"].update(
                     {"host-name": hostname, "traddr": gw_node.ip_address}
                 )
+                cfg["base_cmd_args"] = {"server-address": gw_node.ip_address}
             func = fetch_method(_cls, command)
             func(**cfg)
     except BaseException as be:  # noqa
