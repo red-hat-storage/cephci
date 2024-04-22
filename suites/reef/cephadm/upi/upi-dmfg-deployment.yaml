@@ -101,7 +101,7 @@ tests:
         id: client.1
         install_packages:
           - ceph-common
-        node: node10
+        node: node7
       desc: "Configure the Cephfs client system 1"
       destroy-cluster: false
       module: test_client.py
@@ -115,7 +115,7 @@ tests:
         id: client.2
         install_packages:
           - ceph-common
-        node: node11
+        node: node8
       desc: "Configure the Cephfs client system 2"
       destroy-cluster: false
       module: test_client.py
