@@ -9,6 +9,8 @@ from ceph.nvmegw_cli.log_level import LogLevel
 from ceph.nvmegw_cli.namespace import Namespace
 from ceph.nvmegw_cli.subsystem import Subsystem
 from ceph.nvmegw_cli.version import Version
+from cli.utilities.configs import get_registry_details
+from cli.utilities.containers import Registry
 
 
 class NVMeGWCLI(ExecuteCommandMixin):
@@ -35,6 +37,13 @@ class NVMeGWCLI(ExecuteCommandMixin):
             self.listener,
         ]:
             clas.NVMEOF_CLI_IMAGE = self.NVMEOF_CLI_IMAGE
+
+        if self.NVMEOF_CLI_IMAGE.startswith("cp"):
+            registry_details = get_registry_details(ibm_build=True)
+            url = registry_details.get("registry-url")
+            username = registry_details.get("registry-username")
+            password = registry_details.get("registry-password")
+            Registry(self.node).login(url, username, password)
 
     def fetch_gateway_client_name(self):
         """Return Gateway Client name/id."""
