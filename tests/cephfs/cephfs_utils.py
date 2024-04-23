@@ -40,7 +40,7 @@ class FsUtils(object):
             for package in packages:
                 client.exec_command(
                     sudo=True,
-                    cmd="yum install -y {package}".format(package=package),
+                    cmd="yum install -y {package} --nogpgcheck".format(package=package),
                     long_running=True,
                     check_ec=False,
                 )
