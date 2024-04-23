@@ -673,7 +673,7 @@ tests:
               - "radosgw-admin zone placement modify --rgw-zone secondary --placement-id default-placement  --compression zlib"
               - "radosgw-admin period update --commit"
               - "radosgw-admin period get"
-              - "ceph arch restart rgw.shared.sec"
+              - "ceph orch restart rgw.shared.sec"
             timeout: 120
         ceph-arc:
           config:
@@ -683,7 +683,7 @@ tests:
               - "radosgw-admin zone placement modify --rgw-zone archive --placement-id default-placement  --compression zlib"
               - "radosgw-admin period update --commit"
               - "radosgw-admin period get"
-              - "ceph arch restart rgw.shared.arc"
+              - "ceph orch restart rgw.shared.arc"
             timeout: 120
       desc: enabled default encryption and zlib compression
       module: exec.py
