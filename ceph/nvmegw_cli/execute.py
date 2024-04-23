@@ -15,9 +15,12 @@ class ExecuteCommandMixin:
     def run_nvme_cli(self, action, **kwargs):
         LOG.info(f"NVMe CLI command : {self.name} {action}")
         base_cmd_args = kwargs.get("base_cmd_args", {})
-        base_cmd_args.update(
-            {"server-address": self.node.ip_address, "server-port": self.port}
-        )
+
+        if not base_cmd_args.get("server-address"):
+            base_cmd_args.update({"server-address": self.node.ip_address})
+        if not base_cmd_args.get("server-port"):
+            base_cmd_args.update({"server-port": self.port})
+
         cmd_args = kwargs.get("args", {})
         command = " ".join(
             [
