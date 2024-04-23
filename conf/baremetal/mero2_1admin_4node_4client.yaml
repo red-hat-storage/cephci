@@ -39,6 +39,7 @@ globals:
             - rgw
             - mon
             - osd
+            - mds
             - _admin
           root_password: passwd
           volumes:
