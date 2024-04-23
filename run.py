@@ -778,7 +778,7 @@ def run(args):
                     if "ibm-build=" in _config:
                         config["ibm_build"] = bool(_config.split("=")[1])
 
-                    elif "enable-fips-mode=" in _config:
+                    if "enable-fips-mode=" in _config:
                         config["enable_fips_mode"] = bool(_config.split("=")[1])
 
             config["ceph_docker_registry"] = docker_registry
