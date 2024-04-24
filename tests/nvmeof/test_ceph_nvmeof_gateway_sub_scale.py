@@ -1,16 +1,10 @@
+import json
 from copy import deepcopy
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
-from ceph.nvmegw_cli.connection import Connection
-from ceph.nvmegw_cli.gateway import Gateway
-from ceph.nvmegw_cli.host import Host
-from ceph.nvmegw_cli.listener import Listener
-from ceph.nvmegw_cli.log_level import LogLevel
-from ceph.nvmegw_cli.namespace import Namespace
-from ceph.nvmegw_cli.subsystem import Subsystem
-from ceph.nvmegw_cli.version import Version
+from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmeof.initiator import Initiator
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
@@ -20,16 +14,13 @@ from utility.utils import generate_unique_id, run_fio
 
 LOG = Log(__name__)
 
-services = {
-    "log_level": LogLevel,
-    "version": Version,
-    "gateway": Gateway,
-    "connection": Connection,
-    "subsystem": Subsystem,
-    "listener": Listener,
-    "host": Host,
-    "namespace": Namespace,
-}
+
+def fetch_drive(node, uuid):
+    """Fetch Drive from node using UUID."""
+    # lsblk -np -r -o "name,wwn"
+    out, _ = node.exec_command(cmd=f"lsblk -np -r -o name,wwn | grep {uuid}", sudo=True)
+    if out:
+        return out.split(" ")[0]
 
 
 def initiators(ceph_cluster, gateway, config):
@@ -41,42 +32,33 @@ def initiators(ceph_cluster, gateway, config):
     connect_cmd_args = {
         "transport": "tcp",
         "traddr": gateway.ip_address,
-        "trsvcid": config["listener_port"],
-        "nqn": config["subnqn"],
+        "trsvcid": 8009,
     }
-    LOG.debug(initiator.connect(**connect_cmd_args))
+    LOG.debug(initiator.connect_all(**connect_cmd_args))
 
 
 @retry(Exception, tries=5, delay=10)
-def run_io(ceph_cluster, num, io):
+def run_io(ceph_cluster, ns_uuid, io):
     """Run IO on newly added namespace."""
     LOG.info(io)
     client = get_node_by_id(ceph_cluster, io["node"])
-    initiator = Initiator(client)
-
-    targets = initiator.list_spdk_drives()
-    if not targets:
-        raise Exception(f"NVMe Targets not found on {client.hostname}")
-
-    device_path = next(
-        (device["DevicePath"] for device in targets if device["NameSpace"] == num), None
-    )
-    LOG.debug(device_path)
+    device_path = fetch_drive(client, ns_uuid)
 
     if device_path is None:
-        raise Exception("NVMe volume not found")
-    else:
-        io_args = {
-            "device_name": device_path,
-            "client_node": client,
-            "run_time": "10",
-            "long_running": True,
-            "io_type": io["io_type"],
-            "cmd_timeout": "notimeout",
-        }
-        result = run_fio(**io_args)
-        if result != 0:
-            raise Exception("FIO failure")
+        raise Exception(f"NVMe volume not found for {ns_uuid}")
+
+    LOG.debug(device_path)
+    io_args = {
+        "device_name": device_path,
+        "client_node": client,
+        "run_time": "10",
+        "io_type": io["io_type"],
+        "long_running": True,
+        "cmd_timeout": 600,
+    }
+    result = run_fio(**io_args)
+    if result != 0:
+        raise Exception("FIO failure")
 
 
 def configure_subsystems(config, _cls, command):
@@ -111,7 +93,7 @@ def configure_listeners(config, _cls, command, ceph_cluster):
                     "trsvcid": port,
                 }
             )
-            _cls.node = listener_node
+            config["base_cmd_args"] = {"server-address": listener_node.ip_address}
             listener_func = fetch_method(_cls, command)
             listener_func(**config)
             config["args"].clear()
@@ -155,25 +137,28 @@ def configure_namespaces(
             config["args"].update(
                 {
                     "rbd-image": f"{name}-image{num}",
+                    "nsid": num,
                     "rbd-pool": pool,
                     "subsystem": f"nqn.2016-06.io.spdk:cnode{sub_num}",
                 }
             )
 
-            if subsystems == 1:
-                config["args"]["load-balancing-group"] = (
-                    1 if num == int(namespaces_sub / 2) else 2
-                )
-            else:
-                half_sub = int(subsystems / 2)
-                config["args"]["load-balancing-group"] = (
-                    1 if sub_num < half_sub + 1 else 2
-                )
             namespace_func = fetch_method(_cls, command)
             namespace_func(**config)
 
+            _config = {
+                "base_cmd_args": {"format": "json"},
+                "args": {
+                    "nsid": num,
+                    "subsystem": f"nqn.2016-06.io.spdk:cnode{sub_num}",
+                },
+            }
+            namespace_list = fetch_method(_cls, "list")
+            _, namespace = namespace_list(**_config)
+            ns_uuid = json.loads(namespace)["namespaces"][0]["uuid"]
+
             for io in io_param:
-                run_io(ceph_cluster, num, io)
+                run_io(ceph_cluster, ns_uuid, io)
 
             mem_usage, _ = node.exec_command(
                 cmd="ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
@@ -215,11 +200,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     )
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
     overrides = kwargs.get("test_data", {}).get("custom-config")
-    cli_image = None
     for key, value in dict(item.split("=") for item in overrides).items():
         if key == "nvmeof_cli_image":
-            cli_image = value
+            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
             break
+    nvmegwcli = NVMeGWCLI(node, port)
 
     try:
         steps = config.get("steps", [])
@@ -231,9 +216,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             service = cfg.pop("service")
             command = cfg.pop("command")
 
-            _cls = services[service](node, port)
-            if cli_image:
-                _cls.NVMEOF_CLI_IMAGE = cli_image
+            _cls = fetch_method(nvmegwcli, service)
 
             if service == "subsystem":
                 configure_subsystems(cfg, _cls, command)

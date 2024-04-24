@@ -165,7 +165,7 @@ tests:
             io_type: write
       desc: test with 1 subsystem and 256 namespaces in Single GW
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Scale to 256 namespaces in single subsystem on NVMeOF GW
       polarion-id: CEPH-83576686
 
@@ -215,7 +215,7 @@ tests:
             io_type: write
       desc: test with 1 subsystem and 256 namespaces in Single GW
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Scale to 256 namespaces in single subsystem on NVMeOF GW
       polarion-id: CEPH-83576686
 
@@ -267,7 +267,7 @@ tests:
             io_type: write
       desc: test with 1 subsystem and 256 namespaces in Single GW
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Scale to 256 namespaces in single subsystem on NVMeOF GW
       polarion-id: CEPH-83576686
 
@@ -323,7 +323,7 @@ tests:
             io_type: read
       desc: test with 1 subsystem and 256 namespaces in Single GW
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Scale to 256 namespaces in single subsystem on NVMeOF GW
       polarion-id: CEPH-83576686
 
