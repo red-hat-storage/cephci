@@ -163,7 +163,7 @@ tests:
             io_type: write
       desc: test namespace limitations with 1K namespaces
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: test 1k namespace with 1 subsystem in Single GW
       polarion-id: CEPH-83576691
 
@@ -190,7 +190,7 @@ tests:
             io_type: write
       desc: test namespace limitations with 2K namespaces
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: test 2k namespace with 1 subsystem in Single GW
       polarion-id: CEPH-83576691
 
@@ -217,7 +217,7 @@ tests:
             io_type: write
       desc: test namespace limitations with 3K namespaces
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: test 3k namespace with 1 subsystem in Single GW
       polarion-id: CEPH-83576691
 
@@ -244,7 +244,7 @@ tests:
             io_type: write
       desc: test namespace limitations with 4K namespaces
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: test 4k namespace with 1 subsystem in Single GW
       polarion-id: CEPH-83576691
 
@@ -271,7 +271,7 @@ tests:
             io_type: write
       desc: test namespace limitations with 5K namespaces
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: test 5k namespace with 1 subsystem in Single GW
       polarion-id: CEPH-83576691
 

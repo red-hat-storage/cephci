@@ -148,7 +148,7 @@ tests:
             io_type: write
       desc: Configure nvmeof target and run IO from RHEL
       destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_scale.py
+      module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Manage nvmeof gateway entities
       polarion-id: CEPH-83575783
 
