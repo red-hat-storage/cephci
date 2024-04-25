@@ -105,7 +105,9 @@ class Orch(
             sleep(interval)
             out, err = self.ls({"base_cmd_args": {"format": "json"}})
             out = loads(out)
-            service = [d for d in out if d.get("service_name") == service_name]
+            service = [
+                d["service_name"] for d in out if d.get("service_name") == service_name
+            ]
 
             if service_name not in service and not exist:
                 return True

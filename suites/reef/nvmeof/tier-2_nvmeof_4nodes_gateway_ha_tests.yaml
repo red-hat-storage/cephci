@@ -1,0 +1,399 @@
+# Basic Ceph-NvmeoF sanity Test suite
+# cluster configuration file: conf/reef/nvmeof/ceph_nvmeof_sanity.yaml
+# inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
+
+tests:
+# Set up the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#  Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node10
+          - node11
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+  #  Configure Ceph NVMeoF gateway
+  #  Configure Initiators
+  #  Run IO on NVMe Targets
+
+  # 4 GW Single node failure
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        install: true                           # Run SPDK with all pre-requisites
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+        gw_nodes:
+          - node6
+          - node7
+          - node8
+          - node9
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 2G
+              lb_group: node6
+            - count: 2
+              size: 2G
+              lb_group: node7
+            - count: 2
+              size: 2G
+              lb_group: node8
+            - count: 2
+              size: 2G
+              lb_group: node9
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+        initiators:                             # Configure Initiators with all pre-req
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        fault-injection-methods:                # Failure induction
+          - tool: systemctl
+            nodes: node7
+      desc: 4GW HA test Single subsystem Single Failure
+      destroy-cluster: false
+      module: test_ceph_nvmeof_high_availability.py
+      name: NVMeoF 4-GW HA test Single failure
+      polarion-id: CEPH-83589010
+
+# 4GW HA Single-sub multinode Failover and failback parallely
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        install: true                           # Run SPDK with all pre-requisites
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+        gw_nodes:
+          - node6
+          - node7
+          - node8
+          - node9
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 5G
+              lb_group: node6
+            - count: 2
+              size: 5G
+              lb_group: node7
+            - count: 2
+              size: 5G
+              lb_group: node8
+            - count: 2
+              size: 5G
+              lb_group: node9
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+        initiators:                             # Configure Initiators with all pre-req
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        fault-injection-methods:                # Failure induction
+          - tool: systemctl
+            nodes:
+              - node7
+              - node9
+      desc: 4GW HA Single-sub multinode Failover and failback parallely
+      destroy-cluster: false
+      module: test_ceph_nvmeof_high_availability.py
+      name: Test NVMeoF 4-GW HA multinode fail parallel
+      polarion-id:
+
+  # 4GW Multi node sequential failover-failback
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        install: true                           # Run SPDK with all pre-requisites
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+        gw_nodes:
+          - node6
+          - node7
+          - node8
+          - node9
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 5G
+              lb_group: node6
+            - count: 2
+              size: 5G
+              lb_group: node7
+            - count: 2
+              size: 5G
+              lb_group: node8
+            - count: 2
+              size: 5G
+              lb_group: node9
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+        initiators:                             # Configure Initiators with all pre-req
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        fault-injection-methods:                # Failure induction
+          - tool: systemctl
+            nodes:
+              - node7
+              - node9
+          - tool: systemctl
+            nodes:
+              - node6
+              - node7
+      desc: 4GW HA test Single multinode sequential Failure
+      destroy-cluster: false
+      module: test_ceph_nvmeof_high_availability.py
+      name: Test NVMeoF 4-GW HA multi node sequential failure
+      polarion-id:
+
+# 4GW HA 2-subsystems multinode Failover and failback parallely
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        install: true                           # Run SPDK with all pre-requisites
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+        gw_nodes:
+          - node6
+          - node7
+          - node8
+          - node9
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 5G
+              lb_group: node6
+            - count: 2
+              size: 5G
+              lb_group: node7
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 5G
+              lb_group: node8
+            - count: 2
+              size: 5G
+              lb_group: node9
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+        initiators:                             # Configure Initiators with all pre-req
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        fault-injection-methods:                # Failure induction
+          - tool: systemctl
+            nodes:
+              - node6
+              - node9
+      desc: 4GW HA 2-subsystems multinode Failover and failback parallely
+      destroy-cluster: false
+      module: test_ceph_nvmeof_high_availability.py
+      name: Test NVMeoF 4-GW HA 2-sub multinode fail parallel
+      polarion-id:
+
+# 4GW HA 4-subsystems multinode Failover and failback parallely
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        install: true                           # Run SPDK with all pre-requisites
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+        gw_nodes:
+          - node6
+          - node7
+          - node8
+          - node9
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 5G
+              lb_group: node6
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 5G
+              lb_group: node7
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode3
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 5G
+              lb_group: node8
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode4
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 5G
+              lb_group: node9
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+        initiators:                             # Configure Initiators with all pre-req
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+        fault-injection-methods:                # Failure induction
+          - tool: systemctl
+            nodes:
+              - node8
+              - node7
+      desc: 4GW HA 4-subsystems multinode Failover and failback parallely
+      destroy-cluster: false
+      module: test_ceph_nvmeof_high_availability.py
+      name: Test NVMeoF 4-GW HA 4-sub multinode fail parallel
+      polarion-id:
