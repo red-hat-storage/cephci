@@ -1,0 +1,125 @@
+##############################################################################################
+# Tier-Level: 1
+# Test-Suite: conf/pacific/upgrades/tier-1_upgrade_cephadm.yaml
+# Scenario: upgrade from 5.x(GA) to 5.x(latest) and check rgw pool
+#
+# Cluster Configuration: conf/reef/upgrades/upgrade_4-node-cluster.yaml
+#
+# Test Steps:
+# - Deploy 5.x(GA) cluster in RHEL 8
+# - Upgrade cluster from 5.x(GA) (GA) to 5.x(GA) (Latest)
+# - Validate cluster status
+# - Validate rgw pool
+################################################################################################
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Bootstrap RHCS 5.x(GA) cluster and deploy services with label placements.
+      desc: Bootstrap RHCS 5.x(GA) cluster and deploy services with label placements.
+      polarion-id: CEPH-83573777
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 5.3
+                release: rc
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2
+                  sep: " "
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client
+      desc: Configure client with admin keyring.
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1
+        node: node4
+        copy_admin_keyring: true
+        store-keyring: /etc/ceph/ceph.client.1.keyring
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Upgrade cluster to latest RHCS 5x version
+      desc: Upgrade cluster to latest RHCS 5x version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791,CEPH-83573790,CEPH-83575354
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
+
+  - test:
+      name: Verify upgrade not creates additional rgw pool
+      desc: Verify upgrade not creates additional rgw pool
+      polarion-id: CEPH-83588692
+      module: test_verify_pool.py
+      config:
+        pool: rgw
+
