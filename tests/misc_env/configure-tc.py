@@ -92,6 +92,18 @@ def run(ceph_cluster: Ceph, config: Dict, **kwargs) -> int:
         try:
             exec_command(
                 node=node,
+                command=f"sudo tc qdisc show dev {dev} | grep netem",
+            )
+            LOG.info("delay already exist, change the existing delay")
+            verb = "change"
+
+        except Exception:  # no-qa
+            LOG.info("Introduce network delay")
+            verb = "add"
+
+        try:
+            exec_command(
+                node=node,
                 check_ec=True,
                 sudo=True,
                 command=f"tc qdisc {verb} dev {dev} {rule}",
