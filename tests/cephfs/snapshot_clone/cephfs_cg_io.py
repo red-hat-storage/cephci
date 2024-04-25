@@ -296,7 +296,16 @@ class CG_snap_IO(object):
         )
         io_modules.clear()
         if lc_status == 0:
-            read_status = self.cg_fio_io_read(write_client, mnt_pt)
+            retry_cnt = 2
+            i = 0
+            # Retry read op if quiesce was performed mid op, as new read in quiesced state is allowed
+            while i < retry_cnt:
+                read_status = self.cg_fio_io_read(write_client, mnt_pt)
+                if read_status == 0:
+                    i = retry_cnt
+                else:
+                    i += 1
+
             io_modules.update({"cg_fio_io_read": read_status})
             log.info(f"io_modules:{io_modules}")
             fio_status = self.validate_exit_status(
@@ -307,7 +316,16 @@ class CG_snap_IO(object):
             )
             io_modules.clear()
         if lc_status == 0 and fio_status == 0:
-            read_status = self.cg_smallfile_io_read(write_client, mnt_pt)
+            retry_cnt = 2
+            i = 0
+            # Retry read op if quiesce was performed mid op, as new read in quiesced state is allowed
+            while i < retry_cnt:
+                read_status = self.cg_smallfile_io_read(write_client, mnt_pt)
+                if read_status == 0:
+                    i = retry_cnt
+                else:
+                    i += 1
+
             io_modules.update({"cg_smallfile_io_read": read_status})
             log.info(f"io_modules:{io_modules}")
             sf_status = self.validate_exit_status(
@@ -679,7 +697,7 @@ class CG_snap_IO(object):
                     cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
                     f"--operation read --threads 1 --file-size 1024 "
                     f"--files 1 --top {smallfile_dir} --network-sync-dir /var/tmp",
-                    timeout=15,
+                    timeout=10,
                 )
                 log.info(f"smallfile_io {io_type} cmd op : {out}")
                 smallfile_read_success = 1
@@ -785,7 +803,7 @@ class CG_snap_IO(object):
                 sudo=True,
                 cmd=f"fio --name={fio_file_path} --ioengine=libaio --size 2M --rw=read --bs=1M --direct=1 "
                 f"--numjobs=1 --iodepth=5 --runtime=10",
-                timeout=15,
+                timeout=10,
             )
             log.info(f"fio_io {io_type} cmd op : {out}")
             return 0

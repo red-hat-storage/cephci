@@ -43,28 +43,35 @@ def run(ceph_cluster, **kw):
     3.Run subvolume quiesce, note quiesce set id and version, perform quiesce-set changes include, exclude,
     note version updates for each change. Verify quiesce release with if-version, verify for each versions.
 
-    Workflow3 -
+    Workflow3 - Verify CG quiesce on pre-provisioned quiesce set i.e., quiesce set having subvolumes already
+    part of other quiesce set
     Steps:
-    1.
-    Workflow4 -
+    1. Run QS IO validation tool on selected quiesce set.
+    2. Run Quiesce on subset of subvolumes in quiesce set with timeout and expiration set to 300secs
+    3. Run quiesce on original quiesce set with all subvolumes including ones referred in step2.
+    4. Create snapshots and perform quiesce release.
+    5. Release the quiesce on set created in step2.
+
+    Workflow4 - Verify snapshot restore of QS snap on subvolume can succeed.
     Steps:
+    1. Run QS IO validation tool on selected quiesce set
+    2. Perform quiesce, create snapshot snap1
+    3. Release quiesce. Verify restore of snapshot snap1 contents to new dir
 
-    Type - Longevity
+    Workflow5 - Validate quiesce release response when quiesce-timeout and quiesce-expire time is reached.
+    Steps:
+    1. Run QS IO validation tool on selected quiesce set
+    2. Perform quiesce with shorter timeout as 5secs and normal expiration value,
+    3. Induce delay of 5secs for quiesce by appending string "?delay_ms=5000" to each subvolume in quiesce cmd.
+    4. Validate quiesce cmd response includes string ETIMEDOUT.
+    5. Perform quiesce on same set again with normal timeout but shorter expiration value say 5secs.
+    6. Create snapshot,wait for 6secs.
+    3. Perform quiesce release when set has expired and validate release cmd response to include EPERM error.
 
-    Workflow5 -
-    Workflow6 -
-
-
-    Type - Negative
-    Workflow6 -
-    Workflow7 -
-
-    Type - Systemic
-    Workflow8 - s
-    Note :
+    Workflow6 - Perform all state transitions and validate response
+    Steps:
 
     Clean Up:
-    1.
 
     """
     try:
@@ -99,6 +106,8 @@ def run(ceph_cluster, **kw):
         test_functional = [
             "cg_snap_func_workflow_1",
             "cg_snap_func_workflow_2",
+            "cg_snap_func_workflow_3",
+            "cg_snap_func_workflow_4",
         ]
 
         if test_case_name in test_functional:
@@ -182,18 +191,6 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Clean Up in progess")
-        """
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph nfs export delete {nfs_name} {nfs_export_name}",
-            check_ec=False,
-        )
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph nfs cluster delete {nfs_name}",
-            check_ec=False,
-        )
-        """
         qs_cnt += 1
         for i in range(1, qs_cnt):
             subvol_name = f"sv_def_{i}"
@@ -218,6 +215,12 @@ def cg_snap_test_func(cg_test_params):
         return test_status
     elif cg_test_params["test_case"] == "cg_snap_func_workflow_2":
         test_status = cg_snap_func_2(cg_test_params)
+        return test_status
+    elif cg_test_params["test_case"] == "cg_snap_func_workflow_3":
+        test_status = cg_snap_func_3(cg_test_params)
+        return test_status
+    elif cg_test_params["test_case"] == "cg_snap_func_workflow_4":
+        test_status = cg_snap_func_4(cg_test_params)
         return test_status
 
 
@@ -606,7 +609,7 @@ def cg_snap_func_2(cg_test_params):
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
-        time.sleep(45)
+        time.sleep(30)
         repeat_cnt = 2
         snap_qs_dict = {}
         for qs_member in qs_set:
@@ -884,3 +887,339 @@ def cg_snap_func_2(cg_test_params):
         )
         return 1
     return 0
+
+
+def cg_snap_func_3(cg_test_params):
+    log.info("Workflow 3 - Verify CG quiesce on pre-provisioned quiesce set")
+    cg_test_io_status = {}
+    fs_name = cg_test_params["fs_name"]
+    fs_util = cg_test_params["fs_util"]
+    clients = cg_test_params["clients"]
+    client = cg_test_params["clients"][0]
+    client1 = cg_test_params["clients"][1]
+    qs_clients = [client1]
+    log.info(f"client:{client.node.hostname}")
+    for client_tmp in clients:
+        log.info(f"client:{client_tmp.node.hostname}")
+    for qs_client in qs_clients:
+        log.info(f"qs_client:{qs_client.node.hostname}")
+    qs_sets = cg_test_params["qs_sets"]
+    cg_snap_util = cg_test_params["cg_snap_util"]
+    cg_snap_io = cg_test_params["cg_snap_io"]
+    test_fail = 0
+    for qs_set in qs_sets:
+        client_mnt_dict = {}
+        qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
+        client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
+
+        log.info(f"Start the IO on quiesce set members - {qs_set}")
+
+        cg_test_io_status = Value("i", 0)
+        io_run_time = 30
+
+        p = Thread(
+            target=cg_snap_io.start_cg_io,
+            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+        )
+        p.start()
+        time.sleep(5)
+        repeat_cnt = 2
+        snap_qs_dict = {}
+        for qs_member in qs_set:
+            snap_qs_dict.update({qs_member: []})
+        i = 0
+        while i < repeat_cnt:
+            if p.is_alive():
+                log.info(f"Workflow 3 : Iteration {i}")
+                # time taken for 1 lifecycle : ~5secs
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                qs_id_val_sub = f"cg_test1_subset_{rand_str}"
+                qs_subset = random.sample(qs_set, 3)
+                log.info(f"Run Quiesce on subset of subvolumes in quiesce set {qs_set}")
+                log.info(f"Quiesce the subset {qs_subset}")
+
+                qs_op_out = cg_snap_util.cg_quiesce(
+                    client, qs_subset, qs_id=qs_id_val_sub, timeout=300, expiration=300
+                )
+                log.info(f"quiesce cmd response : {qs_op_out}")
+                log.info(f"Run quiesce on original quiesce set {qs_set}")
+                qs_id_val = f"cg_test1_{rand_str}"
+                qs_op_out = cg_snap_util.cg_quiesce(
+                    client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+                )
+                log.info(f"quiesce cmd response : {qs_op_out}")
+                time.sleep(10)
+                log.info("Perform snapshot creation on all members")
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                snap_name = f"cg_snap_{rand_str}"
+                for qs_member in qs_set:
+                    snap_list = snap_qs_dict[qs_member]
+                    snapshot = {
+                        "vol_name": fs_name,
+                        "snap_name": snap_name,
+                    }
+                    if "/" in qs_member:
+                        group_name, subvol_name = re.split("/", qs_member)
+                        snapshot.update(
+                            {
+                                "subvol_name": subvol_name,
+                                "group_name": group_name,
+                            }
+                        )
+                    else:
+                        subvol_name = qs_member
+                        snapshot.update(
+                            {
+                                "subvol_name": subvol_name,
+                            }
+                        )
+                    fs_util.create_snapshot(client, **snapshot)
+                    log.info(f"Created snapshot {snap_name} on {subvol_name}")
+                    snap_list.append(snap_name)
+                    snap_qs_dict.update({subvol_name: snap_list})
+
+                log.info(f"Release the subset {qs_subset}")
+                out = cg_snap_util.cg_quiesce_release(
+                    client, qs_id_val_sub, if_await=True
+                )
+                if out == 1:
+                    test_fail += 1
+                    log.error(
+                        f"FAIL : Quiesce subset release failed on {qs_id_val_sub}"
+                    )
+                log.info(f"Release quiesce set with id {qs_id_val}")
+                out = cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+                if out == 1:
+                    test_fail += 1
+                    log.error(f"FAIL : Quiesce set release failed on {qs_id_val}")
+
+                if test_fail >= 1:
+                    i = repeat_cnt
+                else:
+                    i += 1
+                    time.sleep(10)
+            else:
+                i = repeat_cnt
+
+        log.info(f"cg_test_io_status : {cg_test_io_status.value}")
+        wait_for_cg_io(p, qs_id_val, io_run_time)
+
+        mnt_pt_list = []
+        log.info(f"Perform cleanup for {qs_set}")
+        for qs_member in qs_member_dict1:
+            mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
+        log.info("Remove CG IO files and unmount")
+        cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
+        mnt_pt_list.clear()
+
+        snap_name = f"cg_snap_{rand_str}"
+        log.info("Remove CG snapshots")
+        for qs_member in qs_member_dict1:
+            snap_list = snap_qs_dict[qs_member]
+            if qs_member_dict1[qs_member].get("group_name"):
+                group_name = qs_member_dict1[qs_member]["group_name"]
+                for snap_name in snap_list:
+                    fs_util.remove_snapshot(
+                        client,
+                        fs_name,
+                        qs_member,
+                        snap_name,
+                        validate=True,
+                        group_name=group_name,
+                    )
+            else:
+                for snap_name in snap_list:
+                    fs_util.remove_snapshot(
+                        client, fs_name, qs_member, snap_name, validate=True
+                    )
+
+        if cg_test_io_status.value == 1:
+            log.error(
+                f"CG IO test exits with failure during workflow3 on qs_set-{qs_id_val}"
+            )
+            test_fail += 1
+
+    if test_fail >= 1:
+        log.error("FAIL: Workflow 3 - Verify quiesce on pre-provisioned quiesce set")
+        return 1
+    return 0
+
+
+def cg_snap_func_4(cg_test_params):
+    log.info("Workflow 4 - Verify Restore suceeds from snapshot created during quiesce")
+    cg_test_io_status = {}
+    fs_name = cg_test_params["fs_name"]
+    fs_util = cg_test_params["fs_util"]
+    clients = cg_test_params["clients"]
+    client = cg_test_params["clients"][0]
+    client1 = cg_test_params["clients"][1]
+    qs_clients = [client1]
+    log.info(f"client:{client.node.hostname}")
+    for client_tmp in clients:
+        log.info(f"client:{client_tmp.node.hostname}")
+    for qs_client in qs_clients:
+        log.info(f"qs_client:{qs_client.node.hostname}")
+    qs_sets = cg_test_params["qs_sets"]
+    cg_snap_util = cg_test_params["cg_snap_util"]
+    cg_snap_io = cg_test_params["cg_snap_io"]
+    test_fail = 0
+
+    for qs_set in qs_sets:
+        client_mnt_dict = {}
+        qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
+        client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
+
+        log.info(f"Start the IO on quiesce set members - {qs_set}")
+
+        cg_test_io_status = Value("i", 0)
+        io_run_time = 30
+        p = Thread(
+            target=cg_snap_io.start_cg_io,
+            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+        )
+        p.start()
+        time.sleep(10)
+        snap_qs_dict = {}
+        for qs_member in qs_set:
+            snap_qs_dict.update({qs_member: []})
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+
+        log.info(f"Run quiesce on quiesce set {qs_set}")
+        qs_id_val = f"cg_test1_{rand_str}"
+        qs_op_out = cg_snap_util.cg_quiesce(
+            client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+        )
+        log.info(f"quiesce cmd response : {qs_op_out}")
+        time.sleep(10)
+        log.info("Perform snapshot creation on all members")
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        snap_name = f"cg_snap_{rand_str}"
+        for qs_member in qs_set:
+            snap_list = snap_qs_dict[qs_member]
+            snapshot = {
+                "vol_name": fs_name,
+                "snap_name": snap_name,
+            }
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                snapshot.update(
+                    {
+                        "subvol_name": subvol_name,
+                        "group_name": group_name,
+                    }
+                )
+            else:
+                subvol_name = qs_member
+                snapshot.update(
+                    {
+                        "subvol_name": subvol_name,
+                    }
+                )
+            fs_util.create_snapshot(client, **snapshot)
+            log.info(f"Created snapshot {snap_name} on {subvol_name}")
+            snap_list.append(snap_name)
+            snap_qs_dict.update({subvol_name: snap_list})
+
+        log.info(f"Release quiesce set with id {qs_id_val}")
+        out = cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+        if out == 1:
+            test_fail += 1
+            log.error(f"FAIL : Quiesce set release failed on {qs_id_val}")
+        log.info("Verify snapshot restore on each member")
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                qs_member = subvol_name
+            mnt_pt = qs_member_dict1[qs_member]["mount_point"]
+            snap_list = snap_qs_dict[qs_member]
+            snap_name = random.choice(snap_list)
+            snap_path = f"{mnt_pt}/.snap/_{snap_name}*/"
+            restore_dst = f"{mnt_pt}/restore_dst_dir/"
+            cmd = f"mkdir {restore_dst};cp {snap_path}/cg_io/dd_dir/* {restore_dst}"
+            try:
+                out, rc = client1.exec_command(sudo=True, cmd=cmd)
+                log.info(f"Restore suceeded for {qs_member} : {out}")
+            except Exception as ex:
+                log.error(f"Restore failed with error {ex} on {qs_member}")
+                test_fail += 1
+
+        log.info(f"cg_test_io_status : {cg_test_io_status.value}")
+        wait_for_cg_io(p, qs_id_val, io_run_time)
+
+        mnt_pt_list = []
+        log.info(f"Perform cleanup for {qs_set}")
+        for qs_member in qs_member_dict1:
+            mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
+        log.info("Remove CG IO files and unmount")
+        cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
+        mnt_pt_list.clear()
+
+        snap_name = f"cg_snap_{rand_str}"
+        log.info("Remove CG snapshots")
+        for qs_member in qs_member_dict1:
+            snap_list = snap_qs_dict[qs_member]
+            if qs_member_dict1[qs_member].get("group_name"):
+                group_name = qs_member_dict1[qs_member]["group_name"]
+                for snap_name in snap_list:
+                    fs_util.remove_snapshot(
+                        client,
+                        fs_name,
+                        qs_member,
+                        snap_name,
+                        validate=True,
+                        group_name=group_name,
+                    )
+            else:
+                for snap_name in snap_list:
+                    fs_util.remove_snapshot(
+                        client, fs_name, qs_member, snap_name, validate=True
+                    )
+
+        if cg_test_io_status.value == 1:
+            log.error(
+                f"CG IO test exits with failure during workflow4 on qs_set-{qs_id_val}"
+            )
+            test_fail += 1
+
+    if test_fail >= 1:
+        log.error(
+            "FAIL: Workflow 4 - Verify Restore suceeds from snapshot created during quiesce"
+        )
+        return 1
+    return 0
+
+
+# HELPER ROUTINES
+
+
+def wait_for_cg_io(p, qs_id_val, io_run_time):
+    if p.is_alive():
+        proc_stop = 0
+        log.info("CG IO is running after quiesce lifecycle")
+        wait_time = io_run_time * 2
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=wait_time)
+        while (datetime.datetime.now() < end_time) and (proc_stop == 0):
+            if p.is_alive():
+                time.sleep(10)
+            else:
+                proc_stop = 1
+        if proc_stop == 1:
+            log.info("CG IO completed")
+        elif proc_stop == 0:
+            log.error("CG IO has NOT completed")
+    else:
+        log.info(
+            f"WARN:CG IO test completed early during quiesce test on qs_set id {qs_id_val}"
+        )
