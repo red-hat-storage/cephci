@@ -4,7 +4,7 @@
 # - The cluster health is good
 # - End users can perform object operations.
 
-# tested with conf file: conf/quincy/baremetal_pipeline/mero_conf.yaml
+# tested with conf file: conf/baremetal/mero1_1admin_4node_4client.yaml
 
 tests:
 
@@ -144,13 +144,11 @@ tests:
       abort-on-fail: true
       config:
         haproxy_clients:
-          - node10
+          - node5
+          - node6
         rgw_endpoints:
-          - "node4:80"
-          - "node5:80"
-          - "node6:80"
-          - "node14:80"
-          - "node15:80"
+          - "node1:80"
+          - "node2:80"
       desc: "Configure HAproxy"
       module: haproxy.py
       name: "Configure HAproxy"
@@ -160,22 +158,25 @@ tests:
       abort-on-fail: true
       config:
         controllers:
-          - node10
+          - node6
         drivers:
           count: 2
           hosts:
-            - node10
+            - node5
+            - node6
       desc: Start COS Bench controller and driver
       module: cosbench.py
       name: deploy cosbench
 
   - test:
-      abort-on-fail: true
       config:
         controllers:
-          - node10
-        drivers: # if drivers are not specified will use one of the rgw node
-          - node10
+          - node6
+        drivers:
+          count: 2
+          hosts:
+            - node5
+            - node6
         fill_percent: 20
         bucket_prefix: test-bkt-
       desc: prepare and push cosbench fill workload
@@ -184,12 +185,14 @@ tests:
       polarion-id: CEPH-83574428
 
   - test:
-      abort-on-fail: true
       config:
         controllers:
-          - node10
-        drivers: # if drivers are not specified will use one of the rgw node
-          - node10
+          - node6
+        drivers:
+          count: 2
+          hosts:
+            - node5
+            - node6
         fill_percent: 20
         workload_type: hybrid
         bucket_prefix: test-bkt-
