@@ -203,7 +203,7 @@ def cg_scale(cg_test_params):
     for qs_set in qs_sets:
         client_mnt_dict = {}
         write_procs = []
-        i = 1
+        i = 0
         for qs_member in qs_set:
             client_obj = qs_clients[i]
             if "/" in qs_member:
