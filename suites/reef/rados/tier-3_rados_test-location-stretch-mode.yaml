@@ -320,6 +320,7 @@ tests:
         tiebreaker_mon_site_name: arbiter
         delete_pool: true
       desc: Test stretch Cluster netsplit scenario between data sites
+      comments: Active bug - 2249962
 
   - test:
       name: OSD and host replacement
