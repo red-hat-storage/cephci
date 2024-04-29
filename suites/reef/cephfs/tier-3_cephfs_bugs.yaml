@@ -18,6 +18,8 @@
   # CEPH-83583762: Check to prevent usage of Pools which has Pool level snaps for Filesystem creation.
   # CEPH-83584084: Validate if no repeated mclientscaps(revoke) entries found in MDS.
   # CEPH-83586730: validate standby replay node not removed after setting mds_inject_health_dummy
+  # CEPH-83583721 - Validate the details of all MDS servers are displayed with command `ceph mds metadata`.
+  # CEPH-83583723 - Ensure deletion of clones are allowed when the clones are stuck and in pending state
 #=======================================================================================================================
 ---
 tests:
@@ -230,4 +232,16 @@ tests:
       module: cephfs_bugs.test_mds_inject_health_dummy.py
       polarion-id: CEPH-83586730
       desc: validate standby reply node not removed after setting mds_inject_health_dummy
+      abort-on-fail: false
+  - test:
+      name:  Validate the details of all MDS servers are displayed with command ceph mds metadata
+      module: cephfs_bugs.validate_mds_metadata.py
+      polarion-id: CEPH-83583721
+      desc: Validate the details of all MDS servers are displayed with command ceph mds metadata
+      abort-on-fail: false
+  - test:
+      name: Ensure deletion of clones are allowed when the clones are stuck and in pending state
+      module: cephfs_bugs.test_clone_delete_with_FS_fail.py
+      polarion-id: CEPH-83583723
+      desc: Ensure deletion of clones are allowed when the clones are stuck and in pending state
       abort-on-fail: false
