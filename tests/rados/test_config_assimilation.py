@@ -44,9 +44,7 @@ def run(ceph_cluster, **kw) -> int:
         )
 
         # Adding the configurations into the conf file.
-        cmd = f"""cat <<EOF >> /etc/ceph/ceph.conf
-    {cluster_conf_file}
-    EOF"""
+        cmd = f"echo '{cluster_conf_file}' >> /etc/ceph/ceph.conf"
         client_node.exec_command(cmd=cmd, sudo=True)
         log.debug("Completed adding the configurations into the ceph.conf file ")
 
@@ -57,7 +55,11 @@ def run(ceph_cluster, **kw) -> int:
 
         log.info("Assimilating the contents of ceph.conf into mon config")
         cmd = "ceph config assimilate-conf -i /etc/ceph/ceph.conf -o /etc/ceph/assimilate-op.txt"
-        client_node.exec_command(cmd=cmd, sudo=True)
+        try:
+            client_node.exec_command(cmd=cmd, sudo=True)
+        except Exception as err:
+            log.error(f"Failed to run the assimilate command. error : {err}")
+            return 1
 
         # Verifying the configs set via the CLI in the mon config database.
         test_config = config.get("Verify_config_parameters")
