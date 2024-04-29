@@ -41,6 +41,7 @@ def run(ceph_cluster, **kwargs) -> int:
     log.info("Upgrade Ceph cluster...")
     config = kwargs["config"]
     config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
+    verify_image = bool(config.get("verify_cluster_health", False))
     orch = Orch(cluster=ceph_cluster, **config)
 
     client = ceph_cluster.get_nodes(role="client")[0]
@@ -81,6 +82,11 @@ def run(ceph_cluster, **kwargs) -> int:
 
         # Monitor upgrade status, till completion
         orch.monitor_upgrade_status()
+
+        if verify_image:
+            # BZ: 2077843
+            if "docker.io" in orch.upgrade_status():
+                raise UpgradeFailure("docker.io appended to the image.")
 
         if config.get("verify_cephadm_containers") and is_legacy_container_present(
             ceph_cluster
