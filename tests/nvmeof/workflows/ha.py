@@ -6,6 +6,7 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+from ceph.ceph_admin.daemon import Daemon
 from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
@@ -39,6 +40,7 @@ class HighAvailability:
         self.config = config
         self.gateways = []
         self.orch = Orch(cluster=self.cluster, **{})
+        self.daemon = Daemon(cluster=self.cluster, **{})
         self.nvme_pool = config["rbd_pool"]
         self.clients = []
 
@@ -47,6 +49,10 @@ class HighAvailability:
             self.gateways.append(NVMeGateway(gw_node))
 
         self.ana_ids = [i.ana_group_id for i in self.gateways]
+        self.fail_ops = {
+            "systemctl": self.system_control,
+            "daemon": self.ceph_daemon,
+        }
 
     def check_gateway(self, node_id):
         """Check node is NVMeoF Gateway node.
@@ -165,15 +171,121 @@ class HighAvailability:
 
         return found
 
-    def system_control(self, gateway, state="is_active"):
-        # todo: handling failure injection via systemctl
-        pass
+    def system_control(self, gateway, action, wait_for_active_state=True):
+        """SystemCtl methods to control nvme unit service states.
 
-    def ceph_daemon(self, gateway, state="running"):
-        # todo: handling failure injection via systemctl
-        pass
+        Args:
+            gateway: NVMe gateway object.
+            action: systemctl "stop"|"start"
+            wait_for_active_state: wait for the active using bool value.
 
-    def failover(self, gateway, fail_tool="systemctl"):
+        - wait_for_active_state:
+            True: wait for the service unit becomes active.
+            False: wait for the service unit becomes inactive.
+            None: do not wait, return
+
+        Returns:
+            Boolean
+        """
+        ops = {
+            "start": gateway.systemctl.start,
+            "stop": gateway.systemctl.stop,
+            "is-active": gateway.systemctl.is_active,
+        }
+
+        unit_service = gateway.system_unit_id
+        op = ops[action]
+        op(unit_service)
+
+        if wait_for_active_state is None:
+            return
+
+        is_active = ops["is-active"]
+        for w in WaitUntil(timeout=300):
+            _active = is_active(unit_service)
+            if _active == wait_for_active_state:
+                LOG.info(
+                    f"[ {unit_service} ] {action}ing NVMeofGW service is successfull."
+                )
+                return True
+            LOG.warning(
+                f"[ {unit_service} ] {action}ing NVMeofGW service is still not successfull. check again"
+            )
+
+        if w.expired:
+            LOG.error(
+                f"[ {unit_service} ] {action}ing NVMeofGW service failed even after 300s timeout.."
+            )
+
+        return False
+
+    def nvmeof_daemon_state(self, name):
+        """Return True if nvmeof daemon is running else False."""
+        daemon_type, daemon_id = name.split(".", 1)
+        ps_args = {
+            "base_cmd_args": {"format": "json"},
+            "args": {
+                "daemon_type": daemon_type,
+                "daemon_id": daemon_id,
+                "refresh": True,
+            },
+        }
+        out, _ = self.orch.ps(ps_args)
+        out = json.loads(out)
+        if out[0]["status"] == 1:
+            return True
+        elif out[0]["status"] == -1:
+            return False
+
+    def ceph_daemon(self, gateway, action, wait_for_active_state=True):
+        """Ceph daemon commands to control nvme daemon states.
+
+        Args:
+            gateway: NVMe gateway object.
+            action: daemon orch "stop"|"start"
+            wait_for_active_state: wait for the active using bool value.
+
+        - wait_for_active_state:
+            True: wait for the daemon becomes active.
+            False: wait for the daemon becomes inactive.
+            None: do not wait, return
+
+        Returns:
+            Boolean
+        """
+        ops = {
+            "start": self.daemon.start,
+            "stop": self.daemon.stop,
+            "is-active": self.nvmeof_daemon_state,
+        }
+        daemon = gateway.daemon_name
+
+        action_args = {"command": action, "pos_args": [daemon]}
+
+        op = ops[action]
+        op(action_args)
+
+        if wait_for_active_state is None:
+            return
+
+        is_active = ops["is-active"]
+        for w in WaitUntil(timeout=300):
+            _active = is_active(daemon)
+            if _active == wait_for_active_state:
+                LOG.info(f"[ {daemon} ] {action}ing NVMeofGW Daemon is successfull.")
+                return True
+            LOG.warning(
+                f"[ {daemon} ] {action}ing NVMeofGW Daemon is still not successfull. check again"
+            )
+
+        if w.expired:
+            LOG.error(
+                f"[ {daemon} ] {action}ing NVMeofGW Daemon failed even after 300s timeout.."
+            )
+
+        return False
+
+    def failover(self, gateway, fail_tool):
         """HA Failover on the NVMeoF Gateways.
 
         Initiate Failover
@@ -185,60 +297,53 @@ class HighAvailability:
         - List out namespaces associated with the failed Gateways using ANA group ids.
         - Check for 5 Consecutive times for the increments in write/read to validate IO continuation.
         """
-        LOG.info(f"[ {gateway.hostname} ] Failing over Gateway")
-
-        # Initiate Failover
-        LOG.info(f"[ {gateway.hostname} ]: Failing NVMe Service {fail_tool} command")
-        service = gateway.system_unit_id
-        gateway.systemctl.stop(service)
-
+        hostname = gateway.hostname
         start_counter = float()
         start_time = str()
         end_counter = float()
         end_time = str()
 
+        # Initiate Failover
+        fail_op = self.fail_ops[fail_tool]
+        LOG.info(f"[ {hostname} ]: Failing Over VMe Service {fail_tool} command")
+        res = fail_op(gateway=gateway, action="stop", wait_for_active_state=False)
+        if not res:
+            raise Exception(
+                f"[ {hostname} ]: Error in stopping NVMe Service using {fail_tool} command "
+            )
+        start_counter, start_time = get_current_timestamp()
+
         # Wait until 60 seconds
         for w in WaitUntil():
-            # Check for service/daemon failure
-            if not gateway.systemctl.is_active(service):
-                LOG.info(f"[ {service} ] NVMeofGW service Stopped successfully.")
-                if not start_counter:
-                    start_counter, start_time = get_current_timestamp()
+            # Check for gateway unavailability
+            if self.check_gateway_availability(
+                gateway.ana_group_id, state="UNAVAILABLE"
+            ):
+                LOG.info(f"[ {hostname} ] NVMeofGW service is UNAVAILABLE.")
+                active = self.get_optimized_state(gateway.ana_group_id)
 
-                # Check for gateway unavailability
-                if self.check_gateway_availability(
-                    gateway.ana_group_id, state="UNAVAILABLE"
-                ):
-                    LOG.info(f"[ {service} ] NVMeofGW service is UNAVAILABLE.")
-                    active = self.get_optimized_state(gateway.ana_group_id)
+                # Find optimized path
+                # Condidtion to fail if multiple Active path exists for a gateway.
+                if active and 1 <= len(active) < 2:
+                    end_counter, end_time = get_current_timestamp()
+                    LOG.info(
+                        f"{list(active[0])} is new and only Active GW for failed {hostname}"
+                    )
+                    break
 
-                    # Find optimized path
-                    # Condidtion to fail if multiple Active path exists for a gateway.
-                    if active and 1 <= len(active) < 2:
-                        end_counter, end_time = get_current_timestamp()
-                        LOG.info(
-                            f"{list(active[0])} is new and only Active GW for failed {gateway.hostname}"
-                        )
-                        break
-
-                    if len(active) > 1:
-                        raise Exception(
-                            f"[ {gateway.hostname} ] Found more than one Active path - {log_json_dump(active)}"
-                        )
-                LOG.warning(f"[ {service} ] is still in AVAILABLE state..")
-                continue
-
-            LOG.warning(
-                f"[ {service} ] Stopping NVMeofGW service Failed. try again!!!!"
-            )
+                if len(active) > 1:
+                    raise Exception(
+                        f"[ {hostname} ] Found more than one Active path - {log_json_dump(active)}"
+                    )
+            LOG.warning(f"[ {hostname} ] is still in AVAILABLE state..")
 
         if w.expired:
             raise TimeoutError(
-                f"[ {gateway.hostname} ] Failover of NVMeofGW service failed after 60s timeout.."
+                f"[ {hostname} ] Failover of NVMeofGW service failed after 60s timeout.."
             )
 
         LOG.info(
-            f"[ {gateway.hostname} ] Total time taken to failover - {end_counter - start_counter}s"
+            f"[ {hostname} ] Total time taken to failover - {end_counter - start_counter} seconds"
         )
         return {
             "failover-start-time": start_time,
@@ -247,68 +352,64 @@ class HighAvailability:
             "failover-end-counter-time": end_counter,
         }
 
-    def failback(self, gateway, fail_tool="systemctl"):
+    def failback(self, gateway, fail_tool):
         """Failback the Gateways.
 
         Args:
             gateway: Gateway to be fail-back.
             fail_tool: tool to fail the GW service
         """
-        LOG.info(f"[ {gateway.hostname} ] Failback / Restore Gateway")
-
-        # Initiate Fail-back
-        LOG.info(f"[ {gateway.hostname} ]: Starting NVMe Service {fail_tool} command")
-        service = gateway.system_unit_id
-        gateway.systemctl.start(service)
-
+        hostname = gateway.hostname
         start_counter = float()
         start_time = str()
         end_counter = float()
         end_time = str()
 
+        # Initiate Fail-back
+        fail_op = self.fail_ops[fail_tool]
+        LOG.info(
+            f"[ {hostname} ]: Failback / Restore Gateway using {fail_tool} command"
+        )
+        res = fail_op(gateway=gateway, action="start", wait_for_active_state=True)
+        if not res:
+            raise Exception(
+                f"[ {hostname} ]: Error in starting NVMe Service using {fail_tool} command "
+            )
+        start_counter, start_time = get_current_timestamp()
+
         for w in WaitUntil():
-            # Check for service/daemon running satte
-            if gateway.systemctl.is_active(service):
-                LOG.info(f"[ {service} ] NVMeofGW service Started successfully.")
-                if not start_counter:
-                    start_counter, start_time = get_current_timestamp()
+            # Check for gateway availability
+            if self.check_gateway_availability(gateway.ana_group_id):
+                LOG.info(f"[ {hostname} ] NVMeofGW service is AVAILABLE.")
 
-                # Check for gateway availability
-                if self.check_gateway_availability(gateway.ana_group_id):
-                    LOG.info(f"[ {service} ] NVMeofGW service is AVAILABLE.")
+                active = self.get_optimized_state(gateway.ana_group_id)
+                if active and 1 <= len(active) < 2:
+                    state = active[0]
 
-                    active = self.get_optimized_state(gateway.ana_group_id)
-                    if active and 1 <= len(active) < 2:
-                        state = active[0]
-
-                        # check gateway for its own original path.
-                        if gateway.ana_group["name"] in state:
-                            end_counter, end_time = get_current_timestamp()
-                            LOG.info(
-                                f"{gateway.hostname} restored to original path - {log_json_dump(state)}"
-                            )
-                            break
-
-                    if len(active) > 1:
-                        raise Exception(
-                            f"[ {gateway.hostname} ] More than one Active path found - {log_json_dump(active)}"
+                    # check gateway for its own original path.
+                    if gateway.ana_group["name"] in state:
+                        end_counter, end_time = get_current_timestamp()
+                        LOG.info(
+                            f"{hostname} restored to original path - {log_json_dump(state)}"
                         )
-                    LOG.warning(f"[ {gateway.hostname} ] No Active path found")
-                    continue
+                        break
 
-                LOG.warning(f"[ {service} ] is still not in AVAILABLE state..")
+                if len(active) > 1:
+                    raise Exception(
+                        f"[ {hostname} ] More than one Active path found - {log_json_dump(active)}"
+                    )
+                LOG.warning(f"[ {hostname} ] No Active path found")
                 continue
 
-            LOG.warning(
-                f"[ {service} ] NVMeofGW service START still in Failed State. try again !!!!"
-            )
+            LOG.warning(f"[ {hostname} ] is still not in AVAILABLE state..")
+            continue
 
         if w.expired:
             raise TimeoutError(
-                f"[ {gateway.hostname} ] Fail-back of NVMeofGW service failed after 60s timeout.."
+                f"[ {hostname} ] Fail-back of NVMeofGW service failed even after 60s timeout.."
             )
         LOG.info(
-            f"[ {gateway.hostname} ] Time taken to Failback - {end_counter - start_counter} seconds"
+            f"[ {hostname} ] Time taken to Failback - {end_counter - start_counter} seconds"
         )
         return {
             "failback-start-time": start_time,
@@ -425,7 +526,7 @@ class HighAvailability:
 
             # Failover and Failback
             for fail_method in fail_methods:
-                fail_tool = fail_method.get("fail_tool", "systemctl")
+                fail_tool = fail_method["tool"]
                 nodes = fail_method["nodes"]
                 if not isinstance(nodes, list):
                     nodes = [nodes]
