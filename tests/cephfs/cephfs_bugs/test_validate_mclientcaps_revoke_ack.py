@@ -121,7 +121,7 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True,
             cmd=f"python /root/{create_large_file_script} {' '.join(file_paths)}",
-            timeout=7200,
+            long_running=True,
         )
 
         log.info("Check for the Ceph Health.")
