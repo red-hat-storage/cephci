@@ -509,7 +509,6 @@ tests:
             config-file-name: test_lc_transition_with_prefix_rule_haproxy.yaml
             run-on-haproxy: true
             timeout: 300
-            stat-all-buckets-at-archive: true
       desc: test LC transition on multisite, and bucket stats at archive
       module: sanity_rgw_multisite.py
       name: test LC transition on multisite, and bucket stats at archive
@@ -673,7 +672,7 @@ tests:
       module: sanity_rgw_multisite.py
       name: test server_side_copy_object_via_encryption
       polarion-id: CEPH-83575711
-      comments: bug-2149450, test server_side_copy_object_via_encryption
+      comments: bug-2149450, Known failures below 7.1, test server_side_copy_object_via_encryption
 
   - test:
       clusters:
