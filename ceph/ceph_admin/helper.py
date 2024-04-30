@@ -1010,9 +1010,12 @@ def check_service_exists(
     _count = 0
     while end_time > datetime.now():
         sleep(interval)
-        out, err = installer.exec_command(
+        out, _ = installer.exec_command(
             sudo=True, cmd=" ".join(cmd_args), check_ec=True
         )
+        if "No services reported" in out:
+            LOG.warning(out)
+            continue
         out = json.loads(out)[0]
         running = out["status"]["running"]
         count = out["status"]["size"]

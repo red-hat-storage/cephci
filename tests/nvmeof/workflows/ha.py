@@ -13,6 +13,7 @@ from ceph.waiter import WaitUntil
 from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
 from utility.log import Log
+from utility.retry import retry
 
 LOG = Log(__name__)
 
@@ -361,6 +362,7 @@ class HighAvailability:
         )
         return namespaces
 
+    @retry(IOError, tries=3, delay=1)
     def validate_io(self, namespaces):
         """Validate Continuous IO on namespaces.
 
@@ -398,7 +400,7 @@ class HighAvailability:
 
                 LOG.info(f"[ {subsys} ] RBD Disk Usage samples - {res}")
                 if not validate_incremetal_io(res):
-                    raise Exception(f"[ {subsys} ] IO is not progressing - {res}")
+                    raise IOError(f"[ {subsys} ] IO is not progressing - {res}")
                 LOG.info(
                     f"IO validation for {subsys} is successful. {log_json_dump(samples)}"
                 )
@@ -461,4 +463,5 @@ class HighAvailability:
             raise Exception(err)
         finally:
             if io_tasks:
+                LOG.info("Waiting for completion of IOs.")
                 executor.shutdown(wait=True, cancel_futures=True)
