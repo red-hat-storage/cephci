@@ -12,6 +12,7 @@ class NVMeGateway(NVMeGWCLI):
         super(NVMeGateway, self).__init__(node)
         self._ana_group = self.fetch_gateway()
         self._ana_group_id = self.ana_group["load_balancing_group"]
+        self._daemon_name = self.ana_group["name"].split(".", 1)[1]
         self.systemctl = SystemCtl(node)
 
     @property
@@ -29,6 +30,14 @@ class NVMeGateway(NVMeGWCLI):
     @ana_group.setter
     def ana_group(self, value):
         self._ana_group = value
+
+    @property
+    def daemon_name(self):
+        return self._daemon_name
+
+    @daemon_name.setter
+    def daemon_name(self, value):
+        self._daemon_name = value
 
     @property
     def system_unit_id(self):
