@@ -134,22 +134,23 @@ def configure_namespaces(
             LOG.info(num)
             LOG.info(namespaces)
             config["args"].clear()
-            config["args"].update(
-                {
+            config = {
+                "base_cmd_args": {"format": "json"},
+                "args": {
                     "rbd-image": f"{name}-image{num}",
-                    "nsid": num,
                     "rbd-pool": pool,
                     "subsystem": f"nqn.2016-06.io.spdk:cnode{sub_num}",
-                }
-            )
+                },
+            }
 
             namespace_func = fetch_method(_cls, command)
-            namespace_func(**config)
+            _, namespaces = namespace_func(**config)
+            nsid = json.loads(namespaces)["nsid"]
 
             _config = {
                 "base_cmd_args": {"format": "json"},
                 "args": {
-                    "nsid": num,
+                    "nsid": nsid,
                     "subsystem": f"nqn.2016-06.io.spdk:cnode{sub_num}",
                 },
             }
