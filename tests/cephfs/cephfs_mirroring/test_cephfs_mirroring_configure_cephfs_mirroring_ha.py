@@ -298,54 +298,55 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        log.info("Clean up the system")
-        log.info("Delete the snapshots")
-        snapshots_to_delete = [
-            f"{kernel_mounting_dir_1}{subvol1_path}.snap/snap_k1",
-            f"{fuse_mounting_dir_1}{subvol2_path}.snap/snap_f1",
-        ]
-        for snapshot_path in snapshots_to_delete:
-            source_clients[0].exec_command(sudo=True, cmd=f"rmdir {snapshot_path}")
+        if config.get("cleanup", True):
+            log.info("Clean up the system")
+            log.info("Delete the snapshots")
+            snapshots_to_delete = [
+                f"{kernel_mounting_dir_1}{subvol1_path}.snap/snap_k1",
+                f"{fuse_mounting_dir_1}{subvol2_path}.snap/snap_f1",
+            ]
+            for snapshot_path in snapshots_to_delete:
+                source_clients[0].exec_command(sudo=True, cmd=f"rmdir {snapshot_path}")
 
-        log.info("Unmount the paths")
-        paths_to_unmount = [kernel_mounting_dir_1, fuse_mounting_dir_1]
-        for path in paths_to_unmount:
-            source_clients[0].exec_command(sudo=True, cmd=f"umount -l {path}")
+            log.info("Unmount the paths")
+            paths_to_unmount = [kernel_mounting_dir_1, fuse_mounting_dir_1]
+            for path in paths_to_unmount:
+                source_clients[0].exec_command(sudo=True, cmd=f"umount -l {path}")
 
-        log.info("Remove paths used for mirroring")
-        paths_to_remove = [subvol1_path, subvol2_path]
-        for path in paths_to_remove:
-            fs_mirroring_utils.remove_path_from_mirroring(
-                source_clients[0], source_fs, path
-            )
+            log.info("Remove paths used for mirroring")
+            paths_to_remove = [subvol1_path, subvol2_path]
+            for path in paths_to_remove:
+                fs_mirroring_utils.remove_path_from_mirroring(
+                    source_clients[0], source_fs, path
+                )
 
-        log.info("Destroy CephFS Mirroring setup.")
-        fs_mirroring_utils.destroy_cephfs_mirroring(
-            source_fs,
-            source_clients[0],
-            target_fs,
-            target_clients[0],
-            target_user,
-            peer_uuid,
-        )
-
-        log.info("Remove Subvolumes")
-        for subvolume in subvolume_list:
-            fs_util_ceph1.remove_subvolume(
+            log.info("Destroy CephFS Mirroring setup.")
+            fs_mirroring_utils.destroy_cephfs_mirroring(
+                source_fs,
                 source_clients[0],
-                **subvolume,
+                target_fs,
+                target_clients[0],
+                target_user,
+                peer_uuid,
             )
 
-        log.info("Remove Subvolume Group")
-        for subvolumegroup in subvolumegroup_list:
-            fs_util_ceph1.remove_subvolumegroup(source_clients[0], **subvolumegroup)
+            log.info("Remove Subvolumes")
+            for subvolume in subvolume_list:
+                fs_util_ceph1.remove_subvolume(
+                    source_clients[0],
+                    **subvolume,
+                )
 
-        log.info("Delete the mounted paths")
-        mounted_paths = [kernel_mounting_dir_1, fuse_mounting_dir_1]
-        for path in mounted_paths:
-            source_clients[0].exec_command(sudo=True, cmd=f"rm -rf {path}")
-        log.info("Cleanup Target Client")
-        for target_mount_path in target_mount_paths:
-            fs_mirroring_utils.cleanup_target_client(
-                target_clients[0], target_mount_path
-            )
+            log.info("Remove Subvolume Group")
+            for subvolumegroup in subvolumegroup_list:
+                fs_util_ceph1.remove_subvolumegroup(source_clients[0], **subvolumegroup)
+
+            log.info("Delete the mounted paths")
+            mounted_paths = [kernel_mounting_dir_1, fuse_mounting_dir_1]
+            for path in mounted_paths:
+                source_clients[0].exec_command(sudo=True, cmd=f"rm -rf {path}")
+            log.info("Cleanup Target Client")
+            for target_mount_path in target_mount_paths:
+                fs_mirroring_utils.cleanup_target_client(
+                    target_clients[0], target_mount_path
+                )
