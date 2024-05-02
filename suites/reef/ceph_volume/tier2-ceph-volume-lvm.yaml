@@ -1,5 +1,5 @@
 # Name: Cluster deployment with Non-collocated OSD with precreated OSDs
-# Conf:  conf/quincy/ceph_volume/tier-2_cephvolume_5node_.yaml
+# Conf:  conf/reef/ceph_volume/tier-2_cephvolume_5node_.yaml
 #    - Bootstrap
 #    - Host management
 #    - Deploy OSD with precreted LVMs
