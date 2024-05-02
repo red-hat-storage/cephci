@@ -142,7 +142,7 @@ def run(ceph_cluster, **kw):
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         # reset monitor weight to 0
-        if active_mon in locals() or active_mon in globals():
+        if "active_mon" in locals() or "active_mon" in globals():
             set_weight_cmd = f"ceph mon set-weight {active_mon} 0"
             rados_obj.client.exec_command(cmd=set_weight_cmd, client_exec=True)
 
