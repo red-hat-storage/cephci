@@ -175,6 +175,7 @@ tests:
   - test:
       name: Deploy OSD with limit filter spec
       desc: Deploy OSD with limit filter spec
+      polarion-id: CEPH-83589139
       module: test_cephadm.py
       config:
         steps:                          # Deploy OSD with limit filter
