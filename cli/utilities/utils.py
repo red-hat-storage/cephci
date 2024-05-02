@@ -784,9 +784,9 @@ def get_file_owner(filepath, clients):
         return None
 
 
-def remove_files(client, mount_point, file_count):
+def remove_files(client, mount_point, file_count, windows_client=False):
     """
-    Create files
+    Remove files
     Args:
         clients (ceph): Client nodes
         mount_point (str): mount path
@@ -794,10 +794,16 @@ def remove_files(client, mount_point, file_count):
     """
     for i in range(1, file_count + 1):
         try:
-            client.exec_command(
-                sudo=True,
-                cmd=f"rm -rf {mount_point}/file{i}",
-            )
+            if windows_client:
+                cmd = f"del {mount_point}\\win_file{i}"
+                client.exec_command(
+                    cmd=cmd,
+                )
+            else:
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"rm -rf {mount_point}/file{i}",
+                )
         except Exception:
             raise OperationFailedError(f"failed to remove file{i}")
 
