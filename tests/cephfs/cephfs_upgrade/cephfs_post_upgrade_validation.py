@@ -1,12 +1,19 @@
+import datetime
 import json
 import random
+import re
+import string
 import time
 import traceback
+from multiprocessing import Value
+from threading import Thread
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.snapshot_clone.cephfs_cg_io import CG_snap_IO
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
+from tests.cephfs.snapshot_clone.cg_snap_utils import CG_Snap_Utils
 from utility.log import Log
 
 log = Log(__name__)
@@ -313,6 +320,7 @@ def snap_sched_test(snap_req_params):
             out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
     cmd = f"umount -f {fuse_mounting_dir};rm -rf {fuse_mounting_dir}"
     out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+    return 0
 
 
 def clone_test(clone_req_params):
@@ -469,6 +477,7 @@ def clone_test(clone_req_params):
         }
         fs_util.remove_subvolume(clone_client, **clone_vol)
         break
+    return 0
 
 
 def dir_pin_test(dir_pin_req_params):
@@ -503,6 +512,7 @@ def dir_pin_test(dir_pin_req_params):
     fs_util = dir_pin_req_params["fs_util"]
     client = dir_pin_req_params["clients"][0]
     pin_vol = {}
+    test_status = 0
     log.info("Capture MDS dir pin data from pre-upgrade config")
     for svg in config["CephFS"][vol_name]:
         for sv in config["CephFS"][vol_name][svg]:
@@ -584,10 +594,12 @@ def dir_pin_test(dir_pin_req_params):
             log.error(
                 f"IO from pinned dirs doesn't go through MDS rank {pin_vol['pin_rank']}"
             )
+            test_status = 1
 
     for mnt_pt in [fuse_mounting_dir_1, kernel_mounting_dir_1]:
         cmd = f"umount -f {mnt_pt};rm -rf {mnt_pt}"
         out, rc = client.exec_command(sudo=True, cmd=cmd)
+    return test_status
 
 
 def auth_test(auth_req_params):
@@ -622,6 +634,7 @@ def auth_test(auth_req_params):
     client_name = client_auth["client_name"]
     auth_client = auth_req_params["clients"][0]
     mon_node_ips = fs_util.get_mon_node_ips()
+    test_status = 0
 
     log.info("Get the pre-upgrade auth config")
     for key in client_auth:
@@ -664,12 +677,14 @@ def auth_test(auth_req_params):
                         log.error(
                             f"Client user {client_name} has read-only permission for /, but write works"
                         )
+                        test_status = 1
                 except Exception as e:
                     log.info(e)
                     if "ls" in cmd:
                         log.error(
                             f"Client user {client_name} has read-only permission for /, but read fails"
                         )
+                        test_status = 1
                     else:
                         log.info(
                             f"Verified that Client user {client_name} has read-only permission for /"
@@ -683,10 +698,12 @@ def auth_test(auth_req_params):
                 log.error(
                     f"User {client_name} has {subvol_path_perm} permission for {subvol_path}, but write fails"
                 )
+                test_status = 1
 
     for mnt_pt in mnt_pt_list:
         cmd = f"umount -f {mnt_pt};rm -rf {mnt_pt}"
         out, rc = auth_client.exec_command(sudo=True, cmd=cmd)
+    return test_status
 
 
 def mds_config_test(mds_req_params):
@@ -741,11 +758,245 @@ def mds_config_test(mds_req_params):
             f"Active MDS : Before - {len(active_mds_before)},\nAfter - {len(active_mds_after)}"
         )
         log.error("Active MDS count before and after upgrade doesn't match")
+        return 1
     if len(standby_mds_before) != len(standby_mds_after):
         log.info(
             f"Standby MDS : Before - {len(standby_mds_before)},\nAfter - {len(standby_mds_after)}"
         )
         log.error("Standby MDS count before and after upgrade doesn't match")
+        return 1
+    return 0
+
+
+def cg_quiesce_test(cg_quiesce_params):
+    """
+    Test Steps:
+    Load existing config for subvolumes and snapshots info.
+    Create new subvolumes in 7.1.Run QS IO Validation tool.
+    Run QS quiesce on pre-upgrade volumes and new 7.1 subvolumes. Verify snapshot create, quiesce-release works.
+    Copy the contents from pre-upgrade snapshots to AFS on existing subvolumes, verify it suceeds.
+
+    Args:
+        auth_req_params as dict_type with below params,
+        auth_req_params = {
+            "config" : pre_upgrade_config,
+            "fs_util" : fs_util,
+            "clients" : clients,
+            "vol_name" : default_fs
+        }
+        param data types:
+        Required -
+        pre_upgrade_config - dict data having pre upgrade snapshot configuration
+        generated from cephfs_upgrade/upgrade_pre_req.py
+        fsutil - fsutil testlib object
+        clients - a list type data, having client objects
+        Optional -
+        vol_name - cephfs volume name, default is 'cephfs'
+    Returns:
+        None
+    Raises:
+        BaseException
+    """
+    config = cg_quiesce_params["config"]
+    vol_name = cg_quiesce_params.get("vol_name", "cephfs")
+    fs_util = cg_quiesce_params["fs_util"]
+    cg_snap_util = cg_quiesce_params["cg_snap_util"]
+    cg_snap_io = cg_quiesce_params["cg_snap_io"]
+    cg_client = cg_quiesce_params["clients"][0]
+    cg_io_client = cg_quiesce_params["clients"][1]
+    test_fail = 0
+    log.info("Get current ceph version after upgrade and verify if 18.2.1 or above")
+    out, rc = cg_client.exec_command(sudo=True, cmd="ceph version")
+    out_item = out.split()[2]
+    version = out_item.split("-")[0]
+    version1 = version.replace(".", "")
+    if int(version1) < 1821:
+        log.warn(
+            f"CG quiesce test can be perfomed only on ceph version 18.2.1 or above. Current version is {out_item}"
+        )
+        return 0
+    log.info(f"Current ceph version : {out_item}")
+    qs_info = {}
+    for svg in config["CephFS"][vol_name]:
+        if "svg" in svg:
+            for sv in config["CephFS"][vol_name][svg]:
+                sv_data = config["CephFS"][vol_name][svg][sv]
+                if sv_data.get("snap_list"):
+                    qs_info[sv] = {}
+                    qs_info[sv].update(
+                        {
+                            "snap_list": sv_data["snap_list"],
+                            "svg": svg,
+                            "mnt_pt": sv_data["mnt_pt"],
+                            "mnt_client": sv_data["mnt_client"],
+                        }
+                    )
+    log.info(f"Existing subvolumes are : {qs_info.keys()}")
+    log.info(f"qs_info : {qs_info}")
+    qs_set = []
+    for sv in qs_info.keys():
+        qs_set.append(f"{qs_info[sv]['svg']}/{sv}")
+    log.info(f"Existing qs_members: {qs_set}")
+    log.info("Create new qs_members")
+    qs_cnt = 6
+    new_sv_cnt = qs_cnt - int(len(qs_info.keys()))
+    new_sv_cnt += 1
+    for i in range(1, new_sv_cnt):
+        sv_name = f"sv_def_{i}"
+        qs_set.append(sv_name)
+        subvolume = {
+            "vol_name": vol_name,
+            "subvol_name": sv_name,
+            "size": "6442450944",
+        }
+        fs_util.create_subvolume(cg_client, **subvolume)
+    client_mnt_dict = {}
+    qs_member_dict = cg_snap_util.mount_qs_members(cg_io_client, qs_set, vol_name)
+    client_mnt_dict.update({cg_io_client.node.hostname: qs_member_dict})
+    log.info(f"CG IO client:{cg_io_client.node.hostname}")
+    log.info(f"CG cmds client:{cg_client.node.hostname}")
+    log.info(f"Start the IO on quiesce set members - {qs_set}")
+    cg_test_io_status = Value("i", 0)
+    io_run_time = 40
+    p = Thread(
+        target=cg_snap_io.start_cg_io,
+        args=([cg_io_client], qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+    )
+    p.start()
+    time.sleep(10)
+    snap_qs_dict = {}
+    for qs_member in qs_set:
+        snap_qs_dict.update({qs_member: []})
+    if p.is_alive():
+        # time taken for 1 lifecycle : ~5secs
+        log.info("Run QS quiesce on pre-upgrade volumes and new 7.1 subvolumes.")
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        qs_id_val = f"cg_test1_{rand_str}"
+        log.info(f"Quiesce the set {qs_set}")
+        log.info(f"client:{cg_client.node.hostname}")
+        cg_snap_util.cg_quiesce(
+            cg_client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+        )
+        time.sleep(10)
+        log.info("Perform snapshot creation on all members")
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        snap_name = f"cg_snap_{rand_str}"
+        for qs_member in qs_set:
+            snap_list = snap_qs_dict[qs_member]
+            snapshot = {
+                "vol_name": vol_name,
+                "snap_name": snap_name,
+            }
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                snapshot.update(
+                    {
+                        "subvol_name": subvol_name,
+                        "group_name": group_name,
+                    }
+                )
+            else:
+                subvol_name = qs_member
+                snapshot.update(
+                    {
+                        "subvol_name": subvol_name,
+                    }
+                )
+            fs_util.create_snapshot(cg_client, **snapshot)
+            log.info(f"Created snapshot {snap_name} on {subvol_name}")
+            snap_list.append(snap_name)
+            snap_qs_dict.update({subvol_name: snap_list})
+        log.info(f"Release quiesce set {qs_id_val}")
+        cg_snap_util.cg_quiesce_release(cg_client, qs_id_val, if_await=True)
+        log.info(
+            "Copy the contents from pre-upgrade snapshots to AFS on existing subvolumes"
+        )
+        for sv in qs_info.keys():
+            client = qs_info[sv]["mnt_client"]
+            mnt_pt = qs_info[sv]["mnt_pt"]
+            snap_list = qs_info[sv]["snap_list"]
+            cmd = f"mkdir {mnt_pt}/new_dir_{rand_str};cp -r {mnt_pt}/.snap/*{snap_name}*/* {mnt_pt}/new_dir_{rand_str}"
+            for client_tmp in cg_quiesce_params["clients"]:
+                if client == client_tmp.node.hostname:
+                    out, rc = client_tmp.exec_command(sudo=True, cmd=cmd)
+                    log.info(out)
+                    cmd = (
+                        f"diff {mnt_pt}/.snap/*{snap_name}* {mnt_pt}/new_dir_{rand_str}"
+                    )
+                    out, rc = client_tmp.exec_command(sudo=True, cmd=cmd)
+                    log.info(out)
+                    log.info(
+                        f"Restore from old snapshot {snap_name} to AFS suceeds after CG quiesce test on {sv}"
+                    )
+
+    log.info(f"cg_test_io_status : {cg_test_io_status.value}")
+
+    if p.is_alive():
+        proc_stop = 0
+        log.info("CG IO is running after quiesce lifecycle")
+        io_run_time *= 2
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=io_run_time)
+        while (datetime.datetime.now() < end_time) and (proc_stop == 0):
+            if p.is_alive():
+                time.sleep(10)
+            else:
+                proc_stop = 1
+        if proc_stop == 1:
+            log.info("CG IO completed")
+        elif proc_stop == 0:
+            raise Exception("CG IO has NOT completed")
+    else:
+        log.info(
+            f"WARN:CG IO test completed early during quiesce lifecycle with await on qs_set {qs_id_val}"
+        )
+
+    mnt_pt_list = []
+    log.info(f"Perform cleanup for {qs_set}")
+    for qs_member in qs_member_dict:
+        mnt_pt_list.append(qs_member_dict[qs_member]["mount_point"])
+    log.info("Remove CG IO files and unmount")
+    cg_snap_util.cleanup_cg_io(cg_io_client, mnt_pt_list)
+    mnt_pt_list.clear()
+
+    snap_name = f"cg_snap_{rand_str}"
+    log.info("Remove CG snapshots")
+    for qs_member in qs_member_dict:
+        snap_list = snap_qs_dict[qs_member]
+        if qs_member_dict[qs_member].get("group_name"):
+            group_name = qs_member_dict[qs_member]["group_name"]
+            for snap_name in snap_list:
+                fs_util.remove_snapshot(
+                    cg_client,
+                    vol_name,
+                    qs_member,
+                    snap_name,
+                    validate=True,
+                    group_name=group_name,
+                )
+        else:
+            for snap_name in snap_list:
+                fs_util.remove_snapshot(
+                    cg_client, vol_name, qs_member, snap_name, validate=True
+                )
+
+    if cg_test_io_status.value == 1:
+        log.error(
+            f"CG IO test exits with failure during quiesce lifecycle with await on qs_set-{qs_id_val}"
+        )
+        test_fail = 1
+
+    if test_fail == 1:
+        log.error("FAIL: CG quiesce lifecycle on set of existing and new subvolumes")
+        return 1
+    else:
+        log.info("PASS: CG quiesce lifecycle on set of existing and new subvolumes")
+        return 0
 
 
 def run(ceph_cluster, **kw):
@@ -777,7 +1028,9 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         default_nfs_name = "cephfs-nfs"
         default_fs = "cephfs"
-
+        cg_snap_util = CG_Snap_Utils(ceph_cluster)
+        cg_snap_io = CG_snap_IO(ceph_cluster)
+        test_status = 0
         log.info("Get the Ceph pre-upgrade config data from cephfs_upgrade_config.json")
         f = clients[0].remote_file(
             sudo=True,
@@ -825,16 +1078,36 @@ def run(ceph_cluster, **kw):
         log.info(" Clone post upgrade validation succeeded \n")
 
         log.info(f"\n\n {space_str} Test4 : Post-upgrade Pinning Validation \n")
-        dir_pin_test(test_reqs)
+        test_status = dir_pin_test(test_reqs)
+        if test_status == 1:
+            assert False, "MDS pinning post upgrade validation failed"
         log.info(" MDS pinning post upgrade validation succeeded \n ")
 
         log.info(f"\n\n {space_str} Test5 : Post-upgrade Auth rules Validation \n")
-        auth_test(test_reqs)
+        test_status = auth_test(test_reqs)
+        if test_status == 1:
+            assert False, "Auth rules post upgrade validation failed"
         log.info(" Auth rules post upgrade validation succeeded \n")
 
         log.info(f"\n\n {space_str} Test6 : Post-upgrade MDS config validation \n")
-        mds_config_test(test_reqs)
+        test_status = mds_config_test(test_reqs)
+        if test_status == 1:
+            assert False, "MDS config post upgrade validation failed"
         log.info(" MDS config post upgrade validation succeeded \n")
+
+        log.info(
+            f"\n\n {space_str} Test7 : Post-upgrade CG quiesce feature validation \n"
+        )
+        test_reqs.update(
+            {
+                "cg_snap_util": cg_snap_util,
+                "cg_snap_io": cg_snap_io,
+            }
+        )
+        test_status = cg_quiesce_test(test_reqs)
+        if test_status == 1:
+            assert False, "CG quiesce post upgrade validation failed"
+        log.info(" CG quiesce post upgrade validation succeeded \n")
 
         return 0
 
