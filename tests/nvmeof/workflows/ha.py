@@ -305,7 +305,7 @@ class HighAvailability:
 
         # Initiate Failover
         fail_op = self.fail_ops[fail_tool]
-        LOG.info(f"[ {hostname} ]: Failing Over VMe Service {fail_tool} command")
+        LOG.info(f"[ {hostname} ]: Failing Over NVMe Service using {fail_tool} command")
         res = fail_op(gateway=gateway, action="stop", wait_for_active_state=False)
         if not res:
             raise Exception(
@@ -483,7 +483,7 @@ class HighAvailability:
                 out = json.loads(out)["images"][0]
                 samples.append(out)
                 time.sleep(3)
-            return sub_ns, samples
+            return sub_ns, f"{pool}/{image}", samples
 
         def validate_incremetal_io(write_samples):
             for i in range(len(write_samples) - 1):
@@ -496,15 +496,18 @@ class HighAvailability:
                 p.spawn(io_value, namespace)
 
             for result in p:
-                subsys, samples = result
+                subsys, pool_img, samples = result
                 res = [i["used_size"] for i in samples]
 
-                LOG.info(f"[ {subsys} ] RBD Disk Usage samples - {res}")
-                if not validate_incremetal_io(res):
-                    raise IOError(f"[ {subsys} ] IO is not progressing - {res}")
                 LOG.info(
-                    f"IO validation for {subsys} is successful. {log_json_dump(samples)}"
+                    f"[ {subsys}|{pool_img} ] RBD DU Detailed - {log_json_dump(samples)}"
                 )
+                LOG.info(f"[ {subsys}|{pool_img} ] RBD DU samples - {res}")
+                if not validate_incremetal_io(res):
+                    raise IOError(
+                        f"[ {subsys}|{pool_img} ] IO is not progressing - {res}"
+                    )
+                LOG.info(f"IO validation for {subsys}|{pool_img} is successful.")
 
         LOG.info("IO Validation is Successfull on all RBD images..")
 
