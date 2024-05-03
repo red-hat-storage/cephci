@@ -13,10 +13,10 @@ function initial_setup {
   # Finally, the sshd service is restarted on the node.
   local node="$1"
   local password="${2:-passwd}"
-  ssh ${node} 'echo "passwd" | sudo passwd --stdin root; \
+  ssh ubuntu@${node} 'echo "passwd" | sudo passwd --stdin root; \
   grep -qxF "PermitRootLogin yes" /etc/ssh/sshd_config || \
   echo "PermitRootLogin yes" | sudo tee -a /etc/ssh/sshd_config'
-  ssh ${node} 'sudo systemctl restart sshd &'
+  ssh ubuntu@${node} 'sudo systemctl restart sshd &'
   sleep 2
 }
 
