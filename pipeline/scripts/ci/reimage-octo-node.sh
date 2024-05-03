@@ -48,7 +48,7 @@ done
 
 echo "Initiating reimage of nodes"
 # Run reimage command with error handling
-if ! ${REIMAGE_CMD} --os-type rhel --os-version ${OS_VER} ${NODES}; then
+if ! sudo ${REIMAGE_CMD} --os-type rhel --os-version ${OS_VER} ${NODES} --owner jenkins-build@magna006; then
     echo "Reimage command failed, continuing with checks..."
 fi
 
