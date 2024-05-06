@@ -102,7 +102,10 @@ class FsUtils(object):
                 client.node.exec_command(
                     cmd="git clone https://github.com/bengland2/smallfile.git"
                 )
-        if clients[0].node.vm_node.node_type == "baremetal":
+        if (
+            hasattr(clients[0].node, "vm_node")
+            and clients[0].node.vm_node.node_type == "baremetal"
+        ):
             cmd = "dnf clean all;dnf -y install ceph-common --nogpgcheck;dnf -y update ceph-common --nogpgcheck"
             for client in clients:
                 client.exec_command(sudo=True, cmd=cmd)
