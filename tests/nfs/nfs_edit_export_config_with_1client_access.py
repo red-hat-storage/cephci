@@ -73,11 +73,11 @@ def run(ceph_cluster, **kw):
         raise ConfigError("The test requires more linux clients than available")
 
     # Windows clients
+    windows_clients = []
     is_windows = config.get("windows_clients", None)
     if is_windows:
         for windows_client_obj in setup_windows_clients(config.get("windows_clients")):
-            ceph_cluster.node_list.append(windows_client_obj)
-        windows_clients = ceph_cluster.get_nodes("windows_client")
+            windows_clients.append(windows_client_obj)
         if windows_clients:
             new_clients_values = f"{windows_clients[0].ip_address}"
 
@@ -115,15 +115,16 @@ def run(ceph_cluster, **kw):
             original_clients_value,
             new_clients_values,
         )
+        sleep(10)
 
         # Mount the export on client1 which is unauthorized.Mount should fail
         clients[1].create_dirs(dir_path=nfs_client_mount, sudo=True)
         cmd = (
             f"mount -t nfs -o vers={version},port={port} "
-            f"{nfs_server_name}:{nfs_export_client} {nfs_client_mount}"
+            f"{nfs_server_name[0]}:{nfs_export_client} {nfs_client_mount}"
         )
         _, rc = clients[1].exec_command(cmd=cmd, sudo=True, check_ec=False)
-        if "No such file or directory" in str(rc):
+        if "access denied by server" in str(rc):
             log.info("As expected, Mount on unauthorized client failed")
             pass
         else:

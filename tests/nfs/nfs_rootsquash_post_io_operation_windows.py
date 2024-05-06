@@ -40,9 +40,9 @@ def run(ceph_cluster, **kw):
         raise ConfigError("The test requires more linux clients than available")
 
     # Windows clients
+    windows_clients = []
     for windows_client_obj in setup_windows_clients(config.get("windows_clients")):
-        ceph_cluster.node_list.append(windows_client_obj)
-    windows_clients = ceph_cluster.get_nodes("windows_client")
+        windows_clients.append(windows_client_obj)
 
     # Squashed export parameters
     nfs_export_squash = "/export_0"
@@ -87,7 +87,7 @@ def run(ceph_cluster, **kw):
         Ceph(linux_clients[0]).nfs.export.apply(nfs_name, "export.conf")
 
         # Add wait till the NFS daemons are up
-        sleep(2)
+        sleep(10)
 
         # Rcreate some more files from window mount point post enabling rootsquash
         for i in range(1, 11):

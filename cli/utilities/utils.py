@@ -784,6 +784,32 @@ def get_file_owner(filepath, clients):
         return None
 
 
+def get_dir_owner(dirpath, clients):
+    """
+    Get directory owner
+    Args:
+        dirpath (str): directory path
+        clients (ceph): Client nodes
+    """
+    out = clients[0].exec_command(sudo=True, cmd=f"ls -nd {dirpath}")
+    uid = int(out[0].split()[2])
+    gid = int(out[0].split()[3])
+
+    # uid and gid for rootuser
+    if uid == 0 and gid == 0:
+        log.info(f"The directory '{dirpath}' is created by the root user.")
+        return "rootuser"
+    # uid and gid for squashuser
+    elif uid == 4294967294 and gid == 4294967294:
+        log.info(f"The directory '{dirpath}' is created by the squashed user.")
+        return "squashuser"
+    else:
+        log.info(
+            f"The directory '{dirpath}' is created by an unknown user with UID: {uid} and GID: {gid}."
+        )
+        return None
+
+
 def remove_files(client, mount_point, file_count, windows_client=False):
     """
     Remove files

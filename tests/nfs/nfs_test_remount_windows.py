@@ -39,9 +39,9 @@ def run(ceph_cluster, **kw):
         raise ConfigError("The test requires more linux clients than available")
 
     # Windows clients
+    windows_clients = []
     for windows_client_obj in setup_windows_clients(config.get("windows_clients")):
-        ceph_cluster.node_list.append(windows_client_obj)
-    windows_clients = ceph_cluster.get_nodes("windows_client")
+        windows_clients.append(windows_client_obj)
 
     try:
         # Setup nfs cluster
