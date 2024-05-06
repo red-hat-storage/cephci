@@ -135,7 +135,6 @@ tests:
       module: sanity_rgw.py
       name: sse_s3_per_bucket_enc_multipart_upload
       polarion-id: CEPH-83575155
-      comments: known issue (bz-2153452)
 
   - test:
       config:
@@ -163,7 +162,7 @@ tests:
         config-file-name: test_sse_kms_per_bucket_multipart_object_download_after_transition.yaml
         timeout: 300
       desc: test_sse_kms_per_bucket_multipart_object_download_after_transition
-      module: sanity_rgw_multisite.py
+      module: sanity_rgw.py
       name: test_sse_kms_per_bucket_multipart_object_download_after_transition
       polarion-id: CEPH-83586489
       comments: known issue (bz-2262741)
@@ -177,7 +176,7 @@ tests:
         config-file-name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard.yaml
         timeout: 300
       desc: test_sse_s3_per_bucket_with_notifications_dynamic_reshard
-      module: sanity_rgw_multisite.py
+      module: sanity_rgw.py
       name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard
       polarion-id: CEPH-83586489
       comments: known issue of object copy with sse (bz-2149450)
@@ -187,7 +186,7 @@ tests:
         config-file-name: test_sse_kms_per_bucket_with_bucket_policy.yaml
         timeout: 300
       desc: test_sse_kms_per_bucket_with_bucket_policy
-      module: sanity_rgw_multisite.py
+      module: sanity_rgw.py
       name: test_sse_kms_per_bucket_with_bucket_policy
       polarion-id: CEPH-83586489
   - test:
@@ -196,7 +195,7 @@ tests:
         config-file-name: test_sse_s3_per_object_with_sts.yaml
         timeout: 300
       desc: test_sse_s3_per_object_with_sts
-      module: sanity_rgw_multisite.py
+      module: sanity_rgw.py
       name: test_sse_s3_per_object_with_sts
       polarion-id: CEPH-83586489
 

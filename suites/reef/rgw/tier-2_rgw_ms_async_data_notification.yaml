@@ -372,7 +372,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: sse_s3_per_bucket_enc_multipart_upload
       polarion-id: CEPH-83575155
-      comments: known issue (bz-2153452)
 
   - test:
       clusters:
