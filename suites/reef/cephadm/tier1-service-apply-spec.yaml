@@ -277,3 +277,26 @@ tests:
       module: test_cephadm_log_spam.py
       config:
         type: command
+  - test:
+      name: Grafana service deployment with spec file
+      desc: Add Grafana services using spec file with parameter "only_bind_port_on_networks"
+      module: test_cephadm.py
+      polarion-id: CEPH-83589249
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: grafana
+                  service_name: grafana
+                  placement:
+                    nodes:
+                      - node4
+                  networks:
+                  - 10.0.208.0/22
+                  spec:
+                    anonymous_access: true
+                    protocol: https
+                    only_bind_port_on_networks: true
