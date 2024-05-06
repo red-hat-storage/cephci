@@ -301,11 +301,10 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("*********** Execution of finally block starts ***********")
-        out, _ = cephadm.shell(args=["ceph osd ls"])
-        active_osd_list = out.strip().split("\n")
-        log.debug(f"List of active OSDs: \n{active_osd_list}")
 
         if "target_osd" in locals() or "target_osd" in globals():
+            active_osd_list = rados_obj.run_ceph_command(cmd="ceph osd ls")
+            log.debug(f"List of active OSDs: \n{active_osd_list}")
             if target_osd not in active_osd_list:
                 utils.set_osd_devices_unmanaged(
                     ceph_cluster, target_osd, unmanaged=True

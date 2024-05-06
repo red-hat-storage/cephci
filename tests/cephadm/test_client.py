@@ -119,10 +119,15 @@ def add(cls, config: Dict) -> None:
             log.debug(f"Enabled repos on the system are : {enabled_repos}")
 
             if rhcs_version != "default":
-                # Disabling all the repos and enabling the ones we need to install the ceph client
-                for cmd in disable_all:
-                    _node.exec_command(sudo=True, cmd=cmd, timeout=1200)
-
+                try:
+                    # Disabling all the repos and enabling the ones we need to install the ceph client
+                    for cmd in disable_all:
+                        _node.exec_command(sudo=True, cmd=cmd, timeout=1200)
+                except Exception as err:
+                    log.error(
+                        f"Failed to disable the repos enabled on the host: {_node.hostname}"
+                        f"Error : {err}. Continuing without the repos disabled."
+                    )
                 # Enabling the required CDN repos
                 for repos in rhel_repos[rhel_version]:
                     _node.exec_command(sudo=True, cmd=f"{enable_cmd}{repos}")
