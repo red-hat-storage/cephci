@@ -68,15 +68,15 @@ class CG_Snap_Utils(object):
                         found += 1
             if found == len(qs_member_dict.keys()):
                 qs_id_req.append(qs_id)
-        db_version = 0
+        version = 0
         log.info(f"qs_id_reqd:{qs_id_req}")
         if len(qs_id_req) > 1:
             for qs_id in qs_all["sets"]:
                 if qs_id in qs_id_req:
-                    if qs_all["sets"][qs_id]["db_version"] > db_version:
+                    if qs_all["sets"][qs_id]["version"] > version:
                         qs_id_ret = qs_id
-                        db_version = qs_all["sets"][qs_id]["db_version"]
-            log.info(f"qs_id_ret : {qs_id_ret},db_version:{db_version}")
+                        version = qs_all["sets"][qs_id]["version"]
+            log.info(f"qs_id_ret : {qs_id_ret},version:{version}")
             return qs_id_ret
         elif len(qs_id_req) == 1:
             return qs_id_req[0]
@@ -92,7 +92,7 @@ class CG_Snap_Utils(object):
                 subvol1 belongs to non-default group
         Returns: qs_query ( type : dict) - output of quiesce --all
         """
-        cmd = f"ceph fs subvolume quiesce {fs_name} --all --format json"
+        cmd = f"ceph fs quiesce {fs_name} --all --format json"
 
         out, rc = client.exec_command(
             sudo=True,
@@ -109,7 +109,7 @@ class CG_Snap_Utils(object):
         qs_id - A str type input referring to quiesce set id whose details are to be fetched
         Returns: qs_query ( type : dict) - output of quiesce --query
         """
-        cmd = f"ceph fs subvolume quiesce {fs_name} --query --set-id {qs_id} --format json"
+        cmd = f"ceph fs quiesce {fs_name} --query --set-id {qs_id} --format json"
         out, rc = client.exec_command(
             sudo=True,
             cmd=cmd,
@@ -137,8 +137,8 @@ class CG_Snap_Utils(object):
         """
         qs_member_str = ""
         for qs_member in qs_members:
-            qs_member_str += f' "{qs_member}?q=2" '
-        cmd = f"ceph fs subvolume quiesce {fs_name} {qs_member_str} --format json"
+            qs_member_str += f' "{qs_member}" '
+        cmd = f"ceph fs quiesce {fs_name} {qs_member_str} --format json"
         if kw_args.get("qs_id"):
             cmd += f"  --set-id {kw_args['qs_id']}"
         if if_await:
@@ -186,7 +186,7 @@ class CG_Snap_Utils(object):
         Returns: If quiesce release passed, return qs_output ( type : dict) - output of quiesce release cmd
                  If quiesce release failed, return 1
         """
-        cmd = f"ceph fs subvolume quiesce {fs_name} --set-id {qs_id} --release --format json"
+        cmd = f"ceph fs quiesce {fs_name} --set-id {qs_id} --release --format json"
         if if_await:
             cmd += "  --await"
         if kw_args.get("if_version"):
@@ -214,7 +214,7 @@ class CG_Snap_Utils(object):
         return qs_output
 
     def cg_quiesce_cancel(
-        self, client, qs_id, if_await=True, fs_name="cephfs", **kw_args
+        self, client, qs_id, if_await=False, fs_name="cephfs", **kw_args
     ):
         """
         This method is required to perform quiesce cancel on given quiesce set id,
@@ -230,7 +230,7 @@ class CG_Snap_Utils(object):
         Returns: If quiesce cancel passed, return qs_output ( type : dict) - output of quiesce cancel cmd
                  If quiesce cancel failed, return 1
         """
-        cmd = f"ceph fs subvolume quiesce {fs_name} --set-id {qs_id} --cancel --format json"
+        cmd = f"ceph fs quiesce {fs_name} --set-id {qs_id} --cancel --format json"
         if if_await:
             cmd += "  --await"
         out, rc = client.exec_command(
@@ -275,8 +275,8 @@ class CG_Snap_Utils(object):
         """
         qs_member_str = ""
         for qs_member in qs_members_new:
-            qs_member_str += f' "{qs_member}?q=2" '
-        cmd = f"ceph fs subvolume quiesce {fs_name} --set-id {qs_id} --include {qs_member_str} --format json"
+            qs_member_str += f' "{qs_member}" '
+        cmd = f"ceph fs quiesce {fs_name} --set-id {qs_id} --include {qs_member_str} --format json"
         if if_await:
             cmd += "  --await"
         out, rc = client.exec_command(
@@ -308,7 +308,10 @@ class CG_Snap_Utils(object):
                                     and if_exclude is False
                                 ) or (
                                     if_await is False
-                                    and member_state == "QUIESCING"
+                                    and (
+                                        member_state == "QUIESCING"
+                                        or member_state == "QUIESCED"
+                                    )
                                     and if_exclude is False
                                 ):
                                     member_quiesce += 1
@@ -355,8 +358,8 @@ class CG_Snap_Utils(object):
         """
         qs_member_str = ""
         for qs_member in qs_members_exclude:
-            qs_member_str += f' "{qs_member}?q=2" '
-        cmd = f"ceph fs subvolume quiesce {fs_name} --set-id {qs_id} --exclude {qs_member_str} --format json"
+            qs_member_str += f' "{qs_member}" '
+        cmd = f"ceph fs quiesce {fs_name} --set-id {qs_id} --exclude {qs_member_str} --format json"
         if if_await:
             cmd += "  --await"
         out, rc = client.exec_command(
@@ -412,8 +415,8 @@ class CG_Snap_Utils(object):
         """
         qs_member_str = ""
         for qs_member in qs_members:
-            qs_member_str += f' "{qs_member}?q=2" '
-        cmd = f"ceph fs subvolume quiesce {fs_name} --set-id {qs_id} --reset {qs_member_str} --format json"
+            qs_member_str += f' "{qs_member}" '
+        cmd = f"ceph fs quiesce {fs_name} --set-id {qs_id} --reset {qs_member_str} --format json"
         if if_await:
             cmd += "  --await"
         out, rc = client.exec_command(

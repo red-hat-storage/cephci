@@ -467,23 +467,22 @@ class CG_snap_IO(object):
         for io_mod in io_modules:
             if io_type == "read":
                 if io_modules[io_mod] == 1:
-                    if io_mod == "cg_smallfile_io_read" or io_mod == "cg_fio_io_read":
-                        qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
-                        log.info(f"qs_id:{qs_id}")
-                        if qs_id != 1:
-                            qs_query = self.cg_snap_util.get_qs_query(
-                                client, qs_id=qs_id
-                            )
-                            log.info(f"qs_query:{qs_query}")
-                            state = qs_query["sets"][qs_id]["state"]["name"]
-                            log.error(
-                                f"FAIL:read io on {qs_member} failed when {qs_id} was in {state}"
-                            )
-                        else:
-                            log.error(
-                                f"FAIL:read io on {qs_member} failed when no QS exists"
-                            )
-                        cg_status = 1
+                    qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
+                    log.info(f"qs_id:{qs_id}")
+                    if qs_id != 1:
+                        qs_query = self.cg_snap_util.get_qs_query(client, qs_id=qs_id)
+                        log.info(f"qs_query:{qs_query}")
+                        state = qs_query["sets"][qs_id]["state"]["name"]
+                        log.info(f"io_modules:{io_modules}")
+                        log.error(
+                            f"FAIL:{io_mod} io on {qs_member} failed when {qs_id} was in {state}"
+                        )
+                    else:
+                        log.info(f"io_modules:{io_modules}")
+                        log.error(
+                            f"FAIL:{io_mod} io on {qs_member} failed when no QS exists"
+                        )
+                    cg_status = 1
                 elif io_type == "write":
                     if io_modules[io_mod] == 1:
                         qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
@@ -798,11 +797,11 @@ class CG_snap_IO(object):
             if fio_cnt == 0:
                 raise Exception(f"No fio files created in {dir_path} even after 60secs")
             fio_file = random.choice(fio_files)
-            fio_file_path = f"{dir_path}/{fio_file}"
+
             out, _ = client.exec_command(
                 sudo=True,
-                cmd=f"fio --name={fio_file_path} --ioengine=libaio --size 2M --rw=read --bs=1M --direct=1 "
-                f"--numjobs=1 --iodepth=5 --runtime=10",
+                cmd=f"fio --name={fio_file} --ioengine=libaio --size 2M --rw=read --bs=1M --direct=1 "
+                f"--numjobs=1 --iodepth=5 --runtime=10 --debug=io",
                 timeout=10,
             )
             log.info(f"fio_io {io_type} cmd op : {out}")
