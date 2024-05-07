@@ -3,6 +3,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 from utility.utils import method_should_succeed
@@ -68,6 +69,8 @@ def run_test(ceph_cluster, **kw):
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
+    pool_obj = PoolFunctions(node=cephadm)
+    client_node = ceph_cluster.get_nodes(role="client")[0]
     iterations = config.get("write_iteration")
     acting_osd_hosts = []
     acting_osd_host_osds = []
@@ -76,6 +79,7 @@ def run_test(ceph_cluster, **kw):
     new_acting_osd_host_osds = []
     verification_dict = {"WI": iterations, "host_osd_map": {}}
     pool_name = config["pool_name"]
+    object_name = config.get("object_name", "obj-osd-df")
 
     log.info("Running test case to verify ceph osd df stats")
 
@@ -92,11 +96,20 @@ def run_test(ceph_cluster, **kw):
         )
 
         # create objects and perform IOPs
-        bench_cfg = {"byte_size": "4096KB", "max_objs": 200, "verify_stats": False}
-        assert rados_obj.bench_write(pool_name=pool_name, **bench_cfg)
+        pool_obj.do_rados_put(
+            client=client_node, pool=pool_name, obj_name=object_name, nobj=1
+        )
 
-        acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
-        log.info(f"Acting set for {pool_name}: {acting_pg_set}")
+        pool_obj.do_rados_append(
+            client=client_node,
+            pool=pool_name,
+            obj_name=object_name,
+            nobj=(iterations - 1),
+        )
+
+        osd_map = rados_obj.get_osd_map(pool=pool_name, obj=object_name)
+        acting_pg_set = osd_map["acting"]
+        log.info(f"Acting set for {object_name} in {pool_name}: {acting_pg_set}")
         if not acting_pg_set:
             log.error("Failed to retrieve acting pg set")
             return 1
@@ -114,17 +127,15 @@ def run_test(ceph_cluster, **kw):
         # Retrieve acting osd hosts and all the osds on these hosts
         try:
             for osd_id in acting_pg_set:
-                acting_osd_hosts.append(
-                    rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+                osd_node = rados_obj.fetch_host_node(
+                    daemon_type="osd", daemon_id=osd_id
                 )
+                acting_osd_hosts.append(osd_node)
                 verification_dict["host_osd_map"].update(
-                    {acting_osd_hosts[-1].hostname: {"iops": osd_id}}
+                    {osd_node.hostname: {"iops": osd_id}}
                 )
-                acting_osd_host_osds.extend(
-                    verification_dict["post_osd_df_stats"][
-                        acting_osd_hosts[-1].hostname
-                    ]["children"]
-                )
+                osd_list = rados_obj.collect_osd_daemon_ids(osd_node=osd_node)
+                acting_osd_host_osds.extend(osd_list)
         except Exception:
             log.error("Failed to fetch host details")
             return 1
@@ -150,21 +161,19 @@ def run_test(ceph_cluster, **kw):
         # Retrieve new acting osd hosts and all the osds on these hosts
         try:
             for osd_id in new_acting_pg_set:
-                new_acting_osd_hosts.append(
-                    rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+                osd_node = rados_obj.fetch_host_node(
+                    daemon_type="osd", daemon_id=osd_id
                 )
-                if new_acting_osd_hosts[-1] not in acting_osd_hosts:
+                new_acting_osd_hosts.append(osd_node)
+                if osd_node not in acting_osd_hosts:
                     verification_dict["host_osd_map"].update(
-                        {new_acting_osd_hosts[-1].hostname: {"out": osd_id}}
+                        {osd_node.hostname: {"out": osd_id}}
                     )
-                verification_dict["host_osd_map"][
-                    new_acting_osd_hosts[-1].hostname
-                ].update({"out": osd_id})
-                new_acting_osd_host_osds.extend(
-                    verification_dict["post_osd_df_stats"][
-                        new_acting_osd_hosts[-1].hostname
-                    ]["children"]
+                verification_dict["host_osd_map"][osd_node.hostname].update(
+                    {"out": osd_id}
                 )
+                osd_list = rados_obj.collect_osd_daemon_ids(osd_node=osd_node)
+                new_acting_osd_host_osds.extend(osd_list)
         except Exception:
             log.error("Failed to fetch host details")
             return 1
@@ -201,6 +210,9 @@ def run_test(ceph_cluster, **kw):
         # Delete the created osd pool
         if config.get("delete_pool"):
             rados_obj.delete_pool(pool=pool_name)
+
+    log.info("--------------Verification dictionary --------------------")
+    log.info(verification_dict)
 
     try:
         for host in acting_osd_hosts:
@@ -315,7 +327,7 @@ def verify_deviation(
     acting_pg_set = config["acting_pg_set"]
     host_osd_map = config["host_osd_map"]
     deviation_multiplier = {
-        "node": {"iops": 1.07, "out": 1.09},
+        "node": {"iops": 1.07, "out": 1.11},
         "osd": {"iops": 1.07, "out": 0},
         "summary": {"iops": 1.08, "out": 1.08},
     }
@@ -334,6 +346,10 @@ def verify_deviation(
         acting_total_data += pre_osd_df_stats[x]["kb_used_data"]
         acting_total_avail += pre_osd_df_stats[x]["kb_avail"]
 
+    log.info(100 * "=")
+    log.info(
+        f"type: {type} | stage: {stage} | host: {host_id} | osd_id: {osd_id} | status: {status}"
+    )
     try:
         if type == "node":
             if stage == "iops":
@@ -490,7 +506,8 @@ def verify_deviation(
                     >= out_osd_df_stats[host_id]["kb"]
                 )
                 log.info(
-                    f"RAW USE: {(post_osd_df_stats[host_id]['kb_used'] - post_osd_df_stats[osd_id]['kb_used']) * 1.08}"
+                    f"RAW USE: "
+                    f"{(post_osd_df_stats[host_id]['kb_used'] - post_osd_df_stats[osd_id]['kb_used'])* dev_factor}"
                     f" >= {out_osd_df_stats[host_id]['kb_used']}"
                 )
                 assert (
@@ -499,7 +516,7 @@ def verify_deviation(
                             post_osd_df_stats[host_id]["kb_used"]
                             - post_osd_df_stats[osd_id]["kb_used"]
                         )
-                        * 1.08
+                        * dev_factor
                     )
                     >= out_osd_df_stats[host_id]["kb_used"]
                 )

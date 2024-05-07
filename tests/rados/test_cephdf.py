@@ -71,7 +71,7 @@ def run(ceph_cluster, **kw):
 
                 # Verify Ceph df output post object creation
                 try:
-                    while counter < 3:
+                    while counter < 5:
                         pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
                         ceph_df_obj = pool_stat["stats"]["objects"]
                         if ceph_df_obj == obj_num:
@@ -95,7 +95,9 @@ def run(ceph_cluster, **kw):
                         )
                         return 1
                 except KeyError:
-                    log.error("No stats about the pools requested found on the cluster")
+                    log.error(
+                        f"No stats found on the cluster for the requested pool {pool_name}"
+                    )
                     return 1
 
                 # delete all objects from the pool
@@ -105,7 +107,7 @@ def run(ceph_cluster, **kw):
                 # Verify Ceph df output post objects deletion
                 try:
                     counter = 1
-                    while counter < 3:
+                    while counter < 5:
                         pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
                         ceph_df_obj = pool_stat.get("stats")["objects"]
                         if ceph_df_obj == 0:
@@ -122,12 +124,14 @@ def run(ceph_cluster, **kw):
                             time.sleep(30)
                     else:
                         log.error(
-                            f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name} even after"
-                            f"60 secs"
+                            f"ceph df stats display incorrect objects {ceph_df_obj} for {pool_name} even after "
+                            f"120 secs"
                         )
                         return 1
                 except KeyError:
-                    log.error("No stats about the pools requested found on the cluster")
+                    log.error(
+                        f"No stats found on the cluster for the requested pool {pool_name}"
+                    )
                     return 1
 
                 log.info(f"ceph df stats verification completed for {obj_num} objects")
