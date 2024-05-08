@@ -1682,7 +1682,8 @@ def install_start_kafka(rgw_node, cloud_type):
     rename_cmd = "mv /usr/local/kafka_2.13-2.8.0 /usr/local/kafka"
     chown_cmd = "chown cephuser:cephuser /usr/local/kafka"
     rgw_node.exec_command(
-        cmd=f"{wget_cmd} && {tar_cmd} && {rename_cmd} && {chown_cmd}", sudo=True
+        cmd=f"ls /usr/local/kafka/ || ({wget_cmd} && {tar_cmd} && {rename_cmd} && {chown_cmd})",
+        sudo=True,
     )
 
     KAFKA_HOME = "/usr/local/kafka"
