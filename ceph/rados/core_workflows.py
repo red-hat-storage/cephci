@@ -3086,6 +3086,24 @@ class RadosOrchestrator:
         log.error("Noautoscale flag not set on the cluster. Returning Fail..")
         return False
 
+    def get_pg_autoscale_status(self, pool_name=None):
+        """
+        Executes autoscale-status command and returns o/p
+
+        Args:
+            pool_name: Name of the pool
+
+        Returns:
+            json object of the pool values.
+        """
+        cmd = "ceph osd pool autoscale-status"
+        out = self.run_ceph_command(cmd=cmd)
+        if pool_name:
+            for pool in out:
+                if pool["pool_name"] == pool_name:
+                    return pool
+        return out
+
     def create_rbd_image(self, pool_name, img_name, **kwargs):
         """
         Creates rbd image on the given pool
