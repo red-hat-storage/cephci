@@ -57,6 +57,10 @@ def run(ceph_cluster, **kwargs) -> int:
         if executor:
             executor.run(config=config["benchmark"])
 
+        # Remove existing repos
+        rm_repo_cmd = "find /etc/yum.repos.d/ -type f -name 'download.*' -delete"
+        for node in ceph_cluster.get_nodes():
+            node.exec_command(sudo=True, cmd=rm_repo_cmd)
         # Set repo to newer RPMs
         orch.set_tool_repo()
 
