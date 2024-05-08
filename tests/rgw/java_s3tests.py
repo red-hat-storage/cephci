@@ -1,5 +1,5 @@
 """
-Test Module to test Java S3tests suite.
+Test Module to test Java S3tests and the Java Checksum suite.
 Steps to test this suite are described here https://github.com/ceph/java_s3tests/blob/master/README.md
 - We will clone the suite
 - We will create the necessary rgw config to test
@@ -51,14 +51,15 @@ def run(**kw):
     host = config.get("host")
 
     client_node = cluster.get_nodes(role="client")[0]
-
-    execute_setup(cluster, config)
-
     if not host:
-        _, secure, _ = get_rgw_frontend(cluster)
+        _, secure, port = get_rgw_frontend(cluster)
 
-    exit_status = execute_s3_tests(client_node, config)
-    execute_teardown(cluster)
+    if "maven" in config["suite"]:
+        exit_status = maven_setup(cluster, config, port)
+    if "JavaS3" in config["suite"]:
+        execute_setup(cluster, config)
+        exit_status = execute_s3_tests(client_node, config)
+        execute_teardown(cluster)
 
     log.info("Returning status code of %s", exit_status)
     return exit_status
@@ -289,3 +290,63 @@ def create_s3_user(node: CephNode, data: Dict) -> None:
         "name": user_info["display_name"],
         "email": user_info["email"],
     }
+
+
+def maven_setup(cluster: Ceph, config: dict, port) -> None:
+    """
+    Execute the prerequisites required to run the tests.
+
+    It involves the following steps
+        - install the required software (radosgw for CLI execution)
+        - Clone the Ceph repo in the client node
+    Args:
+        cluster: Ceph cluster participating in the test.
+        config:  The key/value pairs passed by the tester.
+
+    Raises:
+        CommandFailed:  When a remote command returned non-zero value.
+    """
+    secure = config.get("ssl", False)
+    host = config.get("host")
+
+    client_node = cluster.get_nodes(role="client")[0]
+    rgw_node = cluster.get_nodes(role="rgw")[0]
+
+    if secure:
+        sec = "https"
+    else:
+        sec = "http"
+    rgw_endpoint = f"{sec}://{rgw_node.shortname}:{port}"
+
+    data = dict(
+        {"host": host, "port": int(port), "secure": secure, "endpoint": rgw_endpoint}
+    )
+    create_s3_user(node=client_node, data=data)
+    return install_req(node=client_node, data=data)
+
+
+def install_req(node: CephNode, data: Dict) -> None:
+    """Clone the Ceph repository on the given node."""
+    repo_url = "https://github.com/ceph/ceph.git"
+    node.exec_command(cmd=f"git clone {repo_url}")
+    node.exec_command(cmd="yum install java-17-openjdk -y", sudo=True)
+    node.exec_command(cmd="alternatives --config java <<< '2'", sudo=True)
+    rgw_endpoint = data["endpoint"]
+    access_key = data["user1"]["access_key"]
+    secret = data["user1"]["secret_key"]
+
+    log.info("Executing Java Maven test suite")
+    cmd = "cd ceph/qa/workunits/rgw/jcksum/; ./mvnw clean package"
+    out, err = node.exec_command(cmd=cmd)
+    log.info(out)
+
+    cmd = (
+        f"cd ceph/qa/workunits/rgw/jcksum/; export RGW_HTTP_ENDPOINT_URL={rgw_endpoint}; export"
+        + f" AWS_ACCESS_KEY_ID={access_key}; export AWS_SECRET_ACCESS_KEY={secret}; ./mvnw test -Dtest=PutObjects"
+    )
+    out, err = node.exec_command(cmd=cmd, check_ec=False)
+    log.info(out)
+    for line in out:
+        if "ERROR" in line:
+            return 1
+    return 0

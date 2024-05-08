@@ -158,12 +158,26 @@ tests:
   - test:
       abort-on-fail: false
       config:
+        suite:
+          - JavaS3
         kms_keyid: testKey01
         ssl: true
       desc: Java S3tests
       destroy-cluster: false
       module: java_s3tests.py
       name: execute Java s3tests
+      polarion-id: CEPH-83586289
+
+  - test:
+      abort-on-fail: false
+      config:
+        suite:
+          - maven
+        ssl: true
+      desc: Java Maven Test suite
+      destroy-cluster: false
+      module: java_s3tests.py
+      name: execute Java Maven test suite
       polarion-id: CEPH-83586289
 
   - test:
