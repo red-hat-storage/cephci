@@ -1,5 +1,5 @@
 #===============================================================================================
-# Conf: conf/quincy/cephadm/1admin-8node-1client-cluster.yaml
+# Conf: conf/reef/cephadm/1admin-8node-1client-cluster.yaml
 #
 # Tier-0 test cases for
 #    - Bootstrap
@@ -8,6 +8,7 @@
 #      - SetAddress
 #      - Attach/remove node labels
 #    - Ceph role Service deployment with multiple options,
+#    - Add host to maintenance using flags
 #    - Removal of services
 #===============================================================================================
 tests:
@@ -688,6 +689,20 @@ tests:
           placement:
             nodes: "*"
       destroy-cluster: false
+
+  - test:
+      name: Validate add host to maintenance using flags
+      desc: Add a host to maintenance using --yes-i-really-mean-it flag
+      module: test_add_host_to_maintenance_using_flags.py
+      polarion-id: CEPH-83589544
+      config:
+        node: node3
+        pool_name: test_pool1
+        min_size: 2
+        app_name: rbd
+        pool_config:
+            pool_type: replicated
+            size: 2
 
   - test:
       name: Remove NFS-Ganesha Service

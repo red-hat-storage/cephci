@@ -24,3 +24,22 @@ class Host(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def maintenance(self, hostname, operation, force=False, yes_i_really_mean_it=False):
+        """
+        Add/Remove the specified host from maintenance mode
+        Args:
+            hostname(str): name of the host which needs to be added into maintenance mode
+            operation(str): enter/exit maintenance mode
+            force (bool): Whether to append force with maintenance enter command
+            yes-i-really-mean-it (bool) : Whether to append --yes-i-really-mean-it with maintenance enter command
+        """
+        cmd = f"{self.base_cmd} maintenance {operation} {hostname}"
+        if force:
+            cmd += " --force"
+        if yes_i_really_mean_it:
+            cmd += " --yes-i-really-mean-it"
+        out = self.execute(cmd=cmd, sudo=True)
+        if not out:
+            return False
+        return True

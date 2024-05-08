@@ -115,3 +115,27 @@ class Pool(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def create(self, pool, **kwargs):
+        """
+        Create a pool named from the pool_name parameter.
+        Args:
+            pool: name of the pool being created.
+            kwargs: Any other args that need to be passed
+                pg_num(int): total number of PGs in the pool
+                pgp_num(int): total number of PGs for placement purposes
+                pool_type(str): the pool type {replicated|erasure}
+                erasure_coded_profile(str): name of EC profile if pool being created is an EC pool
+                rule(str): name of the custom CRUSH rule to use for pool
+                expected_num_objects(int): expected number of RADOS objects for this pool
+                size(int): min replication size for pool to write data
+                autoscale_mode(str): the Ceph cluster will autotune or recommend changes to the number
+                    of PGs in your pool based on actual usage {on, off, warn}
+                bulk(bool): False
+        """
+        cmd = f"{self.base_cmd} create {pool} {build_cmd_from_args(**kwargs)}"
+
+        out = self.execute(sudo=True, cmd=cmd)
+        if not out:
+            return False
+        return True
