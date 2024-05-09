@@ -86,13 +86,13 @@ tests:
                 image:
                     size: 50G
                     count: 1
-                node: node10             # client node
+                node: node11              # client node
             -   proto: nvmeof
                 image:
                     size: 50G
                     count: 1
-                gw_node: node6          # gateway node
-                initiator_node: node10   # client node
+                gw_node: node7            # gateway node
+                initiator_node: node11    # client node
                 install_gw: true
 
   - test:
@@ -111,13 +111,13 @@ tests:
               image:
                 size: 50G
                 count: 1
-              node: node10             # client node
+              node: node11             # client node
           -   proto: nvmeof
               image:
                 size: 50G
                 count: 1
-              gw_node: node6          # gateway node
-              initiator_node: node10   # client node
+              gw_node: node7          # gateway node
+              initiator_node: node11   # client node
 
   - test:
       name: libRBD VS NVMeoF Random-WRITE-READ-IOType 4kblocksize single-10G-vol
@@ -136,13 +136,13 @@ tests:
               image:
                 size: 50G
                 count: 1
-              node: node10             # client node
+              node: node11             # client node
           -   proto: nvmeof
               image:
                 size: 50G
                 count: 1
-              gw_node: node6          # gateway node
-              initiator_node: node10   # client node
+              gw_node: node7          # gateway node
+              initiator_node: node11   # client node
 
   - test:
       name: libRBD VS NVMeoF Random-READWRITE-IOType 4kblocksize single-10G-vol
@@ -155,16 +155,16 @@ tests:
           - FIO_RW_BS_4k_IODepth8_RandRWRatio70R_LIBAIO
         rbd_pool: rbd
         do_not_delete_pool: false
-        delete_gateway: node6
+        delete_gateway: node7
         io_exec:
           -   proto: librbd
               image:
                 size: 50G
                 count: 1
-              node: node10             # client node
+              node: node11             # client node
           -   proto: nvmeof
               image:
                 size: 50G
                 count: 1
-              gw_node: node6          # gateway node
-              initiator_node: node10   # client node
+              gw_node: node7          # gateway node
+              initiator_node: node11   # client node
