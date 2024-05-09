@@ -1,4 +1,4 @@
-from nfs_operations import _enable_v3_mount, cleanup_cluster, setup_nfs_cluster
+from nfs_operations import cleanup_cluster, setup_nfs_cluster
 
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.windows_utils import setup_windows_clients
@@ -44,9 +44,9 @@ def run(ceph_cluster, **kw):
         raise ConfigError("The test requires more linux clients than available")
 
     # Windows clients
+    windows_clients = []
     for windows_client_obj in setup_windows_clients(config.get("windows_clients")):
-        ceph_cluster.node_list.append(windows_client_obj)
-    windows_clients = ceph_cluster.get_nodes("windows_client")
+        windows_clients.append(windows_client_obj)
 
     try:
         # Setup nfs cluster with v4.1 and v3
@@ -64,9 +64,6 @@ def run(ceph_cluster, **kw):
             vip,
             ceph_cluster=ceph_cluster,
         )
-
-        # Enable V3 support
-        _enable_v3_mount(["/export_0"], nfs_name)
 
         # Mount NFS-Ganesha V3 to window
         cmd = f"mount {nfs_nodes[0].ip_address}:/export_0 {window_nfs_mount}"
