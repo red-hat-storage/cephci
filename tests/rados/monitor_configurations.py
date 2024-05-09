@@ -247,6 +247,7 @@ class MonConfigMethods:
         """
 
         base_cmd = "ceph config rm"
+        verify_removal = kwargs.get("verify_rm", True)
         cmd = f"{base_cmd} {kwargs['section']}"
         if kwargs.get("location_type"):
             cmd = f"{cmd}/{kwargs['location_type']}:{kwargs['location_value']}"
@@ -255,10 +256,11 @@ class MonConfigMethods:
 
         # Sleeping for 10 second for config to be applied
         time.sleep(10)
-        log.debug("verifying the value set")
-        if self.verify_set_config(**kwargs):
-            log.error(f"Value for config: {kwargs['name']} is still set")
-            return False
+        log.debug("verifying the value removed")
+        if verify_removal:
+            if self.verify_set_config(**kwargs):
+                log.error(f"Value for config: {kwargs['name']} is still set")
+                return False
 
         log.info(f"Value for config: {kwargs['name']} was removed")
         return True

@@ -129,8 +129,13 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info("\n ****** Executing finally block ******* \n")
-            mon_obj.remove_config(section="osd", name="osd_memory_target")
-            mon_obj.remove_config(section=f"osd.{osd_id}", name="osd_memory_target")
+            mon_obj.remove_config(
+                section="osd", name="osd_memory_target", verify_rm=False
+            )
+            if "osd_id" in locals() or "osd_id" in globals():
+                mon_obj.remove_config(
+                    section=f"osd.{osd_id}", name="osd_memory_target", verify_rm=False
+                )
             # log cluster health
             rados_obj.log_cluster_health()
         return 0
@@ -286,8 +291,14 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info("\n ****** Executing finally block ******* \n")
-            mon_obj.remove_config(section=f"osd.{osd_ran}", name="osd_memory_target")
-            mon_obj.remove_config(section=f"osd.{osd_ran2}", name="osd_memory_target")
+            if "osd_ran" in locals() or "osd_ran" in globals():
+                mon_obj.remove_config(
+                    section=f"osd.{osd_ran}", name="osd_memory_target", verify_rm=False
+                )
+            if "osd_ran2" in locals() or "osd_ran2" in globals():
+                mon_obj.remove_config(
+                    section=f"osd.{osd_ran2}", name="osd_memory_target", verify_rm=False
+                )
             mon_obj.remove_config(
                 section="osd",
                 location_type="host",

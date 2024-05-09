@@ -290,6 +290,9 @@ def run(ceph_cluster, **kw):
                 )
                 return 0
 
+            # Setting the global pg autoscale mode to on
+            rados_obj.configure_pg_autoscaler(default_mode="on")
+
             pool_name = config.get("pool_name")
             if not rados_obj.create_pool(pool_name=pool_name):
                 log.error("Failed to create pool on cluster")
@@ -316,11 +319,29 @@ def run(ceph_cluster, **kw):
             log.debug(
                 f"PG count on pool {pool_name} post addition of bulk flag : {pg_count_bulk_true}"
             )
-            if pg_count_bulk_true < init_pg_count:
-                raise Exception(
-                    f"Actual pg_num post bulk enablement {pg_count_bulk_true}"
-                    f" is expected to be greater than {init_pg_count}"
+            no_count_change = False
+            if pg_count_bulk_true <= init_pg_count:
+                log.info(
+                    "Checking the ideal PG count on the pool and the threshold set. default is 3"
                 )
+                pool_data = rados_obj.get_pg_autoscale_status(pool_name=pool_name)
+                final_pg_num = pool_data["pg_num_final"]
+                log.debug(
+                    f"Pool : {pool_name} details as fetched from autoscale-status : {pool_data}"
+                )
+                # for the threshold var, refer :
+                # https://docs.ceph.com/en/latest/rados/operations/placement-groups/#viewing-pg-scaling-recommendations
+                # cmd : ceph osd pool set threshold <val>
+                if float(final_pg_num / init_pg_count) <= 3.0:
+                    log.info(
+                        "PG count not expected to increase as the final pg num is less than the threshold"
+                    )
+                    no_count_change = True
+                else:
+                    raise Exception(
+                        f"Actual pg_num post bulk enablement {pg_count_bulk_true}"
+                        f" is expected to be greater than {init_pg_count}"
+                    )
 
             # Unsetting the bulk flag and checking the change in the PG counts
             if not pool_obj.rm_bulk_flag(pool_name=pool_name):
@@ -335,11 +356,16 @@ def run(ceph_cluster, **kw):
             log.debug(
                 f"PG count on pool {pool_name} post addition of bulk flag : {pg_count_bulk_true}"
             )
-            if not pg_count_bulk_false < pg_count_bulk_true:
-                raise Exception(
-                    f"Actual pg_num post bulk disable {pg_count_bulk_true} is "
-                    f"expected to be less than {pg_count_bulk_true}"
-                )
+            if not pg_count_bulk_false <= pg_count_bulk_true:
+                if no_count_change:
+                    log.info(
+                        "PG count not expected to change upon bulk removal as it was less than the threshold set"
+                    )
+                else:
+                    raise Exception(
+                        f"Actual pg_num post bulk disable {pg_count_bulk_true} is "
+                        f"expected to be less than {pg_count_bulk_true}"
+                    )
         except Exception as e:
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)

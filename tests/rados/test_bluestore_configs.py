@@ -104,6 +104,7 @@ def run(ceph_cluster, **kw):
         log.info(doc)
         log.info("Running test case to verify BlueStore checksum algorithms")
         checksum_list = config.get("checksums")
+        pool_type = config.get("pool_type", "erasure")
 
         try:
             # verify default checksum value
@@ -115,7 +116,7 @@ def run(ceph_cluster, **kw):
                 # create pools with given config when OSD csum_type is default crc32c
                 create_pool_write_iops(
                     param=checksum, pool_type="replicated"
-                ) if "crc" in checksum else create_pool_write_iops(
+                ) if pool_type == "replicated" else create_pool_write_iops(
                     param=checksum, pool_type="ec"
                 )
 
@@ -136,7 +137,7 @@ def run(ceph_cluster, **kw):
                 # create pools with given config when OSD csum_type is varied
                 create_pool_write_iops(
                     param=checksum, pool_type="replicated"
-                ) if "crc" in checksum else create_pool_write_iops(
+                ) if pool_type == "replicated" else create_pool_write_iops(
                     param=checksum, pool_type="ec"
                 )
         except Exception as E:
@@ -152,8 +153,9 @@ def run(ceph_cluster, **kw):
             assert mon_obj.remove_config(
                 **{"section": "osd", "name": "bluestore_csum_type"}
             )
+            # Commenting the osd service restarts until bug fix : https://bugzilla.redhat.com/show_bug.cgi?id=2279839
             # restart osd services
-            restart_osd_service()
+            # restart_osd_service()
             wait_for_clean_pg_sets(rados_obj, timeout=300, sleep_interval=10)
             # log cluster health
             rados_obj.log_cluster_health()
@@ -175,6 +177,7 @@ def run(ceph_cluster, **kw):
         )
         log.info(doc)
         log.info("Running test case to verify BlueStore Cache size tuning")
+        pool_type = config.get("pool_type", None)
 
         try:
             # verify default value for bluestore cache
@@ -202,7 +205,8 @@ def run(ceph_cluster, **kw):
 
             # perform iops
             create_pool_write_iops(param="cache_inc", pool_type="replicated")
-            create_pool_write_iops(param="cache_inc", pool_type="ec")
+            if pool_type != "replicated":
+                create_pool_write_iops(param="cache_inc", pool_type="ec")
 
             # modify ssd and hdd cache (decrease)
             modify_cache_size(factor=0.7)
@@ -212,7 +216,8 @@ def run(ceph_cluster, **kw):
 
             # perform iops
             create_pool_write_iops(param="cache_dec", pool_type="replicated")
-            create_pool_write_iops(param="cache_dec", pool_type="ec")
+            if pool_type != "replicated":
+                create_pool_write_iops(param="cache_dec", pool_type="ec")
 
         except Exception as E:
             log.error(f"Verification failed with exception: {E.__doc__}")
