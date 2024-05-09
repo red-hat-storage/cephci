@@ -193,7 +193,7 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
         scrub_begin_weekday,
         scrub_end_hour,
         scrub_end_weekday,
-    ) = scrub_object.add_begin_end_hours(0, 1)
+    ) = scrub_object.add_begin_end_hours(0, 2)
 
     scrub_object.set_osd_configuration("osd_scrub_begin_hour", scrub_begin_hour)
     scrub_object.set_osd_configuration("osd_scrub_begin_week_day", scrub_begin_weekday)
@@ -201,14 +201,14 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
     scrub_object.set_osd_configuration("osd_scrub_end_week_day", scrub_end_weekday)
     scrub_object.set_osd_configuration("osd_scrub_min_interval", osd_scrub_min_interval)
     scrub_object.set_osd_configuration("osd_scrub_max_interval", osd_scrub_max_interval)
-    endTime = datetime.now() + timedelta(minutes=60)
+    endTime = datetime.now() + timedelta(minutes=120)
 
     while datetime.now() <= endTime:
         if operation == "scrub":
             log.debug(f"Running scrub on pg : {pg_id}")
 
             if rados_obj.start_check_scrub_complete(
-                pg_id=pg_id, user_initiated=False, wait_time=5400
+                pg_id=pg_id, user_initiated=False, wait_time=7200
             ):
                 log.info(f"Scrub completed on pg : {pg_id}")
                 operation_chk_flag = True
@@ -216,7 +216,7 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
         else:
             log.debug(f"Running deep-scrub on pg : {pg_id}")
             if rados_obj.start_check_deep_scrub_complete(
-                pg_id=pg_id, user_initiated=False, wait_time=3600
+                pg_id=pg_id, user_initiated=False, wait_time=7200
             ):
                 log.info(f"Deep scrub completed on pg : {pg_id}")
                 operation_chk_flag = True

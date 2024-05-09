@@ -3484,8 +3484,9 @@ class RadosOrchestrator:
             return None
         log.info(f"Performing the scrub on the pg-{pg_id}")
         self.run_scrub(pgid=pg_id)
-        # sleeping for 10 seconds, waiting for scrubbing to be over
-        time.sleep(10)
+        self.start_check_scrub_complete(
+            pg_id=pg_id, user_initiated=True, wait_time=1800
+        )
         inconsistent_details = self.get_inconsistent_object_details(pg_id)
         obj_count = len(inconsistent_details["inconsistents"])
         log.info(f"The inconsistent object count is -{obj_count}")
