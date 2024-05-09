@@ -15,7 +15,6 @@ erasure:
   sample-pool-1:
     pool_name: ec_pool_10
     pool_type: erasure
-    pg_num: 64
     k: 8
     m: 2
     plugin: jerasure
@@ -23,7 +22,6 @@ erasure:
   sample-pool-2:
     pool_name: ec_pool_20
     pool_type: erasure
-    pg_num: 32
     k: 4
     m: 2
     plugin: jerasure
@@ -31,7 +29,7 @@ erasure:
   sample-pool-3:
     pool_name: ec_pool_30
     pool_type: erasure
-    pg_num: 64
     k: 8
     m: 4
     plugin: jerasure
+    crush-failure-domain: osd

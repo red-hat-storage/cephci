@@ -498,6 +498,7 @@ class RadosOrchestrator:
                 7. disable_pg_autoscale -> sets auto-scale mode off on the pool
                 8. crush_rule -> custom crush rule for the pool
                 9. pool_quota -> limit the maximum number of objects or the maximum number of bytes stored
+                10. app_name -> name of the application to be set on the pool
          Returns: True -> pass, False -> fail
         """
 
@@ -521,8 +522,12 @@ class RadosOrchestrator:
             return False
 
         # Enabling rados application on the pool
-        enable_app_cmd = f"sudo ceph osd pool application enable {pool_name} {kwargs.get('app_name', 'rados')}"
-        self.node.shell([enable_app_cmd])
+        app_name = kwargs.get("app_name", "rados")
+        if app_name:
+            enable_app_cmd = (
+                f"sudo ceph osd pool application enable {pool_name} {app_name}"
+            )
+            self.node.shell([enable_app_cmd])
 
         if kwargs.get("app_name") == "rbd":
             pool_init = f"rbd pool init -p {pool_name}"
@@ -561,14 +566,16 @@ class RadosOrchestrator:
         """
         status_report = self.run_ceph_command(cmd="ceph report", client_exec=True)
         ceph_health_status = list(status_report["health"]["checks"].keys())
-        log.debug(f"Ceph report: \n\n {status_report} \n\n")
         if warning in ceph_health_status:
             log.info(f"warning: {warning}  present on the cluster")
             log.info(
                 f"Warning: {warning} generated on the cluster : {ceph_health_status}"
             )
             return True
-        log.info(f"Warning: {warning} not present on the cluster")
+        log.info(
+            f"Warning: {warning} not present on the cluster. "
+            f"all Generated warnings : {ceph_health_status}"
+        )
         return False
 
     def change_recovery_threads(self, config: dict, action: str):

@@ -352,10 +352,12 @@ tests:
       module: pool_tests.py
       polarion-id:  CEPH-83573413
       config:
-        verify_autoscaler_warn:
+        verify_pool_warnings:
           pool_configs:
             - type: replicated
               conf: sample-pool-1
+            - type: erasure
+              conf: sample-pool-2
           pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
       desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
 

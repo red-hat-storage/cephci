@@ -239,6 +239,7 @@ class MonConfigMethods:
                 1. section: which section of daemons to target
                     allowed values: global, mon, mgr, osd, mds, client
                 2. name: name of the config param for the selection
+                3. verify_rm: (bool) specifies if the removal should be verified
             Optional args:
                 3. location_type: CRUSH property like rack or host
                 4. location_value: Value for location_type
