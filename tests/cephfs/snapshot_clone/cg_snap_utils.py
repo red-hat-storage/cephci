@@ -284,17 +284,26 @@ class CG_Snap_Utils(object):
             cmd=cmd,
         )
         qs_output = json.loads(out)
+        log.info(out)
         member_found = 0
         member_quiesce = 0
         if kw_args.get("task_validate", True):
+            log.info("in task_validate")
             for qs_id in qs_output["sets"]:
+                log.info(f"qs_id:{qs_id}")
                 qs_state = qs_output["sets"][qs_id]["state"]["name"]
+                log.info(f"if_await:{if_await},qs_state:{qs_state}")
                 if (if_await and qs_state == "QUIESCED") or (
                     if_await is False and qs_state == "QUIESCING"
                 ):
+                    log.info("if works")
                     for qs_member_new in qs_members_new:
+                        log.info(f"qs_member_new:{qs_member_new}")
                         for qs_member in qs_output["sets"][qs_id]["members"]:
-                            if qs_member_new in qs_member:
+                            log.info(f"qs_member:{qs_member}")
+                            qs_member_new_tmp = qs_member_new.split("?")[0]
+                            if qs_member_new_tmp in qs_member:
+                                log.info("qs_member_new matched")
                                 member_found += 1
                                 member_state = qs_output["sets"][qs_id]["members"][
                                     qs_member
@@ -302,17 +311,15 @@ class CG_Snap_Utils(object):
                                 if_exclude = qs_output["sets"][qs_id]["members"][
                                     qs_member
                                 ]["excluded"]
-                                if (
-                                    if_await
-                                    and member_state == "QUIESCED"
-                                    and if_exclude is False
-                                ) or (
+                                log.info(
+                                    f"member_state:{member_state},if_exclude:{if_exclude}"
+                                )
+                                if (if_await and member_state == "QUIESCED") or (
                                     if_await is False
                                     and (
                                         member_state == "QUIESCING"
                                         or member_state == "QUIESCED"
                                     )
-                                    and if_exclude is False
                                 ):
                                     member_quiesce += 1
                                     log.info(
@@ -367,18 +374,26 @@ class CG_Snap_Utils(object):
             cmd=cmd,
         )
         qs_output = json.loads(out)
+        log.info(qs_output)
         member_exclude = 0
         if kw_args.get("task_validate", True):
+            log.info("in task_validate")
             for qs_id in qs_output["sets"]:
+                log.info(f"qs_id:{qs_id}")
                 for qs_member_exclude in qs_members_exclude:
+                    log.info(f"qs_member_exclude:{qs_member_exclude}")
                     for qs_member in qs_output["sets"][qs_id]["members"]:
-                        if qs_member_exclude in qs_member:
+                        log.info(f"qs_member:{qs_member}")
+                        qs_member_exclude_tmp = qs_member_exclude.split("?")[0]
+                        if qs_member_exclude_tmp in qs_member:
+                            log.info(f"matched exclude name: {qs_member_exclude}")
                             exclude_state = qs_output["sets"][qs_id]["members"][
                                 qs_member
                             ]["excluded"]
                             log.info(
                                 f"{qs_member}:{qs_output['sets'][qs_id]['members'][qs_member]}"
                             )
+                            log.info(f"excluded_state:{exclude_state}")
                             if exclude_state is True:
                                 member_exclude += 1
                                 log.info(f"Exclude Validated for {qs_member_exclude}")
