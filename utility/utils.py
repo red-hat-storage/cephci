@@ -430,9 +430,12 @@ def retain_bucket_pol_at_archive(
             0
         ]
     )
+    bucket_name_list = json.loads(
+        primary_client_node.exec_command(cmd="sudo radosgw-admin bucket list")[0]
+    )
     for bucket in range(0, total_buckets - 2):
         bucket_id = bucket_stat_pri_doc[bucket]["id"]
-        bucket_name = bucket_stat_pri_doc[bucket]["bucket"]
+        bucket_name = bucket_name_list[bucket]
         log.info(f"Test attrs are same for bucket {bucket_name} on all sites")
         json_doc_arc = json.loads(
             archive_client_node.exec_command(
@@ -1432,9 +1435,11 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
             encryption_algorithm=serialization.NoEncryption(),
         ).decode("utf-8"),
         cert.public_bytes(serialization.Encoding.PEM).decode("utf-8"),
-        ca_cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
-        if ca_cert
-        else None,
+        (
+            ca_cert.public_bytes(serialization.Encoding.PEM).decode("utf-8")
+            if ca_cert
+            else None
+        ),
     )
 
 
