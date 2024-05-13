@@ -2,7 +2,6 @@ import pickle
 import re
 
 from docopt import docopt
-from utils.utility import set_logging_env
 
 from cephci.utils.configs import (
     get_configs,
@@ -24,6 +23,7 @@ from cephci.utils.configure import (
     setup_ssh_keys,
     start_local_private_registry,
 )
+from cephci.utils.utility import set_logging_env
 from cli.exceptions import NodeConfigError
 from cli.utilities.containers import Registry
 from cli.utilities.packages import Package, Rpm
