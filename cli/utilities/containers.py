@@ -54,7 +54,7 @@ class Container(Cli):
     def run(
         self,
         image=None,
-        rm=None,
+        rm=False,
         name=None,
         env=None,
         volume=None,
@@ -63,6 +63,11 @@ class Container(Cli):
         detach_key=None,
         detach=False,
         cmds=None,
+        interactive=False,
+        tty=False,
+        user=None,
+        entry_point=None,
+        long_running=True,
     ):
         """Executes the provided command using podman
         Args
@@ -76,6 +81,10 @@ class Container(Cli):
             detach_key (list): List of detach operation
             detach (str): Image name to detach
             cmds (str): Other commands to be executed
+            interactive (bool): Keep stdin open even if not attached
+            tty (bool): Allocate a pseudo-TTY
+            user (str): User to run container as
+            entry_point (str): Entry point command or executable to be run
         """
         if not image and not rm:
             raise NotSupportedError("Image or rm needs to be provided")
@@ -113,8 +122,20 @@ class Container(Cli):
         if detach:
             cmd += " -d"
 
+        if interactive:
+            cmd += " -i"
+
+        if tty:
+            cmd += " -t"
+
         if rm:
-            cmd += f" --rm {rm}"
+            cmd += " --rm"
+
+        if user:
+            cmd += f" --user {user}"
+
+        if entry_point:
+            cmd += f" --entrypoint {entry_point}"
 
         if image:
             cmd += f" {image}"
@@ -122,8 +143,12 @@ class Container(Cli):
         if cmds:
             cmd += f" {cmds}"
 
-        if self.execute(sudo=True, long_running=True, cmd=cmd):
+        out = self.execute(sudo=True, long_running=long_running, cmd=cmd)
+        if not out:
             raise ContainerRegistryError(f"Failed to run {cmd} on container")
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
 
     def pull(self, image):
         """Pull container image
