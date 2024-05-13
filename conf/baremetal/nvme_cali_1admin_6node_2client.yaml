@@ -6,7 +6,7 @@ globals:
         public:
           - 10.8.128.0/21
       nodes:
-        - hostname: cali001.ceph.redhat.com
+        - hostname: cali001
           id: node1
           ip: 10.8.130.1
           role:
@@ -23,7 +23,7 @@ globals:
             - /dev/sdf
             - /dev/sdg
             - /dev/nvme0n1
-        - hostname: cali002.ceph.redhat.com
+        - hostname: cali002
           id: node2
           ip: 10.8.130.2
           role:
@@ -38,7 +38,7 @@ globals:
             - /dev/sdf
             - /dev/sdg
             - /dev/nvme0n1
-        - hostname: cali003.ceph.redhat.com
+        - hostname: cali003
           id: node3
           ip: 10.8.130.3
           role:
@@ -52,7 +52,7 @@ globals:
             - /dev/sdf
             - /dev/sdg
             - /dev/nvme0n1
-        - hostname: cali004.ceph.redhat.com
+        - hostname: cali004
           id: node4
           ip: 10.8.130.4
           role:
@@ -65,7 +65,7 @@ globals:
             - /dev/sdf
             - /dev/sdg
             - /dev/nvme0n1
-        - hostname: cali005.ceph.redhat.com
+        - hostname: cali005
           id: node5
           ip: 10.8.130.5
           role:
@@ -78,7 +78,7 @@ globals:
             - /dev/sdf
             - /dev/sdg
             - /dev/nvme0n1
-        - hostname: cali006.ceph.redhat.com
+        - hostname: cali006
           id: node6
           ip: 10.8.130.6
           role:
@@ -91,7 +91,7 @@ globals:
             - /dev/sdf
             - /dev/sdg
             - /dev/nvme0n1
-        - hostname: cali007.ceph.redhat.com
+        - hostname: cali007
           id: node7
           ip: 10.8.130.7
           role:
@@ -105,13 +105,13 @@ globals:
             - /dev/sdf
             - /dev/sdg
             - /dev/nvme0n1
-        - hostname: cali008.ceph.redhat.com
+        - hostname: cali008
           id: node8
           ip: 10.8.130.8
           role:
             - nvmeof-gw
           root_password: passwd
-        - hostname: cali009.ceph.redhat.com
+        - hostname: cali009
           id: node9
           ip: 10.8.130.9
           role:
@@ -125,19 +125,19 @@ globals:
             - /dev/sdf
             - /dev/sdg
             - /dev/nvme0n1
-        - hostname: cali010.ceph.redhat.com
+        - hostname: cali010
           id: node10
           ip: 10.8.130.10
           root_password: passwd
           role:
             - nvmeof-gw
-        - hostname: cali011.ceph.redhat.com
+        - hostname: cali011
           id: node11
           ip: 10.8.130.11
           root_password: passwd
           role:
             - client
-        - hostname: cali012.ceph.redhat.com
+        - hostname: cali012
           id: node12
           ip: 10.8.130.12
           root_password: passwd
