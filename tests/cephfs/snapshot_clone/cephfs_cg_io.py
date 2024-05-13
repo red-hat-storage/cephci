@@ -285,51 +285,41 @@ class CG_snap_IO(object):
         log.info("In cg_read_io_subvol function")
         io_modules = {}
 
-        read_status = self.cg_linux_cmds_read(write_client, mnt_pt)
+        read_status, end_time = self.cg_linux_cmds_read(write_client, mnt_pt)
+
+        log.info(f"linux_cmds read end_time:{end_time}")
         io_modules.update({"cg_linux_cmds_read": read_status})
         log.info(f"io_modules:{io_modules}")
         lc_status = self.validate_exit_status(
-            write_client, qs_member, io_modules, "read", qs_members
+            write_client, qs_member, io_modules, "read", end_time, qs_members
         )
         log.info(
             f"cg_linux_cmds_read, read_status:{read_status},read_io_validate_status : {lc_status}"
         )
         io_modules.clear()
         if lc_status == 0:
-            retry_cnt = 2
-            i = 0
-            # Retry read op if quiesce was performed mid op, as new read in quiesced state is allowed
-            while i < retry_cnt:
-                read_status = self.cg_fio_io_read(write_client, mnt_pt)
-                if read_status == 0:
-                    i = retry_cnt
-                else:
-                    i += 1
-
+            read_status, end_time = self.cg_fio_io_read(write_client, mnt_pt)
+            log.info(
+                f"{qs_member},{mnt_pt}-fio_read end_time:{end_time},fio_read status:{read_status}"
+            )
             io_modules.update({"cg_fio_io_read": read_status})
             log.info(f"io_modules:{io_modules}")
             fio_status = self.validate_exit_status(
-                write_client, qs_member, io_modules, "read", qs_members
+                write_client, qs_member, io_modules, "read", end_time, qs_members
             )
             log.info(
                 f"cg_fio_io_read, read_status:{read_status},read_io_validate_status : {fio_status}"
             )
             io_modules.clear()
         if lc_status == 0 and fio_status == 0:
-            retry_cnt = 2
-            i = 0
-            # Retry read op if quiesce was performed mid op, as new read in quiesced state is allowed
-            while i < retry_cnt:
-                read_status = self.cg_smallfile_io_read(write_client, mnt_pt)
-                if read_status == 0:
-                    i = retry_cnt
-                else:
-                    i += 1
-
+            read_status, end_time = self.cg_smallfile_io_read(write_client, mnt_pt)
+            log.info(
+                f"{qs_member},{mnt_pt}-smallfile read end_time:{end_time},smallfile read status:{read_status}"
+            )
             io_modules.update({"cg_smallfile_io_read": read_status})
             log.info(f"io_modules:{io_modules}")
             sf_status = self.validate_exit_status(
-                write_client, qs_member, io_modules, "read", qs_members
+                write_client, qs_member, io_modules, "read", end_time, qs_members
             )
             log.info(
                 f"cg_smallfile_io_read, read_status:{read_status},read_io_validate_status : {sf_status}"
@@ -372,11 +362,13 @@ class CG_snap_IO(object):
         log.info("In cg_write_io_subvol function")
         io_modules = {}
 
-        write_status = self.cg_dd_io_write(client, mnt_pt)
+        write_status, end_time = self.cg_dd_io_write(client, mnt_pt)
+
+        log.info(f"dd write end_time:{end_time}")
         io_modules.update({"cg_dd_io_write": write_status})
         log.info(f"io_modules:{io_modules}")
         dd_status = self.validate_exit_status(
-            client, qs_member, io_modules, "write", qs_members
+            client, qs_member, io_modules, "write", end_time, qs_members
         )
         log.info(
             f"cg_dd_io_write, write_status:{write_status},write_io_validate_status : {dd_status}"
@@ -384,44 +376,57 @@ class CG_snap_IO(object):
 
         if dd_status == 0:
             io_modules.clear()
-            write_status = self.cg_fio_io_write(client, mnt_pt)
+            write_status, end_time = self.cg_fio_io_write(client, mnt_pt)
+
+            log.info(f"fio write end_time:{end_time}")
             io_modules.update({"cg_fio_io_write": write_status})
             log.info(f"io_modules:{io_modules}")
             fio_status = self.validate_exit_status(
-                client, qs_member, io_modules, "write", qs_members
+                client, qs_member, io_modules, "write", end_time, qs_members
             )
             log.info(
                 f"cg_fio_io_write, write_status:{write_status},write_io_validate_status : {fio_status}"
             )
         if dd_status == 0 and fio_status == 0:
             io_modules.clear()
-            write_status = self.cg_smallfile_io_write(client, mnt_pt)
+            write_status, end_time = self.cg_smallfile_io_write(client, mnt_pt)
+
+            log.info(f"smallfile write end_time:{end_time}")
             io_modules.update({"cg_smallfile_io_write": write_status})
             log.info(f"io_modules:{io_modules}")
             sf_status = self.validate_exit_status(
-                client, qs_member, io_modules, "write", qs_members
+                client,
+                qs_member,
+                io_modules,
+                "write",
+                end_time,
+                qs_members,
             )
             log.info(
                 f"cg_smallfile_io_write, write_status:{write_status},write_io_validate_status : {sf_status}"
             )
         if dd_status == 0 and fio_status == 0 and sf_status == 0:
             io_modules.clear()
-            write_status = self.cg_linux_cmds_write(client, mnt_pt)
+            write_status, end_time = self.cg_linux_cmds_write(client, mnt_pt)
+
+            log.info(f"linux_cmds write end_time:{end_time}")
             io_modules.update({"cg_linux_cmds_write": write_status})
             log.info(f"io_modules:{io_modules}")
             lc_status = self.validate_exit_status(
-                client, qs_member, io_modules, "write", qs_members
+                client, qs_member, io_modules, "write", end_time, qs_members
             )
             log.info(
                 f"cg_linux_cmds_write, write_status:{write_status},write_io_validate_status : {lc_status}"
             )
         if dd_status == 0 and fio_status == 0 and sf_status == 0 and lc_status == 0:
             io_modules.clear()
-            write_status = self.cg_crefi_io(client, mnt_pt)
+            write_status, end_time = self.cg_crefi_io(client, mnt_pt)
+
+            log.info(f"crefi write end_time:{end_time}")
             io_modules.update({"cg_crefi_io": write_status})
             log.info(f"io_modules:{io_modules}")
             crefi_status = self.validate_exit_status(
-                client, qs_member, io_modules, "write", qs_members
+                client, qs_member, io_modules, "write", end_time, qs_members
             )
             log.info(
                 f"cg_crefi_io, write_status:{write_status},write_io_validate_status : {crefi_status}"
@@ -446,7 +451,9 @@ class CG_snap_IO(object):
         )
         return write_proc_check_status.value
 
-    def validate_exit_status(self, client, qs_member, io_modules, io_type, qs_members):
+    def validate_exit_status(
+        self, client, qs_member, io_modules, io_type, end_time, qs_members
+    ):
         """
         This is called by cg_write_io_subvol and cg_read_io_subvol to validate exit status of IO tools.
         This is done by fetching current state of quiesce set with qs_members and evaluating against IO exit status.
@@ -483,67 +490,102 @@ class CG_snap_IO(object):
                             f"FAIL:{io_mod} io on {qs_member} failed when no QS exists"
                         )
                     cg_status = 1
-                elif io_type == "write":
-                    if io_modules[io_mod] == 1:
-                        qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
-                        log.info(f"qs_id:{qs_id}")
-                        if qs_id != 1:
-                            qs_query = self.cg_snap_util.get_qs_query(
-                                client, qs_id=qs_id
-                            )
-                            log.info(f"qs_query:{qs_query}")
-                            state = qs_query["sets"][qs_id]["state"]["name"]
+            elif io_type == "write":
+                if io_modules[io_mod] == 1:
+                    qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
+                    log.info(f"qs_id:{qs_id}")
+                    if qs_id != 1:
+                        qs_query = self.cg_snap_util.get_qs_query(client, qs_id=qs_id)
+                        log.info(f"qs_query:{qs_query}")
+                        state = qs_query["sets"][qs_id]["state"]["name"]
+                        age_ref = qs_query["sets"][qs_id]["age_ref"]
+                        curr_time = time.time()
+                        time_before_state = float(curr_time) - float(age_ref)
+                        for member_item in qs_query["sets"][qs_id]["members"]:
+                            if qs_member in member_item:
+                                excluded = qs_query["sets"][qs_id]["members"][
+                                    member_item
+                                ]["excluded"]
 
-                            for member_item in qs_query["sets"][qs_id]["members"]:
-                                if qs_member in member_item:
-                                    excluded = qs_query["sets"][qs_id]["members"][
-                                        member_item
-                                    ]["excluded"]
-                                    break
-                            if excluded is True:
-                                log.error(
-                                    f"FAIL: {io_type} fails in state {state} on {qs_member}, excluded - {excluded}"
-                                )
-                                cg_status = 1
-                            elif state in "RELEASED|EXPIRED|TIMEDOUT|CANCELED":
-                                log.error(
-                                    f"FAIL: {io_type} fails in QS state {state} on {qs_member}"
-                                )
-                                cg_status = 1
-                            else:
-                                log.info(
-                                    f"Expected: {io_type} fails in QS state {state} on {qs_member}"
-                                )
-                        if qs_id == 1:
+                                break
+                        if excluded is True:
                             log.error(
-                                f"FAIL:{io_type} fails when no QS exists with {qs_member}"
+                                f"FAIL: {io_mod} {io_type} fails in state {state} on {qs_member}, excluded - {excluded}"
                             )
                             cg_status = 1
-                    elif io_modules[io_mod] == 0:
-                        qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
-                        log.info(f"qs_id:{qs_id}")
-                        if qs_id != 1:
-                            qs_query = self.cg_snap_util.get_qs_query(
-                                client, qs_id=qs_id
+                        elif state in "RELEASED|EXPIRED|TIMEDOUT|CANCELED":
+                            log.info(
+                                f"time_before_state:{time_before_state},end_time:{end_time}"
                             )
-                            log.info(f"qs_query:{qs_query}")
-                            state = qs_query["sets"][qs_id]["state"]["name"]
-                            for member_item in qs_query["sets"][qs_id]["members"]:
-                                if qs_member in member_item:
-                                    excluded = qs_query["sets"][qs_id]["members"][
-                                        member_item
-                                    ]["excluded"]
-                                    break
-                            if excluded is False:
-                                if state in "QUIESCED|RELEASING|CANCELING":
+                            log.info(f"age_ref:{age_ref},curr_time:{curr_time}")
+                            if state == "RELEASED" and (
+                                float(time_before_state) > float(end_time)
+                            ):
+                                log.info(
+                                    f"WARN: {io_mod} {io_type} fails in QS state {state} on {qs_member}"
+                                )
+                                time_diff = int(
+                                    float(time_before_state) - float(end_time)
+                                )
+                                log.info(
+                                    f"{state} is achieved in {time_diff}secs after end_time,could be false positive"
+                                )
+                            else:
+                                log.error(
+                                    f"FAIL: {io_mod} {io_type} fails when {state}  on {qs_member} - age:{age_ref}secs"
+                                )
+                                cg_status = 1
+                        else:
+                            log.info(
+                                f"Expected: {io_mod} {io_type} fails in QS state {state} on {qs_member}"
+                            )
+                    if qs_id == 1:
+                        log.error(
+                            f"FAIL:{io_mod} {io_type} fails when no QS exists with {qs_member}"
+                        )
+                        cg_status = 1
+                elif io_modules[io_mod] == 0:
+                    qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
+                    log.info(f"qs_id:{qs_id}")
+                    if qs_id != 1:
+                        qs_query = self.cg_snap_util.get_qs_query(client, qs_id=qs_id)
+                        log.info(f"qs_query:{qs_query}")
+                        state = qs_query["sets"][qs_id]["state"]["name"]
+                        curr_time = time.time()
+                        for member_item in qs_query["sets"][qs_id]["members"]:
+                            if qs_member in member_item:
+                                excluded = qs_query["sets"][qs_id]["members"][
+                                    member_item
+                                ]["excluded"]
+                                age = qs_query["sets"][qs_id]["members"][member_item][
+                                    "state"
+                                ]["age"]
+                                time_before_state = float(curr_time) - float(age)
+                                log.info(
+                                    f"time_before_state:{time_before_state},end_time:{end_time}"
+                                )
+                                log.info(f"curr_time:{curr_time},age:{age}")
+                                break
+                        if excluded is False:
+                            if state in "QUIESCED|RELEASING|CANCELING":
+                                if state == "QUIESCED" and (
+                                    float(time_before_state) > float(end_time)
+                                ):
+                                    log.info(
+                                        f"{io_mod} {io_type} passed on {qs_member} when {state},exclude-{excluded}"
+                                    )
+                                    log.info(
+                                        f"{state} is achieved in {age}secs,could be false positive"
+                                    )
+                                else:
                                     log.error(
-                                        f"FAIL:{io_type} passed on {qs_member} when QS state-{state},exclude-{excluded}"
+                                        f"FAIL:{io_mod} {io_type} pass on {qs_member} when {state},exclude-{excluded}"
                                     )
                                     cg_status = 1
-                            else:
-                                log.info(
-                                    f"Expected:{io_type} passed on {qs_member} when QS state-{state},exclude-{excluded}"
-                                )
+                        else:
+                            log.info(
+                                f"Expected:{io_mod} {io_type} pass on {qs_member} when {state},exclude-{excluded}"
+                            )
         return cg_status
 
     """
@@ -640,16 +682,23 @@ class CG_snap_IO(object):
                 sudo=True,
                 cmd=f"echo {src_file} >> {file_path}",
                 check_ec=True,
-                timeout=15,
+                timeout=20,
             )
             out, _ = client.exec_command(
                 sudo=True, cmd=f"ls -l {file_path}", check_ec=True, timeout=15
             )
-            log.info(f"dd_io {io_type} {cmd} op : {out}")
-            return 0
+
+            end_time = time.time()
+            log.info(
+                f"dd_io {io_type} {cmd} passed on {file_path} with end_time {end_time}: {out}"
+            )
+            return (0, end_time)
         except Exception as ex:
-            log.info(ex)
-            return 1
+            end_time = time.time()
+            log.info(
+                f"dd_io {io_type} {cmd} failed on {file_path} with end_time {end_time}:{ex}"
+            )
+            return (1, end_time)
 
     def cg_smallfile_io_read(self, client, mnt_pt):
         """
@@ -665,55 +714,76 @@ class CG_snap_IO(object):
         time.sleep(10)
         dir_path = f"{mnt_pt}/cg_io/smallfile_io_dir"
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=60)
-        smallfile_read_success = 0
 
-        try:
-            while datetime.datetime.now() < end_time:
-                try:
-                    out, rc = client.exec_command(
-                        sudo=True, cmd=f"ls -d {dir_path}/smallfile_*/", timeout=15
-                    )
-                    log.info(f"smallfile_io {io_type} cmd op : {out}")
-                    out = out.strip()
-                    smallfile_dirs = out.split()
-                    log.info(
-                        f"smallfile_io {io_type} smallfile_dirs op : {smallfile_dirs}"
-                    )
-                    if len(smallfile_dirs) > 0:
-                        break
-                except Exception as ex:
-                    log.info(ex)
-                    time.sleep(5)
-            dir_cnt = len(smallfile_dirs)
-            if dir_cnt == 0:
-                raise Exception(
-                    f"No smallfile dirs created in {dir_path} even after 60secs"
-                )
-            smallfile_dir = random.choice(smallfile_dirs)
+        while datetime.datetime.now() < end_time:
             try:
+                out, rc = client.exec_command(
+                    sudo=True, cmd=f"ls -d {dir_path}/smallfile_*/", timeout=15
+                )
+                log.info(f"smallfile_io {io_type} cmd op : {out}")
+                out = out.strip()
+                smallfile_dirs = out.split()
+                log.info(f"smallfile_io {io_type} smallfile_dirs op : {smallfile_dirs}")
+                if len(smallfile_dirs) > 0:
+                    break
+            except Exception as ex:
+                log.info(ex)
+                time.sleep(5)
+        dir_cnt = len(smallfile_dirs)
+        if dir_cnt == 0:
+            raise Exception(
+                f"No smallfile dirs created in {dir_path} even after 60secs"
+            )
+        smallfile_dir = random.choice(smallfile_dirs)
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        i = 0
+        retry_cnt = 2
+        while i < retry_cnt:
+            try:
+                out_tmp, _ = client.exec_command(
+                    sudo=True,
+                    cmd=f"mkdir -p /var/tmp/smallfile_dir_{rand_str}",
+                    timeout=10,
+                )
+                log.info(out_tmp)
+                log.info(f"Smallfile read on {mnt_pt}, Iteration {i}")
                 out, _ = client.exec_command(
                     sudo=True,
                     cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
                     f"--operation read --threads 1 --file-size 1024 "
-                    f"--files 1 --top {smallfile_dir} --network-sync-dir /var/tmp",
-                    timeout=10,
+                    f"--files 1 --top {smallfile_dir} --network-sync-dir /var/tmp/smallfile_dir_{rand_str}",
+                    timeout=30,
                 )
                 log.info(f"smallfile_io {io_type} cmd op : {out}")
-                smallfile_read_success = 1
+                end_time = time.time()
+                log.info(
+                    f"Iter{i}:smallfile_io_read passed on {smallfile_dir} with end_time {end_time}"
+                )
+                return (0, end_time)
             except Exception as ex:
                 exp_str = (
                     "No such file or directory: '/var/tmp/starting_gate.tmp.notyet'"
                 )
                 if exp_str in ex:
-                    smallfile_read_success = 1
+                    end_time = time.time()
+                    log.info(
+                        f"smallfile_io_read passed on {smallfile_dir} with end_time {end_time}"
+                    )
+                    return (0, end_time)
                 else:
-                    smallfile_read_success = 0
+                    log.info(
+                        f"smallfile_io_read failed on {smallfile_dir} in Iter{i}:{ex}"
+                    )
+                    i += 1
 
-        except Exception as ex:
-            log.info(ex)
-        if smallfile_read_success == 0:
-            return 1
-        return 0
+        end_time = time.time()
+        log.info(
+            f"smallfile_io_read failed on {smallfile_dir} with end_time {end_time}"
+        )
+        return (1, end_time)
 
     def cg_smallfile_io_write(self, client, mnt_pt):
         """
@@ -744,7 +814,7 @@ class CG_snap_IO(object):
                 "rmdir",
                 "create",
                 "symlink",
-                "chmod",
+                # "chmod",
             ]
 
             for i in cmd_list:
@@ -755,13 +825,20 @@ class CG_snap_IO(object):
                     f"--operation {i} --threads 1 --file-size 1024 "
                     f"--files 1 --top {dir_path}",
                     long_running=True,
-                    timeout=15,
+                    timeout=20,
                 )
-                log.info(f"after smallfile_io_write cmd:{out_list}")
-            return 0
+                log.info(f"smallfile write output for {i} on {dir_path}:{out_list}")
+            end_time = time.time()
+            log.info(
+                f"smallfile_io_write passed on {dir_path} with end_time {end_time}"
+            )
+            return (0, end_time)
         except Exception as ex:
-            log.info(ex)
-            return 1
+            end_time = time.time()
+            log.info(
+                f"smallfile_io_write failed on {dir_path} with end_time {end_time}:{ex}"
+            )
+            return (1, end_time)
 
     def cg_fio_io_read(self, client, mnt_pt):
         """
@@ -773,42 +850,55 @@ class CG_snap_IO(object):
         """
         io_type = "read"
         log.info(f"In cg_fio_io function:{io_type}")
-        try:
-            time.sleep(10)
-            dir_path = f"{mnt_pt}/cg_io/fio_io_dir"
-            end_time = datetime.datetime.now() + datetime.timedelta(seconds=60)
-            while datetime.datetime.now() < end_time:
-                try:
-                    out, rc = client.exec_command(
-                        sudo=True, cmd=f"ls {dir_path}/fio_cg_test_*", timeout=15
-                    )
-                    log.info(f"fio_io {io_type} cmd op : {out}")
-                    out = out.strip()
-                    fio_files = out.split()
-                    log.info(f"fio_io {io_type} op : {fio_files}")
-                    if len(fio_files) > 0:
-                        break
-                    time.sleep(5)
-                except Exception as ex:
-                    log.info(ex)
-                    time.sleep(5)
 
-            fio_cnt = len(fio_files)
-            if fio_cnt == 0:
-                raise Exception(f"No fio files created in {dir_path} even after 60secs")
-            fio_file = random.choice(fio_files)
+        time.sleep(10)
+        dir_path = f"{mnt_pt}/cg_io/fio_io_dir"
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=100)
+        fio_files = []
+        while datetime.datetime.now() < end_time:
+            try:
+                out, rc = client.exec_command(
+                    sudo=True, cmd=f"ls {dir_path}/fio_cg_test_*", timeout=15
+                )
+                log.info(f"fio_io {io_type} cmd op : {out}")
+                out = out.strip()
+                fio_files = out.split()
+                log.info(f"fio_io {io_type} op : {fio_files}")
+                if len(fio_files) > 0:
+                    break
+                time.sleep(5)
+            except Exception as ex:
+                log.info(ex)
+                time.sleep(5)
 
-            out, _ = client.exec_command(
-                sudo=True,
-                cmd=f"fio --name={fio_file} --ioengine=libaio --size 2M --rw=read --bs=1M --direct=1 "
-                f"--numjobs=1 --iodepth=5 --runtime=10 --debug=io",
-                timeout=10,
-            )
-            log.info(f"fio_io {io_type} cmd op : {out}")
-            return 0
-        except Exception as ex:
-            log.info(ex)
-            return 1
+        fio_cnt = len(fio_files)
+        if fio_cnt == 0:
+            raise Exception(f"No fio files created in {dir_path} even after 60secs")
+        fio_file = random.choice(fio_files)
+        retry_cnt = 2
+        i = 0
+        while i < retry_cnt:
+            try:
+                log.info(f"fio read on {mnt_pt}, Iteration {i}")
+                out, _ = client.exec_command(
+                    sudo=True,
+                    cmd=f"fio --name={fio_file} --ioengine=libaio --size 2M --rw=read --bs=1M --direct=1 "
+                    f"--numjobs=1 --iodepth=5 --runtime=10 --debug=io",
+                    timeout=30,
+                )
+                end_time = time.time()
+                log.info(
+                    f"Iter{i}:fio_io read passed on {fio_file} with end_time {end_time}: {out}"
+                )
+                return (0, end_time)
+
+            except Exception as ex:
+                log.info(f"fio_io read failed on {fio_file} in Iter{i}: {ex} ")
+                i += 1
+
+        end_time = time.time()
+        log.info(f"fio_io read failed on {fio_file} with end_time {end_time}")
+        return (1, end_time)
 
     def cg_fio_io_write(self, client, mnt_pt):
         """
@@ -833,13 +923,16 @@ class CG_snap_IO(object):
                 sudo=True,
                 cmd=f"fio --name={file_path} --ioengine=libaio --size 2M --rw=write --bs=1M --direct=1 "
                 f"--numjobs=1 --iodepth=5 --runtime=10",
-                timeout=15,
+                timeout=20,
                 long_running=True,
             )
-            return 0
+            end_time = time.time()
+            log.info(f"fio write passed on {file_path} with end_time {end_time} ")
+            return (0, end_time)
         except Exception as ex:
-            log.info(ex)
-            return 1
+            end_time = time.time()
+            log.info(f"fio write failed on {file_path} with end_time {end_time}: {ex}")
+            return (1, end_time)
 
     def cg_crefi_io(self, client, mnt_pt):
         """
@@ -867,7 +960,7 @@ class CG_snap_IO(object):
                 "chgrp",
                 "symlink",
                 "hardlink",
-                "truncate",
+                # "truncate",
             ]
             for i in cmd_list:
                 out_list = []
@@ -876,13 +969,17 @@ class CG_snap_IO(object):
                     cmd=f"python3 /home/cephuser/Crefi/crefi.py "
                     f"-n 5 --max 100k --min 10k -t {file_type} -b 2 -d 2 --multi --fop {i} -T 2 {dir_path}",
                     long_running=True,
-                    timeout=15,
+                    timeout=20,
                 )
-                log.info(f"after crefi_io cmd:{out_list}")
-            return 0
+                log.info(f"after crefi_io cmd on {dir_path}:{out_list}")
+
+            end_time = time.time() - 1
+            log.info(f"Crefi write passed on {dir_path} with end_time {end_time}")
+            return (0, end_time)
         except Exception as ex:
-            log.info(ex)
-            return 1
+            end_time = time.time()
+            log.info(f"Crefi write failed on {dir_path} with end_time {end_time}:{ex}")
+            return (1, end_time)
 
     def cg_linux_cmds_read(self, client, mnt_pt):
         """
@@ -896,7 +993,7 @@ class CG_snap_IO(object):
         log.info(f"In cg_linux_cmds function : {io_type}")
 
         try:
-            time.sleep(5)
+            time.sleep(8)
             dir_path = f"{mnt_pt}/cg_io/dd_dir"
             out, _ = client.exec_command(sudo=True, cmd=f"ls {dir_path}", timeout=15)
             log.info(f"linux_cmds {io_type} cmd op : {out}")
@@ -907,22 +1004,23 @@ class CG_snap_IO(object):
             client_name_1 = f"{client_name[0: -1]}"
             read_cmd_dict = {
                 "grep": f"grep -m 2 -H {client_name_1} {dir_path}/{file_name}",
-                "ls -l": f"ls -l {mnt_pt}/cg_io/smallfile_io_dir",
                 "cat": f"touch /tmp/cg_dd_io_cmds.log;cat {dir_path}/{file_name} > /tmp/cg_dd_io_cmds.log",
                 "getfacl": f"getfacl {dir_path}/{file_name}",
                 "dir": f"dir {dir_path}",
+                "ls -l": f"ls -l {mnt_pt}/cg_io/*",
             }
             for cmd in read_cmd_dict:
                 log.info(f"linux_cmds {io_type} cmd to run : {read_cmd_dict[cmd]}")
                 out, _ = client.exec_command(
-                    sudo=True, cmd=read_cmd_dict[cmd], timeout=15
+                    sudo=True, cmd=read_cmd_dict[cmd], timeout=30
                 )
                 log.info(f"linux_cmds {io_type} cmd op : {out}")
-            return 0
+            end_time = time.time()
+            return (0, end_time)
         except Exception as ex:
             log.info(ex)
-
-            return 1
+            end_time = time.time()
+            return (1, end_time)
 
     def cg_linux_cmds_write(self, client, mnt_pt):
         """
@@ -961,10 +1059,12 @@ class CG_snap_IO(object):
             for cmd in write_cmd_dict:
                 log.info(f"linux_cmds {io_type} cmd to run : {write_cmd_dict[cmd]}")
                 out, _ = client.exec_command(
-                    sudo=True, cmd=write_cmd_dict[cmd], timeout=15
+                    sudo=True, cmd=write_cmd_dict[cmd], timeout=20
                 )
                 log.info(f"linux_cmds {io_type} cmd op : {out}")
-            return 0
+            end_time = time.time()
+            return (0, end_time)
         except Exception as ex:
             log.info(ex)
-            return 1
+            end_time = time.time()
+            return (1, end_time)

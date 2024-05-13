@@ -405,6 +405,7 @@ def cg_scale(cg_test_params):
         for p in write_procs:
             if p.is_alive():
                 proc_stop = 0
+                io_run_time = io_run_time * 4
                 log.info("IO is running after quiesce lifecycle")
                 end_time = datetime.datetime.now() + datetime.timedelta(
                     seconds=io_run_time
@@ -417,8 +418,7 @@ def cg_scale(cg_test_params):
                 if proc_stop == 1:
                     log.info("IO completed")
                 elif proc_stop == 0:
-                    log.error("IO has NOT completed, force stop IO")
-                    p.kill()
+                    log.error("IO has NOT completed")
 
     if test_fail == 1:
         log.error("FAIL: Workflow 1 - quiesce lifecycle with scaled config")
@@ -785,6 +785,7 @@ def cg_stress(cg_test_params):
                 if p.is_alive():
                     proc_stop = 0
                     log.info("IO is running after quiesce lifecycle")
+                    io_run_time = io_run_time * 4
                     end_time = datetime.datetime.now() + datetime.timedelta(
                         seconds=io_run_time
                     )
@@ -796,8 +797,7 @@ def cg_stress(cg_test_params):
                     if proc_stop == 1:
                         log.info("IO completed")
                     elif proc_stop == 0:
-                        log.error("IO has NOT completed, force stop IO")
-                        p.kill()
+                        log.error("IO has NOT completed")
         cnt += 1
 
     if test_fail == 1:

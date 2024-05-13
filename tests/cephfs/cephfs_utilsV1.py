@@ -3503,3 +3503,14 @@ os.system('sudo systemctl start  network')
             except Exception as e:
                 log.info(e)
                 raise CommandFailed
+
+    def get_crash_ls_new(self, client):
+        """
+        To get crash ls-new output in json format
+        Args:
+            client : To run ceph crash cmd
+        Returns: dict type data having crash ls-new output
+        """
+        out, _ = client.exec_command(sudo=True, cmd="ceph crash ls-new -f json")
+        crash_info = json.loads(out)
+        return crash_info

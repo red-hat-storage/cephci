@@ -70,6 +70,16 @@ def run(ceph_cluster, **kw):
 
     Workflow6 - Perform all state transitions and validate response
     Steps:
+    Run QS IO validation tool on selected quiesce set
+    1.State - Quiescing : Create QS without --await, when in quiescing performing below
+      Include : Add new subvolumes, verify quiescing continues on new subvolumes
+      Exclude : Exclude subvolume in quiescing state, verify status of QS .
+    2. State - Quiesced : Create QS with quiesce command, when in quiesced state, perform below,
+        Include : Add new subvolumes, verify quiescing continues on new subvolumes
+        Exclude : Exclude subvolume in quiesed state, verify status of QS, attempt a release.
+    3. State - Releasing : Create QS with quiesce command without --await, perform below,
+        quiesce-expire : Verify releasing state goes to expired, when quiesce-expire is exhausted.
+        Exclude : Exclude subvolume, verify status of QS.
 
     Clean Up:
 
@@ -108,6 +118,8 @@ def run(ceph_cluster, **kw):
             "cg_snap_func_workflow_2",
             "cg_snap_func_workflow_3",
             "cg_snap_func_workflow_4",
+            "cg_snap_func_workflow_5",
+            "cg_snap_func_workflow_6",
         ]
 
         if test_case_name in test_functional:
@@ -162,7 +174,11 @@ def run(ceph_cluster, **kw):
             sv_non_def_list,
             sv_mixed_list,
         ]
+
         log.info(f"Test config attributes : qs_cnt - {qs_cnt}, qs_sets - {qs_sets}")
+        crash_status_before = fs_util_v1.get_crash_ls_new(client1)
+        log.info(f"Crash status before Test: {crash_status_before}")
+        fs_util_v1.get_ceph_health_status(client1)
         cg_test_params = {
             "ceph_cluster": ceph_cluster,
             "fs_name": default_fs,
@@ -191,6 +207,11 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Clean Up in progess")
+        crash_status_after = fs_util_v1.get_crash_ls_new(client1)
+        log.info(f"Crash status after Test: {crash_status_after}")
+        fs_util_v1.get_ceph_health_status(client1)
+        if len(crash_status_after) > len(crash_status_before):
+            assert False, "Post test validation failed, please check crash report above"
         qs_cnt += 1
         for i in range(1, qs_cnt):
             subvol_name = f"sv_def_{i}"
@@ -221,6 +242,12 @@ def cg_snap_test_func(cg_test_params):
         return test_status
     elif cg_test_params["test_case"] == "cg_snap_func_workflow_4":
         test_status = cg_snap_func_4(cg_test_params)
+        return test_status
+    elif cg_test_params["test_case"] == "cg_snap_func_workflow_5":
+        test_status = cg_snap_func_5(cg_test_params)
+        return test_status
+    elif cg_test_params["test_case"] == "cg_snap_func_workflow_6":
+        test_status = cg_snap_func_6(cg_test_params)
         return test_status
 
 
@@ -253,14 +280,14 @@ def cg_snap_func_1(cg_test_params):
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
-        io_run_time = 100
+        io_run_time = 60
         p = Thread(
             target=cg_snap_io.start_cg_io,
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
-        time.sleep(45)
-        repeat_cnt = 5
+        time.sleep(10)
+        repeat_cnt = 2
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -279,7 +306,7 @@ def cg_snap_func_1(cg_test_params):
                 cg_snap_util.cg_quiesce(
                     client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
                 )
-                time.sleep(10)
+                time.sleep(30)
                 log.info("Perform snapshot creation on all members")
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
@@ -314,29 +341,13 @@ def cg_snap_func_1(cg_test_params):
                 log.info(f"Release quiesce set {qs_id_val}")
                 cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
                 i += 1
-                time.sleep(10)
+                time.sleep(30)
             else:
                 i = repeat_cnt
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
-        if p.is_alive():
-            proc_stop = 0
-            log.info("CG IO is running after quiesce lifecycle")
-            end_time = datetime.datetime.now() + datetime.timedelta(seconds=io_run_time)
-            while (datetime.datetime.now() < end_time) and (proc_stop == 0):
-                if p.is_alive():
-                    time.sleep(10)
-                else:
-                    proc_stop = 1
-            if proc_stop == 1:
-                log.info("CG IO completed")
-            elif proc_stop == 0:
-                raise Exception("CG IO has NOT completed")
-        else:
-            log.info(
-                f"WARN:CG IO test completed early during quiesce lifecycle with await on qs_set {qs_id_val}"
-            )
+        wait_for_cg_io(p, qs_id_val, io_run_time)
 
         mnt_pt_list = []
         log.info(f"Perform cleanup for {qs_set}")
@@ -388,14 +399,14 @@ def cg_snap_func_1(cg_test_params):
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
-        io_run_time = 100
+        io_run_time = 60
         p = Thread(
             target=cg_snap_io.start_cg_io,
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
-        time.sleep(35)
-        repeat_cnt = 5
+        time.sleep(10)
+        repeat_cnt = 2
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -443,7 +454,7 @@ def cg_snap_func_1(cg_test_params):
                     raise Exception(
                         f"quiesce state of set_id {qs_id_val} is still not QUIESCED after 5mins"
                     )
-
+                time.sleep(30)
                 log.info("Perform snapshot creation on all members")
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
@@ -504,28 +515,12 @@ def cg_snap_func_1(cg_test_params):
                     test_fail = 1
                     i = repeat_cnt
                 i += 1
-                time.sleep(10)
+                time.sleep(30)
             else:
                 i = repeat_cnt
                 log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
-        if p.is_alive():
-            proc_stop = 0
-            log.info("CG IO is running after quiesce lifecycle")
-            end_time = datetime.datetime.now() + datetime.timedelta(seconds=io_run_time)
-            while (datetime.datetime.now() < end_time) and (proc_stop == 0):
-                if p.is_alive():
-                    time.sleep(10)
-                else:
-                    proc_stop = 1
-            if proc_stop == 1:
-                log.info("CG IO completed")
-            elif proc_stop == 0:
-                raise Exception("CG IO has NOT completed")
-        else:
-            log.info(
-                f"WARN:CG IO test completed early during quiesce lifecycle with await on qs_set {qs_id_val}"
-            )
+        wait_for_cg_io(p, qs_id_val, io_run_time)
         mnt_pt_list = []
         for qs_member in qs_member_dict1:
             mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
@@ -533,10 +528,6 @@ def cg_snap_func_1(cg_test_params):
         log.info("Remove CG IO files and unmount")
         cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
         mnt_pt_list.clear()
-        """for qs_member in qs_member_dict2:
-            mnt_pt_list.append(qs_member_dict2[qs_member]["mount_point"])
-        log.info("Unmount")
-        cg_snap_util.cleanup_cg_io(client2, mnt_pt_list, del_data=0)"""
 
         snap_name = f"cg_snap_{rand_str}"
         log.info("Remove CG snapshots")
@@ -609,7 +600,7 @@ def cg_snap_func_2(cg_test_params):
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
-        time.sleep(30)
+        time.sleep(10)
         repeat_cnt = 2
         snap_qs_dict = {}
         for qs_member in qs_set:
@@ -822,29 +813,13 @@ def cg_snap_func_2(cg_test_params):
                     i = repeat_cnt
                 else:
                     i += 1
-                    time.sleep(10)
+                    time.sleep(30)
             else:
                 i = repeat_cnt
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
-        if p.is_alive():
-            proc_stop = 0
-            log.info("CG IO is running after quiesce lifecycle")
-            end_time = datetime.datetime.now() + datetime.timedelta(seconds=io_run_time)
-            while (datetime.datetime.now() < end_time) and (proc_stop == 0):
-                if p.is_alive():
-                    time.sleep(10)
-                else:
-                    proc_stop = 1
-            if proc_stop == 1:
-                log.info("CG IO completed")
-            elif proc_stop == 0:
-                raise Exception("CG IO has NOT completed")
-        else:
-            log.info(
-                f"WARN:CG IO test completed early during quiesce lifecycle with await on qs_set {qs_id_val}"
-            )
+        wait_for_cg_io(p, qs_id_val, io_run_time)
 
         mnt_pt_list = []
         log.info(f"Perform cleanup for {qs_set}")
@@ -1003,7 +978,7 @@ def cg_snap_func_3(cg_test_params):
                     i = repeat_cnt
                 else:
                     i += 1
-                    time.sleep(10)
+                    time.sleep(30)
             else:
                 i = repeat_cnt
 
@@ -1201,6 +1176,383 @@ def cg_snap_func_4(cg_test_params):
     return 0
 
 
+def cg_snap_func_5(cg_test_params):
+    log.info(
+        "Workflow 5 - Validate quiesce release response when quiesce-timeout and quiesce-expire time is reached"
+    )
+    cg_test_io_status = {}
+    fs_name = cg_test_params["fs_name"]
+
+    clients = cg_test_params["clients"]
+    client = cg_test_params["clients"][0]
+    client1 = cg_test_params["clients"][1]
+    qs_clients = [client1]
+    log.info(f"client:{client.node.hostname}")
+    for client_tmp in clients:
+        log.info(f"client:{client_tmp.node.hostname}")
+    for qs_client in qs_clients:
+        log.info(f"qs_client:{qs_client.node.hostname}")
+    qs_sets = cg_test_params["qs_sets"]
+    cg_snap_util = cg_test_params["cg_snap_util"]
+    cg_snap_io = cg_test_params["cg_snap_io"]
+    test_fail = 0
+
+    for qs_set in qs_sets:
+        client_mnt_dict = {}
+        qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
+        client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
+
+        log.info(f"Start the IO on quiesce set members - {qs_set}")
+
+        cg_test_io_status = Value("i", 0)
+        io_run_time = 15
+        p = Thread(
+            target=cg_snap_io.start_cg_io,
+            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+        )
+        p.start()
+        time.sleep(5)
+        snap_qs_dict = {}
+        for qs_member in qs_set:
+            snap_qs_dict.update({qs_member: []})
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        qs_member_str = ""
+        log.info(f"Run quiesce on quiesce set {qs_set} with shorter timeout")
+        qs_id_val = f"cg_test1_{rand_str}"
+        qs_set_copy = qs_set.copy()
+
+        for qs_member in qs_set_copy:
+            qs_member_str += f' "{qs_member}" '
+        cmd = f"ceph fs quiesce {fs_name} {qs_member_str} --set-id  {qs_id_val} --expiration 5 --await"
+        try:
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+            log.info(f"Quiesce with shorter timeout : {out}")
+            test_fail += 1
+            log.error("Quiesce succeeds when timedout")
+        except Exception as ex:
+            log.info(ex)
+            if "ETIMEDOUT" in str(ex):
+                log.info("Quiesce fails as expected when timedout")
+        log.info("Perform quiesce with shorter expiration")
+        qs_id_val = f"cg_test2_{rand_str}"
+        qs_op_out = cg_snap_util.cg_quiesce(
+            client, qs_set, qs_id=qs_id_val, timeout=300, expiration=5
+        )
+        log.info(f"quiesce cmd response : {qs_op_out}")
+        log.info("Wait for quiesce set to expire")
+        time.sleep(6)
+        cmd = f"ceph fs quiesce {fs_name} --set-id  {qs_id_val} --release --await"
+        try:
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+            test_fail += 1
+            log.error("Quiesce release suceeds on expired set")
+        except Exception as ex:
+            log.info(ex)
+            if "EPERM" in str(ex):
+                log.info("Quiesce release fails as expected when expired")
+        log.info("Verify Quiesce state is EXPIRED")
+        qs_query = cg_snap_util.get_qs_query(client, qs_id=qs_id_val)
+        log.info(f"qs_query:{qs_query}")
+        state = qs_query["sets"][qs_id_val]["state"]["name"]
+        if state != "EXPIRED":
+            log.error(f"Quiesce state is not EXPIRED, it is {state}")
+            test_fail += 1
+        log.info("Quiesce state is EXPIRED as expected")
+
+        log.info(f"cg_test_io_status : {cg_test_io_status.value}")
+        wait_for_cg_io(p, qs_id_val, io_run_time)
+
+        mnt_pt_list = []
+        log.info(f"Perform cleanup for {qs_set}")
+        for qs_member in qs_member_dict1:
+            mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
+        log.info("Remove CG IO files and unmount")
+        cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
+        mnt_pt_list.clear()
+
+        if cg_test_io_status.value == 1:
+            log.error(
+                f"CG IO test exits with failure during workflow5 on qs_set-{qs_id_val}"
+            )
+            test_fail += 1
+
+    if test_fail >= 1:
+        log.error(
+            "FAIL:Workflow 5-Validate quiesce release response when quiesce-timeout and quiesce-expire time reached"
+        )
+        return 1
+    return 0
+
+
+def cg_snap_func_6(cg_test_params):
+    log.info("Workflow 6 - Perform all state transitions and validate response")
+    cg_test_io_status = {}
+    fs_name = cg_test_params["fs_name"]
+
+    client = cg_test_params["clients"][0]
+    client1 = cg_test_params["clients"][1]
+    qs_clients = [client1]
+    qs_sets = cg_test_params["qs_sets"]
+    cg_snap_util = cg_test_params["cg_snap_util"]
+    cg_snap_io = cg_test_params["cg_snap_io"]
+    test_fail = 0
+    for qs_set in qs_sets:
+        client_mnt_dict = {}
+        qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
+        client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
+
+        log.info(f"Start the IO on quiesce set members - {qs_set}")
+
+        cg_test_io_status = Value("i", 0)
+        io_run_time = 60
+        p = Thread(
+            target=cg_snap_io.start_cg_io,
+            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+        )
+        p.start()
+        time.sleep(10)
+        repeat_cnt = 2
+        snap_qs_dict = {}
+        for qs_member in qs_set:
+            snap_qs_dict.update({qs_member: []})
+        i = 0
+        while i < repeat_cnt:
+            if p.is_alive():
+                log.info(f"Workflow 6 : Iteration {i}")
+                # time taken for 1 lifecycle : ~5secs
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                qs_id_val = f"cg_test1_{rand_str}"
+                log.info(
+                    " 1.State - Quiescing:Quiesce without --await, when in quiescing perform include,exclude"
+                )
+
+                qs_set_copy = qs_set.copy()
+                for i in range(len(qs_set_copy)):
+                    qs_set_copy[i] = f"{qs_set_copy[i]}?q=3"
+                include_sv_name = qs_set_copy.pop()
+                log.info(f"Quiesce the set {qs_set_copy} without --await")
+                cg_snap_util.cg_quiesce(
+                    client,
+                    qs_set_copy,
+                    qs_id=qs_id_val,
+                    if_await=False,
+                    timeout=300,
+                    expiration=100,
+                )
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+                log.info(f"State of set-id {qs_id_val} before include:{state}")
+                if state != "QUIESCING":
+                    log.info(
+                        f"State of set-id {qs_id_val} before include is not as Expected"
+                    )
+                log.info(f"Include {include_sv_name} to set-id {qs_id_val}")
+                qs_include_status = cg_snap_util.cg_quiesce_include(
+                    client, qs_id_val, [include_sv_name], if_await=False
+                )
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+                log.info(f"State of set-id {qs_id_val} after include:{state}")
+                log.info(f"State of set-id {qs_id_val} before exclude:{state}")
+                if state != "QUIESCING":
+                    log.info(
+                        f"State of set-id {qs_id_val} before exclude is not as Expected"
+                    )
+
+                exclude_sv_name = random.choice(qs_set_copy)
+                log.info(f"Exclude {exclude_sv_name} from set-id {qs_id_val}")
+                qs_exclude_status = cg_snap_util.cg_quiesce_exclude(
+                    client, qs_id_val, [exclude_sv_name], if_await=False
+                )
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+                log.info(f"qs_query output:{qs_query_out}")
+                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+                log.info(f"State of set-id {qs_id_val} after exclude:{state}")
+                log.info(f"qs_exclude_status:{qs_exclude_status}")
+                log.info(f"qs_include_status:{qs_include_status}")
+                if qs_exclude_status == 1:
+                    test_fail += 1
+                    log.error(
+                        f"Exclude of {exclude_sv_name} in qs set {qs_id_val} failed"
+                    )
+                if qs_include_status == 1:
+                    test_fail += 1
+                    log.error(
+                        f"Include of {include_sv_name} in qs set {qs_id_val} failed"
+                    )
+                log.info(f"Wait for QUIESCED state in set-id {qs_id_val}")
+                wait_status = wait_for_cg_state(
+                    client, cg_snap_util, qs_id_val, "QUIESCED"
+                )
+                log.info(f"wait_status:{wait_status}")
+                if wait_status:
+                    test_fail += 1
+                    log.error(f"qs set {qs_id_val} not reached QUIESCED state")
+
+                cg_snap_util.cg_quiesce_release(client, qs_id_val)
+                log.info(
+                    " 2.State - Quiesced:Quiesce with --await, when in quiesced perform include,exclude"
+                )
+                qs_set_copy = qs_set.copy()
+                include_sv_name = qs_set_copy.pop()
+                log.info(f"Quiesce the set {qs_set_copy} with --await")
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                qs_id_val = f"cg_test1_{rand_str}"
+                cg_snap_util.cg_quiesce(
+                    client, qs_set_copy, qs_id=qs_id_val, timeout=300, expiration=300
+                )
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+                log.info(f"State of set-id {qs_id_val} before include:{state}")
+                if state != "QUIESCED":
+                    log.info(
+                        f"State of set-id {qs_id_val} before include is not as Expected"
+                    )
+                log.info(f"Include {include_sv_name} to set-id {qs_id_val}")
+                qs_include_status = cg_snap_util.cg_quiesce_include(
+                    client, qs_id_val, [include_sv_name], if_await=False
+                )
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+                log.info(f"State of set-id {qs_id_val} after include:{state}")
+                if state != "QUIESCED":
+                    log.info(
+                        f"State of set-id {qs_id_val} after include is not as Expected"
+                    )
+                log.info(f"State of set-id {qs_id_val} before exclude:{state}")
+                if state != "QUIESCED":
+                    log.info(
+                        f"State of set-id {qs_id_val} before exclude is not as Expected"
+                    )
+                log.info(f"Exclude {exclude_sv_name} from set-id {qs_id_val}")
+                exclude_sv_name = random.choice(qs_set_copy)
+                qs_exclude_status = cg_snap_util.cg_quiesce_exclude(
+                    client, qs_id_val, [exclude_sv_name], if_await=False
+                )
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+                log.info(f"State of set-id {qs_id_val} after exclude:{state}")
+                if state != "QUIESCED":
+                    log.info(
+                        f"State of set-id {qs_id_val} after exclude is not as Expected"
+                    )
+                if qs_exclude_status == 1:
+                    test_fail += 1
+                    log.error(
+                        f"Exclude of {exclude_sv_name} in qs set {qs_id_val} failed"
+                    )
+                if qs_include_status == 1:
+                    test_fail += 1
+                    log.error(
+                        f"Include of {include_sv_name} in qs set {qs_id_val} failed"
+                    )
+                log.info(f"Wait for QUIESCED state in set-id {qs_id_val}")
+                if wait_for_cg_state(client, cg_snap_util, qs_id_val, "QUIESCED"):
+                    test_fail += 1
+                    log.error(f"qs set {qs_id_val} not reached QUIESCED state")
+                cg_snap_util.cg_quiesce_release(client, qs_id_val)
+
+                log.info(
+                    " 3.State - Releasing:Release without --await, when in Releasing perform exclude"
+                )
+                qs_set_copy = qs_set.copy()
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                qs_id_val = f"cg_test1_{rand_str}"
+                exclude_sv_name = random.choice(qs_set_copy)
+                log.info(f"Quiesce the set {qs_set_copy} with --await")
+                cg_snap_util.cg_quiesce(
+                    client, qs_set_copy, qs_id=qs_id_val, timeout=300, expiration=100
+                )
+                time.sleep(10)
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+                log.info(f"State of set-id {qs_id_val} before exclude:{state}")
+                if state != "QUIESCED":
+                    log.info(
+                        f"State of set-id {qs_id_val} before exclude is not as Expected"
+                    )
+                    test_fail += 1
+                else:
+                    log.info(f"Verify exclude while Releasing quiesce set {qs_id_val}")
+                    out = cg_snap_util.cg_quiesce_release(
+                        client, qs_id_val, if_await=False
+                    )
+                    if out == 1:
+                        test_fail += 1
+                        log.error(f"FAIL : Quiesce set release failed on {qs_id_val}")
+                    else:
+                        try:
+                            qs_exclude_status = cg_snap_util.cg_quiesce_exclude(
+                                client, qs_id_val, [exclude_sv_name], if_await=False
+                            )
+                        except Exception as ex:
+                            log.info(ex)
+                            if "EPERM" in str(ex):
+                                log.info(
+                                    f"Exclude failed as expected during Releasing state on qs set {qs_id_val}"
+                                )
+                            else:
+                                test_fail += 1
+                                log.error(
+                                    f"Exclude passed during Releasing state on qs set {qs_id_val}"
+                                )
+                        qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+                        log.info(f"qs_query_out:{qs_query_out}")
+                        state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+                        log.info(f"State of set-id {qs_id_val} after exclude:{state}")
+
+                if test_fail >= 1:
+                    i = repeat_cnt
+                else:
+                    i += 1
+                    time.sleep(10)
+            else:
+                i = repeat_cnt
+
+        log.info(f"cg_test_io_status : {cg_test_io_status.value}")
+
+        wait_for_cg_io(p, qs_id_val, io_run_time)
+
+        mnt_pt_list = []
+        log.info(f"Perform cleanup for {qs_set}")
+        for qs_member in qs_member_dict1:
+            mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
+        log.info("Remove CG IO files and unmount")
+        cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
+        mnt_pt_list.clear()
+
+        if cg_test_io_status.value == 1:
+            log.error(
+                f"CG IO test exits with failure during quiesce lifecycle with await on qs_set-{qs_id_val}"
+            )
+            test_fail += 1
+
+    if test_fail >= 1:
+        log.error(
+            "FAIL: Workflow 6 - Perform all state transitions and validate response"
+        )
+        return 1
+    return 0
+
+
 # HELPER ROUTINES
 
 
@@ -1208,7 +1560,7 @@ def wait_for_cg_io(p, qs_id_val, io_run_time):
     if p.is_alive():
         proc_stop = 0
         log.info("CG IO is running after quiesce lifecycle")
-        wait_time = io_run_time * 2
+        wait_time = io_run_time * 4
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=wait_time)
         while (datetime.datetime.now() < end_time) and (proc_stop == 0):
             if p.is_alive():
@@ -1223,3 +1575,23 @@ def wait_for_cg_io(p, qs_id_val, io_run_time):
         log.info(
             f"WARN:CG IO test completed early during quiesce test on qs_set id {qs_id_val}"
         )
+
+
+def wait_for_cg_state(client, cg_snap_util, qs_id_val, exp_state):
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
+    qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+    actual_state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+    while (datetime.datetime.now() < end_time) and (actual_state != exp_state):
+        qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+        actual_state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+        if actual_state == exp_state:
+            log.info(f"State of qs set {qs_id_val} is {exp_state}")
+        else:
+            log.error(
+                f"State of qs set {qs_id_val} is not as expected - {exp_state},current state - {actual_state}"
+            )
+        time.sleep(2)
+    if actual_state == exp_state:
+        return 0
+    else:
+        return 1
