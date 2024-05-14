@@ -15,12 +15,9 @@ from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
 from utility.log import Log
 from utility.retry import retry
+from utility.utils import log_json_dump
 
 LOG = Log(__name__)
-
-
-def log_json_dump(data):
-    return json.dumps(data, indent=4)
 
 
 def get_current_timestamp():
@@ -418,6 +415,18 @@ class HighAvailability:
             "failback-end-counter-time": end_counter,
         }
 
+    @retry(IOError, tries=3, delay=3)
+    def compare_client_namespace(self, uuids):
+        lsblk_devs = []
+        for client in self.clients:
+            lsblk_devs.extend(client.fetch_lsblk_nvme_devices())
+
+        LOG.info(f"Expcted NVMe Targets : {uuids} Vs LSBLK devices: {lsblk_devs}")
+        if sorted(uuids) != sorted(lsblk_devs):
+            raise IOError("Few Namespaces are missing!!!")
+        LOG.info("All namespaces are listed at Client(s)")
+        return True
+
     def prepare_io_execution(self, io_clients):
         """Prepare FIO Execution.
 
@@ -432,7 +441,7 @@ class HighAvailability:
             client.connect_targets(io_client)
             self.clients.append(client)
 
-    def fetch_namespaces(self, gateway, failed_ana_grp_ids):
+    def fetch_namespaces(self, gateway, failed_ana_grp_ids=[]):
         """Fetch all namespaces for failed gateways.
 
         Args:
@@ -446,17 +455,23 @@ class HighAvailability:
         subsystems = json.loads(subsystems)
 
         namespaces = []
+        all_ns = []
         for subsystem in subsystems["subsystems"]:
             sub_name = subsystem["nqn"]
             cmd_args = {"args": {"subsystem": subsystem["nqn"]}}
             _, nspaces = gateway.namespace.list(**{**args, **cmd_args})
-            nspaces = json.loads(nspaces)
+            nspaces = json.loads(nspaces)["namespaces"]
+            all_ns.extend(nspaces)
 
-            for ns in nspaces["namespaces"]:
-                if ns["load_balancing_group"] in failed_ana_grp_ids:
-                    # <subsystem>|<nsid>|<pool_name>|<image>
-                    ns_info = f"nsid-{ns['nsid']}|{ns['rbd_pool_name']}|{ns['rbd_image_name']}"
-                    namespaces.append(f"{sub_name}|{ns_info}")
+            if failed_ana_grp_ids:
+                for ns in nspaces:
+                    if ns["load_balancing_group"] in failed_ana_grp_ids:
+                        # <subsystem>|<nsid>|<pool_name>|<image>
+                        ns_info = f"nsid-{ns['nsid']}|{ns['rbd_pool_name']}|{ns['rbd_image_name']}"
+                        namespaces.append(f"{sub_name}|{ns_info}")
+        if not failed_ana_grp_ids:
+            LOG.info(f"All namespaces : {log_json_dump(all_ns)}")
+            return all_ns
 
         LOG.info(
             f"Namespaces found for ANA-grp-id [{failed_ana_grp_ids}]: {log_json_dump(namespaces)}"
@@ -520,7 +535,11 @@ class HighAvailability:
 
         try:
             # Prepare FIO Execution
+            namespaces = self.fetch_namespaces(self.gateways[0])
             self.prepare_io_execution(initiators)
+
+            # Check for targets at clients
+            self.compare_client_namespace([i["uuid"] for i in namespaces])
 
             # Start IO Execution
             for initiator in self.clients:
