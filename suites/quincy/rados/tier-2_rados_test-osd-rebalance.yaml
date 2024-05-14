@@ -107,18 +107,6 @@ tests:
         host_level: true
 
   - test:
-      name: ceph osd df stats
-      module: test_osd_df.py
-      desc: Mark osd out and inspect stats change in ceph osd df
-      polarion-id: CEPH-10787
-      config:
-        run_iteration: 3
-        create_pool: true
-        pool_name: test-osd-df
-        write_iteration: 4
-        delete_pool: true
-
-  - test:
       name: ObjectStore block stats verification
       module: test_objectstore_block.py
       desc: Reduce data from an object and verify the decrease in blocks
@@ -143,6 +131,18 @@ tests:
               pg_num: 1
               disable_pg_autoscale: true
             # EC pool will be added later
+
+  - test:
+      name: ceph osd df stats
+      module: test_osd_df.py
+      desc: Mark osd out and inspect stats change in ceph osd df
+      polarion-id: CEPH-10787
+      config:
+        run_iteration: 3
+        create_pool: true
+        pool_name: test-osd-df
+        write_iteration: 4
+        delete_pool: true
 
   # Below test is currently failing, BZ raised #2214864
   # will be un-commented once fix is available
