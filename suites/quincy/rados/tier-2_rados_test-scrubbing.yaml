@@ -97,7 +97,13 @@ tests:
       module: scheduled_scrub_scenarios.py
       desc: Scheduled scrub validation
       config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
         scenario: "default"
+      delete_pools:
+        - scrub_pool
 
   - test:
       name: Begin Time = End Time
@@ -105,7 +111,13 @@ tests:
       module: scheduled_scrub_scenarios.py
       desc: Scheduled scrub validation
       config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
         scenario: "begin_end_time_equal"
+      delete_pools:
+        - scrub_pool
 
   - test:
       name: Begin time > End time
@@ -113,7 +125,13 @@ tests:
       module: scheduled_scrub_scenarios.py
       desc: Scheduled scrub validation
       config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
         scenario: "beginTime gt endTime"
+      delete_pools:
+        - scrub_pool
 
   - test:
       name: Begin Time >End time<current
@@ -121,7 +139,13 @@ tests:
       module: scheduled_scrub_scenarios.py
       desc: Scheduled scrub validation
       config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
         scenario: "beginTime gt endTime lt currentTime"
+      delete_pools:
+        - scrub_pool
 
   - test:
       name: Begin Time & End time > current
@@ -129,7 +153,13 @@ tests:
       module: scheduled_scrub_scenarios.py
       desc: Scheduled scrub validation
       config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
         scenario: "beginTime and endTime gt currentTime"
+      delete_pools:
+        - scrub_pool
 
   - test:
       name: Decrease scrub time
@@ -137,7 +167,13 @@ tests:
       module: scheduled_scrub_scenarios.py
       desc: Scheduled scrub validation
       config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
         scenario: "decreaseTime"
+      delete_pools:
+        - scrub_pool
 
   - test:
       name: Unsetting scrubbing
@@ -145,4 +181,10 @@ tests:
       module: scheduled_scrub_scenarios.py
       desc: Scheduled scrub validation
       config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
         scenario: "unsetScrub"
+      delete_pools:
+        - scrub_pool

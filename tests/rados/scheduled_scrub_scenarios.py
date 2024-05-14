@@ -1,19 +1,9 @@
 """
-   This module contains the methods required for scrubbing.
-   1.To set the parameters for scrubbing initially required the
-     cluster time and day details.get_cluster_date method provides
-     the details.
-   2.set_osd_configuration method  used to set the configuration
-     parameters on the cluster.
-   3.get_osd_configuration  method is used to get the configured parameters
-     on the cluster.
-     NOTE: With set_osd_configuration & get_osd_configuration methods can
-          use to set the get the any OSD configuration parameters.
-   4. get_pg_dump  method is used to get the pg dump details from the cluster.
-   5. verify_scrub_deepscrub  method used for the verification of scheduled scrub.
+   This module contains the methods required to check the scheduled scrubbing scenarios.
+   Based on the test cases setting the scrub parameters and verifying the functionality.
 """
 
-import datetime
+
 import os
 import sys
 import time
@@ -22,24 +12,9 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.rados_scrub import RadosScrubber
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
+from utility.utils import method_should_succeed
 
 log = Log(__name__)
-
-
-def remove_parameter_configuration(mon_obj):
-    """
-    Used to set the default osd scrub parameter value
-    Args:
-        mon_obj: monitor object
-    Returns : None
-    """
-    mon_obj.remove_config(section="osd", name="osd_scrub_min_interval")
-    mon_obj.remove_config(section="osd", name="osd_scrub_max_interval")
-    mon_obj.remove_config(section="osd", name="osd_deep_scrub_interval")
-    mon_obj.remove_config(section="osd", name="osd_scrub_begin_week_day")
-    mon_obj.remove_config(section="osd", name="osd_scrub_end_week_day")
-    mon_obj.remove_config(section="osd", name="osd_scrub_begin_hour")
-    mon_obj.remove_config(section="osd", name="osd_scrub_end_hour")
 
 
 def run(ceph_cluster, **kw):
@@ -52,11 +27,18 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosScrubber(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
-    # Storing the pg dump log before setting the scrub parameters
-    before_scrub_log = rados_obj.get_pg_dump("pgid", "last_scrub_stamp")
-    before_deep_scrub_log = rados_obj.get_pg_dump("pgid", "last_deep_scrub_stamp")
-    # Preparation of cofiguration parameter values from the current
-    # cluster time
+    # Creating ec pool
+    ec_config = config.get("replicated_pool")
+    pool_name = ec_config["pool_name"]
+
+    if not rados_obj.create_pool(name=pool_name, **ec_config):
+        log.error("Failed to create the  Pool")
+        return 1
+    rados_obj.bench_write(pool_name=pool_name, rados_write_duration=60)
+
+    pg_id = rados_obj.get_pgid(pool_name=pool_name)
+    log.info(f"The pg id is -{pg_id}")
+
     try:
         (
             scrub_begin_hour,
@@ -143,36 +125,44 @@ def run(ceph_cluster, **kw):
             rados_obj.set_osd_configuration("osd_scrub_begin_hour", scrub_begin_hour)
             rados_obj.set_osd_configuration("osd_scrub_end_hour", scrub_end_hour)
 
-        # Scheduled scrub verification
-        endTime = datetime.datetime.now() + datetime.timedelta(minutes=90)
-        while datetime.datetime.now() <= endTime:
-            after_scrub_log = rados_obj.get_pg_dump("pgid", "last_scrub_stamp")
-            scrub_status = rados_obj.verify_scrub_deepscrub(
-                before_scrub_log, after_scrub_log, "scrub"
+        try:
+            scrub_status = rados_obj.start_check_scrub_complete(
+                pg_id=pg_id[-1], user_initiated=False, wait_time=3600
             )
-            if scrub_status == 0 and (
-                config.get("scenario") == "default"
-                or config.get("scenario") == "begin_end_time_equal"
-                or config.get("scenario") == "beginTime gt endTime"
-                or config.get("scenario") == "decreaseTime"
-            ):
-                log.info(f'{"Scrubbing validation is success"}')
-                return 0
-            log.info(f'{"Scrubbing validation is in progress..."}')
-            time.sleep(240)
+        except Exception as err:
+            log.error(f"The error is-{err}")
+            scrub_status = False
 
-        after_deep_scrub_log = rados_obj.get_pg_dump("pgid", "last_deep_scrub_stamp")
-        deep_scrub_status = rados_obj.verify_scrub_deepscrub(
-            before_deep_scrub_log, after_deep_scrub_log, "deepscrub"
-        )
-        if (
-            config.get("scenario") == "beginTime gt endTime lt currentTime"
-            or config.get("scenario") == "beginTime and endTime gt currentTime"
-            or (config.get("scenario") == "unsetScrub" and deep_scrub_status == 1)
+        if scrub_status is True and (
+            config.get("scenario") == "default"
+            or config.get("scenario") == "begin_end_time_equal"
+            or config.get("scenario") == "beginTime gt endTime"
+            or config.get("scenario") == "decreaseTime"
         ):
             log.info(f'{"Scrubbing validation is success"}')
             return 0
-        log.info(f'{"Scrubbing failed"}')
+
+        try:
+            deep_scrub_status = rados_obj.start_check_deep_scrub_complete(
+                pg_id=pg_id[-1], user_initiated=False, wait_time=3600
+            )
+        except Exception as err:
+            log.error(f"The error is-{err}")
+            deep_scrub_status = False
+
+        log.info(f" The deep-scrub execution status is -{deep_scrub_status}")
+
+        if (
+            config.get("scenario") == "beginTime gt endTime lt currentTime"
+            or config.get("scenario") == "beginTime and endTime gt currentTime"
+            or (
+                config.get("scenario") == "unsetScrub"
+                and (deep_scrub_status is False or scrub_status is False)
+            )
+        ):
+            log.info(f'{"Scrubbing validation is success"}')
+            return 0
+        log.error(f'{"Scrubbing  validation failed"}')
         return 1
     except Exception as err:
         exc_type, exc_obj, exc_tb = sys.exc_info()
@@ -186,9 +176,26 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
+        method_should_succeed(rados_obj.delete_pool, pool_name)
         remove_parameter_configuration(mon_obj)
         rados_obj.set_osd_flags("unset", "noscrub")
         rados_obj.set_osd_flags("unset", "nodeep-scrub")
         time.sleep(10)
         # log cluster health
         rados_obj.log_cluster_health()
+
+
+def remove_parameter_configuration(mon_obj):
+    """
+    Used to set the default osd scrub parameter value
+    Args:
+        mon_obj: monitor object
+    Returns : None
+    """
+    mon_obj.remove_config(section="osd", name="osd_scrub_min_interval")
+    mon_obj.remove_config(section="osd", name="osd_scrub_max_interval")
+    mon_obj.remove_config(section="osd", name="osd_deep_scrub_interval")
+    mon_obj.remove_config(section="osd", name="osd_scrub_begin_week_day")
+    mon_obj.remove_config(section="osd", name="osd_scrub_end_week_day")
+    mon_obj.remove_config(section="osd", name="osd_scrub_begin_hour")
+    mon_obj.remove_config(section="osd", name="osd_scrub_end_hour")
