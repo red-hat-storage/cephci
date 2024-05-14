@@ -961,3 +961,42 @@ def rename_file(client, mount_point, file_count, windows_client=False):
                 )
         except Exception:
             raise OperationFailedError(f"failed to rename file file{i}")
+
+
+def create_trusted_ca_key(installer, nodes, copy_to_other_nodes=False):
+    """
+    Creates a trusted ca key on the given node
+    Args:
+        installer (ceph): Installer node
+        nodes (list): List of Ceph nodes
+        copy_to_other_nodes (bool): Whether to copy the key to all nodes
+    """
+    try:
+        # Generate ca-key
+        cmd = 'yes | ssh-keygen -t rsa -f ca-key -N ""'
+        installer.exec_command(cmd=cmd, sudo=True)
+
+        # Update trusted
+        cmd = "yes | cp ca-key.pub /etc/ssh"
+        installer.exec_command(cmd=cmd, sudo=True)
+
+        # Restart sshd
+        cmd = "systemctl restart sshd"
+        installer.exec_command(cmd=cmd, sudo=True)
+
+        # Get the copy of the pub file to be copied to other nodes
+        src = "/etc/ssh/ca-key.pub"
+        dst = "/tmp/ca-key.pub"
+        installer.download_file(sudo=True, src=src, dst=dst)
+        # Copy the key to all other nodes
+        if copy_to_other_nodes:
+            for ceph_node in nodes[1:]:
+                if not ceph_node == installer:
+                    ceph_node.upload_file(sudo=True, src=dst, dst=src)
+
+                    # Restart sshd on the copied node
+                    cmd = "systemctl restart sshd"
+                    ceph_node.exec_command(cmd=cmd, sudo=True)
+
+    except Exception:
+        raise OperationFailedError("Failed to create trusted CA key")
