@@ -140,7 +140,8 @@ def run(ceph_cluster, **kw):
         if config.get("delete_pool"):
             method_should_succeed(rados_obj.delete_pool, pool_name)
             log.info("deleted the pool successfully")
-        rados_obj.change_osd_state(action="start", target=primary_osd)
+        if "primary_osd" in locals() or "primary_osd" in globals():
+            rados_obj.change_osd_state(action="start", target=primary_osd)
         rados_obj.run_ceph_command(cmd=f"ceph osd in {primary_osd}")
         # log cluster health
         rados_obj.log_cluster_health()

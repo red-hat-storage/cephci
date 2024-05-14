@@ -1987,6 +1987,7 @@ class RadosOrchestrator:
 
         Returns: dictionary output of ceph pg dump for input PG ID
         """
+        # cmd if manual run : "ceph pg dump pools"
         _cmd = "ceph pg dump_pools_json"
         pool_dump_str, _ = self.client.exec_command(cmd=_cmd)
         if pool_dump_str.isspace():

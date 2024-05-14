@@ -71,7 +71,7 @@ def run(ceph_cluster, **kw):
                 section="osd", name="osd_shallow_scrub_chunk_max", value="250"
             )
             mon_obj.set_config(section="osd", name="osd_scrub_chunk_max", value="250")
-            mon_obj.set_config(section="osd", name="debug_osd", value="10")
+            mon_obj.set_config(section="osd", name="debug_osd", value="10/10")
 
             rados_object.bench_write(
                 pool_name=entry["pool_name"], rados_write_duration=60, background=True

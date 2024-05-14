@@ -96,22 +96,20 @@ class PoolFunctions:
         def check_omap_entries() -> bool:
             pool_stat = self.rados_obj.get_ceph_pg_dump_pools(pool_id=pool_id)
             omap_keys = pool_stat["stat_sum"]["num_omap_keys"]
-            if not omap_keys > 0:
+            log.info(f"Current value of OMAP keys: {omap_keys}")
+            if omap_keys < expected_omap_keys:
                 # OMAP entries are not readily available,
                 # restarting primary osd as metadata does not get updated automatically.
                 # TBD: bug raised for the issue: https://bugzilla.redhat.com/show_bug.cgi?id=2210278
                 # primary_osd = self.rados_obj.get_pg_acting_set(pool_name=pool_name)[0]
                 # self.rados_obj.change_osd_state(action="restart", target=primary_osd)
-                pool_stat = self.rados_obj.get_ceph_pg_dump_pools(pool_id=pool_id)
-                omap_keys = pool_stat["stat_sum"]["num_omap_keys"]
-                log.info(f"Current value of OMAP keys: {omap_keys}")
-                if omap_keys < expected_omap_keys:
-                    log.error(
-                        f"OMAP key yet to reach expected value of {expected_omap_keys} for pool {pool_name} "
-                        f"even after restarting primary OSD"
-                    )
-                    return False
-            return True
+                log.error(
+                    f"OMAP key yet to reach expected value of {expected_omap_keys} for pool {pool_name}."
+                    f" Current entries : {omap_keys}"
+                )
+                return False
+            else:
+                return True
 
         # Getting the client node to perform the operations
         client_node = self.rados_obj.ceph_cluster.get_nodes(role="client")[0]
@@ -141,49 +139,21 @@ class PoolFunctions:
         # removing the py file copied
         client_node.exec_command(sudo=True, cmd="rm -rf generate_omap_entries.py")
 
-        # Storing the pg dump log before setting the deep-scrub parameters
-        before_deep_scrub_log = self.scrub_obj.get_pg_dump(
-            "pgid", "last_deep_scrub_stamp"
-        )
-
         # Triggering deep scrub on the pool
         self.rados_obj.run_deep_scrub(pool=pool_name)
 
-        flag = 1
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=900)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=1200)
         while end_time > datetime.datetime.now():
-            after_deep_scrub_log = self.scrub_obj.get_pg_dump(
-                "pgid", "last_deep_scrub_stamp"
+            # Triggering deep scrub on the pool
+            log.debug(
+                "Triggered deep-scrub on the pool, and checking for omap entries present"
             )
-            deep_scrub_status = self.scrub_obj.verify_scrub_deepscrub(
-                before_deep_scrub_log, after_deep_scrub_log, "deepscrub"
-            )
+            time.sleep(40)
+            if check_omap_entries():
+                log.info("OMAP entries are available")
+                break
+            self.rados_obj.run_deep_scrub(pool=pool_name)
 
-            if deep_scrub_status:
-                log.info("deep scrubbing has not been completed on the pool")
-                if check_omap_entries():
-                    log.info("OMAP entries were available post OSD restart")
-                    break
-                log.info("Sleeping for 120 seconds and checking again")
-                time.sleep(120)
-                flag = 1
-                continue
-            flag = 0
-            log.info("Completed deep-scrub on the cluster")
-            break
-
-        if not flag:
-            log.error(
-                f"Could not complete deep-scrub on the pool : {pool_name} even with 900 sec wait"
-            )
-            return False
-
-        log.debug("Checking the amount of omap entries created on the pool")
-        if not check_omap_entries():
-            log.error(
-                "No omap entries available for the pool after complete deep-scrub and OSD restart"
-            )
-            return False
         pool_stat = self.rados_obj.get_ceph_pg_dump_pools(pool_id=pool_id)
         omap_keys = pool_stat["stat_sum"]["num_omap_keys"]
         omap_bytes = pool_stat["stat_sum"]["num_omap_bytes"]

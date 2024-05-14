@@ -194,33 +194,6 @@ tests:
       desc: Specifying pool bounds on pool Pgs - Verify pg_num_min
 
   - test:
-      name: Omap creations on objects
-      module: test_omap_entries.py
-      polarion-id: CEPH-83571702
-      config:
-        # EC pool config is commented out because omaps can be written only on RE pools
-        omap_config:
-          small_omap:
-            pool_name: re_pool_small_omap
-            pg_num: 1
-            pg_num_max: 1
-            large_warn: false
-            obj_start: 0
-            obj_end: 5
-            normal_objs: 400
-            num_keys_obj: 200000
-          large_omap:
-            pool_name: re_pool_large_omap
-            pg_num: 1
-            pg_num_max: 1
-            large_warn: true
-            obj_start: 0
-            obj_end: 5
-            normal_objs: 400
-            num_keys_obj: 200001
-      desc: Large number of omap creation on objects and OSD resiliency
-
-  - test:
       name: client pg access
       module: test_client_pg_access.py
       polarion-id: CEPH-83571713

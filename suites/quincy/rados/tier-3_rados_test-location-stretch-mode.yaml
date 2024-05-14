@@ -311,6 +311,7 @@ tests:
       name: Netsplit Scenarios data-data sites
       module: test_stretch_netsplit_scenarios.py
       polarion-id: CEPH-83574979
+      comments: Active bug - 2249962
       config:
         pool_name: test_stretch_pool8
         netsplit_site: DC1

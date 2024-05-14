@@ -117,6 +117,7 @@ tests:
       name: Test configuration Assimilation
       module: test_config_assimilation.py
       polarion-id: CEPH-83573480
+      comments: RFE - 2277761
       config:
         cluster_conf_path: "conf/quincy/rados/test-confs/cluster-configs"
         Verify_config_parameters:
