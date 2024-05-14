@@ -3,7 +3,7 @@ import json
 from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
 from utility.log import Log
-from utility.utils import run_fio
+from utility.utils import log_json_dump, run_fio
 
 LOG = Log(__name__)
 
@@ -13,6 +13,24 @@ class NVMeInitiator(Initiator):
         super().__init__(node)
         self.gateway = gateway
         self.discovery_port = 8009
+
+    def fetch_lsblk_nvme_devices(self):
+        """Validate all devices at client side.
+
+        Args:
+            uuids: List of Namespace UUIDs
+        Returns:
+            boolean
+        """
+        out, _ = self.node.exec_command(
+            cmd=" lsblk -I 8,259 -o name,wwn --json", sudo=True
+        )
+        out = json.loads(out)["blockdevices"]
+        uuids = sorted(
+            [i["wwn"].removeprefix("uuid.") for i in out if i["wwn"] is not None]
+        )
+        LOG.debug(f"[ {self.node.hostname} ] LSBLK UUIds : {log_json_dump(out)}")
+        return uuids
 
     def connect_targets(self, config):
         if not config:
@@ -28,18 +46,20 @@ class NVMeInitiator(Initiator):
         discovery_port = {"trsvcid": self.discovery_port}
         _disc_cmd = {**cmd_args, **discovery_port, **json_format}
 
+        nqns_discovered, _ = self.discover(**_disc_cmd)
+        LOG.debug(nqns_discovered)
+
         # connect-all
         connect_all = {}
         if config["nqn"] == "connect-all":
             connect_all = {"ctrl-loss-tmo": 3600}
             cmd = {**discovery_port, **cmd_args, **connect_all}
             self.connect_all(**cmd)
+            self.list()
             return
 
         # Connect to individual targets of a subsystem
-        nqns_discovered, _ = self.discover(**_disc_cmd)
         subsystem = config["nqn"]
-        LOG.debug(nqns_discovered)
         sub_endpoints = []
 
         for nqn in json.loads(nqns_discovered)["records"]:

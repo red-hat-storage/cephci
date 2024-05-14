@@ -2452,3 +2452,7 @@ print(port)
         if not out or out == "None":
             continue
         return out.strip()
+
+
+def log_json_dump(data):
+    return json.dumps(data, indent=4)

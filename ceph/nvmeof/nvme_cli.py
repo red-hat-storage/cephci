@@ -65,6 +65,19 @@ class NVMeCLI(Cli):
         """
         return self.execute(cmd=f"nvme list {config_dict_to_string(kwargs)}", sudo=True)
 
+    def list_subsys(self, **kwargs):
+        """List the subsystems and its information.
+
+        Example::
+
+            kwargs:
+                output-format: json             # output format
+        """
+        device = kwargs.get("device", "")
+        return self.execute(
+            cmd=f"nvme list-subsys {device} {config_dict_to_string(kwargs)}", sudo=True
+        )
+
     def list_spdk_drives(self):
         """List the NVMe Targets only SPDK drives.
 

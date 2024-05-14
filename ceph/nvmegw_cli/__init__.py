@@ -38,7 +38,7 @@ class NVMeGWCLI(ExecuteCommandMixin):
         ]:
             clas.NVMEOF_CLI_IMAGE = self.NVMEOF_CLI_IMAGE
 
-        if self.NVMEOF_CLI_IMAGE.startswith("cp"):
+        if "icr.io" in self.NVMEOF_CLI_IMAGE:
             registry_details = get_registry_details(ibm_build=True)
             url = registry_details.get("registry-url")
             username = registry_details.get("registry-username")
