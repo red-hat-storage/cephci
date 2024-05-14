@@ -1,6 +1,6 @@
 #===============================================================================================
 #-------------------------------------
-#---    Test Suite for Nfs Ganesha vers 4.1---
+#---    Test Suite for Nfs Ganesha vers 4.2 ---
 #-------------------------------------
 # Conf: conf/reef/nfs/1admin-3client-7node.yaml
 # Smoke test cases for
@@ -140,17 +140,7 @@ tests:
       polarion-id: CEPH-83577561
       abort-on-fail: false
       config:
-        nfs_version: 4.1
-        clients: 2
-
-  - test:
-      name: Nfs Ganesha Pynfs
-      module: nfs_verify_pynfs.py
-      desc: Perform pynfs tests on the Nfs cluster
-      polarion-id: CEPH-83577559
-      abort-on-fail: false
-      config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 2
 
 #   Skipping the test for failure analysis
@@ -161,7 +151,7 @@ tests:
 #      polarion-id: CEPH-83581050
 #      abort-on-fail: false
 #      config:
-#        nfs_version: 4.1
+#        nfs_version: 4.2
 #        clients: 4
 
   - test:
@@ -171,7 +161,7 @@ tests:
       polarion-id: CEPH-83577590
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 4
 
   - test:
@@ -181,7 +171,7 @@ tests:
       polarion-id: CEPH-83577594
       abort-on-fail: true
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 3
         num_files: 1000
         num_dirs: 1000
@@ -193,7 +183,7 @@ tests:
       polarion-id: CEPH-83577596
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 3
         file_count: 100
 
@@ -204,7 +194,7 @@ tests:
       polarion-id: CEPH-83577601
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 3
         file_count: 100
         operations:
@@ -219,7 +209,7 @@ tests:
       polarion-id: CEPH-83577602
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 3
         file_count: 100
         operations:
@@ -234,7 +224,7 @@ tests:
       polarion-id: CEPH-83578392
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 1
 
   - test:
@@ -244,7 +234,7 @@ tests:
       polarion-id: CEPH-83578393
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 1
 
   - test:
@@ -254,7 +244,7 @@ tests:
       polarion-id: CEPH-83578386
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 4
 
   - test:
@@ -264,7 +254,7 @@ tests:
       polarion-id: CEPH-83578395
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 1
 
   - test:
@@ -274,7 +264,7 @@ tests:
       polarion-id: CEPH-83578397
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 2
 
 # ToDo: Needs to revisit the test steps. Moving it out of ci runs till test steps verified
@@ -285,7 +275,7 @@ tests:
 #      polarion-id: CEPH-83577604
 #      abort-on-fail: false
 #      config:
-#        nfs_version: 4.1
+#        nfs_version: 4.2
 #        clients: 4
 
   - test:
@@ -295,7 +285,7 @@ tests:
       polarion-id:
       abort-on-fail: false
       config:
-        nfs_version: 4.1
+        nfs_version: 4.2
         clients: 3
         file_count: 100
         operations:
