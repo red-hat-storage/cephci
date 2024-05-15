@@ -8,6 +8,7 @@ from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -151,7 +152,10 @@ def run(ceph_cluster, **kw):
         rc = fs_util.cephfs_nfs_mount(
             client1, nfs_server, nfs_export_name, nfs_mounting_dir
         )
-        client1.exec_command(sudo=True, cmd=f"touch {nfs_mounting_dir}/file")
+        retry_exec_command = retry(CommandFailed, tries=3, delay=30)(
+            client1.exec_command
+        )
+        retry_exec_command(sudo=True, cmd=f"touch {nfs_mounting_dir}/file")
 
         return 0
     except Exception as e:
