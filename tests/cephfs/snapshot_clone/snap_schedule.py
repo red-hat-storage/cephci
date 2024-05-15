@@ -1,7 +1,9 @@
+import datetime
 import json
 import os
 import random
 import string
+import time
 import traceback
 from distutils.version import LooseVersion
 from time import sleep
@@ -109,6 +111,19 @@ def run(ceph_cluster, **kw):
         m_granularity = (
             "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
         )
+        log.info("Verify Ceph Status is healthy before starting test")
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=60)
+        ceph_healthy = 0
+        while (datetime.datetime.now() < end_time) and (ceph_healthy == 0):
+            try:
+                fs_util.get_ceph_health_status(client1)
+                ceph_healthy = 1
+            except Exception as ex:
+                log.info(ex)
+                log.info("Wait for few secs and recheck ceph status")
+                time.sleep(5)
+        if ceph_healthy == 0:
+            assert False, "Ceph remains unhealthy even after wait for 60secs"
         commands = [
             "ceph config set mgr mgr/snap_schedule/allow_m_granularity true",
             "ceph mgr module enable snap_schedule",

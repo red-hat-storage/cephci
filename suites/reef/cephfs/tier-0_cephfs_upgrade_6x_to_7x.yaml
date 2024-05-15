@@ -193,6 +193,7 @@ tests:
       module: cephfs_upgrade.cephfs_post_upgrade_validation.py
       name: "Validates NFS after upgrade"
       polarion-id: CEPH-83575098
+      comments: product bug bz-2276916
   - test:
       name: cephfs_volume_management
       module: cephfs_volume_management.py
