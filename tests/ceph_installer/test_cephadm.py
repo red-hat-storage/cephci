@@ -33,6 +33,7 @@ from ceph.ceph_admin.osd import OSD
 from ceph.ceph_admin.prometheus import Prometheus
 from ceph.ceph_admin.rbd_mirror import RbdMirror
 from ceph.ceph_admin.rgw import RGW
+from cli.utilities.utils import create_trusted_ca_key
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -130,6 +131,17 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
 
     try:
+        # Check if CA signed SSH keys to be setup
+        if config.get("ca_signed_ssh_keys", False):
+            nodes = ceph_cluster.get_nodes()
+            installer = ceph_cluster.get_nodes("installer")[0]
+            # Create CA signed ssh keys
+            create_trusted_ca_key(installer, nodes, copy_to_other_nodes=True)
+
+            # Create a new key-pair for host access and then sign it with created CA key
+            cmd = 'ssh-keygen -t rsa -f cephadm-ssh-key -N ""'
+            installer.exec_command(cmd=cmd, sudo=True)
+
         # Check if the bootstrap has to be performed as non-root user
         if config.get("install_as_non_root_user", False):
             node = ceph_cluster.get_nodes(role="installer")[0]
