@@ -9,5 +9,19 @@
             "GET_IMAGE": "/api/block/image/{image_spec}",
             "LIST_IMAGE": "/api/block/image",
         },
+        "nvmeof": {
+            "GATEWAY_INFO": "/api/nvmeof/gateway",
+            "CREATE_SUBSYSTEM": "/api/nvmeof/subsystem",
+            "GET_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}",
+            "LIST_SUBSYSTEM": "/api/nvmeof/subsystem",
+            "LIST_SUBSYSTEM_CONNECTIONS": "/api/nvmeof/subsystem/{nqn/connection",
+            "LIST_ALLOWED_HOSTS_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/host",
+            "ALLOW_HOSTS_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/host",
+            "LIST_ALL_SUBSYSTEM_LISTENER": "/api/nvmeof/subsystem/{nqn}/host/listener",
+            "CREATE_SUBSYSTEM_LISTENER": "/api/nvmeof/subsystem/{nqn}/host/listener",
+            "LIST_NAMESPACES_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace",
+            "CREATE_NAMESPACE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace",
+            "GET_INFO_NAMESPACE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace/{nsid}",
+        },
     }
 }
