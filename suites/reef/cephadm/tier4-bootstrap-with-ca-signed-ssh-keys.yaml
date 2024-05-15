@@ -63,8 +63,8 @@ tests:
               args:
                 - "rbd pool init rbd"
               command: shell
-      desc: bootstrap and deploy services.
+      desc: Bootstrap with CA signed ssh keys
       destroy-cluster: false
-      polarion-id: CEPH-83573713
+      polarion-id: CEPH-83589818
       module: test_cephadm.py
-      name: Deploy cluster using cephadm
+      name: Deploy cluster using cephadm with CA ssh keys
