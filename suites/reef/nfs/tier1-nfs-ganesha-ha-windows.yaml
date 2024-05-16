@@ -113,7 +113,7 @@ tests:
         ha: true
         vip: 10.8.128.200/21
         windows_clients:
-          - ip: 10.70.46.165
+          - ip: 10.70.46.59
             hostname: DESKTOP-TJEJHP2
             user: manisha
             password: Redhat
@@ -128,7 +128,7 @@ tests:
         nfs_version: 4.1
         linux_clients: 1
         windows_clients:
-          - ip: 10.70.46.165
+          - ip: 10.70.46.59
             hostname: DESKTOP-TJEJHP2
             user: manisha
             password: Redhat
@@ -145,7 +145,7 @@ tests:
         ha: true
         vip: 10.8.128.200/21
         windows_clients:
-          - ip: 10.70.46.165
+          - ip: 10.70.46.59
             hostname: DESKTOP-TJEJHP2
             user: manisha
             password: Redhat
@@ -163,7 +163,7 @@ tests:
         ha: true
         vip: 10.8.128.200/21
         windows_clients:
-          - ip: 10.70.46.165
+          - ip: 10.70.46.59
             hostname: DESKTOP-TJEJHP2
             user: manisha
             password: Redhat
@@ -181,7 +181,7 @@ tests:
         ha: true
         vip: 10.8.128.200/21
         windows_clients:
-          - ip: 10.70.46.165
+          - ip: 10.70.46.59
             hostname: DESKTOP-TJEJHP2
             user: manisha
             password: Redhat
@@ -199,11 +199,11 @@ tests:
         ha: true
         vip: 10.8.128.200/21
         windows_clients:
-          - ip: 10.70.46.165
+          - ip: 10.70.46.59
             hostname: DESKTOP-TJEJHP2
             user: manisha
             password: Redhat
-          - ip: 10.70.46.170
+          - ip: 10.70.44.43
             hostname: DESKTOP-TJEJHP2
             user: manisha
             password: Redhat
