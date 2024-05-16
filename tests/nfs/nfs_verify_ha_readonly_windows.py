@@ -46,9 +46,9 @@ def run(ceph_cluster, **kw):
     client = linux_clients[0]
 
     # Windows clients
+    windows_clients = []
     for windows_client_obj in setup_windows_clients(config.get("windows_clients")):
-        ceph_cluster.node_list.append(windows_client_obj)
-    windows_clients = ceph_cluster.get_nodes("windows_client")
+        windows_clients.append(windows_client_obj)
 
     try:
         # Setup nfs cluster
@@ -109,6 +109,7 @@ def run(ceph_cluster, **kw):
         # Wait for the ops to complete
         for op in operations:
             op.join()
+        sleep(5)
 
         # Remount the nfs share on same windows client
         cmd = f"mount {vip}:{nfs_export}_0 {window_nfs_mount}"
@@ -126,10 +127,20 @@ def run(ceph_cluster, **kw):
     except Exception as e:
         log.error(f"Failed to validate readonly with failover on a ha cluster: {e}")
         # Cleanup
+        for windows_client in windows_clients:
+            cmd = f"del /q /f {window_nfs_mount}\\*.*"
+            windows_client.exec_command(cmd=cmd)
+            cmd = f"umount {window_nfs_mount}"
+            windows_client.exec_command(cmd=cmd)
         cleanup_cluster(linux_clients, nfs_mount, nfs_name, nfs_export)
         return 1
     finally:
         # Cleanup
         log.info("Cleanup")
+        for windows_client in windows_clients:
+            cmd = f"del /q /f {window_nfs_mount}\\*.*"
+            windows_client.exec_command(cmd=cmd)
+            cmd = f"umount {window_nfs_mount}"
+            windows_client.exec_command(cmd=cmd)
         cleanup_cluster(linux_clients, nfs_mount, nfs_name, nfs_export)
     return 0

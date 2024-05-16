@@ -64,9 +64,9 @@ def run(ceph_cluster, **kw):
     client = linux_clients[0]
 
     # Windows clients
+    windows_clients = []
     for windows_client_obj in setup_windows_clients(config.get("windows_clients")):
-        ceph_cluster.node_list.append(windows_client_obj)
-    windows_clients = ceph_cluster.get_nodes("windows_client")
+        windows_clients.append(windows_client_obj)
     window_client_ip_restricted = config.get("windows_clients")[1]["ip"]
 
     try:
@@ -151,10 +151,14 @@ def run(ceph_cluster, **kw):
             f"Failed to validate export delete with failover on a ha cluster: {e}"
         )
         # Cleanup
+        cmd = f"umount {window_nfs_mount}"
+        windows_clients[1].exec_command(cmd=cmd)
         cleanup_cluster(linux_clients, nfs_mount, nfs_name, nfs_export)
         return 1
     finally:
         # Cleanup
         log.info("Cleanup")
+        cmd = f"umount {window_nfs_mount}"
+        windows_clients[1].exec_command(cmd=cmd)
         cleanup_cluster(linux_clients, nfs_mount, nfs_name, nfs_export)
     return 0
