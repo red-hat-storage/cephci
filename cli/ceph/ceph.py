@@ -1,5 +1,6 @@
 from cli import Cli
 
+from .auth.auth import Auth
 from .balancer import Balancer
 from .config import Config
 from .config_key import ConfigKey
@@ -19,6 +20,7 @@ class Ceph(Cli):
         super(Ceph, self).__init__(nodes)
 
         self.base_cmd = f"{base_cmd} ceph" if base_cmd else "ceph"
+        self.auth = Auth(nodes, self.base_cmd)
         self.mgr = Mgr(nodes, self.base_cmd)
         self.orch = Orch(nodes, self.base_cmd)
         self.rgw = Rgw(nodes, self.base_cmd)
