@@ -124,12 +124,8 @@ def run(ceph_cluster, **kw):
         if not rc:
             log.error("cephfs nfs export mount failed")
             return 1
-        out, err = client1.exec_command(
-            sudo=True, cmd=f"touch {nfs_mounting_dir}/file", check_ec=False
-        )
-        log.info(err)
-        if not err:
-            raise CommandFailed("NFS export has permission to write")
+
+        touch_file(client1, nfs_mounting_dir)
 
         log.info("umount the export")
         client1.exec_command(sudo=True, cmd=f"umount {nfs_mounting_dir}")
@@ -175,3 +171,13 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"rm -rf {nfs_mounting_dir}/", check_ec=False
         )
         client1.exec_command(sudo=True, cmd="rm -rf export.conf", check_ec=False)
+
+
+@retry(CommandFailed, tries=3, delay=30)
+def touch_file(client1, nfs_mounting_dir):
+    out, err = client1.exec_command(
+        sudo=True, cmd=f"touch {nfs_mounting_dir}/file", check_ec=False
+    )
+    log.info(err)
+    if not err:
+        raise CommandFailed("NFS export has permission to write")
