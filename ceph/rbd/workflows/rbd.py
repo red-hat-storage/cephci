@@ -230,6 +230,7 @@ def create_pools_and_images(
     cluster="ceph",
     create_pool_parallely=False,
     create_image_parallely=False,
+    do_not_create_image=False,
 ):
     """
     Create number of pools as specified in parallel/sequential
@@ -252,6 +253,7 @@ def create_pools_and_images(
                 is_ec_pool,
                 is_secondary,
                 create_image_parallely,
+                do_not_create_image,
             )
             if rc:
                 log.error("Multi pool and multi image config failed")
@@ -272,6 +274,7 @@ def create_pools_and_images(
                         is_ec_pool,
                         is_secondary,
                         create_image_parallely,
+                        do_not_create_image,
                         raise_exception=True,
                     )
         except Exception:

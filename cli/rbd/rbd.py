@@ -8,6 +8,7 @@ from .device import Device
 from .feature import Feature
 from .group import Group
 from .image_meta import Image_meta
+from .migration import Migration
 from .mirror.mirror import Mirror
 from .namespace import Namespace
 from .pool import Pool
@@ -27,6 +28,7 @@ class Rbd(Cli):
         self.config = Config(nodes, self.base_cmd)
         self.namespace = Namespace(nodes, self.base_cmd)
         self.group = Group(nodes, self.base_cmd)
+        self.migration = Migration(nodes, self.base_cmd)
 
     def create(self, **kw):
         """
@@ -373,3 +375,18 @@ class Rbd(Cli):
         cmd = f"{self.base_cmd} rename {image_spec} {dest_spec} {build_cmd_from_args(**kw_copy)}"
 
         return self.execute_as_sudo(cmd=cmd, check_ec=False, long_running=False)
+
+    def image_usage(self, **kw):
+        """
+        This method is used to get disk usage of image
+        Args:
+          kw(dict): Key/value pairs that needs to be provided to the installer
+          Example:
+            Supported keys:
+                image-spec(str) : [<pool-name>/[<namespace>/]]<image-name>
+        """
+        kw_copy = deepcopy(kw)
+        image_spec = kw_copy.pop("image-spec", "")
+        cmd = f"{self.base_cmd} du {image_spec} {build_cmd_from_args(**kw_copy)}"
+
+        return self.execute_as_sudo(cmd=cmd)

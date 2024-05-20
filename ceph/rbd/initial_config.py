@@ -319,7 +319,7 @@ def update_config(**kw):
     return pool_types
 
 
-def initial_rbd_config(ceph_cluster, **kw):  # ,
+def initial_rbd_config(ceph_cluster, **kw):
     """
     Create replicated pools, ecpools or both and corresponding images based on arguments specified
     Args:
@@ -453,6 +453,7 @@ def initial_rbd_config(ceph_cluster, **kw):  # ,
             create_image_parallely=config[pool_type].get(
                 "create_image_parallely", False
             ),
+            do_not_create_image=config[pool_type].get("do_not_create_image", False),
         ):
             log.error(f"RBD configuration failed for {pool_type}")
             return None
