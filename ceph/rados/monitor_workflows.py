@@ -186,6 +186,8 @@ class MonitorWorkflows:
         Args:
             kwargs: the accepted KW args for the method are:
                 host: Cluster object of the host from where mon needs to be Added
+                add_label: Arg specifying if the mon label should be added to host or not.
+                        Default is True.
                 location_type: Name of the crush bucket type if needed (optional - Stretch mode)
                 location_name: Name of the crush location type if needed (optional - Stretch mode)
 
@@ -194,6 +196,7 @@ class MonitorWorkflows:
         """
         # Checking if mon service exists before removing
         host = kwargs.get("host")
+        add_label = kwargs.get("add_label", True)
         hostname = host.hostname
         host_ip = host.ip_address
         if self.check_mon_exists_on_host(host=hostname):
@@ -222,12 +225,13 @@ class MonitorWorkflows:
             return False
         log.info(f"Mon service running on host {hostname} post addition")
 
-        # Adding mon label on host if not present
-        labels = self.get_host_labels(host=hostname)
-        if "mon" not in labels:
-            cmd = f"ceph orch host label add {hostname} mon"
-            self.client.exec_command(sudo=True, cmd=cmd)
-            log.debug(f"Added mon label from host : {hostname}")
+        if add_label:
+            # Adding mon label on host if not present
+            labels = self.get_host_labels(host=hostname)
+            if "mon" not in labels:
+                cmd = f"ceph orch host label add {hostname} mon"
+                self.client.exec_command(sudo=True, cmd=cmd)
+                log.debug(f"Added mon label from host : {hostname}")
 
         log.debug(f"Mon successfully added on host : {hostname}")
         return True

@@ -644,6 +644,19 @@ def run(ceph_cluster, **kw):
                 # Changing the default autoscaler value to warn for newly created pools
                 rados_obj.configure_pg_autoscaler(default_mode="warn")
 
+                # Checking if the new config is set for autoscaler module
+                if not mon_obj.verify_set_config(
+                    section="global",
+                    name="osd_pool_default_pg_autoscale_mode",
+                    value="warn",
+                ):
+                    log.error(
+                        "unable to set the global autosclale mode to warn on the cluster"
+                    )
+                    raise Exception(
+                        "Default PG autoscale mode not changed to warn on the cluster"
+                    )
+
                 pool = pool_conf_file[i["type"]][i["conf"]]
                 pool["pg_num"] = 1
                 if rhbuild.split("-")[0] in ["7.1"]:
@@ -651,6 +664,14 @@ def run(ceph_cluster, **kw):
                 create_given_pool(rados_obj, pool)
                 pools.append(pool["pool_name"])
                 time.sleep(10)
+                pool_autoscale_status = rados_obj.get_pg_autoscale_status(
+                    pool_name=pool["pool_name"]
+                )
+                if pool_autoscale_status["pg_autoscale_mode"] != "warn":
+                    log.error(
+                        "Autoscale mode on the newly created pool is not 'warn' when global mode is set to warn"
+                    )
+                    raise Exception("PG autoscale mode not in warn mode on the pool")
 
                 log.debug(
                     f"autoscale status on pools: \n{rados_obj.node.shell(['ceph osd pool autoscale-status'])}"

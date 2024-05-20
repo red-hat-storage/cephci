@@ -294,6 +294,7 @@ tests:
         pool_name: test_stretch_pool5
         replacement_site: DC1
         tiebreaker_mon_site_name: arbiter
+        add_mon_without_location: true
         delete_pool: true
       desc: Test stretch Cluster mon replacement - Data site
 

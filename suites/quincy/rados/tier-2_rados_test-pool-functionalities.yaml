@@ -96,6 +96,22 @@ tests:
         log_to_file: true
       desc: Change config options to enable logging to file
 
+  # Blocked due to BZ 2172795. Bugzilla fixed.
+  # Another bugzilla posing issues : 2252788
+  - test:
+      name: Verify cluster behaviour during PG autoscaler warn
+      module: pool_tests.py
+      polarion-id:  CEPH-83573413
+      config:
+        verify_pool_warnings:
+          pool_configs:
+            - type: replicated
+              conf: sample-pool-1
+            - type: erasure
+              conf: sample-pool-2
+          pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
+      desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
+
   - test:
       name: Verify scrub logs
       module: test_scrub_log.py
@@ -106,7 +122,7 @@ tests:
               conf: sample-pool-2
             - type: erasure
               conf: sample-pool-2
-        pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
+        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
       desc: Verify that scrub & deep-scrub logs are captured in OSD logs
 
   - test:
@@ -318,21 +334,6 @@ tests:
             compression_min_blob_size: 1B
             byte_size: 10KB
       desc: Verification of the effect of compression on replicated pools
-
-# Blocked due to BZ 2172795. Bugzilla fixed.
-  - test:
-      name: Verify cluster behaviour during PG autoscaler warn
-      module: pool_tests.py
-      polarion-id:  CEPH-83573413
-      config:
-        verify_pool_warnings:
-          pool_configs:
-            - type: replicated
-              conf: sample-pool-1
-            - type: erasure
-              conf: sample-pool-2
-          pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
-      desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
 
   - test:
       name: Verify degraded pool behaviour at min_size

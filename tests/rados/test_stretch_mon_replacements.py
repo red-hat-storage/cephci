@@ -37,6 +37,7 @@ def run(ceph_cluster, **kw):
     pool_name = config.get("pool_name", "test_stretch_io")
     mon_obj = MonitorWorkflows(node=cephadm)
     replacement_site = config.get("replacement_site", "DC1")
+    add_mon_without_location = config.get("add_mon_without_location", False)
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
 
     if not stretch_enabled_checks(rados_obj=rados_obj):
@@ -127,6 +128,54 @@ def run(ceph_cluster, **kw):
                     f"selected host : {mon_host.hostname} mon is present as part of Quorum post removal"
                 )
                 raise Exception("Mon in quorum error post removal")
+
+            if add_mon_without_location:
+                log.info(
+                    "Performing -ve scenario where the mon daemon is added without location attributes"
+                    "RFE Raised for new health warning to be generated in such cases"
+                    "ID: https://bugzilla.redhat.com/show_bug.cgi?id=2280926"
+                    "For now, just checking if the mon added without location attributes"
+                    " is not included in mon quorum"
+                )
+                flag = False
+                try:
+                    # Adding the mon to the cluster without crush locations. -ve scenario
+                    mon_obj.add_mon_service(
+                        host=mon_host,
+                        add_label=False,
+                    )
+                    flag = True
+                except Exception as err:
+                    log.info(
+                        f"Could not add mon without location attributes."
+                        f"Error message displayed : {err}"
+                    )
+                if flag:
+                    log.error(
+                        "Command execution passed for mon deployment in stretch mode without location "
+                    )
+
+                    # Checking if the new mon added is part of the quorum
+                    quorum = mon_obj.get_mon_quorum_hosts()
+                    if mon_host.hostname in quorum:
+                        log.error(
+                            f"selected host : {mon_host.hostname} mon is present as part of Quorum post addition,"
+                            f"in -ve scenario"
+                        )
+                        raise Exception(
+                            "Mon in quorum error post addition without location. -ve scenario"
+                        )
+                    # Removing mon service, which is not part of the quorum
+                    if not mon_obj.remove_mon_service(host=mon_host.hostname):
+                        log.error(
+                            "Could not remove the Data site mon daemon, in -ve scenario"
+                        )
+                        raise Exception(
+                            "mon service not removed error, in -ve scenario"
+                        )
+                log.info(
+                    "-ve Test Pass: Add Mon daemon without location attributes into cluster. Mon could not be added"
+                )
 
             # Adding the mon back to the cluster with crush locations
             if not mon_obj.add_mon_service(
