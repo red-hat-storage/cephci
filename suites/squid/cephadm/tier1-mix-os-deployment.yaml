@@ -1,0 +1,155 @@
+#=========================================================================================================
+# Test-Suite: Quincy cluster deployment with admian node in RHEL 9 and other host on RHEL 8
+#
+# Conf: conf/squid/cephadm/1admin-4node-1client-mix-os.yaml
+# Setup: 3 MONS, 3 MGR, 1 MDS, 3 OSD and 2 RGW service daemon(s)
+#   Node1 - Admin, MON, MGR, OSD, Node-Exporter, Alertmanager, Grafana, Prometheus, Crash, RGW
+#   Node2 - MON, MGR, OSD, Node-Exporter, Alertmanager, Crash
+#   Node3 - MON, MGR, OSD, Node-Exporter, Crash
+#   Node4 - MDS, RGW
+#   Node5 - Client
+#
+# Test Steps:
+#   1. Deploy cluster using cephadm with admin node on rhel 9 and other hosts in rhel 8 with all services.
+#   2. Configure Client
+#   3. Run object, block and filesystem basic operations parallelly.
+#==========================================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      name: Deploy rhcs 6.x cluster with admin node on rhel 9 and other hosts in rhel 8
+      desc: Deploy cluster using cephadm with admin node on rhel 9 and other hosts in rhel 8 with all services.
+      polarion-id: CEPH-83575549
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      abort-on-fail: true
+      destroy-cluster: false
+
+  - test:
+      name: configure client
+      desc: Configure the RGW,RBD client system
+      polarion-id: CEPH-83575549
+      module: test_client.py
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+            - node5:
+                release: 5
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      destroy-cluster: false
+
+  # Testing stage
+  - test:
+      name: Executes RGW, RBD and FS operations
+      desc: Run object, block and filesystem basic operations parallelly.
+      polarion-id: CEPH-83575549
+      module: test_parallel.py
+      parallel:
+        - test:
+            name: Test M buckets with N objects
+            desc: test to create "M" no of buckets and "N" no of objects
+            polarion-id: CEPH-9789
+            module: sanity_rgw.py
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+
+        - test:
+            name: Run RBD tier-0 operations
+            desc: Run RBD tier-0 operations
+            polarion-id: CEPH-83575401
+            module: rbd_tier0.py
+            config:
+              ec-pool-k-m: 2,1
+              ec-pool-only: False
+              ec_pool_config:
+                pool: rbd_pool
+                data_pool: rbd_ec_pool
+                ec_profile: rbd_ec_profile
+                image: rbd_image
+                image_thick_provision: rbd_thick_image
+                snap_thick_provision: rbd_thick_snap
+                clone_thick_provision: rbd_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_ec_pool_snap
+                clone: rbd_ec_pool_clone
+              rep_pool_config:
+                pool: rbd_rep_pool
+                image: rbd_rep_image
+                image_thick_provision: rbd_rep_thick_image
+                snap_thick_provision: rbd_rep_thick_snap
+                clone_thick_provision: rbd_rep_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_rep_pool_snap
+                clone: rbd_rep_pool_clone
+              operations:
+                map: true
+                io: true
+                nounmap: false
+            destroy-cluster: false
+
+        - test:
+            name: cephfs-basics
+            desc: "cephfs basic operations"
+            polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
+            module: cephfs_basic_tests.py
+            abort-on-fail: false

@@ -1,0 +1,843 @@
+#===============================================================================================
+# Conf: conf/squid/cephadm/1admin-8node-1client-cluster.yaml
+#
+# Tier-0 test cases for
+#    - Bootstrap
+#    - Host management
+#      - Add/Remove nodes
+#      - SetAddress
+#      - Attach/remove node labels
+#    - Ceph role Service deployment with multiple options,
+#    - Removal of services
+#===============================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap with custom dashboard credentials
+      desc: Bootstrap with initial-dashboard user and password option
+      module: test_bootstrap.py
+      polarion-id: CEPH-83573719
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          registry-url: registry.redhat.io
+          custom_image: true
+          mon-ip: "node1"
+          orphan-initial-daemons: true
+          skip-monitoring-stack: true
+          initial-dashboard-user: admin123
+          initial-dashboard-password: admin123
+          fsid: f64f341c-655d-11eb-8778-fa163e914bcc
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Add Host
+      desc: Add host to Bootstrapped Cluster
+      module: test_host.py
+      polarion-id: CEPH-83573729
+      config:
+        service: host
+        command: add
+        args:                     # arguments to ceph orch
+          attach_ip_address: true
+          node: node2
+      destroy-cluster: false
+
+  - test:
+      name: Add new host node with IP address
+      desc: Add new host and validate using ceph orch host list
+      module: test_host.py
+      polarion-id: CEPH-83573776
+      config:
+        service: host
+        command: add
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node3
+          attach_ip_address: true
+          add_label: false
+      destroy-cluster: false
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address and labels
+      module: test_host.py
+      polarion-id: CEPH-83573729
+      config:
+        service: host
+        command: add
+        args:
+          node: node4
+          attach_ip_address: true
+          labels:
+            - osd
+            - node-exporter
+            - mon
+      destroy-cluster: false
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address and labels
+      module: test_host.py
+      polarion-id: CEPH-83573729
+      config:
+        service: host
+        command: add
+        args:
+          node: node6
+          attach_ip_address: true
+          labels:
+            - osd
+            - node-exporter
+            - mon
+            - rgw
+            - crash
+      destroy-cluster: false
+
+  - test:
+      name: Remove Host label
+      desc: Remove host label osd from node4
+      module: test_host.py
+      polarion-id: CEPH-83574740
+      config:
+        service: host
+        command: label_remove
+        args:
+          node: node4
+          labels:
+            - osd
+            - mon
+      destroy-cluster: false
+
+  - test:
+      name: Remove Host label
+      desc: Remove host label node-exporter from node4
+      module: test_host.py
+      polarion-id: CEPH-83574740
+      config:
+        service: host
+        command: label_remove
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node4
+          labels:
+            - node-exporter
+      destroy-cluster: false
+
+  - test:
+      name: Add Host label
+      desc: Add host label mon,osd to existing node
+      module: test_host.py
+      polarion-id: CEPH-83574739
+      config:
+        service: host
+        command: label_add
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node4
+          labels:
+            - mon
+            - osd
+      destroy-cluster: false
+
+  - test:
+      name: Attach Host label to installer
+      desc: Add host label(s) to existing installer node
+      module: test_host.py
+      polarion-id: CEPH-83574739
+      config:
+        service: host
+        command: label_add
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node1
+          labels: apply-all-labels
+        validate_admin_keyring: true
+      destroy-cluster: false
+
+  - test:
+      name: Add admin label and validate keyring file
+      desc: Add admin label existing node4 and validate keyring file exists
+      module: test_host.py
+      polarion-id: CEPH-83574731
+      config:
+        service: host
+        command: label_add
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node4
+          labels:
+            - _admin
+        validate_admin_keyring: true
+      destroy-cluster: false
+
+  - test:
+      name: Remove admin label and validate keyring file
+      desc: Remove admin label existing node4 and validate keyring file exists
+      module: test_host.py
+      polarion-id: CEPH-83574732
+      config:
+        service: host
+        command: label_remove
+        args:
+          node: node4
+          labels:
+            - _admin
+        validate_admin_keyring: true
+      destroy-cluster: false
+
+  - test:
+      name: Set Host address
+      desc: Set IP address to a existing node
+      module: test_host.py
+      polarion-id: CEPH-83574738
+      config:
+        service: host
+        command: set_address
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node1
+      destroy-cluster: false
+
+  - test:
+      name: Remove host
+      desc: Remove node from cluster
+      module: test_host.py
+      polarion-id: CEPH-83573747
+      config:
+        service: host
+        command: remove
+        base_cmd_args:
+          verbose: true
+        args:
+          node: node4
+      destroy-cluster: false
+
+  - test:
+      name: Remove host
+      desc: Remove node from cluster
+      module: test_host.py
+      polarion-id: CEPH-83573747
+      config:
+        service: host
+        command: remove
+        args:
+          node: node3
+      destroy-cluster: false
+
+  - test:
+      name: Add host with admin label and validate keyring file exists
+      desc: Add new host node5 with admin label and validate keyring file exists
+      module: test_host.py
+      polarion-id: CEPH-83574730
+      config:
+        service: host
+        command: add
+        args:
+          node: node5
+          labels:
+            - _admin
+        validate_admin_keyring: true
+      destroy-cluster: false
+
+  - test:
+      name: Add hosts to ceph cluster
+      desc: Add host node(s) with IP address and labels
+      module: test_host.py
+      polarion-id:
+      config:
+        service: host
+        command: add_hosts
+        args:
+          nodes:
+            - node5
+            - node6
+            - node7
+            - node8
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+
+  - test:
+      name: Remove Hosts from cluster
+      desc: Remove nodes from cluster execpt installer
+      module: test_host.py
+      polarion-id:
+      config:
+        service: host
+        command: remove_hosts
+        args:
+          nodes:
+            - node5
+            - node6
+      destroy-cluster: false
+
+  - test:
+      name: Remove all Hosts
+      desc: Remove all nodes from cluster execpt installer
+      module: test_host.py
+      polarion-id:
+      config:
+        service: host
+        command: remove_hosts
+        args:
+          nodes: []
+      destroy-cluster: false
+
+  - test:
+      name: Add all hosts to ceph cluster
+      desc: Add all host node with IP address and labels
+      module: test_host.py
+      polarion-id:
+      config:
+        service: host
+        command: add_hosts
+        args:
+          nodes: []
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+
+  - test:
+      name: Apply Monitor with placement and limit
+      desc: Apply monitor service with placement and limit
+      module: test_mon.py
+      polarion-id: CEPH-83573778,CEPH-83573773,CEPH-83573774
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+              - node2
+              - node6
+            limit: 3    # no of daemons
+            sep: " "    # separator to be used for placements
+
+  - test:
+      name: Apply Monitor with host placement
+      desc: Apply monitor with placement option on specified hosts
+      module: test_mon.py
+      polarion-id: CEPH-83573732
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+              - node2
+              - node6
+            sep: ";"
+
+  - test:
+      name: Apply Monitor using label
+      desc: Apply monitor using label mon
+      module: test_mon.py
+      polarion-id: CEPH-83573772
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            label: mon
+
+  - test:
+      name: Apply Manager service
+      desc: Apply manager service with placement option
+      module: test_mgr.py
+      polarion-id: CEPH-83573734
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+            sep: " "
+      destroy-cluster: false
+
+  - test:
+      name: Apply Manager service
+      desc: Apply manager service with label option
+      module: test_mgr.py
+      polarion-id: CEPH-83573777
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            label: mgr
+            sep: " "
+      destroy-cluster: false
+
+  - test:
+      name: Apply OSD Service
+      desc: Apply OSD service with all available devices
+      module: test_osd.py
+      polarion-id: CEPH-83573735
+      config:
+        command: apply
+        service: osd
+        base_cmd_args:
+          verbose: true
+        args:
+          all-available-devices: true
+      destroy-cluster: false
+  - test:
+      name: test_validate_safe_stop_hosts
+      desc: Verify if a host be safely stopped without reducing the availability using ceph orch ok-to-stop command
+      polarion-id: CEPH-83573767
+      module: test_node_safe_stop.py
+  - test:
+      name: Configure client
+      desc: Configure client on node9
+      module: test_client.py
+      polarion-id: CEPH-83573758
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node9                       # client node
+        install_packages:
+          - ceph-common                   # install ceph common packages
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Remove client
+      desc: remove client on node9
+      module: test_client.py
+      polarion-id: CEPH-83573759
+      config:
+        command: remove
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node9                       # client node
+        remove_packages:
+          - ceph-common                   # Remove ceph common packages
+        remove_admin_keyring: true        # Copy admin keyring to node
+
+  - test:
+      name: Add cephfs file system volume
+      desc: Add file system for MDS service
+      module: test_bootstrap.py
+      polarion-id: CEPH-83574232
+      config:
+        command: shell
+        args:          # arguments to ceph orch
+          - ceph
+          - fs
+          - volume
+          - create
+          - cephfs
+      destroy-cluster: false
+
+  - test:
+      name: Apply MDS Service
+      desc: Apply MDS service on all mds nodes
+      module: test_mds.py
+      polarion-id: CEPH-83573737
+      config:
+        command: apply
+        service: mds
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        pos_args:
+          - cephfs              # name of the filesystem
+        args:
+          placement:
+            nodes:
+              - node2
+              - node8
+            limit: 2            # no of daemons
+            sep: " "            # separator to be used for placements
+      destroy-cluster: false
+
+  - test:
+      name: Create replicated pool
+      desc: Add pool for ISCSI service
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - iscsi
+          - "3"
+          - "3"
+          - replicated
+      destroy-cluster: false
+
+  - test:
+      name: Enable rbd application on pool
+      desc: enable rbd on iscsi pool
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - iscsi
+          - rbd
+      destroy-cluster: false
+
+  - test:
+      name: Apply Prometheus Service
+      desc: Apply Prometheus service on role nodes
+      module: test_monitoring.py
+      polarion-id: CEPH-83573738
+      config:
+        command: apply
+        service: prometheus
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+      destroy-cluster: false
+
+  - test:
+      name: Apply Node-exporter Service
+      desc: Apply Node-exporter service on role nodes
+      module: test_monitoring.py
+      polarion-id: CEPH-83573884
+      config:
+        command: apply
+        service: node-exporter
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes: "*"
+      destroy-cluster: false
+
+  - test:
+      name: Apply Alert-manager Service
+      desc: Apply Alert-manager service on role nodes
+      module: test_monitoring.py
+      polarion-id:
+      config:
+        command: apply
+        service: alertmanager
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+              - node2
+      destroy-cluster: false
+
+  - test:
+      name: Apply Grafana Service
+      desc: Apply Grafana service on role nodes
+      module: test_monitoring.py
+      polarion-id: CEPH-83573886
+      config:
+        command: apply
+        service: grafana
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+      destroy-cluster: false
+
+  - test:
+      name: Apply collocated RGW Service
+      desc: Apply collocated RGW service using node placements
+      module: test_rgw.py
+      polarion-id: CEPH-83573751
+      config:
+        command: apply
+        service: rgw
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        pos_args:               # positional arguments
+          - foo                 # service id
+        args:
+          placement:
+            count-per-host: 2
+            nodes:              # A list of strings that would looked up
+              - node6
+              - node7
+            sep: ";"            # separator to be used for placements
+      destroy-cluster: false
+
+  - test:
+      name: Apply collocated RGW Service
+      desc: Apply collocated RGW service using label placement
+      module: test_rgw.py
+      polarion-id: CEPH-83574639
+      config:
+        command: apply
+        service: rgw
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        pos_args:               # positional arguments
+          - foo                 # service id
+        args:
+          placement:
+            count-per-host: 2
+            label: rgw
+      destroy-cluster: false
+
+  - test:
+      name: Create replicated pool for NFS
+      desc: Add pool for NFS Ganesha service
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:                     # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - nfs-ganesha-pool
+      destroy-cluster: false
+
+  - test:
+      name: Enable rgw application on nfs-ganesha pool
+      desc: enable rgw on nfs-ganesha pool
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - nfs-ganesha-pool
+          - rgw
+      destroy-cluster: false
+
+  - test:
+      name: Apply NFS Service
+      desc: Apply NFS-Ganesha service on role nodes
+      module: test_nfs.py
+      polarion-id: CEPH-83573749
+      config:
+        command: apply
+        service: nfs
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - mynfs                         # nfs service ID
+          - nfs-ganesha-pool              # name of the pool
+        args:
+          # namespace: mynfs-ns           # specify namespace(supported only in RHCeph 5.0)
+          placement:
+            nodes:
+              - node8
+              - node6
+            limit: 2
+            sep: ";"
+      destroy-cluster: false
+
+  - test:
+      name: Apply Crash Service
+      desc: Apply Crash service on all nodes
+      module: test_crash.py
+      polarion-id: CEPH-83573887
+      config:
+        command: apply
+        service: crash
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes: "*"
+      destroy-cluster: false
+
+  - test:
+      name: Remove NFS-Ganesha Service
+      desc: Remove NFS-Ganesha service using orch remove option
+      module: test_nfs.py
+      polarion-id:
+      config:
+        command: remove
+        service: nfs
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: nfs.mynfs
+          verify: true
+      destroy-cluster: false
+
+  - test:
+      name: Remove RGW Service
+      desc: Remove RGW service using orch remove option
+      module: test_rgw.py
+      polarion-id: CEPH-83573753
+      config:
+        command: remove
+        service: rgw
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: rgw.foo
+          verify: true
+      destroy-cluster: false
+
+  - test:
+      name: Remove ISCSI Service
+      desc: Remove ISCSI service using orch remove option
+      module: test_iscsi.py
+      polarion-id: CEPH-83573757
+      config:
+        command: remove
+        service: iscsi
+        args:
+          service_name: iscsi.iscsi
+          verify: true
+      destroy-cluster: false
+
+  - test:
+      name: Remove Prometheus Service
+      desc: Remove Prometheus service using orch remove option
+      module: test_monitoring.py
+      polarion-id:
+      config:
+        command: remove
+        service: prometheus
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: prometheus
+      destroy-cluster: false
+
+  - test:
+      name: Remove Node-exporter Service
+      desc: Remove Node-exporter service using orch remove option
+      module: test_monitoring.py
+      polarion-id: CEPH-83573884
+      config:
+        command: remove
+        service: node-exporter
+        args:
+          service_name: node-exporter
+      destroy-cluster: false
+
+  - test:
+      name: Remove Alert-manager Service
+      desc: Remove Alert-manager service using orch remove option
+      module: test_monitoring.py
+      polarion-id:
+      config:
+        command: remove
+        service: alertmanager
+        args:
+          service_name: alertmanager
+      destroy-cluster: false
+
+  - test:
+      name: Remove Grafana Service
+      desc: Remove Grafana service using orch remove option
+      module: test_monitoring.py
+      polarion-id: CEPH-83573886
+      config:
+        command: remove
+        service: grafana
+        args:
+          service_name: grafana
+      destroy-cluster: false
+
+  - test:
+      name: Remove MDS Service
+      desc: Remove MDS service using orch remove option
+      module: test_mds.py
+      polarion-id: CEPH-83573748
+      config:
+        command: remove
+        service: mds
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: 'mds.cephfs'
+      destroy-cluster: false
+
+  - test:
+      name: set mon_allow_pool_delete
+      desc: set mon_allow_pool_delete to true
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:
+          - ceph
+          - config
+          - set
+          - mon
+          - mon_allow_pool_delete
+          - "true"
+      destroy-cluster: false
+
+  - test:
+      name: remove cephfs file system volume
+      desc: remove file system
+      module: test_bootstrap.py
+      polarion-id:
+      config:
+        command: shell
+        args:
+          - ceph
+          - fs
+          - volume
+          - rm
+          - cephfs
+          - "--yes-i-really-mean-it"
+      destroy-cluster: false
+
+  - test:
+      name: Remove Crash Service
+      desc: Remove Crash service using orch remove option
+      module: test_crash.py
+      polarion-id: CEPH-83573784,CEPH-83573887
+      config:
+        command: remove
+        service: crash
+        base_cmd_args:
+          verbose: true
+        args:
+          service_name: crash
+      destroy-cluster: false
