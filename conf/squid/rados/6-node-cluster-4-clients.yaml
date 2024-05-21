@@ -1,0 +1,83 @@
+# Test Suite to test CIDR blocklisting of clients
+# Deployment for all the ceph daemons , with 3 mon's, 3 mgr's, 15 OSD daemons & 6 Client nodes
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        networks:
+          - shared_net_15
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - alertmanager
+          - grafana
+          - prometheus
+      node2:
+        networks:
+          - shared_net_15
+        role:
+          - mon
+          - mgr
+          - mds
+          - rgw
+      node3:
+        networks:
+          - shared_net_15
+        role:
+          - osd
+        no-of-volumes: 5
+        disk-size: 25
+      node4:
+        networks:
+          - shared_net_15
+        role:
+          - osd
+        no-of-volumes: 5
+        disk-size: 25
+      node5:
+        role:
+          - osd
+        no-of-volumes: 5
+        disk-size: 25
+      node6:
+        networks:
+          - shared_net_15
+        role:
+          - mon
+          - mgr
+          - mds
+          - rgw
+      node7:
+        image-name:
+          openstack: RHEL-9.3.0-x86_64-ga-latest
+          ibmc: rhel-91-server-released
+        networks:
+          - shared_net_2
+        role:
+          - client
+      node8:
+        image-name:
+          openstack: RHEL-9.3.0-x86_64-ga-latest
+          ibmc: rhel-91-server-released
+        networks:
+          - shared_net_2
+        role:
+          - client
+      node9:
+        image-name:
+          openstack: RHEL-9.3.0-x86_64-ga-latest
+          ibmc: rhel-91-server-released
+        networks:
+          - shared_net_5
+        role:
+          - client
+      node10:
+        image-name:
+          openstack: RHEL-9.3.0-x86_64-ga-latest
+          ibmc: rhel-91-server-released
+        networks:
+          - shared_net_5
+        role:
+          - client

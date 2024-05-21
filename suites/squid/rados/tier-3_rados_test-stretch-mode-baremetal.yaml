@@ -1,0 +1,595 @@
+# Use cluster-conf file: conf/squid/rados/stretch-mode-host-location-attrs.yaml
+# Stretch mode tests performing site down scenarios
+
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap with apply-spec
+      desc: Apply spec in Bootstrap with host location attributes
+      module: test_bootstrap.py
+      polarion-id: CEPH-83575289
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          registry-json: registry.redhat.io
+          mon-ip: node1
+          orphan-initial-daemons: true
+          skip-dashboard: true
+          ssh-user: cephuser
+          apply-spec:
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node2
+                - node3
+              location:
+                root: default
+                datacenter: DC1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node5
+                - node4
+              location:
+                root: default
+                datacenter: DC2
+            - service_type: mon
+              placement:
+                label: mon
+            - service_type: mgr
+              placement:
+                label: mgr
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure OSD
+      module: homogenous_osd_cluster.py
+      desc: Deploy OSDs on specifc devices on the node.
+      abort-on-fail: true
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        nodes: node6
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Mon election strategies
+      polarion-id: CEPH-83573627
+      module: test_election_strategies.py
+      desc: Change Mon election strategies and verify status
+
+  - test:
+      name: Deploy stretch Cluster
+      module: test_stretch_deployment_with_placement.py
+      polarion-id: CEPH-83573621
+      config:
+        no_affinity: false
+        stretch_rule_name: stretch_rule
+        tiebreaker_mon_site_name: arbiter
+        negative_scenarios: false
+      desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
+      abort-on-fail: true
+
+  - test:
+      name: Verify osd heartbeat no reply
+      desc: heartbeat_check log entries should contain hostname:port
+      polarion-id: CEPH-10839
+      module: test_osd_heartbeat.py
+      destroy-cluster: false
+
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      polarion-id: CEPH-83574972
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          pool: rbd_rep_pool
+          image: rbd_rep_image
+          size: 10G
+        io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+      desc: Perform rgw tests
+
+  - test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293"
+
+  - test:
+      name: nfs-ganesha_with_cephfs
+      module: nfs-ganesha_basics.py
+      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+      polarion-id: CEPH-83574439
+      abort-on-fail: false
+
+  - test:
+      name: Verify stretch Cluster
+      module: stretch_cluster.py
+      polarion-id: CEPH-83573630
+      config:
+        verify_forced_recovery: true
+        osd_max_backfills: 16
+        osd_recovery_max_active: 16
+        rados_write_duration: 200
+      desc: Verify forced recovery and healthy on a stretch configured cluster
+
+  - test:
+      name: Compression test - replicated pool
+      module: pool_tests.py
+      polarion-id: CEPH-83571673
+      config:
+        Compression_tests:
+          verify_compression_ratio_set: true          # TC : CEPH-83571672
+          pool_type: replicated
+          pool_config:
+            pool-1: test_compression_repool-1
+            pool-2: test_compression_repool-2
+            rados_write_duration: 200
+            byte_size: 100KB
+            pg_num: 32
+          compression_config:
+            compression_mode: aggressive
+            compression_algorithm: snappy
+            compression_required_ratio: 0.6
+            compression_min_blob_size: 1B
+            byte_size: 10KB
+      desc: Verification of the effect of compression on replicated pools
+
+  - test:
+      name: Compression algorithms
+      module: rados_prep.py
+      polarion-id: CEPH-83571669
+      config:
+        replicated_pool:
+          create: true
+          pool_name: re_pool_compress
+          pg_num: 32
+          rados_write_duration: 10
+          rados_read_duration: 10
+        enable_compression:
+          pool_name: re_pool_compress
+          rados_write_duration: 50
+          rados_read_duration: 50
+          configurations:
+            - config-1:
+                compression_mode: force
+                compression_algorithm: snappy
+                compression_required_ratio: 0.3
+                compression_min_blob_size: 1B
+                byte_size: 10KB
+            - config-2:
+                compression_mode: passive
+                compression_algorithm: zlib
+                compression_required_ratio: 0.7
+                compression_min_blob_size: 10B
+                byte_size: 100KB
+            - config-3:
+                compression_mode: aggressive
+                compression_algorithm: zstd
+                compression_required_ratio: 0.5
+                compression_min_blob_size: 1KB
+                byte_size: 100KB
+        delete_pools:
+          - re_pool_compress
+      desc: Enable/disable different compression algorithms.
+
+  - test:
+      name: Ceph balancer test
+      module: rados_prep.py
+      polarion-id: CEPH-83573251
+      config:
+        configure_balancer:
+          configure: true
+          balancer_mode: upmap
+          target_max_misplaced_ratio: 0.05
+          sleep_interval: 60
+      desc: Ceph balancer plugins CLI validation in upmap mode
+
+  - test:
+      name: Ceph PG Autoscaler
+      module: rados_prep.py
+      polarion-id: CEPH-83573412
+      config:
+        replicated_pool:
+          create: true
+          pool_name: rep_test_pool
+          rados_write_duration: 50
+          rados_read_duration: 50
+          pg_num: 32
+        configure_pg_autoscaler:
+          default_mode: warn
+          mon_target_pg_per_osd: 128
+          pool_config:
+            pool_name: rep_test_pool
+            pg_autoscale_mode: "on"
+            pg_num_min: 16
+            target_size_ratio: 0.4
+        delete_pools:
+          - rep_test_pool
+      desc: Ceph PG autoscaler CLI validation
+
+  - test:
+      name: ObjectStore block stats verification
+      module: test_objectstore_block.py
+      desc: Reduce data from an object and verify the decrease in blocks
+      polarion-id: CEPH-83571714
+      config:
+        create_pool: true
+        pool_name: test-objectstore
+        write_iteration: 3
+        delete_pool: true
+
+  - test:
+      name: Trimming of onodes
+      desc: check for the onode trimming in the cluster
+      module: test_osd_onode_trimming.py
+      polarion-id: CEPH-83575269
+
+  - test:
+      name: Inconsistent object pg check
+      desc: Inconsistent object pg check
+      module: test_osd_inconsistency_pg.py
+      polarion-id: CEPH-9924
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Inconsistent_pool
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 5
+            num_keys_obj: 10
+        delete_pool: true
+
+  - test:
+      name: Inconsistent object pg check using pool snapshot for RE pools
+      desc: Inconsistent object pg check using pool snapshot for RE pools
+      module: test_osd_snap_inconsistency_pg.py
+      polarion-id: CEPH-9942
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Inconsistent_snap_pool_re
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 5
+            num_keys_obj: 10
+        delete_pool: true
+
+  - test:
+      name: PG number maximum limit check
+      module: pool_tests.py
+      desc: Check the pg_num maximut limit is <=128
+      polarion-id: CEPH-83574909
+      config:
+        verify_pg_num_limit:
+          pool_name: pool_num_chk
+          delete_pool: true
+
+  - test:
+      name: OSD min-alloc size and fragmentation checks
+      module: rados_prep.py
+      polarion-id: CEPH-83573808
+      config:
+        Verify_osd_alloc_size:
+          allocation_size: 4096
+      desc: Verify the minimum allocation size for OSDs along with fragmentation scores.
+
+  - test:
+      name: osd_memory_target param set at OSD level
+      module: test_osd_memory_target.py
+      desc: Verification of osd_memory_target parameter set at OSD level
+      polarion-id: CEPH-83580882
+      config:
+        osd_level: true
+
+  - test:
+      name: osd_memory_target param set at host level
+      module: test_osd_memory_target.py
+      desc: Verification of osd_memory_target parameter set at host level
+      polarion-id: CEPH-83580881
+      config:
+        host_level: true
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: replicated
+        pool-2-type: replicated
+        pool-1-conf: sample-pool-1
+        pool-2-conf: sample-pool-2
+      desc: Migrating data between different pools. Scenario-1. RE -> RE
+
+# Cannot run site down tests in BM as of now as the methods use openstack drivers in code.
+# Need to improve code coverage in rados/infra test to use IPMI commands to start/stop/restart BM hosts
+# CEPH-83574975 Test commented in BM
+#  - test:
+#      name: test stretch Cluster site down - Data site
+#      module: test_stretch_site_down.py
+#      polarion-id: CEPH-83574975
+#      config:
+#        pool_name: test_stretch_pool6
+#        shutdown_site: DC1
+#        tiebreaker_mon_site_name: arbiter
+#        delete_pool: true
+#      desc: Test the cluster when we have only 1 of 2 DC's surviving
+#      abort-on-fail: true
+#
+#  - test:
+#      name: test stretch Cluster site down with delay - Data site
+#      module: test_stretch_site_down.py
+#      polarion-id: CEPH-83571705
+#      config:
+#        pool_name: test_stretch_pool9
+#        shutdown_site: DC1
+#        tiebreaker_mon_site_name: arbiter
+#        delete_pool: true
+#        add_network_delay: true
+#      desc: Test the cluster when we have only 1 of 2 DC's surviving with network delay
+#      abort-on-fail: true
+#
+#  - test:
+#      name: test stretch Cluster site down - Arbiter site
+#      module: test_stretch_site_down.py
+#      polarion-id: CEPH-83574974
+#      config:
+#        pool_name: test_stretch_pool5
+#        shutdown_site: arbiter
+#        tiebreaker_mon_site_name: arbiter
+#        delete_pool: true
+#      desc: Test the cluster when the arbiter site is shut down
+#      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster maintenance mode - arbiter site
+      module: test_stretch_site_maintenance_modes.py
+      polarion-id: CEPH-83574976
+      config:
+        pool_name: test_stretch_pool2
+        affected_site: arbiter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when the arbiter site is moved to maintenance mode
+      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster site reboot - Data site
+      module: test_stretch_site_reboot.py
+      polarion-id: CEPH-83574977
+      config:
+        pool_name: test_stretch_pool3
+        affected_site: DC1
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when the data site is rebooted
+
+  - test:
+      name: test stretch Cluster site reboot - Arbiter site
+      module: test_stretch_site_reboot.py
+      polarion-id: CEPH-83574977
+      config:
+        pool_name: test_stretch_pool4
+        affected_site: arbiter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when the arbiter site is rebooted
+
+  - test:
+      name: Mon replacement on Data site
+      module: test_stretch_mon_replacements.py
+      polarion-id: CEPH-83574971
+      config:
+        pool_name: test_stretch_pool5
+        replacement_site: DC1
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test stretch Cluster mon replacement - Data site
+
+# No free host without any mon daemon on the cluster.
+# Arbiter site Mon replacement test commented as of now
+#  - test:
+#      name: Mon replacement on Arbiter site
+#      module: test_stretch_mon_replacements.py
+#      polarion-id: CEPH-83574971
+#      config:
+#        pool_name: test_stretch_pool6
+#        replacement_site: arbiter
+#        tiebreaker_mon_site_name: arbiter
+#        delete_pool: true
+#      desc: Test stretch Cluster mon replacement - Arbiter site
+
+# Commenting test until fix for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2249962
+# New Bug: https://bugzilla.redhat.com/show_bug.cgi?id=2265116
+#  - test:
+#      name: Netsplit Scenarios data-data sites
+#      module: test_stretch_netsplit_scenarios.py
+#      polarion-id: CEPH-83574979
+#      config:
+#        pool_name: test_stretch_pool8
+#        netsplit_site: DC1
+#        tiebreaker_mon_site_name: arbiter
+#        delete_pool: true
+#      desc: Test stretch Cluster netsplit scenario between data sites
+#
+# Commenting this test to make changes in the test case in the way OSds are added/removed.
+# Need to use the same spec file used for cluster deployment
+#  - test:
+#      name: OSD and host replacement
+#      module: test_stretch_osd_serviceability_scenarios.py
+#      polarion-id: CEPH-83575474
+#      config:
+#        pool_name: test_stretch_pool7
+#        stretch_bucket: datacenter
+#        tiebreaker_mon_site_name: arbiter
+#        delete_pool: true
+#        add_network_delay: true
+#      desc: Test stretch Cluster osd and Host replacement
+
+  - test:
+      name: Netsplit Scenarios data-arbiter sites
+      module: test_stretch_netsplit_scenarios.py
+      polarion-id: CEPH-83574979
+      config:
+        pool_name: test_stretch_pool7
+        netsplit_site: arbiter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test stretch Cluster netsplit scenario between data site and arbiter site
+
+  - test:
+      name: Negative scenarios - post-deployment
+      module: test_stretch_negative_scenarios.py
+      polarion-id: CEPH-83584499
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: arbiter
+      desc: Perform post-deployment negative tests on stretch mode
+
+  - test:
+      name: test stretch Cluster maintenance mode - data site
+      module: test_stretch_site_maintenance_modes.py
+      polarion-id: CEPH-83574976
+      config:
+        pool_name: test_stretch_pool1
+        affected_site: DC1
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when the Data site is moved to maintenance mode
+      abort-on-fail: true
+
+  - test:
+      name: Mute ceph health alerts
+      polarion-id: CEPH-83573854
+      module: mute_alerts.py
+      desc: Mute health alerts
+
+  - test:
+      name: Pg autoscaler bulk flag
+      module: pool_tests.py
+      polarion-id: CEPH-83573412
+      desc: Ceph PG autoscaler bulk flag tests
+      config:
+        test_autoscaler_bulk_feature: true
+        pool_name: test_bulk_features
+        delete_pool: true
+
+  - test:
+      name: BlueStore Checksum algorithms
+      module: test_bluestore_configs.py
+      polarion-id: CEPH-83571646
+      config:
+        pool_type : replicated
+        checksums:
+          - none
+          - crc32c
+          - crc32c_16
+          - crc32c_8
+          - xxhash32
+          - xxhash64
+      desc: Verify the different applicable BlueStore Checksum algorithms
+
+# Bug : https://bugzilla.redhat.com/show_bug.cgi?id=2279839
+#  - test:
+#      name: BlueStore cache size tuning
+#      module: test_bluestore_configs.py
+#      polarion-id: CEPH-83571675
+#      config:
+#        pool_type : replicated
+#        bluestore_cache: true
+#      desc: Verify tuning of BlueStore cache size for HDDs and SSDs

@@ -1,0 +1,201 @@
+# Suite contains basic tier-2 rados tests
+#===============================================================================================
+#------------------------------------------------------------------------------------------
+#----- Tier-2 To check OSD status during OMAP,scrub and deep-scrub tasks in progress ------
+#------------------------------------------------------------------------------------------
+# Conf: conf/squid/rados/7-node-cluster.yaml
+#
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+
+  - test:
+      name: OMAP feature
+      desc: Testing omap features
+      module: test_scrub_omap.py
+      polarion-id: CEPH-83572661
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Test
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 200
+            num_keys_obj: 300000
+        verify_cluster_health: true
+
+  - test:
+      name: concurrent and parallel IOPS on an object
+      desc: Perform concurrent and parallel IOPs on one object
+      module: test_object_ops.py
+      config:
+        obj_sizes:
+          - 45
+          - 80
+          - 23
+          - 107
+      polarion-id: CEPH-83571710
+
+  - test:
+      name: Inconsistent OSD epoch
+      desc: list-inconsistent requires the correct epoch
+      module: test_inconsistency_osd_epoch.py
+      polarion-id: CEPH-9947
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool_name: test_pool_4
+            pool_type: replicated
+          omap_config:
+            obj_start: 0
+            obj_end: 50
+            num_keys_obj: 100
+        delete_pool: true
+
+  - test:
+      name: Preempt scrub messages checks
+      desc: Checking preempt messages in the OSDs
+      module: test_rados_preempt_scrub.py
+      polarion-id: CEPH-83572916
+      config:
+        verify_osd_preempt:
+          configurations:
+            pool-1:
+              pool_name: preempt_pool
+              pool_type: replicated
+              pg_num: 16
+        delete_pool: true
+      comments: Active BZ-2269089
+
+  - test:
+      name: Omap creations on objects
+      module: test_omap_entries.py
+      polarion-id: CEPH-83571702
+      config:
+        # EC pool config is commented out because omaps can be written only on RE pools
+        omap_config:
+          small_omap:
+            pool_name: re_pool_small_omap
+            pg_num: 1
+            pg_num_max: 1
+            large_warn: false
+            obj_start: 0
+            obj_end: 5
+            normal_objs: 400
+            num_keys_obj: 200000
+          large_omap:
+            pool_name: re_pool_large_omap
+            pg_num: 1
+            pg_num_max: 1
+            large_warn: true
+            obj_start: 0
+            obj_end: 5
+            normal_objs: 400
+            num_keys_obj: 200001
+      desc: Large number of omap creation on objects and OSD resiliency
