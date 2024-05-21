@@ -1,7 +1,7 @@
 from threading import Thread
 from time import sleep
 
-from nfs_operations import cleanup_cluster, setup_nfs_cluster
+from nfs_operations import cleanup_cluster, enable_v3_locking, setup_nfs_cluster
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
@@ -69,6 +69,7 @@ def run(ceph_cluster, **kw):
     nfs_export = "/export"
     nfs_mount = "/mnt/nfs"
     nfs_server_name = nfs_node.hostname
+    installer = ceph_cluster.get_nodes("installer")[0]
 
     # Squashed export parameters
     nfs_export_squash = "/export_squash"
@@ -106,6 +107,8 @@ def run(ceph_cluster, **kw):
             original_squash_value,
             new_squash_value,
         )
+        sleep(5)
+
     except Exception as e:
         log.error(f"Failed to setup nfs cluster with rootsquash enabled : Error - {e}")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
@@ -127,6 +130,10 @@ def run(ceph_cluster, **kw):
             ):
                 raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
             log.info("Mount succeeded on client")
+
+        # Check the mount protocol and enable locking for v3
+        if version == 3:
+            enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name)
 
         # Create file on squashed dir
         clients[0].exec_command(
