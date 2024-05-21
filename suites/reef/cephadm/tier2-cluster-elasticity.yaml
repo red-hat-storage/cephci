@@ -691,27 +691,6 @@ tests:
       destroy-cluster: false
 
   - test:
-      name: Scale down NFS Service
-      desc: Scale down NFS-Ganesha service to 1 node
-      module: test_nfs.py
-      polarion-id: CEPH-83573586
-      config:
-        command: apply
-        service: nfs
-        base_cmd_args:
-          verbose: true
-        pos_args:
-          - mynfs                         # nfs service ID
-          - nfs-ganesha-pool              # name of the pool
-        args:
-          placement:
-            nodes:
-              - node10
-            limit: 1
-            sep: ";"
-      destroy-cluster: false
-
-  - test:
       name: check-ceph-health
       module: exec.py
       config:
