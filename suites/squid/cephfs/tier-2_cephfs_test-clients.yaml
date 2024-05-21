@@ -1,0 +1,369 @@
+# Conf file used - conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml"
+# This suite is used for tier 2 testcases of cephfs client feature
+---
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-data-ec
+                - "64"
+                - erasure
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-metadata
+                - "64"
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - set
+                - cephfs-data-ec
+                - allow_ec_overwrites
+                - "true"
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - new
+                - cephfs-ec
+                - cephfs-metadata
+                - cephfs-data-ec
+                - --force
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  label: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+          - config:
+              args:
+                - ceph
+                - config
+                - set
+                - mds
+                - defer_client_eviction_on_laggy_osds
+                - "false"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node8
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node9
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node10
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node11
+      desc: "Configure the Cephfs client system 4"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      name: multiple clients run IO's on same directory from each clients and exersize POSIX locks
+      module: clients.multiple_clients_posix_calls.py
+      polarion-id: CEPH-10529
+      desc: multiple clients exersizing POSIX locks
+      abort-on-fail: false
+  - test:
+      name: smallfile IO on multiple clients with diff operations
+      module: clients.smallfiles_with_different_operations.py
+      polarion-id: CEPH-10625
+      desc: smallfiles with different operations
+      abort-on-fail: false
+  - test:
+      name: Mount single directory and perform IO ops from multiple clients
+      module: clients.multiclients_io_on_same_directory.py
+      polarion-id: CEPH-11224
+      desc: multiple clients performing IO on same directory
+      abort-on-fail: false
+  - test:
+      name: rsync tests bw fs and other location and vice versa
+      module: clients.rsync_bw_fs_and_other_location.py
+      polarion-id: CEPH-11298
+      desc: rsync bw filesystem and other location and vice versa
+      abort-on-fail: false
+  - test:
+      name: scp bw fs and remote path and vice versa
+      module: clients.mirgate_data_bw_fs_and_remote_using_scp.py
+      polarion-id: CEPH-11299
+      desc: scp bw filesystem and remote directory and vice versa
+      abort-on-fail: false
+  - test:
+       name: Running basic bash commands on fuse,Kernel and NFS mounts
+       module: clients.fs_basic_bash_cmds.py
+       polarion-id: CEPH-11300
+       desc: Running basic bash commands on fuse,Kernel and NFS mounts
+       abort-on-fail: false
+       config:
+         no_of_files: 1000
+         size_of_files: 1
+         num_dir: 100
+  - test:
+      name: Client File locking on mounts
+      module: clients.file_lock_on_mounts.py
+      polarion-id: CEPH-11304
+      desc: Test File locking on mounts
+      abort-on-fail: false
+  - test:
+      name: Client eviction
+      module: clients.client_evict.py
+      polarion-id: CEPH-11335
+      desc: Test Filesystem client eviction
+      abort-on-fail: false
+  - test:
+      name: Filesystem mount with fstab entry and reboot the client
+      module: clients.client_fstab_auto_mount.py
+      polarion-id: CEPH-11336
+      desc: Update fstab and reboot client to check auto mount of FS works
+      abort-on-fail: false
+  - test:
+      name: Mount and unmount CephFS repeatedly in interval of 30 min & check data integrity
+      module: clients.integrity_check_after_remount.py
+      polarion-id: CEPH-11337
+      desc: Mount and unmount CephFS repeatedly in interval of 30 min & check data integrity
+      abort-on-fail: false
+  - test:
+        name: Filesystem information restriction for client
+        module: clients.multiclient_cephx_restrict_fs.py
+        polarion-id: CEPH-11338
+        desc: Test Filesystem information restriction for client for multiple cephfs
+        abort-on-fail: false
+  - test:
+      name: multi client file and dir ops
+      module: clients.multiclient_file_dir_ops.py
+      polarion-id: CEPH-83573529
+      desc: multi client file and dir ops
+      abort-on-fail: false
+  - test:
+      name: cross delete operations
+      module: clients.cross_delete_ops_bw_fuse_and_kernel_clients.py
+      polarion-id: CEPH-83573532
+      desc: Cross Delete Ops b/w Fuse and Kernel mounts
+      abort-on-fail: false
+  - test:
+      name: mds restriction for client for multifs
+      module: clients.client_mds_restriction.py
+      polarion-id: CEPH-83573869
+      desc: Test mds restriction for client for multiple cephfs
+      abort-on-fail: false
+  - test:
+      name: Filesystem information restriction for client
+      module: clients.client_fs_information_restriction.py
+      polarion-id: CEPH-83573875
+      desc: Test Filesystem information restriction for client for multiple cephfs
+      abort-on-fail: false
+  - test:
+      name: No data sharing between multifs
+      module: clients.test_no_data_sharing_multifs.py
+      polarion-id: CEPH-83573876
+      desc: Test no data sharing between multiple cephfs
+      abort-on-fail: false
+  - test:
+      name: Mount multifs with same client
+      module: clients.multifs_mount_same_client.py
+      polarion-id: CEPH-83573877
+      desc: Test mounting multiple cephfs with same client
+      abort-on-fail: false
+  - test:
+      name: Create users with permissions
+      module: clients.create_user_with_permissions.py
+      polarion-id: CEPH-83574327
+      desc: Create users with permissions and verify the permissions
+      abort-on-fail: false
+  - test:
+      name: ceph auth caps change permission and check
+      module: clients.ceph_auth_caps_modifying_permissions.py
+      polarion-id: CEPH-83574328
+      desc: generate all the possible permissions and verify the permissions
+      abort-on-fail: false
+  - test:
+      name: multi client unlink file
+      module: clients.file_unlink_on_clients.py
+      polarion-id: CEPH-83575042
+      desc: multi client unlink file
+      abort-on-fail: false
+  - test:
+      name: verify user read and write permissions
+      module: clients.verify_user_read_write_permissions.py
+      polarion-id: CEPH-83575574
+      desc: verify user read and write permissions
+      abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "MDS failover while IO is going on each client"
+      module: clients.MDS_failover_while_client_IO.py
+      polarion-id: CEPH-11242
+      config:
+        num_of_file_dir: 1000
+      name: "MDS failover whi client IO"
+  - test:
+      name: Test important MDS Configuration Settings
+      module: clients.mds_conf_modifying.py
+      polarion-id: CEPH-11329
+      desc: Test important MDS Configuration Settings
+      abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "multiple clients permission in mounted directory"
+      module: clients.multiple_clients_permission_mounted_directories.py
+      name: multiple clients permission in mounted directory
+      polarion-id: "CEPH-11340"
+  - test:
+      abort-on-fail: false
+      desc: "mds journal value conf verification"
+      module: clients.mds_journal_value_conf_verification.py
+      name: mds journal value conf verification
+      polarion-id: "CEPH-11331"
+  - test:
+      abort-on-fail: false
+      desc: "mds scrub only with one mds after failover"
+      module: clients.mds_scrub_after_failover.py
+      name: mds scrub only with one mds after failover
+      polarion-id: "CEPH-83573489"
+  - test:
+      abort-on-fail: false
+      desc: "Verify root_squash cap works in multiFS"
+      module: clients.verify_root_squash_in_caps.py
+      name: verify root_squash cap works in multiFS
+      polarion-id: "CEPH-83573868"
+  - test:
+      abort-on-fail: false
+      desc: "Verify Client eviction is deferred if OSD was laggy"
+      module: cephfs_bugs.test_defer_client_evict_on_laggy_osd.py
+      name: Client eviction deferred if OSD is laggy
+      polarion-id: "CEPH-83581592"
+  - test:
+      abort-on-fail: false
+      desc: "Verify Client is blocklisted if session metadata is bloated"
+      module: cephfs_bugs.test_client_blocklist_large_session_metadata.py
+      name: Verify Client is blocklisted if session metadata is bloated
+      polarion-id: "CEPH-83581613"
+
