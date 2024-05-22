@@ -1,0 +1,112 @@
+#===============================================================================================
+# Conf: conf/squid/cephadm/1admin-4node-1client-cluster.yaml
+# Test cases for cluster service operation
+#    - Bootstrap
+#    - Perform stop operation for Mon and Mgr service
+#
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the ceph client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Stopping mon and mgr service
+      desc: Test Ceph orch stop mon and mgr services
+      module: test_cluster_service_operations.py
+      polarion-id: CEPH-83574435
+      config:
+        operation: stop
+        service:
+          - "mon"
+          - "mgr"
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: OSD service ops using systemctl
+      desc: Test stop and start OSD service using systemctl
+      module: test_osd_service_operations.py
+      polarion-id: CEPH-83573802
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Validate pid limits are enforced
+      desc: Verify the pid limits are set for different daemons
+      module: test_validate_pid_limit.py
+      polarion-id: CEPH-83575590
+      destroy-cluster: false
+      abort-on-fail: true

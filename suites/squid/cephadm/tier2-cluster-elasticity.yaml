@@ -1,0 +1,725 @@
+---
+# ==================================================================================
+# Tier-level: 2
+# Test-Suite: tier2-cluster-elasticity.yaml
+# Test-Case:
+# Bootstrap cluster with all daemons and scale up and scale down the deployed
+# daemons and verify
+#
+# Cluster Configuration:
+#    conf/squid/cephadm/1admin-10node-1client-cephadm-scale.yaml
+#
+#    10-Node cluster(RHEL-8.3 and above)
+#    Initial cluster config
+#     - 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
+#
+# Node1 - Mon, Mgr, Installer, OSD, alertmanager, grafana,
+#         prometheus, node-exporter
+# Node2 - Mon, Mgr, OSD, MDS, RGW, alertmanager, node-exporter
+# Node3 - Mon, OSD, MDS, RGW, node-exporter
+# Node4 - Client
+#
+# Scale up cluster to 5 MONS, 5 MGRS, 4 RGWs, 4 MDSs, 2 NFSs,
+#                     2 ISCSIs and 10 OSD nodes
+# Scale down cluster to initial configuration
+#
+# Test steps:
+#   (1) Bootstrap cluster with options,
+##       - skip-monitoring-stack: true
+##       - orphan-initial-daemons: true
+##       - registry-json: <registry-URL>
+##       - fsid: <cluster-fsid>
+##       - mon-ip: <monitor IP address: Required>
+##   (2) Copy SSH keys to nodes.
+##   (3) Add nodes to cluster with address and role labels attached to it using
+#        Host spec yaml file.
+##   (4) Deploy services using apply spec option,
+#        (" ceph orch apply -i <spec_file>)
+##       - 3 Mon on node1, node2, node3 using host placements.
+##       - MGR using placement using label(mgr).
+##       - addition of OSD's using "all-avialable-devices" option.
+##       - alertmanager on node1, node2 using label "alert-manager".
+##       - grafana and prometheus on node1 using host placement with limit.
+##       - crash and node-exporter on all nodes using placement="*".
+##   (5) Configure client node
+##   (6) Run rados bench, RBD and RGW IOs
+##   (7) Add more hosts to the cluster
+##   (8) Scale up MONs to 5 nodes
+##   (9) Scale up MGRs to 5 nodes
+##   (10) Scale up OSDs to all nodes
+##   (11) Scale up RGWs to 4 nodes
+##   (12) Scale up MDSs to 4 nodes
+##   (13) Deploy NFS service using spec file,
+##       (a) Create OSD pool 'nfs-rgw-pool'
+##       (b) Deploy NFS on node4 using 'nfs-rgw-pool' pool.
+##   (14) Deploy ISCSI service using spec file,
+##       (a) Create replicated pool 'iscsi'
+##       (b) Enable rbd application on pool
+##   (15) Deploy SNMP V2c Gateway service
+##        (a) Setup destination node for SNMP traps
+##        (b) Add SNMP V2c Gateway services using spec file
+##   (16) Run rados bench, RBD and RGW IOs
+##   (17) Scale down MONs to 3 nodes
+##   (18) Scale down MGRs to 3 nodes
+##   (19) Scale down OSDs to 3 nodes
+##   (20) Scale down RGWs to 2 nodes
+##   (21) Scale down MDSs to 2 nodes
+##   (22) Scale down NFSs to 2 nodes
+##   (23) Scale down ISCSIs to 2 nodes
+##   (24) Run rados bench, RBD and RGW IOs
+# ==================================================================================
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cluster deployment
+      desc: Cluster deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83573721
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                custom_image: true
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                nodes:
+                  - node2
+                  - node3
+                  - node7
+                  - node8
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  nodes:
+                    - node1
+                    - node2
+                    - node3
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  nodes:
+                    - node1
+                    - node2
+                    - node3
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: all-available-devices
+                  encrypted: "true"
+                  placement:
+                    nodes:
+                      - node1
+                      - node2
+                      - node3
+                  spec:
+                    data_devices:
+                      all: "true"
+                    encrypted: "true"
+          - config:
+              command: apply
+              service: rgw
+              base_cmd_args:                # arguments to ceph orch
+                verbose: true
+              pos_args:                     # positional arguments
+                - myrgw                     # service id
+              args:
+                placement:
+                  nodes:               # A list of strings that would looked up
+                    - node7
+                    - node8
+                  limit: 2                  # no of daemons
+                  sep: ";"             # separator to be used for placements
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:                # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs                    # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node7
+                    - node8
+                  limit: 2                  # no of daemons
+                  sep: " "              # separator to be used for placements
+          - config:
+              command: apply
+              service: prometheus
+              args:
+                placement:
+                  nodes:
+                    - node1
+          - config:
+              command: apply
+              service: grafana
+              args:
+                placement:
+                  nodes:
+                    - node1
+          - config:
+              command: apply
+              service: alertmanager
+              args:
+                placement:
+                  nodes:
+                    - node1
+          - config:
+              command: apply
+              service: node-exporter
+              args:
+                placement:
+                  nodes: "*"
+          - config:
+              command: apply
+              service: crash
+              base_cmd_args:
+                verbose: true
+              args:
+                placement:
+                  nodes: "*"
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client
+      desc: Configure client on node4
+      module: test_client.py
+      polarion-id: CEPH-83573758
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node4                       # client node
+        install_packages:
+          - ceph-common                   # install ceph common packages
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: List client-keyring
+      polarion-id: CEPH-83574703
+      module: test_client_keyring.py
+      config:
+        service: "client-keyring"
+        command: "ls"
+        args:
+          format: json-pretty
+        nodes:
+          - "node4"
+      desc: List client-keyring on node4
+
+  - test:
+      name: set client using client-keyring
+      polarion-id: CEPH-83574704
+      module: test_client_keyring.py
+      config:
+        service: "client-keyring"
+        command: "set"
+        nodes:
+          - "node4"
+        entity: "client.2"
+        placement: "client-2"
+        owner: "107:107"
+        mode: "640"
+        pg_num: '128'
+        pgp_num: '128'
+      desc: Configure client using client-keyring on node4
+
+  - test:
+      name: remove client using client-keyring
+      polarion-id: CEPH-83574705
+      module: test_client_keyring.py
+      config:
+        service: "client-keyring"
+        command: "rm"
+        entity: "client.2"
+        nodes:
+          - "node4"
+      desc: remove client using client-keyring on node4
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cmd: ceph -s
+        sudo: true
+      desc: Check for ceph health debug info
+
+  - test:
+      name: rados_bench_test
+      module: radosbench.py
+      config:
+        pg_num: '128'
+        pool_type: 'normal'
+      desc: run rados bench for 360 - normal profile
+
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+        io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+      desc: Perform rgw tests
+
+  - test:
+      name: Add hosts to ceph cluster
+      desc: Add host node(s) with IP address and labels
+      module: test_host.py
+      polarion-id: CEPH-83573729
+      config:
+        service: host
+        command: add_hosts
+        args:
+          nodes:
+            - node5
+            - node6
+            - node9
+            - node10
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+
+  - test:
+      name: Scale up Monitor with placement
+      desc: Scale up monitor nodes to 5 with placement
+      module: test_mon.py
+
+      polarion-id: CEPH-83573732
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+              - node2
+              - node3
+              - node5
+              - node6
+            sep: ";"    # separator to be used for placements
+
+  - test:
+      name: Scale up Manager service
+      desc: Scale up manager nodes to 5 with placement option
+      module: test_mgr.py
+      polarion-id: CEPH-83573734
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+              - node2
+              - node3
+              - node5
+              - node6
+            sep: " "
+      destroy-cluster: false
+
+  - test:
+      name: Scale up OSD Service
+      desc: Scale up OSD service with all available devices
+      module: test_cephadm.py
+      polarion-id: CEPH-83574032
+      config:
+        command: apply_spec
+        service: orch
+        validate-spec-services: true
+        specs:
+          - service_type: osd
+            service_id: all-available-devices
+            encrypted: "true"
+            placement:
+              nodes:
+                - node1
+                - node2
+                - node3
+                - node5
+                - node6
+                - node9
+                - node10
+            spec:
+              data_devices:
+                all: "true"
+              encrypted: "true"
+      destroy-cluster: false
+
+  - test:
+      name: Scale up RGW Service
+      desc: Scale up RGW service to 4 nodes
+      module: test_rgw.py
+      polarion-id: CEPH-83573739
+      config:
+        command: apply
+        service: rgw
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        pos_args:               # positional arguments
+          - myrgw                 # service id
+        args:
+          placement:
+            nodes:              # A list of strings that would looked up
+              - node7
+              - node8
+              - node9
+              - node10
+            limit: 4            # no of daemons
+            sep: ";"            # separator to be used for placements
+      destroy-cluster: false
+
+  - test:
+      name: Scale up MDS Service
+      desc: Scale up MDS service to 4 nodes
+      module: test_mds.py
+      polarion-id: CEPH-83573737
+      config:
+        command: apply
+        service: mds
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        pos_args:
+          - cephfs              # name of the filesystem
+        args:
+          placement:
+            nodes:
+              - node7
+              - node8
+              - node9
+              - node10
+            limit: 4            # no of daemons
+            sep: " "            # separator to be used for placements
+      destroy-cluster: false
+
+  - test:
+      name: Create replicated pool for NFS
+      desc: Add pool for NFS Ganesha service
+      module: test_bootstrap.py
+      config:
+        command: shell
+        args:                     # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - nfs-ganesha-pool
+      destroy-cluster: false
+
+  - test:
+      name: Enable rgw application on nfs-ganesha pool
+      desc: enable rgw on nfs-ganesha pool
+      module: test_bootstrap.py
+      config:
+        command: shell
+        args:             # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - nfs-ganesha-pool
+          - rgw
+      destroy-cluster: false
+
+  - test:
+      name: Apply NFS Service
+      desc: Apply NFS-Ganesha service on role nodes
+      module: test_nfs.py
+      polarion-id: CEPH-83573586
+      config:
+        command: apply
+        service: nfs
+        base_cmd_args:
+          verbose: true
+        pos_args:
+          - mynfs                         # nfs service ID
+          - nfs-ganesha-pool              # name of the pool
+        args:
+          placement:
+            nodes:
+              - node9
+              - node10
+            limit: 2
+            sep: ";"
+      destroy-cluster: false
+
+  - test:
+      name: Create replicated pool
+      desc: Add pool for ISCSI service
+      module: test_bootstrap.py
+      config:
+        command: shell
+        args:               # command arguments
+          - ceph
+          - osd
+          - pool
+          - create
+          - iscsi
+          - "3"
+          - "3"
+          - replicated
+      destroy-cluster: false
+
+  - test:
+      name: Enable rbd application on pool
+      desc: enable rbd on iscsi pool
+      module: test_bootstrap.py
+      config:
+        command: shell
+        args:           # command arguments
+          - ceph
+          - osd
+          - pool
+          - application
+          - enable
+          - iscsi
+          - rbd
+      destroy-cluster: false
+
+  - test:
+      name: Setup destination node for SNMP traps
+      desc: Install snmptrapd tool and install CEPH MIB on destination node
+      module: snmp_destination.py
+      polarion-id: CEPH-83574775
+      config:
+        node: node3
+        specs:
+              - service_type: snmp-destination
+                spec:
+                  credentials:
+                    snmp_v2_community: authCommunity
+
+  - test:
+      name: SNMP V2C Gateway Service deployment with spec
+      desc: Add SNMP V2c Gateway services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574744
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: snmp-gateway
+                  service_name: snmp-gateway
+                  placement:
+                    count: 1
+                  spec:
+                    credentials:
+                      snmp_community: public
+                    port: 9464
+                    snmp_destination: node3
+                    snmp_version: V2c
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cmd: ceph -s
+        sudo: true
+      desc: Check for ceph health debug info
+
+  - test:
+      name: rados_bench_test
+      module: radosbench.py
+      config:
+        pg_num: '128'
+        pool_type: 'normal'
+      desc: run rados bench for 360 - normal profile
+
+  # TODO (tmathew): Skipping test due to known socket timeout exception issue
+  # - test:
+  #     name: rbd-io
+  #     module: rbd_faster_exports.py
+  #     config:
+  #       io-total: 100M
+  #     desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+      desc: Perform rgw tests
+
+  - test:
+      name: Scale down Monitor with placement
+      desc: Scale down monitor nodes to 3 with placement
+      module: test_mon.py
+
+      polarion-id: CEPH-83573732
+      config:
+        command: apply
+        service: mon
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+              - node5
+              - node6
+            sep: ";"    # separator to be used for placements
+
+  - test:
+      name: Scale down Manager service
+      desc: Scale down manager nodes to 3 with placement option
+      module: test_mgr.py
+      polarion-id: CEPH-83573734
+      config:
+        command: apply
+        service: mgr
+        base_cmd_args:
+          verbose: true
+        args:
+          placement:
+            nodes:
+              - node1
+              - node5
+              - node6
+            sep: " "
+      destroy-cluster: false
+
+  - test:
+      name: Scale down OSD Service
+      desc: Scale down OSD service to 3 nodes
+      module: test_cephadm.py
+      polarion-id: CEPH-83574032
+      config:
+        command: apply_spec
+        service: orch
+        validate-spec-services: true
+        specs:
+          - service_type: osd
+            service_id: all-available-devices
+            encrypted: "true"
+            placement:
+              nodes:
+                - node5
+                - node6
+                - node7
+            spec:
+              data_devices:
+                all: "true"
+      destroy-cluster: false
+
+  - test:
+      name: Scale down RGW Service
+      desc: Scale down RGW service to 2 nodes
+      module: test_rgw.py
+      polarion-id: CEPH-83573739
+      config:
+        command: apply
+        service: rgw
+        base_cmd_args:               # arguments to ceph orch
+          verbose: true
+        pos_args:                    # positional arguments
+          - myrgw                    # service id
+        args:
+          placement:
+            nodes:                   # A list of strings that would looked up
+              - node9
+              - node10
+            limit: 2                 # no of daemons
+            sep: ";"                 # separator to be used for placements
+      destroy-cluster: false
+
+  - test:
+      name: Scale down MDS Service
+      desc: Scale down MDS service to 2 nodes
+      module: test_mds.py
+      polarion-id: CEPH-83573737
+      config:
+        command: apply
+        service: mds
+        base_cmd_args:          # arguments to ceph orch
+          verbose: true
+        pos_args:
+          - cephfs              # name of the filesystem
+        args:
+          placement:
+            nodes:
+              - node7
+              - node8
+            limit: 2            # no of daemons
+            sep: " "            # separator to be used for placements
+      destroy-cluster: false
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cmd: ceph -s
+        sudo: true
+      desc: Check for ceph health debug info
+
+  - test:
+      name: rados_bench_test
+      module: radosbench.py
+      config:
+        pg_num: '128'
+        pool_type: 'normal'
+      desc: run rados bench for 360 - normal profile
+
+  # TODO (tmathew): Skipping test due to known socket timeout exception issue
+  # - test:
+  #     name: rbd-io
+  #     module: rbd_faster_exports.py
+  #     config:
+  #       io-total: 100M
+  #     desc: Perform export during read/write,resizing,flattening,lock operations
+
+  # TODO (tmathew): Skipping test due to expected node is not available after remove/shrink operations
+  # - test:
+  #     name: rgw sanity tests
+  #     module: sanity_rgw.py
+  #     config:
+  #       script-name: test_multitenant_user_access.py
+  #       config-file-name: test_multitenant_access.yaml
+  #       timeout: 300
+  #     desc: Perform rgw tests
