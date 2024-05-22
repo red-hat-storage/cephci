@@ -314,7 +314,7 @@ tests:
             verify-io-on-site: ["ceph-pri", "ceph-sec", "ceph-arc"]
             timeout: 300
       name: test to create "M" no of buckets on primary
-      polarion-id: CEPH-9789
+      polarion-id: CEPH-83575435
       desc: test metadata sync - create buckets
       module: sanity_rgw_multisite.py
 

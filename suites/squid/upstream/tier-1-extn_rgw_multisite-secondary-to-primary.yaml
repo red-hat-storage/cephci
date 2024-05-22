@@ -6,8 +6,9 @@
 # cluster whereas the sec zone is part of the sec datacenter (cluster).
 
 # The deployment is evaluated by running IOs across the environments.
-# conf : conf/squid/rgw/rgw_multisite.yaml
 tests:
+
+  # Cluster deployment stage
 
   - test:
       abort-on-fail: true
@@ -115,67 +116,6 @@ tests:
       name: deploy cluster
 
   - test:
-      clusters:
-        ceph-pri:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply_spec
-                  service: orch
-                  validate-spec-services: true
-                  specs:
-                    - service_type: prometheus
-                      placement:
-                        count: 1
-                        nodes:
-                          - node1
-                    - service_type: grafana
-                      placement:
-                        nodes:
-                          - node1
-                    - service_type: alertmanager
-                      placement:
-                        count: 1
-                    - service_type: node-exporter
-                      placement:
-                        host_pattern: "*"
-                    - service_type: crash
-                      placement:
-                        host_pattern: "*"
-        ceph-sec:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply_spec
-                  service: orch
-                  validate-spec-services: true
-                  specs:
-                    - service_type: prometheus
-                      placement:
-                        count: 1
-                        nodes:
-                          - node1
-                    - service_type: grafana
-                      placement:
-                        nodes:
-                          - node1
-                    - service_type: alertmanager
-                      placement:
-                        count: 1
-                    - service_type: node-exporter
-                      placement:
-                        host_pattern: "*"
-                    - service_type: crash
-                      placement:
-                        host_pattern: "*"
-      name: Monitoring Services deployment
-      desc: Add monitoring services using spec file.
-      module: test_cephadm.py
-      polarion-id: CEPH-83574727
-
-  - test:
       abort-on-fail: true
       clusters:
         ceph-pri:
@@ -199,7 +139,6 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
-
   - test:
       abort-on-fail: true
       clusters:
@@ -235,7 +174,6 @@ tests:
       module: exec.py
       name: setup multisite
       polarion-id: CEPH-10362
-
   - test:
       abort-on-fail: true
       clusters:
@@ -252,7 +190,6 @@ tests:
       polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info on primary
-
   - test:
       abort-on-fail: true
       clusters:
@@ -269,6 +206,7 @@ tests:
       polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info on secondary
+  # Test work flow
 
   - test:
       clusters:
@@ -283,101 +221,66 @@ tests:
       polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
+  # add datalog omap tests
+  - test:
+      name:  datalog omap offload on secondary
+      desc: Execute datalog omap offload on secondary
+      polarion-id: CEPH-83573691
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_data_omap_offload.py
+            config-file-name: test_data_omap_offload.yaml
+            verify-io-on-site: ["ceph-pri"]
+            timeout: 300
 
   - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_dynamic_resharding_greenfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
-      desc: Test dynamic resharding brownfield scenario in greenfield
-      abort-on-fail: true
-      module: sanity_rgw_multisite.py
-      name: Dynamic Resharding tests on Primary cluster
-      polarion-id: CEPH-83574737
-  - test:
-      name: setting acls to versioned objects on secondary
-      desc: test_versioning_objects_acls on secondary
-      polarion-id: CEPH-9190
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_acls.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: delete versioned objects on secondary
-      desc: test_versioning_objects_delete on secondary
-      polarion-id: CEPH-14262
+      name:  datalog omap offload with multipart objects on secondary
+      desc: Execute datalog omap offload with multipart objects on secondary
+      polarion-id: CEPH-83573691
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
           config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_delete.yaml
-            timeout: 300
-  - test:
-      name: enabling bucket versioning and uploading objects on secondary
-      desc: test_versioning_objects_enable on secondary
-      polarion-id: CEPH-10652 # also applies to CEPH-14261 and CEPH-9222
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_enable.yaml
+            script-name: test_data_omap_offload.py
+            config-file-name: test_data_omap_offload_multipart.yaml
             verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: delete bucket policy on secondary
-      desc: test_bucket_policy_delete.yaml on secondary
-      polarion-id: CEPH-11213
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bucket_policy_ops.py
-            config-file-name: test_bucket_policy_delete.yaml
-            verify-io-on-site: ["ceph-pri"]
-            timeout: 300
-  - test:
-      name: download objects on secondary
-      desc: test_Mbuckets_with_Nobjects_download on secondary
-      polarion-id: CEPH-14237
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            timeout: 300
-  - test:
-      name: multipart upload on primary
-      desc: test_Mbuckets_with_Nobjects_multipart on primary
-      polarion-id: CEPH-14265
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-            timeout: 300
-  - test:
-      name: enable compression on secondary
-      desc: test_Mbuckets_with_Nobjects_compression on secondary
-      polarion-id: CEPH-11350
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
             timeout: 300
 
+  - test:
+      name:  datalog omap offload on versioned bucket on secondary
+      desc:  Execute datalog omap offload on versioned bucket on secondary
+      polarion-id: CEPH-83573691
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_data_omap_offload.py
+            config-file-name: test_data_omap_offload_versioned_bucket.yaml
+            verify-io-on-site: ["ceph-pri"]
+            timeout: 300
+  - test:
+      name: datalog trim command with delete marker enabled on secondary
+      desc: Execute datalog trim command with delete marker enabled on secondary
+      polarion-id: CEPH-83574591
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name:  test_Mbuckets_with_Nobjects.py
+            config-file-name:  test_datalog_trim_command.yaml
+            timeout: 300
+            verify-io-on-site: ["ceph-pri"]
+  - test:
+      name: Test DBR reshard list and cancel command on secondary
+      desc: Test DBR reshard list and cancel command on secondary
+      polarion-id: CEPH-83573590
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name:  test_Mbuckets_with_Nobjects.py
+            config-file-name:  test_Mbuckets_with_Nobjects_reshard_cancel_cmd.yaml
+            timeout: 300
+            verify-io-on-site: ["ceph-pri"]

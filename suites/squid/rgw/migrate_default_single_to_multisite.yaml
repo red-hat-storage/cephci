@@ -110,6 +110,7 @@ tests:
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
+
   - test:
       abort-on-fail: true
       clusters:
@@ -175,6 +176,7 @@ tests:
       polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       name: test M buckets compression on haproxy node
+
   - test:
       clusters:
         ceph-pri:
@@ -210,8 +212,6 @@ tests:
               - "ceph config set client.rgw.rgw.default rgw_zonegroup shared"
               - "ceph config set client.rgw.rgw.default rgw_zone primary"
               - "ceph orch restart rgw.rgw.default"
-
-
         ceph-sec:
           config:
             cephadm: true
@@ -225,11 +225,11 @@ tests:
               - "ceph config set client.rgw.rgw.default rgw_zonegroup shared"
               - "ceph config set client.rgw.rgw.default rgw_zone secondary"
               - "ceph orch restart rgw.rgw.default"
-
       desc: Single site to multisite conversion on default configuration
       module: exec.py
       name: setup multisite
       polarion-id: CEPH-83587141
+
   - test:
       clusters:
         ceph-pri:
@@ -245,6 +245,7 @@ tests:
       polarion-id: CEPH-83575473
       module: sanity_rgw_multisite.py
       name: test rgw restore index tool on versioned bucket
+
   - test:
       clusters:
         ceph-pri:

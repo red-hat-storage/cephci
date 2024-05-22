@@ -96,7 +96,7 @@ tests:
       desc: test to create "M" no of buckets and "N" no of objects
       module: sanity_rgw.py
       name: Test M buckets with N objects
-      polarion-id: CEPH-9789
+      polarion-id: CEPH-83575435
 
   - test:
       name: Test single delete marker for versioned object using LC

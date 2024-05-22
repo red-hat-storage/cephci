@@ -375,19 +375,6 @@ tests:
 
   - test:
       clusters:
-        ceph-sec:
-          config:
-            set-env: true
-            script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
-            timeout: 300
-      desc: test_sse_s3_per_bucket_encryption_version_enabled
-      module: sanity_rgw_multisite.py
-      name: sse-s3 per bucket encryption test on a versiond bucket
-      polarion-id: CEPH-83574622
-
-  - test:
-      clusters:
         ceph-pri:
           config:
             set-env: true
