@@ -1,0 +1,343 @@
+#
+# Objective: Test bucket notifications with kafka endpoint
+#       - with ack_type broker/none
+#       - w/o persistent flag
+#
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  # kafka broker type broker with persistent flag enabled
+  - test:
+      name: notify put,delete events with kafka_broker_persistent and test bucket deletion deletes notification
+      desc: notify put,delete events with kafka_broker_persistent and test bucket deletion deletes notification
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574798
+      config:
+        run-on-rgw: true
+        extra-pkgs:
+          - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
+        install_start_kafka: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
+        timeout: 300
+
+  - test:
+      name: notify copy events with kafka_broker_persistent and verify details of event record
+      desc: notify copy events with kafka_broker_persistent and verify details of event record
+      polarion-id: CEPH-83574085
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_copy.yaml
+        timeout: 300
+
+  # kafka broker type none with persistent flag enabled
+
+  - test:
+      name: notify put,delete events with kafka_none_persistent and delete kafka topic
+      desc: notify put,delete events with kafka_none_persistent and delete kafka topic
+      module: sanity_rgw.py
+      comments: Known issue BZ-2239173
+      polarion-id: CEPH-83574076
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_none_persistent_delete.yaml
+        timeout: 300
+
+  - test:
+      name: notify copy events with kafka_none_persistent
+      desc: notify copy events with kafka_none_persistent
+      polarion-id: CEPH-83574070
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_none_persistent_copy.yaml
+        timeout: 300
+
+  - test:
+      name: notify on multipart upload events with kafka_none_persistent
+      desc: notify on multipart upload events with kafka_none_persistent
+      polarion-id: CEPH-83574070
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_none_persistent_multipart.yaml
+        timeout: 300
+
+  # kafka broker type none
+
+  - test:
+      name: notify put,delete events with kafka_none
+      desc: notify put,delete events with kafka_none
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574074
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_none_delete.yaml
+        timeout: 300
+
+  - test:
+      name: notify copy events with kafka_none
+      desc: notify copy events with kafka_none
+      polarion-id: CEPH-83574064
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_none_copy.yaml
+        timeout: 300
+
+  - test:
+      name: notify on multipart upload events with kafka_none and verify timestamp of event record
+      desc: notify on multipart upload events with kafka_none and verify timestamp of event record
+      polarion-id: CEPH-83574693
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_none_multipart.yaml
+        timeout: 300
+
+  # kafka broker type broker
+
+  - test:
+      name: notify put,delete events with kafka_broker
+      desc: notify put,delete events with kafka_broker
+      module: sanity_rgw.py
+      comments: Known issue BZ-2239173
+      polarion-id: CEPH-83574073
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_delete.yaml
+        timeout: 300
+
+  - test:
+      name: notify copy events with kafka_broker
+      desc: notify copy events with kafka_broker
+      polarion-id: CEPH-83574069
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_copy.yaml
+        timeout: 300
+
+  - test:
+      name: notify on copy, delete events with kafka_broker_persistent configured with metadata filter
+      desc: notify on copy, delete events with kafka_broker_persistent configured with metadata filter
+      polarion-id: CEPH-83574420
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_filter.yaml
+        timeout: 300
+
+  - test:
+      name: notify on copy, delete events with kafka_broker_persistent on manually resharded buckets
+      desc: notify on copy, delete events with kafka_broker_persistent on manually resharded buckets
+      polarion-id: CEPH-83574419
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_manual_reshard.yaml
+        timeout: 300
+
+  - test:
+      name: notify on copy, delete events with kafka_broker_persistent on dynamically resharded buckets
+      desc: notify on copy, delete events with kafka_broker_persistent on dynamically resharded buckets
+      polarion-id: CEPH-83574419
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_dynamic_reshard.yaml
+        timeout: 300
+
+  - test:
+      name: put empty bucket notifications
+      desc: put empty bucket notifications
+      module: sanity_rgw.py
+      comments: Known issue BZ-2239173
+      polarion-id: CEPH-83575036
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_empty_bucket_notification_kafka_broker.yaml
+        timeout: 300
+
+  # test persistent bucket notifications when kafka server is unreachable
+
+  - test:
+      name: test kafka_broker_persistent notifications for copy, delete events when kafka server is down
+      desc: test kafka_broker_persistent notifications for copy, delete events when kafka server is down
+      polarion-id: CEPH-83574417
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_down_broker_persistent.yaml
+        timeout: 300
+
+  - test:
+      name: test kafka_broker_persistent notifications for multipart upload events when kafka server is down
+      desc: test kafka_broker_persistent notifications for multipart upload events when kafka server is down
+      polarion-id: CEPH-83574078
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_down_broker_persistent_multipart.yaml
+        timeout: 300
+
+  # test event time 0 fix for multipart uploads
+
+  - test:
+      name: notify on multipart upload events with kafka_broker_persistent
+      desc: notify on multipart upload events with kafka_broker_persistent
+      polarion-id: CEPH-83574066
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_multipart.yaml
+        timeout: 300
+
+  - test:
+      name: notify on multipart upload events with kafka_broker
+      desc: notify on multipart upload events with kafka_broker
+      polarion-id: CEPH-83574069
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_multipart.yaml
+        timeout: 300
+
+  # Test Bucket notifications for lifecycle events
+
+  - test:
+      name: notify on lifecycle expiration events with upload type multipart
+      desc: notify on lifecycle expiration events with upload type multipart
+      polarion-id: CEPH-83575583
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lc_object_exp_multipart.py
+        config-file-name: test_bucket_lc_object_exp_multipart_notifications.yaml
+        timeout: 300
+
+  - test:
+      name: notify on lifecycle expiration delete marker
+      desc: notify on lifecycle expiration delete marker
+      polarion-id: CEPH-83575583
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_delete_marker_notifications.yaml
+        timeout: 300
+
+  - test:
+      name: notify on lifecycle expiration events
+      desc: notify on lifecycle expiration events
+      polarion-id: CEPH-83575583
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_expiration_notifications.yaml
+        timeout: 300
+
+  - test:
+      name: notify on lifecycle expiration with parallel lc processing
+      desc: notify on lifecycle expiration with parallel lc processing
+      polarion-id: CEPH-83575583
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_expiration_parallel_notifications.yaml
+        timeout: 300
+
+  - test:
+      name: notify on lifecycle expiration non current objects with prefix rule
+      desc: notify on lifecycle expiration non current objects with prefix rule
+      polarion-id: CEPH-83575583
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_prefix_non_current_days_notifications.yaml
+        timeout: 300
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cephadm: true
+        commands:
+          - "ceph -s"
+      desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200
