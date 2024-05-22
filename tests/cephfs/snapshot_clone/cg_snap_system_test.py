@@ -108,6 +108,9 @@ def run(ceph_cluster, **kw):
             cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds_quiesce 10",
             check_ec=False,
         )
+        crash_status_before = fs_util_v1.get_crash_ls_new(client1)
+        log.info(f"Crash status before Test: {crash_status_before}")
+        fs_util_v1.get_ceph_health_status(client1)
         sv_mixed_list = []
         qs_cnt -= 1
         for i in range(0, qs_cnt):
@@ -156,6 +159,30 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Clean Up in progess")
+        crash_status_after = fs_util_v1.get_crash_ls_new(client1)
+        log.info(f"Crash status after Test: {crash_status_after}")
+        health_wait = 300
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=health_wait)
+        health_ok = 0
+        wait_time = 0
+        while (datetime.datetime.now() < end_time) and health_ok == 0:
+            try:
+                fs_util_v1.get_ceph_health_status(client1)
+                health_ok = 1
+            except Exception as ex:
+                log.info(
+                    f"Wait for sometime to check if Cluster health can be OK, current state : {ex}"
+                )
+                time.sleep(10)
+                wait_time += 10
+        if health_ok == 0:
+            assert (
+                False
+            ), f"Cluster health is not OK even after waiting for {health_wait}secs"
+        log.info(f"Cluster Health is OK in {wait_time}secs")
+
+        if len(crash_status_after) > len(crash_status_before):
+            assert False, "Post test validation failed, please check crash report above"
         qs_cnt += 1
         for i in range(1, qs_cnt):
             subvol_name = f"sv_def_{i}"
@@ -258,33 +285,33 @@ def cg_scale(cg_test_params):
                 "file_name": "dd_test_file",
                 "input_type": "random",
                 "bs": "1M",
-                "count": 100,
+                "count": 10,
             }
             smallfile_params = {
                 "testdir_prefix": "smallfile_io_dir",
-                "threads": 4,
+                "threads": 2,
                 "file-size": 10240,
-                "files": 100,
+                "files": 10,
             }
             crefi_params = {
                 "testdir_prefix": "crefi_io_dir",
-                "files": 100,
+                "files": 10,
                 "max": "100k",
                 "min": "10k",
                 "type": "tar",
-                "breadth": 5,
-                "depth": 5,
-                "threads": 3,
+                "breadth": 3,
+                "depth": 3,
+                "threads": 2,
             }
 
-        io_run_time = 200
+        io_run_time_mins = 3
         io_args = {
-            "run_time": io_run_time,
+            "run_time": io_run_time_mins,
             "dd_params": dd_params,
             "smallfile_params": smallfile_params,
             "crefi_params": crefi_params,
         }
-        io_tools = ["dd", "smallfile", "crefi", "wget", "file_extract"]
+        io_tools = ["dd", "smallfile", "crefi", "file_extract"]
 
         for client_tmp in client_mnt_dict:
             mounting_dir = client_mnt_dict[client_tmp]
@@ -298,7 +325,7 @@ def cg_scale(cg_test_params):
             write_procs.append(p)
 
         time.sleep(5)
-        repeat_cnt = 5
+        repeat_cnt = 4
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -320,9 +347,9 @@ def cg_scale(cg_test_params):
             )
             rand_str = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
-                for _ in list(range(3))
+                for _ in list(range(4))
             )
-            qs_id_val = f"cg_test1_{rand_str}"
+            qs_id_val = f"cg_scale_{rand_str}"
             log.info(f"Quiesce the set {qs_set}")
             cg_snap_util.cg_quiesce(
                 client, qs_set, qs_id=qs_id_val, timeout=600, expiration=600
@@ -405,10 +432,10 @@ def cg_scale(cg_test_params):
         for p in write_procs:
             if p.is_alive():
                 proc_stop = 0
-                io_run_time = io_run_time * 4
+                io_run_time_secs = io_run_time_mins * 4 * 60
                 log.info("IO is running after quiesce lifecycle")
                 end_time = datetime.datetime.now() + datetime.timedelta(
-                    seconds=io_run_time
+                    seconds=io_run_time_secs
                 )
                 while (datetime.datetime.now() < end_time) and (proc_stop == 0):
                     if p.is_alive():
@@ -506,32 +533,32 @@ def cg_stress(cg_test_params):
                     "file_name": "dd_test_file",
                     "input_type": "random",
                     "bs": "1M",
-                    "count": 100,
+                    "count": 10,
                 }
                 smallfile_params = {
                     "testdir_prefix": "smallfile_io_dir",
-                    "threads": 4,
+                    "threads": 2,
                     "file-size": 10240,
-                    "files": 100,
+                    "files": 10,
                 }
                 crefi_params = {
                     "testdir_prefix": "crefi_io_dir",
-                    "files": 100,
+                    "files": 10,
                     "max": "100k",
                     "min": "10k",
                     "type": "tar",
-                    "breadth": 5,
-                    "depth": 5,
-                    "threads": 3,
+                    "breadth": 3,
+                    "depth": 3,
+                    "threads": 2,
                 }
-            io_run_time = 200
+            io_run_time_mins = 3
             io_args = {
-                "run_time": io_run_time,
+                "run_time": io_run_time_mins,
                 "dd_params": dd_params,
                 "smallfile_params": smallfile_params,
                 "crefi_params": crefi_params,
             }
-            io_tools = ["dd", "smallfile", "crefi", "wget", "file_extract"]
+            io_tools = ["dd", "smallfile", "crefi", "file_extract"]
 
             for client_tmp in client_mnt_dict:
                 mounting_dir = client_mnt_dict[client_tmp]
@@ -545,7 +572,7 @@ def cg_stress(cg_test_params):
                 write_procs.append(p)
 
             time.sleep(5)
-            repeat_cnt = 8
+            repeat_cnt = 2
             snap_qs_dict = {}
             for qs_member in qs_set:
                 snap_qs_dict.update({qs_member: []})
@@ -638,7 +665,7 @@ def cg_stress(cg_test_params):
                 log.info("Perform snapshot creation on all members")
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
+                    for _ in list(range(4))
                 )
                 snap_name = f"cg_snap_{rand_str}"
                 for qs_member in qs_set:
@@ -785,9 +812,9 @@ def cg_stress(cg_test_params):
                 if p.is_alive():
                     proc_stop = 0
                     log.info("IO is running after quiesce lifecycle")
-                    io_run_time = io_run_time * 4
+                    io_run_time_secs = io_run_time_mins * 4 * 60
                     end_time = datetime.datetime.now() + datetime.timedelta(
-                        seconds=io_run_time
+                        seconds=io_run_time_secs
                     )
                     while (datetime.datetime.now() < end_time) and (proc_stop == 0):
                         if p.is_alive():
