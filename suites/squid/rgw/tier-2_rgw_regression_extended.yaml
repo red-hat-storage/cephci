@@ -1,0 +1,254 @@
+# ======================================================================================
+# Cluster Configuration:
+#    cephci/conf/squid/rgw/tier-0_rgw.yaml
+#
+#    5-Node cluster(RHEL-7.9 and above)
+#    3 MONS, 2 MGR, 4 OSD and 1 RGW service daemon(s)
+#
+# ======================================================================================
+
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Test BucketNotification with users in same tenant and different tenant
+      desc: BucketNotification with users in same tenant and different tenant
+      polarion-id: CEPH-11204
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        extra-pkgs:
+          - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
+        install_start_kafka: true
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
+        timeout: 300
+
+  - test:
+      name: Bucket Lifecycle expiration of incomplete multipart
+      desc: Bucket Lifecycle expiration of incomplete multipart
+      polarion-id: CEPH-11195
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lc_incomplete_multipart.yaml
+        timeout: 300
+
+  # Object lock no overwrite
+  - test:
+      name: object lock no overwrite
+      desc: object lock no overwrite
+      polarion-id: CEPH-83574059
+      module: sanity_rgw.py
+      comments: known issue (bz-2265890)
+      config:
+        script-name: test_object_lock_no_overwrite.py
+        config-file-name: test_object_lock_no_overwrite.yaml
+        timeout: 500
+  - test:
+      name: S3CMD small and multipart object download
+      desc: S3CMD small and multipart object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        timeout: 300
+
+  - test:
+      name: Swift user with read access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_read.yaml
+        timeout: 300
+
+  - test:
+      name: Swift user with write access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_write.yaml
+        timeout: 300
+
+  - test:
+      name: Swift user with readwrite access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_readwrite.yaml
+        timeout: 300
+
+  - test:
+      name: Test rgw put bucket website with users of same and different tenant
+      desc: Test rgw put bucket website with users of same and different tenant
+      polarion-id: CEPH-11148
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_put_bucket_website_with_tenant_same_and_different_user.yaml
+        timeout: 500
+
+  - test:
+      name: Test rgw get bucket website with users of same and different tenant
+      desc: Test rgw get bucket website with users of same and different tenant
+      polarion-id: CEPH-11150
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_get_bucket_website_with_tenant_same_and_different_user.yaml
+        timeout: 500
+
+  - test:
+      name: Test LC with custom worktime
+      desc: Test LC with custom worktime
+      polarion-id: CEPH-83583080
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_with_custom_worktime.yaml
+        timeout: 300
+
+  - test:
+      name: Test Etag not empty for complete multipart upload in aws
+      desc: Test Etag not empty for complete multipart upload in aws
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
+        timeout: 500
+
+  - test:
+      name: Test S3 PUT requests with non ascii characters in body
+      desc: Test S3 PUT requests with non ascii characters in body
+      polarion-id: CEPH-83572765
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_aws_non_ascii.yaml
+        timeout: 500
+
+  - test:
+      name: Test LC transition with rule by lc process
+      desc: Test LC transition with rule by lc process
+      polarion-id: CEPH-83574044
+      module: sanity_rgw.py
+      comments: known issue (BZ-2269490)
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_with_lc_process.yaml
+        timeout: 500
+
+  - test:
+      name: Test LC transition without rule by lc process
+      desc: Test LC transition without rule by lc process
+      polarion-id: CEPH-83574044
+      module: sanity_rgw.py
+      comments: known issue (7.0z2-BZ2272164)
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_process_without_applying_rule.yaml
+        timeout: 500
+
+  - test:
+      abort-on-fail: false
+      config:
+        branch: ceph-reef
+      desc: Run the external S3test suites.
+      destroy-cluster: false
+      module: test_s3.py
+      name: execute s3tests
+      polarion-id: CEPH-83575225
+      comments: BZ2266411 - anon_put_write_access, BZ2268234 - list_buckets_bad_auth
+
+  - test:
+      abort-on-fail: false
+      config:
+        suite:
+          - JavaS3
+        kms_keyid: testKey01
+        ssl: false
+      desc: Java S3tests
+      destroy-cluster: false
+      module: java_s3tests.py
+      name: execute Java s3tests
+      polarion-id: CEPH-83586289
+
+  - test:
+      abort-on-fail: false
+      config:
+        suite:
+          - maven
+        ssl: false
+      desc: Java Maven Test suite
+      destroy-cluster: false
+      module: java_s3tests.py
+      name: execute Java Maven test suite
+      polarion-id: CEPH-83586289

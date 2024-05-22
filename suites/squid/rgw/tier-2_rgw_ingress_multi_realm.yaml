@@ -1,0 +1,194 @@
+# Tier 2: CEPH-83574608 - Create a RGW Ingress ingress daemon on multiple realms
+# Tier 2: CEPH-83574609 - Create a RGW Ingress ingress daemon on multiple realms with SSL
+#
+# This test suite evaluates the Ingress HAproxy deployment scenario wherein there exists more than one
+# RGW daemons configured with multiple realm, along with zones and zonegroups.
+
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.realm1
+                  placement:
+                    nodes:
+                      - node5
+                      - node6
+                  spec:
+                    rgw_frontend_port: 8080
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.realm2
+                  placement:
+                    nodes:
+                      - node5
+                      - node6
+                  spec:
+                    rgw_frontend_port: 8081
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  - test:
+      abort-on-fail: true
+      config:
+        cephadm: true
+        commands:
+          - "radosgw-admin realm create --rgw-realm india --default"
+          - "radosgw-admin zonegroup create --rgw-zonegroup south --rgw-realm india --master --default"
+          - "radosgw-admin zone create --rgw-zone ka --rgw-zonegroup south --rgw-realm india --endpoints http://{node:node5}:8080 --master --default"
+          - "radosgw-admin period update --commit --rgw-realm india"
+          - "ceph config set client.{service_name:rgw.realm1} rgw_realm india"
+          - "ceph config set client.{service_name:rgw.realm1} rgw_zonegroup south"
+          - "ceph config set client.{service_name:rgw.realm1} rgw_zone ka"
+          - "ceph orch restart {service_name:rgw.realm1}"
+          - "radosgw-admin realm create --rgw-realm us"
+          - "radosgw-admin zonegroup create --rgw-zonegroup east --rgw-realm us --master --default"
+          - "radosgw-admin zone create --rgw-zone east-1 --rgw-zonegroup east --rgw-realm us --endpoints http://{node:node6}:8081 --master --default"
+          - "radosgw-admin period update --commit --rgw-realm us"
+          - "ceph config set client.{service_name:rgw.realm2} rgw_realm us"
+          - "ceph config set client.{service_name:rgw.realm2} rgw_zonegroup east"
+          - "ceph config set client.{service_name:rgw.realm2} rgw_zone east-1"
+          - "ceph orch restart {service_name:rgw.realm2}"
+          - "ceph -s"
+          - "radosgw-admin realm list"
+          - "radosgw-admin zonegroup list"
+          - "radosgw-admin zone list"
+      desc: Configure the Object realms and its zones
+      module: exec.py
+      name: configure realm
+      polarion-id: CEPH-83573815
+
+  - test:
+      name: Deploy RGW Ingress daemon with SSL
+      abort-on-fail: true
+      desc: Add RGW and HA Proxy services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574609
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: ingress
+                  service_id: rgw.realm1
+                  placement:
+                    nodes:
+                      - node3
+                      - node4
+                  spec:
+                    backend_service: rgw.rgw.realm1
+                    virtual_ip: 10.0.195.174/24 # floating ip1 in rhos-01
+                    frontend_port: 443
+                    monitor_port: 1967
+                    ssl_cert: create-cert
+
+  - test:
+      name: Deploy RGW Ingress daemon
+      abort-on-fail: true
+      desc: Add RGW and HA Proxy services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574608
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: ingress
+                  service_id: rgw.realm2
+                  placement:
+                    nodes:
+                      - node5
+                      - node6
+                  spec:
+                    backend_service: rgw.rgw.realm2
+                    virtual_ip: 10.0.195.111/24 # floating ip2 in rhos-01
+                    frontend_port: 8083
+                    monitor_port: 1967
