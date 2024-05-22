@@ -1,0 +1,44 @@
+# Test suite for for baremetal rgw-multisite deployment and testing multisite sync at scale.
+#
+# This suite deploys a Longevity environment on baremetal machines. It is a multisite environment with each site having a storage capacity of 617Tb.
+# each site has around 4 osd hosts and a total of 16 osds.
+# A single realm (India) spanning across two RHCS clusters. It has a
+# zonegroup (shared) which also spans across the clusters. There exists a master (primary)
+# and secondary (secondary) zone within this group. The master zone is part of the pri
+# cluster whereas the sec zone is part of the sec datacenter (cluster).
+
+# The deployment is evaluated by running IOs across the environments.
+# tested with conf file: conf/baremetal/rgw_multisite_extensa_clara.yaml
+
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: "Validate the ceph version before upgrade"
+      module: validate_version.py
+      clusters:
+        ceph-pri:
+          config:
+            env_type: "RH"
+        ceph-sec:
+          config:
+            env_type: "RH"
+      name: "Validate the ceph version before upgrade"
+
+  - test:
+      abort-on-fail: true
+      desc: Multisite upgrade
+      module: test_cephadm_upgrade.py
+      name: multisite ceph upgrade
+      polarion-id: CEPH-83574647
+      clusters:
+        ceph-pri:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+        ceph-sec:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
