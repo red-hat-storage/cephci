@@ -1,0 +1,17 @@
+---
+tests:
+  - test:
+      abort-on-fail: false
+      desc: "Fill the cluster with specific percentage"
+      name: "Fill Cluster"
+      module: test_io.py
+      config:
+        wait_for_io: True
+        cephfs:
+          "fill_data": 10
+          "num_of_clients": 4
+          "io_tool": "smallfile"
+          "mount": "fuse"
+          "batch_size": 30
+          "filesystem": "cephfs_io_2"
+          "mount_dir": ""

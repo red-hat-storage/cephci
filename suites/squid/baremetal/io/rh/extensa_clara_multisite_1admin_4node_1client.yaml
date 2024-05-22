@@ -1,0 +1,28 @@
+# Test suite to run cosbench on rgw multisite cluster
+# tested with conf file: conf/baremetal/extensa_clara_multisite_1admin_4node_1client.yaml
+
+tests:
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - extensa010
+            drivers:
+              count: 4
+              hosts:
+                - extensa010
+                - extensa011
+        ceph-sec:
+          config:
+            controllers:
+              - clara011
+            drivers:
+              count: 4
+              hosts:
+                - clara011
+                - clara012
+      desc: Start COS Bench controller and driver
+      module: cosbench.py
+      name: deploy cosbench
