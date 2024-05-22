@@ -1,0 +1,151 @@
+# Name: Cluster deployment with Non-collocated OSD
+# Conf:  conf/squid/ceph_volume/1admin-1client-5node-single-volume.yaml
+#    - Bootstrap
+#    - Host management
+#    - Re-deploy non-collocated OSDs
+#    - Deploy OSDs with spec crush_device_class
+#------------------------------------------------------------------------------
+
+tests:
+  - test:
+      name: Setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster
+      desc: Bootstrap cluster for ceph-volume
+      module: test_cephadm_bootstrap.py
+      config:
+        ansible_preflight: true
+        bootstrap:
+          mon-ip: node1
+          apply-spec:
+            file_type: yaml
+            spec:
+              - service_type: host
+                hostname: node1
+                addr: node1
+                labels:
+                 - osd
+              - service_type: host
+                hostname: node2
+                addr: node2
+                labels:
+                 - osd
+              - service_type: host
+                hostname: node3
+                labels:
+                 - osd
+              - service_type: host
+                hostname: node1
+                addr: node1
+              - service_type: host
+                hostname: node2
+                addr: node2
+              - service_type: host
+                hostname: node3
+              - service_type: mon
+                placement:
+                  hosts:
+                    - node1
+                    - node2
+              - service_type: mgr
+                placement:
+                  hosts:
+                    - node1
+                    - node2
+              - service_type: mds
+                service_id: test_mds
+                placement:
+                  hosts:
+                    - node1
+                    - node2
+              - service_type: alertmanager
+                placement:
+                  hosts:
+                    - node1
+              - service_type: grafana
+                placement:
+                  hosts:
+                    - node1
+        client:
+          ansible_clients: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Redeploy non-collocated OSD
+      desc: Verify redeployment of non-collocated OSD with wrong dedicated DB size
+      polarion-id: CEPH-83575600
+      module: test_ceph_volume_redeploy.py
+      config:
+        spec:
+          service_type: osd
+          service_name: osd_hdd
+          placement:
+            hosts:
+              - node0
+              - node1
+              - node2
+          spec:
+            data_devices:
+              size: 16GB
+            db_devices:
+              size: 32GB
+
+  - test:
+      name: OSDs redeployed colocated instead-colocated
+      desc: DB devices are filtered out and OSDs deployed as colocated scenario instead of non-colocated
+      polarion-id: CEPH-83575597
+      module: test_ceph_volume_non_collocated.py
+      config:
+        spec:
+          service_type: osd
+          service_name: osd_hdd
+          placement:
+            hosts:
+              - node0
+              - node1
+              - node2
+          spec:
+            data_devices:
+              size: 16GB
+            db_devices:
+              size: 32GB
+
+  - test:
+      name: OSDs redeployed colocated and non-colocated
+      desc: Dedicated db not creating for newly deployed OSDs for non-collocated scenario
+      polarion-id: CEPH-83575602
+      module: test_redeploy_collocated_and_non_collocated_osd.py
+      config:
+        spec:
+          service_type: osd
+          service_name: osd_hdd
+          placement:
+            label: "osd"
+          spec:
+            data_devices:
+              size: 15GB
+            db_devices:
+              size: 100GB
+
+  - test:
+      name: OSDs deploy with spec crush_device_class
+      desc: Deploy OSD using the DriveGroup spec crush_device_class on specified paths
+      polarion-id: CEPH-83575587
+      module: test_osd_deploy_with_spec_crush_device_class.py
+      config:
+        spec:
+          service_type: osd
+          service_name: osd_sdd
+          placement:
+            label: "osd"
+          crush_device_class: ssd
+          spec:
+            data_devices:
+              paths:
+              - /dev/vdb
+              - /dev/vdc
