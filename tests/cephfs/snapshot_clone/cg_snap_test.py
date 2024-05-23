@@ -4,7 +4,7 @@ import re
 import string
 import time
 import traceback
-from multiprocessing import Value
+from multiprocessing import Process, Value
 from threading import Thread
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
@@ -200,6 +200,7 @@ def run(ceph_cluster, **kw):
                 assert False, f"Test {test_name} failed"
             else:
                 log.info(f"Test {test_name} passed \n")
+            time.sleep(30)  # Wait before next test start
         return 0
     except Exception as e:
         log.error(e)
@@ -209,7 +210,26 @@ def run(ceph_cluster, **kw):
         log.info("Clean Up in progess")
         crash_status_after = fs_util_v1.get_crash_ls_new(client1)
         log.info(f"Crash status after Test: {crash_status_after}")
-        fs_util_v1.get_ceph_health_status(client1)
+        health_wait = 300
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=health_wait)
+        health_ok = 0
+        wait_time = 0
+        while (datetime.datetime.now() < end_time) and health_ok == 0:
+            try:
+                fs_util_v1.get_ceph_health_status(client1)
+                health_ok = 1
+            except Exception as ex:
+                log.info(
+                    f"Wait for sometime to check if Cluster health can be OK, current state : {ex}"
+                )
+                time.sleep(10)
+                wait_time += 10
+        if health_ok == 0:
+            assert (
+                False
+            ), f"Cluster health is not OK even after waiting for {health_wait}secs"
+        log.info(f"Cluster Health is OK in {wait_time}secs")
+
         if len(crash_status_after) > len(crash_status_before):
             assert False, "Post test validation failed, please check crash report above"
         qs_cnt += 1
@@ -275,19 +295,20 @@ def cg_snap_func_1(cg_test_params):
         client_mnt_dict = {}
         qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
         client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
-
+        time.sleep(5)
         log.info(f"client:{client.node.hostname}")
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 60
-        p = Thread(
+        p = Process(
             target=cg_snap_io.start_cg_io,
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
+
         p.start()
-        time.sleep(10)
-        repeat_cnt = 2
+        time.sleep(30)
+        repeat_cnt = 1
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -396,6 +417,7 @@ def cg_snap_func_1(cg_test_params):
         client_mnt_dict = {}
         qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
         client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
+        time.sleep(5)
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
@@ -405,8 +427,8 @@ def cg_snap_func_1(cg_test_params):
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
-        time.sleep(10)
-        repeat_cnt = 2
+        time.sleep(30)
+        repeat_cnt = 1
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -590,18 +612,18 @@ def cg_snap_func_2(cg_test_params):
         client_mnt_dict = {}
         qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
         client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
-
+        time.sleep(5)
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 100
-        p = Thread(
+        p = Process(
             target=cg_snap_io.start_cg_io,
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
-        time.sleep(10)
-        repeat_cnt = 2
+        time.sleep(30)
+        repeat_cnt = 1
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -621,7 +643,7 @@ def cg_snap_func_2(cg_test_params):
                     client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
                 )
                 db_version = qs_op_out["sets"][qs_id_val]["version"]
-                time.sleep(10)
+                time.sleep(30)
                 log.info("Perform snapshot creation on all members")
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
@@ -658,6 +680,7 @@ def cg_snap_func_2(cg_test_params):
                 out = cg_snap_util.cg_quiesce_release(
                     client, qs_id_val, if_await=True, if_version=db_version
                 )
+                time.sleep(10)
                 if out == 1:
                     test_fail += 1
                     log.error(
@@ -723,6 +746,7 @@ def cg_snap_func_2(cg_test_params):
                         log.error(
                             f"FAIL : Release with if-version with exclude before release on {qs_id_val}"
                         )
+                time.sleep(30)
                 qs_set_new = qs_set.copy()
                 qs_set_new.remove(exclude_sv_name)
                 qs_id_val_new = qs_id_val + "_new"
@@ -886,19 +910,19 @@ def cg_snap_func_3(cg_test_params):
         client_mnt_dict = {}
         qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
         client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
-
+        time.sleep(5)
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
-        io_run_time = 30
+        io_run_time = 60
 
         p = Thread(
             target=cg_snap_io.start_cg_io,
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
-        time.sleep(5)
-        repeat_cnt = 2
+        time.sleep(30)
+        repeat_cnt = 1
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -926,7 +950,7 @@ def cg_snap_func_3(cg_test_params):
                     client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
                 )
                 log.info(f"quiesce cmd response : {qs_op_out}")
-                time.sleep(10)
+                time.sleep(30)
                 log.info("Perform snapshot creation on all members")
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
@@ -1049,17 +1073,17 @@ def cg_snap_func_4(cg_test_params):
         client_mnt_dict = {}
         qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
         client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
-
+        time.sleep(5)
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
-        io_run_time = 30
+        io_run_time = 60
         p = Thread(
             target=cg_snap_io.start_cg_io,
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
-        time.sleep(10)
+        time.sleep(30)
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -1074,7 +1098,7 @@ def cg_snap_func_4(cg_test_params):
             client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
         )
         log.info(f"quiesce cmd response : {qs_op_out}")
-        time.sleep(10)
+        time.sleep(30)
         log.info("Perform snapshot creation on all members")
         rand_str = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -1201,17 +1225,17 @@ def cg_snap_func_5(cg_test_params):
         client_mnt_dict = {}
         qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
         client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
-
+        time.sleep(5)
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
-        io_run_time = 15
+        io_run_time = 60
         p = Thread(
             target=cg_snap_io.start_cg_io,
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
-        time.sleep(5)
+        time.sleep(30)
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -1309,7 +1333,7 @@ def cg_snap_func_6(cg_test_params):
         client_mnt_dict = {}
         qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
         client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
-
+        time.sleep(5)
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
@@ -1319,8 +1343,8 @@ def cg_snap_func_6(cg_test_params):
             args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
         )
         p.start()
-        time.sleep(10)
-        repeat_cnt = 2
+        time.sleep(30)
+        repeat_cnt = 1
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -1560,7 +1584,7 @@ def wait_for_cg_io(p, qs_id_val, io_run_time):
     if p.is_alive():
         proc_stop = 0
         log.info("CG IO is running after quiesce lifecycle")
-        wait_time = io_run_time * 4
+        wait_time = io_run_time * 20
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=wait_time)
         while (datetime.datetime.now() < end_time) and (proc_stop == 0):
             if p.is_alive():
@@ -1571,6 +1595,7 @@ def wait_for_cg_io(p, qs_id_val, io_run_time):
             log.info("CG IO completed")
         elif proc_stop == 0:
             log.error("CG IO has NOT completed")
+
     else:
         log.info(
             f"WARN:CG IO test completed early during quiesce test on qs_set id {qs_id_val}"

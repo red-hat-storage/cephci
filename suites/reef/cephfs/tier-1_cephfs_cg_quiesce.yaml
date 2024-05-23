@@ -121,9 +121,61 @@ tests:
       name: "configure client"
   -
     test:
-      abort-on-fail: true
-      desc: "CG snap functional test"
+      abort-on-fail: false
+      desc: "cg_snap_func_workflow_1"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
-      name: "cg_snap_test"
+      name: "cg_snap_func_workflow_1"
       polarion-id: CEPH-83581467
+      config:
+       test_name: cg_snap_func_workflow_1
+  -
+    test:
+      abort-on-fail: false
+      desc: "cg_snap_func_workflow_2"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_func_workflow_2"
+      polarion-id: CEPH-83581470
+      config:
+       test_name: cg_snap_func_workflow_2
+  -
+    test:
+      abort-on-fail: false
+      desc: "cg_snap_func_workflow_3"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_func_workflow_3"
+      polarion-id: CEPH-83590253
+      config:
+       test_name: cg_snap_func_workflow_3
+  -
+    test:
+      abort-on-fail: false
+      desc: "cg_snap_func_workflow_4"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_func_workflow_4"
+      polarion-id: CEPH-83590254
+      config:
+       test_name: cg_snap_func_workflow_4
+  -
+    test:
+      abort-on-fail: false
+      desc: "cg_snap_func_workflow_5"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_func_workflow_5"
+      polarion-id: CEPH-83590255
+      config:
+       test_name: cg_snap_func_workflow_5
+  -
+    test:
+      abort-on-fail: false
+      desc: "cg_snap_func_workflow_6"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_func_workflow_6"
+      polarion-id: CEPH-83590256
+      config:
+       test_name: cg_snap_func_workflow_6

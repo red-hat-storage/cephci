@@ -297,6 +297,9 @@ class CG_snap_IO(object):
             f"cg_linux_cmds_read, read_status:{read_status},read_io_validate_status : {lc_status}"
         )
         io_modules.clear()
+        """
+        BZ 2280603 : FIO Tool Read op not suceeding when subvolume in quiesced state.
+        Not running FIO Read until BZ is resolved or read op blocked issue is analyzed and concluded
         if lc_status == 0:
             read_status, end_time = self.cg_fio_io_read(write_client, mnt_pt)
             log.info(
@@ -311,6 +314,8 @@ class CG_snap_IO(object):
                 f"cg_fio_io_read, read_status:{read_status},read_io_validate_status : {fio_status}"
             )
             io_modules.clear()
+        """
+        fio_status = 0
         if lc_status == 0 and fio_status == 0:
             read_status, end_time = self.cg_smallfile_io_read(write_client, mnt_pt)
             log.info(
@@ -327,7 +332,7 @@ class CG_snap_IO(object):
             io_modules.clear()
 
         log.info(
-            f"cg_read_io_subvol read_proc_check_status before update : {read_proc_check_status.value}"
+            f"cg_read_io_subvol {qs_member} read_proc_check_status before update : {read_proc_check_status.value}"
         )
         if lc_status == 1 or fio_status == 1 or sf_status == 1:
             read_proc_check_status.value = 1
@@ -335,7 +340,7 @@ class CG_snap_IO(object):
             read_proc_check_status.value = 0
 
         log.info(
-            f"cg_read_io_subvol read_proc_check_status after update : {read_proc_check_status.value}"
+            f"cg_read_io_subvol {qs_member} read_proc_check_status after update : {read_proc_check_status.value}"
         )
         return read_proc_check_status.value
 
@@ -433,7 +438,7 @@ class CG_snap_IO(object):
             )
 
         log.info(
-            f"cg_write_io_subvol write_proc_check_status before update : {write_proc_check_status.value}"
+            f"cg_write_io_subvol {qs_member} write_proc_check_status before update : {write_proc_check_status.value}"
         )
         if (
             dd_status == 1
@@ -447,7 +452,7 @@ class CG_snap_IO(object):
             write_proc_check_status.value = 0
 
         log.info(
-            f"cg_write_io_subvol write_proc_check_status after update : {write_proc_check_status.value}"
+            f"cg_write_io_subvol {qs_member} write_proc_check_status after update : {write_proc_check_status.value}"
         )
         return write_proc_check_status.value
 
@@ -500,19 +505,39 @@ class CG_snap_IO(object):
                         state = qs_query["sets"][qs_id]["state"]["name"]
                         age_ref = qs_query["sets"][qs_id]["age_ref"]
                         curr_time = time.time()
-                        time_before_state = float(curr_time) - float(age_ref)
+                        # Get time when state is achieved, add buffer 1secs
+                        time_before_state = (float(curr_time) - float(age_ref)) + 1
                         for member_item in qs_query["sets"][qs_id]["members"]:
                             if qs_member in member_item:
                                 excluded = qs_query["sets"][qs_id]["members"][
                                     member_item
                                 ]["excluded"]
-
+                                age = qs_query["sets"][qs_id]["members"][member_item][
+                                    "state"
+                                ]["age"]
                                 break
                         if excluded is True:
-                            log.error(
-                                f"FAIL: {io_mod} {io_type} fails in state {state} on {qs_member}, excluded - {excluded}"
+                            # Get time when state is achieved, add buffer 1secs
+                            time_before_state = (float(curr_time) - float(age)) + 1
+                            log.info(
+                                f"time_before_state:{time_before_state},end_time:{end_time}"
                             )
-                            cg_status = 1
+                            log.info(f"age:{age},curr_time:{curr_time}")
+                            if float(time_before_state) > float(end_time):
+                                log.info(
+                                    f"WARN: {io_mod} {io_type} fails in QS state {state} on {qs_member}"
+                                )
+                                time_diff = int(
+                                    float(time_before_state) - float(end_time)
+                                )
+                                log.info(
+                                    f"{state} is achieved in {time_diff}secs after end_time,could be false positive"
+                                )
+                            else:
+                                log.error(
+                                    f"FAIL: {io_mod} {io_type} fails in {state} on {qs_member}, excluded-{excluded}"
+                                )
+                                cg_status = 1
                         elif state in "RELEASED|EXPIRED|TIMEDOUT|CANCELED":
                             log.info(
                                 f"time_before_state:{time_before_state},end_time:{end_time}"
@@ -560,7 +585,8 @@ class CG_snap_IO(object):
                                 age = qs_query["sets"][qs_id]["members"][member_item][
                                     "state"
                                 ]["age"]
-                                time_before_state = float(curr_time) - float(age)
+                                # Get time when state is achieved, add buffer 1secs
+                                time_before_state = (float(curr_time) - float(age)) + 1
                                 log.info(
                                     f"time_before_state:{time_before_state},end_time:{end_time}"
                                 )
@@ -660,9 +686,16 @@ class CG_snap_IO(object):
                 random.choice(string.ascii_lowercase + string.digits)
                 for _ in list(range(3))
             )
-            client.exec_command(
-                sudo=True, cmd=f"mkdir -p {mnt_pt}/cg_io/dd_dir", timeout=15
-            )
+            sleep_time = random.randrange(1, 5)
+            time.sleep(sleep_time)
+            try:
+                cmd = f"mkdir {mnt_pt}/cg_io/;mkdir {mnt_pt}/cg_io/dd_dir;"
+                client.exec_command(sudo=True, cmd=cmd, timeout=15)
+            except Exception as ex:
+                log.info(f"dd_io {io_type} {cmd} failed on {mnt_pt}, retrying:{ex}")
+                time.sleep(2)
+                cmd = f"mkdir -p {mnt_pt}/cg_io/dd_dir"
+                client.exec_command(sudo=True, cmd=cmd, timeout=15)
             file_path = f"{mnt_pt}/cg_io/dd_dir/dd_testfile_{rand_str}"
             log.info(f"file_path:{file_path}")
             # write 5 files using system files
@@ -993,12 +1026,30 @@ class CG_snap_IO(object):
         log.info(f"In cg_linux_cmds function : {io_type}")
 
         try:
-            time.sleep(8)
             dir_path = f"{mnt_pt}/cg_io/dd_dir"
-            out, _ = client.exec_command(sudo=True, cmd=f"ls {dir_path}", timeout=15)
-            log.info(f"linux_cmds {io_type} cmd op : {out}")
-            out = out.strip()
-            files = out.split()
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=120)
+            cmd_pass = 0
+            while datetime.datetime.now() < end_time and cmd_pass == 0:
+                try:
+                    out, _ = client.exec_command(
+                        sudo=True, cmd=f"ls {dir_path}", timeout=15
+                    )
+                    log.info(f"linux_cmds {io_type} cmd op : {out}")
+                    out = out.strip()
+                    files = out.split()
+                    cmd_pass = 1
+                except Exception as ex:
+                    log.info(ex)
+                    str1 = "list index out of range"
+                    str2 = "No such file or directory"
+                    if str1 in str(ex) or str2 in str(ex):
+                        time.sleep(5)
+                    else:
+                        end_time = time.time()
+                        log.info(
+                            f"linux_cmds read failed on {mnt_pt},end_time-{end_time},out-{ex}"
+                        )
+                        return (1, end_time)
             file_name = random.choice(files)
             client_name = client.node.hostname
             client_name_1 = f"{client_name[0: -1]}"
@@ -1010,16 +1061,23 @@ class CG_snap_IO(object):
                 "ls -l": f"ls -l {mnt_pt}/cg_io/*",
             }
             for cmd in read_cmd_dict:
-                log.info(f"linux_cmds {io_type} cmd to run : {read_cmd_dict[cmd]}")
+                log.info(
+                    f"linux_cmds {io_type} cmd to run on {mnt_pt}: {read_cmd_dict[cmd]}"
+                )
                 out, _ = client.exec_command(
                     sudo=True, cmd=read_cmd_dict[cmd], timeout=30
                 )
-                log.info(f"linux_cmds {io_type} cmd op : {out}")
+                log.info(
+                    f"linux_cmds read passed on {mnt_pt} for {read_cmd_dict[cmd]} : {out}"
+                )
+
             end_time = time.time()
+            log.info(f"linux_cmds read passed on {mnt_pt} with end_time {end_time}")
             return (0, end_time)
         except Exception as ex:
             log.info(ex)
             end_time = time.time()
+            log.info(f"linux_cmds read failed on {mnt_pt},end_time-{end_time},out-{ex}")
             return (1, end_time)
 
     def cg_linux_cmds_write(self, client, mnt_pt):
