@@ -134,6 +134,14 @@ def disconnect_initiator(ceph_cluster, node, subnqn):
     initiator.disconnect(**{"nqn": subnqn})
 
 
+def disconnect_all_initiator(ceph_cluster, nodes):
+    """Disconnect all connections on Initiator."""
+    for node in nodes:
+        node = get_node_by_id(ceph_cluster, node)
+        initiator = Initiator(node)
+        initiator.disconnect_all()
+
+
 def teardown(ceph_cluster, rbd_obj, nvmegwcli, config):
     """Cleanup the ceph-nvme gw entities.
 
@@ -148,6 +156,13 @@ def teardown(ceph_cluster, rbd_obj, nvmegwcli, config):
             disconnect_initiator(
                 ceph_cluster, initiator_cfg["node"], initiator_cfg["subnqn"]
             )
+
+    if "disconnect_all" in config["cleanup"]:
+        nodes = config.get("disconnect_all")
+        if not nodes:
+            nodes = [i["node"] for i in config["initiators"]]
+
+        disconnect_all_initiator(ceph_cluster, nodes)
 
     # Delete the multiple subsystems across multiple gateways
     if "subsystems" in config["cleanup"]:

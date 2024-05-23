@@ -27,6 +27,7 @@ from tests.nvmeof.test_ceph_nvmeof_gateway import (
 )
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
+from utility.retry import retry
 from utility.utils import find_free_port, generate_unique_id
 
 LOG = Log(__name__)
@@ -79,8 +80,8 @@ def test_ceph_83575812(ceph_cluster, rbd, pool, config):
     finally:
         cleanup_cfg = {
             "gw_node": config["gw_node"],
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
@@ -182,8 +183,8 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
     finally:
         cleanup_cfg = {
             "gw_node": config["gw_node"],
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
@@ -227,10 +228,18 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
             }
             nvmegwcli.namespace.add(**ns_args)
 
+        @retry(IOError, tries=5, delay=5)
+        def list_subsystems(**sub_args):
+            try:
+                _, out = nvmegwcli.subsystem.list(**sub_args)
+                return out
+            except Exception as e:
+                raise IOError(e)
+
         config.update(initiator_cfg)
         sub_args = {"base_cmd_args": {"format": "json"}}
         initiators(ceph_cluster, nvmegwcli, initiator_cfg)
-        _, gw_info_bkp = nvmegwcli.subsystem.list(**sub_args)
+        gw_info_bkp = list_subsystems(**sub_args)
         gw_info_bkp = json.loads(gw_info_bkp.strip())["subsystems"]
 
         # restart nvmeof service
@@ -243,7 +252,7 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
             }
         }
         test_orch.run(ceph_cluster, **restart_cfg)
-        _, gw_info = nvmegwcli.subsystem.list(**sub_args)
+        gw_info = list_subsystems(**sub_args)
         gw_info = json.loads(gw_info.strip())["subsystems"]
 
         if gw_info != gw_info_bkp:
@@ -256,8 +265,8 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
     finally:
         cleanup_cfg = {
             "gw_node": config["gw_node"],
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
@@ -349,8 +358,8 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     finally:
         cleanup_cfg = {
             "gw_node": config["gw_node"],
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
@@ -451,8 +460,8 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     finally:
         cleanup_cfg = {
             "gw_node": config["gw_node"],
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
@@ -553,8 +562,8 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
     finally:
         cleanup_cfg = {
             "gw_node": config["gw_node"],
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
@@ -677,8 +686,8 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         client.exec_command(sudo=True, cmd=f"umount {_dir}")
         cleanup_cfg = {
             "gw_node": config["gw_node"],
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
@@ -766,8 +775,8 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
     finally:
         cleanup_cfg = {
             "gw_node": config["gw_node"],
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
@@ -847,8 +856,8 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
     finally:
         cleanup_cfg = {
             "gw_node": config.get("gw_node"),
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
         teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
@@ -940,8 +949,8 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
     finally:
         cleanup_cfg = {
             "gw_node": config.get("gw_node"),
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
             "subsystems": [subsystem],
         }
@@ -1029,8 +1038,8 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
     finally:
         cleanup_cfg = {
             "gw_node": config.get("gw_node"),
-            "initiators": [initiator_cfg],
-            "cleanup": ["initiators", "gateway", "pool"],
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
             "subsystems": [subsystem],
         }
