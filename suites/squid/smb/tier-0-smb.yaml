@@ -1,0 +1,195 @@
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+      copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Deploy samba with auth_mode 'user' using imperative style(CLI Commands)
+      desc: Deploy samba with auth_mode 'user' using imperative style(CLI Commands)
+      module: smb_deployment_imperative_method
+      polarion-id:
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1, sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1, share2]
+        path: "/"
+
+  - test:
+      name: Deploy samba with auth_mode 'AD' using imperative style(CLI Commands)
+      desc: Deploy samba with auth_mode 'Active Directory(AD)' using imperative style(CLI Commands)
+      module: smb_deployment_imperative_method
+      polarion-id:
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1, sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: active-directory
+        domain_realm: samba.qe
+        custom_dns: "10.70.44.153"
+        smb_user_name: Administrator
+        smb_user_password: Redhat@123
+        smb_shares: [share1, share2]
+        path: "/"
+
+  - test:
+      name: Deploy samba with auth_mode 'user' using declarative style(Spec File)
+      desc: Deploy samba with auth_mode 'user' using declarative style(Spec File)
+      module: smb_deployment_declarative_method.py
+      polarion-id:
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv2
+              path: /
+
+  - test:
+      name: Deploy samba with auth_mode 'AD' using declarative style(Spec File)
+      desc: Deploy samba with auth_mode 'Active Directory(AD)' using declarative style(Spec File)
+      module: smb_deployment_declarative_method.py
+      polarion-id:
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: active-directory
+            domain_settings:
+              realm: samba.qe
+              join_sources:
+                - source_type: resource
+                  ref: join1-admin
+            custom_dns:
+              - 10.70.44.153
+            placement:
+              label: smb
+          - resource_type: ceph.smb.join.auth
+            auth_id: join1-admin
+            auth:
+              username: Administrator
+              password: Redhat@123
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv2
+              path: /

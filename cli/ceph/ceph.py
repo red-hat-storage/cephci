@@ -11,6 +11,7 @@ from .nfs.nfs import Nfs
 from .orch.orch import Orch
 from .osd.osd import Osd
 from .rgw.rgw import Rgw
+from .smb.smb import Smb
 
 
 class Ceph(Cli):
@@ -31,6 +32,7 @@ class Ceph(Cli):
         self.nfs = Nfs(nodes, self.base_cmd)
         self.fs = Fs(nodes, self.base_cmd)
         self.osd = Osd(nodes, self.base_cmd)
+        self.smb = Smb(nodes, self.base_cmd)
 
     def version(self):
         """Get ceph version."""
