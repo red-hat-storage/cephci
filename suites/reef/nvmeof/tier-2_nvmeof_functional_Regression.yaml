@@ -113,6 +113,7 @@ tests:
           - initiators
           - pool
           - gateway
+          - disconnect_all
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 2
@@ -147,6 +148,7 @@ tests:
           - initiators
           - pool
           - gateway
+          - disconnect_all
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode6
             serial: 1
@@ -181,6 +183,7 @@ tests:
           - initiators
           - pool
           - gateway
+          - disconnect_all
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode3
             serial: 3
@@ -225,6 +228,7 @@ tests:
           - initiators
           - pool
           - gateway
+          - disconnect_all
         subsystems: # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode5
             serial: 1
