@@ -220,6 +220,12 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode1
           - config:
               service: namespace
+              command: set_qos             # namespace set_qos
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                rw-ios-per-second: 10
+          - config:
+              service: namespace
               command: resize              # Namespace resize
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
