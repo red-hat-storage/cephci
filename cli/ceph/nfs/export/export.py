@@ -1,4 +1,7 @@
 from cli import Cli
+from utility.log import Log
+
+log = Log(__name__)
 
 
 class Export(Cli):
@@ -29,9 +32,27 @@ class Export(Cli):
             squash (str) : value to squash
             client-addr (str) : Authorized client hostname/IP
         """
-        cmd = f"{self.base_cmd} create {fs_name} {nfs_name} {nfs_export} {fs}"
-        if subvol_path:
-            cmd += f" path={subvol_path}"
+        # Step 1: Check if the subvolume group is present.If not, create subvolume group
+        cmd = "ceph fs subvolumegroup ls cephfs"
+        out = self.execute(sudo=True, cmd=cmd)
+        if "[]" in out[0]:
+            cmd = "ceph fs subvolumegroup create cephfs ganeshagroup"
+            self.execute(sudo=True, cmd=cmd)
+            log.info("Subvolume group created successfully")
+        subvol_name = nfs_export.replace("/", "")
+
+        # Step 2: Create subvolume
+        cmd = f"ceph fs subvolume create cephfs {subvol_name} --group_name ganeshagroup --namespace-isolated"
+        self.execute(sudo=True, cmd=cmd)
+        # Get volume path
+        cmd = (
+            f"ceph fs subvolume getpath cephfs {subvol_name} --group_name ganeshagroup"
+        )
+        out = self.execute(sudo=True, cmd=cmd)
+        path = out[0].strip()
+
+        # Step 3: Create export
+        cmd = f"{self.base_cmd} create {fs_name} {nfs_name} {nfs_export} {fs} --path={path}"
         if readonly:
             cmd += " --readonly"
         if squash:
