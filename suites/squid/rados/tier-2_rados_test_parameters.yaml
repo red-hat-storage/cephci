@@ -1,0 +1,100 @@
+#################################################################################
+# Checking various parameters in RHCS7
+#--------------------------------------------------------------------------------
+# Cluster Configuration: conf/squid/rados/7-node-cluster.yaml
+#--------------------------------------------------------------------------------
+# Test Steps:
+#--------------------------------------------------------------------------------
+# - Deploy RHCS 7 cluster in RHEL 9
+# - Check the MSGRV2 parameters
+# - Check the MSGRV2 paramters and Mclock parameters
+#--------------------------------------------------------------------------------
+#################################################################################
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+  - test:
+      name: Ceph MSGRV2 paramter check in 7.x
+      desc: MSGRV2 parameter check in 7.x
+      polarion-id: CEPH-83574890
+      module: test_config_parameter_chk.py
+      config:
+        scenario: msgrv2_6x
+        ini-file: conf/squid/rados/test-confs/rados_config_parameters.ini
+  - test:
+      name: Mclock sleep parameter check
+      desc: Mclock sleep parameter check
+      polarion-id: CEPH-83574903
+      module: test_config_parameter_chk.py
+      config:
+        scenario: mclock_sleep
+        ini-file: conf/squid/rados/test-confs/rados_config_parameters.ini
+  - test:
+      name: Mclock default,reservation,limit and weight parameter check
+      desc: Mclock default,reservation,limit and weight parameter check
+      polarion-id: CEPH-83574902
+      module: test_config_parameter_chk.py
+      config:
+        scenario: mclock_chg_chk
+        ini-file: conf/squid/rados/test-confs/rados_config_parameters.ini
+  - test:
+      name: Check RocksDB compression default value
+      desc: Check that RocksDB compression value is kLZ4Compression
+      polarion-id: CEPH-83582326
+      module: test_config_parameter_chk.py
+      config:
+        scenario: rocksdb_compression

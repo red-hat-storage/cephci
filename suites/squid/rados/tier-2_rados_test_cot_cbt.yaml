@@ -1,6 +1,10 @@
-# Suite contains tests to be run after upgrade [brownfield deployment]
-# Use cluster-conf file: conf/reef/rados/7-node-cluster.yaml
-
+#===============================================================================================
+#------------------------------------------------------------------------------------------
+#----- Tier-2 test to verify all functionalities of COT and CBT tool ------
+#------------------------------------------------------------------------------------------
+# Conf: conf/squid/rados/7-node-cluster.yaml
+# Test suite is targeted only for OpenStack
+#===============================================================================================
 tests:
   - test:
       name: setup install pre-requisistes
@@ -12,7 +16,7 @@ tests:
       name: cluster deployment
       desc: Execute the cluster deployment workflow.
       module: test_cephadm.py
-      polarion-id:
+      polarion-id: CEPH-83574887
       config:
         verify_cluster_health: true
         steps:
@@ -22,12 +26,9 @@ tests:
               base_cmd_args:
                 verbose: true
               args:
-                rhcs-version: 6.1
-                release: rc
+                registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
-                registry-url: registry.redhat.io
-                allow-fqdn-hostname: true
           - config:
               command: add_hosts
               service: host
@@ -46,19 +47,63 @@ tests:
               args:
                 placement:
                   label: mon
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
           - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osd_spec_collocated
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      rotational: 1
+                      limit: 3
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
           - config:
               command: shell
-              args:          # arguments to ceph orch
+              args:               # arguments to ceph orch
                 - ceph
                 - fs
                 - volume
                 - create
                 - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
           - config:
               command: apply
               service: rgw
@@ -67,22 +112,6 @@ tests:
               args:
                 placement:
                   label: rgw
-          - config:
-              command: apply
-              service: mds
-              base_cmd_args:          # arguments to ceph orch
-                verbose: true
-              pos_args:
-                - cephfs              # name of the filesystem
-              args:
-                placement:
-                  nodes:
-                    - node2
-                    - node6
-                  limit: 2            # no of daemons
-                  sep: " "            # separator to be used for placements
-      destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Configure client admin
@@ -101,7 +130,6 @@ tests:
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
-      abort-on-fail: true
 
   - test:
       name: Enable logging to file
@@ -146,72 +174,21 @@ tests:
       abort-on-fail: false
 
   - test:
-      name: Upgrade cluster to latest 7.x ceph version
-      desc: Upgrade cluster to latest version
-      module: test_cephadm_upgrade.py
-      polarion-id: CEPH-83573791
-      config:
-        command: start
-        service: upgrade
-        base_cmd_args:
-          verbose: true
-        verify_cluster_health: true
-      destroy-cluster: false
-      abort-on-fail: true
-
-  # Running basic rbd and rgw tests after upgrade
-  - test:
-      name: rbd-io
-      module: rbd_faster_exports.py
-      config:
-        rep-pool-only: True
-        rep_pool_config:
-          pool: rbd_rep_pool
-          image: rbd_rep_image
-          size: 10G
-        io-total: 100M
-      desc: Perform export during read/write,resizing,flattening,lock operations
-
-  - test:
-      name: rgw sanity tests
-      module: sanity_rgw.py
-      config:
-          script-name: test_multitenant_user_access.py
-          config-file-name: test_multitenant_access.yaml
-          timeout: 300
-      desc: Perform rgw tests
-
-  - test:
-      abort-on-fail: false
-      desc: "cephfs basic operations"
-      module: cephfs_basic_tests.py
-      name: cephfs-basics
-      polarion-id: "CEPH-11293"
-
-  - test:
-      name: nfs-ganesha_with_cephfs
-      module: nfs-ganesha_basics.py
-      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
-      polarion-id: CEPH-83574439
-      abort-on-fail: false
-
-  - test:
-      name: prometheus metadata
-      module: test_brownfield.py
-      desc: Fetch and verify ceph version for various daemons post upgrade
-      polarion-id: CEPH-83581346
-      config:
-       prometheus_metrics:
-         daemons:
-           - mon
-           - osd
-           - mgr
-
-  - test:
       name: ceph-bluestore-tool utility
       module: test_bluestoretool_workflows.py
       polarion-id: CEPH-83571692
       desc: Verify ceph-bluestore-tool functionalities
+
+# after the following test is executed, one or more OSD becomes non-collocated
+# while rest are still collocated, this renders the cluster in non-homogenous state.
+# subsequent tests should be added keeping this in account
+  - test:
+      name: ceph-bluestore-tool utility non-collocated
+      module: test_bluestoretool_workflows.py
+      polarion-id: CEPH-83571692
+      config:
+        non-collocated: true
+      desc: Verify ceph-bluestore-tool functionalities for non-collocated OSDs
 
   - test:
       name: ceph-objectstore-tool utility

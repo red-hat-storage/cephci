@@ -1,0 +1,159 @@
+# Suite contains  tier-2 rados tests which adds DB and wal to the OSD
+#===============================================================================================
+#------------------------------------------------------------------------------------------
+#-----      Tier-2- Using bluestore-tool add DB & Wal  to the existing OSD          ------
+#------------------------------------------------------------------------------------------
+# Conf: conf/squid/baremetal/mero_4_node_4_client_conf.yaml
+# Requirements:  Minimum one SSD and NVME is required to verify this testcase.In Mero nodes
+#                initially configuring the OSD's on HDD devices.On test OSD adding DB using SSD
+#                and adding WAL using NVME device.
+#===============================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+      desc: "Execute the cluster deployment workflow with label placement."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: CEPH-83573777
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osd_spec_hdd
+                  placement:
+                    host_pattern: '*'
+                  spec:
+                    data_devices:
+                      rotational: 1
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - cephadm
+        node: node4
+      desc: "Configure the client system "
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node5
+      desc: "Configure the client system "
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node6
+      desc: "Configure the client system "
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node7
+      desc: "Configure the client system "
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node8
+      desc: "Configure the client system "
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      name: Using Blustore-tool add DB and WAL to existing OSD
+      desc: Using Blustore-tool add DB and WAL to existing OSD
+      module: test_add_db_wal_cbt.py
+      polarion-id: CEPH-83584018
+      abort-on-fail: true

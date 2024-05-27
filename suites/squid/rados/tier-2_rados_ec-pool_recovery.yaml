@@ -1,5 +1,7 @@
-# Suite contains tests to be run after upgrade [brownfield deployment]
-# Use cluster-conf file: conf/reef/rados/7-node-cluster.yaml
+# Suite contains tier-2 rados test: EC Pool recovery
+# CLuster should have atleast 6 OSD hosts for testing.
+# Suited best for BM pipeline.
+# Can be run on RHOS-d env as well.
 
 tests:
   - test:
@@ -17,16 +19,17 @@ tests:
         verify_cluster_health: true
         steps:
           - config:
+              rhcs-version: 7.0
+              release: rc
               command: bootstrap
+              orphan-initial-daemons: true
+              skip-monitoring-stack: true
               service: cephadm
               base_cmd_args:
                 verbose: true
               args:
-                rhcs-version: 6.1
-                release: rc
-                mon-ip: node1
-                orphan-initial-daemons: true
                 registry-url: registry.redhat.io
+                mon-ip: node1
                 allow-fqdn-hostname: true
           - config:
               command: add_hosts
@@ -95,13 +98,13 @@ tests:
         node: node7                       # client node
         install_packages:
           - ceph-common
+          - ceph-base
         copy_admin_keyring: true          # Copy admin keyring to node
         caps:                             # authorize client capabilities
           mon: "allow *"
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
-      abort-on-fail: true
 
   - test:
       name: Enable logging to file
@@ -111,45 +114,10 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
-      name: rbd-io
-      module: rbd_faster_exports.py
-      config:
-        rep-pool-only: True
-        rep_pool_config:
-          pool: rbd_rep_pool
-          image: rbd_rep_image
-          size: 10G
-        io-total: 100M
-      desc: Perform export during read/write,resizing,flattening,lock operations
-
-  - test:
-      name: rgw sanity tests
-      module: sanity_rgw.py
-      config:
-        script-name: test_multitenant_user_access.py
-        config-file-name: test_multitenant_access.yaml
-        timeout: 300
-      desc: Perform rgw tests
-
-  - test:
-      abort-on-fail: false
-      desc: "cephfs basic operations"
-      module: cephfs_basic_tests.py
-      name: cephfs-basics
-      polarion-id: "CEPH-11293"
-
-  - test:
-      name: nfs-ganesha_with_cephfs
-      module: nfs-ganesha_basics.py
-      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
-      polarion-id: CEPH-83574439
-      abort-on-fail: false
-
-  - test:
-      name: Upgrade cluster to latest 7.x ceph version
+      name: Upgrade cluster to latest 8.x ceph version
       desc: Upgrade cluster to latest version
       module: test_cephadm_upgrade.py
-      polarion-id: CEPH-83573791
+      polarion-id: CEPH-83573791,CEPH-83573790
       config:
         command: start
         service: upgrade
@@ -159,62 +127,73 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
 
-  # Running basic rbd and rgw tests after upgrade
   - test:
-      name: rbd-io
-      module: rbd_faster_exports.py
+      name: EC Pool Recovery Improvement
+      module: pool_tests.py
+      polarion-id: CEPH-83573852
       config:
-        rep-pool-only: True
-        rep_pool_config:
-          pool: rbd_rep_pool
-          image: rbd_rep_image
-          size: 10G
-        io-total: 100M
-      desc: Perform export during read/write,resizing,flattening,lock operations
+        ec_pool_recovery_improvement:
+          create: true
+          pool_name: ec_pool_recovery
+          k: 2
+          m: 2
+          pg_num: 32
+          plugin: jerasure
+          rados_write_duration: 100
+          rados_read_duration: 50
+          osd_max_backfills: 16
+          osd_recovery_max_active: 16
+          delete_pool: true
+      desc: Verify Recovery of EC pool with only "k" shards available
 
   - test:
-      name: rgw sanity tests
-      module: sanity_rgw.py
+      name: EC pool LC
+      module: rados_prep.py
+      polarion-id: CEPH-83571632
       config:
-          script-name: test_multitenant_user_access.py
-          config-file-name: test_multitenant_access.yaml
-          timeout: 300
-      desc: Perform rgw tests
+        ec_pool:
+          create: true
+          pool_name: test_ec_pool
+          pg_num: 64
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+          rados_write_duration: 50
+          rados_read_duration: 30
+        set_pool_configs:
+          pool_name: test_ec_pool
+          configurations:
+            pg_num: 32
+            pgp_num: 32
+            pg_autoscale_mode: 'on'
+            compression_mode: force
+            compression_algorithm: snappy
+        delete_pools:
+          - test_ec_pool
+      desc: Create, modify & delete EC pools and run IO
 
   - test:
-      abort-on-fail: false
-      desc: "cephfs basic operations"
-      module: cephfs_basic_tests.py
-      name: cephfs-basics
-      polarion-id: "CEPH-11293"
-
-  - test:
-      name: nfs-ganesha_with_cephfs
-      module: nfs-ganesha_basics.py
-      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
-      polarion-id: CEPH-83574439
-      abort-on-fail: false
-
-  - test:
-      name: prometheus metadata
-      module: test_brownfield.py
-      desc: Fetch and verify ceph version for various daemons post upgrade
-      polarion-id: CEPH-83581346
+      name: EC pool with Overwrites
+      module: rados_prep.py
+      polarion-id: CEPH-83571730
       config:
-       prometheus_metrics:
-         daemons:
-           - mon
-           - osd
-           - mgr
-
-  - test:
-      name: ceph-bluestore-tool utility
-      module: test_bluestoretool_workflows.py
-      polarion-id: CEPH-83571692
-      desc: Verify ceph-bluestore-tool functionalities
-
-  - test:
-      name: ceph-objectstore-tool utility
-      module: test_objectstoretool_workflows.py
-      polarion-id: CEPH-83581811
-      desc: Verify ceph-objectstore-tool functionalities
+        ec_pool:
+          create: true
+          pool_name: ec_pool_overwrite
+          app_name: rbd
+          pg_num: 32
+          erasure_code_use_overwrites: "true"
+          k: 2
+          m: 2
+          plugin: jerasure
+          rados_write_duration: 50
+          rados_read_duration: 30
+          test_overwrites_pool: true
+          metadata_pool: re_pool_overwrite
+          image_name: image_ec_pool
+          image_size: 100M
+        delete_pools:
+          - ec_pool_overwrite
+          - re_pool_overwrite
+      desc: EC pool with Overwrites & create RBD pool

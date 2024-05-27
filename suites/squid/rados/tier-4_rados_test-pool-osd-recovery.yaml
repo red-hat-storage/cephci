@@ -1,0 +1,251 @@
+# Suite contains tier-4 tests to verify and test ceph pools upon OSD changes
+# This suite is to be run with conf : conf/squid/rados/13-node-cluster.yaml
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+            - node5
+            - node6
+            - node8
+            - node9
+            - node10
+            - node11
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true"                     # boolean as string
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  # Running basic rbd and rgw tests after deployment of cluster
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          pool: rbd_rep_pool
+          image: rbd_rep_image
+          size: 10G
+        io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+      desc: Perform rgw tests
+
+  - test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293"
+
+  - test:
+      name: nfs-ganesha_with_cephfs
+      module: nfs-ganesha_basics.py
+      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+      polarion-id: CEPH-83574439
+      abort-on-fail: false
+
+  - test:
+      name: Crushtool to change crush maps
+      module: test_crushtool_workflows.py
+      polarion-id: CEPH-83572695
+      config:
+        add_buckets:
+          DC1: datacenter
+          DC2: datacenter
+          Arbiter: datacenter
+          test-host-1: host
+          test-host-2: host
+        bin_tests:
+          - show-statistics
+          - show-mappings
+          - show-utilization-all
+      desc: Verify Crushtool to change crush maps ( -ve Tests )
+
+  - test:
+      name: Failure recovery on Replicated & EC
+      module: test_pool_osd_recovery.py
+      polarion-id: CEPH-11032
+      config:
+        pool_configs:
+          - type: replicated
+            conf: sample-pool-2
+          - type: erasure
+            conf: sample-pool-2
+          - type: replicated
+            conf: sample-pool-1
+          - type: erasure
+            conf: sample-pool-1
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
+        remove_host : node13
+      desc: Failure recovery on Replicated & EC pools upon OSD changes
+
+  - test:
+      name: pg rebalancing upon addition of new OSD
+      desc: Test PG rebalancing upon addition of new OSDs when Cluster is in full state
+      module: test_osd_full.py
+      polarion-id: CEPH-9232
+      config:
+        osd_addition:
+          pool_config:
+            pool-1:
+              pool_type: replicated
+              pool_name: re_pool
+              pg_num: 1
+              disable_pg_autoscale: true
+            # EC pool will be added later
+
+  - test:
+      name: crash warning upon daemon crash
+      module: test_crash_daemon.py
+      polarion-id: CEPH-83573855
+      desc: Verify crash warning in ceph health upon crashing a daemon
+      comments: Active BZ-2253394
