@@ -27,7 +27,9 @@ def run(ceph_cluster, **kw):
     rhceph_repo = config.get("rhceph_repo")
 
     # Get the rhbuild
-    if rhbuild.startswith("7"):
+    if rhbuild.startswith("8"):
+        rhbuild = "squid"
+    elif rhbuild.startswith("7"):
         rhbuild = "reef"
     elif rhbuild.startswith("6"):
         rhbuild = "quincy"
