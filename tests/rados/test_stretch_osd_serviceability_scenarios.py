@@ -167,7 +167,7 @@ def run(ceph_cluster, **kw):
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
 
         # Checking if the expected health warning about the different site weights are seen.
-        if rhbuild.split("-")[0] in ["7.1"]:
+        if float(rhbuild.split("-")[0]) >= 7.1:
             if not check_stretch_health_warning():
                 log.error("Warnings not generated on the cluster")
                 raise Exception("Warning not present on cluster")
@@ -202,7 +202,7 @@ def run(ceph_cluster, **kw):
             raise Exception("Inactive PGs during stop error")
 
         # Checking if the expected health warning about the different site weights is removed post addition of OSD.
-        if rhbuild.split("-")[0] in ["7.1"]:
+        if float(rhbuild.split("-")[0]) >= 7.1:
             if check_stretch_health_warning():
                 log.error("Warnings not removed on the cluster post osd addition")
                 raise Exception("Warning present on cluster")
@@ -267,7 +267,7 @@ def run(ceph_cluster, **kw):
             raise Exception("Inactive PGs during stop error")
 
         # Checking if the expected health warning about the different site weights is displayed post removal of OSD host
-        if rhbuild.split("-")[0] in ["7.1"]:
+        if float(rhbuild.split("-")[0]) >= 7.1:
             if not check_stretch_health_warning():
                 log.error(
                     "Warnings is not displayed on the cluster post osd host removal"
@@ -303,7 +303,7 @@ def run(ceph_cluster, **kw):
             raise Exception("Inactive PGs during stop error")
 
         # Checking if the health warning about the different site weights is removed post addition of OSD host
-        if rhbuild.split("-")[0] in ["7.1"]:
+        if float(rhbuild.split("-")[0]) >= 7.1:
             if check_stretch_health_warning():
                 log.error(
                     "Warnings is not removed on the cluster post osd host addition"

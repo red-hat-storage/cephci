@@ -132,7 +132,7 @@ def run(ceph_cluster, **kw):
         time.sleep(10)
         if not rados_obj.check_health_warning(warning=warning):
             log.error(f"Warning : {warning} not generated on the cluster")
-            if rhbuild.split("-")[0] in ["7.1"]:
+            if float(rhbuild.split("-")[0]) >= 7.1:
                 log.info("THe warning should be generated on the cluster.")
                 rados_obj.run_ceph_command(cmd=cmd3)
                 raise Exception("Stretch Warning not generated error")
@@ -159,7 +159,7 @@ def run(ceph_cluster, **kw):
         cmd2 = f"ceph osd crush move {bucket_name} {stretch_bucket}={dc_2_name}"
         if not rados_obj.check_health_warning(warning=warning):
             log.error(f"Warning : {warning} not generated on the cluster")
-            if rhbuild.split("-")[0] in ["7.1"]:
+            if float(rhbuild.split("-")[0]) >= 7.1:
                 log.info("THe warning should be generated on the cluster.")
                 rados_obj.run_ceph_command(cmd=cmd2)
                 raise Exception("Stretch Warning not generated error")
