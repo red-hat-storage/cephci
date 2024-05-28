@@ -1,0 +1,271 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_rbd_mirror_recreate_secondary_cluster.yaml
+#
+# Cluster Configuration:
+#    cephci/conf/squid/rbd/3_clusters_5_node.yaml
+#    No of Clusters : 3
+#    Each cluster configuration
+#    5-Node cluster(RHEL-8.3 and above)
+#    1 MONS, 1 MGR, 3 OSD and 1 RBD MIRROR service daemon(s)
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - client
+#     Node3 - OSD
+#     Node4 - OSD
+#     Node5 - OSD, RBD Mirror
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    registry-url: registry.redhat.io
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    fsid: 97901760-9328-11ee-8807-fa163ece848d
+                    mon-ip: node1
+                    registry-url: registry.redhat.io
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+        ceph-rbd3:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    registry-url: registry.redhat.io
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy 3 cluster for mirror failback test
+      abort-on-fail: true
+
+  - test:
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-rbd2:
+          config:
+              command: add
+              id: client.1
+              node: node2
+              install_packages:
+                  - ceph-common
+              copy_admin_keyring: true
+        ceph-rbd3:
+          config:
+              command: add
+              id: client.1
+              node: node2
+              install_packages:
+                  - ceph-common
+              copy_admin_keyring: true
+      desc: Configure the client system
+      destroy-cluster: false
+      module: test_client.py
+      name: Test to configure client
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd2:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+        ceph-rbd3:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set mon mon_allow_pool_delete true"
+      desc: Enable mon_allow_pool_delete to True for deleting the pools
+      module: exec.py
+      name: configure mon_allow_pool_delete to True
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd3:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror daemon deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror daemon
+
+  - test:
+      abort-on-fail: true
+      name: test to configure snapshot based mirroring
+      module: test_configure_mirror_snapshot.py
+      clusters:
+        ceph-rbd1:
+          config:
+            stop_rbd_mirror_on_primary: true
+            poolname: pool_failback
+            mirrormode: snapshot
+            mode: image
+            imagesize: 1G
+            image-count: 10
+            io-total: 100M
+      polarion-id: CEPH-83573332
+      desc: Configures user specified mirrored images with snapshot schedule
+
+  - test:
+      name: Test to remove site-b cluster for failback
+      module: test_cephadm_ansible.py
+      clusters:
+        ceph-rbd2:
+          config:
+            playbook: cephadm-purge-cluster.yml
+            extra-vars:
+              ceph_origin: rhcs
+              fsid: 97901760-9328-11ee-8807-fa163ece848d
+              ireallymeanit: 'yes'
+      polarion-id: CEPH-83574414
+      desc: purge the ceph from site-b secondary clusters
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd3:
+          config:
+            poolname: pool_failback
+            io-total: 100M
+      desc: Test to verify rbd mirroring failback
+      module: rbd_mirror_reconfigure_secondary_cluster.py
+      polarion-id: CEPH-9477
+      name: Reconfigure mirror with newly created cluster as secondary

@@ -1,0 +1,215 @@
+# Tier2: Extended RBD acceptance testing
+#
+# This test suite runs addition test scripts to evaluate the existing functionality of
+# Ceph RBD component.
+#
+# Cluster Configuration:
+#    Conf file - conf/squid/rbd/4-node-cluster-with-1-client.yaml
+#    Node 2 must to be a client node
+#
+# The following tests are covered
+#   - CEPH-9230 - verification snap and clone on an imported image
+#   - CEPH-11408 - If the image has an exclusive-lock on it, verify the behaviour on delayed deletion
+#   - CEPH-11409 - Delayed Deletion - Create a clone of a RBD image, and then try to delete the parent image while the relationship is active
+#   - CEPH-83573309 - Verify deletion of parent Image when clone is flattened
+#   - CEPH-83573650 - Create image with Deep Flattening enabled,take snap,protect,clone,snap,flatten the clone, unprotect the parent snap, delete the parent snap
+#   - CEPH-9833 - Create multiple snapshot from Parent and its clone Image, rename all the snapshot one-by-one
+#   - CEPH-9835 - Create multiple snapshot, on top create clone image, then try to rename the snapshot which hosts the clone (Negative)
+#   - CEPH-9836 - [Rbd] - Rename the snapshot when different operations on the clone/parent image is in progress
+#   - CEPH-9224 - RBD-Kernel_Client: Try to delete a protected snapshot
+#   - CEPH-9862 - Perform flatten operations while changing the image feature
+#   - CEPH-9861 - Perform resize operations while changing the image feature
+#   - CEPH-83574644 - set "rbd_compression_hint" globally, per-pool, or per-image and check the behaviour
+
+tests:
+
+   #Setup the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+# # Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      desc: snap and clone operations on imported image
+      destroy-cluster: false
+      module: rbd_snap_clone_imported_image.py
+      name: snap and clone on imported image
+      polarion-id: CEPH-9230
+
+  - test:
+      desc: Verify Delayed deletion with exclusive feature on RBD image
+      module: rbd_exclusive_lock_rm_image.py
+      config:
+        io-total: 5G
+      name: Verify exclusive lock feature
+      polarion-id: CEPH-11408
+
+  - test:
+      desc: verify for parent image deletion after flattening the clone and removing snap
+      config:
+        io-total: 5G
+      module: rbd_clone_delete_parent_image.py
+      name: Test for parent image deletion after flattening the clone and removing snap
+      polarion-id: CEPH-11409
+
+  - test:
+      desc: Verify that clones creation and deletion of parent image with V2 enabled
+      destroy-cluster: false
+      module: rbd_clonev2.py
+      name: clones creation with v2clone format
+      polarion-id: CEPH-83573309
+
+  - test:
+      desc: Verify parent snapshot deletion after flattening the clone
+      destroy-cluster: false
+      module: rbd_clone_delete_parent_snapshot.py
+      name: parent snap deletion after clone flattening
+      polarion-id: CEPH-83573650
+
+  - test:
+      desc: Rename image snapshots on an image on replicated and ecpools and its clones
+      module: rbd_snapshot_rename.py
+      name: Test Snapshot Rename functionality
+      polarion-id: CEPH-9833
+
+  - test:
+      desc: Rename image snapshot from which another image was cloned on a replicated and ecpool
+      module: rbd_rename_cloned_snapshot.py
+      name: Test Snapshot Rename for snapshot with clone
+      polarion-id: CEPH-9835
+
+  - test:
+      desc: Rename image snapshot when operations on clone/parent image is in progress
+      module: rbd_snapshot_rename_advanced.py
+      name: Test Snapshot Rename with clone operations in progress
+      polarion-id: CEPH-9836
+
+  - test:
+      desc: Trying to delete a protected snapshot should fail - negative
+      config:
+        do_not_create_image: True
+        operations:
+          map: true
+          io: true
+          nounmap: true
+      module: rbd_delete_protected_snapshot_krbd.py
+      name: krbd client - Test to Perform Deletion of protected snapshot
+      polarion-id: CEPH-9224
+
+  - test:
+      desc: Perform flatten operations while changing the image feature
+      config:
+        rbd_op_thread_timeout: 120
+      module: rbd_flatten_image_feature_disable.py
+      name: Test to disable image feature when flatten operation is performed
+      polarion-id: CEPH-9862
+
+  - test:
+      desc: Verify image feature disable on image having image meta set on it
+      config:
+        image_feature: deep-flatten
+      module: image_with_metadata_feature_disable.py
+      name: Test to verify image feature disable with image meta on it
+      polarion-id: CEPH-9864
+
+  - test:
+      desc: Verify image resize while changing image feature
+      config:
+        image_feature: fast-diff
+        size_increase: 11G
+        size_decrease: 5G
+        rep_pool_config:
+          size: 10G
+        ec_pool_config:
+          size: 10G
+      module: rbd_resize_image_with_image_feature.py
+      name: Test to verify image resize operation while changing image feature
+      polarion-id: CEPH-9861
+
+  - test:
+      desc: Verify rbd_compression_hint config settings
+      config:
+        compression_algorithm: snappy
+        compression_mode: passive
+        compression_ratio: 0.7
+        io_total: 1G
+      module: test_rbd_compression.py
+      name: Test to verify data compression on global, pool and image level
+      polarion-id: CEPH-83574644
+
+  - test:
+      desc: Verify python rbd module
+      config:
+        do_not_create_image: true
+        rep_pool_config:
+          num_pools: 1
+          num_images: 1
+        ec_pool_config:
+          num_pools: 1
+          num_images: 1
+      module: test_rbd_python_module.py
+      polarion-id: CEPH-83574791
+      name: Test image creation, write and read data using python rbd module

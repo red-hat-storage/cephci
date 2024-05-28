@@ -1,0 +1,352 @@
+# RBD: Persistent write back cache feature
+#
+# Cluster Configuration: ( Need physical systems with SSD/NVME)
+#    Conf file - conf/squid/upi/octo-5-node-env.yaml
+#    Ensure SSD client has at-least 8GB SSD drive.
+#
+
+tests:
+
+# Set up the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#  Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node10
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      desc: Install rbd-nbd and remove any epel packages
+      module: exec.py
+      name: Install rbd-nbd
+      config:
+        sudo: true
+        commands:
+          - "rm -rf /etc/yum.repos.d/epel*"
+          - "dnf install rbd-nbd -y"
+
+  - test:
+      abort-on-fail: true
+      config:
+        levels:
+          - client
+          - pool
+          - image                        # PWL at client
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node10
+        drive: /dev/nvme0n1
+        cleanup: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+        fio:
+          image_name: image1
+          pool_name: pool1
+          runtime: 120
+      desc: PWL Cache validation at client pool and image level.
+      destroy-cluster: false
+      module: test_rbd_persistent_write_back_cache.py
+      name: RBD PWL cache validation.
+      polarion-id: CEPH-83574707
+
+  - test:
+      abort-on-fail: true
+      polarion-id: CEPH-83574722
+      config:
+        levels:
+          - client
+          - pool
+          - image                        # PWL at client
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node10
+        drive: /dev/nvme0n1
+        cleanup: true
+        validate_cache_size: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+        fio:
+          image_name: image1
+          pool_name: pool1
+          runtime: 120
+      desc: PWL cache size validation at client pool and image level.
+      destroy-cluster: false
+      module: test_rbd_persistent_write_back_cache.py
+      name:  RBD PWL cache size validation.
+
+  - test:
+      abort-on-fail: true
+      polarion-id: CEPH-83574721
+      config:
+        levels:
+          - client
+          - pool
+          - image                # PWL at client
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node10
+        drive: /dev/nvme0n1
+        cleanup: true
+        validate_cache_path: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+          resize_to: 20G
+        fio:
+          image_name: image1
+          pool_name: pool1
+          runtime: 120
+      desc: PWL cache path validation at client pool and image level.
+      destroy-cluster: false
+      module: test_rbd_persistent_write_back_cache.py
+      name:  RBD PWL cache path validation.
+
+  - test:
+      abort-on-fail: true
+      config:
+        levels:
+          - client
+          - pool
+          - image                           # PWL at client, pool, image
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node10
+        drive: /dev/nvme0n1
+        cleanup: true
+        validate_exclusive_lock: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+        fio:
+          image_name: image1
+          pool_name: pool1
+          runtime: 120
+      desc: Validate PWL cache non-working without exclusive lock feature
+      destroy-cluster: false
+      module: test_rbd_persistent_write_back_cache.py
+      name: PWL cache creation with exclusive lock
+      polarion-id: CEPH-83574719
+
+  - test:
+      abort-on-fail: true
+      config:
+        level: client                        # PWL at client
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node10
+        drive: /dev/nvme0n1
+        cleanup: true
+        # validate_exclusive_lock: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool2
+          image: image2
+          size: 10G
+        fio:
+          image_name: image2
+          pool_name: pool2
+          runtime: 120
+      desc: Validate cache flush with persistent cache enabled
+      destroy-cluster: false
+      module: test_rbd_persistent_writeback_cache_flush.py
+      name: Validate cache flush with persistent cache enabled
+      polarion-id: CEPH-83574893
+
+  - test:
+      abort-on-fail: true
+      polarion-id: CEPH-83574709
+      config:
+        levels:
+          - client
+          - pool
+          - image                        # PWL at client
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node10
+        drive: /dev/nvme0n1
+        cleanup: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+        fio:
+          image_name: image1
+          pool_name: pool1
+          runtime: 120
+      desc: PWL cache invalidate at client pool and image level.
+      destroy-cluster: false
+      module: test_rbd_persistent_writeback_cache_invalidate.py
+      name: RBD PWL cache invalidate.
+
+  - test:
+      abort-on-fail: true
+      config:
+        levels:
+          - client                           # PWL at client
+          - pool
+          - image
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node10
+        drive: /dev/nvme0n1
+        cleanup: true
+        validate_exclusive_lock: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+        fio:
+          image_name: image1
+          pool_name: pool1
+          runtime: 120
+      desc: Validate concurrent writes to exclusive lock feature with persistent cache enabled
+      destroy-cluster: false
+      module: test_concurrent_write_pwl_cache.py
+      name: PWL cache creation with exclusive lock and concurrent writes
+      polarion-id: CEPH-83574720
+
+  - test:
+      abort-on-fail: true
+      config:
+        levels:                          # PWL at client
+          - client
+          - pool
+          - image
+        cache_file_size: 1073741824          # 1 GB
+        rbd_persistent_cache_mode: ssd       # "ssd" or "rwl" on pmem device
+        client: node10
+        drive: /dev/nvme0n1
+        cleanup: true
+        validate_exclusive_lock: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 20G
+          io_size: 5G
+      desc: Validate performance with/without persistent cache enabled
+      destroy-cluster: false
+      module: test_performance_pwl_cache.py
+      name: Performance comparison with or without pwl cache
+      polarion-id: CEPH-83574711
+
+  - test:
+      abort-on-fail: true
+      config:
+        levels:
+          - client
+          - pool
+          - image
+        cache_file_size: 1073741824         # 1 GB
+        rbd_persistent_cache_mode: ssd      # "ssd" or "rwl" on pmem device
+        drive: /dev/nvme0n1
+        client: node10
+        cleanup: true
+        validate_cache_path: true
+        rep-pool-only: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+        fio:
+          image_name: image1
+          pool_name: pool1
+          size: 100M
+      desc: Validate cache status and IO interruption
+      destroy-cluster: false
+      module: test_rbd_pwl_cache_cluster_operation.py
+      name: Validate cluster operation with persistent cache enabled
+      polarion-id: CEPH-83574891
+
+  - test:
+      abort-on-fail: true
+      config:
+        levels:
+          - client
+          - pool
+          - image
+        cache_file_size: 1073741824         # 1 GB
+        rbd_persistent_cache_mode: ssd      # "ssd" or "rwl" on pmem device
+        drive: /dev/nvme0n1
+        client: node10
+        cleanup: true
+        validate_cache_path: true
+        rep-pool-only: True
+        do_not_create_image: True
+        rep_pool_config:
+          pool: pool1
+          image: image1
+          size: 10G
+        fio:
+          size: 100M
+      desc: Validate PWL cache status on encrypted images
+      destroy-cluster: false
+      module: test_rbd_pwl_with_encrypted_images.py
+      name: PWL cache creation on encrypted images
+      polarion-id: CEPH-83575409
