@@ -360,10 +360,38 @@ tests:
       module: cephfs_bugs.test_defer_client_evict_on_laggy_osd.py
       name: Client eviction deferred if OSD is laggy
       polarion-id: "CEPH-83581592"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Enable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-enable-logs
+      config:
+       ENABLE_LOGS : 1
+       daemon_list : ['mds','osd','client']
+       daemon_dbg_level : {'mds':20,'osd':5,'client':10}
   - test:
       abort-on-fail: false
       desc: "Verify Client is blocklisted if session metadata is bloated"
       module: cephfs_bugs.test_client_blocklist_large_session_metadata.py
       name: Verify Client is blocklisted if session metadata is bloated
       polarion-id: "CEPH-83581613"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Collect and upload system logs"
+      module: cephfs_logs_util.py
+      name: cephfs-upload-logs
+      config:
+       UPLOAD_LOGS : 1
+       daemon_list : ['mds','osd']
+  -
+    test:
+      abort-on-fail: false
+      desc: "Disable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-disable-logs
+      config:
+       DISABLE_LOGS : 1
+       daemon_list : ['mds','osd','client']
 

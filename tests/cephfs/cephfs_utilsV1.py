@@ -12,10 +12,13 @@ import os
 import random
 import re
 import string
+import subprocess
 import time
 from time import sleep
 
-from ceph.ceph import CommandFailed
+import paramiko
+
+from ceph.ceph import CommandFailed, SSHConnectionManager
 from ceph.parallel import parallel
 from mita.v2 import get_openstack_driver
 from utility.log import Log
@@ -3550,3 +3553,152 @@ os.system('sudo systemctl start  network')
         metrics_out = json.loads(str(metrics_out))
 
         return metrics_out
+
+    def enable_logs(
+        self,
+        client,
+        daemons_value={"mds": 10, "mon": 5, "client": 5, "osd": 5, "mgr": 5},
+        validate=True,
+    ):
+        """
+        To Enable debug logs for daemons - mds,mgr,osd,mon,client
+        Args:
+            client: to run ceph cmds , type - client object
+            daemons_value : to get daemons whose debug logging to be enabled, with dbg_level, in type - dict
+                            example : {'mds':5,'mgr':5}
+        Returns: 0 if completed succesfully, else 1.
+        """
+
+        for k in daemons_value.keys():
+            client.exec_command(
+                sudo=True,
+                cmd=f"ceph config set {k} log_to_file true",
+            )
+        for k, v in daemons_value.items():
+            client.exec_command(
+                sudo=True,
+                cmd=f"ceph config set {k} debug_{k} {v};",
+            )
+            if k == "mds":
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph config set {k} debug_ms 1;",
+                )
+        if validate:
+            for k, v in daemons_value.items():
+                out, rc = client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph config get {k} log_to_file",
+                )
+                if "true" not in out:
+                    log.error("Unable to set the debug logs : {out}")
+                    return 1
+                out, rc = client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph config get {k} debug_{k}",
+                )
+                if str(v) not in out:
+                    log.error("Unable to set the debug logs : {out}")
+                    return 1
+        return 0
+
+    def disable_logs(
+        self, client, daemons=["mds", "mon", "mgr", "osd", "client"], validate=True
+    ):
+        """
+        To Disable debug logs for daemons - mds,mgr,osd,mon,client
+        Args:
+            client: to run ceph cmds , type - client object
+            daemons : to get daemons whose debug logging to be disabled,type - list
+                      example : ['mds','mon','mgr']
+        Returns: 0 if completed succesfully, else 1.
+        """
+        for k in daemons:
+            client.exec_command(
+                sudo=True,
+                cmd=f"ceph config set {k} log_to_file false",
+            )
+        if validate:
+            for k in daemons:
+                out, _ = client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph config get {k} log_to_file",
+                )
+                if "false" not in out.strip():
+                    log.error(f"Unable to disable the debug logs : {out}")
+                    return 1
+        return 0
+
+    def upload_logs(self, client, log_dir_dst, daemons=["mds", "mgr", "osd"]):
+        """
+        To upload debug logs to test log directory.
+        Args:
+        client: to run ceph cmds , type - client object
+        daemons : to get daemons whose debug logs to be uploaded,type - list
+                  example : ['mds','mon','mgr']
+        Returns: 0 if completed succesfully, else 1.
+        """
+        logs_dict = {}
+        result = ""
+        try:
+            cmd = f'grep "> failed" {log_dir_dst}/*'
+            result = subprocess.check_output(cmd, shell=True, text=True)
+            log.info(result)
+        except Exception as ex:
+            log.info(ex)
+
+        if "failed" in result:
+            try:
+                for k in daemons:
+                    logs_dict.update({k: {}})
+                    for node in self.ceph_cluster.get_nodes(role=k):
+                        logs_dict[k].update({node.hostname: node.ip_address})
+                uname = "root"
+                pword = "passwd"
+                fsid = self.get_fsid(client)
+                node_info = {}
+                for k in daemons:
+                    node_info_tmp = logs_dict[k]
+                    node_info.update(node_info_tmp)
+                log.info(f"node_info:{node_info}")
+                log.info("Collect logs in each node to tmp/<node_hostname> directory")
+                for node in node_info:
+                    ssh_install = SSHConnectionManager(
+                        node_info[node], uname, pword
+                    ).get_client()
+                    ssh_install.exec_command(f"sudo mkdir -p tmp/{node}")
+                    for k in daemons:
+                        if node in logs_dict[k].keys():
+                            ssh_install.exec_command(
+                                f"sudo cp /var/log/ceph/{fsid}/*{k}* tmp/{node}/"
+                            )
+                            ssh_install.exec_command(
+                                f"tar -czvf tmp/{node}.tar.gz tmp/{node}"
+                            )
+
+                # create dir in logdir for system logs
+                log_path = f"{log_dir_dst}/cephfs-dbg-logs"
+                os.mkdir(log_path)
+                log.info(f"Upload logs to {log_dir_dst}/cephfs-dbg-logs")
+                ssh_d = paramiko.SSHClient()
+                ssh_d.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+                for node in node_info:
+                    nodeip = node_info[node]
+                    ssh_d.connect(nodeip, username=uname, password=pword)
+                    source_file = f"tmp/{node}.tar.gz"
+                    dir_exist = os.path.exists(log_path)
+                    if not dir_exist:
+                        os.makedirs(log_path)
+                    ftp_client = ssh_d.open_sftp()
+                    ftp_client.get(f"{source_file}", f"{log_path}/{node}.tar.gz")
+                    ftp_client.close()
+                    ssh_d.exec_command(f"sudo rm -rf {source_file}")
+                    ssh_d.close()
+                log.info(f"Sucessfully copied debug logs to {log_path}")
+                return 0
+            except Exception as ex:
+                log.info(ex)
+                return 1
+        else:
+            log.info("There is no failed test, skipping debug logs upload")
+            return 0
