@@ -4,6 +4,7 @@ from time import sleep
 
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
+from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
@@ -261,3 +262,35 @@ def permission(client, nfs_name, nfs_export, old_permission, new_permission):
 
     # Wait till the NFS daemons are up
     sleep(10)
+
+
+def enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name):
+    # Enable the NLM support for v3 Locking
+    content = f"""service_type: nfs
+    service_id: {nfs_name}
+    placement:
+    hosts:
+        - {nfs_server_name}
+    spec:
+    enable_nlm: true"""
+
+    with open("export.conf", "w") as f:
+        f.write(content)
+    log.info(content)
+
+    # Mount the export file inside shell and apply changes
+    cmd = (
+        "--mount export.conf:/var/lib/ceph/export.conf -- "
+        "ceph orch apply -i /var/lib/ceph/export.conf"
+    )
+    CephAdm(installer).shell(cmd=cmd)
+
+    # Restart the NFS Ganesha service
+    CephAdm(installer).ceph.orch.redeploy(service=f"nfs.{nfs_name}")
+
+    # Wait till the NFS daemons are up
+    sleep(10)
+
+    # Start the rpc-statd service on server
+    cmd = "sudo systemctl start rpc-statd"
+    nfs_node.exec_command(cmd=cmd)

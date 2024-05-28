@@ -1,7 +1,7 @@
 from threading import Thread
 from time import sleep
 
-from nfs_operations import cleanup_cluster, setup_nfs_cluster
+from nfs_operations import cleanup_cluster, enable_v3_locking, setup_nfs_cluster
 
 from cli.exceptions import ConfigError
 from utility.log import Log
@@ -45,6 +45,7 @@ def run(ceph_cluster, **kw):
     nfs_mount = "/mnt/nfs"
     fs = "cephfs"
     nfs_server_name = nfs_node.hostname
+    installer = ceph_cluster.get_nodes("installer")[0]
 
     try:
         # Setup nfs cluster
@@ -64,6 +65,10 @@ def run(ceph_cluster, **kw):
         log.error(f"Failed to setup nfs cluster {e}")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
+
+    # Check the mount protocol
+    if version == 3:
+        enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name)
 
     # Create a file on Client 1
     file_path = f"{nfs_mount}/sample_file"
