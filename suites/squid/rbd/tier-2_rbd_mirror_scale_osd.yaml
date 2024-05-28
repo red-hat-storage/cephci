@@ -1,0 +1,238 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_rbd_mirror_scale_osd.yaml
+#
+# Cluster Configuration:
+#    cephci/conf/squid/rbd/rbd_mirror_large.yaml
+#    No of Clusters : 2
+#    Each cluster configuration
+#    9-Node cluster(RHEL-8.3 and above)
+#    3 MONS, 2 MGRS, 3 OSD and 1 RBD MIRROR service daemon(s)
+#     Node1 - Mon, Mgr, Installer
+#     Node2 - Mon, Mgr
+#     Node3 - Mon
+#     Node4 - OSD, RBD Mirror
+#     Node5 - OSD
+#     Node6 - OSD
+#     Node7 - Pool (Node to scale up OSD)
+#     Node8 - Pool (Node to scale up OSD)
+#     Node9 - Client
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: osd
+                      service_id: osd_nodes
+                      placement:
+                        nodes:
+                          - node4
+                          - node5
+                          - node6
+                      spec:
+                        data_devices:
+                          all: "true"
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: false
+                  specs:
+                    - service_type: osd
+                      service_id: osd_nodes
+                      unmanaged: true
+                      placement:
+                        nodes:
+                          - node4
+                          - node5
+                          - node6
+                      spec:
+                        data_devices:
+                          all: "true"
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: osd
+                      service_id: osd_nodes
+                      placement:
+                        nodes:
+                          - node4
+                          - node5
+                          - node6
+                      spec:
+                        data_devices:
+                          all: "true"
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: osd
+                      service_id: osd_nodes
+                      unmanaged: true
+                      placement:
+                        nodes:
+                          - node4
+                          - node5
+                          - node6
+                      spec:
+                        data_devices:
+                          all: "true"
+      desc: RBD Mirror cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+  - test:
+        abort-on-fail: true
+        clusters:
+          ceph-rbd1:
+            config:
+              command: add
+              id: client.1
+              node: node9
+              install_packages:
+                - ceph-common
+              copy_admin_keyring: true
+          ceph-rbd2:
+            config:
+                command: add
+                id: client.1
+                node: node9
+                install_packages:
+                    - ceph-common
+                copy_admin_keyring: true
+        desc: Configure the client system 1
+        destroy-cluster: false
+        module: test_client.py
+        name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+        ceph-rbd2:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      label: rbd-mirror
+      desc: RBD Mirror daemon deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy rbd-mirror daemon
+
+  - test:
+      name: test-add-remove-osd-with-mirroring
+      module: test-add-remove-osd-with-mirroring.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            osds_to_add:
+              - node7
+              - node8
+            osds_to_remove:
+              - node5
+              - node6
+        ceph-rbd2:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            osds_to_add:
+              - node7
+              - node8
+            osds_to_remove:
+              - node5
+              - node6
+      polarion-id: CEPH-9489
+      desc: Verify that image deleted at primary site updated at secondary

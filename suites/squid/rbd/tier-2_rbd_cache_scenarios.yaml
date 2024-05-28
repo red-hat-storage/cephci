@@ -1,0 +1,145 @@
+# Tier-2: Extended RBD cache scenario tests.
+#
+# Test-Suite: tier-2_rbd_cache_scenarios.yaml
+#
+# This test suite runs addition test scripts to evaluate the existing functionality of
+# Ceph RBD component involving dm-cache scenarios.
+#
+#
+# Cluster Configuration:
+#    Conf file - conf/squid/rbd/4-node-cluster-with-1-client.yaml
+#    1 Node must to be a client node
+
+
+tests:
+
+  # Setup the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: RHCS cluster deployment using cephadm
+      destroy-clster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - fio
+        copy_admin_keyring: true
+      desc: Configure client node
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      desc: Install rbd-nbd and remove any epel packages
+      module: exec.py
+      name: Install rbd-nbd
+      config:
+        sudo: true
+        commands:
+          - "rm -rf /etc/yum.repos.d/epel*"
+          - "dnf install rbd-nbd -y"
+
+  - test:
+      abort-on-fail: true
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          pool: test_pool
+          image1: immutable_image
+          size: 10G
+        fio:
+          runtime: 120
+      desc: Configure and validate immutable object cache feature
+      destroy-cluster: false
+      module: test_rbd_immutable_cache.py
+      name: Immutable object cache creation
+      polarion-id: CEPH-83574134
+
+  - test:
+      abort-on-fail: true
+      config:
+        rep_pool_config:
+          num_pools: 1
+          num_images: 1
+          size: 4G
+        ec_pool_config:
+          num_pools: 1
+          num_images: 1
+          size: 4G
+        fio:
+          size: 100M
+      desc: validate immutable object cache feature with cluster operation parallel
+      destroy-cluster: false
+      module: test_rbd_immutable_cache_cluster_operations.py
+      name: Immutable object cache creation with cluster operation
+      polarion-id: CEPH-83574132
+
+  - test:
+      abort-on-fail: true
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          num_pools: 1
+          num_images: 1
+          size: 4G
+        fio:
+          size: 3G
+      desc: Validate performance with/without immutable cache enabled
+      destroy-cluster: false
+      module: test_performance_immutable_cache.py
+      name: verify performance for Immutable object cache
+      polarion-id: CEPH-83581376
