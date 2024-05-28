@@ -1,7 +1,7 @@
 #===============================================================================================
 # Test Suite: Test `api/auth` cephapi
 #
-# Conf: conf/squid/mgr/1admin-4node-1client-mgr.yaml
+# Conf: conf/squid/cephmgr/1admin-4node-1client-ceph-mgr.yaml
 #
 # Setup:
 #   - Bootstrap with pre-defined dashboard credentials
