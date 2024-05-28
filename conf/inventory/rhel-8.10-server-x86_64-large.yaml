@@ -3,7 +3,7 @@ version_id: 8.10
 id: rhel
 instance:
   create:
-    image-name: RHEL-8.10.0-x86_64-nightly-latest
+    image-name: RHEL-8.10.0-x86_64-ga-latest
     vm-size: ci.standard.large
 
   setup: |
