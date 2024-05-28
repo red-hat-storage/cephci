@@ -262,6 +262,20 @@ tests:
       name: create non-tenanted user
       polarion-id: CEPH-83575199
 
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - node4
+            rgw_endpoints:
+              - node4:80
+
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
 
   - test:
       clusters:
@@ -269,6 +283,7 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_multipart_archive_colocated.yaml
+            run-on-haproxy: true
             timeout: 300
       desc: Perform IOs and test bucket versioned at the colocated archive zone
       module: sanity_rgw_multisite.py
