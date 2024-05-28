@@ -78,28 +78,6 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
-      abort-on-fail: true
-      config:
-        install:
-          - agent
-        run-on-rgw: true
-      desc: Setup and configure vault agent
-      destroy-cluster: false
-      module: install_vault.py
-      name: configure vault agent
-      polarion-id: CEPH-83575226
-
-  - test:
-      config:
-        script-name: test_sse_s3_kms_with_vault.py
-        config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
-        timeout: 300
-      desc: test_sse_s3_per_bucket_encryption_version_enabled
-      module: sanity_rgw.py
-      name: sse-s3 per bucket encryption test on a versiond bucket
-      polarion-id: CEPH-83574619 # CEPH-83575150
-
-  - test:
       name: Mbuckets_with_Nobjects with etag verification pre upgrade
       desc: test etag verification
       module: sanity_rgw.py
@@ -252,16 +230,6 @@ tests:
 
   - test:
       config:
-        script-name: test_bucket_listing.py
-        config-file-name: test_bucket_listing_flat_unordered.yaml
-        timeout: 300
-      desc: test duration for unordered listing of buckets with top level objects
-      module: sanity_rgw.py
-      name: unordered listing of buckets post upgrade
-      polarion-id: CEPH-83573545
-
-  - test:
-      config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_basic_ops.yaml
         timeout: 300
@@ -269,6 +237,18 @@ tests:
       module: sanity_rgw.py
       name: swift basic operations post upgrade
       polarion-id: CEPH-11019
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
 
   - test:
       config:

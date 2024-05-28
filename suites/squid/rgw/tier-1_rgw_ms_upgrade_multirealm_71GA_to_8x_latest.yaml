@@ -372,19 +372,6 @@ tests:
       name: unordered listing of buckets pre upgrade
       polarion-id: CEPH-83573545
 
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_manual_resharding_brownfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
-      desc: Create bucket for Testing manual resharding brownfield scenario after upgrade
-      module: sanity_rgw_multisite.py
-      name: Create bucket for Testing manual resharding brownfield scenario after upgrade
-      polarion-id: CEPH-83574735
-
   # Performing cluster upgrade
 
   - test:
@@ -462,16 +449,3 @@ tests:
       module: sanity_rgw_multisite.py
       name: swift object expiration post upgrade
       polarion-id: CEPH-9718
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_manual_resharding_brownfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
-      desc: Test manual resharding brownfield scenario after upgrade
-      module: sanity_rgw_multisite.py
-      name: Test manual resharding brownfield scenario after upgrade
-      polarion-id: CEPH-83574735

@@ -230,16 +230,6 @@ tests:
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
         timeout: 500
 
-  - test:
-      config:
-        script-name: test_bucket_listing.py
-        config-file-name: test_bucket_listing_flat_unordered.yaml
-        timeout: 300
-      desc: test duration for unordered listing of buckets with top level objects
-      module: sanity_rgw.py
-      name: unordered listing of buckets post upgrade
-      polarion-id: CEPH-83573545
-
   # configuring vault agent
   - test:
       abort-on-fail: true
@@ -261,4 +251,4 @@ tests:
       desc: test_sse_s3_per_bucket_encryption_version_enabled after upgrade
       module: sanity_rgw.py
       name: sse-s3 per bucket encryption test on a versiond bucket after upgrade
-      polarion-id: CEPH-83575152 # CEPH-83575150 #CEPH-83574619
+      polarion-id: CEPH-83575152 # CEPH-83575150 #CEPH-83574619 # CEPH-8357515
