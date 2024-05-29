@@ -63,10 +63,12 @@ def run(ceph_cluster, **kw):
             if "standby-replay" in value["state"]
         }
         standby_replay_mds = fs_util.get_standby_replay_mdss(client1, fs_name=fs_name)
+        log.info(f"standby_replay_mds : {standby_replay_mds}")
         standby_replay_mdss_obj = [
             ceph_cluster.get_node_by_hostname(i.split(".")[1])
             for i in standby_replay_mds
         ]
+        log.info(f"standby_replay_mdss_obj : {standby_replay_mdss_obj}")
         out, rc = client1.exec_command(sudo=True, cmd="ceph orch ps -f json")
         output = json.loads(out)
         deamon_dict = fs_util.filter_daemons(output, "mds", fs_name)
