@@ -1,0 +1,1673 @@
+---
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+      desc: "Execute the cluster deployment workflow with label placement."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: CEPH-83573777
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node301
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+        node: node302
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+        node: node303
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+        node: node304
+      desc: "Configure the Cephfs client system 4"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.5
+        install_packages:
+          - ceph-common
+        node: node305
+      desc: "Configure the Cephfs client system 5"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.6
+        install_packages:
+          - ceph-common
+        node: node306
+      desc: "Configure the Cephfs client system 6"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.7
+        install_packages:
+          - ceph-common
+        node: node307
+      desc: "Configure the Cephfs client system 7"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.8
+        install_packages:
+          - ceph-common
+        node: node308
+      desc: "Configure the Cephfs client system 8"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.9
+        install_packages:
+          - ceph-common
+        node: node309
+      desc: "Configure the Cephfs client system 9"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.10
+        install_packages:
+          - ceph-common
+        node: node310
+      desc: "Configure the Cephfs client system 10"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.11
+        install_packages:
+          - ceph-common
+        node: node311
+      desc: "Configure the Cephfs client system 11"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.12
+        install_packages:
+          - ceph-common
+        node: node312
+      desc: "Configure the Cephfs client system 12"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.13
+        install_packages:
+          - ceph-common
+        node: node313
+      desc: "Configure the Cephfs client system 13"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.14
+        install_packages:
+          - ceph-common
+        node: node314
+      desc: "Configure the Cephfs client system 14"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.15
+        install_packages:
+          - ceph-common
+        node: node315
+      desc: "Configure the Cephfs client system 15"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.16
+        install_packages:
+          - ceph-common
+        node: node316
+      desc: "Configure the Cephfs client system 16"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.17
+        install_packages:
+          - ceph-common
+        node: node317
+      desc: "Configure the Cephfs client system 17"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.18
+        install_packages:
+          - ceph-common
+        node: node318
+      desc: "Configure the Cephfs client system 18"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.19
+        install_packages:
+          - ceph-common
+        node: node319
+      desc: "Configure the Cephfs client system 19"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.20
+        install_packages:
+          - ceph-common
+        node: node320
+      desc: "Configure the Cephfs client system 20"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.21
+        install_packages:
+          - ceph-common
+        node: node321
+      desc: "Configure the Cephfs client system 21"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.22
+        install_packages:
+          - ceph-common
+        node: node322
+      desc: "Configure the Cephfs client system 22"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.23
+        install_packages:
+          - ceph-common
+        node: node323
+      desc: "Configure the Cephfs client system 23"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.24
+        install_packages:
+          - ceph-common
+        node: node324
+      desc: "Configure the Cephfs client system 24"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.25
+        install_packages:
+          - ceph-common
+        node: node325
+      desc: "Configure the Cephfs client system 25"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.26
+        install_packages:
+          - ceph-common
+        node: node326
+      desc: "Configure the Cephfs client system 26"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.27
+        install_packages:
+          - ceph-common
+        node: node327
+      desc: "Configure the Cephfs client system 27"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.28
+        install_packages:
+          - ceph-common
+        node: node328
+      desc: "Configure the Cephfs client system 28"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.29
+        install_packages:
+          - ceph-common
+        node: node329
+      desc: "Configure the Cephfs client system 29"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.30
+        install_packages:
+          - ceph-common
+        node: node330
+      desc: "Configure the Cephfs client system 30"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.31
+        install_packages:
+          - ceph-common
+        node: node331
+      desc: "Configure the Cephfs client system 31"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.32
+        install_packages:
+          - ceph-common
+        node: node332
+      desc: "Configure the Cephfs client system 32"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.33
+        install_packages:
+          - ceph-common
+        node: node333
+      desc: "Configure the Cephfs client system 33"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.34
+        install_packages:
+          - ceph-common
+        node: node334
+      desc: "Configure the Cephfs client system 34"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.35
+        install_packages:
+          - ceph-common
+        node: node335
+      desc: "Configure the Cephfs client system 35"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.36
+        install_packages:
+          - ceph-common
+        node: node336
+      desc: "Configure the Cephfs client system 36"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.37
+        install_packages:
+          - ceph-common
+        node: node337
+      desc: "Configure the Cephfs client system 37"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.38
+        install_packages:
+          - ceph-common
+        node: node338
+      desc: "Configure the Cephfs client system 38"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.39
+        install_packages:
+          - ceph-common
+        node: node339
+      desc: "Configure the Cephfs client system 39"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.40
+        install_packages:
+          - ceph-common
+        node: node340
+      desc: "Configure the Cephfs client system 40"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.41
+        install_packages:
+          - ceph-common
+        node: node341
+      desc: "Configure the Cephfs client system 41"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.42
+        install_packages:
+          - ceph-common
+        node: node342
+      desc: "Configure the Cephfs client system 42"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.43
+        install_packages:
+          - ceph-common
+        node: node343
+      desc: "Configure the Cephfs client system 43"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.44
+        install_packages:
+          - ceph-common
+        node: node344
+      desc: "Configure the Cephfs client system 44"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.45
+        install_packages:
+          - ceph-common
+        node: node345
+      desc: "Configure the Cephfs client system 45"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.46
+        install_packages:
+          - ceph-common
+        node: node346
+      desc: "Configure the Cephfs client system 46"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.47
+        install_packages:
+          - ceph-common
+        node: node347
+      desc: "Configure the Cephfs client system 47"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.48
+        install_packages:
+          - ceph-common
+        node: node348
+      desc: "Configure the Cephfs client system 48"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.49
+        install_packages:
+          - ceph-common
+        node: node349
+      desc: "Configure the Cephfs client system 49"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.50
+        install_packages:
+          - ceph-common
+        node: node350
+      desc: "Configure the Cephfs client system 50"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.51
+        install_packages:
+          - ceph-common
+        node: node351
+      desc: "Configure the Cephfs client system 51"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.52
+        install_packages:
+          - ceph-common
+        node: node352
+      desc: "Configure the Cephfs client system 52"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.53
+        install_packages:
+          - ceph-common
+        node: node353
+      desc: "Configure the Cephfs client system 53"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.54
+        install_packages:
+          - ceph-common
+        node: node354
+      desc: "Configure the Cephfs client system 54"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.55
+        install_packages:
+          - ceph-common
+        node: node355
+      desc: "Configure the Cephfs client system 55"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.56
+        install_packages:
+          - ceph-common
+        node: node356
+      desc: "Configure the Cephfs client system 56"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.57
+        install_packages:
+          - ceph-common
+        node: node357
+      desc: "Configure the Cephfs client system 57"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.58
+        install_packages:
+          - ceph-common
+        node: node358
+      desc: "Configure the Cephfs client system 58"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.59
+        install_packages:
+          - ceph-common
+        node: node359
+      desc: "Configure the Cephfs client system 59"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.60
+        install_packages:
+          - ceph-common
+        node: node360
+      desc: "Configure the Cephfs client system 60"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.61
+        install_packages:
+          - ceph-common
+        node: node361
+      desc: "Configure the Cephfs client system 61"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.62
+        install_packages:
+          - ceph-common
+        node: node362
+      desc: "Configure the Cephfs client system 62"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.63
+        install_packages:
+          - ceph-common
+        node: node363
+      desc: "Configure the Cephfs client system 63"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.64
+        install_packages:
+          - ceph-common
+        node: node364
+      desc: "Configure the Cephfs client system 64"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.65
+        install_packages:
+          - ceph-common
+        node: node365
+      desc: "Configure the Cephfs client system 65"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.66
+        install_packages:
+          - ceph-common
+        node: node366
+      desc: "Configure the Cephfs client system 66"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.67
+        install_packages:
+          - ceph-common
+        node: node367
+      desc: "Configure the Cephfs client system 67"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.68
+        install_packages:
+          - ceph-common
+        node: node368
+      desc: "Configure the Cephfs client system 68"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.69
+        install_packages:
+          - ceph-common
+        node: node369
+      desc: "Configure the Cephfs client system 69"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.70
+        install_packages:
+          - ceph-common
+        node: node370
+      desc: "Configure the Cephfs client system 70"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.71
+        install_packages:
+          - ceph-common
+        node: node371
+      desc: "Configure the Cephfs client system 71"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.72
+        install_packages:
+          - ceph-common
+        node: node372
+      desc: "Configure the Cephfs client system 72"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.73
+        install_packages:
+          - ceph-common
+        node: node373
+      desc: "Configure the Cephfs client system 73"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.74
+        install_packages:
+          - ceph-common
+        node: node374
+      desc: "Configure the Cephfs client system 74"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.75
+        install_packages:
+          - ceph-common
+        node: node375
+      desc: "Configure the Cephfs client system 75"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.76
+        install_packages:
+          - ceph-common
+        node: node376
+      desc: "Configure the Cephfs client system 76"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.77
+        install_packages:
+          - ceph-common
+        node: node377
+      desc: "Configure the Cephfs client system 77"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.78
+        install_packages:
+          - ceph-common
+        node: node378
+      desc: "Configure the Cephfs client system 78"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.79
+        install_packages:
+          - ceph-common
+        node: node379
+      desc: "Configure the Cephfs client system 79"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.80
+        install_packages:
+          - ceph-common
+        node: node380
+      desc: "Configure the Cephfs client system 80"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.81
+        install_packages:
+          - ceph-common
+        node: node381
+      desc: "Configure the Cephfs client system 81"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.82
+        install_packages:
+          - ceph-common
+        node: node382
+      desc: "Configure the Cephfs client system 82"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.83
+        install_packages:
+          - ceph-common
+        node: node383
+      desc: "Configure the Cephfs client system 83"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.84
+        install_packages:
+          - ceph-common
+        node: node384
+      desc: "Configure the Cephfs client system 84"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.85
+        install_packages:
+          - ceph-common
+        node: node385
+      desc: "Configure the Cephfs client system 85"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.86
+        install_packages:
+          - ceph-common
+        node: node386
+      desc: "Configure the Cephfs client system 86"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.87
+        install_packages:
+          - ceph-common
+        node: node387
+      desc: "Configure the Cephfs client system 87"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.88
+        install_packages:
+          - ceph-common
+        node: node388
+      desc: "Configure the Cephfs client system 88"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.89
+        install_packages:
+          - ceph-common
+        node: node389
+      desc: "Configure the Cephfs client system 89"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.90
+        install_packages:
+          - ceph-common
+        node: node390
+      desc: "Configure the Cephfs client system 90"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.91
+        install_packages:
+          - ceph-common
+        node: node391
+      desc: "Configure the Cephfs client system 91"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.92
+        install_packages:
+          - ceph-common
+        node: node392
+      desc: "Configure the Cephfs client system 92"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.93
+        install_packages:
+          - ceph-common
+        node: node393
+      desc: "Configure the Cephfs client system 93"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.94
+        install_packages:
+          - ceph-common
+        node: node394
+      desc: "Configure the Cephfs client system 94"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.95
+        install_packages:
+          - ceph-common
+        node: node395
+      desc: "Configure the Cephfs client system 95"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.96
+        install_packages:
+          - ceph-common
+        node: node396
+      desc: "Configure the Cephfs client system 96"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.97
+        install_packages:
+          - ceph-common
+        node: node397
+      desc: "Configure the Cephfs client system 97"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.98
+        install_packages:
+          - ceph-common
+        node: node398
+      desc: "Configure the Cephfs client system 98"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.99
+        install_packages:
+          - ceph-common
+        node: node399
+      desc: "Configure the Cephfs client system 99"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.100
+        install_packages:
+          - ceph-common
+        node: node400
+      desc: "Configure the Cephfs client system 100"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.101
+        install_packages:
+          - ceph-common
+        node: node401
+      desc: "Configure the Cephfs client system 101"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+
+
+  - test:
+      name: Fill Cluster
+      module: test_parallel.py
+      parallel:
+      - test:
+          abort-on-fail: false
+          desc: "Fill the cluster with specific percentage"
+          name: "Fill Cluster"
+          module: test_io.py
+          config:
+            wait_for_io: True
+            cephfs:
+              "fill_data": 3
+              "num_of_clients": 10
+              "io_tool": "smallfile"
+              "mount": "fuse"
+              "batch_size": 4
+              "filesystem": "cephfs"
+              "mount_dir": ""
+      - test:
+          abort-on-fail: false
+          desc: "Fill the cluster with specific percentage"
+          name: "Fill Cluster"
+          module: test_io.py
+          config:
+            wait_for_io: True
+            cephfs:
+              "fill_data": 3
+              "num_of_clients": 10
+              "io_tool": "smallfile"
+              "mount": "kernel"
+              "batch_size": 4
+              "filesystem": "cephfs"
+              "mount_dir": ""
+      desc: "Fill the cluster with specific percentage"
+      abort-on-fail: true
+  - test:
+        name: large_file_writes
+        module: cephfs_scale.large_file_writes.py
+        config:
+          num_of_subvolumes: 1
+          num_of_clients: 1
+          mount_type : fuse
+        desc: Write Large IOs
+        abort-on-fail: false
+  - test:
+        name: Cleanup Clients
+        module: cephfs_scale.cleanup.py
+        desc: Cleanup Clients
+        abort-on-fail: false
+  - test:
+        name: large_file_writes
+        module: cephfs_scale.large_file_writes.py
+        config:
+          num_of_subvolumes: 5
+          num_of_clients: 5
+          mount_type : fuse
+        desc: Write Large IOs
+        abort-on-fail: false
+  - test:
+        name: Cleanup Clients
+        module: cephfs_scale.cleanup.py
+        desc: Cleanup Clients
+        abort-on-fail: false
+  - test:
+        name: large_file_writes
+        module: cephfs_scale.large_file_writes.py
+        config:
+          num_of_subvolumes: 10
+          num_of_clients: 10
+          mount_type : fuse
+        desc: Write Large IOs
+        abort-on-fail: false
+  - test:
+        name: Cleanup Clients
+        module: cephfs_scale.cleanup.py
+        desc: Cleanup Clients
+        abort-on-fail: false
+  - test:
+        name: large_file_writes
+        module: cephfs_scale.large_file_writes.py
+        config:
+          num_of_subvolumes: 50
+          num_of_clients: 50
+          mount_type : fuse
+        desc: Write Large IOs
+        abort-on-fail: false
+  - test:
+        name: Cleanup Clients
+        module: cephfs_scale.cleanup.py
+        desc: Cleanup Clients
+        abort-on-fail: false
+  - test:
+        name: large_file_writes
+        module: cephfs_scale.large_file_writes.py
+        config:
+          num_of_subvolumes: 100
+          num_of_clients: 100
+          mount_type : fuse
+        desc: Write Large IOs
+        abort-on-fail: false
+  - test:
+        name: Cleanup Clients
+        module: cephfs_scale.cleanup.py
+        desc: Cleanup Clients
+        abort-on-fail: false
+
+  - test:
+        name: large_file_writes
+        module: cephfs_scale.large_file_writes.py
+        config:
+          num_of_subvolumes: 1
+          num_of_clients: 1
+          mount_type : kernel
+        desc: Write Large IOs
+        abort-on-fail: false
+  - test:
+        name: Cleanup Clients
+        module: cephfs_scale.cleanup.py
+        desc: Cleanup Clients
+        abort-on-fail: false
+  - test:
+        name: large_file_writes
+        module: cephfs_scale.large_file_writes.py
+        config:
+          num_of_subvolumes: 5
+          num_of_clients: 5
+          mount_type : kernel
+        desc: Write Large IOs
+        abort-on-fail: false
+  - test:
+        name: Cleanup Clients
+        module: cephfs_scale.cleanup.py
+        desc: Cleanup Clients
+        abort-on-fail: false
+  - test:
+        name: large_file_writes
+        module: cephfs_scale.large_file_writes.py
+        config:
+          num_of_subvolumes: 10
+          num_of_clients: 10
+          mount_type : kernel
+        desc: Write Large IOs
+        abort-on-fail: false
+  - test:
+        name: Cleanup Clients
+        module: cephfs_scale.cleanup.py
+        desc: Cleanup Clients
+        abort-on-fail: false
+  - test:
+        name: large_file_writes
+        module: cephfs_scale.large_file_writes.py
+        config:
+          num_of_subvolumes: 50
+          num_of_clients: 50
+          mount_type : kernel
+        desc: Write Large IOs
+        abort-on-fail: false
+  - test:
+        name: Cleanup Clients
+        module: cephfs_scale.cleanup.py
+        desc: Cleanup Clients
+        abort-on-fail: false
+  - test:
+        name: large_file_writes
+        module: cephfs_scale.large_file_writes.py
+        config:
+          num_of_subvolumes: 100
+          num_of_clients: 100
+          mount_type : kernel
+        desc: Write Large IOs
+        abort-on-fail: false
+  - test:
+        name: Cleanup Clients
+        module: cephfs_scale.cleanup.py
+        desc: Cleanup Clients
+        abort-on-fail: false
