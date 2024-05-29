@@ -73,6 +73,10 @@ tests:
                 - max_mds
                 - "2"
               command: shell
+          - config:
+              args:
+                - "ceph config set global osd_pool_default_pg_autoscale_mode on"
+              command: shell
       desc: "Execute the cluster deployment workflow with label placement."
       destroy-cluster: false
       module: test_cephadm.py
