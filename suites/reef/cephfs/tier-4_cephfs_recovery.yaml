@@ -188,6 +188,14 @@ tests:
       module: test_client.py
       name: "configure client"
   - test:
+      name: snap_sched_retention_negative_test
+      module: snapshot_clone.snap_schedule_retention_vol_subvol.py
+      polarion-id: CEPH-83575627
+      desc: Verify Snapshot schedule and retention works with service restart and non-existent path
+      abort-on-fail: false
+      config:
+        test_name : negative
+  - test:
       abort-on-fail: false
       desc: "Taking the cephfs down with down flag"
       module: cephfs_recovery.fs_down_flag.py
@@ -200,14 +208,6 @@ tests:
       module: cephfs_recovery.fs_scrub.py
       polarion-id: CEPH-11267
       name: "Cephfs Scrubing"
-  - test:
-      name: snap_sched_retention_negative_test
-      module: snapshot_clone.snap_schedule_retention_vol_subvol.py
-      polarion-id: CEPH-83575627
-      desc: Verify Snapshot schedule and retention works with service restart and non-existent path
-      abort-on-fail: false
-      config:
-        test_name : negative
   - test:
       name: Move data and meta_data pool to different root level bucket in OSD tree.
       module: cephfs_generic.test_data_migrate_bw_buckets.py

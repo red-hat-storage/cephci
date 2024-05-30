@@ -112,7 +112,7 @@ def run(ceph_cluster, **kw):
             "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
         )
         log.info("Verify Ceph Status is healthy before starting test")
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=60)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
         ceph_healthy = 0
         while (datetime.datetime.now() < end_time) and (ceph_healthy == 0):
             try:
@@ -123,8 +123,9 @@ def run(ceph_cluster, **kw):
                 log.info("Wait for few secs and recheck ceph status")
                 time.sleep(5)
         if ceph_healthy == 0:
-            assert False, "Ceph remains unhealthy even after wait for 60secs"
+            assert False, "Ceph remains unhealthy even after wait for 300secs"
         commands = [
+            f"ceph fs subvolume ls {default_fs}",
             "ceph config set mgr mgr/snap_schedule/allow_m_granularity true",
             "ceph mgr module enable snap_schedule",
             f"ceph fs snap-schedule add path 1{m_granularity} --fs {default_fs}",
