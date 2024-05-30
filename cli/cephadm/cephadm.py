@@ -105,3 +105,19 @@ class CephAdm(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def ceph_osd(self, id, **kw):
+        """Run ceph-osd command
+
+        Args:
+            id (str): OSD id
+
+            Supported Keys:
+                conf (str): read configuration from the given confirguration file
+                keyring (str): keyring file name
+        """
+        cmd = f"{self.base_cmd} ceph-osd --id {id} {build_cmd_from_args(**kw)}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out

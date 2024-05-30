@@ -67,3 +67,21 @@ class Osd(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def out(self, id):
+        """Set osd out
+
+        Args:
+            id (str): osd id
+        """
+        cmd = f"{self.base_cmd} out {id}"
+        return self.execute(sudo=True, long_running=True, cmd=cmd)
+
+    def _in(self, id):
+        """Set osd in
+
+        Args:
+            id (str): osd id
+        """
+        cmd = f"{self.base_cmd} in {id}"
+        return self.execute(sudo=True, long_running=True, cmd=cmd)

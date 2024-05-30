@@ -44,3 +44,9 @@ tests:
       desc: Verify OSD creation using ceph-volume utility
       polarion-id: CEPH-11378
       module: test_ceph_volume_sanity.py
+
+  - test:
+      name: Start existing ceph-volume OSD
+      desc: Verify starting and stopping existing OSD
+      polarion-id: CEPH-83572762
+      module: test_ceph_volume_existing_osd.py
