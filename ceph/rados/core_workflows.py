@@ -795,7 +795,10 @@ class RadosOrchestrator:
         """
 
         mgr_modules = self.run_ceph_command(cmd="ceph mgr module ls")
-        if "pg_autoscaler" not in mgr_modules["enabled_modules"]:
+        if (
+            "pg_autoscaler" not in mgr_modules["enabled_modules"]
+            and "pg_autoscaler" not in mgr_modules["always_on_modules"]
+        ):
             cmd = "ceph mgr module enable pg_autoscaler"
             self.node.shell([cmd])
 

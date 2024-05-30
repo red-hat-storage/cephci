@@ -198,7 +198,7 @@ tests:
               conf: sample-pool-1
             - type: replicated
               conf: sample-pool-2
-        pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
+        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
         verify_inflation: false
       desc: Verify that the duplicates in the PG log entries are trimmed regularly
       abort-on-fail: true
