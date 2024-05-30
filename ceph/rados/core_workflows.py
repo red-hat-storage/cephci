@@ -1806,8 +1806,9 @@ class RadosOrchestrator:
         cmd = f"{base_cmd} {service_type}" if service_type else base_cmd
         orch_ls_op = self.run_ceph_command(cmd=cmd)
 
-        for service in orch_ls_op:
-            service_name_ls.append(service["service_name"])
+        if orch_ls_op:
+            for service in orch_ls_op:
+                service_name_ls.append(service["service_name"])
         return service_name_ls
 
     def check_host_status(self, hostname, status: str = None) -> bool:
