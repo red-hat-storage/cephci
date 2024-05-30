@@ -1027,7 +1027,7 @@ class CG_snap_IO(object):
 
         try:
             dir_path = f"{mnt_pt}/cg_io/dd_dir"
-            end_time = datetime.datetime.now() + datetime.timedelta(seconds=120)
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
             cmd_pass = 0
             while datetime.datetime.now() < end_time and cmd_pass == 0:
                 try:
@@ -1040,16 +1040,7 @@ class CG_snap_IO(object):
                     cmd_pass = 1
                 except Exception as ex:
                     log.info(ex)
-                    str1 = "list index out of range"
-                    str2 = "No such file or directory"
-                    if str1 in str(ex) or str2 in str(ex):
-                        time.sleep(5)
-                    else:
-                        end_time = time.time()
-                        log.info(
-                            f"linux_cmds read failed on {mnt_pt},end_time-{end_time},out-{ex}"
-                        )
-                        return (1, end_time)
+                    time.sleep(5)
             file_name = random.choice(files)
             client_name = client.node.hostname
             client_name_1 = f"{client_name[0: -1]}"

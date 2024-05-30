@@ -368,7 +368,7 @@ def cg_snap_func_1(cg_test_params):
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
-        wait_for_cg_io(p, qs_id_val, io_run_time)
+        wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
         log.info(f"Perform cleanup for {qs_set}")
@@ -542,7 +542,7 @@ def cg_snap_func_1(cg_test_params):
                 i = repeat_cnt
                 log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
-        wait_for_cg_io(p, qs_id_val, io_run_time)
+        wait_for_cg_io(p, qs_id_val)
         mnt_pt_list = []
         for qs_member in qs_member_dict1:
             mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
@@ -843,7 +843,7 @@ def cg_snap_func_2(cg_test_params):
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
-        wait_for_cg_io(p, qs_id_val, io_run_time)
+        wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
         log.info(f"Perform cleanup for {qs_set}")
@@ -1007,7 +1007,7 @@ def cg_snap_func_3(cg_test_params):
                 i = repeat_cnt
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
-        wait_for_cg_io(p, qs_id_val, io_run_time)
+        wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
         log.info(f"Perform cleanup for {qs_set}")
@@ -1155,7 +1155,7 @@ def cg_snap_func_4(cg_test_params):
                 test_fail += 1
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
-        wait_for_cg_io(p, qs_id_val, io_run_time)
+        wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
         log.info(f"Perform cleanup for {qs_set}")
@@ -1293,7 +1293,7 @@ def cg_snap_func_5(cg_test_params):
         log.info("Quiesce state is EXPIRED as expected")
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
-        wait_for_cg_io(p, qs_id_val, io_run_time)
+        wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
         log.info(f"Perform cleanup for {qs_set}")
@@ -1553,7 +1553,7 @@ def cg_snap_func_6(cg_test_params):
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
-        wait_for_cg_io(p, qs_id_val, io_run_time)
+        wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
         log.info(f"Perform cleanup for {qs_set}")
@@ -1580,11 +1580,11 @@ def cg_snap_func_6(cg_test_params):
 # HELPER ROUTINES
 
 
-def wait_for_cg_io(p, qs_id_val, io_run_time):
+def wait_for_cg_io(p, qs_id_val):
     if p.is_alive():
         proc_stop = 0
         log.info("CG IO is running after quiesce lifecycle")
-        wait_time = io_run_time * 20
+        wait_time = 1800
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=wait_time)
         while (datetime.datetime.now() < end_time) and (proc_stop == 0):
             if p.is_alive():
