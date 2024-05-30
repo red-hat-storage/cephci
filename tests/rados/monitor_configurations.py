@@ -205,7 +205,9 @@ class MonConfigMethods:
         log.info(f"Value for config: {kwargs['name']} was set")
         return True
 
-    def get_config(self, section: str, param: str) -> str:
+    def get_config(
+        self, section: str = None, param: str = None, daemon_name: str = None
+    ) -> str:
         """
         Retrieves the config param in monitor config database,
         Usage - config get <section> <name>
@@ -214,10 +216,10 @@ class MonConfigMethods:
         have been explicitly set
 
         Args:
-            **kwargs:
-                - section: which section of daemons to target
-                    allowed values: mon, mgr, osd, mds, client
-                - param: name of the config param for the selection
+            - section: which section of daemons to target
+                allowed values: mon, mgr, osd, mds, client
+            - param: name of the config param for the selection
+            - daemon (optional): name of specific daemon
         Returns: string output of ceph config get <section> <name> command
 
         E.g.
@@ -228,6 +230,8 @@ class MonConfigMethods:
         """
 
         cmd = f"ceph config get {section} {param}"
+        if daemon_name:
+            cmd = f"ceph config get {daemon_name}"
         return self.rados_obj.node.shell([cmd])[0]
 
     def remove_config(self, **kwargs):
@@ -388,7 +392,7 @@ class MonConfigMethods:
             log.error("The log collected does not contain the name of change made")
             return False
 
-    def show_config(self, daemon: str, id: str, param: str) -> str:
+    def show_config(self, daemon: str, id: str, param: str = None) -> str:
         """
         Reports the  running configuration value of a paramter for a running daemon
         Usage - config show <daemon>.<id> <param>
@@ -400,7 +404,9 @@ class MonConfigMethods:
         E.g.
             - # ceph config show osd.0 osd_recovery_max_active
         """
-        cmd = f"ceph config show {daemon}.{id} {param}"
+        cmd = f"ceph config show {daemon}.{id}"
+        if param:
+            cmd += f" {param}"
         try:
             result, _ = self.rados_obj.node.shell([cmd])
         except Exception as error:
