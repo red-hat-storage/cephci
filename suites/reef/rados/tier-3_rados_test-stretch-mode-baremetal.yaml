@@ -601,5 +601,5 @@ tests:
       module: test_bug_fixes.py
       config:
         slow-osd-heartbeat-baremetal: true
-      polarion-id: CEPH-83584004
+      polarion-id: CEPH-83590688
       desc: Verify auto removal of Slow OSD heartbeat

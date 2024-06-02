@@ -156,3 +156,44 @@ def get_slow_requests_log(node, start_time, end_time, service_name="mon"):
         log.error(f"Exception hit while command execution. {er}")
     should_not_be_empty(j_log, "Failed to retrieve slow requests")
     return j_log
+
+
+def wait_for_device_rados(host, osd_id, action: str, timeout: int = 900) -> bool:
+    """
+    Waiting for the device to be removed/added based on the action
+    Args:
+        host: host object
+        osd_id: osd id
+        action: add/remove device path
+        timeout: wait timeout in seconds
+    Returns:  True -> pass, False -> fail
+    """
+    dev_path = None
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+    while end_time > datetime.datetime.now():
+        flag = True
+
+        base_cmd = "cephadm shell -- "
+        volume_cmd = f"ceph-volume lvm list {osd_id} --format json"
+        out, _ = host.exec_command(cmd=f"{base_cmd} {volume_cmd}", sudo=True)
+
+        for item in json.loads(out)["osd_id"]:
+            if "osd-block" in item["lv_name"]:
+                dev_path = item["devices"][0]
+                break
+
+        log.info(f"dev_path  : {dev_path}")
+        if action == "remove":
+            if dev_path:
+                flag = False
+        else:
+            if not dev_path:
+                flag = False
+        if flag:
+            log.info(f"The OSD {action} is completed.")
+            return True
+        log.info(
+            f"Waiting for OSD {osd_id} to {action}. checking status again in 2 minutes"
+        )
+        time.sleep(120)
+    return False

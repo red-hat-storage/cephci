@@ -188,14 +188,17 @@ def set_osd_in(
     return ret_val
 
 
-def osd_remove(ceph_cluster, osd_id):
+def osd_remove(ceph_cluster, osd_id, zap=False):
     """
     osd remove
     Args:
         ceph_cluster: ceph cluster
         osd_id: osd id
+        zap: flag to control zapping of device
     """
     config = {"command": "rm", "service": "osd", "pos_args": [osd_id]}
+    if zap:
+        config["base_cmd_args"] = {"zap": True}
     log.info(f"Executing OSD {config.pop('command')} service")
     osd = OSD(cluster=ceph_cluster, **config)
     osd.rm(config)

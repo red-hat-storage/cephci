@@ -145,7 +145,7 @@ tests:
       module: test_bug_fixes.py
       config:
         test-config-show-get: true
-      polarion-id: CEPH-83584004
+      polarion-id: CEPH-83590689
       desc: Verify ceph config show & get outputs
 
   - test:
@@ -153,5 +153,5 @@ tests:
       module: test_bug_fixes.py
       config:
         slow-osd-heartbeat: true
-      polarion-id: CEPH-83584004
+      polarion-id: CEPH-83590688
       desc: Generate Slow OSD heartbeats by inducing network delay

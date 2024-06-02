@@ -6,7 +6,7 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.rados_test_util import (
     create_pools,
     get_device_path,
-    wait_for_device,
+    wait_for_device_rados,
     write_to_pools,
 )
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
@@ -59,10 +59,10 @@ def run(ceph_cluster, **kw):
         utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
         method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
-        utils.osd_remove(ceph_cluster, osd_id)
+        utils.osd_remove(ceph_cluster, osd_id, zap=True)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
         method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
-        method_should_succeed(wait_for_device, host, osd_id, action="remove")
+        method_should_succeed(wait_for_device_rados, host, osd_id, action="remove")
         osd_id1 = acting_pg_set[1]
         host1 = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id1)
         should_not_be_empty(host1, "Failed to fetch host details")
@@ -72,7 +72,7 @@ def run(ceph_cluster, **kw):
         )
         method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id1)
         utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
-        method_should_succeed(wait_for_device, host, osd_id, action="add")
+        method_should_succeed(wait_for_device_rados, host, osd_id, action="add")
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
 
         acting_pg_set1 = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
@@ -98,12 +98,12 @@ def run(ceph_cluster, **kw):
         if osd_id not in active_osd_list:
             utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
             utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
-            method_should_succeed(wait_for_device, host, osd_id, action="add")
+            method_should_succeed(wait_for_device_rados, host, osd_id, action="add")
 
         if osd_id1 not in active_osd_list:
             utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
             utils.add_osd(ceph_cluster, host1.hostname, dev_path1, osd_id1)
-            method_should_succeed(wait_for_device, host1, osd_id, action="add")
+            method_should_succeed(wait_for_device_rados, host1, osd_id, action="add")
 
         utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
         rados_obj.change_recovery_threads(config=pool, action="rm")
