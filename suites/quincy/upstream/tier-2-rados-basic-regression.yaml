@@ -424,11 +424,16 @@ tests:
             byte_size: 10KB
       desc: Verification of the effect of compression on replicated pools
 
-  - test:
-      name: autoscaler flags
-      module: test_pg_autoscale_flag.py
-      polarion-id: CEPH-83574794
-      desc: verify autoscaler flags functionality
+# Commenting until bug fix : https://bugzilla.redhat.com/show_bug.cgi?id=2252788
+#  - test:
+#      name: autoscaler flags
+#      module: test_pg_autoscale_flag.py
+#      polarion-id: CEPH-83574794
+#      config:
+#        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
+#      desc: verify autoscaler flags functionality
+#      comments: Bug 2252788
+
   - test:
       name: PG number maximum limit check
       module: pool_tests.py

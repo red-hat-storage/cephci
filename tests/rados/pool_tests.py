@@ -659,7 +659,7 @@ def run(ceph_cluster, **kw):
 
                 pool = pool_conf_file[i["type"]][i["conf"]]
                 pool["pg_num"] = 1
-                if rhbuild.split("-")[0] in ["7.1"]:
+                if float(rhbuild.split("-")[0]) >= 7.1:
                     pool["app_name"] = None
                 create_given_pool(rados_obj, pool)
                 pools.append(pool["pool_name"])
@@ -677,7 +677,7 @@ def run(ceph_cluster, **kw):
                     f"autoscale status on pools: \n{rados_obj.node.shell(['ceph osd pool autoscale-status'])}"
                 )
 
-                if rhbuild.split("-")[0] in ["7.1"]:
+                if float(rhbuild.split("-")[0]) >= 7.1:
                     log.debug("Bug fixed only in 7.1.")
                     # Scenario 1: Generate POOL_APP_NOT_ENABLED
                     log.debug(
