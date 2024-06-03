@@ -7,6 +7,8 @@
 # Bugs:
 #     1. https://bugzilla.redhat.com/show_bug.cgi?id=2233800
 #     2. https://bugzilla.redhat.com/show_bug.cgi?id=1900127
+#     3. https://bugzilla.redhat.com/show_bug.cgi?id=2229651
+#     4. https://bugzilla.redhat.com/show_bug.cgi?id=2011756
 #===============================================================================================
 tests:
   - test:
@@ -137,3 +139,19 @@ tests:
         inconsistent_obj_count: 4
         delete_pool:
           - ecpool
+
+  - test:
+      name: Verification of ceph config show & get
+      module: test_bug_fixes.py
+      config:
+        test-config-show-get: true
+      polarion-id: CEPH-83590689
+      desc: Verify ceph config show & get outputs
+
+  - test:
+      name: Verification of Slow OSD heartbeat
+      module: test_bug_fixes.py
+      config:
+        slow-osd-heartbeat: true
+      polarion-id: CEPH-83590688
+      desc: Generate Slow OSD heartbeats by inducing network delay

@@ -21,8 +21,9 @@ def run(ceph_cluster, **kw):
     which do not fit in any other existing segregation
 
     Currently, covers the following tests:
-    - CEPH-: Verify ceph config show and get for all daemons
-    - CEPH-: Induce Slow OSD heartbeat warning by controlled network delay
+    - CEPH-83590689 | BZ-2011756: Verify ceph config show and get for all daemons
+    - CEPH-83590688 | BZ-2229651: Induce Slow OSD heartbeat warning by controlled network delay
+    - CEPH-83590688 | BZ-2229651: Verify auto removal of slow osd heartbeat warning after 15 mins of OSD node restart
     """
 
     log.info(run.__doc__)
@@ -36,7 +37,7 @@ def run(ceph_cluster, **kw):
 
     if config.get("test-config-show-get"):
         doc = (
-            "\n# CEPH-"
+            "\n# CEPH-83590689"
             "\n Verify ceph config show and get command for all daemons"
             "\n\t 1. Deploy a cluster with at least 1 mon, mgr, OSD, and RGW each"
             "\n\t 2. Retrieve the ceph config show output for each daemon"
@@ -130,7 +131,7 @@ def run(ceph_cluster, **kw):
 
     if config.get("slow-osd-heartbeat"):
         doc = (
-            "\n# CEPH-"
+            "\n# CEPH-83590688"
             "\n Verify slow osd heartbeat warning being generated when network delay > 1 sec"
             "\n\t 1. Deploy a cluster with at least 2 OSD hosts"
             "\n\t 2. Ensure Cluster health condition should be HEALTH_OK"
@@ -218,7 +219,7 @@ def run(ceph_cluster, **kw):
 
     if config.get("slow-osd-heartbeat-baremetal"):
         doc = (
-            "\n# CEPH-"
+            "\n# CEPH-83590688"
             "\n Verify auto removal of slow osd heartbeat warning after 15 mins of OSD node restart"
             "\n\t 1. Deploy a cluster with at least 2 OSD hosts"
             "\n\t 2. Ensure Cluster health condition should be HEALTH_OK"
