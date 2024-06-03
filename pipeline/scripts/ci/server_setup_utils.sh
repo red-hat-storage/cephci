@@ -60,7 +60,11 @@ function wipe_drives {
     local username="${2:-root}"
     local password="${3:-passwd}"
     echo "Wipe all data disks clean."
-    disks=$(sshpass -p ${password} ssh ${username}@${node} 'lsblk -o NAME -d | tail -n +2')
+
+    # Find all disks and its type
+    disks=$(sshpass -p ${password} ssh -q ${username}@${node} "lsblk -ndo name,type | awk '{print \$1\",\"\$2}'")
+
+    # Find root disk device
     root_disk=$(sshpass -p ${password} ssh ${username}@${node} 'eval $(lsblk -o PKNAME,MOUNTPOINT -P | grep "MOUNTPOINT=\"/\""); echo $PKNAME')
 
     if [ -z "${root_disk}" ]; then
@@ -73,13 +77,19 @@ function wipe_drives {
         exit 2
     fi
 
-    for disk in ${disks} ; do
+    read -a devices -d ' ' <<< $disks
+    for disk in "${devices[@]}" ; do
+      echo "Device - ${disk}"
+      IFS=',' read -r name type <<< "$dev"
+
       # shellcheck disable=SC2076
-      if [[ "${root_disk}" =~ "${disk}" ]]; then
+      # Skip wipefs for root, cd-rom.,etc
+      if [[ "${root_disk}" =~ "${name}" || "${type}" != "disk" ]]; then
+        echo "Skipping this disk :  disk - ${name} , type - ${type}"
         continue
       else
-    sshpass -p ${password} ssh ${username}@${node} "wipefs -a --force /dev/${disk}"
-    fi
+        sshpass -p ${password} ssh ${username}@${node} "wipefs -a --force /dev/${disk}"
+      fi
     done
 }
 
