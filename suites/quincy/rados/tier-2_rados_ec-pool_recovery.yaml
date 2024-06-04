@@ -180,17 +180,3 @@ tests:
           - re_pool_overwrite
       desc: EC pool with Overwrites & create RBD pool
 
-# Test to verify EC 8+6 with custom crush rules, designed to run on 4 node cluster
-  - test:
-      name: 8+6 EC pool
-      module: test_ec_86.py
-      config:
-          create_rule: true
-          create_pool: true
-          pool_name: test_86_ecpool
-          k: 8
-          m: 6
-          plugin: jerasure
-          crush_rule: rule-86
-          change_subtree_limit: host
-      desc: Verification of 8+6 EC pools on a 4 node cluster

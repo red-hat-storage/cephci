@@ -37,7 +37,7 @@ def run(ceph_cluster, **kw) -> int:
     pool_obj = PoolFunctions(node=cephadm)
     client_node = ceph_cluster.get_nodes(role="client")[0]
 
-    pool_configs_path = "conf/pacific/rados/test-confs/pool-configurations.yaml"
+    pool_configs_path = config.get("pool_configs_path")
 
     with open(pool_configs_path, "r") as fd:
         pool_configs = yaml.safe_load(fd)

@@ -27,9 +27,38 @@ erasure:
     plugin: jerasure
     crush-failure-domain: osd
   sample-pool-3:
-    pool_name: ec_pool_30
+    profile_name: ec86_profile
+    pool_name: ec86_msr_pool
     pool_type: erasure
     k: 8
     m: 4
+    create_rule: true
+    crush-osds-per-failure-domain: 4
+    crush-num-failure-domains: 4
     plugin: jerasure
-    crush-failure-domain: osd
+    crush-failure-domain: host
+  sample-pool-4:
+    profile_name: ec86_profile1
+    pool_name: ec86_msr_pool1
+    pool_type: erasure
+    k: 8
+    m: 4
+    create_rule: true
+    crush-osds-per-failure-domain: 4
+    crush-num-failure-domains: 4
+    plugin: jerasure
+    crush-failure-domain: host
+  sample-pool-5:
+    pool_name: ec_pool_22
+    pool_type: erasure
+    k: 2
+    m: 2
+    plugin: jerasure
+    crush-failure-domain: host
+  sample-pool-6:
+    pool_name: ec_pool_22_1
+    pool_type: erasure
+    k: 2
+    m: 2
+    plugin: jerasure
+    crush-failure-domain: host
