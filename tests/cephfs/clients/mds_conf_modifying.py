@@ -1,10 +1,13 @@
+import json
 import random
 import string
 import traceback
+from distutils.version import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -22,6 +25,7 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
+        ceph_version = get_ceph_version_from_cluster(clients[0])
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
@@ -37,9 +41,26 @@ def run(ceph_cluster, **kw):
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
         fs_util.fuse_mount([client1], fuse_mounting_dir_1)
         fs_util.run_ios(client1, fuse_mounting_dir_1, ["dd", "smallfile"])
+
         log.info("Setting the client config values")
         conf_set = "ceph config set mds"
         conf_get = "ceph config get mds"
+        if LooseVersion(ceph_version) >= LooseVersion("18.1"):
+            output = client1.exec_command(
+                sudo=True, cmd=f"{conf_get} defer_client_eviction_on_laggy_osds"
+            )
+            defer_client_eviction_on_laggy_osds = output[0].strip()
+            if defer_client_eviction_on_laggy_osds != "false":
+                log.error(
+                    f"defer_client_eviction_on_laggy_osds values is expected to be disabled by default.\n "
+                    f"but the value is {defer_client_eviction_on_laggy_osds}"
+                )
+
+                return 1
+
+        if LooseVersion(ceph_version) >= LooseVersion("18.2"):
+            set_balance_automate_and_validate(client1)
+
         conf_default = [
             ["mds_cache_mid", ""],
             ["mds_dir_max_commit_size", ""],
@@ -193,3 +214,47 @@ def run(ceph_cluster, **kw):
             value = default[1]
             client1.exec_command(sudo=True, cmd=f"{conf_set} {client_conf} {value}")
         log.info("Successfully reset all the client config values to default")
+
+
+def set_balance_automate_and_validate(client):
+    log.info(
+        "Validate if the Balance Automate is set to False by default and reset after toggling the values"
+    )
+    out, rc = client.exec_command(sudo=True, cmd="ceph fs get cephfs -f json")
+    json_data = json.loads(out)
+    default_balance_automate_value = json_data["mdsmap"]["flags_state"][
+        "balance_automate"
+    ]
+
+    if default_balance_automate_value != "false":
+        log.error(
+            f"balance automate values is expected to be disabled by default.\n "
+            f"but the value is {default_balance_automate_value}"
+        )
+        raise CommandFailed("Set Balance Automate value is not set to default value")
+
+    log.info("Set Balance Automate to True and Validate")
+    client.exec_command(sudo=True, cmd="ceph fs set cephfs balance_automate true")
+    out, rc = client.exec_command(sudo=True, cmd="ceph fs get cephfs -f json")
+    json_data = json.loads(out)
+    balance_automate = json_data["mdsmap"]["flags_state"]["balance_automate"]
+
+    if balance_automate != "true":
+        log.error(
+            f"balance automate values is unable to set to True.\n "
+            f"and the current value is {balance_automate}"
+        )
+        raise CommandFailed("Unable to set Balance Automate value to True")
+
+    log.info("Set Balance Automate back to Default Value")
+    client.exec_command(sudo=True, cmd="ceph fs set cephfs balance_automate false")
+
+    out, rc = client.exec_command(sudo=True, cmd="ceph fs get cephfs -f json")
+    json_data = json.loads(out)
+    balance_automate = json_data["mdsmap"]["flags_state"]["balance_automate"]
+    if balance_automate != "false":
+        log.error(
+            f"balance automate values is unable to set to default value.\n "
+            f"but the value is {balance_automate}"
+        )
+        raise CommandFailed("Unable to set Balance Automate value to default value")
