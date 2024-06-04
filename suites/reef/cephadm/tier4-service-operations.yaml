@@ -1,5 +1,5 @@
 #===============================================================================================
-# Conf: conf/quincy/cephadm/tier-0.yaml
+# Conf: conf/reef/cephadm/tier-0.yaml
 # Test cases for cluster service operation
 #    - Bootstrap
 #    - Perform stop operation for Mon and Mgr service
@@ -110,3 +110,20 @@ tests:
       polarion-id: CEPH-83575590
       destroy-cluster: false
       abort-on-fail: true
+
+  - test:
+      name: Validate container cpu limit in cephadm
+      desc: Verify support to customize daemon container cpu limit
+      polarion-id: CEPH-83591038
+      module: test_validate_container_cpu_limit.py
+      config:
+        spec:
+          service_type: osd
+          service_id: all-available-devices
+          encrypted: true
+          placement:
+          host_pattern: '*'
+          data_devices:
+          all: true
+          extra_container_args:
+            - "--cpus=1"
