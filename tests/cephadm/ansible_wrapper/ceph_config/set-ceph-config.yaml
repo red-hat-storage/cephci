@@ -17,4 +17,4 @@
         who: "{{ who }}"
         option: "{{ option }}"
       register: result
-      failed_when: "{{ value }} != {{ result.stdout }}"
+      failed_when: value !=  result.stdout
