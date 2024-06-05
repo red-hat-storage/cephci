@@ -1,5 +1,5 @@
 # Test suite to scale with 4 GWs having 2 subsystem to 2048 namespaces
-# Test config at conf/reef/nvmeof/ceph_nvmeof_4-nvmeof-gw_scale_cluster.yaml
+# Test config at conf/baremetal/nvme_cali_1admin_6node_2client.yaml
 # Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 # Test attributes
   #  4 ceph-nvmeof GWs colocated with osd on node4, node5, node 6, node7 and node8 is nvmeof initiator
