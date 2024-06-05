@@ -1,3 +1,4 @@
+import json
 from datetime import datetime
 from threading import Thread
 from time import sleep
@@ -154,6 +155,22 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
         Ceph(clients[0]).nfs.export.delete(nfs_name, f"{nfs_export}_{i}")
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
     sleep(30)
+
+    # Delete the subvolume
+    for i in range(len(clients)):
+        cmd = "ceph fs subvolume ls cephfs --group_name ganeshagroup"
+        out = client.exec_command(sudo=True, cmd=cmd)
+        json_string, _ = out
+        data = json.loads(json_string)
+        # Extract names of subvolume
+        for item in data:
+            subvol = item["name"]
+            cmd = f"ceph fs subvolume rm cephfs {subvol} --group_name ganeshagroup"
+            client.exec_command(sudo=True, cmd=cmd)
+
+    # Delete the subvolume group
+    cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
+    client.exec_command(sudo=True, cmd=cmd)
 
 
 def _get_client_specific_mount_versions(versions, clients):
