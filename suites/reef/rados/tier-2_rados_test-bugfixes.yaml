@@ -9,6 +9,10 @@
 #     2. https://bugzilla.redhat.com/show_bug.cgi?id=1900127
 #     3. https://bugzilla.redhat.com/show_bug.cgi?id=2229651
 #     4. https://bugzilla.redhat.com/show_bug.cgi?id=2011756
+#     5. https://bugzilla.redhat.com/show_bug.cgi?id=2264053
+#     6. https://bugzilla.redhat.com/show_bug.cgi?id=2264054
+#     7. https://bugzilla.redhat.com/show_bug.cgi?id=2264052
+#     8. https://bugzilla.redhat.com/show_bug.cgi?id=2260306
 #===============================================================================================
 tests:
   - test:
@@ -121,6 +125,15 @@ tests:
       module: test_rados_ballooning_client.py
       polarion-id: CEPH-83584004
       desc: Verify MON ballooning client
+
+# moved prior to Inconsistent object test due to chances of an OSD being down
+  - test:
+      name: OSD restart when bluefs_shared_alloc_size is lower than bluestore_min_alloc_size
+      module: test_bug_fixes.py
+      config:
+        lower_bluefs_shared_alloc_size: true
+      polarion-id: CEPH-83591092
+      desc: verify OSD resiliency when 'bluefs_shared_alloc_size' is below 'bluestore_min_alloc_size'
 
   - test:
       name: Inconsistent objects in  EC pool functionality check
