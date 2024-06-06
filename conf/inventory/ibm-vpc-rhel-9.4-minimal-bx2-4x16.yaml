@@ -1,0 +1,41 @@
+---
+version_id: 9.4
+id: rhel
+instance:
+  create:
+    image-name: ibm-redhat-9-4-minimal-amd64-1
+    network_name: sn-20240306-02
+    private_key: ceph-qe-jenkins
+    group_access: flick-outgoing-rejoicing-broadways
+    profile: bx2-4x16
+
+  setup:  |
+    #cloud-config
+    disable_root: false
+    ssh_pwauth: true
+
+    groups:
+      - cephuser
+
+    users:
+      - name: cephuser
+        primary-group: cephuser
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh-authorized-keys:
+          - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQDdDC+Hul7b76AGu4U27Zk8stcTmmJmB3OB+BJ8ytigwC/Pm3XTj+zpOgDkc3blWZY0fSS5cfNXU7tX7P0L8WTpkj2BrjRPjw1AIOJNhFk+bmlhGoKwATvHkMZYsz48WJhG4pN3/cPyeuldHLnwxxDecFMDpE5ELPHHw+S0Q6tSz6RYsl23d0P1vzyeqSxL5pDQ69ofhEIpb1vPKpK/Dekm5NniOFaTe9cpeSi+qZMt9EKdpcdNebg+n6zYfcRaWA+sigjqLo6y/ZTSEhPZI8qXU3Z0fMEF0kclrCg1a3OSWvHzD7uA01w1uv168OqQXMj4ofiOezgqYd/N+AfYlfy+vwn5fS4hxkqcvbLC22Cek1O5Bw8T7/7XdyY9ZDolUvIELfFzVj6jNmhuGS3x9DmFaAtm9zRSns31Eixz7AO//pYBngmS5ssCJctmeg+qHMtNPlxTNlMzPq9YB+7pppwZVgw9UY+gU72nD+b2tThQ5tBrUyL43YbKV0p93Va2JiE= jenkins@cephqevs
+
+    chpasswd:
+      users:
+        - name: cephuser
+          password: $y$j9T$PxJ09a3yVNnPj0Veb8QDT.$bdWoyLq1IdGwlimyJC98P5OsSFE2w7.9ac68z4eoa01
+        - name: root
+          password: $y$j9T$L0/xJyxgqCPIezC0dp/0/0$KawKfTR2FhliH9YrG4/30wot90M3xtF03K1XwGnYz2A
+      expire: false
+
+    runcmd:
+      - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - systemctl restart sshd
+      - update-ca-trust
+      - touch /ceph-qa-ready
