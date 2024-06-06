@@ -33,16 +33,23 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         log.info("checking Pre-requisites")
         if len(clients) < 1:
-            log.info(
+            log.error(
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
+        log.info("Installing required packages for make")
+        clients[0].exec_command(
+            sudo=True, cmd='dnf groupinstall "Development Tools" -y'
+        )
         fs_util_v1.prepare_clients(clients, build)
         fs_util_v1.auth_list(clients)
         default_fs = "cephfs"
+        # if "cephfs" does not exsit, create it
+        fs_details = fs_util_v1.get_fs_info(clients[0])
+        if not fs_details:
+            fs_util_v1.create_fs(clients[0], default_fs)
         subvolume_group_name = "subvol_group1"
         subvolume_name = "subvol"
-
         subvolumegroup = {
             "vol_name": default_fs,
             "group_name": subvolume_group_name,
@@ -131,11 +138,11 @@ def run(ceph_cluster, **kw):
         log.info(ceph_health)
         return 0
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
     finally:
-        log.info("Clean up the system")
+        log.error("Clean up the system")
         fs_util_v1.client_clean_up(
             "umount", kernel_clients=[clients[0]], mounting_dir=kernel_mounting_dir_1
         )
