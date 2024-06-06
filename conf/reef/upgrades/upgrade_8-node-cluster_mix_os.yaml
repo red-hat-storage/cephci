@@ -2,7 +2,9 @@ globals:
   - ceph-cluster:
       name: ceph
       node1:
-        image-name: RHEL-8.6.0-x86_64-ga-latest
+        image-name:
+          openstack: RHEL-8.9.0-x86_64-ga-latest
+          ibmc: ibm-redhat-8-10-minimal-amd64-1
         networks:
           - provider_net_cci_12
         role:
@@ -16,7 +18,9 @@ globals:
           - prometheus
           - crash
       node2:
-        image-name: RHEL-8.6.0-x86_64-ga-latest
+        image-name:
+          openstack: RHEL-8.9.0-x86_64-ga-latest
+          ibmc: ibm-redhat-8-10-minimal-amd64-1
         networks:
           - provider_net_cci_12
         role:
@@ -27,7 +31,9 @@ globals:
           - alertmanager
           - crash
       node3:
-        image-name: RHEL-8.6.0-x86_64-ga-latest
+        image-name:
+          openstack: RHEL-8.9.0-x86_64-ga-latest
+          ibmc: ibm-redhat-8-10-minimal-amd64-1
         networks:
           - provider_net_cci_12
         role:
@@ -37,7 +43,9 @@ globals:
         no-of-volumes: 5
         disk-size: 25
       node4:
-        image-name: RHEL-8.6.0-x86_64-ga-latest
+        image-name:
+          openstack: RHEL-8.9.0-x86_64-ga-latest
+          ibmc: ibm-redhat-8-10-minimal-amd64-1
         networks:
           - provider_net_cci_12
         role:
@@ -47,7 +55,9 @@ globals:
         no-of-volumes: 5
         disk-size: 25
       node5:
-        image-name: RHEL-8.6.0-x86_64-ga-latest
+        image-name:
+          openstack: RHEL-8.9.0-x86_64-ga-latest
+          ibmc: ibm-redhat-8-10-minimal-amd64-1
         networks:
           - provider_net_cci_12
         role:
@@ -57,7 +67,9 @@ globals:
         no-of-volumes: 5
         disk-size: 25
       node6:
-        image-name: RHEL-8.6.0-x86_64-ga-latest
+        image-name:
+          openstack: RHEL-8.9.0-x86_64-ga-latest
+          ibmc: ibm-redhat-8-10-minimal-amd64-1
         networks:
           - provider_net_cci_12
         role:
@@ -67,13 +79,17 @@ globals:
           - node-exporter
           - crash
       node7:
-        image-name: RHEL-9.1.0-x86_64-ga-latest
+        image-name:
+          openstack: RHEL-9.4.0-x86_64-ga-latest
+          ibmc: ibm-redhat-9-4-minimal-amd64-1
         networks:
           - provider_net_cci_9
         role:
           - client
       node8:
-        image-name: RHEL-9.1.0-x86_64-ga-latest
+        image-name:
+          openstack: RHEL-9.4.0-x86_64-ga-latest
+          ibmc: ibm-redhat-9-4-minimal-amd64-1
         networks:
           - provider_net_cci_12
         role:
