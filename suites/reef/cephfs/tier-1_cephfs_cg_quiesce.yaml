@@ -129,6 +129,7 @@ tests:
       polarion-id: CEPH-83581467
       config:
        test_name: cg_snap_func_workflow_1
+      comments: product bug bz-2284364
   -
     test:
       abort-on-fail: false
@@ -139,6 +140,7 @@ tests:
       polarion-id: CEPH-83581470
       config:
        test_name: cg_snap_func_workflow_2
+      comments: product bug bz-2284364
   -
     test:
       abort-on-fail: false
@@ -179,3 +181,13 @@ tests:
       polarion-id: CEPH-83590256
       config:
        test_name: cg_snap_func_workflow_6
+  -
+    test:
+      abort-on-fail: false
+      desc: "cg_snap_interop_workflow_1"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_interop_workflow_1"
+      polarion-id: CEPH-83581472
+      config:
+       test_name: cg_snap_interop_workflow_1

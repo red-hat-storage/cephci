@@ -1041,7 +1041,12 @@ class CG_snap_IO(object):
                 except Exception as ex:
                     log.info(ex)
                     time.sleep(5)
-            file_name = random.choice(files)
+            retry_cnt = 5
+            while retry_cnt > 0:
+                file_name = random.choice(files)
+                retry_cnt -= 1
+                if "_copy" not in file_name:
+                    retry_cnt = 0
             client_name = client.node.hostname
             client_name_1 = f"{client_name[0: -1]}"
             read_cmd_dict = {

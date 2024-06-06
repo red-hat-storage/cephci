@@ -1,4 +1,5 @@
 import datetime
+import json
 import random
 import re
 import string
@@ -6,6 +7,8 @@ import time
 import traceback
 from multiprocessing import Process, Value
 from threading import Thread
+
+from pip._internal.exceptions import CommandError
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
 from tests.cephfs.snapshot_clone.cephfs_cg_io import CG_snap_IO
@@ -81,6 +84,14 @@ def run(ceph_cluster, **kw):
         quiesce-expire : Verify releasing state goes to expired, when quiesce-expire is exhausted.
         Exclude : Exclude subvolume, verify status of QS.
 
+    # Interop tests
+    Workflow1 - Verify MDS failover during Quiescing, Quiesced and Releasing states
+    Steps:
+    Run QS IO validation tool on selected quiesce set
+    1.In State - Quiescing, Perform MDS failover. Verify quiesce lifecycle can suceed.
+    2.In State - Quiesced, Perform MDS failover. Verify quiesce lifecycle can suceed.
+    3.In State - Releasing, Perform MDS failover. Verify quiesce lifecycle can suceed.
+
     Clean Up:
 
     """
@@ -120,6 +131,7 @@ def run(ceph_cluster, **kw):
             "cg_snap_func_workflow_4",
             "cg_snap_func_workflow_5",
             "cg_snap_func_workflow_6",
+            "cg_snap_interop_workflow_1",
         ]
 
         if test_case_name in test_functional:
@@ -177,8 +189,19 @@ def run(ceph_cluster, **kw):
 
         log.info(f"Test config attributes : qs_cnt - {qs_cnt}, qs_sets - {qs_sets}")
         crash_status_before = fs_util_v1.get_crash_ls_new(client1)
+
         log.info(f"Crash status before Test: {crash_status_before}")
-        fs_util_v1.get_ceph_health_status(client1)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
+        ceph_healthy = 0
+        while (datetime.datetime.now() < end_time) and (ceph_healthy == 0):
+            try:
+                fs_util_v1.get_ceph_health_status(client1)
+                ceph_healthy = 1
+            except Exception as ex:
+                log.info(ex)
+                time.sleep(5)
+        if ceph_healthy == 0:
+            assert False, "Ceph Cluster remains unhealthy even after 5mins"
         cg_test_params = {
             "ceph_cluster": ceph_cluster,
             "fs_name": default_fs,
@@ -232,6 +255,13 @@ def run(ceph_cluster, **kw):
 
         if len(crash_status_after) > len(crash_status_before):
             assert False, "Post test validation failed, please check crash report above"
+
+        cmd = "ceph config set mds mds_cache_quiesce_delay 0"
+        out, rc = client1.exec_command(
+            sudo=True,
+            cmd=cmd,
+        )
+
         qs_cnt += 1
         for i in range(1, qs_cnt):
             subvol_name = f"sv_def_{i}"
@@ -268,6 +298,9 @@ def cg_snap_test_func(cg_test_params):
         return test_status
     elif cg_test_params["test_case"] == "cg_snap_func_workflow_6":
         test_status = cg_snap_func_6(cg_test_params)
+        return test_status
+    elif cg_test_params["test_case"] == "cg_snap_interop_workflow_1":
+        test_status = cg_snap_interop_1(cg_test_params)
         return test_status
 
 
@@ -1363,8 +1396,12 @@ def cg_snap_func_6(cg_test_params):
                 )
 
                 qs_set_copy = qs_set.copy()
-                for i in range(len(qs_set_copy)):
-                    qs_set_copy[i] = f"{qs_set_copy[i]}?q=3"
+                log.info("Induce delay in quiescing")
+                cmd = "ceph config set mds mds_cache_quiesce_delay 3000"
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
                 include_sv_name = qs_set_copy.pop()
                 log.info(f"Quiesce the set {qs_set_copy} without --await")
                 cg_snap_util.cg_quiesce(
@@ -1426,6 +1463,12 @@ def cg_snap_func_6(cg_test_params):
                     log.error(f"qs set {qs_id_val} not reached QUIESCED state")
 
                 cg_snap_util.cg_quiesce_release(client, qs_id_val)
+                log.info("Reset delay in quiescing")
+                cmd = "ceph config set mds mds_cache_quiesce_delay 0"
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
                 log.info(
                     " 2.State - Quiesced:Quiesce with --await, when in quiesced perform include,exclude"
                 )
@@ -1577,6 +1620,171 @@ def cg_snap_func_6(cg_test_params):
     return 0
 
 
+def cg_snap_interop_1(cg_test_params):
+    log.info(
+        "Interop Workflow 1 - Verify MDS failover during quiescing, quiesced and releasing states"
+    )
+    cg_test_io_status = {}
+    fs_name = cg_test_params["fs_name"]
+
+    client = cg_test_params["clients"][0]
+    client1 = cg_test_params["clients"][1]
+    qs_clients = [client1]
+    qs_sets = cg_test_params["qs_sets"]
+    cg_snap_util = cg_test_params["cg_snap_util"]
+    cg_snap_io = cg_test_params["cg_snap_io"]
+    fs_util = cg_test_params["fs_util"]
+    test_fail = 0
+    for qs_set in qs_sets:
+        client_mnt_dict = {}
+        qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
+        client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
+        time.sleep(5)
+        log.info(f"Start the IO on quiesce set members - {qs_set}")
+
+        cg_test_io_status = Value("i", 0)
+        io_run_time = 60
+        p = Thread(
+            target=cg_snap_io.start_cg_io,
+            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+        )
+        p.start()
+        time.sleep(30)
+        repeat_cnt = 1
+        snap_qs_dict = {}
+        for qs_member in qs_set:
+            snap_qs_dict.update({qs_member: []})
+        i = 0
+        while i < repeat_cnt:
+            if p.is_alive():
+                log.info(f"Interop Workflow 1 : Iteration {i}")
+                # time taken for 1 lifecycle : ~5secs
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                qs_id_val = f"cg_test1_{rand_str}"
+                log.info(
+                    " 1.State - Quiescing:Quiesce without await, when in quiescing perform MDS failover"
+                )
+                log.info("Induce delay in quiescing")
+                cmd = "ceph config set mds mds_cache_quiesce_delay 3000"
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+
+                log.info(f"Quiesce the set {qs_set} without --await")
+                cg_snap_util.cg_quiesce(
+                    client,
+                    qs_set,
+                    qs_id=qs_id_val,
+                    if_await=False,
+                    timeout=300,
+                    expiration=100,
+                )
+
+                log.info("Perform MDS failover")
+                if cg_mds_failover(fs_util, client, fs_name):
+                    test_fail += 1
+
+                log.info("Reset quiesce delay to 0")
+                cmd = "ceph config set mds mds_cache_quiesce_delay 0"
+                out, rc = client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+                log.info("Verify quiesce lifecycle can suceed after mds failover")
+                if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+                    test_fail += 1
+                log.info("1.State:Quiescing, Quiesce suceeds after MDS failover")
+
+                log.info(
+                    " 2.State - Quiesced:Quiesce with --await, when in quiesced perform MDS failover"
+                )
+
+                log.info(f"Quiesce the set {qs_set} with --await")
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                qs_id_val = f"cg_test1_{rand_str}"
+                cg_snap_util.cg_quiesce(
+                    client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+                )
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+                log.info(f"State of set-id {qs_id_val} before MDS failover:{state}")
+                if state != "QUIESCED":
+                    log.info(
+                        f"State of set-id {qs_id_val} before mds failover is not as Expected"
+                    )
+                log.info("Perform MDS failover when in QUIESCED state")
+                if cg_mds_failover(fs_util, client, fs_name):
+                    test_fail += 1
+                log.info("Verify quiesce lifecycle can suceed after mds failover")
+                if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+                    test_fail += 1
+                log.info("2.State:Quiesced, Quiesce suceeds after MDS failover")
+
+                log.info(
+                    " 3.State - Releasing:Release without --await, when in Releasing perform mds failover"
+                )
+
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                qs_id_val = f"cg_test1_{rand_str}"
+                log.info(f"Quiesce the set {qs_set} with --await")
+                cg_snap_util.cg_quiesce(
+                    client, qs_set, qs_id=qs_id_val, timeout=300, expiration=100
+                )
+                time.sleep(10)
+                cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=False)
+
+                log.info(f"Verify mds failover while Releasing quiesce set {qs_id_val}")
+                if cg_mds_failover(fs_util, client, fs_name):
+                    test_fail += 1
+
+                log.info("Verify quiesce lifecycle can suceed after mds failover")
+                if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+                    test_fail += 1
+                log.info("3.State:Releasing, Quiesce suceeds after MDS failover")
+                if test_fail >= 1:
+                    i = repeat_cnt
+                else:
+                    i += 1
+                    time.sleep(10)
+            else:
+                i = repeat_cnt
+
+        log.info(f"cg_test_io_status : {cg_test_io_status.value}")
+
+        wait_for_cg_io(p, qs_id_val)
+
+        mnt_pt_list = []
+        log.info(f"Perform cleanup for {qs_set}")
+        for qs_member in qs_member_dict1:
+            mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
+        log.info("Remove CG IO files and unmount")
+        cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
+        mnt_pt_list.clear()
+
+        if cg_test_io_status.value == 1:
+            log.error(
+                f"CG IO test exits with failure during quiesce test on qs_set-{qs_id_val}"
+            )
+            test_fail += 1
+
+    if test_fail >= 1:
+        log.error(
+            "FAIL: Interop Workflow 1 - Verify MDS failover during quiescing, quiesced and releasing states"
+        )
+        return 1
+    return 0
+
+
 # HELPER ROUTINES
 
 
@@ -1620,3 +1828,84 @@ def wait_for_cg_state(client, cg_snap_util, qs_id_val, exp_state):
         return 0
     else:
         return 1
+
+
+def cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+    try:
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        qs_id_val = f"cg_test1_{rand_str}"
+        log.info(f"Quiesce the set {qs_set} with --await")
+        cg_snap_util.cg_quiesce(
+            client, qs_set, qs_id=qs_id_val, timeout=300, expiration=100
+        )
+        time.sleep(10)
+        cg_snap_util.cg_quiesce_release(client, qs_id_val)
+    except Exception as ex:
+        log.info(ex)
+        return 1
+    return 0
+
+
+def cg_mds_failover(fs_util, client, fs_name):
+    mds_ls = fs_util.get_active_mdss(client, fs_name=fs_name)
+    for mds in mds_ls:
+        out, rc = client.exec_command(cmd=f"ceph mds fail {mds}", client_exec=True)
+        log.info(out)
+
+        if not wait_for_two_active_mds(client, fs_name):
+            raise CommandError("2 Active MDS did not start after failing one MDS")
+        time.sleep(120)
+        out, rc = client.exec_command(cmd=f"ceph fs status {fs_name}", client_exec=True)
+        log.info(f"Status of {fs_name}:\n {out}")
+        out, rc = client.exec_command(cmd="ceph -s -f json", client_exec=True)
+        ceph_status = json.loads(out)
+        log.info(f"Ceph status: {json.dumps(ceph_status, indent=4)}")
+        if ceph_status["health"]["status"] == "HEALTH_ERR":
+            log.error(f"Ceph Health is NOT OK after mds{mds} failover")
+            return 1
+    return 0
+
+
+def wait_for_two_active_mds(client1, fs_name, max_wait_time=180, retry_interval=10):
+    """
+    Wait until two active MDS (Metadata Servers) are found or the maximum wait time is reached.
+
+    Args:
+        data (str): JSON data containing MDS information.
+        max_wait_time (int): Maximum wait time in seconds (default: 180 seconds).
+        retry_interval (int): Interval between retry attempts in seconds (default: 5 seconds).
+
+    Returns:
+        bool: True if two active MDS are found within the specified time, False if not.
+
+    Example usage:
+    ```
+    data = '...'  # JSON data
+    if wait_for_two_active_mds(data):
+        print("Two active MDS found.")
+    else:
+        print("Timeout: Two active MDS not found within the specified time.")
+    ```
+    """
+
+    start_time = time.time()
+    while time.time() - start_time < max_wait_time:
+        out, rc = client1.exec_command(
+            cmd=f"ceph fs status {fs_name} -f json", client_exec=True
+        )
+        log.info(out)
+        parsed_data = json.loads(out)
+        active_mds = [
+            mds
+            for mds in parsed_data.get("mdsmap", [])
+            if mds.get("rank", -1) in [0, 1] and mds.get("state") == "active"
+        ]
+        if len(active_mds) == 2:
+            return True  # Two active MDS found
+        else:
+            time.sleep(retry_interval)  # Retry after the specified interval
+
+    return False
