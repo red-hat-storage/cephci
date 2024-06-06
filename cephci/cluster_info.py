@@ -1,6 +1,8 @@
 import json
+import os
 import pickle
 import re
+from stat import S_ISDIR, S_ISREG
 
 import yaml
 from docopt import docopt
@@ -15,13 +17,19 @@ from cli.utilities.utils import (
     get_release_info,
     get_running_containers,
 )
+from utility.log import Log
+
+log = Log(__name__)
+
+CEPH_VAR_LOG_DIR = "/var/log/ceph"
 
 doc = """
 Utility to gather cluster information
 
     Usage:
        cephci/cluster_info.py (--reuse <FILE>)
-           [--output <YAML>]
+           (--output <YAML>)
+           (--ceph-logs <true/false>)
 
        cephci/cluster_info.py --help
 
@@ -152,12 +160,48 @@ def gather_info(cluster):
     return info
 
 
+def get_ceph_var_logs(cluster, log_dir):
+    """
+    This method is to download and store
+    ceph cluster var logs into log directory.
+    """
+    for node in cluster.get_nodes():
+        download_dir = os.path.join(log_dir, "ceph_logs", node.hostname)
+        os.makedirs(download_dir, exist_ok=True)
+        file_attributes = node.get_listdir_attr(dir_path=CEPH_VAR_LOG_DIR, sudo=True)
+        for attribute in file_attributes:
+            if S_ISDIR(attribute.st_mode):
+                os.makedirs(
+                    os.path.join(download_dir, attribute.filename), exist_ok=True
+                )
+                ceph_files = node.get_dir_list(
+                    dir_path=os.path.join(CEPH_VAR_LOG_DIR, attribute.filename),
+                    sudo=True,
+                )
+                for ceph_file in ceph_files:
+                    node.download_file(
+                        src=os.path.join(
+                            CEPH_VAR_LOG_DIR, attribute.filename, ceph_file
+                        ),
+                        dst=os.path.join(download_dir, attribute.filename, ceph_file),
+                        sudo=True,
+                    )
+                    log.info(
+                        f"Downloading {ceph_file} from {node.hostname} to {download_dir}/{attribute.filename}"
+                    )
+            elif S_ISREG(attribute.st_mode):
+                node.download_file(
+                    src=os.path.join(CEPH_VAR_LOG_DIR, attribute.filename),
+                    dst=os.path.join(download_dir, attribute.filename),
+                    sudo=True,
+                )
+                log.info(
+                    f"Downloading {attribute.filename} from {node.hostname} to {download_dir}"
+                )
+
+
 def write_output(data, output):
     """Write output data to stream"""
-    if not output:
-        print(data)
-        return
-
     with open(output, "w") as fp:
         yaml.dump(data, fp, default_flow_style=False, indent=2)
 
@@ -167,12 +211,18 @@ if __name__ == "__main__":
     args = docopt(doc)
 
     # Get user parameters
-    config, output = args.get("--reuse"), args.get("--output")
+    config = args.get("--reuse")
+    output = args.get("--output")
+    ceph_logs = args.get("--ceph-logs")
 
     # Collect cluster information
     _dict, _info = _load_cluster_config(config), {}
     for name in _dict:
-        _info[name] = gather_info(_dict.get(name))
+        _info = gather_info(_dict.get(name))
 
-    # Write data to stream
-    write_output(_info, output)
+        # Write data to stream
+        _output = os.path.join(output, f"cluster_info_{name}.yaml")
+        write_output(_info, _output)
+
+        if ceph_logs:
+            get_ceph_var_logs(_dict.get(name), output)
