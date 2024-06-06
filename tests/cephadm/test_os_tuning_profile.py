@@ -80,7 +80,7 @@ def run(ceph_cluster, **kw):
     """
     installler_node = ceph_cluster.get_nodes(role="installer")[0]
     config = kw.get("config")
-    mount = "/tmp:/tmp"
+    mount = "/tmp"
     if config.get("command") in ("apply", "re-apply"):
         nodes = config.get("specs", {}).get("placement", {}).get("hosts")
         if "hostx" in nodes:
@@ -90,9 +90,9 @@ def run(ceph_cluster, **kw):
         config["specs"]["placement"]["hosts"] = hosts
         spec_file = generate_tuned_profile_spec(installler_node, config.get("specs"))
         try:
-            result = CephAdm(installler_node, mount).ceph.orch.tuned_profile.apply(
-                spec_file, True
-            )
+            result = CephAdm(
+                installler_node, mount=mount
+            ).ceph.orch.tuned_profile.apply(spec_file, True)
             if config.get("result") not in result:
                 raise OsTuningProfileError("Fail to apply tuned profile")
         except CommandFailed as err:
