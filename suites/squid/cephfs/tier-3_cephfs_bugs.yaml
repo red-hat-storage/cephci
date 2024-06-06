@@ -246,3 +246,9 @@ tests:
       polarion-id: CEPH-83589266
       desc: Validate Ceph commands when ceph file system is in failed state
       abort-on-fail: false
+  - test:
+      name: Verify Ceph Health Warning for Slow MDS Requests After Cluster Installation
+      module: cephfs_bugs.validate_mds_health_with_client_evict.py
+      polarion-id: CEPH-83591136
+      desc: Verify Ceph Health Warning for Slow MDS Requests After Cluster Installation
+      abort-on-fail: false
