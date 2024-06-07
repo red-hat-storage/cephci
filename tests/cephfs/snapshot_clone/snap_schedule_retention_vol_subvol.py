@@ -199,7 +199,7 @@ def run(ceph_cluster, **kw):
                 f"Verify Ceph Status is healthy before starting test {test_case_name}"
             )
             ceph_healthy = 0
-            end_time = datetime.datetime.now() + datetime.timedelta(seconds=60)
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
             while (datetime.datetime.now() < end_time) and (ceph_healthy == 0):
                 try:
                     fs_util_v1.get_ceph_health_status(client1)
@@ -209,7 +209,7 @@ def run(ceph_cluster, **kw):
                     log.info("Wait for few secs and recheck ceph status")
                     time.sleep(5)
             if ceph_healthy == 0:
-                assert False, "Ceph remains unhealthy even after wait for 60secs"
+                assert False, "Ceph remains unhealthy even after wait for 300secs"
             cleanup_params = run_snap_test(snap_test_params)
             log.info(f"post_test_params:{cleanup_params}")
             snap_test_params["export_created"] = cleanup_params["export_created"]
