@@ -57,7 +57,7 @@ def run(ceph_cluster, **kw):
     validate this)
 
     Type - Negative
-    Workflow6 - snap_retention_service_restart: Verify Snapshot retention works even after service restarts.
+    Workflow6 - snap_retention_service_restart: Verify Snapshot retention works even after service restart.
     Verify for mgr, mon and mds.
     Workflow7 - snap_sched_non_existing_path: Verify Snapshot schedule can be created for non-existing path.
     After the start-time is hit for the
