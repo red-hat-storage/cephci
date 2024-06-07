@@ -42,6 +42,7 @@ def run(ceph_cluster, **kw):
         pool_name = ec_config["pool_name"]
         mon_obj.set_config(section="osd", name="debug_osd", value="20/20")
         no_of_objects = config.get("inconsistent_obj_count")
+
         if not rados_obj.create_erasure_pool(name=pool_name, **ec_config):
             log.error("Failed to create the EC Pool")
             return 1
@@ -187,7 +188,8 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
     """
     operation_chk_flag = False
     osd_scrub_min_interval = 120
-    osd_scrub_max_interval = 3600
+    osd_scrub_max_interval = 1800
+    osd_deep_scrub_interval = 1800
     (
         scrub_begin_hour,
         scrub_begin_weekday,
@@ -201,14 +203,17 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
     scrub_object.set_osd_configuration("osd_scrub_end_week_day", scrub_end_weekday)
     scrub_object.set_osd_configuration("osd_scrub_min_interval", osd_scrub_min_interval)
     scrub_object.set_osd_configuration("osd_scrub_max_interval", osd_scrub_max_interval)
-    endTime = datetime.now() + timedelta(minutes=120)
+    scrub_object.set_osd_configuration(
+        "osd_deep_scrub_interval", osd_deep_scrub_interval
+    )
+    endTime = datetime.now() + timedelta(minutes=60)
 
     while datetime.now() <= endTime:
         if operation == "scrub":
             log.debug(f"Running scrub on pg : {pg_id}")
 
             if rados_obj.start_check_scrub_complete(
-                pg_id=pg_id, user_initiated=False, wait_time=7200
+                pg_id=pg_id, user_initiated=False, wait_time=3600
             ):
                 log.info(f"Scrub completed on pg : {pg_id}")
                 operation_chk_flag = True
@@ -216,7 +221,7 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
         else:
             log.debug(f"Running deep-scrub on pg : {pg_id}")
             if rados_obj.start_check_deep_scrub_complete(
-                pg_id=pg_id, user_initiated=False, wait_time=7200
+                pg_id=pg_id, user_initiated=False, wait_time=3600
             ):
                 log.info(f"Deep scrub completed on pg : {pg_id}")
                 operation_chk_flag = True
@@ -270,5 +275,6 @@ def set_default_param_value(mon_obj):
     mon_obj.remove_config(section="osd", name="osd_scrub_end_week_day")
     mon_obj.remove_config(section="osd", name="osd_scrub_min_interval")
     mon_obj.remove_config(section="osd", name="osd_scrub_max_interval")
+    mon_obj.remove_config(section="osd", name="osd_deep_scrub_interval")
     mon_obj.remove_config(section="osd", name="debug_osd")
     time.sleep(10)
