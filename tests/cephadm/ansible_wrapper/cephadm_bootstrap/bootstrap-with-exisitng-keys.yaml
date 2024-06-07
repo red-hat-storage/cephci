@@ -8,3 +8,7 @@
       cephadm_bootstrap:
         mon_ip: "{{ mon_ip }}"
         allow_overwrite: "{{ allow_overwrite | default(False) }}"
+        image: "{{ image | default(False) }}"
+        registry_url: "{{ registry_url | default() }}"
+        registry_username: "{{ registry_username | default() }}"
+        registry_password: "{{ registry_password | default() }}"

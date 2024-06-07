@@ -11,3 +11,6 @@
         monitoring: "{{ monitoring | default(False) }}"
         firewalld: "{{ firewalld | default(False) }}"
         ssh_user: "{{ ssh_user }}"
+        registry_url: "{{ registry_url | default() }}"
+        registry_username: "{{ registry_username | default() }}"
+        registry_password: "{{ registry_password | default() }}"
