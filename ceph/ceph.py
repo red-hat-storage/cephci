@@ -2098,6 +2098,22 @@ class CephNode(object):
         except Exception as e:
             raise e
 
+    def get_listdir_attr(self, dir_path, sudo=False):
+        """Lists directory attributes from node
+
+        Args:
+            dir_path (str): Directory path to get direcotry attributes
+            sudo (bool): Use root access
+        """
+        client = self.rssh if sudo else self.ssh
+        try:
+            return client().open_sftp().listdir_attr(dir_path)
+        except FileNotFoundError:
+            logger.info(f"Dir path '{dir_path}' not present")
+            return None
+        except Exception as e:
+            raise e
+
     def upload_file(self, src, dst, sudo=False):
         """Put file to remote location
 

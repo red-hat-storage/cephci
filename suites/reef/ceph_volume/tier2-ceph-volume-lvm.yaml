@@ -77,7 +77,7 @@ tests:
   - test:
       name: Deploy OSDs with LVM
       desc: Create OSDs with existing LVMs
-      polarion-id: CEPH-83575620
+      polarion-id: CEPH-83575620,CEPH-83591043
       module: test_ceph_volume_prepare_lvm.py
       config:
         specs:

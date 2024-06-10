@@ -77,18 +77,22 @@ function wipe_drives {
         exit 2
     fi
 
-    read -a devices -d ' ' <<< $disks
-    for disk in "${devices[@]}" ; do
-      echo "Device - ${disk}"
-      IFS=',' read -r name type <<< "$dev"
+    arr=()
+    while IFS='[[:space:]]+' read -r value; do
+      arr+=("$value")
+    done <<< "$(echo $disks)"
+
+    for disk in "${arr}" ; do
+      IFS=',' read -r name type <<< "$disk"
+      echo "name: $name, type: $type"
 
       # shellcheck disable=SC2076
-      # Skip wipefs for root, cd-rom.,etc
+      # Skip wipefs for root, cd-rom.,etc disks
       if [[ "${root_disk}" =~ "${name}" || "${type}" != "disk" ]]; then
         echo "Skipping this disk :  disk - ${name} , type - ${type}"
         continue
       else
-        sshpass -p ${password} ssh ${username}@${node} "wipefs -a --force /dev/${disk}"
+        sshpass -p ${password} ssh ${username}@${node} "wipefs -a --force /dev/${name}"
       fi
     done
 }

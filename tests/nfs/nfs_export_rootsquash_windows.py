@@ -68,7 +68,7 @@ def run(ceph_cluster, **kw):
         )
 
         # Create export with squash permission
-        Ceph(linux_clients).nfs.export.create(
+        Ceph(linux_clients[0]).nfs.export.create(
             fs_name=fs_name,
             nfs_name=nfs_name,
             nfs_export=nfs_export_squash,
