@@ -13,9 +13,10 @@
 tests:
   - test:
       abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
+      desc: Install software pre-requisites for cluster deployment
       module: install_prereq.py
       name: setup pre-requisites
+
   - test:
       abort-on-fail: true
       clusters:
@@ -28,56 +29,11 @@ tests:
                   service: cephadm
                   args:
                     registry-url: registry.redhat.io
-                    mon-ip: extensa010
+                    mon-ip: clara001
                     allow-fqdn-hostname: true
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
-              - config:
-                  command: add_hosts
-                  service: host
-                  args:
-                    attach_ip_address: true
-                    labels: apply-all-labels
-              - config:
-                  command: apply
-                  service: mgr
-                  args:
-                    placement:
-                      label: mgr
-              - config:
-                  command: apply
-                  service: mon
-                  args:
-                    placement:
-                      label: mon
-              - config:
-                  command: apply
-                  service: osd
-                  args:
-                    all-available-devices: true
-              - config:
-                  command: apply
-                  service: rgw
-                  pos_args:
-                    - shared.pri.io
-                  args:
-                    port: 8080
-                    placement:
-                      nodes:
-                        - extensa010
-                        - extensa011
-              - config:
-                  command: apply
-                  service: rgw
-                  pos_args:
-                    - shared.pri.sync
-                  args:
-                    port: 8080
-                    placement:
-                      nodes:
-                        - extensa012
-                        - extensa013
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -87,11 +43,25 @@ tests:
                   service: cephadm
                   args:
                     registry-url: registry.redhat.io
-                    mon-ip: clara011
+                    mon-ip: clara013
                     allow-fqdn-hostname: true
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
+      desc: Bootstrap clusters using cephadm.
+      polarion-id: CEPH-83573386
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Bootstrap clusters
+
+# deploy more mons and mgrs
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
               - config:
                   command: add_hosts
                   service: host
@@ -110,11 +80,230 @@ tests:
                   args:
                     placement:
                       label: mon
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
               - config:
                   command: apply
-                  service: osd
+                  service: mgr
                   args:
-                    all-available-devices: true
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+      desc: RHCS deploy mons and mgrs
+      polarion-id: CEPH-83575222
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy mons and mgrs
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa001
+                    - "/dev/sda"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa001
+                    - "/dev/sdc"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa001
+                    - "/dev/sdd"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa001
+                    - "/dev/sde"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa010
+                    - "/dev/sda"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa010
+                    - "/dev/sdc"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa010
+                    - "/dev/sdd"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa010
+                    - "/dev/sde"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa011
+                    - "/dev/sda"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa011
+                    - "/dev/sdc"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa011
+                    - "/dev/sdd"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa011
+                    - "/dev/sde"
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa012
+                    - "/dev/sda"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa012
+                    - "/dev/sdc"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa012
+                    - "/dev/sdd"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa012
+                    - "/dev/sde"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa013
+                    - "/dev/sdb"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa013
+                    - "/dev/sdc"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa013
+                    - "/dev/sdd"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa013
+                    - "/dev/sde"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa014
+                    - "/dev/sdb"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa014
+                    - "/dev/sdc"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa014
+                    - "/dev/sdd"
+              - config:
+                  command: add
+                  service: osd
+                  pos_args:
+                    - extensa014
+                    - "/dev/sde"
+      desc: RHCS OSD deployment
+      polarion-id: CEPH-83575222
+      destroy-cluster: false
+      module: test_daemon.py
+      name: Add OSD services
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.pri.io
+                  args:
+                    port: 8080
+                    placement:
+                      nodes:
+                        - clara001
+                        - clara011
+                        - clara012
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.pri.sync
+                  args:
+                    port: 8080
+                    placement:
+                      nodes:
+                        - extensa001
+                        - extensa010
+                        - extensa011
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
               - config:
                   command: apply
                   service: rgw
@@ -124,8 +313,9 @@ tests:
                     port: 8080
                     placement:
                       nodes:
-                        - clara011
-                        - clara012
+                        - clara013
+                        - clara014
+                        - clara015
               - config:
                   command: apply
                   service: rgw
@@ -135,13 +325,14 @@ tests:
                     port: 8080
                     placement:
                       nodes:
-                        - clara013
-                        - clara014
-      desc: RHCS cluster deployment using cephadm.
+                        - extensa012
+                        - extensa013
+                        - extensa014
+      desc: RHCS rgws deploy using cephadm
       polarion-id: CEPH-83575222
       destroy-cluster: false
       module: test_cephadm.py
-      name: deploy cluster
+      name: rgws deploy using cephadm
 
   - test:
       clusters:
@@ -158,11 +349,11 @@ tests:
                       placement:
                         count: 1
                         nodes:
-                          - extensa010
+                          - clara001
                     - service_type: grafana
                       placement:
                         nodes:
-                          - extensa010
+                          - clara001
                     - service_type: alertmanager
                       placement:
                         count: 1
@@ -185,11 +376,11 @@ tests:
                       placement:
                         count: 1
                         nodes:
-                          - clara011
+                          - clara013
                     - service_type: grafana
                       placement:
                         nodes:
-                          - clara011
+                          - clara013
                     - service_type: alertmanager
                       placement:
                         count: 1
@@ -212,7 +403,7 @@ tests:
             command: add
             id: client.pri
             node:
-              - extensa010
+              - clara001
               - extensa011
             install_packages:
               - ceph-common
@@ -222,8 +413,8 @@ tests:
             command: add
             id: client.sec
             node:
-              - clara011
-              - clara012
+              - clara013
+              - extensa014
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -241,8 +432,8 @@ tests:
             cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:extensa012}:8080,http://{node_ip:extensa013}:8080 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:extensa012}:8080,http://{node_ip:extensa013}:8080 --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:extensa001}:8080,http://{node_ip:extensa010}:8080,http://{node_ip:extensa011}:8080 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:extensa001}:8080,http://{node_ip:extensa010}:8080,http://{node_ip:extensa011}:8080 --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key test123 --secret test123 --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key test123 --secret test123"
@@ -261,9 +452,9 @@ tests:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://extensa012:8080 --access-key test123 --secret test123 --default"
-              - "radosgw-admin period pull --url http://extensa012:8080 --access-key test123 --secret test123"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:clara013}:8080,http://{node_ip:clara014}:8080 --access-key test123 --secret test123"
+              - "radosgw-admin realm pull --rgw-realm india --url http://extensa001:8080 --access-key test123 --secret test123 --default"
+              - "radosgw-admin period pull --url http://extensa001:8080 --access-key test123 --secret test123"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:extensa012}:8080,http://{node_ip:extensa013}:8080,http://{node_ip:extensa014}:8080 --access-key test123 --secret test123"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.shared.sec.sync rgw_realm india"
               - "ceph config set client.rgw.shared.sec.sync rgw_zonegroup shared"
@@ -274,6 +465,52 @@ tests:
               - "ceph config set client.rgw.shared.sec.io rgw_run_sync_thread false"
               - "ceph orch restart {service_name:shared.sec.io}"
               - "ceph orch restart {service_name:shared.sec.sync}"
+      desc: Setting up RGW multisite replication environment
+      module: exec.py
+      name: setup multisite
+      polarion-id: CEPH-10362
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - extensa001
+            rgw_endpoints:
+              - "extensa001:8080"
+              - "extensa010:8080"
+              - "extensa011:8080"
+        ceph-sec:
+          config:
+            haproxy_clients:
+              - extensa012
+            rgw_endpoints:
+              - "extensa012:8080"
+              - "extensa013:8080"
+              - "extensa014:8080"
+      desc: Configure HAproxy for sync rgw
+      module: haproxy.py
+      name: Configure HAproxy for sync rgw
+      polarion-id: CEPH-83572703
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zonegroup modify --endpoints=http://extensa001:5000 --rgw-zonegroup shared --rgw-realm india --access-key test123 --secret-key test123"
+              - "radosgw-admin zone modify --endpoints=http://extensa001:5000 --rgw-zonegroup shared --rgw-realm india --rgw-zone primary --access-key test123 --secret-key test123"
+              - "radosgw-admin period update --commit"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "sleep 120"
+              - "radosgw-admin zone modify --rgw-zone secondary --endpoints=http://extensa012:5000 --access-key test123 --secret-key test123"
+              - "radosgw-admin period update --commit"
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite
@@ -314,22 +551,24 @@ tests:
         ceph-pri:
           config:
             haproxy_clients:
-              - extensa010
-              - extensa011
+              - clara001
+              - clara011
             rgw_endpoints:
-              - "extensa010:8080"
-              - "extensa011:8080"
+              - "clara001:8080"
+              - "clara011:8080"
+              - "clara012:8080"
         ceph-sec:
           config:
             haproxy_clients:
-              - clara011
-              - clara012
+              - clara013
+              - clara014
             rgw_endpoints:
-              - "clara011:8080"
-              - "clara012:8080"
-      desc: "Configure HAproxy"
+              - "clara013:8080"
+              - "clara014:8080"
+              - "clara015:8080"
+      desc: Configure HAproxy for io rgw
       module: haproxy.py
-      name: "Configure HAproxy"
+      name: Configure HAproxy for io rgw
       polarion-id: CEPH-83572703
 
   - test:
@@ -338,21 +577,23 @@ tests:
         ceph-pri:
           config:
             controllers:
-              - extensa010
+              - clara001
             drivers:
-              count: 4
+              count: 6
               hosts:
-                - extensa010
-                - extensa011
+                - clara001
+                - clara011
+                - clara012
         ceph-sec:
           config:
             controllers:
-              - clara011
+              - clara013
             drivers:
-              count: 4
+              count: 6
               hosts:
-                - clara011
-                - clara012
+                - clara013
+                - clara014
+                - clara015
       desc: Start COS Bench controller and driver
       module: cosbench.py
       name: deploy cosbench

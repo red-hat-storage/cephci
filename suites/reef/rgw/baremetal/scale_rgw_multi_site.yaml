@@ -17,10 +17,11 @@ tests:
         ceph-pri:
           config:
             controllers:
-              - extensa010
+              - clara001
             drivers: # if drivers are not specified will use one of the rgw node
-              - extensa010
-              - extensa011
+              - clara001
+              - clara011
+              - clara012
             fill_percent: 30
       desc: prepare and push cosbench fill workload
       module: push_cosbench_workload.py
@@ -32,10 +33,11 @@ tests:
         ceph-pri:
           config:
             controllers:
-              - extensa010
+              - clara001
             drivers: # if drivers are not specified will use one of the rgw node
-              - extensa010
-              - extensa011
+              - clara001
+              - clara011
+              - clara012
             fill_percent: 30
             workload_type: hybrid
             run_time: 3600 # value in seconds
@@ -82,10 +84,11 @@ tests:
               ceph-pri:
                 config:
                   controllers:
-                    - extensa010
+                    - clara001
                   drivers:
-                    - extensa010
-                    - extensa011
+                    - clara001
+                    - clara011
+                    - clara012
                   fill_percent: 35
                   workload_type: symmetrical
                   record_sync_on_site: ceph-sec
@@ -100,10 +103,11 @@ tests:
               ceph-sec:
                 config:
                   controllers:
-                    - clara011
+                    - clara013
                   drivers:
-                    - clara011
-                    - clara012
+                    - clara013
+                    - clara014
+                    - clara015
                   fill_percent: 35
                   workload_type: symmetrical
                   record_sync_on_site: ceph-pri
@@ -119,10 +123,11 @@ tests:
         ceph-pri:
           config:
             controllers:
-              - extensa010
+              - clara001
             drivers:
-              - extensa010
-              - extensa011
+              - clara001
+              - clara011
+              - clara012
             workload_type: fill_runtime
             run_time: 7200
             record_sync_on_site: ceph-sec
@@ -156,10 +161,11 @@ tests:
               ceph-pri:
                 config:
                   controllers:
-                    - extensa010
+                    - clara001
                   drivers:
-                    - extensa010
-                    - extensa011
+                    - clara001
+                    - clara011
+                    - clara012
                   workload_type: cleanup
                   record_sync_on_site: ceph-sec
                   bucket_prefix: cosbench01-bkt-
@@ -173,10 +179,11 @@ tests:
               ceph-sec:
                 config:
                   controllers:
-                    - clara011
+                    - clara013
                   drivers:
-                    - clara011
-                    - clara012
+                    - clara013
+                    - clara014
+                    - clara015
                   workload_type: cleanup
                   record_sync_on_site: ceph-pri
                   bucket_prefix: cosbench01-bkt-
