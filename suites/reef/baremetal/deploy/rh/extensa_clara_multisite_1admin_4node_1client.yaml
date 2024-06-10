@@ -579,7 +579,7 @@ tests:
             controllers:
               - clara001
             drivers:
-              count: 6
+              count: 2
               hosts:
                 - clara001
                 - clara011
@@ -589,7 +589,7 @@ tests:
             controllers:
               - clara013
             drivers:
-              count: 6
+              count: 2
               hosts:
                 - clara013
                 - clara014
