@@ -92,9 +92,6 @@ def run(ceph_cluster, **kw):
             raise OperationFailedError(f"Failed to mount nfs on {clients[0].hostname}")
         log.info("Mount succeeded on client")
 
-        # Change the permission of mount dir
-        clients[0].exec_command(sudo=True, cmd=f"chmod 777 {nfs_mount}/")
-
         # Create file on non squashed dir
         clients[0].exec_command(
             sudo=True,
@@ -109,25 +106,15 @@ def run(ceph_cluster, **kw):
             return 1
         log.info("File created by root user")
 
-        # Create file on squashed dir
-        clients[0].exec_command(
-            sudo=True,
-            cmd=f"touch {nfs_squash_mount}/file_squashed",
+        # Try creating file on squashed dir
+        _, rc = clients[0].exec_command(
+            sudo=True, cmd=f"touch {nfs_squash_mount}/file_squashed", check_ec=False
         )
-
-        # Check permission of file created by squashed user
-        clients[0].exec_command(
-            sudo=True, cmd=f"ls -n {nfs_squash_mount}/file_squashed"
-        )
-        out = get_file_owner(f"{nfs_squash_mount}/file_squashed", clients)
-        if "squashuser" not in out:
-            log.error("File is not created by squashed user")
+        if "Permission denied" in str(rc):
+            log.info("Rootsquash is enabled and root access is denied")
+        else:
+            log.error("Failed to validate export rootsquash")
             return 1
-        log.info("File created by squashed user")
-
-    except Exception as e:
-        log.error(f"Failed to validate export rootsquash: {e}")
-        return 1
 
     finally:
         log.info("Cleaning up")

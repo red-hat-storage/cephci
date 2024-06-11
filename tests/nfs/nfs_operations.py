@@ -3,6 +3,8 @@ from datetime import datetime
 from threading import Thread
 from time import sleep
 
+import yaml
+
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
@@ -284,21 +286,25 @@ def permission(client, nfs_name, nfs_export, old_permission, new_permission):
 def enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name):
     # Enable the NLM support for v3 Locking
     content = f"""service_type: nfs
-    service_id: {nfs_name}
-    placement:
+service_id: {nfs_name}
+placement:
     hosts:
         - {nfs_server_name}
-    spec:
+spec:
     enable_nlm: true"""
 
-    with open("export.conf", "w") as f:
-        f.write(content)
+    with open("ganesha.yaml", "w") as f:
+        yaml.dump(content, f)
     log.info(content)
+
+    # Adding the configurations into the ganesha.yaml file.
+    cmd = f"echo '{content}' >> ganesha.yaml"
+    CephAdm(installer).shell(cmd=cmd)
 
     # Mount the export file inside shell and apply changes
     cmd = (
-        "--mount export.conf:/var/lib/ceph/export.conf -- "
-        "ceph orch apply -i /var/lib/ceph/export.conf"
+        "--mount ganesha.yaml:/var/lib/ceph/ganesha.yaml -- "
+        "ceph orch apply -i /var/lib/ceph/ganesha.yaml"
     )
     CephAdm(installer).shell(cmd=cmd)
 

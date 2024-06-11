@@ -172,11 +172,12 @@ def run(ceph_cluster, **kw):
                 windows_client.exec_command(cmd=cmd)
 
         # Cleaning up the client export and mount dir
-        if Unmount(clients[0]).unmount(nfs_client_mount):
-            raise OperationFailedError(
-                f"Failed to unmount nfs on {clients[0].hostname}"
-            )
-        clients[0].exec_command(sudo=True, cmd=f"rm -rf  {nfs_client_mount}")
+        for client in clients[:2]:
+            if Unmount(client).unmount(nfs_client_mount):
+                raise OperationFailedError(
+                    f"Failed to unmount nfs on {client.hostname}"
+                )
+            client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_client_mount}")
         Ceph(clients[0]).nfs.export.delete(nfs_name, nfs_export_client)
 
         # Cleaning up the remaining export and deleting the nfs cluster
