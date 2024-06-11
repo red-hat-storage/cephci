@@ -168,3 +168,14 @@ tests:
         slow-osd-heartbeat: true
       polarion-id: CEPH-83590688
       desc: Generate Slow OSD heartbeats by inducing network delay
+
+  - test:
+      name: Verify the recovery flag functionality
+      module: test_norecovery_flag_functionality.py
+      polarion-id: CEPH-83591783
+      config:
+        replicated_pool:
+          create: true
+          pool_name: recovery_pool
+      delete_pool:
+        - recovery_pool
