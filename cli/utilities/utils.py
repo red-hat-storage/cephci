@@ -998,3 +998,22 @@ def create_trusted_ca_key(installer, nodes, copy_to_other_nodes=False):
 
     except Exception:
         raise OperationFailedError("Failed to create trusted CA key")
+
+
+def get_process_info(node, process="", awk=""):
+    """
+    Executes the ps aux command
+    Args:
+        node (ceph): Node where the cmd has to be executed
+        process (str): Name of the process
+        awk (str): Column number of the output.
+                   Example: If "10" is provided here,
+                   then the 10th column will be printed
+    """
+    cmd = "ps aux"
+    if process:
+        cmd = cmd + f" | grep {process}"
+    if awk:
+        cmd = cmd + " | awk {{'print $" + f"{awk}" + "'}}"
+    out, _ = node.exec_command(cmd=cmd, sudo=True)
+    return out.split("\n")
