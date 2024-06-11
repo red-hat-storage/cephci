@@ -42,7 +42,9 @@ def run(ceph_cluster, **kw):
         # Prepare the clients
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
-
+        fs_details = fs_util.get_fs_info(client1)
+        if not fs_details:
+            fs_util.create_fs(client1, "cephfs")
         # Check if jq package is installed, install if not
         jq_check = client1.exec_command(cmd="rpm -qa | grep jq")
         if "jq" not in jq_check:
@@ -236,7 +238,7 @@ def run(ceph_cluster, **kw):
         # Perform write operations
         client1.exec_command(
             sudo=True,
-            cmd=f"dd if=/dev/zero of={fuse_mounting_dir_1}/{rand}_read bs=10M count=100",
+            cmd=f"dd if=/dev/zero of={fuse_mounting_dir_1}/{rand}_read bs=100M count=10",
         )
         client1.exec_command(
             sudo=True, cmd=f"cp {fuse_mounting_dir_1}/{rand}_read /{rand}_copy"
@@ -247,10 +249,11 @@ def run(ceph_cluster, **kw):
         for file_path in file_paths:
             for _ in range(5):  # Repeat the read operation multiple times
                 client1.exec_command(
-                    sudo=True, cmd=f"cat {fuse_mounting_dir_1}/{rand}_read > /dev/null"
+                    sudo=True,
+                    cmd=f"head -c 100 {fuse_mounting_dir_1}/{rand}_read > /dev/null",
                 )
-                client1.exec_command(sudo=True, cmd=f"cat {file_path} > /dev/null")
-        time.sleep(60)
+                client1.exec_command(sudo=True, cmd=f"tail {file_path} > /dev/null")
+        time.sleep(90)
 
         # Get final MDS metrics after reading and writing files
         final_metrics3 = fs_util.get_mds_metrics(client1, 0, fuse_mounting_dir_1)

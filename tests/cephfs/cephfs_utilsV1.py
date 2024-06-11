@@ -3518,7 +3518,7 @@ os.system('sudo systemctl start  network')
         crash_info = json.loads(out)
         return crash_info
 
-    def get_mds_metrics(self, client, rank=0, mounted_dir=""):
+    def get_mds_metrics(self, client, rank=0, mounted_dir="", fs_name="cephfs"):
         """
         returns the metrics for the MDS rank and the client mounted directory
 
@@ -3526,17 +3526,18 @@ os.system('sudo systemctl start  network')
             client (Client): The client object used to execute commands.
             rank (str): rank of the MDS.
             mounted_dir (str): where the client is mounted.
+
         Returns:
             str: The value of the metric.
         """
         ranked_mds, _ = client.exec_command(
             sudo=True,
-            cmd=f"ceph fs status -f json | jq '.mdsmap[] | select(.rank == {rank}) | .name'",
+            cmd=f"ceph fs status {fs_name} -f json | jq '.mdsmap[] | select(.rank == {rank}) | .name'",
         )
         ranked_mds = ranked_mds.replace('"', "").replace("\n", "")
         client_id_cmd = (
             f"ceph tell mds.{ranked_mds} session ls | jq '.[] | select(.client_metadata.mount_point"
-            f'!= null and (.client_metadata.mount_point | contains("{mounted_dir}"))) | .id\''
+            f' != null and (.client_metadata.mount_point | contains("{mounted_dir}"))) | .id\''
         )
         client_id, _ = client.exec_command(sudo=True, cmd=client_id_cmd)
         client_id = client_id.replace('"', "").replace("\n", "")
