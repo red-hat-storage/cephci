@@ -4,6 +4,7 @@ It contains all the re-useable functions related to cephfs
 It installs all the pre-requisites on client nodes
 
 """
+
 import argparse
 import datetime
 import itertools
@@ -212,21 +213,21 @@ class FsUtils(object):
         """
         out, rc = client.exec_command(sudo=True, cmd="ceph orch ps -f json")
         output = json.loads(out)
-        deamon_dict = self.filter_daemons(output, "mds", fs_name)
+        daemon_dict = self.filter_daemons(output, "mds", fs_name)
         set_log_dict = {"log_to_file": "true", "debug_mds": "5", "debug_ms": "1"}
-        for mds_nodes in deamon_dict:
-            for hostname, deamon in mds_nodes.items():
+        for mds_nodes in daemon_dict:
+            for hostname, daemon in mds_nodes.items():
                 node = self.ceph_cluster.get_node_by_hostname(hostname)
                 for k, v in set_log_dict.items():
                     node.exec_command(
                         sudo=True,
-                        cmd=f"cephadm shell -- ceph daemon {deamon} config set {k} {v}",
+                        cmd=f"cephadm shell -- ceph daemon {daemon} config set {k} {v}",
                     )
             if validate:
                 for k, v in set_log_dict.items():
                     out, rc = node.exec_command(
                         sudo=True,
-                        cmd=f"cephadm shell -- ceph daemon {deamon} config get {k}",
+                        cmd=f"cephadm shell -- ceph daemon {daemon} config get {k}",
                     )
                     if v not in out:
                         log.error("Unable to set the debug logs")
@@ -234,34 +235,54 @@ class FsUtils(object):
 
     def disable_mds_logs(self, client, fs_name="cephfs", validate=True):
         """
+        Disable MDS logs for all MDS nodes in the cluster.
 
         Args:
-            fs_name:
+            client: The client node to execute commands.
+            fs_name: The name of the file system (default is "cephfs").
+            validate: Whether to validate the log configuration (default is True).
 
         Returns:
+            None
 
+        Raises:
+            CommandFailed: If unable to unset the debug logs.
         """
         out, rc = client.exec_command(sudo=True, cmd="ceph orch ps -f json")
         output = json.loads(out)
-        deamon_dict = self.filter_daemons(output, "mds", fs_name)
-        for mds_nodes in deamon_dict:
-            for hostname, deamon in mds_nodes.items():
+        daemon_dict = self.filter_daemons(output, "mds", fs_name)
+        unset_log_keys = ["log_to_file", "log_file"]
+        set_log_dict = {
+            "log_to_file": "false",
+            "debug_mds": "1",
+            "debug_ms": "0",
+        }
+        for mds_nodes in daemon_dict:
+            for hostname, daemon in mds_nodes.items():
                 node = self.ceph_cluster.get_node_by_hostname(hostname)
-                set_log_dict = {
-                    "log_to_file": "false",
-                    "debug_mds": "1",
-                    "debug_ms": "0",
-                }
+                # Unset existing log configurations
+                for key in unset_log_keys:
+                    try:
+                        out, rc = node.exec_command(
+                            sudo=True,
+                            cmd=f"cephadm shell -- ceph daemon {daemon} config unset {key}",
+                        )
+                        log.info(f"Unset {key} on {daemon}: {out}")
+                    except Exception as e:
+                        log.error(f"Failed to unset {key} on {daemon}: {e}")
+                        raise CommandFailed(f"Failed to unset {key} on {daemon}: {e}")
+
                 for k, v in set_log_dict.items():
                     node.exec_command(
                         sudo=True,
-                        cmd=f"cephadm shell -- ceph daemon {deamon} config set {k} {v}",
+                        cmd=f"cephadm shell -- ceph daemon {daemon} config set {k} {v}",
                     )
+
                 if validate:
                     for k, v in set_log_dict.items():
                         out, rc = node.exec_command(
                             sudo=True,
-                            cmd=f"cephadm shell -- ceph daemon {deamon} config get {k}",
+                            cmd=f"cephadm shell -- ceph daemon {daemon} config get {k}",
                         )
                         if v not in out:
                             log.error("Unable to set the debug logs")
