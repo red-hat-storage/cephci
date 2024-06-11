@@ -173,6 +173,7 @@ def smbclient_check_shares(
                         sudo=True,
                         cmd=cmd,
                     )
+                sleep(1)
     except Exception as e:
         raise CephadmOpsExecutionError(
             f"Fail to access smb share {smb_share}, Error {e}"
