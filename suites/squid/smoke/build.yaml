@@ -19,7 +19,7 @@ tests:
       name: Validate package versions
       config:
         server_packages:
-          cephadm-ansible: "3.0"
+          cephadm-ansible: "3.2"
         default_packages:
           chrony: "4.2"
           lvm2: "2.03"
@@ -29,9 +29,9 @@ tests:
           ansible-collection-ansible-posix: "1.2"
           ansible-collection-community-general: "4.0"
         client_packages:
-          ceph-common: "16.2"
-          ceph-fuse: "16.2"
-          cephfs-top: "16.2"
+          ceph-common: "19.0"
+          ceph-fuse: "19.0"
+          cephfs-top: "19.0"
         monitoring_images:
           ose-prometheus-node-exporter: "v4.13.0"
           ose-prometheus: "v4.13.0"
