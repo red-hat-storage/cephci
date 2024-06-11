@@ -528,6 +528,72 @@ def run(ceph_cluster, **kw):
         sync_bytes = counter.get("sync_bytes")
         log.info(f"Sync Bytes: {sync_bytes}")
 
+        log.info("Negative : Induce a Sync failure and capture the metrics")
+        target_mount_path1 = "/mnt/remote_dir_new"
+        target_client_user = "client.admin"
+        snap_target = "snap_target"
+        source_path1 = subvol1_path
+        target_fs_new = "cephfs-tnew"
+
+        log.info("Inject a Sync Failure")
+        fs_mirroring_utils.inject_sync_failure(
+            target_clients[0],
+            target_mount_path1,
+            target_client_user,
+            source_path1,
+            snap_target,
+            target_fs_new,
+        )
+
+        log.info(
+            "Wait for some time and check if the counters are reflecting the sync failure"
+        )
+        time.sleep(30)
+
+        log.info("Get the Metrics after injecting a sync failure")
+        data_after_sync_failure = fs_mirroring_utils.get_cephfs_mirror_counters(
+            cephfs_mirror_node, fsid, asok_file
+        )
+
+        log.info(
+            "Validate if sync_failure count has increased after injecting failures"
+        )
+        resource_name = "cephfs_mirror_peers"
+        filesystem_name = source_fs_new
+
+        label, counter = fs_mirroring_utils.get_labels_and_counters(
+            resource_name, filesystem_name, data_after_sync_failure
+        )
+
+        if counter:
+            sync_failures = counter.get("sync_failures", 0)
+            if sync_failures > 0:
+                log.info("Validation Passed: Sync failure count is more than 0")
+            else:
+                log.error("Validation Failed: Sync failure count is 0 or less")
+        else:
+            log.error(
+                "Validation Failed: Sync Failures counters mismatch in the metrics."
+            )
+            raise CommandFailed(
+                "Sync Failure failed to increase after injecting a failure"
+            )
+
+        log.info(
+            "Delete the snapshot used for injecting sync failure and unmount the paths"
+        )
+        cmds = [
+            f"rmdir {target_mount_path1}{source_path1}.snap/{snap_target}",
+            f"umount -l {target_mount_path1}",
+            f"rm -rf {target_mount_path1}",
+        ]
+        for cmd in cmds:
+            target_clients[0].exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+            time.sleep(10)
+
         log.info("Delete the snapshots")
         snapshots_to_delete = [
             f"{kernel_mounting_dir_1}{subvol1_path}.snap/{snap1}_{snap_suffix}*",
@@ -537,7 +603,7 @@ def run(ceph_cluster, **kw):
             source_clients[0].exec_command(
                 sudo=True, cmd=f"rmdir {snapshot_path}", check_ec=False
             )
-        time.sleep(20)
+        time.sleep(30)
 
         log.info(
             "Validate if all the Details of Peer Connection is updated in the Counters "

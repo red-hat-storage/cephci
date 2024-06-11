@@ -3,6 +3,7 @@ This is cephfs mirroring  utility module
 It contains all the re-useable functions related to cephfs mirroring feature
 
 """
+
 import json
 import random
 import string
@@ -1130,3 +1131,45 @@ class CephfsMirroringUtils(object):
                 ):
                     return item["labels"], item["counters"]
         return None, None
+
+    def inject_sync_failure(
+        self,
+        target_clients,
+        target_mount_path,
+        target_client_user,
+        source_path,
+        snap_target,
+        target_fs_name,
+    ):
+        """
+        Injects a sync failure by creating a snapshot on the target filesystem.
+
+        Parameters:
+        - target_clients: The client instance to execute commands on the target.
+        - target_mount_path: The mount path where the target filesystem will be mounted.
+        - target_client_user: The user with permissions to perform operations on the target filesystem.
+        - source_path: The source path within the target filesystem.
+        - snap_target: The name of the snapshot to be created for injecting the sync failure.
+        - target_fs_name: The name of the target filesystem where the snapshot will be created.
+
+        This function performs the following steps:
+        1. Creates the target mount path directory.
+        2. Mounts the target filesystem using ceph-fuse.
+        3. Logs the list of existing snapshots in the source path.
+        4. Creates a new snapshot in the source path to inject the sync failure.
+        5. Logs the list of snapshots after the failure is injected.
+        """
+        target_clients.exec_command(sudo=True, cmd=f"mkdir -p {target_mount_path}")
+        target_clients.exec_command(
+            sudo=True,
+            cmd=f"ceph-fuse -n {target_client_user} {target_mount_path} --client_fs {target_fs_name}",
+        )
+        snapshot_list = f"ls {target_mount_path}{source_path}.snap"
+        log.info(f"Existing list of snaps : {snapshot_list}")
+        target_clients.exec_command(
+            sudo=True, cmd=f"mkdir {target_mount_path}{source_path}.snap/{snap_target}"
+        )
+        snapshot_list_after_sync_failure = f"ls {target_mount_path}{source_path}.snap"
+        log.info(
+            f"List of snaps after injecting failure : {snapshot_list_after_sync_failure}"
+        )
