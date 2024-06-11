@@ -282,6 +282,19 @@ tests:
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
       polarion-id: CEPH-83575199
+
+  - test:
+      name: bucket granular sync policy on bucket with flow symmetrical and storage class
+      desc: Test bucket granular sync policy on bucket with flow symmetrical and storage class
+      polarion-id: CEPH-83575143
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_bucket_granular_sync_policy.py
+            config-file-name: test_bucket_granularsync_storage_class_symm.yaml
+            timeout: 300
+
   - test:
       clusters:
         ceph-pri:
@@ -333,6 +346,18 @@ tests:
             config-file-name:  test_datalog_trim_command.yaml
             timeout: 300
             verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      name: bucket granular sync policy on bucket with flow directional and storage class
+      desc: Test bucket granular sync policy on bucket with flow directional and storage class
+      polarion-id: CEPH-83575143
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_bucket_granular_sync_policy.py
+            config-file-name: test_bucket_granularsync_storage_class_direc.yaml
+            timeout: 300
 
   - test:
       name: bucket creation on primary for crash check
