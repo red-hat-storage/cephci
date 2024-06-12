@@ -46,14 +46,14 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd="ceph config set client log_to_file true",
         )
-        log.info("Set client config client inject fixed oldest tid to true")
+        log.info("Set client config client_inject_fixed_oldest_tid to true")
         out, rc = client1.exec_command(
             sudo=True,
-            cmd='ceph config set client "client inject fixed oldest tid" true',
+            cmd='ceph config set client "client_inject_fixed_oldest_tid" true',
         )
         out, rc = client1.exec_command(
             sudo=True,
-            cmd='ceph config get client "client inject fixed oldest tid"',
+            cmd='ceph config get client "client_inject_fixed_oldest_tid"',
         )
         log.info(out)
         if "true" not in out.strip():
@@ -217,7 +217,7 @@ def run(ceph_cluster, **kw):
         )
         client1.exec_command(
             sudo=True,
-            cmd='ceph config set client "client inject fixed oldest tid" false',
+            cmd='ceph config set client "client_inject_fixed_oldest_tid" false',
         )
         mds_session_metadata_threshold_default = out.strip()
         client1.exec_command(sudo=True, cmd=f"umount {fuse_mount_dir}", check_ec=False)
