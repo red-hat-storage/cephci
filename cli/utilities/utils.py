@@ -919,12 +919,10 @@ def create_yaml_config(node, specs):
     Return: file name
     """
     # Create temporory file path
-    temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
-
+    temp_file = tempfile.NamedTemporaryFile(suffix=".yaml", dir="/tmp")
     # Create temporary file and dump data
     with node.remote_file(sudo=True, file_name=temp_file.name, file_mode="w") as file:
         yaml.dump(specs, file, default_flow_style=False)
-
     return temp_file.name
 
 
