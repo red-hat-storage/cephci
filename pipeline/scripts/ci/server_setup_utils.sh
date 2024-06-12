@@ -77,12 +77,9 @@ function wipe_drives {
         exit 2
     fi
 
-    arr=()
-    while IFS='[[:space:]]+' read -r value; do
-      arr+=("$value")
-    done <<< "$(echo $disks)"
+    mapfile -t arr < <(printf "%s\n" "$disks")
 
-    for disk in "${arr}" ; do
+    for disk in "${arr[@]}" ; do
       IFS=',' read -r name type <<< "$disk"
       echo "name: $name, type: $type"
 
