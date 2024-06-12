@@ -227,6 +227,11 @@ class CG_snap_IO(object):
         while datetime.datetime.now() < end_time:
             for qs_member in qs_member_dict:
                 qs_mnt_pt = qs_member_dict[qs_member]["mount_point"]
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"setfattr -n ceph.dir.pin.random -v 0.75 {qs_mnt_pt}",
+                    timeout=15,
+                )
                 write_proc_check_status = Value("i", 0)
                 proc_status_list.append(write_proc_check_status)
                 p = Thread(
@@ -506,7 +511,7 @@ class CG_snap_IO(object):
                         age_ref = qs_query["sets"][qs_id]["age_ref"]
                         curr_time = time.time()
                         # Get time when state is achieved, add buffer 1secs
-                        time_before_state = (float(curr_time) - float(age_ref)) + 1
+                        time_before_state = (float(curr_time) - float(age_ref)) + 5
                         for member_item in qs_query["sets"][qs_id]["members"]:
                             if qs_member in member_item:
                                 excluded = qs_query["sets"][qs_id]["members"][
@@ -518,7 +523,7 @@ class CG_snap_IO(object):
                                 break
                         if excluded is True:
                             # Get time when state is achieved, add buffer 1secs
-                            time_before_state = (float(curr_time) - float(age)) + 1
+                            time_before_state = (float(curr_time) - float(age)) + 5
                             log.info(
                                 f"time_before_state:{time_before_state},end_time:{end_time}"
                             )
@@ -586,7 +591,7 @@ class CG_snap_IO(object):
                                     "state"
                                 ]["age"]
                                 # Get time when state is achieved, add buffer 1secs
-                                time_before_state = (float(curr_time) - float(age)) + 1
+                                time_before_state = (float(curr_time) - float(age)) + 5
                                 log.info(
                                     f"time_before_state:{time_before_state},end_time:{end_time}"
                                 )
@@ -856,7 +861,7 @@ class CG_snap_IO(object):
                     sudo=True,
                     cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
                     f"--operation {i} --threads 1 --file-size 1024 "
-                    f"--files 1 --top {dir_path}",
+                    f"--files 100 --top {dir_path}",
                     long_running=True,
                     timeout=20,
                 )
@@ -1000,7 +1005,7 @@ class CG_snap_IO(object):
                 out_list = client.exec_command(
                     sudo=True,
                     cmd=f"python3 /home/cephuser/Crefi/crefi.py "
-                    f"-n 5 --max 100k --min 10k -t {file_type} -b 2 -d 2 --multi --fop {i} -T 2 {dir_path}",
+                    f"-n 100 --max 100k --min 10k -t {file_type} -b 2 -d 2 --multi --fop {i} -T 2 {dir_path}",
                     long_running=True,
                     timeout=20,
                 )
