@@ -98,10 +98,26 @@ def run(ceph_cluster, **kw):
             nfs_export=nfs_export_squash,
             fs=fs_name,
         )
+        # Mount the volume with rootsquash enable on client 1 and 2
+        for client in clients[:2]:
+            client.create_dirs(dir_path=nfs_squash_mount, sudo=True)
+
+        # Change the permission of mount dir and mount the exports
+        for client in clients[:2]:
+            if Mount(client).nfs(
+                mount=nfs_squash_mount,
+                version=version,
+                port=port,
+                server=nfs_server_name,
+                export=nfs_export_squash,
+            ):
+                raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
+            client.exec_command(sudo=True, cmd=f"chmod 777 {nfs_squash_mount}/")
+        log.info("Mount succeeded on client")
 
         # Enable rootsquash using conf file
         rootsquash_using_conf(
-            clients[0],
+            clients[1],
             nfs_name,
             nfs_export_squash,
             original_squash_value,
@@ -115,22 +131,6 @@ def run(ceph_cluster, **kw):
         return 1
 
     try:
-        # Mount the volume with rootsquash enable on client 1 and 2
-        for client in clients[:2]:
-            client.create_dirs(dir_path=nfs_squash_mount, sudo=True)
-
-            # Change the permission of mount dir
-            client.exec_command(sudo=True, cmd=f"chmod 777 {nfs_squash_mount}/")
-            if Mount(client).nfs(
-                mount=nfs_squash_mount,
-                version=version,
-                port=port,
-                server=nfs_server_name,
-                export=nfs_export_squash,
-            ):
-                raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
-            log.info("Mount succeeded on client")
-
         # Check the mount protocol and enable locking for v3
         if version == 3:
             enable_v3_locking(installer, nfs_name, nfs_node, nfs_server_name)
@@ -180,16 +180,17 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Cleaning up")
         # Cleaning up the squash export and mount dir
-        log.info("Unmounting nfs-ganesha squash mount on client:")
-        if Unmount(clients[0]).unmount(nfs_squash_mount):
-            raise OperationFailedError(
-                f"Failed to unmount nfs on {clients[0].hostname}"
-            )
-        log.info("Removing nfs-ganesha squash mount dir on client:")
-        clients[0].exec_command(sudo=True, cmd=f"rm -rf  {nfs_squash_mount}")
+        for client in clients[:2]:
+            log.info("Unmounting nfs-ganesha squash mount on client:")
+            if Unmount(client).unmount(nfs_squash_mount):
+                raise OperationFailedError(
+                    f"Failed to unmount nfs on {clients[0].hostname}"
+                )
+            log.info("Removing nfs-ganesha squash mount dir on client:")
+            client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_squash_mount}")
         Ceph(clients[0]).nfs.export.delete(nfs_name, nfs_export_squash)
 
         # Cleaning up the remaining export and deleting the nfs cluster
-        cleanup_cluster(clients[0], nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successfull")
     return 0
