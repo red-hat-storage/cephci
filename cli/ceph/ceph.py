@@ -108,3 +108,21 @@ class Ceph(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def logs(self, num, channel, level=None):
+        """
+        Run the ceph logs command to get the
+        cephadm logs
+        Args:
+            num(str): Number of logs required
+            level(str): Log level debug|info|sec|warn|error
+            channel(str): Get logs for channel cluster|audit|cephadm
+        """
+        cmd = f"{self.base_cmd} log last"
+        if level:
+            cmd += f" {level}"
+        cmd += f" {channel}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
