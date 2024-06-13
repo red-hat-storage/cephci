@@ -683,3 +683,233 @@ class PoolFunctions:
         _cmd = f"ceph osd pool stats {pool}"
         pool_stat = self.rados_obj.run_ceph_command(cmd=_cmd, client_exec=True)
         return pool_stat[0]
+
+    def modify_autoscale_threshold(self, threshold: float):
+        """
+        Method to modify the pool autosclae threshold on the cluster
+        refer : https://docs.ceph.com/en/latest/rados/operations/placement-groups/#viewing-pg-scaling-recommendations
+        https://ceph.io/en/news/blog/2022/autoscaler_tuning/
+        Args:
+            threshold: autoscale threshold value to be set
+        Returns: None
+        """
+        cmd = f"ceph osd pool set threshold {threshold}"
+        self.rados_obj.run_ceph_command(cmd=cmd)
+
+    def run_autoscaler_bulk_test(self, pool: str, **kwargs) -> tuple:
+        """
+        Method to run the PG autoscaler bulk tests
+
+        Args:
+            pool: Name of the pool on which autoscaler tests need to run
+            kwargs: Supported kwargs are:
+                overwrite_recovery_threads: Specifies if the recovery threads on cluster should be modified or not
+                test_pg_split: Set bulk flag to increase PG count
+                test_pg_merge: Remove the bulk flag to reduce PG count
+                modify_threshold: change threshold set on the cluster if the automatic scaling is not possible
+
+            Note: test_pg_split & test_pg_merge are mutually exclusive and only 1 KW arg can be passed at a time.
+
+        Returns:
+            tuple (run_status , Inactive_pg_count)
+        """
+        log.info(
+            f"Testing PG autoscaler bulk tests for PG splits & Merges on pool : {pool}"
+        )
+
+        overwrite_recovery_threads = kwargs.get("overwrite_recovery_threads", True)
+        test_pg_split = kwargs.get("test_pg_split", True)
+        test_pg_merge = kwargs.get("test_pg_merge", True)
+        modify_threshold = kwargs.get("modify_threshold", False)
+
+        if overwrite_recovery_threads:
+            self.rados_obj.change_recovery_threads(config={}, action="set")
+
+        autoscale_status = self.rados_obj.get_pg_autoscale_status(pool_name=pool)
+        if autoscale_status["pg_autoscale_mode"] != "on":
+            log.debug(
+                f"PG autoscale mode of the pool is not on. Status of pool : {autoscale_status}"
+                f"Turning the autoscale mode to ON for pool : {pool}"
+            )
+            self.rados_obj.set_pool_property(
+                pool=pool, props="pg_autoscale_mode", value="on"
+            )
+
+        init_pg_count = self.rados_obj.get_pool_property(pool=pool, props="pg_num")[
+            "pg_num"
+        ]
+        log.debug(
+            f"init PG count on the pool {pool} before starting any activity is: {init_pg_count}"
+        )
+
+        # Checking if PG increase is desired
+        if test_pg_split:
+            # checking if bulk is already set on pool
+            if self.rados_obj.get_pool_property(pool=pool, props="bulk")["bulk"]:
+                log.error(f"Bulk flag already set on pool : {pool}")
+                return False, 0
+
+            log.info(
+                f"Starting to split the PGs of the pool {pool} by setting bulk flag"
+            )
+            self.rados_obj.set_pool_property(pool=pool, props="bulk", value="true")
+            time.sleep(10)
+
+            # checking if bulk was set successfully
+            if not self.rados_obj.get_pool_property(pool=pool, props="bulk")["bulk"]:
+                log.error(f"Bulk flag could not be set on pool : {pool}")
+                return False, 0
+
+            pg_count_bulk_true = self.rados_obj.get_pool_details(pool=pool)[
+                "pg_num_target"
+            ]
+            log.debug(
+                f"PG count on pool {pool} post addition of bulk flag : {pg_count_bulk_true}"
+            )
+            no_count_change = False
+            if pg_count_bulk_true <= init_pg_count:
+                log.debug(
+                    "PG count before and after bulk flag is same. Checking the threshold values for pool"
+                )
+                log.info(
+                    "Checking the ideal PG count on the pool and the threshold set. default is 3"
+                )
+                pool_data = self.rados_obj.get_pg_autoscale_status(pool_name=pool)
+                final_pg_num = pool_data["pg_num_final"]
+                log.debug(
+                    f"Pool : {pool} details as fetched from autoscale-status : {pool_data}"
+                )
+
+                if float(final_pg_num / init_pg_count) <= 3.0:
+                    log.info(
+                        "PG count not expected to increase as the final pg num is less than the threshold"
+                    )
+                    if modify_threshold:
+                        log.info(
+                            "Param passed to modify the threshold set. Changing it to 1.3 from 3."
+                        )
+                        self.modify_autoscale_threshold(threshold=1.3)
+                        time.sleep(60)
+                    else:
+                        no_count_change = True
+
+            if not no_count_change:
+                log.debug(
+                    f"PG count on pool {pool} post addition of bulk flag : {pg_count_bulk_true}"
+                    f"Starting to wait for PG count on the pool to go from {init_pg_count} to"
+                    f" {pg_count_bulk_true} while checking for PG inactivity"
+                )
+
+                inactive_pg = 0
+                endtime = datetime.datetime.now() + datetime.timedelta(seconds=14000)
+                while datetime.datetime.now() < endtime:
+                    pool_pg_num = self.rados_obj.get_pool_property(
+                        pool=pool, props="pg_num"
+                    )["pg_num"]
+                    if pool_pg_num == pg_count_bulk_true:
+                        log.info(
+                            f"PG count on pool {pool} is achieved post adding the bulk flag"
+                        )
+                        break
+                    log.info(
+                        f"PG count on pool {pool} has not reached desired levels."
+                        f"Expected : {pg_count_bulk_true}, Current : {pool_pg_num}"
+                    )
+                    if not self.rados_obj.check_inactive_pgs_on_pool(pool_name=pool):
+                        log.error(f"Inactive PGs found on pool : {pool}")
+                        inactive_pg += 1
+
+                    log.info(
+                        "Sleeping for 60 secs and checking the PG states and PG count"
+                    )
+                    time.sleep(60)
+                else:
+                    log.error(
+                        f"pg_num on pool {pool} did not reach the desired levels of PG count "
+                        f"with bulk flag enabled"
+                        f"Expected : {pg_count_bulk_true}"
+                    )
+                    if modify_threshold:
+                        self.modify_autoscale_threshold(threshold=3.0)
+                        time.sleep(60)
+                    return False, inactive_pg
+                log.info(
+                    "PGs increased to desired levels after application of bulk flag"
+                )
+                if modify_threshold:
+                    log.info(
+                        "Param passed to modify the threshold set. Reverting it back to 3"
+                    )
+                    self.modify_autoscale_threshold(threshold=3.0)
+                    time.sleep(60)
+
+                log.info(
+                    f"inactive PGs Count {inactive_pg} on the cluster during bulk flag addition on pool {pool}"
+                )
+                return True, inactive_pg
+            else:
+                log.info(
+                    f"No PG splits will be done on pool : {pool}."
+                    f" The change in the PG count before and after the bulk flag is less than the threshold."
+                )
+                return True, 0
+
+        if test_pg_merge:
+            # checking if bulk is already set on pool
+            if self.rados_obj.get_pool_property(pool=pool, props="bulk")["bulk"]:
+                log.error(f"Bulk flag already set on pool : {pool}")
+                return False, 0
+
+            log.info(
+                f"Starting to merge the PGs of the pool {pool} by setting bulk flag"
+            )
+            self.rados_obj.set_pool_property(pool=pool, props="bulk", value="false")
+            time.sleep(20)
+
+            # checking if bulk was set successfully
+            if self.rados_obj.get_pool_property(pool=pool, props="bulk")["bulk"]:
+                log.error(f"Bulk flag could not be un-set on pool : {pool}")
+                return False, 0
+
+            pg_count_bulk_false = self.rados_obj.get_pool_details(pool=pool)[
+                "pg_num_target"
+            ]
+            log.debug(
+                f"Calculated PG count on pool {pool} post removal of bulk flag : {pg_count_bulk_false}"
+            )
+
+            inactive_pg = 0
+            endtime = datetime.datetime.now() + datetime.timedelta(seconds=14000)
+            while datetime.datetime.now() < endtime:
+                pool_pg_num = self.rados_obj.get_pool_property(
+                    pool=pool, props="pg_num"
+                )["pg_num"]
+                if pool_pg_num == pg_count_bulk_false:
+                    log.info(
+                        f"PG count on pool {pool} is achieved post removal of bulk flag"
+                    )
+                    break
+                log.info(
+                    f"PG count on pool {pool} has not reached desired levels."
+                    f"Expected : {pg_count_bulk_false}, Current : {pool_pg_num}"
+                )
+                if not self.rados_obj.check_inactive_pgs_on_pool(pool_name=pool):
+                    log.error(f"Inactive PGs found on pool : {pool}")
+                    inactive_pg += 1
+
+                log.info("Sleeping for 60 secs and checking the PG states and PG count")
+                time.sleep(60)
+            else:
+                log.error(
+                    f"pg_num on pool {pool} did not reach the desired levels of PG count "
+                    f"with bulk flag enabled"
+                    f"Expected : {pg_count_bulk_false}"
+                )
+                return False, inactive_pg
+
+            log.info("PGs increased to desired levels after application of bulk flag")
+            log.info(
+                f"Found inactive PGs on the cluster multiple times during bulk flag addition on pool {pool}"
+                f"Count {inactive_pg}"
+            )
+            return True, inactive_pg

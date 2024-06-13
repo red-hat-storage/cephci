@@ -406,6 +406,7 @@ tests:
         pool-2-type: replicated
         pool-1-conf: sample-pool-1
         pool-2-conf: sample-pool-2
+        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-1. RE -> RE
 
 # Cannot run site down tests in BM as of now as the methods use openstack drivers in code.

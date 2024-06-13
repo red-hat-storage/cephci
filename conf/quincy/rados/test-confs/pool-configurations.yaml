@@ -33,3 +33,17 @@ erasure:
     m: 4
     plugin: jerasure
     crush-failure-domain: osd
+  sample-pool-4:
+    pool_name: ec_pool_22
+    pool_type: erasure
+    k: 2
+    m: 2
+    plugin: jerasure
+    crush-failure-domain: host
+  sample-pool-5:
+    pool_name: ec_pool_22_1
+    pool_type: erasure
+    k: 2
+    m: 2
+    plugin: jerasure
+    crush-failure-domain: host

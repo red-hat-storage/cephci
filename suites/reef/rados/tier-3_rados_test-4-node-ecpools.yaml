@@ -249,3 +249,326 @@ tests:
           - ec_pool_overwrite
           - re_pool_overwrite
       desc: EC pool with Overwrites & create RBD pool
+
+  - test:
+      name: Inconsistent objects in  EC pool functionality check
+      desc: Scub and deep-scrub on  inconsistent objects in EC pool
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec86_4
+          pool_name: ec86_pool4
+          pg_num: 1
+          k: 2
+          m: 2
+          plugin: jerasure
+          disable_pg_autoscale: true
+          crush-failure-domain: host
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec86_pool4
+
+  - test:
+      name: Compression test - EC pool
+      module: pool_tests.py
+      polarion-id: CEPH-83571674
+      config:
+        Compression_tests:
+          pool_type: erasure
+          pool_config:
+            profile_name: ec86_5
+            pool-1: ec86_pool5
+            pool-2: ec86_pool6
+            rados_write_duration: 300
+            byte_size: 10KB
+            pg_num: 32
+            k: 2
+            m: 2
+            plugin: jerasure
+            crush-failure-domain: host
+          compression_config:
+            compression_mode: aggressive
+            compression_algorithm: snappy
+            compression_required_ratio: 0.7
+            compression_min_blob_size: 1B
+            byte_size: 10KB
+      desc: Verification of the effect of compression on erasure coded pools
+
+  - test:
+      name: Autoscaler test - pool target size ratio
+      module: pool_tests.py
+      polarion-id: CEPH-83573424
+      config:
+        verify_pool_target_ratio:
+          configurations:
+            pool-1:
+              profile_name: ec86_7
+              pool_name: ec86_pool7
+              pool_type: erasure
+              pg_num: 32
+              k: 2
+              m: 2
+              plugin: jerasure
+              crush-failure-domain: host
+              target_size_ratio: 0.8
+              rados_write_duration: 50
+              rados_read_duration: 50
+              delete_pool: true
+      desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
+
+  - test:
+      name: ceph-bluestore-tool utility
+      module: test_bluestoretool_workflows.py
+      polarion-id: CEPH-83571692
+      desc: Verify ceph-bluestore-tool functionalities
+
+  - test:
+      name: ceph-objectstore-tool utility
+      module: test_objectstoretool_workflows.py
+      polarion-id: CEPH-83581811
+      desc: Verify ceph-objectstore-tool functionalities
+
+  - test:
+      name: Verify premerge PGS during PG split
+      module: test_pg_split.py
+      desc: Verify if there are premerge PGs when split is in progress
+      polarion-id: CEPH-83573526
+      config:
+        create_pools:
+          - create_pool:
+              check_premerge_pgs: true
+              profile_name: ec86_8
+              pool_name: ec86_pool8
+              pg_num: 32
+              rados_put: true
+              num_objs: 200
+              byte_size: 1024
+              pool_type: erasure
+              k: 2
+              m: 2
+              plugin: jerasure
+              crush-failure-domain: host
+        delete_pools:
+          - ec86_pool8
+
+  - test:
+      name: Verify PG split and merge with network delay
+      module: test_pg_split.py
+      desc: Verify PG splitting and merging with network delay
+      polarion-id: CEPH-83571705
+      config:
+        create_pools:
+          - create_pool:
+              profile_name: ec86_9
+              pool_name: ec86_pool9
+              pg_num: 32
+              rados_put: true
+              num_objs: 200
+              byte_size: 1024
+              pool_type: erasure
+              k: 2
+              m: 2
+              crush-failure-domain: host
+              plugin: jerasure
+        add_network_delay: true
+        delete_pools:
+          - ec86_pool9
+
+  - test:
+      name: Verify scrub logs
+      module: test_scrub_log.py
+      polarion-id: CEPH-83575403
+      config:
+        pool_configs:
+            - type: erasure
+              conf: sample-pool-4
+        pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
+      desc: Verify that scrub & deep-scrub logs are captured in OSD logs
+
+  - test:
+      name: Autoscaler test - pool target size ratio
+      module: pool_tests.py
+      polarion-id: CEPH-83573424
+      config:
+        verify_pool_target_ratio:
+          configurations:
+            pool-1:
+              profile_name: ec86_10
+              pool_name: ec86_pool10
+              pool_type: erasure
+              pg_num: 32
+              k: 2
+              m: 2
+              crush-failure-domain: host
+              plugin: jerasure
+              target_size_ratio: 0.8
+              rados_write_duration: 50
+              rados_read_duration: 50
+              delete_pool: true
+      desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
+
+  - test:
+      name: Autoscaler test - pool pg_num_min
+      module: pool_tests.py
+      polarion-id: CEPH-83573425
+      config:
+        verify_pg_num_min:
+          configurations:
+            pool-1:
+              profile_name: ec86_11
+              pool_name: ec86_pool11
+              pool_type: erasure
+              k: 2
+              m: 2
+              plugin: jerasure
+              crush-failure-domain: host
+              pg_num_min: 16
+              rados_write_duration: 50
+              rados_read_duration: 50
+              delete_pool: true
+      desc: Specifying pool bounds on pool Pgs - Verify pg_num_min
+
+  - test:
+      name: client pg access
+      module: test_client_pg_access.py
+      polarion-id: CEPH-83571713
+      config:
+        verify_client_pg_access:
+          num_snapshots: 20
+          configurations:
+            pool-1:
+              profile_name: ec86_12
+              pool_name: ec86_pool12
+              pool_type: erasure
+              k: 2
+              m: 2
+              plugin: jerasure
+              crush-failure-domain: host
+              disable_pg_autoscale: true
+      desc: many clients clients accessing same PG with bluestore as backend
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: replicated
+        pool-2-type: erasure
+        pool-1-conf: sample-pool-1
+        pool-2-conf: sample-pool-4
+        pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
+      desc: Migrating data between different pools. Scenario-2. RE -> EC
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: erasure
+        pool-2-type: replicated
+        pool-1-conf: sample-pool-4
+        pool-2-conf: sample-pool-3
+        pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
+      desc: Migrating data between different pools. Scenario-3. EC -> RE
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: erasure
+        pool-2-type: erasure
+        pool-1-conf: sample-pool-4
+        pool-2-conf: sample-pool-5
+        pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
+      desc: Migrating data between different pools. Scenario-4. Ec -> EC
+
+# Blocked due to BZ 2172795. Bugzilla fixed.
+  - test:
+      name: Verify cluster behaviour during PG autoscaler warn
+      module: pool_tests.py
+      polarion-id:  CEPH-83573413
+      config:
+        verify_pool_warnings:
+          pool_configs:
+            - type: erasure
+              conf: sample-pool-4
+          pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
+      desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
+
+  - test:
+      name: Scrub enhancement
+      module: test_scrub_enhancement.py
+      desc: Verify scrub enhancement feature
+      polarion-id: CEPH-83575885
+      config:
+        create_pools:
+          - create_pool:
+              pg_num: 1
+              pg_num_max: 1
+              profile_name: ec86_13
+              pool_name: ec86_pool13
+              pool_type: erasure
+              k: 2
+              m: 2
+              plugin: jerasure
+              crush-failure-domain: host
+        delete_pools:
+          - ec86_pool13
+
+  - test:
+      name: Limit slow request details to cluster log
+      module: test_slow_op_requests.py
+      desc: Limit slow request details to cluster log
+      polarion-id: CEPH-83574884
+      config:
+        create_pools:
+          - create_pool:
+              profile_name: ec86_14
+              pool_name: ec86_pool14
+              pool_type: erasure
+              k: 2
+              m: 2
+              plugin: jerasure
+              crush-failure-domain: host
+              pg_num: 64
+              rados_write_duration: 1000
+              byte_size: 1024
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+        delete_pools:
+          - ec86_pool14
+
+  - test:
+      name: Robust rebalancing - in progress osd replacement
+      module: test_osd_inprogress_rebalance.py
+      desc: Add osd while data migration from the pools are in progress
+      polarion-id: CEPH-9228
+      abort-on-fail: true
+      config:
+        create_pools:
+          - create_pool:
+              create: true
+              profile_name: ec86_15
+              pool_name: ec86_pool15
+              pool_type: erasure
+              k: 2
+              m: 2
+              plugin: jerasure
+              crush-failure-domain: host
+              rados_put: true
+          - create_pool:
+              create: true
+              profile_name: ec86_16
+              pool_name: ec86_pool16
+              pool_type: erasure
+              k: 2
+              m: 2
+              plugin: jerasure
+              crush-failure-domain: host
+        delete_pools:
+          - ec86_pool15
+          - ec86_pool16
+

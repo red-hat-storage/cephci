@@ -1,4 +1,4 @@
-# Suite is to be used to verify the EC 2+2 config on 4 nodes
+# Suite is to be used to verify the EC 8+6 with MSR config on 4 nodes
 
 tests:
   - test:
@@ -21,9 +21,6 @@ tests:
               base_cmd_args:
                 verbose: true
               args:
-                # using 6.1 rc candidate
-                custom_image: "registry-proxy.engineering.redhat.com/rh-osbs/rhceph:6-177"
-                custom_repo: "http://download-node-02.eng.bos.redhat.com/rhel-9/rel-eng/RHCEPH-6/RHCEPH-6.1-RHEL-9-20230602.0/compose/Tools/x86_64/os/"
                 mon-ip: mero006
                 allow-fqdn-hostname: true
           - config:
@@ -123,7 +120,7 @@ tests:
           interval: 10
           smtp_destination:
             - pdhiran@redhat.com
-          smtp_from_name: EC 2+2@4 cluster alerts
+          smtp_from_name: EC 8+6@4 MSR rules cluster alerts
       desc: Configure email alerts on ceph cluster
 
   - test:
@@ -148,33 +145,42 @@ tests:
                 - mon
                 - mon_osd_down_out_subtree_limit
                 - host
-          - config:
-              command: shell
-              args:
-                - ceph
-                - config
-                - set
-                - osd
-                - osd_async_recovery_min_cost
-                - "1099511627776"
 
   - test:
-      name: EC pool 2=2@4 LC
-      module: test_four_node_ecpool.py
-      polarion-id: CEPH-83575858
+      name: EC pool 8+6@4 with MSR LC
+      module: test_ec_86.py
+      polarion-id: CEPH-83590733
       config:
-        ec_pool:
-          profile_name: ec22_profile
-          pool_name: test_ec_pool
-          k: 2
-          m: 2
-          force: true
-          plugin: jerasure
-          crush-failure-domain: host
-        remove_host: false
+        profile_name: ec86_0
+        pool_name: ec86_pool0
+        k: 8
+        m: 6
+        force: true
+        plugin: jerasure
+        create_rule: true
+        modify_threshold: true
+        pre_create_rule: false
+        crush-failure-domain: host
+        change_subtree_limit: true
+        crush-osds-per-failure-domain: 4
+        crush-num-failure-domains: 4
         delete_pools:
-          - test_ec_pool
-      desc: 2+2@4 EC pool life cycle with serviceability scenarios
+          - ec86_pool0
+      desc: 8+6@4 MSR EC pool life cycle with serviceability scenarios
+
+  - test:
+      name: Upgrade cluster to latest 8.x ceph version
+      desc: Upgrade cluster to latest version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791,CEPH-83573790
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
 
   - test:
       name: EC Pool Recovery Improvement
@@ -183,11 +189,15 @@ tests:
       config:
         ec_pool_recovery_improvement:
           create: true
-          pool_name: ec_pool_recovery
-          k: 2
-          m: 2
+          profile_name: ec86_1
+          pool_name: ec86_pool1
+          k: 8
+          m: 6
           pg_num: 32
           plugin: jerasure
+          create_rule: true
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
           crush-failure-domain: host
           rados_write_duration: 100
           rados_read_duration: 50
@@ -203,10 +213,14 @@ tests:
       config:
         ec_pool:
           create: true
-          pool_name: test_ec_pool
+          profile_name: ec86_2
+          pool_name: ec86_pool2
           pg_num: 64
-          k: 2
-          m: 2
+          k: 8
+          m: 6
+          create_rule: true
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
           plugin: jerasure
           crush-failure-domain: host
           disable_pg_autoscale: true
@@ -221,7 +235,7 @@ tests:
             compression_mode: force
             compression_algorithm: snappy
         delete_pools:
-          - test_ec_pool
+          - ec86_pool2
       desc: Create, modify & delete EC pools and run IO
 
   - test:
@@ -231,12 +245,16 @@ tests:
       config:
         ec_pool:
           create: true
-          pool_name: ec_pool_overwrite
+          profile_name: ec86_3
+          pool_name: ec86_pool3
           app_name: rbd
           pg_num: 32
           erasure_code_use_overwrites: "true"
-          k: 2
-          m: 2
+          k: 8
+          m: 6
+          create_rule: true
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
           plugin: jerasure
           crush-failure-domain: host
           rados_write_duration: 50
@@ -246,7 +264,7 @@ tests:
           image_name: image_ec_pool
           image_size: 100M
         delete_pools:
-          - ec_pool_overwrite
+          - ec86_pool3
           - re_pool_overwrite
       desc: EC pool with Overwrites & create RBD pool
 
@@ -261,11 +279,13 @@ tests:
           profile_name: ec86_4
           pool_name: ec86_pool4
           pg_num: 1
-          k: 2
-          m: 2
+          k: 8
+          m: 6
+          create_rule: true
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
           plugin: jerasure
           disable_pg_autoscale: true
-          crush-failure-domain: host
         inconsistent_obj_count: 4
         delete_pool:
           - ec86_pool4
@@ -284,8 +304,11 @@ tests:
             rados_write_duration: 300
             byte_size: 10KB
             pg_num: 32
-            k: 2
-            m: 2
+            k: 8
+            m: 6
+            create_rule: true
+            crush-osds-per-failure-domain: 4
+            crush-num-failure-domains: 4
             plugin: jerasure
             crush-failure-domain: host
           compression_config:
@@ -308,10 +331,13 @@ tests:
               pool_name: ec86_pool7
               pool_type: erasure
               pg_num: 32
-              k: 2
-              m: 2
+              k: 8
+              m: 6
+              create_rule: true
+              crush-osds-per-failure-domain: 4
+              crush-num-failure-domains: 4
               plugin: jerasure
-              crush-failure-domain: host
+              crush-failure-domain: osd
               target_size_ratio: 0.8
               rados_write_duration: 50
               rados_read_duration: 50
@@ -346,10 +372,12 @@ tests:
               num_objs: 200
               byte_size: 1024
               pool_type: erasure
-              k: 2
-              m: 2
+              k: 8
+              m: 6
+              create_rule: true
+              crush-osds-per-failure-domain: 4
+              crush-num-failure-domains: 4
               plugin: jerasure
-              crush-failure-domain: host
         delete_pools:
           - ec86_pool8
 
@@ -368,9 +396,11 @@ tests:
               num_objs: 200
               byte_size: 1024
               pool_type: erasure
-              k: 2
-              m: 2
-              crush-failure-domain: host
+              k: 8
+              m: 6
+              create_rule: true
+              crush-osds-per-failure-domain: 4
+              crush-num-failure-domains: 4
               plugin: jerasure
         add_network_delay: true
         delete_pools:
@@ -383,8 +413,8 @@ tests:
       config:
         pool_configs:
             - type: erasure
-              conf: sample-pool-4
-        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
+              conf: sample-pool-3
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Verify that scrub & deep-scrub logs are captured in OSD logs
 
   - test:
@@ -399,10 +429,13 @@ tests:
               pool_name: ec86_pool10
               pool_type: erasure
               pg_num: 32
-              k: 2
-              m: 2
-              crush-failure-domain: host
+              k: 8
+              m: 6
+              create_rule: true
+              crush-osds-per-failure-domain: 4
+              crush-num-failure-domains: 4
               plugin: jerasure
+              crush-failure-domain: host
               target_size_ratio: 0.8
               rados_write_duration: 50
               rados_read_duration: 50
@@ -420,8 +453,11 @@ tests:
               profile_name: ec86_11
               pool_name: ec86_pool11
               pool_type: erasure
-              k: 2
-              m: 2
+              k: 8
+              m: 6
+              create_rule: true
+              crush-osds-per-failure-domain: 4
+              crush-num-failure-domains: 4
               plugin: jerasure
               crush-failure-domain: host
               pg_num_min: 16
@@ -442,8 +478,11 @@ tests:
               profile_name: ec86_12
               pool_name: ec86_pool12
               pool_type: erasure
-              k: 2
-              m: 2
+              k: 8
+              m: 6
+              create_rule: true
+              crush-osds-per-failure-domain: 4
+              crush-num-failure-domains: 4
               plugin: jerasure
               crush-failure-domain: host
               disable_pg_autoscale: true
@@ -457,8 +496,8 @@ tests:
         pool-1-type: replicated
         pool-2-type: erasure
         pool-1-conf: sample-pool-1
-        pool-2-conf: sample-pool-4
-        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
+        pool-2-conf: sample-pool-3
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-2. RE -> EC
 
   - test:
@@ -468,9 +507,9 @@ tests:
       config:
         pool-1-type: erasure
         pool-2-type: replicated
-        pool-1-conf: sample-pool-4
+        pool-1-conf: sample-pool-3
         pool-2-conf: sample-pool-3
-        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-3. EC -> RE
 
   - test:
@@ -481,8 +520,8 @@ tests:
         pool-1-type: erasure
         pool-2-type: erasure
         pool-1-conf: sample-pool-4
-        pool-2-conf: sample-pool-5
-        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
+        pool-2-conf: sample-pool-3
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-4. Ec -> EC
 
 # Blocked due to BZ 2172795. Bugzilla fixed.
@@ -494,8 +533,8 @@ tests:
         verify_pool_warnings:
           pool_configs:
             - type: erasure
-              conf: sample-pool-4
-          pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
+              conf: sample-pool-3
+          pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
 
   - test:
@@ -511,8 +550,11 @@ tests:
               profile_name: ec86_13
               pool_name: ec86_pool13
               pool_type: erasure
-              k: 2
-              m: 2
+              k: 8
+              m: 6
+              create_rule: true
+              crush-osds-per-failure-domain: 4
+              crush-num-failure-domains: 4
               plugin: jerasure
               crush-failure-domain: host
         delete_pools:
@@ -529,8 +571,11 @@ tests:
               profile_name: ec86_14
               pool_name: ec86_pool14
               pool_type: erasure
-              k: 2
-              m: 2
+              k: 8
+              m: 6
+              create_rule: true
+              crush-osds-per-failure-domain: 4
+              crush-num-failure-domains: 4
               plugin: jerasure
               crush-failure-domain: host
               pg_num: 64
@@ -554,8 +599,11 @@ tests:
               profile_name: ec86_15
               pool_name: ec86_pool15
               pool_type: erasure
-              k: 2
-              m: 2
+              k: 8
+              m: 6
+              create_rule: true
+              crush-osds-per-failure-domain: 4
+              crush-num-failure-domains: 4
               plugin: jerasure
               crush-failure-domain: host
               rados_put: true
@@ -564,8 +612,11 @@ tests:
               profile_name: ec86_16
               pool_name: ec86_pool16
               pool_type: erasure
-              k: 2
-              m: 2
+              k: 8
+              m: 6
+              create_rule: true
+              crush-osds-per-failure-domain: 4
+              crush-num-failure-domains: 4
               plugin: jerasure
               crush-failure-domain: host
         delete_pools:

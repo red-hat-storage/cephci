@@ -234,6 +234,7 @@ tests:
         pool-2-type: replicated
         pool-1-conf: sample-pool-1
         pool-2-conf: sample-pool-2
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-1. RE -> RE
 
   - test:
@@ -245,6 +246,7 @@ tests:
         pool-2-type: erasure
         pool-1-conf: sample-pool-1
         pool-2-conf: sample-pool-3
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-2. RE -> EC
 
   - test:
@@ -256,6 +258,7 @@ tests:
         pool-2-type: replicated
         pool-1-conf: sample-pool-3
         pool-2-conf: sample-pool-3
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-3. EC -> RE
 
   - test:
@@ -267,6 +270,7 @@ tests:
         pool-2-type: erasure
         pool-1-conf: sample-pool-2
         pool-2-conf: sample-pool-3
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-4. Ec -> EC
 
   - test:

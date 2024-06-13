@@ -1080,6 +1080,26 @@ class RadosOrchestrator:
             return False
         return True
 
+    def get_ec_profiles(self) -> list:
+        """
+        Fetches all the EC profiles present on the cluster
+        returns:
+            list of ec profiles present on the cluster
+        """
+        profile_ls = "ceph osd erasure-code-profile ls"
+        return self.run_ceph_command(cmd=profile_ls)
+
+    def get_crush_rule_names(self) -> list:
+        """
+        Fetches all the crush rule names present on the cluster
+        returns:
+            list of crush rule names present on the cluster
+        """
+        # Creating the pool with the profile created
+        # https://docs.ceph.com/en/latest/rados/operations/crush-map/#rules
+        cmd = "ceph osd crush rule ls"
+        return self.run_ceph_command(cmd=cmd)
+
     def create_erasure_pool(self, name: str, **kwargs) -> bool:
         """
         Creates an erasure code profile and then creates a pool with the same
@@ -1100,6 +1120,10 @@ class RadosOrchestrator:
                     3. clay -> Upstream Only
                 6. pool_name -> pool name to create and associate with the EC profile being created
                 7. force -> Override an existing profile by the same name.
+                8. crush-osds-per-failure-domain -> number of OSDs per failure domain
+                9. crush-num-failure-domains -> Number of failure domains present on the cluster
+                10. create_rule -> Arg to specify if the CRUSH rule should be created or not
+                11. profile_name -> Name of the profile to be created
         Returns: True -> pass, False -> fail
         """
         failure_domain = kwargs.get("crush-failure-domain", "osd")
@@ -1107,16 +1131,34 @@ class RadosOrchestrator:
         m = kwargs.get("m", 2)
         l = kwargs.get("l")
         d = kwargs.get("d", 5)
+        crush_osds_per_failure_domain = kwargs.get(
+            "crush-osds-per-failure-domain", None
+        )
+        crush_num_failure_domains = kwargs.get("crush-num-failure-domains", None)
+        create_rule = kwargs.get("create_rule", False)
         plugin = kwargs.get("plugin", "jerasure")
         pool_name = kwargs.get("pool_name")
         force = kwargs.get("force")
-        profile_name = f"ecprofile_{name}"
+        profile_name = kwargs.get("profile_name", f"ecp_{name}")
+        rule_name = f"rule_{name}"
 
         # Creating an erasure coded profile with the options provided
         cmd = (
             f"ceph osd erasure-code-profile set {profile_name}"
             f" crush-failure-domain={failure_domain} k={k} m={m} plugin={plugin}"
         )
+        if crush_osds_per_failure_domain:
+            if self.rhbuild and self.rhbuild.split(".")[0] >= "8":
+                cmd = (
+                    cmd
+                    + f" crush-osds-per-failure-domain={crush_osds_per_failure_domain} "
+                    f" crush-num-failure-domains={crush_num_failure_domains}"
+                )
+            else:
+                log.info(
+                    "Params 'crush-osds-per-failure-domain' only supported from 8.x"
+                    "No modification of the command done."
+                )
 
         if plugin == "lrc":
             cmd = cmd + f" l={l}"
@@ -1124,8 +1166,17 @@ class RadosOrchestrator:
             cmd = cmd + f" d={d}"
         if force:
             cmd = cmd + " --force"
+
+        log.debug(f"Final command to create EC pool : {cmd}")
         try:
-            self.node.shell([cmd])
+            self.run_ceph_command(cmd=cmd)
+            time.sleep(5)
+            profiles = self.get_ec_profiles()
+            if profile_name not in profiles:
+                raise Exception(
+                    f"Profile not found in list error.\n profile name :{profile_name} "
+                    f"\n profiles on cluster : {profiles}"
+                )
         except Exception as err:
             log.error(f"Failed to create ec profile : {profile_name}")
             log.error(err)
@@ -1133,13 +1184,34 @@ class RadosOrchestrator:
 
         cmd = f"ceph osd erasure-code-profile get {profile_name}"
         log.info(self.node.shell([cmd]))
-        # Creating the pool with the profile created
-        if not self.create_pool(
-            ec_profile_name=profile_name,
-            **kwargs,
-        ):
-            log.error(f"Failed to create Pool {pool_name}")
-            return False
+
+        # Creating the Crush rule for the profile created
+        if create_rule:
+            cmd = f"ceph osd crush rule create-erasure {rule_name} {profile_name}"
+            self.run_ceph_command(cmd=cmd)
+            time.sleep(5)
+
+            rule_list = self.get_crush_rule_names()
+            if rule_name not in rule_list:
+                log.error(
+                    f"unable to create rule: {rule_name}. list obtained from cluster: {rule_list}"
+                )
+                return False
+            if not self.create_pool(
+                ec_profile_name=profile_name,
+                crush_rule=rule_name,
+                **kwargs,
+            ):
+                log.error(f"Failed to create Pool {pool_name}")
+                return False
+        else:
+            if not self.create_pool(
+                ec_profile_name=profile_name,
+                **kwargs,
+            ):
+                log.error(f"Failed to create Pool {pool_name}")
+                return False
+
         log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
         return True
 
