@@ -65,7 +65,8 @@ function wipe_drives {
     disks=$(sshpass -p ${password} ssh -q ${username}@${node} "lsblk -ndo name,type | awk '{print \$1\",\"\$2}'")
 
     # Find root disk device
-    root_disk=$(sshpass -p ${password} ssh -q ${username}@${node} "sudo findmnt -v -n -T /boot -o SOURCE"
+    root_disk=$(sshpass -p ${password} ssh ${username}@${node} 'eval $(lsblk -o PKNAME,MOUNTPOINT -P | grep "MOUNTPOINT=\"/\""); echo $PKNAME')
+
     if [ -z "${root_disk}" ]; then
         echo "ERR: Unable to find root disk on ${node}"
         exit 2
@@ -84,7 +85,7 @@ function wipe_drives {
 
       # shellcheck disable=SC2076
       # Skip wipefs for root, cd-rom.,etc disks
-      if [[ "${root_disk}" =~ "/dev/${name}" || "${type}" != "disk" ]]; then
+      if [[ "${root_disk}" =~ "${name}" || "${type}" != "disk" ]]; then
         echo "Skipping this disk :  disk - ${name} , type - ${type}"
         continue
       else
