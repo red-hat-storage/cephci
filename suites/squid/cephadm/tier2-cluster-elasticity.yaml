@@ -303,7 +303,7 @@ tests:
       name: Add hosts to ceph cluster
       desc: Add host node(s) with IP address and labels
       module: test_host.py
-      polarion-id: CEPH-83573729
+      polarion-id: CEPH-83573729, CEPH-83591442
       config:
         service: host
         command: add_hosts
