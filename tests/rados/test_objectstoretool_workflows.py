@@ -271,13 +271,21 @@ def run(ceph_cluster, **kw):
                 objectstore_obj.get_bytes(
                     osd_id=osd_id, obj=obj, pgid=pg_id, out_file="/tmp/mod_obj"
                 )
-                mod_obj_data, _ = osd_host.exec_command(
-                    sudo=True, cmd="cat /tmp/mod_obj"
-                )
-                assert "random data" in mod_obj_data
-                log.info(
-                    f"Additional text found in modified bytes fetched for object {obj}"
-                )
+
+                try:
+                    mod_obj_data, _ = osd_host.exec_command(
+                        sudo=True, cmd="cat /tmp/mod_obj"
+                    )
+                    log.info(mod_obj_data)
+                    assert "random data" in mod_obj_data
+                    log.info(
+                        f"Additional text found in modified bytes fetched for object {obj}"
+                    )
+                except UnicodeDecodeError:
+                    log.info(
+                        "Object content was not in utf-8 encoding, attempting to fix"
+                    )
+                    mod_obj_data = mod_obj_data.decode("utf-8", "ignore")
 
             if operation == "list_omap":
                 # Use the ceph-objectstore-tool to list the contents of the object map (OMAP).

@@ -84,6 +84,7 @@ def run(ceph_cluster, **kw):
 
         if pool.get("rados_put", False):
             do_rados_get(client_node, pool["pool_name"], 1)
+        log.info("verification of OSD re-balancing completed")
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
@@ -94,7 +95,7 @@ def run(ceph_cluster, **kw):
         )
         out, _ = cephadm.shell(args=["ceph osd ls"])
         active_osd_list = out.strip().split("\n")
-        log.debug(f"List of active OSDs: \n{active_osd_list}")
+        log.info(f"List of active OSDs: \n{active_osd_list}")
         if osd_id not in active_osd_list:
             utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
             utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
@@ -103,7 +104,7 @@ def run(ceph_cluster, **kw):
         if osd_id1 not in active_osd_list:
             utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
             utils.add_osd(ceph_cluster, host1.hostname, dev_path1, osd_id1)
-            method_should_succeed(wait_for_device_rados, host1, osd_id, action="add")
+            method_should_succeed(wait_for_device_rados, host1, osd_id1, action="add")
 
         utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
         rados_obj.change_recovery_threads(config=pool, action="rm")

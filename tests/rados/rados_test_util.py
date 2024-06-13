@@ -176,11 +176,14 @@ def wait_for_device_rados(host, osd_id, action: str, timeout: int = 900) -> bool
         base_cmd = "cephadm shell -- "
         volume_cmd = f"ceph-volume lvm list {osd_id} --format json"
         out, _ = host.exec_command(cmd=f"{base_cmd} {volume_cmd}", sudo=True)
+        ceph_volume_dict = json.loads(out)
+        log.info(ceph_volume_dict)
 
-        for item in json.loads(out)[osd_id]:
-            if "osd-block" in item["lv_name"]:
-                dev_path = item["devices"][0]
-                break
+        if ceph_volume_dict:
+            for item in ceph_volume_dict[f"{osd_id}"]:
+                if "osd-block" in item["lv_name"]:
+                    dev_path = item["devices"][0]
+                    break
 
         log.info(f"dev_path  : {dev_path}")
         if action == "remove":
