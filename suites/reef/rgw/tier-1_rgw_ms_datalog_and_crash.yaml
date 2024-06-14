@@ -362,7 +362,6 @@ tests:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_datalog_trim_command.yaml
             timeout: 300
-            verify-io-on-site: ["ceph-sec"]
 
   - test:
       name: bucket granular sync policy on bucket with flow directional and storage class
