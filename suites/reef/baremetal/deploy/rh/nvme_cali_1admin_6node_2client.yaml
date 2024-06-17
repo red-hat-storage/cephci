@@ -29,6 +29,7 @@ tests:
                 orphan-initial-daemons: true
                 registry-url: registry.redhat.io
                 allow-fqdn-hostname: true
+                allow-overwrite: true
               base_cmd_args:
                 verbose: true
           - config:
@@ -78,8 +79,9 @@ tests:
                   spec:
                     data_devices:
                       model: "PERC H755 Front"
-                    dedicated_devices:
+                    db_devices:
                       # model: "Dell Ent NVMe CM6 MU 1.6TB"
+                      paths:
                       - /dev/nvme0n1
                     encrypted: "true"                     # boolean as string
 

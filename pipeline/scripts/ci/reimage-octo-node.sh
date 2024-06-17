@@ -78,6 +78,7 @@ for node in ${NODES}; do
     initial_setup "${node}"
     set_hostnames_repos "${node}"
     wipe_drives "${node}"
+    cleanup_node "${node}"
     reboot_node "${node}"
 done
 
@@ -100,6 +101,7 @@ while [ ${#failed_nodes[@]} -gt 0 ] && [ ${retry_count} -lt 3 ]; do
     new_failed_nodes=()
     for node in "${failed_nodes[@]}"; do
         wipe_drives "${node}"
+        cleanup_node "${node}"
         reboot_node "${node}"
     done
 
