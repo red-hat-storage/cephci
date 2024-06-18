@@ -46,7 +46,7 @@ def run(ceph_cluster, **kw):
             f"Memory usages returned by ceph orch ps {mem_usage_from_ceph} and ps {mem_usage_from_ps}"
         )
         raise OsdOperationError(
-            "Error!!! There is a mismatch in the Memory usage returned by ps and ceph orch ps"
+            "Error!!! There is a mismatch in the Memory usage returned by ps and ceph orch ps. Refer Bz: #2259884"
         )
 
     log.info("There is no mismatch in the Memory usage returned by ps and ceph orch ps")
