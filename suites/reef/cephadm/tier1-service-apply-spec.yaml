@@ -38,6 +38,7 @@
 #   (6) Deploy NFS service using spec file,
 #       (a) Create OSD pool 'nfs-rgw-pool'
 #       (b) Deploy NFS on node4 using 'nfs-rgw-pool' pool.
+#   (7) Verify Prometheus daemon retention time is adjustable
 #===============================================================================================
 tests:
   - test:
@@ -300,3 +301,17 @@ tests:
                     anonymous_access: true
                     protocol: https
                     only_bind_port_on_networks: true
+  - test:
+      name: Validate adjust retention time for prometheus daemon
+      desc: Change the retention time for prometheus daemon
+      module: test_adjust_prometheus_retention_time.py
+      polarion-id: CEPH-83574726
+      config:
+        specs:
+          service_type: prometheus
+          service_name: prometheus
+          placement:
+              count: 1
+          spec:
+            retention_time: "1y"
+        retention_time: "30d"
