@@ -72,7 +72,7 @@ def run(ceph_cluster, **kw):
                         sudo=True, cmd="yum update kernel -y --nogpgcheck"
                     )
                     cnode.exec_command(sudo=True, cmd="sudo reboot", check_ec=False)
-                    time.sleep(30)
+                    time.sleep(60)
                     cnode.reconnect()
                     kernel_version, _ = cnode.exec_command(sudo=True, cmd="uname -r")
                     kernel_version = kernel_version.rstrip()
@@ -129,7 +129,7 @@ def run(ceph_cluster, **kw):
                 log.info(kernel_update_cmd)
                 cnode.exec_command(sudo=True, cmd=kernel_update_cmd)
                 cnode.exec_command(sudo=True, cmd="sudo reboot", check_ec=False)
-                time.sleep(30)
+                time.sleep(60)
                 cnode.reconnect()
                 kernel_version, rc = cnode.exec_command(sudo=True, cmd="uname -r")
                 kernel_version = kernel_version.rstrip()
