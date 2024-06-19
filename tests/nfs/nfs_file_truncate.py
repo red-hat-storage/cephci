@@ -50,7 +50,7 @@ def run(ceph_cluster, **kw):
 
         # Create files from dd on client 1
         cmd = f"for i in $(seq 1 15);do dd if=/dev/urandom of={nfs_mount}/file$i bs=1G count=1;done"
-        clients[0].exec_command(cmd=cmd, sudo=True)
+        clients[1].exec_command(cmd=cmd, sudo=True)
 
         for i in range(1, 15):
             # Validate the size of file is 1GB each
