@@ -3587,3 +3587,96 @@ class RadosOrchestrator:
         log.info(f"The inconsistent object count is -{obj_count}")
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id
+
+    def set_unmanaged_flag(self, daemon):
+        """
+        Method to set the unmanaged flag to a daemon
+        Args:
+            daemon : Cluster daemon Example: mgr,mon, osd, rgw
+        Return:
+             True, if unmanaged flag is set
+             False, if unmanaged flag is not set
+        """
+
+        cmd_set_unmanaged_flag = f"ceph orch set-unmanaged {daemon}"
+        self.client.exec_command(sudo=True, cmd=cmd_set_unmanaged_flag)
+        base_cmd = "ceph orch ls"
+        cmd = f"{base_cmd} {daemon}"
+        duration = 300  # 5 minutes
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            orch_ls_op = self.run_ceph_command(cmd=cmd)
+            for entry in orch_ls_op:
+                if entry["unmanaged"]:
+                    log.info("The unmanaged flag is set to True ")
+                    return True
+            time.sleep(30)
+        log.error("The unmanaged flag is not set to True  ")
+        return False
+
+    def set_managed_flag(self, daemon):
+        """
+        Method to unset the unmanaged flag to a daemon
+        Args:
+            daemon : Cluster daemon Example: mgr,mon, osd, rgw
+        Return:
+            True, if unmanaged flag is unset
+            False, if unmanaged flag is not unset
+        """
+
+        cmd_set_managed_flag = f"ceph orch set-managed {daemon}"
+        self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
+
+        base_cmd = "ceph orch ls"
+        cmd = f"{base_cmd} {daemon}"
+        duration = 300  # 5 minutes
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            orch_ls_op = self.run_ceph_command(cmd=cmd)
+            for entry in orch_ls_op:
+                if "unmanaged" not in entry:
+                    log.info("The unmanaged flag is unset")
+                    return True
+            time.sleep(30)
+        log.error("The unmanaged flag is not unset")
+        return False
+
+    def check_daemon_exists_on_host(self, host, daemon_type) -> bool:
+        """
+        Method to check a daemon is running on the given host
+        Args:
+            host: name of the host where existence of mgr needs to be checked
+            daemon_type: daemon type to check on the node.
+                         Example: mgr,mon
+        Return:
+            Pass -> True, Fail -> false
+        """
+        cmd = f"ceph orch ps {host}"
+        out = self.run_ceph_command(cmd=cmd, client_exec=True)
+        for entry in out:
+            if entry["daemon_type"] == daemon_type:
+                log.debug(f"{daemon_type} daemon present on the host")
+                return True
+        log.debug(f"{daemon_type} daemon not present on the host")
+        return False
+
+    def get_daemon_list_fromCluster(self, daemon_type):
+        """
+        Method to get the required daemon list from the cluster
+        Args:
+             daemon_type: daemon type
+                         Example: mgr,mon
+        Returns:
+              nodes list that contain the daemon type
+        """
+        mgr_node_list = []
+        cmd_orch = "ceph orch host ls"
+        host_output = self.run_ceph_command(cmd=cmd_orch, client_exec=True)
+        for item in host_output:
+            host_name = item["hostname"]
+            cmd_orch = f"ceph orch ps {host_name}"
+            out = self.run_ceph_command(cmd=cmd_orch, client_exec=True)
+            for entry in out:
+                if entry["daemon_type"] == daemon_type:
+                    mgr_node_list.append(host_name)
+        return mgr_node_list
