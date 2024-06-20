@@ -50,9 +50,11 @@ def run(ceph_cluster, **kw):
         log.info(f"Scenario1:The pool-{pool_name} is created")
         old_pg_num = pool_obj.get_pg_autoscaler_value(pool_name, "pg_num_target")
         log.info(f"The current pg number is -{old_pg_num}")
+        rados_obj.log_cluster_health()
         rados_obj.bench_write(
             pool_name=pool_name, byte_size=1024, rados_write_duration=10
         )
+        rados_obj.log_cluster_health()
         status = check_status(pool_obj, old_pg_num, pool_name)
         pg_num = pool_obj.get_pg_autoscaler_value(pool_name, "pg_num_target")
         if not status:
@@ -97,9 +99,11 @@ def run(ceph_cluster, **kw):
                 break
         old_pg_num = pool_obj.get_pg_autoscaler_value(pool_name, "pg_num_target")
         log.info(f"Scenario2:The current pg number is -{old_pg_num}")
+        rados_obj.log_cluster_health()
         rados_obj.bench_write(
             pool_name=pool_name, byte_size=1024, rados_write_duration=10
         )
+        rados_obj.log_cluster_health()
         status = check_status(pool_obj, old_pg_num, pool_name)
         pg_num = pool_obj.get_pg_autoscaler_value(pool_name, "pg_num_target")
         if not status:
@@ -174,10 +178,11 @@ def run(ceph_cluster, **kw):
         log.info("Scenario4:The norecover is set on the cluster")
         old_pg_num = pool_obj.get_pg_autoscaler_value(pool_name, "pg_num_target")
         log.info(f"Scenario4:The pg_num after setting the norecover flg is - {pg_num}")
-
+        rados_obj.log_cluster_health()
         rados_obj.bench_write(
             pool_name=pool_name, byte_size=1024, rados_write_duration=10
         )
+        rados_obj.log_cluster_health()
         status = check_status(pool_obj, old_pg_num, pool_name)
 
         if not status:
@@ -221,7 +226,9 @@ def run(ceph_cluster, **kw):
         )
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
         while end_time > datetime.datetime.now():
+            rados_obj.log_cluster_health()
             rados_obj.bench_write(pool_name=pool_name)
+            rados_obj.log_cluster_health()
             pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
             out_put = rados_obj.run_ceph_command(cmd="ceph -s")
             for state in out_put["pgmap"]["pgs_by_state"]:
@@ -258,6 +265,8 @@ def run(ceph_cluster, **kw):
             log.info(f"deleted the {pool_name} pool successfully")
         utils.configure_osd_flag(ceph_cluster, "unset", "norecover")
         log.info("The norecover is unset on the cluster")
+        # log cluster health
+        rados_obj.log_cluster_health()
     return 0
 
 
@@ -273,7 +282,7 @@ def check_status(pool_object, current_pg_num, pool_name):
              False -> PG number is changed
 
     """
-    endtime = datetime.datetime.now() + datetime.timedelta(seconds=180)
+    endtime = datetime.datetime.now() + datetime.timedelta(seconds=300)
     while datetime.datetime.now() < endtime:
         time.sleep(10)
         new_pg_num = pool_object.get_pg_autoscaler_value(pool_name, "pg_num_target")

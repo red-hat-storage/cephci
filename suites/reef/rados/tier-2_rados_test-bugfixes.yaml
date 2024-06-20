@@ -170,7 +170,8 @@ tests:
       desc: Generate Slow OSD heartbeats by inducing network delay
 
   - test:
-      name: Verify the recovery flag functionality
+      name: Verification the recovery flag functionality
+      desc: Verify the pg_num and recovery status
       module: test_norecovery_flag_functionality.py
       polarion-id: CEPH-83591783
       config:
