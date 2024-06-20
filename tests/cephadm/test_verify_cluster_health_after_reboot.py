@@ -1,3 +1,5 @@
+from time import sleep
+
 from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
 from cli.utilities.utils import get_service_id, reboot_node, set_service_state
@@ -46,6 +48,9 @@ def run(ceph_cluster, **kw):
                 raise ClusterNotHealthy(
                     f"Ceph cluster not healthy after rebooting {node.hostname}"
                 )
+        # Adding an explicit delay, because sudden reboots are causing the cluster Health to
+        # HEALTH WARN state.
+        sleep(30)
 
     elif action == "service-state":
         # Get the SERVICE_ID of the mon service
