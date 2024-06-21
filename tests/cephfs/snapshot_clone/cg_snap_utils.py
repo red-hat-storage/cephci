@@ -467,7 +467,16 @@ class CG_Snap_Utils(object):
 
         for mnt_pt in mnt_pt_list:
             if del_data == 1:
-                client.exec_command(sudo=True, cmd=f"rm -rf  {mnt_pt}/cg_io")
+                cg_cleanup = 0
+                retry_cnt = 5
+                while cg_cleanup == 0 and retry_cnt > 0:
+                    try:
+                        client.exec_command(sudo=True, cmd=f"rm -rf  {mnt_pt}/cg_io")
+                        cg_cleanup = 1
+                    except Exception as ex:
+                        log.info(ex)
+                        retry_cnt -= 1
+
             client.exec_command(sudo=True, cmd=f"umount -l  {mnt_pt}")
 
     def mount_qs_members(self, client, qs_members, fs_name="cephfs"):
@@ -497,7 +506,7 @@ class CG_Snap_Utils(object):
             "fs_name": fs_name,
             "export_created": 0,
         }
-        mnt_type = ["kernel"]
+        mnt_type = ["fuse"]
         for qs_member in qs_member_dict:
             cmd = f"ceph fs subvolume getpath {fs_name} {qs_member}"
             if qs_member_dict[qs_member].get("group_name"):
@@ -531,3 +540,36 @@ class CG_Snap_Utils(object):
                     )
 
         return qs_member_dict
+
+    def validate_pin_stats(self, client, fs_util, mds_nodes, fs_name="cephfs"):
+        """
+        This method is required to mount quiesce members
+        Params:
+        client - A client object to perform mount
+        qs_members(type : list) - A list of quiesce members, each member in format subvol1 or group1/subvol1 if
+                subvol1 belongs to non-default group
+        Returns: qs_member_dict - a dict type data in below format,
+        {subvolume : {'group_name' : groupname,'mount_point' : mountpoint}}
+        """
+
+        mds_ls = fs_util.get_active_mdss(client, fs_name=fs_name)
+        pin_validate = 0
+        for mds_iter in mds_ls:
+            for mds_node in mds_nodes:
+                if mds_node.node.hostname in mds_iter:
+                    cmd = f"cephadm shell ceph daemon mds.{mds_iter} get subtrees | grep export_pin_target -A 2"
+                    out, rc = mds_node.exec_command(
+                        sudo=True,
+                        cmd=cmd,
+                    )
+                    log.info(f"export_pin_target details:{out}")
+                    out_list = out.split("\n")
+
+                    for line in out_list:
+                        if "export_pin_target" in line:
+                            export_pin_target = line.split(":")[1]
+                            export_pin_target = export_pin_target.split(",")[0]
+                            if abs(int(export_pin_target)) >= 1:
+                                pin_validate = 1
+
+        return pin_validate
