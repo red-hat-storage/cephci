@@ -286,6 +286,7 @@ def start_local_private_registry(node, image):
         ports=PRIVATE_REGISTRY_PORT,
         restart="always",
         detach=True,
+        long_running=False,
     )
     return True
 
@@ -327,7 +328,13 @@ def add_images_to_private_registry(
             dest_creds,
             remove_signature=True,
         )
-        Container(node).run(volume=volumes, rm=SKOPEO_IMAGE, cmds=skopeo_cmd)
+        Container(node).run(
+            long_running=False,
+            volume=volumes,
+            rm=True,
+            image=SKOPEO_IMAGE,
+            cmds=skopeo_cmd,
+        )
     return True
 
 
