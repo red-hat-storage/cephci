@@ -345,3 +345,16 @@ def setfattr(client, file_path, attribute_name, attribute_value):
     cmd = f"setfattr -n user.{attribute_name} -v {attribute_value} {file_path}"
     out = client.exec_command(sudo=True, cmd=cmd)
     return out
+
+
+def removeattr(client, file_path, attribute_name):
+    """
+    Remove the value of an extended attribute on a file.
+
+    Args:
+    - file_path (str): Path to the file/dir where the extended attribute needs tp be removed.
+    - attribute_name (str): Name of the extended attribute to be removed.
+    """
+    cmd = f"setfattr -x user.{attribute_name} {file_path}"
+    out = client.exec_command(sudo=True, cmd=cmd)
+    return out
