@@ -215,6 +215,7 @@ tests:
       desc: Remove nvmeof service on GW nodes
       destroy-cluster: false
       module: test_orch.py
+      do-not-skip-tc: true
       name: Delete nvmeof gateway
 
   - test:
@@ -237,4 +238,5 @@ tests:
       desc: Delete nvmeof and rbd pool from ceph cluster
       destroy-cluster: false
       module: test_cephadm.py
+      do-not-skip-tc: true
       name: Delete NVMeOF pools
