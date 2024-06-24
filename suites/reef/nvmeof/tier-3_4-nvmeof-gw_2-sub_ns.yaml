@@ -236,5 +236,6 @@ tests:
                 - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
       desc: Delete nvmeof and rbd pool from ceph cluster
       destroy-cluster: false
+      do-not-skip-tc: true
       module: test_cephadm.py
       name: Delete NVMeOF pools
