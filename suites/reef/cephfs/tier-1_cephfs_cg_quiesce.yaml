@@ -184,16 +184,6 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "Verify quiesce ops in parallel to multi-MDS failover"
-      destroy-cluster: false
-      module: snapshot_clone.cg_snap_test.py
-      name: "cg_snap_interop_workflow_1"
-      polarion-id: CEPH-83581472
-      config:
-       test_name: cg_snap_interop_workflow_1
-  -
-    test:
-      abort-on-fail: false
       desc: "Verify quiesce suceeds with IO from nfs,fuse and kernel mounts"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
@@ -211,4 +201,15 @@ tests:
       polarion-id: CEPH-83591512
       config:
        test_name: cg_snap_neg_workflow_1
+  -
+    test:
+      abort-on-fail: false
+      desc: "Verify quiesce ops in parallel to multi-MDS failover"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_interop_workflow_1"
+      polarion-id: CEPH-83581472
+      config:
+       test_name: cg_snap_interop_workflow_1
+      comments: product bug bz-2273569
 

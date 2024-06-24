@@ -38,7 +38,7 @@ def run(ceph_cluster, **kw):
         cg_snap_io = CG_snap_IO(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
-        default_subvol_size = config.get("subvol_size", 6442450944)
+        default_subvol_size = config.get("subvol_size", 8589934592)
         platform_type = config.get("platform_type", "default")
         if platform_type == "baremetal":
             default_subvol_size = default_subvol_size * 10
@@ -139,7 +139,7 @@ def run(ceph_cluster, **kw):
             "clients": clients,
             "mgr_node": mgr_node,
             "qs_sets": qs_sets,
-            "cg_run_time": 3600,
+            "cg_run_time": 2700,  # beyond 45mins the container's rootFS get's full
         }
         for test_name in test_list:
             log.info(
@@ -227,7 +227,274 @@ def cg_scale(cg_test_params):
 
     total_fail = 0
     test_fail = 0
-    for qs_set in qs_sets:
+    qs_set = random.choice(qs_sets)
+    client_mnt_dict = {}
+    write_procs = []
+    i = 0
+    for qs_member in qs_set:
+        client_obj = qs_clients[i]
+        if "/" in qs_member:
+            group_name, subvol_name = re.split("/", qs_member)
+            cmd = f"ceph fs subvolume getpath {fs_name} {subvol_name} --group_name {group_name}"
+        else:
+            subvol_name = qs_member
+            cmd = f"ceph fs subvolume getpath {fs_name} {subvol_name}"
+
+        subvol_path, rc = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+        )
+        mnt_path = subvol_path.strip()
+        mount_params = {
+            "fs_util": fs_util,
+            "client": client_obj,
+            "mnt_path": mnt_path,
+            "fs_name": fs_name,
+            "export_created": 0,
+        }
+        mounting_dir, _ = fs_util.mount_ceph("kernel", mount_params)
+        client_mnt_dict.update({client_obj: mounting_dir})
+        i += 1
+
+    log.info(f"Start the IO on quiesce set members - {qs_set}")
+    if platform_type == "baremetal":
+        dd_params = {
+            "file_name": "dd_test_file",
+            "input_type": "random",
+            "bs": "1M",
+            "count": 500,
+        }
+        smallfile_params = {
+            "testdir_prefix": "smallfile_io_dir",
+            "threads": 4,
+            "file-size": 10240,
+            "files": 5000,
+        }
+        crefi_params = {
+            "testdir_prefix": "crefi_io_dir",
+            "files": 5000,
+            "max": "100k",
+            "min": "10k",
+            "type": "tar",
+            "breadth": 5,
+            "depth": 5,
+            "threads": 3,
+        }
+    else:
+        dd_params = {
+            "file_name": "dd_test_file",
+            "input_type": "random",
+            "bs": "1M",
+            "count": 10,
+        }
+        smallfile_params = {
+            "testdir_prefix": "smallfile_io_dir",
+            "threads": 2,
+            "file-size": 10240,
+            "files": 10,
+        }
+        crefi_params = {
+            "testdir_prefix": "crefi_io_dir",
+            "files": 10,
+            "max": "100k",
+            "min": "10k",
+            "type": "tar",
+            "breadth": 3,
+            "depth": 3,
+            "threads": 2,
+        }
+
+    io_run_time_mins = 3
+
+    io_args = {
+        "run_time": io_run_time_mins,
+        "dd_params": dd_params,
+        "smallfile_params": smallfile_params,
+        "crefi_params": crefi_params,
+    }
+
+    io_tools = ["dd", "smallfile", "crefi"]
+    tar_compile_test = 0
+    for client_tmp in client_mnt_dict:
+        mounting_dir = client_mnt_dict[client_tmp]
+        if tar_compile_test == 0:
+            file_extract_params = {"compile_test": 1}
+            io_args_tmp = io_args.copy()
+            io_args_tmp.update({"file_extract_params": file_extract_params})
+            io_tools_tmp = io_tools.copy()
+            io_tools_tmp.insert(0, "file_extract")
+            tar_compile_test = 1
+            p = Thread(
+                target=fs_util.run_ios_V1,
+                args=(client_tmp, mounting_dir, io_tools_tmp),
+                kwargs=io_args_tmp,
+            )
+        else:
+            p = Thread(
+                target=fs_util.run_ios_V1,
+                args=(client_tmp, mounting_dir, io_tools),
+                kwargs=io_args,
+            )
+        p.start()
+        write_procs.append(p)
+
+    time.sleep(60)
+    repeat_cnt = 5
+    snap_qs_dict = {}
+    for qs_member in qs_set:
+        snap_qs_dict.update({qs_member: []})
+    i = 0
+    while i < repeat_cnt:
+        log.info(f"Quiesce Lifecycle : Iteration {i}")
+        # time taken for 1 lifecycle : ~5secs
+
+        out, rc = client.exec_command(
+            sudo=True,
+            cmd="ceph status;ceph fs status;ceph fs dump",
+            check_ec=False,
+        )
+        log.info(f"Ceph fs status and fs dump output : {out}")
+        client.exec_command(
+            sudo=True,
+            cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
+            check_ec=False,
+        )
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(4))
+        )
+        qs_id_val = f"cg_scale_{rand_str}"
+        log.info(f"Quiesce the set {qs_set}")
+        cg_snap_util.cg_quiesce(
+            client, qs_set, qs_id=qs_id_val, timeout=600, expiration=600
+        )
+        client.exec_command(
+            sudo=True,
+            cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
+            check_ec=False,
+        )
+        time.sleep(30)
+        log.info("Perform snapshot creation on all members")
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        snap_name = f"cg_snap_{rand_str}"
+        for qs_member in qs_set:
+            snap_list = snap_qs_dict[qs_member]
+            snapshot = {
+                "vol_name": fs_name,
+                "snap_name": snap_name,
+            }
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                snapshot.update(
+                    {
+                        "subvol_name": subvol_name,
+                        "group_name": group_name,
+                    }
+                )
+            else:
+                subvol_name = qs_member
+                snapshot.update(
+                    {
+                        "subvol_name": subvol_name,
+                    }
+                )
+            try:
+                fs_util.create_snapshot(client, **snapshot)
+            except Exception as ex:
+                log.info(ex)
+            log.info(f"Created snapshot {snap_name} on {subvol_name}")
+            snap_list.append(snap_name)
+            snap_qs_dict.update({subvol_name: snap_list})
+        log.info(f"Release quiesce set {qs_id_val}")
+        cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+        i += 1
+        time.sleep(20)
+
+    for p in write_procs:
+        if p.is_alive():
+            proc_stop = 0
+            io_run_time_secs = io_run_time_mins * 4 * 60
+            log.info("IO is running after quiesce lifecycle")
+            end_time = datetime.datetime.now() + datetime.timedelta(
+                seconds=io_run_time_secs
+            )
+            while (datetime.datetime.now() < end_time) and (proc_stop == 0):
+                if p.is_alive():
+                    time.sleep(10)
+                else:
+                    proc_stop = 1
+            if proc_stop == 1:
+                log.info("IO completed")
+            elif proc_stop == 0:
+                log.error("IO has NOT completed")
+
+    log.info(f"Perform cleanup for {qs_set}")
+    log.info("Remove CG IO files and unmount")
+    for client_tmp in client_mnt_dict:
+        mounting_dir = client_mnt_dict[client_tmp]
+        cg_snap_util.cleanup_cg_io(client_tmp, [mounting_dir])
+
+    snap_name = f"cg_snap_{rand_str}"
+    log.info("Remove CG snapshots")
+    for qs_member in qs_set:
+        group_name = None
+        if "/" in qs_member:
+            group_name, subvol_name = re.split("/", qs_member)
+        else:
+            subvol_name = qs_member
+        snap_list = snap_qs_dict[subvol_name]
+        for snap_name in snap_list:
+            if group_name is not None:
+                fs_util.remove_snapshot(
+                    client,
+                    fs_name,
+                    subvol_name,
+                    snap_name,
+                    validate=True,
+                    group_name=group_name,
+                )
+            else:
+                fs_util.remove_snapshot(
+                    client, fs_name, subvol_name, snap_name, validate=True
+                )
+
+    if test_fail == 1:
+        log.error("FAIL: Workflow 1 - quiesce lifecycle with scaled config")
+        test_fail = 0
+        total_fail += 1
+    if total_fail > 0:
+        return 1
+    return 0
+
+
+def cg_stress(cg_test_params):
+    log.info("Workflow - Stress test on quiesce set")
+    fs_name = cg_test_params["fs_name"]
+    fs_util = cg_test_params["fs_util"]
+    platform_type = cg_test_params["platform_type"]
+    clients = cg_test_params["clients"]
+    client = cg_test_params["clients"][0]
+    qs_clients = clients.copy()
+    qs_clients.pop(0)
+    qs_sets = cg_test_params["qs_sets"]
+    cg_snap_util = cg_test_params["cg_snap_util"]
+
+    cg_run_time = cg_test_params["cg_run_time"]
+    total_fail = 0
+    test_fail = 0
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=cg_run_time)
+    cnt = 0
+    log.info(f"cg_run_time:{cg_run_time},end_time:{end_time}")
+
+    while datetime.datetime.now() < end_time:
+        now_time = datetime.datetime.now()
+        log.info(f"now_time:{now_time},end_time:{end_time}")
+        log.info(f"CG stress test : Iteration {cnt}")
+        qs_set = random.choice(qs_sets)
+
         client_mnt_dict = {}
         write_procs = []
         i = 0
@@ -303,7 +570,6 @@ def cg_scale(cg_test_params):
                 "depth": 3,
                 "threads": 2,
             }
-
         io_run_time_mins = 3
         io_args = {
             "run_time": io_run_time_mins,
@@ -311,21 +577,35 @@ def cg_scale(cg_test_params):
             "smallfile_params": smallfile_params,
             "crefi_params": crefi_params,
         }
-        io_tools = ["dd", "smallfile", "crefi", "file_extract"]
 
+        io_tools = ["dd", "smallfile", "crefi"]
+        tar_compile_test = 0
         for client_tmp in client_mnt_dict:
             mounting_dir = client_mnt_dict[client_tmp]
-
-            p = Thread(
-                target=fs_util.run_ios_V1,
-                args=(client_tmp, mounting_dir, io_tools),
-                kwargs=io_args,
-            )
+            # Run file_extract tool just once
+            if tar_compile_test == 0:
+                file_extract_params = {"compile_test": 1}
+                io_args_tmp = io_args.copy()
+                io_args_tmp.update({"file_extract_params": file_extract_params})
+                io_tools_tmp = io_tools.copy()
+                io_tools_tmp.insert(0, "file_extract")
+                tar_compile_test = 1
+                p = Thread(
+                    target=fs_util.run_ios_V1,
+                    args=(client_tmp, mounting_dir, io_tools_tmp),
+                    kwargs=io_args_tmp,
+                )
+            else:
+                p = Thread(
+                    target=fs_util.run_ios_V1,
+                    args=(client_tmp, mounting_dir, io_tools),
+                    kwargs=io_args,
+                )
             p.start()
             write_procs.append(p)
 
-        time.sleep(5)
-        repeat_cnt = 4
+        time.sleep(60)
+        repeat_cnt = 5
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -333,7 +613,11 @@ def cg_scale(cg_test_params):
         while i < repeat_cnt:
             log.info(f"Quiesce Lifecycle : Iteration {i}")
             # time taken for 1 lifecycle : ~5secs
-
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(3))
+            )
+            qs_id_val = f"cg_test1_{rand_str}"
             out, rc = client.exec_command(
                 sudo=True,
                 cmd="ceph status;ceph fs status;ceph fs dump",
@@ -345,11 +629,6 @@ def cg_scale(cg_test_params):
                 cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
                 check_ec=False,
             )
-            rand_str = "".join(
-                random.choice(string.ascii_lowercase + string.digits)
-                for _ in list(range(4))
-            )
-            qs_id_val = f"cg_scale_{rand_str}"
             log.info(f"Quiesce the set {qs_set}")
             cg_snap_util.cg_quiesce(
                 client, qs_set, qs_id=qs_id_val, timeout=600, expiration=600
@@ -359,7 +638,9 @@ def cg_scale(cg_test_params):
                 cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
                 check_ec=False,
             )
-            time.sleep(10)
+            time.sleep(30)
+            log.info(f"Query quiesce set {qs_id_val}")
+            cg_snap_util.get_qs_query(client, qs_id_val)
             log.info("Perform snapshot creation on all members")
             rand_str = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
@@ -394,10 +675,152 @@ def cg_scale(cg_test_params):
                 log.info(f"Created snapshot {snap_name} on {subvol_name}")
                 snap_list.append(snap_name)
                 snap_qs_dict.update({subvol_name: snap_list})
+            log.info(f"Query quiesce set {qs_id_val}")
+            cg_snap_util.get_qs_query(client, qs_id_val)
             log.info(f"Release quiesce set {qs_id_val}")
             cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+            log.info(f"Query quiesce set {qs_id_val}")
+            cg_snap_util.get_qs_query(client, qs_id_val)
+            log.info(f"Ceph fs status and fs dump output : {out}")
+            client.exec_command(
+                sudo=True,
+                cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
+                check_ec=False,
+            )
+            log.info(f"Reset the quiesce set - {qs_set}")
+            cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
+            client.exec_command(
+                sudo=True,
+                cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
+                check_ec=False,
+            )
+            log.info(f"Query quiesce set {qs_id_val}")
+            cg_snap_util.get_qs_query(client, qs_id_val)
+            log.info("Perform snapshot creation on all members")
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(4))
+            )
+            snap_name = f"cg_snap_{rand_str}"
+            for qs_member in qs_set:
+                snap_list = snap_qs_dict[qs_member]
+                snapshot = {
+                    "vol_name": fs_name,
+                    "snap_name": snap_name,
+                }
+                if "/" in qs_member:
+                    group_name, subvol_name = re.split("/", qs_member)
+                    snapshot.update(
+                        {
+                            "subvol_name": subvol_name,
+                            "group_name": group_name,
+                        }
+                    )
+                else:
+                    subvol_name = qs_member
+                    snapshot.update(
+                        {
+                            "subvol_name": subvol_name,
+                        }
+                    )
+                try:
+                    fs_util.create_snapshot(client, **snapshot)
+                except Exception as ex:
+                    log.info(ex)
+                log.info(f"Created snapshot {snap_name} on {subvol_name}")
+                snap_list.append(snap_name)
+                snap_qs_dict.update({subvol_name: snap_list})
+            log.info(f"Query quiesce set {qs_id_val}")
+            cg_snap_util.get_qs_query(client, qs_id_val)
+            log.info(f"Cancel quiesce set {qs_id_val}")
+            try:
+                cg_snap_util.cg_quiesce_cancel(client, qs_id_val)
+            except Exception as ex:
+                log.info(ex)
+            log.info(f"Query quiesce set {qs_id_val}")
+            out = cg_snap_util.get_qs_query(client, qs_id_val)
+            log.info(out)
+            client.exec_command(
+                sudo=True,
+                cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
+                check_ec=False,
+            )
+            log.info(f"Reset the quiesce set - {qs_set}")
+            cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
+            client.exec_command(
+                sudo=True,
+                cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
+                check_ec=False,
+            )
+            log.info(f"Exclude a subvolume from quiesce set {qs_id_val}")
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            exclude_sv_name = random.choice(qs_set)
+            cg_snap_util.cg_quiesce_exclude(
+                client, qs_id_val, [exclude_sv_name], if_await=True
+            )
+
+            log.info(f"Verify quiesce set {qs_id_val} state after exclude")
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+            if state == "QUIESCED":
+                log.info(f"State of qs set {qs_id_val} after exclude is QUIESCED")
+            else:
+                log.error(
+                    f"State of qs set {qs_id_val} after exclude is not as expected - {state}"
+                )
+                test_fail = 1
+            include_sv_name = exclude_sv_name
+            log.info(
+                f"Include a subvolume {include_sv_name} in quiesce set {qs_id_val}"
+            )
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            for qs_member in qs_query_out["sets"][qs_id_val]["members"]:
+                if exclude_sv_name in qs_member:
+                    exclude_state = qs_query_out["sets"][qs_id_val]["members"][
+                        qs_member
+                    ]["excluded"]
+                    log.info(
+                        f"excluded value of {exclude_sv_name} before include : {exclude_state}"
+                    )
+            cg_snap_util.cg_quiesce_include(
+                client, qs_id_val, [include_sv_name], if_await=True
+            )
+
+            log.info(f"Verify quiesce set {qs_id_val} state after include")
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+            if state == "QUIESCED":
+                log.info(f"State of qs set {qs_id_val} after include is QUIESCED")
+            else:
+                log.error(
+                    f"State of qs set {qs_id_val} after include is not as expected - {state}"
+                )
+                test_fail = 1
+            log.info(f"Release quiesce set {qs_id_val}")
+            cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+            log.info(f"Query quiesce set {qs_id_val}")
+            qs_query = cg_snap_util.get_qs_query(client, qs_id_val)
+            log.info(f"Query of qs set {qs_id_val} : {qs_query}")
             i += 1
-            time.sleep(2)
+            time.sleep(30)
+
+        for p in write_procs:
+            if p.is_alive():
+                proc_stop = 0
+                log.info("IO is running after quiesce lifecycle")
+                io_run_time_secs = io_run_time_mins * 4 * 60
+                end_time_sub = datetime.datetime.now() + datetime.timedelta(
+                    seconds=io_run_time_secs
+                )
+                while (datetime.datetime.now() < end_time_sub) and (proc_stop == 0):
+                    if p.is_alive():
+                        time.sleep(10)
+                    else:
+                        proc_stop = 1
+                if proc_stop == 1:
+                    log.info("IO completed")
+                elif proc_stop == 0:
+                    log.error("IO has NOT completed")
 
         log.info(f"Perform cleanup for {qs_set}")
         log.info("Remove CG IO files and unmount")
@@ -428,403 +851,8 @@ def cg_scale(cg_test_params):
                     fs_util.remove_snapshot(
                         client, fs_name, subvol_name, snap_name, validate=True
                     )
+                time.sleep(2)
 
-        for p in write_procs:
-            if p.is_alive():
-                proc_stop = 0
-                io_run_time_secs = io_run_time_mins * 4 * 60
-                log.info("IO is running after quiesce lifecycle")
-                end_time = datetime.datetime.now() + datetime.timedelta(
-                    seconds=io_run_time_secs
-                )
-                while (datetime.datetime.now() < end_time) and (proc_stop == 0):
-                    if p.is_alive():
-                        time.sleep(10)
-                    else:
-                        proc_stop = 1
-                if proc_stop == 1:
-                    log.info("IO completed")
-                elif proc_stop == 0:
-                    log.error("IO has NOT completed")
-
-    if test_fail == 1:
-        log.error("FAIL: Workflow 1 - quiesce lifecycle with scaled config")
-        test_fail = 0
-        total_fail += 1
-    if total_fail > 0:
-        return 1
-    return 0
-
-
-def cg_stress(cg_test_params):
-    log.info("Workflow - Stress test on quiesce set")
-    fs_name = cg_test_params["fs_name"]
-    fs_util = cg_test_params["fs_util"]
-    platform_type = cg_test_params["platform_type"]
-    clients = cg_test_params["clients"]
-    client = cg_test_params["clients"][0]
-    qs_clients = clients.copy()
-    qs_clients.pop(0)
-    qs_sets = cg_test_params["qs_sets"]
-    cg_snap_util = cg_test_params["cg_snap_util"]
-
-    cg_run_time = cg_test_params["cg_run_time"]
-    total_fail = 0
-    test_fail = 0
-    end_time = datetime.datetime.now() + datetime.timedelta(minutes=cg_run_time)
-    cnt = 0
-    while datetime.datetime.now() < end_time:
-        log.info(f"CG stress test : Iteration {cnt}")
-        for qs_set in qs_sets:
-            client_mnt_dict = {}
-            write_procs = []
-            i = 0
-            for qs_member in qs_set:
-                client_obj = qs_clients[i]
-                if "/" in qs_member:
-                    group_name, subvol_name = re.split("/", qs_member)
-                    cmd = f"ceph fs subvolume getpath {fs_name} {subvol_name} --group_name {group_name}"
-                else:
-                    subvol_name = qs_member
-                    cmd = f"ceph fs subvolume getpath {fs_name} {subvol_name}"
-
-                subvol_path, rc = client.exec_command(
-                    sudo=True,
-                    cmd=cmd,
-                )
-                mnt_path = subvol_path.strip()
-                mount_params = {
-                    "fs_util": fs_util,
-                    "client": client_obj,
-                    "mnt_path": mnt_path,
-                    "fs_name": fs_name,
-                    "export_created": 0,
-                }
-                mounting_dir, _ = fs_util.mount_ceph("kernel", mount_params)
-                client_mnt_dict.update({client_obj: mounting_dir})
-                i += 1
-
-            log.info(f"Start the IO on quiesce set members - {qs_set}")
-            if platform_type == "baremetal":
-                dd_params = {
-                    "file_name": "dd_test_file",
-                    "input_type": "random",
-                    "bs": "1M",
-                    "count": 500,
-                }
-                smallfile_params = {
-                    "testdir_prefix": "smallfile_io_dir",
-                    "threads": 4,
-                    "file-size": 10240,
-                    "files": 5000,
-                }
-                crefi_params = {
-                    "testdir_prefix": "crefi_io_dir",
-                    "files": 5000,
-                    "max": "100k",
-                    "min": "10k",
-                    "type": "tar",
-                    "breadth": 5,
-                    "depth": 5,
-                    "threads": 3,
-                }
-            else:
-                dd_params = {
-                    "file_name": "dd_test_file",
-                    "input_type": "random",
-                    "bs": "1M",
-                    "count": 10,
-                }
-                smallfile_params = {
-                    "testdir_prefix": "smallfile_io_dir",
-                    "threads": 2,
-                    "file-size": 10240,
-                    "files": 10,
-                }
-                crefi_params = {
-                    "testdir_prefix": "crefi_io_dir",
-                    "files": 10,
-                    "max": "100k",
-                    "min": "10k",
-                    "type": "tar",
-                    "breadth": 3,
-                    "depth": 3,
-                    "threads": 2,
-                }
-            io_run_time_mins = 3
-            io_args = {
-                "run_time": io_run_time_mins,
-                "dd_params": dd_params,
-                "smallfile_params": smallfile_params,
-                "crefi_params": crefi_params,
-            }
-            io_tools = ["dd", "smallfile", "crefi", "file_extract"]
-
-            for client_tmp in client_mnt_dict:
-                mounting_dir = client_mnt_dict[client_tmp]
-
-                p = Thread(
-                    target=fs_util.run_ios_V1,
-                    args=(client_tmp, mounting_dir, io_tools),
-                    kwargs=io_args,
-                )
-                p.start()
-                write_procs.append(p)
-
-            time.sleep(5)
-            repeat_cnt = 2
-            snap_qs_dict = {}
-            for qs_member in qs_set:
-                snap_qs_dict.update({qs_member: []})
-            i = 0
-            while i < repeat_cnt:
-                log.info(f"Quiesce Lifecycle : Iteration {i}")
-                # time taken for 1 lifecycle : ~5secs
-                rand_str = "".join(
-                    random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
-                )
-                qs_id_val = f"cg_test1_{rand_str}"
-                out, rc = client.exec_command(
-                    sudo=True,
-                    cmd="ceph status;ceph fs status;ceph fs dump",
-                    check_ec=False,
-                )
-                log.info(f"Ceph fs status and fs dump output : {out}")
-                client.exec_command(
-                    sudo=True,
-                    cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
-                    check_ec=False,
-                )
-                log.info(f"Quiesce the set {qs_set}")
-                cg_snap_util.cg_quiesce(
-                    client, qs_set, qs_id=qs_id_val, timeout=600, expiration=600
-                )
-                client.exec_command(
-                    sudo=True,
-                    cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
-                    check_ec=False,
-                )
-                log.info(f"Query quiesce set {qs_id_val}")
-                cg_snap_util.get_qs_query(client, qs_id_val)
-                log.info("Perform snapshot creation on all members")
-                rand_str = "".join(
-                    random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
-                )
-                snap_name = f"cg_snap_{rand_str}"
-                for qs_member in qs_set:
-                    snap_list = snap_qs_dict[qs_member]
-                    snapshot = {
-                        "vol_name": fs_name,
-                        "snap_name": snap_name,
-                    }
-                    if "/" in qs_member:
-                        group_name, subvol_name = re.split("/", qs_member)
-                        snapshot.update(
-                            {
-                                "subvol_name": subvol_name,
-                                "group_name": group_name,
-                            }
-                        )
-                    else:
-                        subvol_name = qs_member
-                        snapshot.update(
-                            {
-                                "subvol_name": subvol_name,
-                            }
-                        )
-                    try:
-                        fs_util.create_snapshot(client, **snapshot)
-                    except Exception as ex:
-                        log.info(ex)
-                    log.info(f"Created snapshot {snap_name} on {subvol_name}")
-                    snap_list.append(snap_name)
-                    snap_qs_dict.update({subvol_name: snap_list})
-                log.info(f"Query quiesce set {qs_id_val}")
-                cg_snap_util.get_qs_query(client, qs_id_val)
-                log.info(f"Release quiesce set {qs_id_val}")
-                cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
-                log.info(f"Query quiesce set {qs_id_val}")
-                cg_snap_util.get_qs_query(client, qs_id_val)
-                log.info(f"Ceph fs status and fs dump output : {out}")
-                client.exec_command(
-                    sudo=True,
-                    cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
-                    check_ec=False,
-                )
-                log.info(f"Reset the quiesce set - {qs_set}")
-                cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
-                client.exec_command(
-                    sudo=True,
-                    cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
-                    check_ec=False,
-                )
-                log.info(f"Query quiesce set {qs_id_val}")
-                cg_snap_util.get_qs_query(client, qs_id_val)
-                log.info("Perform snapshot creation on all members")
-                rand_str = "".join(
-                    random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(4))
-                )
-                snap_name = f"cg_snap_{rand_str}"
-                for qs_member in qs_set:
-                    snap_list = snap_qs_dict[qs_member]
-                    snapshot = {
-                        "vol_name": fs_name,
-                        "snap_name": snap_name,
-                    }
-                    if "/" in qs_member:
-                        group_name, subvol_name = re.split("/", qs_member)
-                        snapshot.update(
-                            {
-                                "subvol_name": subvol_name,
-                                "group_name": group_name,
-                            }
-                        )
-                    else:
-                        subvol_name = qs_member
-                        snapshot.update(
-                            {
-                                "subvol_name": subvol_name,
-                            }
-                        )
-                    try:
-                        fs_util.create_snapshot(client, **snapshot)
-                    except Exception as ex:
-                        log.info(ex)
-                    log.info(f"Created snapshot {snap_name} on {subvol_name}")
-                    snap_list.append(snap_name)
-                    snap_qs_dict.update({subvol_name: snap_list})
-                log.info(f"Query quiesce set {qs_id_val}")
-                cg_snap_util.get_qs_query(client, qs_id_val)
-                log.info(f"Cancel quiesce set {qs_id_val}")
-                try:
-                    cg_snap_util.cg_quiesce_cancel(client, qs_id_val)
-                except Exception as ex:
-                    log.info(ex)
-                log.info(f"Query quiesce set {qs_id_val}")
-                out = cg_snap_util.get_qs_query(client, qs_id_val)
-                log.info(out)
-                client.exec_command(
-                    sudo=True,
-                    cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
-                    check_ec=False,
-                )
-                log.info(f"Reset the quiesce set - {qs_set}")
-                cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
-                client.exec_command(
-                    sudo=True,
-                    cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
-                    check_ec=False,
-                )
-                log.info(f"Exclude a subvolume from quiesce set {qs_id_val}")
-                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
-                exclude_sv_name = random.choice(qs_set)
-                qs_exclude_status = cg_snap_util.cg_quiesce_exclude(
-                    client, qs_id_val, [exclude_sv_name], if_await=True
-                )
-                if qs_exclude_status == 1:
-                    test_fail = 1
-                    log.error(
-                        f"Exclude of {exclude_sv_name} in qs set {qs_id_val} failed"
-                    )
-                log.info(f"Verify quiesce set {qs_id_val} state after exclude")
-                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
-                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
-                if state == "QUIESCED":
-                    log.info(f"State of qs set {qs_id_val} after exclude is QUIESCED")
-                else:
-                    log.error(
-                        f"State of qs set {qs_id_val} after exclude is not as expected - {state}"
-                    )
-                    test_fail = 1
-                include_sv_name = exclude_sv_name
-                log.info(
-                    f"Include a subvolume {include_sv_name} in quiesce set {qs_id_val}"
-                )
-                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
-                for qs_member in qs_query_out["sets"][qs_id_val]["members"]:
-                    if exclude_sv_name in qs_member:
-                        exclude_state = qs_query_out["sets"][qs_id_val]["members"][
-                            qs_member
-                        ]["excluded"]
-                        log.info(
-                            f"excluded value of {exclude_sv_name} before include : {exclude_state}"
-                        )
-                qs_include_status = cg_snap_util.cg_quiesce_include(
-                    client, qs_id_val, [include_sv_name], if_await=True
-                )
-                if qs_include_status == 1:
-                    test_fail = 1
-                    log.error(
-                        f"Include of {include_sv_name} in qs set {qs_id_val} failed"
-                    )
-                log.info(f"Verify quiesce set {qs_id_val} state after include")
-                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
-                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
-                if state == "QUIESCED":
-                    log.info(f"State of qs set {qs_id_val} after include is QUIESCED")
-                else:
-                    log.error(
-                        f"State of qs set {qs_id_val} after include is not as expected - {state}"
-                    )
-                    test_fail = 1
-                log.info(f"Release quiesce set {qs_id_val}")
-                cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
-                log.info(f"Query quiesce set {qs_id_val}")
-                qs_query = cg_snap_util.get_qs_query(client, qs_id_val)
-                log.info(f"Query of qs set {qs_id_val} : {qs_query}")
-                i += 1
-
-            log.info(f"Perform cleanup for {qs_set}")
-            log.info("Remove CG IO files and unmount")
-            for client_tmp in client_mnt_dict:
-                mounting_dir = client_mnt_dict[client_tmp]
-                cg_snap_util.cleanup_cg_io(client_tmp, [mounting_dir])
-
-            snap_name = f"cg_snap_{rand_str}"
-            log.info("Remove CG snapshots")
-            for qs_member in qs_set:
-                group_name = None
-                if "/" in qs_member:
-                    group_name, subvol_name = re.split("/", qs_member)
-                else:
-                    subvol_name = qs_member
-                snap_list = snap_qs_dict[subvol_name]
-                for snap_name in snap_list:
-                    if group_name is not None:
-                        fs_util.remove_snapshot(
-                            client,
-                            fs_name,
-                            subvol_name,
-                            snap_name,
-                            validate=True,
-                            group_name=group_name,
-                        )
-                    else:
-                        fs_util.remove_snapshot(
-                            client, fs_name, subvol_name, snap_name, validate=True
-                        )
-                    time.sleep(2)
-
-            for p in write_procs:
-                if p.is_alive():
-                    proc_stop = 0
-                    log.info("IO is running after quiesce lifecycle")
-                    io_run_time_secs = io_run_time_mins * 4 * 60
-                    end_time = datetime.datetime.now() + datetime.timedelta(
-                        seconds=io_run_time_secs
-                    )
-                    while (datetime.datetime.now() < end_time) and (proc_stop == 0):
-                        if p.is_alive():
-                            time.sleep(10)
-                        else:
-                            proc_stop = 1
-                    if proc_stop == 1:
-                        log.info("IO completed")
-                    elif proc_stop == 0:
-                        log.error("IO has NOT completed")
         cnt += 1
 
     if test_fail == 1:

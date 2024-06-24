@@ -242,14 +242,18 @@ class CG_snap_IO(object):
                 qs_mnt_pt = qs_member_dict[qs_member]["mount_point"]
 
                 if ephemeral_pin == 1:
-                    client.exec_command(
-                        sudo=True,
-                        cmd=f"setfattr -n ceph.dir.pin.random -v 0.75 {qs_mnt_pt}",
-                        timeout=15,
-                    )
+                    try:
+                        client.exec_command(
+                            sudo=True,
+                            cmd=f"setfattr -n ceph.dir.pin.random -v 0.75 {qs_mnt_pt}",
+                            timeout=15,
+                        )
+                    except Exception as ex:
+                        log.info(ex)
 
                 write_proc_check_status = Value("i", 0)
                 proc_status_list.append(write_proc_check_status)
+                log.info(f"Starting cg_write_io_subvol for {qs_mnt_pt}")
                 p = Thread(
                     target=self.cg_write_io_subvol,
                     args=(
@@ -1179,10 +1183,11 @@ class CG_snap_IO(object):
             write_cmd_dict = {
                 "cp": f"cp -f {dir_path}/{file_name} {dir_path}/{file_name}_copy",
                 "mkdir": f"mkdir {dir_path}/testdir_{rand_str}",
-                "rmdir": f"rmdir {dir_path}/testdir_{rand_str}",
                 "setfacl": f"setfacl -m u::rw {dir_path}/{file_name}",
                 "tar": f"tar -cvf {dir_path}/{file_name}_copy.tar {dir_path}/{file_name}_copy",
                 "mv": f"mv {dir_path}/{file_name}_copy {dir_path}/{file_name}_copy_renamed",
+                "rename_dir": f"mv {dir_path}/testdir_{rand_str} {dir_path}/new_testdir_{rand_str}",
+                "rmdir": f"rmdir {dir_path}/new_testdir_{rand_str}",
                 "rm": f"rm -f {dir_path}/{file_name}_copy_renamed",
             }
             for cmd in write_cmd_dict:
