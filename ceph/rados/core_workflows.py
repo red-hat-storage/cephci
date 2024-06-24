@@ -725,13 +725,23 @@ class RadosOrchestrator:
                 f"{mgr_modules['enabled_modules']}"
             )
 
-        # Setting the mode for the balancer. Available modes: none|crush-compat|upmap
-        balancer_mode = kwargs.get("balancer_mode", "upmap")
-        cmd = f"ceph balancer mode {balancer_mode}"
-        self.node.shell([cmd])
         # Turning on the balancer on the system
         cmd = "ceph balancer on"
         self.node.shell([cmd])
+
+        # Setting the mode for the balancer. Available modes: none|crush-compat|upmap|upmap-read|read
+        balancer_mode = kwargs.get("balancer_mode", "upmap")
+        cmd = f"ceph balancer mode {balancer_mode}"
+        self.node.shell([cmd])
+        time.sleep(10)
+        cmd = "ceph balancer status"
+        balancer_status = self.run_ceph_command(cmd=cmd)
+        if balancer_status["mode"] != balancer_mode:
+            log.error(
+                f"Could not set the desired balancer mode on the cluster."
+                f"Balancer state on cluster : {balancer_status}"
+            )
+            return False
 
         if kwargs.get("target_max_misplaced_ratio"):
             cmd = f"ceph config set mgr target_max_misplaced_ratio {kwargs.get('target_max_misplaced_ratio')}"
@@ -750,6 +760,38 @@ class RadosOrchestrator:
             return False
         log.info(f"the balancer status is \n {out}")
         return True
+
+    def get_read_scores_on_cluster(self) -> dict:
+        """
+        Method to get the read balance scores for all the pools on the cluster
+        Args:
+        Returns:
+            dictionary of all the pools with their read scores
+            dict[pool_name] = "read_scores"
+
+        """
+        log.info("Checking the read balancer scores on the cluster for all pools")
+        read_scores = {}
+        existing_pools = self.list_pools()
+        for pool_name in existing_pools:
+            pool_details = self.get_pool_details(pool=pool_name)
+            log.debug(f"Selected pool name : {pool_name}")
+            if not pool_details["erasure_code_profile"]:
+                log.debug(
+                    f"Selected pool is a replicated pool. Checking read balancer scores.\n"
+                    f" Fetched from pool {pool_details['read_balance']}"
+                )
+                read_score = round(pool_details["read_balance"]["score_acting"], 2)
+                read_scores[pool_name] = read_score
+            else:
+                log.info(
+                    f"Selected pool {pool_name} is a EC pool, skipping check of balance scores."
+                )
+        log.info(
+            f"Completed collection of balance scores for all the pools"
+            f"Scores are : {read_scores}"
+        )
+        return read_scores
 
     def check_file_exists_on_client(self, loc) -> bool:
         """Method to check if a particular file/ directory exists on the ceph client node
