@@ -647,6 +647,7 @@ def run(args):
                 "total_time": total_time,
                 "info": info,
                 "send_to_cephci": send_to_cephci,
+                "prefix": instances_name,
             }
             email_results(test_result=test_res)
             return 1
@@ -701,6 +702,7 @@ def run(args):
         "run_id": run_id,
     }
     download_path = run_dir if not log_directory else log_directory
+    cluster_info = []
 
     for test in tests:
         test = test.get("test")
@@ -725,6 +727,10 @@ def run(args):
         start = datetime.datetime.now()
 
         for cluster_name in test.get("clusters", ceph_cluster_dict):
+            # Add cluster names
+            if cluster_name not in cluster_info:
+                cluster_info.append(cluster_name)
+
             # If Performance and CPU usage monitoring is enabled, perform pre-reqs
             if enable_perf_mon:
                 if not upload_mem_and_cpu_logger_script(
@@ -996,6 +1002,8 @@ def run(args):
         "total_time": total_time,
         "info": info,
         "send_to_cephci": send_to_cephci,
+        "cluster_info": cluster_info,
+        "prefix": instances_name,
     }
 
     email_results(test_result=test_res)
