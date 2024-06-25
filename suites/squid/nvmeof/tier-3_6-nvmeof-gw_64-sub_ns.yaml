@@ -1,11 +1,10 @@
-# Test suite to scale with 2 GWs having 4 subsystems to 2048 namespaces
-# Test config at conf/squid/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml or conf/squid/nvmeof/octo-6-node-env.yaml for baremetal
+# Test suite to scale with 6 GWs having 64 subsystems to 2048 namespaces
+# Test config at conf/baremetal/nvme_cali_1admin_6node_2client.yaml
 # Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 # Test attributes
-  #  2 ceph-nvmeof GWs colocated with osd on node4 and node5, node 6 is nvmeof initiator
+  #  6 ceph-nvmeof GWs colocated with osd on node5 to node 10 are nvmeof initiators
   #  nvmeof GW - at end of each scale step/ test below is the configuration
-     # Scale-1: 4 subsystem, 400 namespaces,  400 RBD images of 1TB size each
-     # Scale-2 : 4 subsystem, 1648 namespaces,  1648 RBD images of 1TB size each
+     # Scale-1 : 64 subsystem, 1024 namespaces,  1024 RBD images of 1TB size each
   #  nvmeof initiator - Each initiator/ client connects to a subsystem ( 1 initiator : 1 subsystem)
   #  io test (no performance tests)
      # Tool : fio
@@ -67,7 +66,7 @@ tests:
         command: add
         id: client.1
         nodes:
-          - node6
+          - node8
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -75,10 +74,10 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure Ceph client for NVMe tests
-      polarion-id: CEPH-43573754
+      polarion-id: CEPH-83573758
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         verify_cluster_health: true
         steps:
@@ -95,7 +94,13 @@ tests:
               service: nvmeof
               args:
                 placement:
-                  label: nvmeof-gw
+                  nodes:
+                  - node5
+                  - node6
+                  - node7
+                  - node8
+                  - node9
+                  - node10
               pos_args:
                 - nvmeof_pool
           - config:
@@ -113,9 +118,9 @@ tests:
       name: deploy NVMeoF service on GW node
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
-        node: node4
+        node: node7
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
@@ -124,32 +129,36 @@ tests:
               service: subsystem
               command: add
               args:
-                subsystems: 4
+                subsystems: 64
                 max-namespaces: 2048
           - config:
               service: listener
               command: add
               args:
-                subsystems: 4
+                subsystems: 64
                 port: 4420
                 nodes:
-                  - node4
                   - node5
+                  - node6
+                  - node7
+                  - node8
+                  - node9
+                  - node10
           - config:
               service: host
               command: add
               args:
-                subsystems: 4
-      desc: Configure 2 NVMeOF Gateways with 4 subsystems
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Configure NVMeOF Gateways
-      polarion-id: CEPH-83581625
+                subsystems: 64
+        desc: Configure 4 NVMeOF Gateways with 64 subsystems
+        destroy-cluster: false
+        module: test_ceph_nvmeof_gateway_sub_scale.py
+        name: Configure NVMeOF Gateways
+        polarion-id: CEPH-83581625
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
-        node: node4
+        node: node7
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
@@ -158,49 +167,21 @@ tests:
               service: namespace
               command: add
               args:
-                subsystems: 4
-                namespaces: 400
+                subsystems: 64
+                namespaces: 1024
                 image_size: 1T
                 pool: rbd
         initiators:
             listener_port: 4420
-            node: node6
+            node: node11
         run_io:
-          - node: node6
+          - node: node11
             io_type: write
-      desc: Scale to 400 namespaces with IO
+      desc: Scale to 1024 namespaces with IO
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Scale to 400 namespaces with IO on 2GW and 4 subsystems
-      polarion-id: CEPH-83582449
-
-  - test:
-      abort-on-fail: true
-      config:
-        node: node4
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        steps:
-          - config:
-              service: namespace
-              command: add
-              args:
-                subsystems: 4
-                namespaces: 1648
-                image_size: 1T
-                pool: rbd
-        initiators:
-            listener_port: 4420
-            node: node6
-        run_io:
-          - node: node6
-            io_type: write
-      desc: Scale to 2048 namespaces with IO
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Scale to 2048 namespaces with IO on 2GW and 4 subsystems
-      polarion-id: CEPH-83582453
+      name: Scale to 1024 namespaces with IO on 4GW and 64 subsystems
+      polarion-id: CEPH-83583005
 
   - test:
       abort-on-fail: false
@@ -212,6 +193,7 @@ tests:
            verify: true
       desc: Remove nvmeof service on GW nodes
       destroy-cluster: false
+      do-not-skip-tc: true
       module: test_orch.py
       name: Delete nvmeof gateway
 
@@ -234,5 +216,6 @@ tests:
                 - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
       desc: Delete nvmeof and rbd pool from ceph cluster
       destroy-cluster: false
+      do-not-skip-tc: true
       module: test_cephadm.py
       name: Delete NVMeOF pools
