@@ -178,6 +178,9 @@ tests:
       module: test_omap_entries.py
       polarion-id: CEPH-83571702
       config:
+        # Pool created to  verify the Bug#2249003
+        crash_config:
+          pool_name: re_pool_crash
         # EC pool config is commented out because omaps can be written only on RE pools
         omap_config:
           small_omap:
