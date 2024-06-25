@@ -58,6 +58,25 @@ def run(ceph_cluster, **kw):
             osd_list = out.strip().split("\n")
             log.debug(f"List of OSDs: {osd_list}")
 
+            """ inorder to verify the precedence between osd_memory_target set at
+             OSD level and daemon level, the parameter if declared at the host level
+             would need to be removed temporarily"""
+
+            # check if osd_memory_target is defined at host level for osd.0
+            host_level = False
+            osd_node = rados_obj.fetch_host_node(daemon_type="osd", daemon_id="0")
+            # fetch ceph config dump in json format
+            config_dump_json = rados_obj.run_ceph_command(
+                cmd="ceph config dump", client_exec=True
+            )
+            for entry in config_dump_json:
+                if osd_node.hostname in entry["mask"]:
+                    log.info(
+                        f"osd_memory_target defined at host level for {osd_node.hostname}: {entry}"
+                    )
+                    host_level = True
+                    break
+
             # set a value for osd_memory_target at OSD level
             log.info("Setting a value for osd_memory_target at OSD level")
             # assert mon_obj.set_config(
@@ -79,13 +98,16 @@ def run(ceph_cluster, **kw):
                 f"OSD osd_memory_target set at OSD level from ceph config get: {osd_get_omt}"
             )
             assert int(osd_get_omt) == 6000000000
-            osd_show_omt = mon_obj.show_config(
-                daemon="osd", id="0", param="osd_memory_target"
-            )
-            log.info(
-                f"OSD osd_memory_target set at OSD level from ceph config show: {osd_show_omt}"
-            )
-            assert int(osd_show_omt) == 6000000000
+            # the config show verification should be skipped if osd_memory_target is defined at
+            # host level as it holds higher precedence than OSD level declaration
+            if not host_level:
+                osd_show_omt = mon_obj.show_config(
+                    daemon="osd", id="0", param="osd_memory_target"
+                )
+                log.info(
+                    f"OSD osd_memory_target set at OSD level from ceph config show: {osd_show_omt}"
+                )
+                assert int(osd_show_omt) == 6000000000
             log.info("OSD config parameter osd_memory_target set successfully")
 
             # pick an OSD at random to change the osd_memory_target at individual OSD level
@@ -108,9 +130,6 @@ def run(ceph_cluster, **kw):
             log.info(
                 f"OSD osd_memory_target set for osd.{osd_id} from ceph config show: {osdid_show_omt}"
             )
-            assert int(osdid_get_omt) == 5000000000
-            assert int(osdid_show_omt) == 5000000000
-            log.info("OSD config parameter osd_memory_target set successfully")
 
             if not int(osdid_get_omt) == int(osdid_show_omt) == 5000000000:
                 log.error(
@@ -119,6 +138,7 @@ def run(ceph_cluster, **kw):
                 raise AssertionError(
                     f"Value of osd_memory_target for osd.{osd_id} not set as per expectation"
                 )
+            log.info("OSD config parameter osd_memory_target set successfully")
             log.info(
                 f"osd_memory_target parameter set at individual OSD level for osd.{osd_id} "
                 f"has taken effect and verified successfully"
@@ -176,10 +196,10 @@ def run(ceph_cluster, **kw):
             # fetch the original value of osd_memory_target for the chosen OSD before start of test
             osd_ran_get_omt, osd_ran_show_omt = fetch_osd_config_value(osd_ran)
             log.info(
-                f"OSD {osd_ran} osd_memory_target out from ceph config get: {osd_ran_get_omt}"
+                f"OSD {osd_ran} osd_memory_target from ceph config get: {osd_ran_get_omt}"
             )
             log.info(
-                f"OSD {osd_ran} osd_memory_target out from ceph config show: {osd_ran_show_omt}"
+                f"OSD {osd_ran} osd_memory_target from ceph config show: {osd_ran_show_omt}"
             )
             # set a custom value of osd_memory_target for the OSD
             log.info(f"Setting a value for osd_memory_target at osd.{osd_ran} level")
@@ -215,6 +235,7 @@ def run(ceph_cluster, **kw):
                 location_value=osd_node.hostname,
                 name="osd_memory_target",
                 value="5500000000",
+                custom_delay=5,
             )
             log.info(
                 f"osd_memory_target for host: {osd_node.hostname} set successfully"
@@ -305,7 +326,9 @@ def run(ceph_cluster, **kw):
                 location_value=osd_node.hostname,
                 name="osd_memory_target",
             )
-            mon_obj.remove_config(section="osd", name="osd_memory_target")
+            mon_obj.remove_config(
+                section="osd", name="osd_memory_target", verify_rm=False
+            )
             # log cluster health
             rados_obj.log_cluster_health()
         log.info("All verifications completed")
