@@ -183,7 +183,7 @@ tests:
       desc: Test Etag not empty for complete multipart upload in aws
       polarion-id: CEPH-9801
       module: sanity_rgw.py
-      comments: known issue (bz-2266793)
+      comments: known issue (bz-2266793) target to 6.1
       config:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
@@ -199,16 +199,16 @@ tests:
         config-file-name: ../../aws/configs/test_aws_non_ascii.yaml
         timeout: 500
 
-  - test:
-      name: Test LC transition with rule by lc process
-      desc: Test LC transition with rule by lc process
-      polarion-id: CEPH-83574044
-      module: sanity_rgw.py
-      comments: known issue (BZ-2269490)
-      config:
-        script-name: test_bucket_lifecycle_object_expiration_transition.py
-        config-file-name: test_lc_transition_with_lc_process.yaml
-        timeout: 500
+  # - test:
+  #     name: Test LC transition with rule by lc process
+  #     desc: Test LC transition with rule by lc process
+  #     polarion-id: CEPH-83574044
+  #     module: sanity_rgw.py
+  #     comments: known issue (BZ-2269490) targeted to 8.0
+  #     config:
+  #       script-name: test_bucket_lifecycle_object_expiration_transition.py
+  #       config-file-name: test_lc_transition_with_lc_process.yaml
+  #       timeout: 500
 
   - test:
       name: Test LC transition without rule by lc process
@@ -229,4 +229,3 @@ tests:
       module: test_s3.py
       name: execute s3tests
       polarion-id: CEPH-83575225
-      comments: Known issue - Ceph tracker 55614
