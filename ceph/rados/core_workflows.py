@@ -1545,6 +1545,57 @@ class RadosOrchestrator:
                 return False
         return True
 
+    def update_osd_state_on_cluster(self, osd_id, state):
+        """
+        Method to update the state of the OSD in the cluster. This method can mark the osd "in, out, up, down"
+        Args:
+            osd_id: ID of the osd to be operated
+            state: Property that needs to be updated.
+                  Allowed states: "in, out, up, down"
+        Returns: True -> pass, false -> fail
+        """
+        allowed_states = {"in", "out", "up", "down"}
+        if state not in allowed_states:
+            log.error(f"Invalid state '{state}'. Allowed states are {allowed_states}")
+            return False
+
+        log.info(f"Marking OSD.{osd_id} {state}")
+        cmd = f"ceph osd {state} {osd_id}"
+        self.run_ceph_command(cmd=cmd)
+        time.sleep(5)
+
+        log.debug(f"Checking OSD state post marking it {state}")
+        cmd = "ceph osd dump"
+        dump_status = self.run_ceph_command(cmd=cmd)
+
+        osd_found = False
+
+        for entry in dump_status["osds"]:
+            if entry["osd"] == osd_id:
+                osd_found = True
+                is_in = entry.get("in", 0)
+                is_up = entry.get("up", 0)
+
+                if state == "in" and not is_in:
+                    log.error(f"OSD {osd_id} not marked in the cluster")
+                    return False
+                elif state == "out" and is_in:
+                    log.error(f"OSD {osd_id} not marked out of the cluster")
+                    return False
+                elif state == "up" and not is_up:
+                    log.error(f"OSD {osd_id} not marked up in the cluster")
+                    return False
+                elif state == "down" and is_up:
+                    log.error(f"OSD {osd_id} not marked down in the cluster")
+                    return False
+                else:
+                    log.info(f"OSD {osd_id} marked {state} successfully.")
+                    return True
+
+        if not osd_found:
+            log.error(f"OSD {osd_id} state not found in the cluster dump")
+        return False
+
     def get_cephdf_stats(self, pool_name: str = None, detail: bool = False) -> dict:
         """
         Retrieves and returns the output ceph df command

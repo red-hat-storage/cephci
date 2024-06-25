@@ -15,6 +15,7 @@ from collections import namedtuple
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.monitor_workflows import MonitorWorkflows
 from tests.rados.test_stretch_site_down import (
     get_stretch_site_hosts,
     stretch_enabled_checks,
@@ -39,6 +40,7 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     rhbuild = config.get("rhbuild")
     pool_name = config.get("pool_name", "test_stretch_io")
+    mon_obj = MonitorWorkflows(node=cephadm)
     stretch_bucket = config.get("stretch_bucket", "datacenter")
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
 
@@ -73,6 +75,7 @@ def run(ceph_cluster, **kw):
         )
 
         # Creating test pool to check if regular pool creation works
+        log.info("Scenario 1: Create regular replicated pools. Should be successful")
         try:
             if not rados_obj.create_pool(pool_name=pool_name):
                 log.error(f"Failed to create pool : {pool_name}")
@@ -86,6 +89,9 @@ def run(ceph_cluster, **kw):
         time.sleep(5)
 
         # Trying to create an EC pool. Should not be possible in stretch mode
+        log.info(
+            "Scenario 2: Create an EC pool. Should not be possible in stretch mode"
+        )
         try:
             pool_name = "ec-stretch-pool"
             if rados_obj.create_erasure_pool(name="stretch-ec", pool_name=pool_name):
@@ -101,6 +107,10 @@ def run(ceph_cluster, **kw):
 
         # Creating a regular pool with updated crush rules currently works. Commenting return 1 line.
         # Bz : https://bugzilla.redhat.com/show_bug.cgi?id=2267850
+        log.info(
+            "Scenario 3: Create an RE pool with non stretch mode CRUSH rule."
+            " Should not be possible in stretch mode. Currently blocked with bug 2267850"
+        )
         try:
             pool_name = "non-stretch-rule-pool"
             if rados_obj.create_pool(
@@ -117,6 +127,9 @@ def run(ceph_cluster, **kw):
         log.debug("Completed test for non-default rule pool")
         rados_obj.delete_pool(pool=pool_name)
 
+        log.info(
+            "Scenario 4: having more than 3 DCs in stretch mode. Should not be possible in stretch mode"
+        )
         # Trying to Add another DC in stretch mode. We should see health warning generated.
         bucket_name = "test-bkt"
         warning = "INCORRECT_NUM_BUCKETS_STRETCH_MODE"
@@ -143,6 +156,9 @@ def run(ceph_cluster, **kw):
         rados_obj.run_ceph_command(cmd=cmd3)
         log.debug("Completed scenario of 2+ DCs")
 
+        log.info(
+            "Scenario 5: having uneven site weights. Should not be possible in stretch mode"
+        )
         # Making the site weights unequal. We should see health warning generated.
         bucket_name = random.choice(dc_2_hosts)
         log.debug(
@@ -169,6 +185,71 @@ def run(ceph_cluster, **kw):
             log.info("Warning generated on the cluster")
         rados_obj.run_ceph_command(cmd=cmd2)
         log.debug("Completed scenario of uneven OSD weight")
+
+        log.info(
+            "Scenario 6: Adding mon daemons without location attributes. Should not be possible in stretch mode"
+        )
+        # Trying to add a mon without location attributes. should fail
+        """
+        Warning seen on cluster:
+        # ceph mon add ceph-pdhiran-w420vn-node5 10.0.208.191
+        Error EINVAL: We are in stretch mode and new monitors must have a location,
+        but could not parse your input location to anything real; [] turned into an empty map!
+        RFEs Filed for the scenario:
+        1. https://bugzilla.redhat.com/show_bug.cgi?id=2280926
+        2. https://bugzilla.redhat.com/show_bug.cgi?id=2281638
+        """
+        mon_nodes = ceph_cluster.get_nodes(role="mon")
+        cluster_nodes = ceph_cluster.get_nodes()
+
+        # Get items from cluster_nodes which are not present in mon_nodes
+        non_mon_nodes = [node for node in cluster_nodes if node not in mon_nodes]
+        log.debug(f"Hosts on cluster without mon daemon are : {non_mon_nodes}")
+        if len(non_mon_nodes) >= 1:
+            new_addition_host = non_mon_nodes[0]
+            flag = False
+            # Setting the mon service as unmanaged
+            if not mon_obj.set_mon_service_managed_type(unmanaged=True):
+                log.error("Could not set the mon service to unmanaged")
+                raise Exception("mon service not unmanaged error")
+
+            try:
+                # Adding the mon to the cluster without crush locations. -ve scenario
+                mon_obj.add_mon_service(
+                    host=new_addition_host,
+                    add_label=False,
+                )
+                flag = True
+            except Exception as err:
+                log.info(
+                    f"Could not add mon without location attributes."
+                    f"Error message displayed : {err}"
+                )
+            if flag:
+                log.error(
+                    "Command execution passed for mon deployment in stretch mode without location "
+                )
+
+                # Checking if the new mon added is part of the quorum
+                quorum = mon_obj.get_mon_quorum_hosts()
+                if new_addition_host.hostname in quorum:
+                    log.error(
+                        f"selected host : {new_addition_host.hostname} mon is present as part of Quorum post addition,"
+                        f"in -ve scenario"
+                    )
+                    raise Exception(
+                        "Mon in quorum error post addition without location. -ve scenario"
+                    )
+            log.info(
+                "-ve Test Pass: Add Mon daemon without location attributes into cluster. Mon could not be added"
+            )
+            # Setting the mon service as unmanaged
+            if not mon_obj.set_mon_service_managed_type(unmanaged=False):
+                log.error("Could not set the mon service to unmanaged")
+                raise Exception("mon service not unmanaged error")
+        else:
+            log.info("No host found without mon daemon to test the -ve scenario")
+
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
@@ -179,7 +260,7 @@ def run(ceph_cluster, **kw):
         )
         # removal of rados pools
         rados_obj.rados_pool_cleanup()
-
+        mon_obj.set_mon_service_managed_type(unmanaged=False)
         # log cluster health
         rados_obj.log_cluster_health()
     log.info("All the tests completed on the cluster, Pass!!!")
