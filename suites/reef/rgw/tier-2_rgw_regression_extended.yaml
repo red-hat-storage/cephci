@@ -206,6 +206,16 @@ tests:
         timeout: 500
 
   - test:
+      name: Test bucket listing with markers on versioned bucket
+      desc: Test bucket listing with markers on versioned bucket
+      polarion-id: CEPH-83572736
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_versioned_list_marker.yaml
+        timeout: 500
+
+  - test:
       name: Test LDAP auth for RGW
       desc: Test LDAP auth for RGW
       polarion-id: CEPH-9793
