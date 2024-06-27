@@ -940,7 +940,7 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
             _ = nvmegwcli.namespace.set_qos(**qos_args_with_invalid_args)
         except Exception as err:
             if (
-                "load-balancing-group argument is not allowed for set_qos commandt"
+                "load-balancing-group argument is not allowed for set_qos command"
                 not in str(err)
             ):
                 raise Exception("Set QoS was failed as expected due to invalid args.")
