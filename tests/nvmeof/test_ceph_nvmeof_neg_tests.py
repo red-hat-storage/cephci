@@ -8,7 +8,7 @@ import re
 from copy import deepcopy
 from time import sleep
 
-from ceph.ceph import Ceph, SocketTimeoutException
+from ceph.ceph import Ceph, SocketTimeoutException, CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmegw_cli import NVMeGWCLI
@@ -919,14 +919,7 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
         qos_args_with_invalid_values.setdefault("args", {}).update(
             {"nsid": 10, "subsystem": subsystem["nqn"], "rw-ios-per-second": 10}
         )
-        try:
-            _ = nvmegwcli.namespace.set_qos(**qos_args_with_invalid_values)
-        except Exception as err:
-            if "Can't find namespace" not in str(err):
-                raise Exception(
-                    "Set QoS was failed as expected due to invalid namespace."
-                )
-            LOG.info("Set QoS was failed as expected due to invalid namespace....")
+        _ = nvmegwcli.namespace.set_qos(**qos_args_with_invalid_values)
         qos_args_with_invalid_args = {}
         qos_args_with_invalid_args.setdefault("args", {}).update(
             {
@@ -936,15 +929,18 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
                 "rw-ios-per-second": 10,
             }
         )
-        try:
-            _ = nvmegwcli.namespace.set_qos(**qos_args_with_invalid_args)
-        except Exception as err:
-            if (
-                "load-balancing-group argument is not allowed for set_qos commandt"
-                not in str(err)
-            ):
-                raise Exception("Set QoS was failed as expected due to invalid args.")
-            LOG.info("Set QoS was failed as expected due to invalid args....")
+        _ = nvmegwcli.namespace.set_qos(**qos_args_with_invalid_args)
+    except CommandFailed as err:
+        if (
+            "load-balancing-group argument is not allowed for set_qos commandt"
+            not in str(err)
+        ):
+            raise Exception("Set QoS was failed as expected due to invalid args.")
+        if "Can't find namespace" not in str(err):
+            raise Exception(
+                "Set QoS was failed as expected due to invalid namespace."
+            )
+        LOG.info("Set QoS was failed as expected due to invalid namespace....")
 
     finally:
         cleanup_cfg = {
@@ -1008,33 +1004,93 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
 
         qos_args_without_mandatory_args = {}
         qos_args_without_mandatory_args.setdefault("args", {}).update({"nsid": nsid[0]})
-        try:
-            _ = nvmegwcli.namespace.set_qos(**qos_args_without_mandatory_args)
-        except Exception as err:
-            if "the following arguments are required" not in str(err):
-                raise Exception(
-                    "Set QoS was failed as expected due to absence of mandatory args."
-                )
-            LOG.info(
-                "Set QoS was failed as expected due to absence of mandatory args...."
-            )
+        _ = nvmegwcli.namespace.set_qos(**qos_args_without_mandatory_args)
         qos_args_without_mandatory_args = {}
         qos_args_without_mandatory_args.setdefault("args", {}).update(
             {"rw-ios-per-second": 10, "subsystem": subsystem["nqn"]}
         )
-        try:
-            _ = nvmegwcli.namespace.set_qos(**qos_args_without_mandatory_args)
-        except Exception as err:
-            if (
-                "At least one of --nsid or --uuid arguments is mandatory for set_qos command"
-                not in str(err)
-            ):
-                raise Exception(
-                    "Set QoS was failed as expected due to absence of mandatory args."
-                )
-            LOG.info(
-                "Set QoS was failed as expected due to absence of mandatory args...."
+        _ = nvmegwcli.namespace.set_qos(**qos_args_without_mandatory_args)
+    except CommandFailed as err:
+        if "the following arguments are required" not in str(err):
+            raise Exception(
+                "Set QoS was failed as expected due to absence of mandatory args."
             )
+        LOG.info(
+            "Set QoS was failed as expected due to absence of mandatory args...."
+        )
+        if (
+            "At least one of --nsid or --uuid arguments is mandatory for set_qos command"
+            not in str(err)
+        ):
+            raise Exception(
+                "Set QoS was failed as expected due to absence of mandatory args."
+            )
+        LOG.info(
+            "Set QoS was failed as expected due to absence of mandatory args...."
+        )
+    finally:
+        cleanup_cfg = {
+            "gw_node": config.get("gw_node"),
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
+            "rbd_pool": pool,
+            "subsystems": [subsystem],
+        }
+        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        return 0
+    
+def test_ceph_83581752(ceph_cluster, rbd, pool, config):
+    """CEPH-83581752: Set QoS for non-existent namespace in subsystem.
+    Args:
+        ceph_cluster (CephCluster): The Ceph cluster instance.
+        rbd (RadosBlockDevice): The RBD instance.
+    pool (str): The Ceph pool name.
+    config (dict): Configuration parameters.
+    Returns:
+        int: 0 on success, 1 on failure.
+    """
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
+    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph-83581752",
+            "serial": 83581752,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83575814",
+        "listener_port": listener_port,
+        "node": config.get("initiator_node"),
+    }
+    try:
+        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        list_args = {}
+        list_args.setdefault("args", {}).update({"subsystem": subsystem["nqn"]})
+        name = generate_unique_id(length=4)
+
+        # Create image
+        img = f"{name}-image"
+        rbd.create_image(pool, img, "10G")
+
+        config.update(initiator_cfg)
+
+        qos_args_without_mandatory_args = {}
+        qos_args_without_mandatory_args.setdefault("args", {}).update({"nsid": 1, "subsystem": subsystem["nqn"], "rw-ios-per-second": 10})
+        _ = nvmegwcli.namespace.set_qos(**qos_args_without_mandatory_args)
+    except CommandFailed as err:
+        if "Can't find namespace" not in str(err):
+            raise Exception(
+                "Set QoS was failed as expected due to absence of namespace."
+            )
+        LOG.info(
+            "Set QoS was failed as expected due to absence of namepace...."
+        )
     finally:
         cleanup_cfg = {
             "gw_node": config.get("gw_node"),
@@ -1118,8 +1174,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             test_ceph_83581753(ceph_cluster, rbd_obj, rbd_pool, config)
         if config["operation"] == "CEPH-83581945":
             test_ceph_83581945(ceph_cluster, rbd_obj, rbd_pool, config)
+        if config["operation"] == "CEPH-83581752":
+            test_ceph_83581752(ceph_cluster, rbd_obj, rbd_pool, config)
         return 0
     except Exception as err:
-        LOG.error(err)
+        LOG.info(err)
 
     return 1

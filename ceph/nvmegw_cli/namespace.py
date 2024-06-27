@@ -13,12 +13,13 @@ class Namespace(ExecuteCommandMixin):
         subsystem = kwargs.get("args", {}).get("subsystem")
         _, namespaces = self.list(args={"subsystem": subsystem})
 
-        pattern = r"\│\s*(\d+)\s*│"
-        nsid = [int(match) for match in re.findall(pattern, namespaces)]
+        if namespaces:
+            pattern = r"\│\s*(\d+)\s*│"
+            nsid = [int(match) for match in re.findall(pattern, namespaces)]
 
-        kwargs.setdefault("args", {}).update({"nsid": nsid[0]})
+            kwargs.setdefault("args", {}).update({"nsid": nsid[0]})
 
-        return self.run_nvme_cli("set_qos", **kwargs)
+            return self.run_nvme_cli("set_qos", **kwargs)
 
     def add(self, **kwargs):
         """Adds namespace for subsystem."""

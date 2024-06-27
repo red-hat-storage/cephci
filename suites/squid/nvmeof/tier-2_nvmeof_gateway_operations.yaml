@@ -222,6 +222,7 @@ tests:
               service: namespace
               command: set_qos             # namespace set_qos
               args:
+                nsid: 0
                 subsystem: nqn.2016-06.io.spdk:cnode1
                 rw-ios-per-second: 10
           - config:
