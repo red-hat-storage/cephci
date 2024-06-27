@@ -302,3 +302,13 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+
+  - test:
+      name: Nfs verify setting and deleting multiple xttar on file
+      module: nfs_multiple_xattr_set_and_delete.py
+      desc: Test setting up and deleting multiple xattr on single file
+      polarion-id: CEPH-83591993, CEPH-83591994
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
