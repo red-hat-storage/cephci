@@ -65,6 +65,7 @@ globals:
             - mds
             - mon
             - mgr
+            - osd
             - osd-bak
             - nfs
           root_password: passwd
