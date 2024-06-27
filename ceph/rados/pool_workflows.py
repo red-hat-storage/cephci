@@ -241,6 +241,51 @@ class PoolFunctions:
                 return 1
         return 0
 
+    def do_rados_get(self, pool, read_count) -> bool:
+        """
+        Perform read operations on the cluster
+        Args:
+            pool: name of the pool where read operations need to be performed
+            read_count: no of objects to be read from the pool
+                Allowed Values: "all" or count of objects
+                            "all": read all the objects on the pool
+        Returns:
+            True -> pass, False -> fail
+        """
+        pool_ls = f"rados -p {pool} ls"
+        all_objs = self.rados_obj.run_ceph_command(cmd=pool_ls)
+        count = 0
+        if not all_objs:
+            log.error("Could not run the command to fetch the objects")
+            return False
+        if len(all_objs) > 0:
+            log.debug(f"There are {len(all_objs)} objects present on the cluster")
+            objlist = [obj["name"] for obj in all_objs]
+
+            if read_count == "all":
+                read_count = len(objlist)
+
+            for obj in objlist:
+                file_name = f"/tmp/{obj}"
+                get_cmd = f"rados -p {pool} get {obj} {file_name}"
+                try:
+                    self.rados_obj.client.exec_command(sudo=True, cmd=get_cmd)
+                    count += 1
+                    if count >= read_count:
+                        log.info(
+                            f"Completed reading {read_count} objects on the pool."
+                            f"Refraining from reading further objects"
+                        )
+                        break
+                except Exception as err:
+                    log.error(f"rados get failed for {obj}. Error : {err}")
+                    return False
+            log.info(f"Completed reading {read_count} objects on the cluster")
+            return True
+        else:
+            log.info("There are no objects on the pool to perform read operations")
+            return True
+
     def do_rados_append(self, client, pool: str, obj_name: str = None, nobj: int = 1):
         """
         Append static data to nobjs already present in a pool
