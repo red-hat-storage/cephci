@@ -244,3 +244,24 @@ tests:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_csv_depth2.yaml
         timeout: 3600
+
+  - test:
+      name: test s3select with depth1 queries on parquet objects
+      desc: test s3select with depth1 queries of incorrect syntax for checking rgw crashes on parquet objects
+      polarion-id: CEPH-83575176
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select.py
+        config-file-name: test_s3select_query_gen_parquet_depth1.yaml
+        timeout: 3600
+
+  - test:
+      name: test s3select with depth2 queries on parquet objects
+      desc: test s3select with depth2 queries of incorrect syntax for checking rgw crashes on parquet objects
+      polarion-id: CEPH-83575176
+      module: sanity_rgw.py
+      comments: known issue (BZ2290775) targeted to 8.1
+      config:
+        script-name: test_s3select.py
+        config-file-name: test_s3select_query_gen_parquet_depth2.yaml
+        timeout: 3600

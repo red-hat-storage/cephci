@@ -215,7 +215,6 @@ tests:
       desc: Test ratelimit on bucket owner change
       polarion-id: CEPH-83574920
       module: sanity_rgw.py
-      comments: known issue BZ2262919
       config:
         script-name: ../s3cmd/test_ratelimit_bucketowner.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_bucketowner.yaml
