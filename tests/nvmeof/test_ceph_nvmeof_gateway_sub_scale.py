@@ -172,14 +172,14 @@ def configure_namespaces(
 
 def execute_and_log_results(node):
     commands = [
-        "cephadm shell ceph df",
-        "cephadm shell rbd du",
-        "cephadm shell ceph -s",
-        "cephadm shell ceph health detail",
-        "cat /proc/meminfo",
-        "cat /proc/cpuinfo",
+        "cephadm shell -- ceph df",
+        "cephadm shell -- rbd du",
+        "cephadm shell -- ceph -s",
+        "cephadm shell -- ceph health detail",
+        "cat /proc/meminfo | grep -iE 'hugepage|^mem|swap'",
+        "cat /proc/cpuinfo | grep -iE 'cpu'",
         "ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
-        "top -b | head -n 20",
+        "top -n 1 | grep -iE '^tasks|^mib|reactor|^%cpu|python'",
     ]
     for cmd in commands:
         output, _ = node.installer.exec_command(cmd, sudo=True)
