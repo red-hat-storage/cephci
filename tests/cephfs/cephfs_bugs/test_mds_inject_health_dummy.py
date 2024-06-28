@@ -7,6 +7,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -62,7 +63,8 @@ def run(ceph_cluster, **kw):
             for key, value in info_before.items()
             if "standby-replay" in value["state"]
         }
-        standby_replay_mds = fs_util.get_standby_replay_mdss(client1, fs_name=fs_name)
+
+        standby_replay_mds = retry_get_standby_reply(fs_util, client1, fs_name=fs_name)
         log.info(f"standby_replay_mds : {standby_replay_mds}")
         standby_replay_mdss_obj = [
             ceph_cluster.get_node_by_hostname(i.split(".")[1])
@@ -143,3 +145,13 @@ def get_info(json_output, fs_name):
     for i in json_output["filesystems"]:
         if i["mdsmap"]["fs_name"] == fs_name:
             return i["mdsmap"]["info"]
+
+
+@retry(CommandFailed, tries=3, delay=60)
+def retry_get_standby_reply(fs_util, client1, fs_name):
+    standby_replay_mds = fs_util.get_standby_replay_mdss(client1, fs_name=fs_name)
+    if not standby_replay_mds:
+        out, rc = client1.exec_command(sudo=True, cmd=f"ceph fs status {fs_name}")
+        log.info(out)
+        raise CommandFailed("Unable to get standby reply MDS")
+    return standby_replay_mds

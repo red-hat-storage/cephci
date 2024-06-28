@@ -75,11 +75,16 @@ def run(ceph_cluster, **kw):
         # Now perform export while IO in progress
         for i in range(10, 60):
             nfs_export_name = f"/export_{i}"
-            export_path = "/"
             Ceph(clients[0]).nfs.export.create(
                 fs_name=fs_name, nfs_name=nfs_name, nfs_export=nfs_export_name, fs=fs
             )
             log.info("ceph nfs export created successfully")
+
+            # Get volume path
+            subvol_name = nfs_export_name.replace("/", "")
+            cmd = f"ceph fs subvolume getpath cephfs {subvol_name} --group_name ganeshagroup"
+            out = clients[0].exec_command(sudo=True, cmd=cmd)
+            export_path = out[0].strip()
 
             out = Ceph(clients[0]).nfs.export.get(nfs_name, nfs_export_name)
             log.info(out)

@@ -2,6 +2,7 @@ import datetime
 import json
 import random
 import re
+import secrets
 import string
 import time
 import traceback
@@ -10,7 +11,9 @@ from threading import Thread
 
 from pip._internal.exceptions import CommandError
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
+from tests.cephfs.cephfs_volume_management import wait_for_process
 from tests.cephfs.snapshot_clone.cephfs_cg_io import CG_snap_IO
 from tests.cephfs.snapshot_clone.cg_snap_utils import CG_Snap_Utils
 from utility.log import Log
@@ -92,6 +95,17 @@ def run(ceph_cluster, **kw):
     2.In State - Quiesced, Perform MDS failover. Verify quiesce lifecycle can suceed.
     3.In State - Releasing, Perform MDS failover. Verify quiesce lifecycle can suceed.
 
+    Workflow 2 - Verify quiesce ops suceed when IOs are in parallel through Fuse,NFS and Kernel mountpoints
+    Steps:
+    Run IO on selected quiesce set with subvolumes mounted on one of Fuse,NFS and Kernel mountpoints
+    Verify quiesce lifecycle and other quiesce commands - include,exclude,cancel,query and reset
+
+    # Negative tests
+    Negative Workflow 1 - Verify parallel quiesce calls to same set
+    Steps:
+    Run QS IO validation tool on selected quiesce set
+    1.Run multiple parallel quiesce calls to same set
+    2.Create snapshots when quiesced, wait for sometime and release quiesce
     Clean Up:
 
     """
@@ -115,7 +129,8 @@ def run(ceph_cluster, **kw):
         qs_cnt_def = random.randrange(5, 11)
         # qs_cnt_def = 2
         qs_cnt = config.get("qs_cnt", qs_cnt_def)
-
+        restore_mds = 0
+        nfs_exists = 0
         fs_util_v1.auth_list(qs_clients)
 
         client1 = qs_clients[0]
@@ -125,6 +140,20 @@ def run(ceph_cluster, **kw):
         cmd = "ceph config set mds mds_export_ephemeral_random true;"
         cmd += "ceph config set mds mds_export_ephemeral_random_max 0.75"
         client1.exec_command(sudo=True, cmd=cmd)
+
+        log.info("Get default fragmentation size on cluster")
+        cmd = "ceph config get mds mds_bal_split_size"
+        out, rc = client1.exec_command(sudo=True, cmd=cmd)
+        default_frag_size = out.strip()
+        log.info(f"Default FS fragmentation size:{default_frag_size}")
+        log.info("Change fragmentation size for FS to 100")
+        cmd = "ceph config set mds mds_bal_split_size 100"
+        out, rc = client1.exec_command(sudo=True, cmd=cmd)
+        log.info("Verify fragmentation size on cluster")
+        cmd = "ceph config get mds mds_bal_split_size"
+        out, rc = client1.exec_command(sudo=True, cmd=cmd)
+        new_frag_size = out.strip()
+        log.info(f"FS fragmentation size:{new_frag_size}")
 
         fs_details = fs_util_v1.get_fs_info(client1, fs_name=default_fs)
         if not fs_details:
@@ -139,6 +168,8 @@ def run(ceph_cluster, **kw):
             "cg_snap_func_workflow_5",
             "cg_snap_func_workflow_6",
             "cg_snap_interop_workflow_1",
+            "cg_snap_interop_workflow_2",
+            "cg_snap_neg_workflow_1",
         ]
 
         if test_case_name in test_functional:
@@ -193,7 +224,6 @@ def run(ceph_cluster, **kw):
             sv_non_def_list,
             sv_mixed_list,
         ]
-
         log.info(f"Test config attributes : qs_cnt - {qs_cnt}, qs_sets - {qs_sets}")
         crash_status_before = fs_util_v1.get_crash_ls_new(client1)
 
@@ -217,15 +247,39 @@ def run(ceph_cluster, **kw):
             "cg_snap_io": cg_snap_io,
             "clients": qs_clients,
             "mgr_node": mgr_node,
+            "mds_nodes": mds_nodes,
             "qs_sets": qs_sets,
         }
         for test_name in test_list:
             log.info(
                 f"\n\n                                   ============ {test_name} ============ \n"
             )
-            if test_name == "cg_snap_interop_workflow_1":
-                restore_mds = 0
-                cg_test_params.update({"mds_nodes": mds_nodes})
+
+            if test_name == "cg_snap_interop_workflow_2":
+                nfs_servers = ceph_cluster.get_ceph_objects("nfs")
+                nfs_server = nfs_servers[0].node.hostname
+                nfs_name = "cephfs-nfs"
+                client1 = clients[0]
+                client1.exec_command(
+                    sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
+                )
+                if wait_for_process(
+                    client=client1, process_name=nfs_name, ispresent=True
+                ):
+                    log.info("ceph nfs cluster created successfully")
+                    nfs_exists = 1
+                else:
+                    raise CommandFailed("Failed to create nfs cluster")
+                nfs_export_name = "/export_" + "".join(
+                    secrets.choice(string.digits) for i in range(3)
+                )
+                cg_test_params.update(
+                    {
+                        "nfs_export_name": nfs_export_name,
+                        "nfs_server": nfs_server,
+                        "nfs_name": nfs_name,
+                    }
+                )
             cg_test_params.update({"test_case": test_name})
             test_status = cg_snap_test_func(cg_test_params)
 
@@ -243,27 +297,14 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Clean Up in progess")
-        crash_status_after = fs_util_v1.get_crash_ls_new(client1)
-        log.info(f"Crash status after Test: {crash_status_after}")
-        health_wait = 300
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=health_wait)
-        health_ok = 0
-        wait_time = 0
-        while (datetime.datetime.now() < end_time) and health_ok == 0:
-            try:
-                fs_util_v1.get_ceph_health_status(client1)
-                health_ok = 1
-            except Exception as ex:
-                log.info(
-                    f"Wait for sometime to check if Cluster health can be OK, current state : {ex}"
-                )
-                time.sleep(10)
-                wait_time += 10
-        if health_ok == 0:
+        wait_time_secs = 300
+        if wait_for_healthy_ceph(client1, fs_util_v1, wait_time_secs) == 0:
             assert (
                 False
-            ), f"Cluster health is not OK even after waiting for {health_wait}secs"
-        log.info(f"Cluster Health is OK in {wait_time}secs")
+            ), f"Cluster health is not OK even after waiting for {wait_time_secs}secs"
+
+        crash_status_after = fs_util_v1.get_crash_ls_new(client1)
+        log.info(f"Crash status after Test: {crash_status_after}")
 
         if len(crash_status_after) > len(crash_status_before):
             assert False, "Post test validation failed, please check crash report above"
@@ -273,6 +314,17 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=cmd,
         )
+        log.info("Change fragmentation size for FS to default")
+        cmd = f"ceph config set mds mds_bal_split_size {default_frag_size}"
+        out, rc = client1.exec_command(sudo=True, cmd=cmd)
+        log.info("Verify fragmentation size on cluster")
+        cmd = "ceph config get mds mds_bal_split_size"
+        out, rc = client1.exec_command(sudo=True, cmd=cmd)
+        current_frag_size = out.strip()
+        if current_frag_size != default_frag_size:
+            log.error("Failed to set fragmentation size to default")
+
+        log.info(f"FS fragmentation size:{new_frag_size}")
         if restore_mds == 1:
             mds_cnt = len(mds_nodes)
             cmd = f'ceph orch apply mds {default_fs} --placement="{mds_cnt}'
@@ -285,6 +337,12 @@ def run(ceph_cluster, **kw):
             client1.exec_command(
                 sudo=True,
                 cmd=f"ceph fs set {default_fs} max_mds 2",
+            )
+        if nfs_exists == 1:
+            client1.exec_command(
+                sudo=True,
+                cmd=f"ceph nfs cluster delete {nfs_name}",
+                check_ec=False,
             )
         qs_cnt += 1
         for i in range(1, qs_cnt):
@@ -326,6 +384,12 @@ def cg_snap_test_func(cg_test_params):
     elif cg_test_params["test_case"] == "cg_snap_interop_workflow_1":
         test_status = cg_snap_interop_1(cg_test_params)
         return test_status
+    elif cg_test_params["test_case"] == "cg_snap_interop_workflow_2":
+        test_status = cg_snap_interop_2(cg_test_params)
+        return test_status
+    elif cg_test_params["test_case"] == "cg_snap_neg_workflow_1":
+        test_status = cg_snap_neg_1(cg_test_params)
+        return test_status
 
 
 def cg_snap_func_1(cg_test_params):
@@ -333,6 +397,7 @@ def cg_snap_func_1(cg_test_params):
     cg_test_io_status = {}
     fs_name = cg_test_params["fs_name"]
     fs_util = cg_test_params["fs_util"]
+    mds_nodes = cg_test_params["mds_nodes"]
     clients = cg_test_params["clients"]
     client = cg_test_params["clients"][0]
     client1 = cg_test_params["clients"][1]
@@ -358,14 +423,22 @@ def cg_snap_func_1(cg_test_params):
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 60
+        ephemeral_pin = 1
         p = Process(
             target=cg_snap_io.start_cg_io,
-            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(
+                qs_clients,
+                qs_set,
+                client_mnt_dict,
+                cg_test_io_status,
+                io_run_time,
+                ephemeral_pin,
+            ),
         )
 
         p.start()
         time.sleep(30)
-        repeat_cnt = 1
+        repeat_cnt = 3
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
@@ -428,6 +501,12 @@ def cg_snap_func_1(cg_test_params):
         wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
+        if ephemeral_pin == 1:
+            if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+                log.error(
+                    "Ephemeral random pinning feature was NOT exercised during the test"
+                )
+            log.info("Ephemeral random pinning feature was exercised during the test")
         log.info(f"Perform cleanup for {qs_set}")
         for qs_member in qs_member_dict1:
             mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
@@ -479,9 +558,17 @@ def cg_snap_func_1(cg_test_params):
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 60
+        ephemeral_pin = 1
         p = Thread(
             target=cg_snap_io.start_cg_io,
-            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(
+                qs_clients,
+                qs_set,
+                client_mnt_dict,
+                cg_test_io_status,
+                io_run_time,
+                ephemeral_pin,
+            ),
         )
         p.start()
         time.sleep(30)
@@ -603,9 +690,17 @@ def cg_snap_func_1(cg_test_params):
         mnt_pt_list = []
         for qs_member in qs_member_dict1:
             mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
-        log.info("Perform cleanup for {qs_set}")
+        if ephemeral_pin == 1:
+            if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+                log.error(
+                    "Ephemeral random pinning feature was NOT exercised during the test"
+                )
+            log.info("Ephemeral random pinning feature was exercised during the test")
+        log.info(f"Perform cleanup for {qs_set}")
         log.info("Remove CG IO files and unmount")
+
         cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
+
         mnt_pt_list.clear()
 
         snap_name = f"cg_snap_{rand_str}"
@@ -653,6 +748,7 @@ def cg_snap_func_2(cg_test_params):
     fs_name = cg_test_params["fs_name"]
     fs_util = cg_test_params["fs_util"]
     clients = cg_test_params["clients"]
+    mds_nodes = cg_test_params["mds_nodes"]
     client = cg_test_params["clients"][0]
     client1 = cg_test_params["clients"][1]
     qs_clients = [client1]
@@ -674,9 +770,17 @@ def cg_snap_func_2(cg_test_params):
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 100
+        ephemeral_pin = 1
         p = Process(
             target=cg_snap_io.start_cg_io,
-            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(
+                qs_clients,
+                qs_set,
+                client_mnt_dict,
+                cg_test_io_status,
+                io_run_time,
+                ephemeral_pin,
+            ),
         )
         p.start()
         time.sleep(30)
@@ -903,6 +1007,12 @@ def cg_snap_func_2(cg_test_params):
         wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
+        if ephemeral_pin == 1:
+            if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+                log.error(
+                    "Ephemeral random pinning feature was NOT exercised during the test"
+                )
+            log.info("Ephemeral random pinning feature was exercised during the test")
         log.info(f"Perform cleanup for {qs_set}")
         for qs_member in qs_member_dict1:
             mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
@@ -950,6 +1060,7 @@ def cg_snap_func_3(cg_test_params):
     cg_test_io_status = {}
     fs_name = cg_test_params["fs_name"]
     fs_util = cg_test_params["fs_util"]
+    mds_nodes = cg_test_params["mds_nodes"]
     clients = cg_test_params["clients"]
     client = cg_test_params["clients"][0]
     client1 = cg_test_params["clients"][1]
@@ -972,10 +1083,17 @@ def cg_snap_func_3(cg_test_params):
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 60
-
+        ephemeral_pin = 0
         p = Thread(
             target=cg_snap_io.start_cg_io,
-            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(
+                qs_clients,
+                qs_set,
+                client_mnt_dict,
+                cg_test_io_status,
+                io_run_time,
+                ephemeral_pin,
+            ),
         )
         p.start()
         time.sleep(30)
@@ -1067,6 +1185,12 @@ def cg_snap_func_3(cg_test_params):
         wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
+        if ephemeral_pin == 1:
+            if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+                log.error(
+                    "Ephemeral random pinning feature was NOT exercised during the test"
+                )
+            log.info("Ephemeral random pinning feature was exercised during the test")
         log.info(f"Perform cleanup for {qs_set}")
         for qs_member in qs_member_dict1:
             mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
@@ -1112,6 +1236,7 @@ def cg_snap_func_4(cg_test_params):
     cg_test_io_status = {}
     fs_name = cg_test_params["fs_name"]
     fs_util = cg_test_params["fs_util"]
+    mds_nodes = cg_test_params["mds_nodes"]
     clients = cg_test_params["clients"]
     client = cg_test_params["clients"][0]
     client1 = cg_test_params["clients"][1]
@@ -1135,9 +1260,17 @@ def cg_snap_func_4(cg_test_params):
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 60
+        ephemeral_pin = 0
         p = Thread(
             target=cg_snap_io.start_cg_io,
-            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(
+                qs_clients,
+                qs_set,
+                client_mnt_dict,
+                cg_test_io_status,
+                io_run_time,
+                ephemeral_pin,
+            ),
         )
         p.start()
         time.sleep(30)
@@ -1215,6 +1348,12 @@ def cg_snap_func_4(cg_test_params):
         wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
+        if ephemeral_pin == 1:
+            if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+                log.error(
+                    "Ephemeral random pinning feature was NOT exercised during the test"
+                )
+            log.info("Ephemeral random pinning feature was exercised during the test")
         log.info(f"Perform cleanup for {qs_set}")
         for qs_member in qs_member_dict1:
             mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
@@ -1263,7 +1402,8 @@ def cg_snap_func_5(cg_test_params):
     )
     cg_test_io_status = {}
     fs_name = cg_test_params["fs_name"]
-
+    fs_util = cg_test_params["fs_util"]
+    mds_nodes = cg_test_params["mds_nodes"]
     clients = cg_test_params["clients"]
     client = cg_test_params["clients"][0]
     client1 = cg_test_params["clients"][1]
@@ -1287,9 +1427,17 @@ def cg_snap_func_5(cg_test_params):
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 60
+        ephemeral_pin = 0
         p = Thread(
             target=cg_snap_io.start_cg_io,
-            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(
+                qs_clients,
+                qs_set,
+                client_mnt_dict,
+                cg_test_io_status,
+                io_run_time,
+                ephemeral_pin,
+            ),
         )
         p.start()
         time.sleep(30)
@@ -1353,6 +1501,12 @@ def cg_snap_func_5(cg_test_params):
         wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
+        if ephemeral_pin == 1:
+            if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+                log.error(
+                    "Ephemeral random pinning feature was NOT exercised during the test"
+                )
+            log.info("Ephemeral random pinning feature was exercised during the test")
         log.info(f"Perform cleanup for {qs_set}")
         for qs_member in qs_member_dict1:
             mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
@@ -1378,7 +1532,8 @@ def cg_snap_func_6(cg_test_params):
     log.info("Workflow 6 - Perform all state transitions and validate response")
     cg_test_io_status = {}
     fs_name = cg_test_params["fs_name"]
-
+    fs_util = cg_test_params["fs_util"]
+    mds_nodes = cg_test_params["mds_nodes"]
     client = cg_test_params["clients"][0]
     client1 = cg_test_params["clients"][1]
     qs_clients = [client1]
@@ -1395,9 +1550,17 @@ def cg_snap_func_6(cg_test_params):
 
         cg_test_io_status = Value("i", 0)
         io_run_time = 60
+        ephemeral_pin = 0
         p = Thread(
             target=cg_snap_io.start_cg_io,
-            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(
+                qs_clients,
+                qs_set,
+                client_mnt_dict,
+                cg_test_io_status,
+                io_run_time,
+                ephemeral_pin,
+            ),
         )
         p.start()
         time.sleep(30)
@@ -1623,6 +1786,12 @@ def cg_snap_func_6(cg_test_params):
         wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
+        if ephemeral_pin == 1:
+            if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+                log.error(
+                    "Ephemeral random pinning feature was NOT exercised during the test"
+                )
+            log.info("Ephemeral random pinning feature was exercised during the test")
         log.info(f"Perform cleanup for {qs_set}")
         for qs_member in qs_member_dict1:
             mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
@@ -1650,6 +1819,7 @@ def cg_snap_interop_1(cg_test_params):
     )
     cg_test_io_status = {}
     fs_name = cg_test_params["fs_name"]
+    fs_util = cg_test_params["fs_util"]
     mds_nodes = cg_test_params["mds_nodes"]
     client = cg_test_params["clients"][0]
     client1 = cg_test_params["clients"][1]
@@ -1681,197 +1851,491 @@ def cg_snap_interop_1(cg_test_params):
         sudo=True,
         cmd=f"ceph fs set {fs_name} max_mds 4",
     )
-    ceph_healthy = 0
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
-    while ceph_healthy == 0 and (datetime.datetime.now() < end_time):
-        try:
-            fs_util.get_ceph_health_status(client1)
-            ceph_healthy = 1
-        except Exception as ex:
-            log.info(ex)
-            time.sleep(5)
-    if ceph_healthy == 0:
+
+    if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
         return 1
     test_fail = 0
+    qs_set = random.choice(qs_sets)
+    client_mnt_dict = {}
+    qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
+    client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
+    time.sleep(5)
+    log.info(f"Start the IO on quiesce set members - {qs_set}")
+
+    cg_test_io_status = Value("i", 0)
+    io_run_time = 120
+    ephemeral_pin = 1
+    p = Thread(
+        target=cg_snap_io.start_cg_io,
+        args=(
+            qs_clients,
+            qs_set,
+            client_mnt_dict,
+            cg_test_io_status,
+            io_run_time,
+            ephemeral_pin,
+        ),
+    )
+    p.start()
+    time.sleep(30)
+    repeat_cnt = 5
+    snap_qs_dict = {}
+    for qs_member in qs_set:
+        snap_qs_dict.update({qs_member: []})
+    i = 0
+    while i < repeat_cnt:
+        if p.is_alive():
+            log.info(f"Interop Workflow 1 : Iteration {i}")
+            # time taken for 1 lifecycle : ~5secs
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(3))
+            )
+            qs_id_val = f"cg_int1_{rand_str}"
+            log.info(
+                " 1.State - Quiescing:Quiesce without await, when in quiescing perform MDS failover"
+            )
+            log.info("Induce delay in quiescing")
+            cmd = "ceph config set mds mds_cache_quiesce_delay 3000"
+            client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+
+            log.info(f"Quiesce the set {qs_set} without --await")
+            cg_snap_util.cg_quiesce(
+                client,
+                qs_set,
+                qs_id=qs_id_val,
+                if_await=False,
+                timeout=300,
+                expiration=100,
+            )
+
+            log.info("Perform MDS failover")
+            if cg_mds_failover(fs_util, client, fs_name):
+                test_fail += 1
+
+            log.info(f"Wait for CANCELED state in set-id {qs_id_val}")
+            wait_status = wait_for_cg_state(client, cg_snap_util, qs_id_val, "CANCELED")
+            log.info(f"wait_status:{wait_status}")
+            if wait_status:
+                test_fail += 1
+                log.error(f"qs set {qs_id_val} not reached CANCELED state")
+
+            log.info("MDS failover during quiescing: quiesce state is CANCELED")
+            log.info("Reset quiesce delay to 0")
+            cmd = "ceph config set mds mds_cache_quiesce_delay 0"
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+            time.sleep(10)
+
+            if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+                log.error("Ceph cluster is not healthy after MDS failover")
+                return 1
+            log.info("Verify quiesce lifecycle can suceed after mds failover")
+            if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+                test_fail += 1
+
+            log.info(
+                " 2.State - Quiesced:Quiesce with --await, when in quiesced perform MDS failover"
+            )
+
+            log.info(f"Quiesce the set {qs_set} with --await")
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(3))
+            )
+            qs_id_val = f"cg_int1_{rand_str}"
+            cg_snap_util.cg_quiesce(
+                client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+            )
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+            log.info(f"State of set-id {qs_id_val} before MDS failover:{state}")
+            if state != "QUIESCED":
+                log.info(
+                    f"State of set-id {qs_id_val} before mds failover is not as Expected"
+                )
+            log.info("Perform MDS failover when in QUIESCED state")
+            if cg_mds_failover(fs_util, client, fs_name):
+                test_fail += 1
+            log.info(f"Wait for CANCELED state in set-id {qs_id_val}")
+            wait_status = wait_for_cg_state(client, cg_snap_util, qs_id_val, "CANCELED")
+            log.info(f"wait_status:{wait_status}")
+            if wait_status:
+                test_fail += 1
+                log.error(f"qs set {qs_id_val} not reached CANCELED state")
+
+            log.info("MDS failover when quiesced: quiesce state is CANCELED")
+            time.sleep(10)
+            if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+                log.error("Ceph cluster is not healthy after MDS failover")
+                return 1
+            log.info("Verify quiesce lifecycle can suceed after mds failover")
+            if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+                test_fail += 1
+
+            log.info(
+                " 3.State - Releasing:Release without --await, when in Releasing perform mds failover"
+            )
+
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(3))
+            )
+            qs_id_val = f"cg_int1_{rand_str}"
+            log.info(f"Quiesce the set {qs_set} with --await")
+            cg_snap_util.cg_quiesce(
+                client, qs_set, qs_id=qs_id_val, timeout=300, expiration=100
+            )
+            time.sleep(10)
+            cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=False)
+
+            log.info(f"Verify mds failover while Releasing quiesce set {qs_id_val}")
+            if cg_mds_failover(fs_util, client, fs_name):
+                test_fail += 1
+            log.info(f"Wait for RELEASED state in set-id {qs_id_val}")
+            wait_status = wait_for_cg_state(client, cg_snap_util, qs_id_val, "RELEASED")
+            log.info(f"wait_status:{wait_status}")
+            if wait_status:
+                test_fail += 1
+                log.error(f"qs set {qs_id_val} not reached RELEASED state")
+
+            time.sleep(10)
+            if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+                log.error("Ceph cluster is not healthy after MDS failover")
+                return 1
+            log.info("Verify quiesce lifecycle can suceed after mds failover")
+            if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+                test_fail += 1
+
+            log.info("MDS failover during Releasing: Quiesce state is RELEASED")
+            if test_fail >= 1:
+                i = repeat_cnt
+            else:
+                i += 1
+                time.sleep(10)
+        else:
+            i = repeat_cnt
+
+    log.info(f"cg_test_io_status : {cg_test_io_status.value}")
+
+    wait_for_cg_io(p, qs_id_val)
+
+    mnt_pt_list = []
+    if ephemeral_pin == 1:
+        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+            log.error(
+                "Ephemeral random pinning feature was NOT exercised during the test"
+            )
+        log.info("Ephemeral random pinning feature was exercised during the test")
+    log.info(f"Perform cleanup for {qs_set}")
+    for qs_member in qs_member_dict1:
+        mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
+    log.info("Remove CG IO files and unmount")
+    cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
+    mnt_pt_list.clear()
+    cmd = f'ceph orch apply mds {fs_name} --placement="{len(mds_nodes)}'
+
+    for mds_nodes_iter in mds_nodes:
+        cmd += f" {mds_nodes_iter.node.hostname}"
+    cmd += '"'
+    log.info(f"Restoring MDS config - {mds_cnt} MDS, Active - {max_mds_val}")
+    out, rc = client.exec_command(sudo=True, cmd=cmd)
+    client.exec_command(
+        sudo=True,
+        cmd=f"ceph fs set {fs_name} max_mds {max_mds_val}",
+    )
+    if cg_test_io_status.value == 1:
+        log.error(
+            f"CG IO test exits with failure during quiesce test on qs_set-{qs_id_val}"
+        )
+        test_fail += 1
+
+    if test_fail >= 1:
+        log.error(
+            "FAIL: Interop Workflow 1 - Verify MDS failover during quiescing, quiesced and releasing states"
+        )
+        return 1
+    return 0
+
+
+def cg_snap_interop_2(cg_test_params):
+    log.info(
+        "Interop Workflow 2 - Verify quiesce suceeds with IO from kernel,fuse and nfs mountpoints in parallel"
+    )
+    cg_test_io_status = {}
+    fs_name = cg_test_params["fs_name"]
+    fs_util = cg_test_params["fs_util"]
+    mds_nodes = cg_test_params["mds_nodes"]
+    client = cg_test_params["clients"][0]
+    client1 = cg_test_params["clients"][1]
+    qs_clients = [client1]
+    qs_sets = cg_test_params["qs_sets"]
+    cg_snap_util = cg_test_params["cg_snap_util"]
+    cg_snap_io = cg_test_params["cg_snap_io"]
+
+    test_fail = 0
+    nfs_export_list = []
+    mnt_type_list = ["fuse", "nfs", "kernel"]
     for qs_set in qs_sets:
+        subvol_dict = {}
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                subvol_dict.update(
+                    {subvol_name: {"group_name": group_name, "mount_point": ""}}
+                )
+            else:
+                subvol_name = qs_member
+                cmd = f"ceph fs subvolume getpath {fs_name} {subvol_name}"
+                subvol_dict.update({subvol_name: {"mount_point": ""}})
+
+            subvol_path, rc = client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+            mnt_path = subvol_path.strip()
+
+            mount_params = {
+                "fs_util": fs_util,
+                "client": client1,
+                "mnt_path": mnt_path,
+                "fs_name": fs_name,
+                "export_created": 0,
+            }
+            mnt_type = random.choice(mnt_type_list)
+            if mnt_type == "nfs":
+                nfs_export_name = f"{cg_test_params['nfs_export_name']}_{subvol_name}"
+                nfs_export_list.append(nfs_export_name)
+                mount_params.update(
+                    {
+                        "nfs_name": cg_test_params["nfs_name"],
+                        "nfs_export_name": nfs_export_name,
+                        "nfs_server": cg_test_params["nfs_server"],
+                    }
+                )
+            log.info(f"Perform {mnt_type} mount of {subvol_name}")
+            mounting_dir, _ = fs_util.mount_ceph(mnt_type, mount_params)
+            subvol_dict[subvol_name].update({"mount_point": mounting_dir})
+            subvol_dict[subvol_name].update({"client": client1.node.hostname})
+
         client_mnt_dict = {}
-        qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
-        client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
+
+        client_mnt_dict.update({client1.node.hostname: subvol_dict})
         time.sleep(5)
         log.info(f"Start the IO on quiesce set members - {qs_set}")
 
         cg_test_io_status = Value("i", 0)
-        io_run_time = 120
+        io_run_time = 60
+        ephemeral_pin = 0
         p = Thread(
             target=cg_snap_io.start_cg_io,
-            args=(qs_clients, qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+            args=(
+                qs_clients,
+                qs_set,
+                client_mnt_dict,
+                cg_test_io_status,
+                io_run_time,
+                ephemeral_pin,
+            ),
         )
         p.start()
+
         time.sleep(30)
-        repeat_cnt = 5
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
-        i = 0
-        while i < repeat_cnt:
-            if p.is_alive():
-                log.info(f"Interop Workflow 1 : Iteration {i}")
-                # time taken for 1 lifecycle : ~5secs
-                rand_str = "".join(
-                    random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
-                )
-                qs_id_val = f"cg_int1_{rand_str}"
-                log.info(
-                    " 1.State - Quiescing:Quiesce without await, when in quiescing perform MDS failover"
-                )
-                log.info("Induce delay in quiescing")
-                cmd = "ceph config set mds mds_cache_quiesce_delay 3000"
-                client.exec_command(
-                    sudo=True,
-                    cmd=cmd,
-                )
 
-                log.info(f"Quiesce the set {qs_set} without --await")
-                cg_snap_util.cg_quiesce(
-                    client,
-                    qs_set,
-                    qs_id=qs_id_val,
-                    if_await=False,
-                    timeout=300,
-                    expiration=100,
-                )
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        qs_id_val = f"cg_int_2_{rand_str}"
 
-                log.info("Perform MDS failover")
-                if cg_mds_failover(fs_util, client, fs_name):
-                    test_fail += 1
+        log.info(f"Quiesce the set {qs_set} with id {qs_id_val}")
+        cg_snap_util.cg_quiesce(
+            client, qs_set, qs_id=qs_id_val, timeout=600, expiration=600
+        )
 
-                log.info(f"Wait for CANCELED state in set-id {qs_id_val}")
-                wait_status = wait_for_cg_state(
-                    client, cg_snap_util, qs_id_val, "CANCELED"
+        log.info(f"Query quiesce set {qs_id_val}")
+        out = cg_snap_util.get_qs_query(client, qs_id_val)
+        log.info(out)
+        time.sleep(5)
+        log.info("Perform snapshot creation on all members")
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        snap_name = f"cg_int2_snap_{rand_str}"
+        for qs_member in qs_set:
+            snap_list = snap_qs_dict[qs_member]
+            snapshot = {
+                "vol_name": fs_name,
+                "snap_name": snap_name,
+            }
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                snapshot.update(
+                    {
+                        "subvol_name": subvol_name,
+                        "group_name": group_name,
+                    }
                 )
-                log.info(f"wait_status:{wait_status}")
-                if wait_status:
-                    test_fail += 1
-                    log.error(f"qs set {qs_id_val} not reached CANCELED state")
-
-                log.info("MDS failover during quiescing: quiesce state is CANCELED")
-                log.info("Reset quiesce delay to 0")
-                cmd = "ceph config set mds mds_cache_quiesce_delay 0"
-                out, rc = client.exec_command(
-                    sudo=True,
-                    cmd=cmd,
-                )
-                time.sleep(10)
-                log.info("Verify quiesce lifecycle can suceed after mds failover")
-                if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
-                    test_fail += 1
-
-                log.info(
-                    " 2.State - Quiesced:Quiesce with --await, when in quiesced perform MDS failover"
-                )
-
-                log.info(f"Quiesce the set {qs_set} with --await")
-                rand_str = "".join(
-                    random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
-                )
-                qs_id_val = f"cg_int1_{rand_str}"
-                cg_snap_util.cg_quiesce(
-                    client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
-                )
-                qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
-                state = qs_query_out["sets"][qs_id_val]["state"]["name"]
-                log.info(f"State of set-id {qs_id_val} before MDS failover:{state}")
-                if state != "QUIESCED":
-                    log.info(
-                        f"State of set-id {qs_id_val} before mds failover is not as Expected"
-                    )
-                log.info("Perform MDS failover when in QUIESCED state")
-                if cg_mds_failover(fs_util, client, fs_name):
-                    test_fail += 1
-                log.info(f"Wait for CANCELED state in set-id {qs_id_val}")
-                wait_status = wait_for_cg_state(
-                    client, cg_snap_util, qs_id_val, "CANCELED"
-                )
-                log.info(f"wait_status:{wait_status}")
-                if wait_status:
-                    test_fail += 1
-                    log.error(f"qs set {qs_id_val} not reached CANCELED state")
-
-                log.info("MDS failover when quiesced: quiesce state is CANCELED")
-                time.sleep(10)
-                log.info("Verify quiesce lifecycle can suceed after mds failover")
-                if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
-                    test_fail += 1
-
-                log.info(
-                    " 3.State - Releasing:Release without --await, when in Releasing perform mds failover"
-                )
-
-                rand_str = "".join(
-                    random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
-                )
-                qs_id_val = f"cg_int1_{rand_str}"
-                log.info(f"Quiesce the set {qs_set} with --await")
-                cg_snap_util.cg_quiesce(
-                    client, qs_set, qs_id=qs_id_val, timeout=300, expiration=100
-                )
-                time.sleep(10)
-                cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=False)
-
-                log.info(f"Verify mds failover while Releasing quiesce set {qs_id_val}")
-                if cg_mds_failover(fs_util, client, fs_name):
-                    test_fail += 1
-                log.info(f"Wait for RELEASED state in set-id {qs_id_val}")
-                wait_status = wait_for_cg_state(
-                    client, cg_snap_util, qs_id_val, "RELEASED"
-                )
-                log.info(f"wait_status:{wait_status}")
-                if wait_status:
-                    test_fail += 1
-                    log.error(f"qs set {qs_id_val} not reached RELEASED state")
-
-                time.sleep(10)
-                log.info("Verify quiesce lifecycle can suceed after mds failover")
-                if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
-                    test_fail += 1
-
-                log.info("MDS failover during Releasing: Quiesce state is RELEASED")
-                if test_fail >= 1:
-                    i = repeat_cnt
-                else:
-                    i += 1
-                    time.sleep(10)
             else:
-                i = repeat_cnt
+                subvol_name = qs_member
+                snapshot.update(
+                    {
+                        "subvol_name": subvol_name,
+                    }
+                )
+            try:
+                fs_util.create_snapshot(client, **snapshot)
+            except Exception as ex:
+                log.info(ex)
+            log.info(f"Created snapshot {snap_name} on {subvol_name}")
+            snap_list.append(snap_name)
+            snap_qs_dict.update({subvol_name: snap_list})
+
+        log.info(f"Release quiesce set {qs_id_val}")
+        cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+
+        log.info(f"Reset the quiesce set - {qs_set}")
+        cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
+        time.sleep(5)
+        log.info("Perform snapshot creation on all members")
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(4))
+        )
+        snap_name = f"cg_int2_snap_{rand_str}"
+        for qs_member in qs_set:
+            snap_list = snap_qs_dict[qs_member]
+            snapshot = {
+                "vol_name": fs_name,
+                "snap_name": snap_name,
+            }
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                snapshot.update(
+                    {
+                        "subvol_name": subvol_name,
+                        "group_name": group_name,
+                    }
+                )
+            else:
+                subvol_name = qs_member
+                snapshot.update(
+                    {
+                        "subvol_name": subvol_name,
+                    }
+                )
+            try:
+                fs_util.create_snapshot(client, **snapshot)
+            except Exception as ex:
+                log.info(ex)
+            log.info(f"Created snapshot {snap_name} on {subvol_name}")
+            snap_list.append(snap_name)
+            snap_qs_dict.update({subvol_name: snap_list})
+
+        log.info(f"Cancel quiesce set {qs_id_val}")
+        try:
+            cg_snap_util.cg_quiesce_cancel(client, qs_id_val)
+        except Exception as ex:
+            log.info(ex)
+        log.info(f"Query quiesce set {qs_id_val}")
+        out = cg_snap_util.get_qs_query(client, qs_id_val)
+        log.info(out)
+
+        log.info(f"Reset the quiesce set - {qs_set} with id {qs_id_val}")
+        cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
+
+        log.info(f"Exclude a subvolume from quiesce set {qs_id_val}")
+
+        exclude_sv_name = random.choice(qs_set)
+        qs_exclude_status = cg_snap_util.cg_quiesce_exclude(
+            client, qs_id_val, [exclude_sv_name], if_await=True
+        )
+        if qs_exclude_status == 1:
+            test_fail = 1
+            log.error(f"Exclude of {exclude_sv_name} in qs set {qs_id_val} failed")
+        log.info(f"Verify quiesce set {qs_id_val} state after exclude")
+        qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+        log.info(qs_query_out)
+        state = qs_query_out["sets"][qs_id_val]["state"]["name"]
+        if state == "QUIESCED":
+            log.info(f"State of qs set {qs_id_val} after exclude is QUIESCED")
+        else:
+            log.error(
+                f"State of qs set {qs_id_val} after exclude is not as expected - {state}"
+            )
+            test_fail = 1
+        include_sv_name = exclude_sv_name
+        log.info(f"Include a subvolume {include_sv_name} in quiesce set {qs_id_val}")
+        qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+        for qs_member in qs_query_out["sets"][qs_id_val]["members"]:
+            if exclude_sv_name in qs_member:
+                exclude_state = qs_query_out["sets"][qs_id_val]["members"][qs_member][
+                    "excluded"
+                ]
+                log.info(
+                    f"excluded value of {exclude_sv_name} before include : {exclude_state}"
+                )
+        qs_include_status = cg_snap_util.cg_quiesce_include(
+            client, qs_id_val, [include_sv_name], if_await=True
+        )
+        if qs_include_status == 1:
+            test_fail = 1
+            log.error(f"Include of {include_sv_name} in qs set {qs_id_val} failed")
+
+        log.info(f"Release quiesce set {qs_id_val}")
+        cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
         wait_for_cg_io(p, qs_id_val)
 
         mnt_pt_list = []
+        if ephemeral_pin == 1:
+            if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+                log.error(
+                    "Ephemeral random pinning feature was NOT exercised during the test"
+                )
+            log.info("Ephemeral random pinning feature was exercised during the test")
         log.info(f"Perform cleanup for {qs_set}")
-        for qs_member in qs_member_dict1:
-            mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
+        for qs_member in subvol_dict:
+            mnt_pt_list.append(subvol_dict[qs_member]["mount_point"])
         log.info("Remove CG IO files and unmount")
         cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
         mnt_pt_list.clear()
-        cmd = f'ceph orch apply mds {fs_name} --placement="{mds_cnt}'
-        if mds_cnt > len(mds_nodes):
-            mds_nodes_sub = random.sample(mds_nodes, mds_cnt)
-        else:
-            mds_nodes_sub = mds_nodes
-        for mds_nodes_sub_iter in mds_nodes_sub:
-            cmd += f" {mds_nodes_sub_iter.node.hostname}"
-        cmd += '"'
-        log.info(f"Restoring MDS config - {mds_cnt} MDS, Active - {max_mds_val}")
-        out, rc = client.exec_command(sudo=True, cmd=cmd)
-        client.exec_command(
-            sudo=True,
-            cmd=f"ceph fs set {fs_name} max_mds {max_mds_val}",
-        )
+        log.info("Remove CG snapshots")
+        for qs_member in subvol_dict:
+            snap_list = snap_qs_dict[qs_member]
+            if subvol_dict[qs_member].get("group_name"):
+                group_name = subvol_dict[qs_member]["group_name"]
+                for snap_name in snap_list:
+                    fs_util.remove_snapshot(
+                        client,
+                        fs_name,
+                        qs_member,
+                        snap_name,
+                        validate=True,
+                        group_name=group_name,
+                    )
+            else:
+                for snap_name in snap_list:
+                    fs_util.remove_snapshot(
+                        client, fs_name, qs_member, snap_name, validate=True
+                    )
+        for nfs_export_name in nfs_export_list:
+            client1.exec_command(
+                sudo=True,
+                cmd=f"ceph nfs export delete {cg_test_params['nfs_name']} {nfs_export_name}",
+                check_ec=False,
+            )
         if cg_test_io_status.value == 1:
             log.error(
                 f"CG IO test exits with failure during quiesce test on qs_set-{qs_id_val}"
@@ -1880,7 +2344,191 @@ def cg_snap_interop_1(cg_test_params):
 
     if test_fail >= 1:
         log.error(
-            "FAIL: Interop Workflow 1 - Verify MDS failover during quiescing, quiesced and releasing states"
+            "FAIL: Interop Workflow 2 - Verify quiesce with IO from kernel,fuse and nfs mountpoints"
+        )
+        return 1
+    return 0
+
+
+def cg_snap_neg_1(cg_test_params):
+    log.info("Negative Workflow 1 - Verify parallel quiesce calls to same set")
+
+    fs_name = cg_test_params["fs_name"]
+    fs_util = cg_test_params["fs_util"]
+    mds_nodes = cg_test_params["mds_nodes"]
+    client = cg_test_params["clients"][0]
+
+    qs_sets = cg_test_params["qs_sets"]
+    cg_snap_util = cg_test_params["cg_snap_util"]
+    client1 = cg_test_params["clients"][1]
+    qs_clients = [client1]
+    log.info(f"client:{client.node.hostname}")
+
+    cg_snap_io = cg_test_params["cg_snap_io"]
+    test_fail = 0
+
+    for qs_set in qs_sets:
+        client_mnt_dict = {}
+        qs_member_dict1 = cg_snap_util.mount_qs_members(client1, qs_set, fs_name)
+        client_mnt_dict.update({client1.node.hostname: qs_member_dict1})
+        time.sleep(5)
+        log.info(f"Start the IO on quiesce set members - {qs_set}")
+
+        cg_test_io_status = Value("i", 0)
+        io_run_time = 20
+        ephemeral_pin = 0
+        p = Thread(
+            target=cg_snap_io.start_cg_io,
+            args=(
+                qs_clients,
+                qs_set,
+                client_mnt_dict,
+                cg_test_io_status,
+                io_run_time,
+                ephemeral_pin,
+            ),
+        )
+        p.start()
+        time.sleep(10)
+        repeat_cnt = 1
+        snap_qs_dict = {}
+        for qs_member in qs_set:
+            snap_qs_dict.update({qs_member: []})
+        i = 0
+
+        while i < repeat_cnt:
+            parallel_cnt = 5
+            qs_id_list = []
+            if p.is_alive():
+                log.info(f"Negative Workflow 1 : Iteration {i}")
+                # time taken for 1 lifecycle : ~5secs
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                quiesce_procs = []
+                for k in range(parallel_cnt):
+                    qs_id_val = f"cg_neg_{k}_{rand_str}"
+                    log.info(
+                        f"Iter{k}: Run quiesce on quiesce set {qs_set} with id {qs_id_val}"
+                    )
+                    cg_args = {
+                        "qs_id": qs_id_val,
+                        "timeout": 300,
+                        "expiration": 300,
+                        "if_await": "False",
+                    }
+                    try:
+                        quiesce_proc = Thread(
+                            target=cg_snap_util.cg_quiesce,
+                            args=(client, qs_set),
+                            kwargs=cg_args,
+                        )
+                        quiesce_proc.start()
+                        quiesce_procs.append(quiesce_proc)
+                        qs_id_list.append(qs_id_val)
+                    except Exception as ex:
+                        log.info(ex)
+                        test_fail += 1
+
+                for quiesce_proc in quiesce_procs:
+                    quiesce_proc.join()
+                time.sleep(30)
+                log.info("Perform snapshot creation on all members")
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                snap_name = f"cg_neg1_snap_{rand_str}"
+                for qs_member in qs_set:
+                    snap_list = snap_qs_dict[qs_member]
+                    snapshot = {
+                        "vol_name": fs_name,
+                        "snap_name": snap_name,
+                    }
+                    if "/" in qs_member:
+                        group_name, subvol_name = re.split("/", qs_member)
+                        snapshot.update(
+                            {
+                                "subvol_name": subvol_name,
+                                "group_name": group_name,
+                            }
+                        )
+                    else:
+                        subvol_name = qs_member
+                        snapshot.update(
+                            {
+                                "subvol_name": subvol_name,
+                            }
+                        )
+                    fs_util.create_snapshot(client, **snapshot)
+                    log.info(f"Created snapshot {snap_name} on {subvol_name}")
+                    snap_list.append(snap_name)
+                    snap_qs_dict.update({subvol_name: snap_list})
+
+                for qs_id in qs_id_list:
+                    log.info(f"Release the qs_set with id {qs_id}")
+                    try:
+                        cg_snap_util.cg_quiesce_release(client, qs_id, if_await=True)
+                    except Exception as ex:
+                        log.info(ex)
+                        test_fail += 1
+
+                if test_fail >= 1:
+                    i = repeat_cnt
+                else:
+                    i += 1
+                    time.sleep(30)
+            else:
+                i = repeat_cnt
+
+        log.info(f"cg_test_io_status : {cg_test_io_status.value}")
+        wait_for_cg_io(p, qs_id_val)
+
+        mnt_pt_list = []
+        if ephemeral_pin == 1:
+            if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+                log.error(
+                    "Ephemeral random pinning feature was NOT exercised during the test"
+                )
+            log.info("Ephemeral random pinning feature was exercised during the test")
+        log.info(f"Perform cleanup for {qs_set}")
+        for qs_member in qs_member_dict1:
+            mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
+        log.info("Remove CG IO files and unmount")
+        cg_snap_util.cleanup_cg_io(client1, mnt_pt_list)
+        mnt_pt_list.clear()
+
+        snap_name = f"cg_snap_neg_{rand_str}"
+        log.info("Remove CG snapshots")
+        for qs_member in qs_member_dict1:
+            snap_list = snap_qs_dict[qs_member]
+            if qs_member_dict1[qs_member].get("group_name"):
+                group_name = qs_member_dict1[qs_member]["group_name"]
+                for snap_name in snap_list:
+                    fs_util.remove_snapshot(
+                        client,
+                        fs_name,
+                        qs_member,
+                        snap_name,
+                        validate=True,
+                        group_name=group_name,
+                    )
+            else:
+                for snap_name in snap_list:
+                    fs_util.remove_snapshot(
+                        client, fs_name, qs_member, snap_name, validate=True
+                    )
+
+        if cg_test_io_status.value == 1:
+            log.error(
+                f"CG IO test exits with failure during negative workflow1 on qs_set-{qs_id_val}"
+            )
+            test_fail += 1
+
+    if test_fail >= 1:
+        log.error(
+            "FAIL: Negative Workflow 1 - Verify parallel quiesce calls to same set"
         )
         return 1
     return 0
@@ -2025,3 +2673,22 @@ def wait_for_two_active_mds(client1, fs_name, max_wait_time=180, retry_interval=
             time.sleep(retry_interval)  # Retry after the specified interval
 
     return False
+
+
+def wait_for_healthy_ceph(client1, fs_util, wait_time_secs):
+    # Returns 1 if healthy, 0 if unhealthy
+    ceph_healthy = 0
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=wait_time_secs)
+    while ceph_healthy == 0 and (datetime.datetime.now() < end_time):
+        try:
+            fs_util.get_ceph_health_status(client1)
+            ceph_healthy = 1
+        except Exception as ex:
+            log.info(ex)
+            log.info(
+                f"Wait for sometime to check if Cluster health can be OK, current state : {ex}"
+            )
+            time.sleep(5)
+    if ceph_healthy == 0:
+        return 0
+    return 1

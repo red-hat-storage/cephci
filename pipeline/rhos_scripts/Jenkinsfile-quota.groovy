@@ -4,7 +4,7 @@
 // Global variables section
 def sharedLib
 
-node("magna006") {
+node("rhel-9-medium") {
     try {
         stage('prepareNode') {
             checkout(

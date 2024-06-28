@@ -438,15 +438,15 @@ tests:
       polarion-id: CEPH-83574040
 
 # please include test cases before below rename testcase as the process is disruptive currently
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_check_sharding_enabled.py
-            config-file-name: test_zonegroup_rename.yaml
-            timeout: 300
-      desc: Test zonegroup rename in master
-      module: sanity_rgw_multisite.py
-      name: Perform zonegroup rename in master
-      polarion-id: CEPH-10740
-      comments: known issue (BZ2210695)
+  # - test:
+  #     clusters:
+  #       ceph-pri:
+  #         config:
+  #           script-name: test_check_sharding_enabled.py
+  #           config-file-name: test_zonegroup_rename.yaml
+  #           timeout: 300
+  #     desc: Test zonegroup rename in master
+  #     module: sanity_rgw_multisite.py
+  #     name: Perform zonegroup rename in master
+  #     polarion-id: CEPH-10740
+  #     comments: known issue (BZ2210695) targeted to 8.0

@@ -2784,7 +2784,7 @@ os.system('sudo systemctl start  network')
 
         def file_extract():
             log.info("IO tool scheduled : FILE_EXTRACT")
-            io_params = {"testdir_prefix": "file_extract_dir"}
+            io_params = {"testdir_prefix": "file_extract_dir", "compile_test": 0}
             if kwargs.get("file_extract_params"):
                 file_extract_params = kwargs.get("file_extract_params")
                 for io_param in io_params:
@@ -2798,11 +2798,36 @@ os.system('sudo systemctl start  network')
             client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
             client.exec_command(
                 sudo=True,
-                cmd=f"cd {io_path};wget -O linux.tar.gz http://download.ceph.com/qa/linux-5.4.tar.gz",
+                cmd=f"cd {io_path};wget -O linux.tar.xz http://download.ceph.com/qa/linux-6.5.11.tar.xz",
             )
             client.exec_command(
                 sudo=True,
-                cmd=f"cd {io_path};tar -xzf linux.tar.gz tardir/ ; sleep 10 ; rm -rf  tardir/",
+                cmd=f"cd {io_path};tar -xJf linux.tar.xz",
+                long_running=True,
+                timeout=3600,
+            )
+            log.info(f"untar suceeded on {mounting_dir}")
+            if io_params["compile_test"] == 1:
+                log.info("Install dependent packages")
+                cmd = "yum install -y --nogpgcheck flex bison bc elfutils-libelf-devel openssl-devel"
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+                out, rc = client.exec_command(
+                    sudo=True,
+                    cmd="grep -c processor /proc/cpuinfo",
+                )
+                cpu_cnt = out.strip()
+                log.info(f"cpu_cnt:{cpu_cnt},out:{out}")
+                cmd = f"cd {io_path}/; cd linux-6.5.11;make defconfig;make -j {cpu_cnt}"
+                client.exec_command(sudo=True, cmd=cmd, timeout=3600)
+                log.info(f"Compile test passed on {mounting_dir}")
+
+            # cleanup
+            client.exec_command(
+                sudo=True,
+                cmd=f"rm -rf  {io_path}",
             )
 
         def wget():

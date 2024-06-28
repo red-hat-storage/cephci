@@ -3,12 +3,13 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
  with supported entities like subsystems , etc.,
 
 """
+
 import json
 import re
 from copy import deepcopy
 from time import sleep
 
-from ceph.ceph import Ceph, SocketTimeoutException, CommandFailed
+from ceph.ceph import Ceph, CommandFailed, SocketTimeoutException
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmegw_cli import NVMeGWCLI
@@ -937,9 +938,7 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
         ):
             raise Exception("Set QoS was failed as expected due to invalid args.")
         if "Can't find namespace" not in str(err):
-            raise Exception(
-                "Set QoS was failed as expected due to invalid namespace."
-            )
+            raise Exception("Set QoS was failed as expected due to invalid namespace.")
         LOG.info("Set QoS was failed as expected due to invalid namespace....")
 
     finally:
@@ -1015,9 +1014,7 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
             raise Exception(
                 "Set QoS was failed as expected due to absence of mandatory args."
             )
-        LOG.info(
-            "Set QoS was failed as expected due to absence of mandatory args...."
-        )
+        LOG.info("Set QoS was failed as expected due to absence of mandatory args....")
         if (
             "At least one of --nsid or --uuid arguments is mandatory for set_qos command"
             not in str(err)
@@ -1025,9 +1022,7 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
             raise Exception(
                 "Set QoS was failed as expected due to absence of mandatory args."
             )
-        LOG.info(
-            "Set QoS was failed as expected due to absence of mandatory args...."
-        )
+        LOG.info("Set QoS was failed as expected due to absence of mandatory args....")
     finally:
         cleanup_cfg = {
             "gw_node": config.get("gw_node"),
@@ -1038,7 +1033,8 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
         }
         teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
         return 0
-    
+
+
 def test_ceph_83581752(ceph_cluster, rbd, pool, config):
     """CEPH-83581752: Set QoS for non-existent namespace in subsystem.
     Args:
@@ -1081,16 +1077,16 @@ def test_ceph_83581752(ceph_cluster, rbd, pool, config):
         config.update(initiator_cfg)
 
         qos_args_without_mandatory_args = {}
-        qos_args_without_mandatory_args.setdefault("args", {}).update({"nsid": 1, "subsystem": subsystem["nqn"], "rw-ios-per-second": 10})
+        qos_args_without_mandatory_args.setdefault("args", {}).update(
+            {"nsid": 1, "subsystem": subsystem["nqn"], "rw-ios-per-second": 10}
+        )
         _ = nvmegwcli.namespace.set_qos(**qos_args_without_mandatory_args)
     except CommandFailed as err:
         if "Can't find namespace" not in str(err):
             raise Exception(
                 "Set QoS was failed as expected due to absence of namespace."
             )
-        LOG.info(
-            "Set QoS was failed as expected due to absence of namepace...."
-        )
+        LOG.info("Set QoS was failed as expected due to absence of namepace....")
     finally:
         cleanup_cfg = {
             "gw_node": config.get("gw_node"),
@@ -1152,32 +1148,26 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             },
         }
         test_nvmeof.run(ceph_cluster, **cfg)
-        if config["operation"] == "CEPH-83575812":
-            test_ceph_83575812(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83576084":
-            test_ceph_83576084(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83575467":
-            test_ceph_83575467(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83576085":
-            test_ceph_83576085(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83576087":
-            test_ceph_83576087(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83575813":
-            test_ceph_83575813(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83576093":
-            test_ceph_83576093(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83575455":
-            test_ceph_83575455(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83575814":
-            test_ceph_83575814(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83581753":
-            test_ceph_83581753(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83581945":
-            test_ceph_83581945(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83581752":
-            test_ceph_83581752(ceph_cluster, rbd_obj, rbd_pool, config)
+        operation_mapping = {
+            "CEPH-83575812": test_ceph_83575812,
+            "CEPH-83576084": test_ceph_83576084,
+            "CEPH-83575467": test_ceph_83575467,
+            "CEPH-83576085": test_ceph_83576085,
+            "CEPH-83576087": test_ceph_83576087,
+            "CEPH-83575813": test_ceph_83575813,
+            "CEPH-83576093": test_ceph_83576093,
+            "CEPH-83575455": test_ceph_83575455,
+            "CEPH-83575814": test_ceph_83575814,
+            "CEPH-83581753": test_ceph_83581753,
+            "CEPH-83581945": test_ceph_83581945,
+            "CEPH-83581752": test_ceph_83581752,
+        }
+
+        operation = config["operation"]
+        if operation in operation_mapping:
+            operation_mapping[operation](ceph_cluster, rbd_obj, rbd_pool, config)
         return 0
     except Exception as err:
-        LOG.info(err)
+        LOG.error(err)
 
     return 1

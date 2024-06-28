@@ -1545,6 +1545,57 @@ class RadosOrchestrator:
                 return False
         return True
 
+    def update_osd_state_on_cluster(self, osd_id, state):
+        """
+        Method to update the state of the OSD in the cluster. This method can mark the osd "in, out, up, down"
+        Args:
+            osd_id: ID of the osd to be operated
+            state: Property that needs to be updated.
+                  Allowed states: "in, out, up, down"
+        Returns: True -> pass, false -> fail
+        """
+        allowed_states = {"in", "out", "up", "down"}
+        if state not in allowed_states:
+            log.error(f"Invalid state '{state}'. Allowed states are {allowed_states}")
+            return False
+
+        log.info(f"Marking OSD.{osd_id} {state}")
+        cmd = f"ceph osd {state} {osd_id}"
+        self.run_ceph_command(cmd=cmd)
+        time.sleep(5)
+
+        log.debug(f"Checking OSD state post marking it {state}")
+        cmd = "ceph osd dump"
+        dump_status = self.run_ceph_command(cmd=cmd)
+
+        osd_found = False
+
+        for entry in dump_status["osds"]:
+            if entry["osd"] == osd_id:
+                osd_found = True
+                is_in = entry.get("in", 0)
+                is_up = entry.get("up", 0)
+
+                if state == "in" and not is_in:
+                    log.error(f"OSD {osd_id} not marked in the cluster")
+                    return False
+                elif state == "out" and is_in:
+                    log.error(f"OSD {osd_id} not marked out of the cluster")
+                    return False
+                elif state == "up" and not is_up:
+                    log.error(f"OSD {osd_id} not marked up in the cluster")
+                    return False
+                elif state == "down" and is_up:
+                    log.error(f"OSD {osd_id} not marked down in the cluster")
+                    return False
+                else:
+                    log.info(f"OSD {osd_id} marked {state} successfully.")
+                    return True
+
+        if not osd_found:
+            log.error(f"OSD {osd_id} state not found in the cluster dump")
+        return False
+
     def get_cephdf_stats(self, pool_name: str = None, detail: bool = False) -> dict:
         """
         Retrieves and returns the output ceph df command
@@ -3587,3 +3638,128 @@ class RadosOrchestrator:
         log.info(f"The inconsistent object count is -{obj_count}")
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id
+
+    def set_unmanaged_flag(self, daemon):
+        """
+        Method to set the unmanaged flag to a daemon
+        Args:
+            daemon : Cluster daemon Example: mgr,mon, osd, rgw
+        Return:
+             True, if unmanaged flag is set
+             False, if unmanaged flag is not set
+        """
+
+        cmd_set_unmanaged_flag = f"ceph orch set-unmanaged {daemon}"
+        self.client.exec_command(sudo=True, cmd=cmd_set_unmanaged_flag)
+        base_cmd = "ceph orch ls"
+        cmd = f"{base_cmd} {daemon}"
+        duration = 300  # 5 minutes
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            orch_ls_op = self.run_ceph_command(cmd=cmd)
+            for entry in orch_ls_op:
+                if entry["unmanaged"]:
+                    log.info("The unmanaged flag is set to True ")
+                    return True
+            time.sleep(30)
+        log.error("The unmanaged flag is not set to True  ")
+        return False
+
+    def set_managed_flag(self, daemon):
+        """
+        Method to unset the unmanaged flag to a daemon
+        Args:
+            daemon : Cluster daemon Example: mgr,mon, osd, rgw
+        Return:
+            True, if unmanaged flag is unset
+            False, if unmanaged flag is not unset
+        """
+
+        cmd_set_managed_flag = f"ceph orch set-managed {daemon}"
+        self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
+
+        base_cmd = "ceph orch ls"
+        cmd = f"{base_cmd} {daemon}"
+        duration = 300  # 5 minutes
+        start_time = time.time()
+        while time.time() - start_time < duration:
+            orch_ls_op = self.run_ceph_command(cmd=cmd)
+            for entry in orch_ls_op:
+                if "unmanaged" not in entry:
+                    log.info("The unmanaged flag is unset")
+                    return True
+            time.sleep(30)
+        log.error("The unmanaged flag is not unset")
+        return False
+
+    def check_daemon_exists_on_host(self, host, daemon_type) -> bool:
+        """
+        Method to check a daemon is running on the given host
+        Args:
+            host: name of the host where existence of mgr needs to be checked
+            daemon_type: daemon type to check on the node.
+                         Example: mgr,mon
+        Return:
+            Pass -> True, Fail -> false
+        """
+        cmd = f"ceph orch ps {host}"
+        out = self.run_ceph_command(cmd=cmd, client_exec=True)
+        for entry in out:
+            if entry["daemon_type"] == daemon_type:
+                log.debug(f"{daemon_type} daemon present on the host")
+                return True
+        log.debug(f"{daemon_type} daemon not present on the host")
+        return False
+
+    def get_daemon_list_fromCluster(self, daemon_type):
+        """
+        Method to get the required daemon list from the cluster
+        Args:
+             daemon_type: daemon type
+                         Example: mgr,mon
+        Returns:
+              nodes list that contain the daemon type
+        """
+        mgr_node_list = []
+        cmd_orch = "ceph orch host ls"
+        host_output = self.run_ceph_command(cmd=cmd_orch, client_exec=True)
+        for item in host_output:
+            host_name = item["hostname"]
+            cmd_orch = f"ceph orch ps {host_name}"
+            out = self.run_ceph_command(cmd=cmd_orch, client_exec=True)
+            for entry in out:
+                if entry["daemon_type"] == daemon_type:
+                    mgr_node_list.append(host_name)
+        return mgr_node_list
+
+    def get_active_osd_list(self) -> list:
+        """
+        Method to fetch list of OSDs which are UP and IN
+        Returns:
+            List of active OSDs
+        """
+        down_osd_list = out_osd_list = []
+        total_list = self.run_ceph_command(cmd="ceph osd ls")
+        log.info(f"ceph osd ls output: {total_list}")
+
+        # prepare list of OSDs which are down
+        down_osd_tree = self.run_ceph_command(cmd="ceph osd tree down")
+        if down_osd_tree["nodes"]:
+            for entry in down_osd_tree["nodes"]:
+                if entry["type"] == "osd":
+                    down_osd_list.append(entry["id"])
+        log.info(f"List of down OSDs: {down_osd_list}")
+
+        # prepare list of OSDs which are out
+        out_osd_tree = self.run_ceph_command(cmd="ceph osd tree out")
+        if out_osd_tree["nodes"]:
+            for entry in out_osd_tree["nodes"]:
+                if entry["type"] == "osd":
+                    out_osd_list.append(entry["id"])
+        log.info(f"List of out OSDs: {out_osd_list}")
+
+        exclude_list = list(set(down_osd_list + out_osd_list))
+        if exclude_list:
+            [total_list.remove(i) for i in exclude_list]
+
+        return total_list
