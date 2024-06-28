@@ -10,7 +10,7 @@ from ceph.ceph import CommandFailed
 from ceph.ceph_admin.daemon import Daemon
 from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
-from ceph.utils import get_node_by_id
+from ceph.utils import get_node_by_id, get_openstack_driver
 from ceph.waiter import WaitUntil
 from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
@@ -50,6 +50,7 @@ class HighAvailability:
         self.fail_ops = {
             "systemctl": self.system_control,
             "daemon": self.ceph_daemon,
+            "power_on_off": self.power_on_off,
         }
 
     def check_gateway(self, node_id):
@@ -280,6 +281,65 @@ class HighAvailability:
             LOG.error(
                 f"[ {daemon} ] {action}ing NVMeofGW Daemon failed even after 300s timeout.."
             )
+
+        return False
+
+    def is_node_active(self, driver, node):
+        """Return true if the given node is powered on and false if powered off"""
+        op = driver.ex_get_node_details(node)
+        if op.state == "running":
+            return True
+        elif op.state == "stopped":
+            return False
+
+    def power_on_off(self, gateway, action, wait_for_active_state=None):
+        """Power on and off nvme daemon nodes.
+
+        Args:
+            gateway: NVMe gateway object.
+            action: "stop" | "start"
+            wait_for_active_state: wait for the active using bool value.
+
+        - wait_for_active_state:
+            True: wait for the node to power on.
+            False: wait for the node to power off.
+            None: do not wait, return
+
+        Returns:
+            Boolean
+        """
+        osp_cred = self.config.get("osp_cred")
+        driver = get_openstack_driver(osp_cred)
+        ops = {
+            "start": driver.ex_start_node,
+            "stop": driver.ex_stop_node,
+            "is-active": self.is_node_active,
+        }
+        nodename = gateway.node.hostname.lower()
+
+        driver_node = next(
+            (node for node in driver.list_nodes() if node.name.lower() == nodename),
+            None,
+        )
+
+        op = ops[action]
+        op(driver_node)
+
+        if wait_for_active_state is None:
+            return
+
+        is_active = ops["is-active"]
+        for w in WaitUntil(timeout=300):
+            _active = is_active(driver, driver_node)
+            if _active == wait_for_active_state:
+                LOG.info(f"[ {nodename} ] {action} is successfull.")
+                return True
+            LOG.warning(
+                f"[ {nodename} ] {action} is still not successfull. check again"
+            )
+
+        if w.expired:
+            LOG.error(f"[ {nodename} ] {action} failed even after 300s timeout..")
 
         return False
 
