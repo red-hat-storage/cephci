@@ -61,15 +61,16 @@ def test_expand_or_shrink_img_at_secondary(rbd_mirror, pool_type, **kw):
             )
             p.spawn(mirror2.resize_image, imagespec=imagespec, size=size)
 
+        if flag:
+            log.error("Expanding secondary image did not fail as expected")
     except IOonSecondaryError:
         log.info("Expanding secondary image has failed as expected")
         flag = 0
 
-    if flag:
-        log.error("Expanding secondary image did not fail as expected")
+    finally:
+        mirror1.delete_image(imagespec)
+        mirror1.clean_up(peercluster=mirror2, pools=[pool])
 
-    mirror1.delete_image(imagespec)
-    mirror1.clean_up(peercluster=mirror2, pools=[pool])
     return flag
 
 

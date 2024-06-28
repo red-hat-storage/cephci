@@ -54,7 +54,6 @@ def run(**kw):
         mirror1.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
         mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+replaying")
         mirror1.check_data(peercluster=mirror2, imagespec=imagespec)
-        mirror1.clean_up(peercluster=mirror2, pools=[poolname])
         return 0
 
     except ValueError as ve:
@@ -65,3 +64,5 @@ def run(**kw):
     except Exception as e:
         log.exception(e)
         return 1
+    finally:
+        mirror1.clean_up(peercluster=mirror2, pools=[poolname])
