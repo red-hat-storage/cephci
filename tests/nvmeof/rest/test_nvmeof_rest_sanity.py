@@ -3,6 +3,7 @@ from ceph.nvmeof.initiator import Initiator
 from ceph.utils import get_node_by_id
 from rest.common.utils.rest import rest
 from rest.workflows.nvmeof.nvmeof import (
+    add_and_verify_host,
     create_and_verify_subsystem,
     get_info_nvmeof_gateway,
 )
@@ -36,13 +37,10 @@ def sanity_workflow(config):
         if rc_ss:
             log.error("FAILED: create subsystem and validations")
             return 1
-
-    # 3. NVMeOF subsystem host allowlist addition and validations
-
-    # 4. NVMEoF subsystem listener creation and validation
-
-    # 5. NVMEoF subsystem namespace creation and validation
-
+        rc_addhost = add_and_verify_host(**_subsystem)
+        if rc_addhost:
+            log.error("FAILED: Add host and validations")
+            return 1
     return 0
 
 
@@ -136,7 +134,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     config = kwargs["config"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
     try:
-        rc_s = sanity_workflow(config, rbd_obj)
+        rc_s = sanity_workflow(config)
     except Exception as err:
         log.error(str(err))
         rc_s = 1
