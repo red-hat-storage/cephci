@@ -219,6 +219,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     )
 
         # HA failover and failback
+
         ha.run()
 
         return 0

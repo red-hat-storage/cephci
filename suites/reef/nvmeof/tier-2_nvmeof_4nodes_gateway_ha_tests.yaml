@@ -95,16 +95,16 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 2G
+              size: 5G
               lb_group: node6
             - count: 2
-              size: 2G
+              size: 5G
               lb_group: node7
             - count: 2
-              size: 2G
+              size: 5G
               lb_group: node8
             - count: 2
-              size: 2G
+              size: 5G
               lb_group: node9
             listener_port: 4420
             listeners:
