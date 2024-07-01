@@ -15,6 +15,7 @@ import sys
 from datetime import datetime, timezone
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from types import SimpleNamespace
 from typing import Dict
 
 import yaml
@@ -85,7 +86,12 @@ def cleanup(
     Returns:
         None
     """
-    user_ = osp_identity.get_user(node.extra["userId"])
+    try:
+        user_ = osp_identity.get_user(node.extra["userId"])
+    except Exception as e:
+        print(f"For Node:{node.name} unable to find the owner {e}")
+        user_ = SimpleNamespace(name="No_USER", email="cephci@redhat.com")
+
     if node.state.lower() != "error":
         node_age = datetime.now(timezone.utc) - node.created_at
         max_age = 7 if tenant != "ceph-jenkins" else 3

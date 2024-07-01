@@ -308,8 +308,6 @@ tests:
       module: sanity_rgw.py
       name: test_metadata_integrity_with_0_num_shards (single site)
       polarion-id: CEPH-83575472
-      comments: BUG-2174235, customer SERPRO
-
 
   # migrating from singlesite to multisite
 
@@ -487,7 +485,6 @@ tests:
       desc: test mdlog trimming on primary
       polarion-id: CEPH-10544 #CEPH-10722, CEPH-10547
       module: sanity_rgw_multisite.py
-      comments: Known issue BZ-2230359
       clusters:
         ceph-pri:
           config:
@@ -532,17 +529,3 @@ tests:
             script-name: test_bucket_request_payer.py
             config-file-name: test_bucket_request_payer.yaml
             timeout: 300
-
-  # please include test cases before below rename testcase as the process is disruptive currently
-  - test:
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_check_sharding_enabled.py
-            config-file-name: test_zone_rename.yaml
-            timeout: 300
-      desc: Test zone rename in non master that is secondary
-      module: sanity_rgw_multisite.py
-      name: Perform zone rename in non master that is secondary
-      polarion-id: CEPH-10740
-      comments: known issue (BZ2210757)

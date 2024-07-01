@@ -443,7 +443,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test LC from primary to secondary
       polarion-id: CEPH-11194
-      comments: bug-1991808, test LC rules from primary to secondary
 
   - test:
       clusters:
@@ -458,7 +457,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test sync on bucket with 0 shards
       polarion-id: CEPH-83575573
-      comments: bug-2188022, 2180549 HotFix for Square eCommerce
   - test:
       clusters:
         ceph-pri:
@@ -472,7 +470,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test LC transition on multisite, and bucket stats at archive
       polarion-id: CEPH-83573372
-      comments: known failure below rhcs-6.1 and old buckets[bug-2128421]
 
   - test:
       clusters:
@@ -486,21 +483,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test LC transition on multisite with object acl set
       polarion-id: CEPH-83574048
-      comments: known issue, bug-2213801
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            config-file-name: test_Mbuckets_with_Nobjects_no_reshard_haproxy.yaml
-            script-name: test_Mbuckets_with_Nobjects.py
-            run-on-haproxy: true
-            timeout: 600
-            test-archive-bucket-stats: true
-      desc: Execute M buckets with N objects on primary and verify on secondary & archive cluster
-      polarion-id: CEPH-83575575
-      module: sanity_rgw_multisite.py
-      name: m buckets with n objects
-      comments: bug-2213138, known failure
 # test the workaround to sync only from one active zone
   - test:
       clusters:
@@ -528,8 +510,7 @@ tests:
       desc: Execute M buckets with N objects on primary and verify on secondary & archive cluster
       polarion-id: CEPH-83575575
       module: sanity_rgw_multisite.py
-      name: m buckets with n objects
-      comments: bug-2213138, workaround test, should pass, workaround fail [bz-2262400]
+      name: m buckets with n objects on primary and verify on secondary & archive cluster
   - test:
       clusters:
         ceph-sec:
@@ -541,7 +522,6 @@ tests:
             timeout: 300
       desc: test M buckets multipart uploads on haproxy node
       module: sanity_rgw_multisite.py
-      comments: workaround sync fail [bz-2262400]
       name: test M buckets multipart uploads on haproxy node
       polarion-id: CEPH-83575433
   - test:
@@ -569,7 +549,6 @@ tests:
       polarion-id: CEPH-83575917
       module: sanity_rgw_multisite.py
       name: Upload 5000 objects via s3cmd to test full sync at archive
-      comments: Known issue in 7.1, Bug 2262400
 
   - test:
       clusters:
@@ -598,7 +577,6 @@ tests:
       polarion-id: CEPH-83575576
       module: sanity_rgw_multisite.py
       name: bucket policies retained at archive site
-      comments: bug-1937618, Inditex.
   - test:
       clusters:
         ceph-pri:
@@ -674,7 +652,6 @@ tests:
       polarion-id: CEPH-83575711
       module: sanity_rgw_multisite.py
       name: test server_side_copy_object_via_encryption
-      comments: product fails in 7.1 bug-2149450
 
   - test:
       clusters:

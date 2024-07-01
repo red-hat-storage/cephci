@@ -16,6 +16,7 @@ globals:
             - mgr
             - rgw
             - osd
+            - nfs
           root_password: passwd
           volumes:
             - /dev/sda
@@ -40,6 +41,7 @@ globals:
             - mon
             - osd
             - _admin
+            - nfs
           root_password: passwd
           volumes:
             - /dev/sda
@@ -62,7 +64,9 @@ globals:
             - mds
             - mon
             - mgr
+            - osd
             - osd-bak
+            - nfs
           root_password: passwd
           volumes:
             - /dev/sda
@@ -88,6 +92,7 @@ globals:
             - alertmanager
             - grafana
             - prometheus
+            - nfs
           root_password: passwd
           volumes:
             - /dev/sda

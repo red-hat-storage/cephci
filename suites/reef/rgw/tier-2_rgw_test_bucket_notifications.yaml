@@ -92,7 +92,6 @@ tests:
       name: notify put,delete events with kafka_none_persistent and delete kafka topic
       desc: notify put,delete events with kafka_none_persistent and delete kafka topic
       module: sanity_rgw.py
-      comments: Known issue BZ-2239173
       polarion-id: CEPH-83574076
       config:
         run-on-rgw: true
@@ -163,7 +162,6 @@ tests:
       name: notify put,delete events with kafka_broker
       desc: notify put,delete events with kafka_broker
       module: sanity_rgw.py
-      comments: Known issue BZ-2239173
       polarion-id: CEPH-83574073
       config:
         run-on-rgw: true
@@ -219,7 +217,6 @@ tests:
       name: put empty bucket notifications
       desc: put empty bucket notifications
       module: sanity_rgw.py
-      comments: Known issue BZ-2239173
       polarion-id: CEPH-83575036
       config:
         run-on-rgw: true

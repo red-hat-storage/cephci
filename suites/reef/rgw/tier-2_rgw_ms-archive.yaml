@@ -261,7 +261,6 @@ tests:
       desc: Test bucket granular sync policy with symmetrical flow having archive zone
       polarion-id: CEPH-83575879
       module: sanity_rgw_multisite.py
-      comments: known issue (bz-2213138)
       clusters:
         ceph-pri:
           config:
@@ -331,7 +330,6 @@ tests:
       polarion-id: CEPH-83575468
       module: sanity_rgw_multisite.py
       name: test no bilogs are generated at archive zone
-      comments: bug-2169298
 
 # configuring vault agent on all the sites
 
@@ -432,7 +430,6 @@ tests:
       polarion-id: CEPH-83573390
       module: sanity_rgw_multisite.py
       name: test multipart+encrypt object access at the archive site
-      comments: product bug duplicates in archive zone, bz-2213138
   - test:
       clusters:
         ceph-pri:
@@ -456,7 +453,6 @@ tests:
       polarion-id: CEPH-83575919
       module: sanity_rgw_multisite.py
       name: Test LC on archive for newer-noncurrent versions
-      comments: new in 7.1, fails since code yet not present
 
   - test:
       clusters:

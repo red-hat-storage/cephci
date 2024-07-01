@@ -7,7 +7,7 @@
             "LIST_POOL": "/api/pool",
             "CREATE_IMAGE": "/api/block/image",
             "GET_IMAGE": "/api/block/image/{image_spec}",
-            "LIST_IMAGE": "/api/block/image",
+            "LIST_IMAGE": "/api/block/image"
         },
         "nvmeof": {
             "GATEWAY_INFO": "/api/nvmeof/gateway",
@@ -21,7 +21,7 @@
             "CREATE_SUBSYSTEM_LISTENER": "/api/nvmeof/subsystem/{nqn}/host/listener",
             "LIST_NAMESPACES_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace",
             "CREATE_NAMESPACE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace",
-            "GET_INFO_NAMESPACE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace/{nsid}",
-        },
+            "GET_INFO_NAMESPACE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace/{nsid}"
+        }
     }
 }

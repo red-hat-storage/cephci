@@ -6,10 +6,11 @@ import json
 import time
 from concurrent.futures import ThreadPoolExecutor
 
+from ceph.ceph import CommandFailed
 from ceph.ceph_admin.daemon import Daemon
 from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
-from ceph.utils import get_node_by_id
+from ceph.utils import get_node_by_id, get_openstack_driver
 from ceph.waiter import WaitUntil
 from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
@@ -49,6 +50,7 @@ class HighAvailability:
         self.fail_ops = {
             "systemctl": self.system_control,
             "daemon": self.ceph_daemon,
+            "power_on_off": self.power_on_off,
         }
 
     def check_gateway(self, node_id):
@@ -282,6 +284,65 @@ class HighAvailability:
 
         return False
 
+    def is_node_active(self, driver, node):
+        """Return true if the given node is powered on and false if powered off"""
+        op = driver.ex_get_node_details(node)
+        if op.state == "running":
+            return True
+        elif op.state == "stopped":
+            return False
+
+    def power_on_off(self, gateway, action, wait_for_active_state=None):
+        """Power on and off nvme daemon nodes.
+
+        Args:
+            gateway: NVMe gateway object.
+            action: "stop" | "start"
+            wait_for_active_state: wait for the active using bool value.
+
+        - wait_for_active_state:
+            True: wait for the node to power on.
+            False: wait for the node to power off.
+            None: do not wait, return
+
+        Returns:
+            Boolean
+        """
+        osp_cred = self.config.get("osp_cred")
+        driver = get_openstack_driver(osp_cred)
+        ops = {
+            "start": driver.ex_start_node,
+            "stop": driver.ex_stop_node,
+            "is-active": self.is_node_active,
+        }
+        nodename = gateway.node.hostname.lower()
+
+        driver_node = next(
+            (node for node in driver.list_nodes() if node.name.lower() == nodename),
+            None,
+        )
+
+        op = ops[action]
+        op(driver_node)
+
+        if wait_for_active_state is None:
+            return
+
+        is_active = ops["is-active"]
+        for w in WaitUntil(timeout=300):
+            _active = is_active(driver, driver_node)
+            if _active == wait_for_active_state:
+                LOG.info(f"[ {nodename} ] {action} is successfull.")
+                return True
+            LOG.warning(
+                f"[ {nodename} ] {action} is still not successfull. check again"
+            )
+
+        if w.expired:
+            LOG.error(f"[ {nodename} ] {action} failed even after 300s timeout..")
+
+        return False
+
     def failover(self, gateway, fail_tool):
         """HA Failover on the NVMeoF Gateways.
 
@@ -478,7 +539,7 @@ class HighAvailability:
         )
         return namespaces
 
-    @retry(IOError, tries=3, delay=1)
+    @retry((IOError, TimeoutError, CommandFailed), tries=3, delay=1)
     def validate_io(self, namespaces):
         """Validate Continuous IO on namespaces.
 
@@ -494,7 +555,9 @@ class HighAvailability:
             count = 3
             samples = []
             for _ in range(count):
-                out, _ = self.orch.shell(args=[f"rbd --format json du {pool}/{image}"])
+                out, _ = self.orch.shell(
+                    args=[f"rbd --format json du {pool}/{image}"], timeout=600
+                )
                 out = json.loads(out)["images"][0]
                 samples.append(out)
                 time.sleep(3)
@@ -541,46 +604,51 @@ class HighAvailability:
             # Check for targets at clients
             self.compare_client_namespace([i["uuid"] for i in namespaces])
 
+            repeat_ha_count = self.config.get("repeat_ha_count", 1)
             # Start IO Execution
             for initiator in self.clients:
                 io_tasks.append(executor.submit(initiator.start_fio))
             time.sleep(20)  # time sleep for IO to Kick-in
 
             # Failover and Failback
-            for fail_method in fail_methods:
-                fail_tool = fail_method["tool"]
-                nodes = fail_method["nodes"]
-                if not isinstance(nodes, list):
-                    nodes = [nodes]
+            for i in range(0, repeat_ha_count):
+                LOG.info(f"Failover and failback execution for iteration number {i}")
+                for fail_method in fail_methods:
+                    fail_tool = fail_method["tool"]
+                    nodes = fail_method["nodes"]
+                    if not isinstance(nodes, list):
+                        nodes = [nodes]
 
-                LOG.info(
-                    f"Failover and Failback execution on {nodes} using {fail_tool}"
-                )
-                log_json_dump(fail_method)
+                    LOG.info(
+                        f"Failover and Failback execution on {nodes} using {fail_tool}"
+                    )
+                    log_json_dump(fail_method)
 
-                fail_gws, operational_gws = self.catogorize(nodes)
-                fail_gw_ana_ids = [gw.ana_group_id for gw in fail_gws]
-                gateway = operational_gws[0]
+                    fail_gws, operational_gws = self.catogorize(nodes)
+                    fail_gw_ana_ids = [gw.ana_group_id for gw in fail_gws]
+                    gateway = operational_gws[0]
 
-                # Primary check - validate IO continuation
-                namespaces = self.fetch_namespaces(gateway, fail_gw_ana_ids)
-                self.validate_io(namespaces)
-
-                # Fail Over
-                with parallel() as p:
-                    for gw in fail_gws:
-                        p.spawn(self.failover, gw, fail_tool)
-                    for result in p:
-                        LOG.info(log_json_dump(result))
+                    # Primary check - validate IO continuation
+                    namespaces = self.fetch_namespaces(gateway, fail_gw_ana_ids)
                     self.validate_io(namespaces)
 
-                # Fail Back
-                with parallel() as p:
-                    for gw in fail_gws:
-                        p.spawn(self.failback, gw, fail_tool)
-                    for result in p:
-                        LOG.info(log_json_dump(result))
-                    self.validate_io(namespaces)
+                    # Fail Over
+                    with parallel() as p:
+                        for gw in fail_gws:
+                            p.spawn(self.failover, gw, fail_tool)
+                        for result in p:
+                            LOG.info(log_json_dump(result))
+                        self.validate_io(namespaces)
+
+                    # Fail Back
+                    with parallel() as p:
+                        for gw in fail_gws:
+                            p.spawn(self.failback, gw, fail_tool)
+                        for result in p:
+                            LOG.info(log_json_dump(result))
+                        self.validate_io(namespaces)
+
+                    time.sleep(20)
 
         except BaseException as err:  # noqa
             raise Exception(err)

@@ -27,7 +27,11 @@ class NVMeInitiator(Initiator):
         )
         out = json.loads(out)["blockdevices"]
         uuids = sorted(
-            [i["wwn"].removeprefix("uuid.") for i in out if i["wwn"] is not None]
+            [
+                i["wwn"].removeprefix("uuid.")
+                for i in out
+                if i.get("wwn", "").startswith("uuid.")
+            ]
         )
         LOG.debug(f"[ {self.node.hostname} ] LSBLK UUIds : {log_json_dump(out)}")
         return uuids

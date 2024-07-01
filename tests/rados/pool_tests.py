@@ -770,17 +770,20 @@ def run(ceph_cluster, **kw):
 
                 # Scenario 4: Generate POOL_TOO_MANY_PGS
                 POOL_TOO_MANY_PGS = False
-                values = [128, 256, 512, 1024]
+                values = [256, 512, 1024]
                 pool_val = rados_obj.get_pg_autoscale_status(
                     pool_name=pool["pool_name"]
                 )
-                value = 64
+                value = 128
                 for val in values:
                     if value <= pool_val["pg_num_final"]:
                         value = val
                 log.debug(f"PG count selected to trigger too many pgs is : {value}")
                 rados_obj.set_pool_property(
                     pool=pool["pool_name"], props="pg_num", value=value
+                )
+                rados_obj.set_pool_property(
+                    pool=pool["pool_name"], props="pgp_num", value=value
                 )
                 end_time = datetime.datetime.now() + datetime.timedelta(seconds=1200)
                 while end_time > datetime.datetime.now():
@@ -805,6 +808,9 @@ def run(ceph_cluster, **kw):
                 POOL_PG_NUM_NOT_POWER_OF_TWO = False
                 rados_obj.set_pool_property(
                     pool=pool["pool_name"], props="pg_num", value=5
+                )
+                rados_obj.set_pool_property(
+                    pool=pool["pool_name"], props="pgp_num", value=5
                 )
                 end_time = datetime.datetime.now() + datetime.timedelta(seconds=1200)
                 while end_time > datetime.datetime.now():
@@ -956,6 +962,7 @@ def run(ceph_cluster, **kw):
             rados_obj.log_cluster_health()
         return 0
 
+    # tbd : fix the test case
     if config.get("Verify_degraded_pool_min_size_behaviour"):
         log.info(
             "Test to verify that degraded Pools are not able to serve clients below min_size"
@@ -971,7 +978,12 @@ def run(ceph_cluster, **kw):
             try:
                 method_should_succeed(rados_obj.create_pool, **entry)
                 # Write IO to pool
-                rados_obj.bench_write(pool_name=pool_name)
+                rados_obj.bench_write(
+                    pool_name=pool_name,
+                    rados_write_duration=50,
+                    max_objs=500,
+                    verify_stats=False,
+                )
 
                 log.info("Getting a sample PG from the pool")
                 pool_id = pool_obj.get_pool_id(pool_name=pool_name)
@@ -1129,6 +1141,114 @@ def run(ceph_cluster, **kw):
                 rados_obj.delete_pool(pool=pool_name)
                 # log cluster health
                 rados_obj.log_cluster_health()
+        return 0
+
+    if config.get("Verify_osd_in_out_behaviour"):
+        log.info(
+            "Test to verify the behaviour of the OSD when it is marked out and back in to the cluster"
+        )
+        try:
+            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
+            osd_list = []
+            for entry in osd_tree["nodes"]:
+                if entry["id"] > 0:
+                    osd_list.append(entry["id"])
+            selected_osd = random.choice(osd_list)
+
+            log.info(
+                f"OSDs on the cluster : {osd_list}\n Selected OSD for testing : {selected_osd}"
+            )
+            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
+            for entry in osd_tree["nodes"]:
+                if entry["id"] == selected_osd:
+                    log.info(f"Selected OSD details before marking out : {entry}")
+                    selected_osd_details_init = entry
+                    break
+
+            # Making the OSD out of the cluster
+            if not rados_obj.update_osd_state_on_cluster(
+                osd_id=selected_osd, state="out"
+            ):
+                log.error(f"OSD.{selected_osd} not marked out error")
+                raise Exception("OSD not marked out error")
+            log.info(f"OSD: {selected_osd} marked out successfully. ")
+
+            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
+            for entry in osd_tree["nodes"]:
+                if entry["id"] == selected_osd:
+                    log.info(f"Selected OSD details After marking out : {entry}")
+                    selected_osd_details_post = entry
+                    break
+
+            if (
+                selected_osd_details_post["crush_weight"]
+                != selected_osd_details_init["crush_weight"]
+            ):
+                log.error(
+                    f"Crush weight modified post marking the OSD.{selected_osd} out."
+                    f"Before : {selected_osd_details_init['crush_weight']} "
+                    f"After : {selected_osd_details_post['crush_weight']}"
+                )
+                raise Exception("OSD Crush weights modified error")
+
+            if selected_osd_details_post["reweight"] != 0:
+                log.error(
+                    f"reweight not modified post marking the OSD.{selected_osd} out."
+                    f"Before : {selected_osd_details_init['reweight']} "
+                    f"After : {selected_osd_details_post['reweight']}"
+                )
+                raise Exception("OSD reweights not modified error")
+
+            # Making the OSD in of the cluster
+            if not rados_obj.update_osd_state_on_cluster(
+                osd_id=selected_osd, state="in"
+            ):
+                log.error(f"OSD.{selected_osd} not marked in the cluster")
+                raise Exception("OSD not marked in error")
+
+            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
+            for entry in osd_tree["nodes"]:
+                if entry["id"] == selected_osd:
+                    log.info(f"Selected OSD details After marking IN : {entry}")
+                    selected_osd_details_last = entry
+                    break
+
+            if (
+                selected_osd_details_last["crush_weight"]
+                != selected_osd_details_init["crush_weight"]
+            ):
+                log.error(
+                    f"Crush weight modified post marking the OSD.{selected_osd} IN."
+                    f"Before : {selected_osd_details_init['crush_weight']} "
+                    f"After : {selected_osd_details_post['crush_weight']}"
+                )
+                raise Exception("OSD Crush weights modified error")
+
+            if (
+                selected_osd_details_last["reweight"]
+                != selected_osd_details_init["reweight"]
+            ):
+                log.error(
+                    f"reweight modified post marking the OSD.{selected_osd} IN."
+                    f"Before : {selected_osd_details_init['reweight']} "
+                    f"After : {selected_osd_details_last['reweight']}"
+                )
+                raise Exception("OSD reweights modified error")
+
+            log.info(
+                "Tested the behaviour of OSD upon marking it in and out of the cluster"
+            )
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+            rados_obj.update_osd_state_on_cluster(osd_id=selected_osd, state="in")
+            # log cluster health
+            rados_obj.log_cluster_health()
         return 0
 
 

@@ -138,6 +138,7 @@ def run(ceph_cluster, **kw):
                 time.sleep(10)
 
         leader_mon_daemon = rados_obj.run_ceph_command(cmd="ceph mon stat")["leader"]
+        end_time, _ = mon_host.exec_command(cmd="date '+%Y-%m-%d %H:%M:%S'", sudo=True)
         mon_logs = rados_obj.get_journalctl_log(
             start_time=init_time,
             end_time=end_time,

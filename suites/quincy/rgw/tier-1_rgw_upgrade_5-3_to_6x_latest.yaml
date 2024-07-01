@@ -224,6 +224,16 @@ tests:
           - "ceph versions"
 
 # Post upgrade tests
+
+  - test:
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_sse_kms_per_bucket_multipart_object_download_after_transition.yaml
+        timeout: 300
+      desc: test_sse_kms_per_bucket_multipart_object_download_after_transition
+      module: sanity_rgw.py
+      name: test_sse_kms_per_bucket_multipart_object_download_after_transition
+      polarion-id: CEPH-83586489
   - test:
       config:
         script-name: test_Mbuckets_with_Nobjects.py

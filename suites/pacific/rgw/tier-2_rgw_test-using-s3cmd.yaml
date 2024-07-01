@@ -220,3 +220,13 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_disable_and_enable_dynamic_resharding_with_1k_bucket.yaml
         timeout: 300
+
+  - test:
+      name: Test non-current deletion via s3cmd
+      desc: Test non-current deletion via s3cmd
+      polarion-id: CEPH-83573543
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_lifecycle_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_lc_expiration_noncurrent_when_current_object_deleted_via_s3cmd.yaml
+        timeout: 300

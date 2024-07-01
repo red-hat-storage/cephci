@@ -2,6 +2,7 @@
 Module to test Reads balancer functionality on RHCS 7.0 and above clusters
 
 """
+import datetime
 import re
 import time
 
@@ -27,6 +28,7 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
     osdtool_obj = OsdToolWorkflows(node=cephadm)
+    rhbuild = config.get("rhbuild")
     client_node = ceph_cluster.get_nodes(role="client")[0]
 
     regex = r"\s*(\d.\d)-rhel-\d"
@@ -104,6 +106,42 @@ def run(ceph_cluster, **kw):
                 )
             log.info("Completed verification of balance scores for all the pools")
 
+        # Trying to change the primary without setting the set-require-min-compat-client to reef. -ve test
+        log.info(
+            "Trying to change the primary without setting the set-require-min-compat-client to reef. -ve test"
+        )
+        test_pool = existing_pools[0]
+        # Getting a sample PG from the pool
+        pool_id = pool_obj.get_pool_id(pool_name=test_pool)
+        pgid = f"{pool_id}.0"
+        acting_set = rados_obj.get_pg_acting_set(pg_num=pgid)
+
+        log.debug(f"Acting set for PG-id {pgid} in pool {test_pool} is {acting_set}")
+
+        new_osd = acting_set[1]
+        change_cmd = f"ceph osd pg-upmap-primary {pgid} {new_osd}"
+        """
+        Error String seen on the cluster:
+        Error EPERM: min_compat_client luminous < reef, which is required for pg-upmap-primary.
+        Try 'ceph osd set-require-min-compat-client reef' before using the new interface
+        """
+        error_str = r"Error EPERM: min_compat_client \w+ < reef, which is required for pg-upmap-primary."
+
+        try:
+            out, err = client_node.exec_command(sudo=True, cmd=change_cmd)
+        except Exception as e:
+            error_message = str(e).strip()
+            if not re.search(error_str, error_message):
+                log.error(
+                    "Correct error string not seen in stderr stream"
+                    f"Expected : {error_str} \n Got : {e}"
+                )
+                raise Exception("Wrong error string obtained")
+            log.debug(
+                "Could not change the primary before setting the set-require-min-compat-client to reef. Pass"
+            )
+            log.error(f"An error occurred but was expected: {e}")
+
         log.debug(
             "Setting config to allow clients to perform read balancing on the clusters."
         )
@@ -134,6 +172,9 @@ def run(ceph_cluster, **kw):
                     )
 
                     # Trying to change the primary with existing primary. -ve test
+                    log.info(
+                        "rying to change the primary with existing primary. -ve test"
+                    )
                     new_osd = acting_set[0]
                     change_cmd = f"ceph osd pg-upmap-primary {pgid} {new_osd}"
                     error_str = (
@@ -155,6 +196,9 @@ def run(ceph_cluster, **kw):
                         log.error(f"An error occurred but was expected: {e}")
 
                     # Trying to set a non-existant OSD as for the PG primary. -ve test
+                    log.info(
+                        "Trying to set a non-existant OSD as for the PG primary. -ve test"
+                    )
                     new_osd = 250
                     change_cmd = f"ceph osd pg-upmap-primary {pgid} {new_osd}"
                     error_str = f"Error ENOENT: osd.{new_osd} does not exist"
@@ -173,6 +217,9 @@ def run(ceph_cluster, **kw):
                         )
 
                     # Trying to set a OSD which is not present in the acting set. -ve test
+                    log.info(
+                        " Trying to set a OSD which is not present in the acting set. -ve test"
+                    )
                     osd_list = []
                     for node in ceph_cluster:
                         if node.role == "osd":
@@ -203,6 +250,9 @@ def run(ceph_cluster, **kw):
                         )
 
                     # Trying to change the primary with secondary. Should be possible
+                    log.info(
+                        " Trying to change the primary with secondary. Should be possible"
+                    )
                     pgid = f"{pool_id}.0"
                     acting_set = rados_obj.get_pg_acting_set(pg_num=pgid)
                     new_osd = acting_set[1]
@@ -232,6 +282,9 @@ def run(ceph_cluster, **kw):
 
                     time.sleep(5)
                     # Checking if it is possible to revert the changes made previously via "pg-upmap-primary"
+                    log.info(
+                        "Checking if it is possible to revert the changes made previously via pg-upmap-primary"
+                    )
                     rm_cmd = f"ceph osd rm-pg-upmap-primary {pgid}"
                     out, err = client_node.exec_command(sudo=True, cmd=rm_cmd)
                     # Checking the change in the new acting set
@@ -267,6 +320,9 @@ def run(ceph_cluster, **kw):
                     )
 
                     # Trying to change Primary PG for a EC pool. should not be possible. -ve test
+                    log.info(
+                        "Trying to change Primary PG for a EC pool. should not be possible. -ve test"
+                    )
                     new_osd = acting_set[1]
                     change_cmd = f"ceph osd pg-upmap-primary {pgid} {new_osd}"
                     error_str = "Error EINVAL: pg-upmap-primary is only supported for replicated pools"
@@ -356,9 +412,68 @@ def run(ceph_cluster, **kw):
                         "incomplete",
                         "undersized",
                     ]
-                    clean_pgs = rados_obj.check_pool_pg_states(
-                        pool=pool_name, disallowed_states=disallowed_states
+                    wait_time = 2400
+                    start_time = datetime.datetime.now()
+                    clean_pgs = False
+                    while datetime.datetime.now() <= start_time + datetime.timedelta(
+                        seconds=wait_time
+                    ):
+                        if rados_obj.check_pool_pg_states(
+                            pool=pool_name, disallowed_states=disallowed_states
+                        ):
+                            log.info(f"PGs on pool : {pool_name} in clean state. ")
+                            clean_pgs = True
+                            break
+                        log.debug(
+                            f"Pool {pool_name} PGs not in active + clean state yet. sleeping for 20 seconds"
+                        )
+                        time.sleep(20)
+
+                    if not clean_pgs:
+                        log.error(f"{pool_name} could not reach clean state. Failure")
+                        raise Exception("PGs not clean error")
+
+                    log.info(
+                        "Checking if any read recommendations are invalid, "
+                        "i.e suggestions for already existing primary"
                     )
+                    try:
+                        valid_change = True
+                        out, error = client_node.exec_command(
+                            sudo=True, cmd=f"cat {read_file_loc}"
+                        )
+                        log.debug(f"Read file generated : {out}")
+                        regx = r"ceph\sosd\spg-upmap-primary\s(\w*\.\w*)\s(\d*)"
+                        items = re.findall(regx, out)
+                        if items:
+                            for item in items:
+                                pg_set = rados_obj.get_pg_acting_set(pg_num=item[0])
+                                log.debug(
+                                    f"Read suggestion on PG:{item[0]} - New Suggested primary {item[1]} "
+                                    f"Existing primary : {pg_set[0]}"
+                                )
+
+                                if pg_set[0] == item[1]:
+                                    log.error(
+                                        f"Suggested change is not valid"
+                                        f"PG:{item[0]} - New Suggested primary {item[1]} "
+                                        f"Existing primary : {pg_set[0]}"
+                                    )
+                                    valid_change = False
+                        if not valid_change:
+                            log.error("Changes suggested which are invalid.")
+                            if float(rhbuild.split("-")[0]) >= 7.1:
+                                log.error(
+                                    "Still hitting the bug :  https://bugzilla.redhat.com/show_bug.cgi?id=2237574"
+                                    "which was fixed in 7.1."
+                                )
+                                raise Exception("Invalid recommendations given")
+
+                    except Exception as err:
+                        log.error(
+                            "Could not read the read suggestions from the cluster"
+                            f"Proceeding further. Error hit : {err}"
+                        )
 
                     # Executing the read results on the cluster.
                     try:
@@ -374,7 +489,12 @@ def run(ceph_cluster, **kw):
                             " https://bugzilla.redhat.com/show_bug.cgi?id=2237574."
                             " The below exception to be uncommented post bug fix."
                         )
-                        # raise Exception("read recommendations not set")
+                        if float(rhbuild.split("-")[0]) >= 7.1:
+                            log.error(
+                                "Still hitting the bug :  https://bugzilla.redhat.com/show_bug.cgi?id=2237574"
+                                "which was fixed in 7.1."
+                            )
+                            raise Exception("read recommendations not set")
 
                     log.info(
                         f"Successfully set the read recommendations on the pool : {pool_name}"
@@ -459,8 +579,10 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("\n\n\nIn the finally block of reads balancer tests\n\n\n")
+        rados_obj.configure_pg_autoscaler(default_mode="on")
         if config.get("delete_pools"):
             for pool_name in config.get("delete_pools"):
                 rados_obj.delete_pool(pool=pool_name)
+        time.sleep(60)
         # log cluster health
         rados_obj.log_cluster_health()

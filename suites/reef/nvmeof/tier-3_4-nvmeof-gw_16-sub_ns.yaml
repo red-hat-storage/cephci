@@ -142,11 +142,11 @@ tests:
               command: add
               args:
                 subsystems: 16
-        desc: Configure 4 NVMeOF Gateways with 16 subsystems
-        destroy-cluster: false
-        module: test_ceph_nvmeof_gateway_sub_scale.py
-        name: Configure NVMeOF Gateways
-        polarion-id: CEPH-83581625
+      desc: Configure 4 NVMeOF Gateways with 16 subsystems
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: Configure NVMeOF Gateways
+      polarion-id: CEPH-83581625
 
   - test:
       abort-on-fail: false
@@ -236,5 +236,6 @@ tests:
                 - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
       desc: Delete nvmeof and rbd pool from ceph cluster
       destroy-cluster: false
+      do-not-skip-tc: true
       module: test_cephadm.py
       name: Delete NVMeOF pools

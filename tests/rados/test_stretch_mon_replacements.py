@@ -77,7 +77,7 @@ def run(ceph_cluster, **kw):
         mon_nodes = ceph_cluster.get_nodes(role="mon")
         cluster_nodes = ceph_cluster.get_nodes()
 
-        # Checking if the site passed to shut down is present in the Cluster CRUSH
+        # Checking if the site passed for mon replacement is present in the Cluster CRUSH
         if replacement_site in [dc_1_name, dc_2_name]:
             for item in mon_nodes:
                 if item.hostname in dc_1_hosts:

@@ -122,7 +122,7 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "cg_snap_func_workflow_1"
+      desc: "Verify quiesce lifecycle with and without --await"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
       name: "cg_snap_func_workflow_1"
@@ -133,7 +133,7 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "cg_snap_func_workflow_2"
+      desc: "Verify quiesce release with if-version, repeat with exclude and include prior to release"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
       name: "cg_snap_func_workflow_2"
@@ -144,7 +144,7 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "cg_snap_func_workflow_3"
+      desc: "Verify CG quiesce on pre-provisioned quiesce set"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
       name: "cg_snap_func_workflow_3"
@@ -154,7 +154,7 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "cg_snap_func_workflow_4"
+      desc: "Verify restore suceeds from snapshot taken when subvolume was quiesced"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
       name: "cg_snap_func_workflow_4"
@@ -164,7 +164,7 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "cg_snap_func_workflow_5"
+      desc: "Verify quiesce release response when quiesce-timeout and quiesce-expire time is reached"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
       name: "cg_snap_func_workflow_5"
@@ -174,7 +174,7 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "cg_snap_func_workflow_6"
+      desc: "Verify state transitions suceed during quiescing,quiesced and releasing state"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
       name: "cg_snap_func_workflow_6"
@@ -184,10 +184,32 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "cg_snap_interop_workflow_1"
+      desc: "Verify quiesce suceeds with IO from nfs,fuse and kernel mounts"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_interop_workflow_2"
+      polarion-id: CEPH-83591508
+      config:
+       test_name: cg_snap_interop_workflow_2
+  -
+    test:
+      abort-on-fail: false
+      desc: "Verify parallel quiesce calls to same quiesce set members"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_neg_workflow_1"
+      polarion-id: CEPH-83591512
+      config:
+       test_name: cg_snap_neg_workflow_1
+  -
+    test:
+      abort-on-fail: false
+      desc: "Verify quiesce ops in parallel to multi-MDS failover"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
       name: "cg_snap_interop_workflow_1"
       polarion-id: CEPH-83581472
       config:
        test_name: cg_snap_interop_workflow_1
+      comments: product bug bz-2273569
+

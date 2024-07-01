@@ -19,7 +19,9 @@ def verify_multiple_public_network(cls, configured_network):
     public_network, _ = cls.shell(
         args=["ceph", "config", "get", "mon", "public_network"]
     )
-    if configured_network == public_network.rstrip():
+    if sorted(configured_network.split(",")) == sorted(
+        public_network.rstrip().split(",")
+    ):
         return True
     return False
 

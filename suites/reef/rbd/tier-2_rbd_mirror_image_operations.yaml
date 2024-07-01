@@ -374,3 +374,26 @@ tests:
               num_images: 1
               mode: pool
               mirrormode: journal
+
+  - test:
+      desc: Validate the mirror pool status reflects accordingly
+      name: Test to verify changing and Reseting peer client ID
+      module: test_rbd_mirror_peer_id.py
+      polarion-id: CEPH-83590607
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              mode: image
+              mirrormode: snapshot
+              imagesize: 2G
+              io_total: 100M
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              mode: image
+              mirrormode: snapshot
+              imagesize: 2G
+              io_total: 100M

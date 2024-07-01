@@ -12,6 +12,7 @@ import traceback
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 from utility.utils import method_should_succeed
 
@@ -30,6 +31,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
+    method_should_succeed(wait_for_clean_pg_sets, rados_obj)
     pool_target_configs = config["verify_osd_omap_entries"]["configurations"]
     omap_target_configs = config["verify_osd_omap_entries"]["omap_config"]
     test_secondary = config.get("test_secondary", False)
@@ -82,7 +84,7 @@ def run(ceph_cluster, **kw):
 
         pool_name = random.choice(pools)
         obj_list = rados_obj.get_object_list(pool_name)
-        oname = random.choice(obj_list)
+        oname = random.choices(obj_list, k=3)
         snapshot_name = pool_obj.create_pool_snap(pool_name=pool_name)
         if not snapshot_name:
             log.error("Cannot able to create the pool snapshot")
@@ -91,10 +93,15 @@ def run(ceph_cluster, **kw):
 
         # Checking if the inconsistent PG needs to be generated on primary or secondary PGs
         # Create inconsistency objects
-        pg_id = rados_obj.create_inconsistent_obj_snap(
-            pool_name, oname, secondary=test_secondary
-        )
-        if pg_id is None:
+        inconsistent_chk_flag = False
+        for object in oname:
+            pg_id = rados_obj.create_inconsistent_obj_snap(
+                pool_name, object, secondary=test_secondary
+            )
+            if pg_id is not None:
+                inconsistent_chk_flag = True
+                break
+        if inconsistent_chk_flag is False:
             log.error("Cannot able to create the inconsistent PG")
             return 1
         inconsistent_pg_list = rados_obj.get_inconsistent_pg_list(pool_name)
@@ -120,6 +127,7 @@ def run(ceph_cluster, **kw):
             method_should_succeed(rados_obj.delete_pool, pool_name)
             time.sleep(5)
             log.info("deleted the snapshot and pool successfully")
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         # log cluster health
         rados_obj.log_cluster_health()
     return 0

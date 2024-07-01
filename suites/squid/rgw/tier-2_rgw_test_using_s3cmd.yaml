@@ -201,11 +201,20 @@ tests:
         timeout: 300
 
   - test:
+      name: Test Ratelimit Debt
+      desc: Test Ratelimit Debt
+      polarion-id: CEPH-83574918
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_debt.yaml
+        timeout: 300
+
+  - test:
       name: Test ratelimit on bucket owner change
       desc: Test ratelimit on bucket owner change
       polarion-id: CEPH-83574920
       module: sanity_rgw.py
-      comments: known issue BZ2262919
       config:
         script-name: ../s3cmd/test_ratelimit_bucketowner.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_bucketowner.yaml

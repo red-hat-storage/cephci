@@ -323,7 +323,7 @@ tests:
   - test:
       name: Test functionality of user stat reset
       desc: Test functionality of user stat reset
-      comments: Known issue BZ-2167475
+      comments: Known issue BZ-2167475 targeted to 8.0
       polarion-id: CEPH-83575439
       module: sanity_rgw.py
       config:

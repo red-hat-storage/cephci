@@ -160,8 +160,9 @@ tests:
         no_affinity: false
         stretch_rule_name: stretch_rule
         tiebreaker_mon_site_name: arbiter
-        negative_scenarios: True
+        negative_scenarios: False
       desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
+      comments: -ve scenarios bug - 2293147
       abort-on-fail: true
 
 

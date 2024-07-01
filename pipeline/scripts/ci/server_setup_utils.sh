@@ -116,7 +116,8 @@ function set_hostnames_repos {
   local username="${2:-root}"
   local password="${3:-passwd}"
   echo 'Setting the systems to use shortnames'
-  sshpass -p ${password} ssh ${username}@${node} 'sudo hostnamectl set-hostname $(hostname -s)'
+  sshpass -p ${password} ssh ${username}@${node} "sudo hostnamectl set-hostname ${node}"
+  sshpass -p ${password} ssh ${username}@${node} "sudo echo ${node} > /etc/hostname"
   sshpass -p ${password} ssh ${username}@${node} 'sudo sed -i "s/$(hostname)/$(hostname -s)/g" /etc/hosts'
 
   echo 'Cleaning default repo files to avoid conflicts'

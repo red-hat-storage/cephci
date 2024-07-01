@@ -69,3 +69,39 @@ def create_and_verify_subsystem(**kw):
     except Exception as e:
         log.error(f"FAILED verification of subsystem {nqn} failed by GET {str(e)}")
         return 1
+
+
+def add_and_verify_host(**kw):
+    """
+    Add and verfies Host
+    Args:
+        kw: kw args required for Adding  and verifying Host
+    """
+    _rest = kw.pop("rest", None)
+    nvmeof_rest = NVMEoF(rest=_rest)
+
+    # 1. Add a Host
+    nqn = kw.get("nqn")
+    host = kw.get("allow_host")
+    if nqn is None:
+        log.error("nqn is must for Adding Host")
+        return 1
+    try:
+        log.info(f"Adding a Host with nqn {nqn}")
+        _ = nvmeof_rest.add_host(nqn=nqn, host_nqn=host)
+    except Exception as e:
+        log.error(f"Adding a Host with nqn {nqn} failed {str(e)}")
+        return 1
+
+    # 2. verify added host using list GET call
+    log.info("validating host by list host REST")
+    if nqn is None:
+        log.error("nqn is must for Adding Host")
+        return 1
+    try:
+        _ = nvmeof_rest.list_host(subsystem_nqn=nqn)
+        log.info(f"SUCCESS: verification of host {nqn} via GET REST passed")
+        return 0
+    except Exception as e:
+        log.error(f"FAILED verification of host {nqn} failed by GET {str(e)}")
+        return 1

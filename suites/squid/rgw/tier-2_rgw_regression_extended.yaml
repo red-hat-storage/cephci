@@ -85,6 +85,16 @@ tests:
         timeout: 300
 
   - test:
+      name: Test non-current deletion via s3cmd
+      desc: Test non-current deletion via s3cmd
+      polarion-id: CEPH-83573543
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_lifecycle_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_lc_expiration_noncurrent_when_current_object_deleted_via_s3cmd.yaml
+        timeout: 300
+
+  - test:
       name: Bucket Lifecycle expiration of incomplete multipart
       desc: Bucket Lifecycle expiration of incomplete multipart
       polarion-id: CEPH-11195
@@ -100,7 +110,7 @@ tests:
       desc: object lock no overwrite
       polarion-id: CEPH-83574059
       module: sanity_rgw.py
-      comments: known issue (bz-2265890)
+      comments: known issue (bz-2265890) targeted to 8.1
       config:
         script-name: test_object_lock_no_overwrite.py
         config-file-name: test_object_lock_no_overwrite.yaml
@@ -196,11 +206,22 @@ tests:
         timeout: 500
 
   - test:
+      name: Test LDAP auth for RGW
+      desc: Test LDAP auth for RGW
+      polarion-id: CEPH-9793
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_ldap_auth.py
+        config-file-name: ../../aws/configs/test_ldap_auth.yaml
+        timeout: 300
+        run-on-rgw: true
+
+  - test:
       name: Test LC transition with rule by lc process
       desc: Test LC transition with rule by lc process
       polarion-id: CEPH-83574044
       module: sanity_rgw.py
-      comments: known issue (BZ-2269490)
+      comments: known issue (BZ-2269490) targeted to 8.0
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_with_lc_process.yaml
@@ -211,7 +232,6 @@ tests:
       desc: Test LC transition without rule by lc process
       polarion-id: CEPH-83574044
       module: sanity_rgw.py
-      comments: known issue (7.0z2-BZ2272164)
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_process_without_applying_rule.yaml
@@ -220,13 +240,13 @@ tests:
   - test:
       abort-on-fail: false
       config:
-        branch: ceph-reef
+        branch: ceph-squid
       desc: Run the external S3test suites.
       destroy-cluster: false
       module: test_s3.py
       name: execute s3tests
       polarion-id: CEPH-83575225
-      comments: BZ2266411 - anon_put_write_access, BZ2268234 - list_buckets_bad_auth
+      comments: BZ2268234 - list_buckets_bad_auth targeted to 8.0
 
   - test:
       abort-on-fail: false

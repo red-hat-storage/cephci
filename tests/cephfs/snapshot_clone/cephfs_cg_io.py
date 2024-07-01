@@ -35,7 +35,13 @@ class CG_snap_IO(object):
         self.fs_util = FsUtils(ceph_cluster)
 
     def start_cg_io(
-        self, clients, qs_members, client_mnt_dict, cg_test_io_status, io_run_time
+        self,
+        clients,
+        qs_members,
+        client_mnt_dict,
+        cg_test_io_status,
+        io_run_time,
+        ephemeral_pin,
     ):
         """
         Start IO on quiesce-set members and validate IO progress based on quiesce state
@@ -83,6 +89,7 @@ class CG_snap_IO(object):
                 cg_write_io_status,
                 write_client,
                 int(io_run_time),
+                ephemeral_pin,
                 qs_members,
                 qs_member_dict1,
             ),
@@ -194,7 +201,13 @@ class CG_snap_IO(object):
         return 0
 
     def cg_write_io(
-        self, cg_write_io_status, client, io_run_time, qs_members, qs_member_dict
+        self,
+        cg_write_io_status,
+        client,
+        io_run_time,
+        ephemeral_pin,
+        qs_members,
+        qs_member_dict,
     ):
         """
         This is called by cg_start_io using Thread to run WRITE IO on quiesce set members
@@ -227,13 +240,20 @@ class CG_snap_IO(object):
         while datetime.datetime.now() < end_time:
             for qs_member in qs_member_dict:
                 qs_mnt_pt = qs_member_dict[qs_member]["mount_point"]
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"setfattr -n ceph.dir.pin.random -v 0.75 {qs_mnt_pt}",
-                    timeout=15,
-                )
+
+                if ephemeral_pin == 1:
+                    try:
+                        client.exec_command(
+                            sudo=True,
+                            cmd=f"setfattr -n ceph.dir.pin.random -v 0.75 {qs_mnt_pt}",
+                            timeout=15,
+                        )
+                    except Exception as ex:
+                        log.info(ex)
+
                 write_proc_check_status = Value("i", 0)
                 proc_status_list.append(write_proc_check_status)
+                log.info(f"Starting cg_write_io_subvol for {qs_mnt_pt}")
                 p = Thread(
                     target=self.cg_write_io_subvol,
                     args=(
@@ -511,7 +531,7 @@ class CG_snap_IO(object):
                         age_ref = qs_query["sets"][qs_id]["age_ref"]
                         curr_time = time.time()
                         # Get time when state is achieved, add buffer 1secs
-                        time_before_state = (float(curr_time) - float(age_ref)) + 5
+                        time_before_state = (float(curr_time) - float(age_ref)) + 10
                         for member_item in qs_query["sets"][qs_id]["members"]:
                             if qs_member in member_item:
                                 excluded = qs_query["sets"][qs_id]["members"][
@@ -521,9 +541,30 @@ class CG_snap_IO(object):
                                     "state"
                                 ]["age"]
                                 break
-                        if excluded is True:
+
+                        if state in "RELEASED|EXPIRED|TIMEDOUT|CANCELED":
+                            log.info(
+                                f"time_before_state:{time_before_state},end_time:{end_time}"
+                            )
+                            log.info(f"age_ref:{age_ref},curr_time:{curr_time}")
+                            if float(time_before_state) > float(end_time):
+                                log.info(
+                                    f"WARN: {io_mod} {io_type} fails in QS state {state} on {qs_member}"
+                                )
+                                time_diff = int(
+                                    float(time_before_state) - float(end_time)
+                                )
+                                log.info(
+                                    f"{state} is achieved in {time_diff}secs after end_time,could be false positive"
+                                )
+                            else:
+                                log.error(
+                                    f"FAIL: {io_mod} {io_type} fails if {state} on {qs_member} - age_ref:{age_ref}secs"
+                                )
+                                cg_status = 1
+                        elif excluded is True:
                             # Get time when state is achieved, add buffer 1secs
-                            time_before_state = (float(curr_time) - float(age)) + 5
+                            time_before_state = (float(curr_time) - float(age)) + 10
                             log.info(
                                 f"time_before_state:{time_before_state},end_time:{end_time}"
                             )
@@ -541,28 +582,6 @@ class CG_snap_IO(object):
                             else:
                                 log.error(
                                     f"FAIL: {io_mod} {io_type} fails in {state} on {qs_member}, excluded-{excluded}"
-                                )
-                                cg_status = 1
-                        elif state in "RELEASED|EXPIRED|TIMEDOUT|CANCELED":
-                            log.info(
-                                f"time_before_state:{time_before_state},end_time:{end_time}"
-                            )
-                            log.info(f"age_ref:{age_ref},curr_time:{curr_time}")
-                            if state == "RELEASED" and (
-                                float(time_before_state) > float(end_time)
-                            ):
-                                log.info(
-                                    f"WARN: {io_mod} {io_type} fails in QS state {state} on {qs_member}"
-                                )
-                                time_diff = int(
-                                    float(time_before_state) - float(end_time)
-                                )
-                                log.info(
-                                    f"{state} is achieved in {time_diff}secs after end_time,could be false positive"
-                                )
-                            else:
-                                log.error(
-                                    f"FAIL: {io_mod} {io_type} fails when {state}  on {qs_member} - age:{age_ref}secs"
                                 )
                                 cg_status = 1
                         else:
@@ -728,14 +747,19 @@ class CG_snap_IO(object):
 
             end_time = time.time()
             log.info(
-                f"dd_io {io_type} {cmd} passed on {file_path} with end_time {end_time}: {out}"
+                f"dd_io {io_type} {cmd} passed on {file_path},end_time - {end_time}: {out}"
             )
             return (0, end_time)
         except Exception as ex:
             end_time = time.time()
-            log.info(
-                f"dd_io {io_type} {cmd} failed on {file_path} with end_time {end_time}:{ex}"
-            )
+            if ex == "":
+                log.error(
+                    f"dd_io read timedout after 20secs on {file_path},end_time - {end_time}"
+                )
+            else:
+                log.error(
+                    f"dd_io read returns error on {file_path},end_time - {end_time}: {ex}"
+                )
             return (1, end_time)
 
     def cg_smallfile_io_read(self, client, mnt_pt):
@@ -779,6 +803,7 @@ class CG_snap_IO(object):
         )
         i = 0
         retry_cnt = 2
+        ex = ""
         while i < retry_cnt:
             try:
                 out_tmp, _ = client.exec_command(
@@ -808,19 +833,29 @@ class CG_snap_IO(object):
                 if exp_str in ex:
                     end_time = time.time()
                     log.info(
-                        f"smallfile_io_read passed on {smallfile_dir} with end_time {end_time}"
+                        f"smallfile_io read passed on {smallfile_dir},end_time - {end_time}"
                     )
                     return (0, end_time)
+                elif ex == "":
+                    log.info(
+                        f"smallfile_io read timedout after 30secs on {smallfile_dir} in Iter{i}"
+                    )
+                    i += 1
                 else:
                     log.info(
-                        f"smallfile_io_read failed on {smallfile_dir} in Iter{i}:{ex}"
+                        f"smallfile_io read returns error on {smallfile_dir} in Iter{i} : {ex}"
                     )
                     i += 1
 
         end_time = time.time()
-        log.info(
-            f"smallfile_io_read failed on {smallfile_dir} with end_time {end_time}"
-        )
+        if ex == "":
+            log.error(
+                f"smallfile_io read timedout after 30secs on {smallfile_dir},end_time - {end_time}"
+            )
+        else:
+            log.error(
+                f"smallfile_io read returns error on {smallfile_dir},end_time - {end_time}: {ex}"
+            )
         return (1, end_time)
 
     def cg_smallfile_io_write(self, client, mnt_pt):
@@ -867,15 +902,18 @@ class CG_snap_IO(object):
                 )
                 log.info(f"smallfile write output for {i} on {dir_path}:{out_list}")
             end_time = time.time()
-            log.info(
-                f"smallfile_io_write passed on {dir_path} with end_time {end_time}"
-            )
+            log.info(f"smallfile_io_write passed on {dir_path},end_time - {end_time}")
             return (0, end_time)
         except Exception as ex:
             end_time = time.time()
-            log.info(
-                f"smallfile_io_write failed on {dir_path} with end_time {end_time}:{ex}"
-            )
+            if ex == "":
+                log.error(
+                    f"smallfile_io_write timedout after 20secs on {dir_path},end_time - {end_time}"
+                )
+            else:
+                log.error(
+                    f"smallfile_io_write returns error on {dir_path},end_time - {end_time}: {ex}"
+                )
             return (1, end_time)
 
     def cg_fio_io_read(self, client, mnt_pt):
@@ -915,6 +953,7 @@ class CG_snap_IO(object):
         fio_file = random.choice(fio_files)
         retry_cnt = 2
         i = 0
+        ex = ""
         while i < retry_cnt:
             try:
                 log.info(f"fio read on {mnt_pt}, Iteration {i}")
@@ -931,11 +970,25 @@ class CG_snap_IO(object):
                 return (0, end_time)
 
             except Exception as ex:
-                log.info(f"fio_io read failed on {fio_file} in Iter{i}: {ex} ")
+                if ex == "":
+                    log.error(
+                        f"fio read timedout after 30secs on {fio_file} in Iter{i}"
+                    )
+                else:
+                    log.error(f"fio read returns error on {fio_file} in Iter{i}: {ex}")
+
                 i += 1
 
         end_time = time.time()
-        log.info(f"fio_io read failed on {fio_file} with end_time {end_time}")
+        if ex == "":
+            log.error(
+                f"fio read timedout after 30secs on {fio_file},end_time - {end_time}"
+            )
+        else:
+            log.error(
+                f"fio read returns error on {fio_file},end_time - {end_time}: {ex}"
+            )
+
         return (1, end_time)
 
     def cg_fio_io_write(self, client, mnt_pt):
@@ -965,11 +1018,18 @@ class CG_snap_IO(object):
                 long_running=True,
             )
             end_time = time.time()
-            log.info(f"fio write passed on {file_path} with end_time {end_time} ")
+            log.info(f"fio write passed on {file_path},end_time - {end_time}")
             return (0, end_time)
         except Exception as ex:
             end_time = time.time()
-            log.info(f"fio write failed on {file_path} with end_time {end_time}: {ex}")
+            if ex == "":
+                log.error(
+                    f"fio write timedout after 20secs on {mnt_pt},end_time - {end_time} : {ex}"
+                )
+            else:
+                log.error(
+                    f"fio write returns error on {mnt_pt},end_time - {end_time} : {ex}"
+                )
             return (1, end_time)
 
     def cg_crefi_io(self, client, mnt_pt):
@@ -1016,7 +1076,14 @@ class CG_snap_IO(object):
             return (0, end_time)
         except Exception as ex:
             end_time = time.time()
-            log.info(f"Crefi write failed on {dir_path} with end_time {end_time}:{ex}")
+            if ex == "":
+                log.error(
+                    f"Crefi write timedout after 20secs on {mnt_pt},end_time - {end_time} : {ex}"
+                )
+            else:
+                log.error(
+                    f"Crefi write returns error on {mnt_pt},end_time - {end_time} : {ex}"
+                )
             return (1, end_time)
 
     def cg_linux_cmds_read(self, client, mnt_pt):
@@ -1073,12 +1140,19 @@ class CG_snap_IO(object):
                 )
 
             end_time = time.time()
-            log.info(f"linux_cmds read passed on {mnt_pt} with end_time {end_time}")
+            log.info(f"linux_cmds {io_type} passed on {mnt_pt},end_time - {end_time}")
             return (0, end_time)
         except Exception as ex:
             log.info(ex)
             end_time = time.time()
-            log.info(f"linux_cmds read failed on {mnt_pt},end_time-{end_time},out-{ex}")
+            if ex == "":
+                log.error(
+                    f"linux_cmds {io_type} timedout after 30secs on {mnt_pt},end_time - {end_time} : {ex}"
+                )
+            else:
+                log.error(
+                    f"linux_cmds {io_type} returns error on {mnt_pt},end_time - {end_time} : {ex}"
+                )
             return (1, end_time)
 
     def cg_linux_cmds_write(self, client, mnt_pt):
@@ -1109,10 +1183,11 @@ class CG_snap_IO(object):
             write_cmd_dict = {
                 "cp": f"cp -f {dir_path}/{file_name} {dir_path}/{file_name}_copy",
                 "mkdir": f"mkdir {dir_path}/testdir_{rand_str}",
-                "rmdir": f"rmdir {dir_path}/testdir_{rand_str}",
                 "setfacl": f"setfacl -m u::rw {dir_path}/{file_name}",
                 "tar": f"tar -cvf {dir_path}/{file_name}_copy.tar {dir_path}/{file_name}_copy",
                 "mv": f"mv {dir_path}/{file_name}_copy {dir_path}/{file_name}_copy_renamed",
+                "rename_dir": f"mv {dir_path}/testdir_{rand_str} {dir_path}/new_testdir_{rand_str}",
+                "rmdir": f"rmdir {dir_path}/new_testdir_{rand_str}",
                 "rm": f"rm -f {dir_path}/{file_name}_copy_renamed",
             }
             for cmd in write_cmd_dict:
@@ -1122,8 +1197,18 @@ class CG_snap_IO(object):
                 )
                 log.info(f"linux_cmds {io_type} cmd op : {out}")
             end_time = time.time()
+            log.error(f"linux_cmds {io_type} passed on {mnt_pt},end_time - {end_time}")
             return (0, end_time)
         except Exception as ex:
             log.info(ex)
             end_time = time.time()
+            if ex == "":
+                log.error(
+                    f"linux_cmds {io_type} timedout after 20secs on {mnt_pt},end_time - {end_time} : {ex}"
+                )
+            else:
+                log.error(
+                    f"linux_cmds {io_type} returns error on {mnt_pt}, end_time - {end_time} : {ex}"
+                )
+
             return (1, end_time)

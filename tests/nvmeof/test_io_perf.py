@@ -411,10 +411,15 @@ def librbd(ceph_cluster, **args):
         except Exception as err:
             raise Exception(err)
         finally:
-            # cleanup images
-            for img, dev in images.items():
-                client.exec_command(cmd=RBD_UNMAP.format(device=dev), sudo=True)
-                rbd.remove_image(pool, img)
+            # Unmap and Remove the RBD images
+            out, _ = client.exec_command(
+                cmd="rbd  device list --format json", sudo=True
+            )
+            for dev in json.loads(out):
+                client.exec_command(
+                    cmd=RBD_UNMAP.format(device=dev["device"]), sudo=True
+                )
+                rbd.remove_image(pool, dev["name"])
 
 
 def nvmeof(ceph_cluster, **args):
@@ -459,6 +464,7 @@ def nvmeof(ceph_cluster, **args):
     # Install Gateway
     if args.get("install_gw"):
         cfg = {
+            "no_cluster_state": False,
             "config": {
                 "command": "apply",
                 "service": "nvmeof",
@@ -466,7 +472,7 @@ def nvmeof(ceph_cluster, **args):
                     "placement": {"nodes": [args["gw_node"]]},
                 },
                 "pos_args": [pool],
-            }
+            },
         }
         test_nvmeof.run(ceph_cluster, **cfg)
 
@@ -526,8 +532,9 @@ def nvmeof(ceph_cluster, **args):
             # disconnect and delete subsystems
             cleanup_cfg = {
                 "gw_node": args["gw_node"],
-                "cleanup": ["subsystems"],
+                "cleanup": ["subsystems", "disconnect_all"],
                 "subsystems": [subsystem],
+                "initiators": [initiator_cfg],
             }
 
             teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)

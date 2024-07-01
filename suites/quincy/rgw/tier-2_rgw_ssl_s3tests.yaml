@@ -165,4 +165,3 @@ tests:
       module: test_s3.py
       name: execute s3tests
       polarion-id: CEPH-83575225
-      comments: Known issue - Ceph tracker 55614

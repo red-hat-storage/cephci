@@ -335,4 +335,4 @@ tests:
       module: sanity_rgw_multisite.py
       name: Perform zone rename in master
       polarion-id: CEPH-10740
-      comments: known issue (BZ2210757)
+      comments: known issue (BZ2210695)targeted to 8.0
