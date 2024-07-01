@@ -50,7 +50,7 @@ def run(ceph_cluster, **kw):
                 sudo=True, cmd=f"{conf_get} defer_client_eviction_on_laggy_osds"
             )
             defer_client_eviction_on_laggy_osds = output[0].strip()
-            if defer_client_eviction_on_laggy_osds != "false":
+            if defer_client_eviction_on_laggy_osds.lower() != "false":
                 log.error(
                     f"defer_client_eviction_on_laggy_osds values is expected to be disabled by default.\n "
                     f"but the value is {defer_client_eviction_on_laggy_osds}"

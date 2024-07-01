@@ -43,10 +43,6 @@ def run(ceph_cluster, **kw):
     pool_obj = PoolFunctions(node=cephadm)
     objectstore_obj = objectstoreToolWorkflows(node=cephadm)
 
-    out, _ = cephadm.shell(args=["ceph osd ls"])
-    osd_list = out.strip().split("\n")
-    log.debug(f"List of OSDs: \n{osd_list}")
-
     def get_bench_obj(_osd_id):
         out = objectstore_obj.list_objects(osd_id=_osd_id)
         obj_list = [json.loads(x) for x in out.split()]
@@ -94,6 +90,9 @@ def run(ceph_cluster, **kw):
     ]
     operations = config.get("operations", all_ops)
     try:
+        osd_list = rados_obj.get_active_osd_list()
+        log.info(f"List of OSDs: \n{osd_list}")
+
         log.info("Create a data pool with default config")
         assert rados_obj.create_pool(pool_name="cot-pool")
 

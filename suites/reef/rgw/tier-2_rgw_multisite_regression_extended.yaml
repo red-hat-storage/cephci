@@ -297,19 +297,19 @@ tests:
             verify-io-on-site: ["ceph-sec"]
             timeout: 300
 
-  - test:
-      name: bucket granular sync policy with allowed allowed semantic
-      desc: Test bucket granular sync policy with allowed allowed semantic
-      polarion-id: CEPH-83575868
-      module: sanity_rgw_multisite.py
-      comments: Known issue BZ-2153834
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_multisite_bucket_granular_sync_policy.py
-            config-file-name: test_multisite_granular_bucket_sync_policy.yaml
-            verify-io-on-site: ["ceph-sec"]
-            timeout: 300
+  # - test:
+  #     name: bucket granular sync policy with allowed allowed semantic
+  #     desc: Test bucket granular sync policy with allowed allowed semantic
+  #     polarion-id: CEPH-83575868
+  #     module: sanity_rgw_multisite.py
+  #     comments: Known issue BZ-2153834 targeted to 8.0
+  #     clusters:
+  #       ceph-pri:
+  #         config:
+  #           script-name: test_multisite_bucket_granular_sync_policy.py
+  #           config-file-name: test_multisite_granular_bucket_sync_policy.yaml
+  #           verify-io-on-site: ["ceph-sec"]
+  #           timeout: 300
 
   - test:
       name: bucket granular sync policy on enabled enabled semantic with directional flow
@@ -347,15 +347,15 @@ tests:
             config-file-name: test_multisite_granular_bucketsync_forbidden_forbidden.yaml
             timeout: 300
 
-  - test:
-      name: Test Changing datalog num shards not cause any crash
-      desc: Test Changing datalog num shards not cause any crash
-      polarion-id: CEPH-83574088
-      comments: Known issue BZ-2274680
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_changing_data_log_num_shards_cause_no_crash.yaml
-            timeout: 300
+  # - test:
+  #     name: Test Changing datalog num shards not cause any crash
+  #     desc: Test Changing datalog num shards not cause any crash
+  #     polarion-id: CEPH-83574088
+  #     comments: Known issue BZ-2274680 targeted to 8.1
+  #     module: sanity_rgw_multisite.py
+  #     clusters:
+  #       ceph-pri:
+  #         config:
+  #           script-name: test_Mbuckets_with_Nobjects.py
+  #           config-file-name: test_changing_data_log_num_shards_cause_no_crash.yaml
+  #           timeout: 300

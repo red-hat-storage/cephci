@@ -184,10 +184,15 @@ class MonConfigMethods:
             Optional args:
                 4. location_type: CRUSH property like rack or host
                 5. device_class: Value for location_type
+                6. no_delay: should be set to true if a transient config
+                needs to be verified whose value might reset shortly
+                7. custom_delay: arg to decide the wait time before starting
+                validation. Defaulted to 10 secs
         Returns: True -> Pass, False -> fail
 
         """
-
+        no_delay = kwargs.get("no_delay", False)
+        delay = int(kwargs.get("custom_delay", 10))
         base_cmd = "ceph config set"
         cmd = f"{base_cmd} {kwargs['section']}"
         if kwargs.get("location_type"):
@@ -195,8 +200,9 @@ class MonConfigMethods:
         cmd = f"{cmd} {kwargs['name']} {kwargs['value']}"
         self.rados_obj.node.shell([cmd])
 
-        # Sleeping for 10 second for config to be applied
-        time.sleep(10)
+        if not no_delay:
+            # Sleeping for 10 second for config to be applied
+            time.sleep(delay)
         log.debug("verifying the value set")
         if not self.verify_set_config(**kwargs):
             log.error(f"Value for config: {kwargs['name']} could not be set")
@@ -292,6 +298,14 @@ class MonConfigMethods:
                 entry["name"].lower() == kwargs["name"].lower()
                 and entry["section"].lower() == kwargs["section"].lower()
             ):
+                # temporary fix, should be changed later, current logic is not robust
+                # problem: the module will return True if user provides 'location_value' as
+                # an argument to this method but, it is actually not set in the cluster config
+                if (
+                    kwargs.get("location_value")
+                    and kwargs.get("location_value") not in entry["mask"]
+                ):
+                    continue
                 entry["value"] = str(entry["value"]).strip("\n").strip()
                 kwargs["value"] = str(kwargs["value"]).strip("\n").strip()
                 if not entry["value"].lower() == kwargs["value"].lower():

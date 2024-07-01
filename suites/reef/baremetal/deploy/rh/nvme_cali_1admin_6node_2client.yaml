@@ -104,7 +104,7 @@ tests:
       config:
         command: add
         copy_admin_keyring: true
-        id: client.2
+        id: client.1
         install_packages:
           - ceph-common
         node: node12
@@ -134,7 +134,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 2G
+              size: 20G
               lb_group: node7
             listener_port: 4420
             listeners:
@@ -145,7 +145,7 @@ tests:
             serial: 2
             bdevs:
             - count: 2
-              size: 2G
+              size: 20G
               lb_group: node8
             listener_port: 4420
             listeners:
