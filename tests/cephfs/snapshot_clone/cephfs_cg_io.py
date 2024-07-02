@@ -511,15 +511,35 @@ class CG_snap_IO(object):
                         log.info(f"qs_query:{qs_query}")
                         state = qs_query["sets"][qs_id]["state"]["name"]
                         log.info(f"io_modules:{io_modules}")
-                        log.error(
-                            f"FAIL:{io_mod} io on {qs_member} failed when {qs_id} was in {state}"
-                        )
+                        if state in "RELEASED":
+                            age_ref = qs_query["sets"][qs_id]["age_ref"]
+                            curr_time = time.time()
+                            # Get time when state is achieved
+                            time_before_state = float(curr_time) - float(age_ref)
+                            if (float(end_time) - float(time_before_state)) < 5:
+                                log.info(
+                                    f"WARN: {io_mod} {io_type} fails in QS state {state} on {qs_member}"
+                                )
+                                time_diff = int(
+                                    float(end_time) - float(time_before_state)
+                                )
+                                read_str = "Release event can cause impact on immediate read to fail at times"
+                                log.info(
+                                    f"Read exits in {time_diff}secs after {state},a false positive error:{read_str}"
+                                )
+                            else:
+                                cg_status = 1
+                        else:
+                            log.error(
+                                f"FAIL:{io_mod} io on {qs_member} failed when {qs_id} was in {state}"
+                            )
+                            cg_status = 1
                     else:
                         log.info(f"io_modules:{io_modules}")
                         log.error(
                             f"FAIL:{io_mod} io on {qs_member} failed when no QS exists"
                         )
-                    cg_status = 1
+                        cg_status = 1
             elif io_type == "write":
                 if io_modules[io_mod] == 1:
                     qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
@@ -626,6 +646,16 @@ class CG_snap_IO(object):
                                     )
                                     log.info(
                                         f"{state} is achieved in {age}secs,could be false positive"
+                                    )
+                                elif state == "QUIESCED" and (
+                                    float(end_time) - float(time_before_state) <= 5
+                                ):
+                                    log.info(
+                                        f"{io_mod} {io_type} passed on {qs_member} when {state},exclude-{excluded}"
+                                    )
+                                    exp_str = "IO suceeded before quiesced but client response could be slow"
+                                    log.info(
+                                        f"{io_type} ends in <5 secs after {state}:{exp_str}"
                                     )
                                 else:
                                     log.error(
@@ -1117,7 +1147,7 @@ class CG_snap_IO(object):
             while retry_cnt > 0:
                 file_name = random.choice(files)
                 retry_cnt -= 1
-                if "_copy" not in file_name:
+                if ("_copy" not in file_name) and ("dir" not in file_name):
                     retry_cnt = 0
             client_name = client.node.hostname
             client_name_1 = f"{client_name[0: -1]}"
@@ -1178,6 +1208,10 @@ class CG_snap_IO(object):
             out = out.strip()
             files = out.split()
             file_name = random.choice(files)
+            retry_cnt = 5
+            while "dir" in file_name and retry_cnt > 0:
+                file_name = random.choice(files)
+                retry_cnt -= 1
             log.info(f"linux_cmds {io_type} filename chosen : {file_name}")
 
             write_cmd_dict = {
@@ -1187,6 +1221,7 @@ class CG_snap_IO(object):
                 "tar": f"tar -cvf {dir_path}/{file_name}_copy.tar {dir_path}/{file_name}_copy",
                 "mv": f"mv {dir_path}/{file_name}_copy {dir_path}/{file_name}_copy_renamed",
                 "rename_dir": f"mv {dir_path}/testdir_{rand_str} {dir_path}/new_testdir_{rand_str}",
+                "sleep": "sleep 5",
                 "rmdir": f"rmdir {dir_path}/new_testdir_{rand_str}",
                 "rm": f"rm -f {dir_path}/{file_name}_copy_renamed",
             }

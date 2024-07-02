@@ -224,6 +224,7 @@ def run(ceph_cluster, **kw):
             sv_non_def_list,
             sv_mixed_list,
         ]
+
         log.info(f"Test config attributes : qs_cnt - {qs_cnt}, qs_sets - {qs_sets}")
         crash_status_before = fs_util_v1.get_crash_ls_new(client1)
 
@@ -345,11 +346,20 @@ def run(ceph_cluster, **kw):
                 check_ec=False,
             )
         qs_cnt += 1
+
         for i in range(1, qs_cnt):
             subvol_name = f"sv_def_{i}"
+            subvol_info = fs_util_v1.get_subvolume_info(
+                client1, default_fs, subvol_name
+            )
+            log.info(subvol_info)
             fs_util_v1.remove_subvolume(client1, default_fs, subvol_name, validate=True)
         for i in range(1, qs_cnt):
             subvol_name = f"sv_non_def_{i}"
+            subvol_info = fs_util_v1.get_subvolume_info(
+                client1, default_fs, subvol_name, group_name="subvolgroup_cg"
+            )
+            log.info(subvol_info)
             fs_util_v1.remove_subvolume(
                 client1,
                 default_fs,
@@ -442,14 +452,27 @@ def cg_snap_func_1(cg_test_params):
         snap_qs_dict = {}
         for qs_member in qs_set:
             snap_qs_dict.update({qs_member: []})
+
         i = 0
         while i < repeat_cnt:
             if p.is_alive():
                 log.info(f"Quiesce Lifecycle : Iteration {i}")
+                for qs_member in qs_set:
+                    if "/" in qs_member:
+                        group_name, subvol_name = re.split("/", qs_member)
+                        subvol_info = fs_util.get_subvolume_info(
+                            client1, fs_name, subvol_name, group_name=group_name
+                        )
+                        log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
+                    else:
+                        subvol_info = fs_util.get_subvolume_info(
+                            client1, fs_name, qs_member
+                        )
+                        log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
                 # time taken for 1 lifecycle : ~5secs
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
+                    for _ in list(range(4))
                 )
                 qs_id_val = f"cg_test1_{rand_str}"
                 log.info(f"Quiesce the set {qs_set}")
@@ -499,7 +522,16 @@ def cg_snap_func_1(cg_test_params):
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
         wait_for_cg_io(p, qs_id_val)
-
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                subvol_info = fs_util.get_subvolume_info(
+                    client1, fs_name, subvol_name, group_name=group_name
+                )
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
+            else:
+                subvol_info = fs_util.get_subvolume_info(client1, fs_name, qs_member)
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
         mnt_pt_list = []
         if ephemeral_pin == 1:
             if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
@@ -580,10 +612,22 @@ def cg_snap_func_1(cg_test_params):
         while i < repeat_cnt:
             if p.is_alive():
                 log.info(f"Quiesce Lifecycle : Iteration {i}")
+                for qs_member in qs_set:
+                    if "/" in qs_member:
+                        group_name, subvol_name = re.split("/", qs_member)
+                        subvol_info = fs_util.get_subvolume_info(
+                            client1, fs_name, subvol_name, group_name=group_name
+                        )
+                        log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
+                    else:
+                        subvol_info = fs_util.get_subvolume_info(
+                            client1, fs_name, qs_member
+                        )
+                        log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
                 # time taken for 1 lifecycle : ~5secs
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
+                    for _ in list(range(4))
                 )
                 qs_id_val = f"cg_test1_{rand_str}"
                 log.info(f"Quiesce the set {qs_set}")
@@ -687,6 +731,17 @@ def cg_snap_func_1(cg_test_params):
                 log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
         wait_for_cg_io(p, qs_id_val)
+
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                subvol_info = fs_util.get_subvolume_info(
+                    client1, fs_name, subvol_name, group_name=group_name
+                )
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
+            else:
+                subvol_info = fs_util.get_subvolume_info(client1, fs_name, qs_member)
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
         mnt_pt_list = []
         for qs_member in qs_member_dict1:
             mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
@@ -792,10 +847,22 @@ def cg_snap_func_2(cg_test_params):
         while i < repeat_cnt:
             if p.is_alive():
                 log.info(f"Workflow 2 : Iteration {i}")
+                for qs_member in qs_set:
+                    if "/" in qs_member:
+                        group_name, subvol_name = re.split("/", qs_member)
+                        subvol_info = fs_util.get_subvolume_info(
+                            client1, fs_name, subvol_name, group_name=group_name
+                        )
+                        log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
+                    else:
+                        subvol_info = fs_util.get_subvolume_info(
+                            client1, fs_name, qs_member
+                        )
+                        log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
                 # time taken for 1 lifecycle : ~5secs
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
+                    for _ in list(range(4))
                 )
                 qs_id_val = f"cg_test1_{rand_str}"
                 log.info(f"Quiesce the set {qs_set}")
@@ -926,7 +993,7 @@ def cg_snap_func_2(cg_test_params):
                     test_fail += 1
                     rand_str = "".join(
                         random.choice(string.ascii_lowercase + string.digits)
-                        for _ in list(range(3))
+                        for _ in list(range(4))
                     )
                     qs_id_val_new = f"cg_test1_{rand_str}"
                     qs_op_out = cg_snap_util.cg_quiesce(
@@ -1006,6 +1073,16 @@ def cg_snap_func_2(cg_test_params):
 
         wait_for_cg_io(p, qs_id_val)
 
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                subvol_info = fs_util.get_subvolume_info(
+                    client1, fs_name, subvol_name, group_name=group_name
+                )
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
+            else:
+                subvol_info = fs_util.get_subvolume_info(client1, fs_name, qs_member)
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
         mnt_pt_list = []
         if ephemeral_pin == 1:
             if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
@@ -1105,10 +1182,22 @@ def cg_snap_func_3(cg_test_params):
         while i < repeat_cnt:
             if p.is_alive():
                 log.info(f"Workflow 3 : Iteration {i}")
+                for qs_member in qs_set:
+                    if "/" in qs_member:
+                        group_name, subvol_name = re.split("/", qs_member)
+                        subvol_info = fs_util.get_subvolume_info(
+                            client1, fs_name, subvol_name, group_name=group_name
+                        )
+                        log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
+                    else:
+                        subvol_info = fs_util.get_subvolume_info(
+                            client1, fs_name, qs_member
+                        )
+                        log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
                 # time taken for 1 lifecycle : ~5secs
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
+                    for _ in list(range(4))
                 )
                 qs_id_val_sub = f"cg_test1_subset_{rand_str}"
                 qs_subset = random.sample(qs_set, 3)
@@ -1183,6 +1272,17 @@ def cg_snap_func_3(cg_test_params):
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
         wait_for_cg_io(p, qs_id_val)
+
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                subvol_info = fs_util.get_subvolume_info(
+                    client1, fs_name, subvol_name, group_name=group_name
+                )
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
+            else:
+                subvol_info = fs_util.get_subvolume_info(client1, fs_name, qs_member)
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
 
         mnt_pt_list = []
         if ephemeral_pin == 1:
@@ -1279,8 +1379,18 @@ def cg_snap_func_4(cg_test_params):
             snap_qs_dict.update({qs_member: []})
         rand_str = "".join(
             random.choice(string.ascii_lowercase + string.digits)
-            for _ in list(range(3))
+            for _ in list(range(4))
         )
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                subvol_info = fs_util.get_subvolume_info(
+                    client1, fs_name, subvol_name, group_name=group_name
+                )
+                log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
+            else:
+                subvol_info = fs_util.get_subvolume_info(client1, fs_name, qs_member)
+                log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
 
         log.info(f"Run quiesce on quiesce set {qs_set}")
         qs_id_val = f"cg_test1_{rand_str}"
@@ -1336,7 +1446,7 @@ def cg_snap_func_4(cg_test_params):
             snap_name = random.choice(snap_list)
             snap_path = f"{mnt_pt}/.snap/_{snap_name}*/"
             restore_dst = f"{mnt_pt}/restore_dst_dir/"
-            cmd = f"mkdir {restore_dst};cp {snap_path}/cg_io/dd_dir/* {restore_dst}"
+            cmd = f"mkdir {restore_dst};ls {snap_path}/cg_io/dd_dir/*;cp {snap_path}/cg_io/dd_dir/*file* {restore_dst}"
             try:
                 out, rc = client1.exec_command(sudo=True, cmd=cmd)
                 log.info(f"Restore suceeded for {qs_member} : {out}")
@@ -1346,7 +1456,16 @@ def cg_snap_func_4(cg_test_params):
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
         wait_for_cg_io(p, qs_id_val)
-
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                subvol_info = fs_util.get_subvolume_info(
+                    client1, fs_name, subvol_name, group_name=group_name
+                )
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
+            else:
+                subvol_info = fs_util.get_subvolume_info(client1, fs_name, qs_member)
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
         mnt_pt_list = []
         if ephemeral_pin == 1:
             if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
@@ -1446,8 +1565,20 @@ def cg_snap_func_5(cg_test_params):
             snap_qs_dict.update({qs_member: []})
         rand_str = "".join(
             random.choice(string.ascii_lowercase + string.digits)
-            for _ in list(range(3))
+            for _ in list(range(4))
         )
+
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                subvol_info = fs_util.get_subvolume_info(
+                    client1, fs_name, subvol_name, group_name=group_name
+                )
+                log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
+            else:
+                subvol_info = fs_util.get_subvolume_info(client1, fs_name, qs_member)
+                log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
+
         qs_member_str = ""
         log.info(f"Run quiesce on quiesce set {qs_set} with shorter timeout")
         qs_id_val = f"cg_test1_{rand_str}"
@@ -1499,6 +1630,17 @@ def cg_snap_func_5(cg_test_params):
 
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
         wait_for_cg_io(p, qs_id_val)
+
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                subvol_info = fs_util.get_subvolume_info(
+                    client1, fs_name, subvol_name, group_name=group_name
+                )
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
+            else:
+                subvol_info = fs_util.get_subvolume_info(client1, fs_name, qs_member)
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
 
         mnt_pt_list = []
         if ephemeral_pin == 1:
@@ -1572,10 +1714,22 @@ def cg_snap_func_6(cg_test_params):
         while i < repeat_cnt:
             if p.is_alive():
                 log.info(f"Workflow 6 : Iteration {i}")
+                for qs_member in qs_set:
+                    if "/" in qs_member:
+                        group_name, subvol_name = re.split("/", qs_member)
+                        subvol_info = fs_util.get_subvolume_info(
+                            client1, fs_name, subvol_name, group_name=group_name
+                        )
+                        log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
+                    else:
+                        subvol_info = fs_util.get_subvolume_info(
+                            client1, fs_name, qs_member
+                        )
+                        log.info(f"SUBVOL_INFO BEFORE TEST:{subvol_info}")
                 # time taken for 1 lifecycle : ~5secs
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
+                    for _ in list(range(4))
                 )
                 qs_id_val = f"cg_test1_{rand_str}"
                 log.info(
@@ -1664,7 +1818,7 @@ def cg_snap_func_6(cg_test_params):
                 log.info(f"Quiesce the set {qs_set_copy} with --await")
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
+                    for _ in list(range(4))
                 )
                 qs_id_val = f"cg_test1_{rand_str}"
                 cg_snap_util.cg_quiesce(
@@ -1727,7 +1881,7 @@ def cg_snap_func_6(cg_test_params):
                 qs_set_copy = qs_set.copy()
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
+                    for _ in list(range(4))
                 )
                 qs_id_val = f"cg_test1_{rand_str}"
                 exclude_sv_name = random.choice(qs_set_copy)
@@ -1784,7 +1938,16 @@ def cg_snap_func_6(cg_test_params):
         log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
         wait_for_cg_io(p, qs_id_val)
-
+        for qs_member in qs_set:
+            if "/" in qs_member:
+                group_name, subvol_name = re.split("/", qs_member)
+                subvol_info = fs_util.get_subvolume_info(
+                    client1, fs_name, subvol_name, group_name=group_name
+                )
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
+            else:
+                subvol_info = fs_util.get_subvolume_info(client1, fs_name, qs_member)
+                log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
         mnt_pt_list = []
         if ephemeral_pin == 1:
             if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
@@ -1889,7 +2052,7 @@ def cg_snap_interop_1(cg_test_params):
             # time taken for 1 lifecycle : ~5secs
             rand_str = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
-                for _ in list(range(3))
+                for _ in list(range(4))
             )
             qs_id_val = f"cg_int1_{rand_str}"
             log.info(
@@ -1946,7 +2109,7 @@ def cg_snap_interop_1(cg_test_params):
             log.info(f"Quiesce the set {qs_set} with --await")
             rand_str = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
-                for _ in list(range(3))
+                for _ in list(range(4))
             )
             qs_id_val = f"cg_int1_{rand_str}"
             cg_snap_util.cg_quiesce(
@@ -1984,7 +2147,7 @@ def cg_snap_interop_1(cg_test_params):
 
             rand_str = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
-                for _ in list(range(3))
+                for _ in list(range(4))
             )
             qs_id_val = f"cg_int1_{rand_str}"
             log.info(f"Quiesce the set {qs_set} with --await")
@@ -2152,7 +2315,7 @@ def cg_snap_interop_2(cg_test_params):
 
         rand_str = "".join(
             random.choice(string.ascii_lowercase + string.digits)
-            for _ in list(range(3))
+            for _ in list(range(4))
         )
         qs_id_val = f"cg_int_2_{rand_str}"
 
@@ -2404,7 +2567,7 @@ def cg_snap_neg_1(cg_test_params):
                 # time taken for 1 lifecycle : ~5secs
                 rand_str = "".join(
                     random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(3))
+                    for _ in list(range(4))
                 )
                 quiesce_procs = []
                 for k in range(parallel_cnt):
@@ -2583,7 +2746,7 @@ def cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
     try:
         rand_str = "".join(
             random.choice(string.ascii_lowercase + string.digits)
-            for _ in list(range(3))
+            for _ in list(range(4))
         )
         qs_id_val = f"cg_test1_{rand_str}"
         log.info(f"Quiesce the set {qs_set} with --await")
