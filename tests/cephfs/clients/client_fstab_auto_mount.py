@@ -335,7 +335,7 @@ def run(ceph_cluster, **kw):
             for mds in fs_util_v1.mdss:
                 FsUtilsV1.deamon_op(mds, rf"mds\.{fs_name}\.", "restart")
             for mds in fs_util_v1.mdss:
-                FsUtilsV1.check_deamon_status(mds, "mds", "active")
+                FsUtilsV1.check_deamon_status(mds, rf"mds\.{fs_name}\.", "active")
         else:
             rc = fs_util.client_clean_up(
                 client_info["fuse_clients"], "", client_info["mounting_dir"], "umount"
@@ -351,7 +351,7 @@ def run(ceph_cluster, **kw):
             for mds in fs_util_v1.mdss:
                 FsUtilsV1.deamon_op(mds, rf"mds\.{fs_name}\.", "restart")
             for mds in fs_util_v1.mdss:
-                FsUtilsV1.check_deamon_status(mds, "mds", "active")
+                FsUtilsV1.check_deamon_status(mds, rf"mds\.{fs_name}\.", "active")
 
         log.info("Execution of Test cases CEPH-%s ended:" % (tc))
         print("Script execution time:------")

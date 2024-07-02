@@ -72,17 +72,26 @@ def run(ceph_cluster, **kw):
         if "10000" not in out.strip():
             log.error("mds_max_completed_requests could not be set 10000")
             return 1
-        mds = fs_util.get_active_mdss(clients[0], fs_name)[0]
-        for mds_node in mds_nodes:
-            log.info(mds_node.node.hostname)
-            if mds_node.node.hostname in mds:
-                log.info("Get the mdthresh_evicted ceph mds perf cntr value")
-                mds_daemon = f"mds.{mds}"
-                out, rc = mds_node.exec_command(
-                    sudo=True,
-                    cmd=f"cephadm shell ceph daemon {mds_daemon} perf dump | grep mdthresh_evicted",
-                )
-                mds_perf_out = out.strip().split("\n")
+        mds = fs_util.get_active_mdss(clients[0], fs_name)
+        mds_active_node = ceph_cluster.get_node_by_hostname(mds[0].split(".")[1])
+        log.info("Get the mdthresh_evicted ceph mds perf cntr value")
+        mds_daemon = f"mds.{mds[0]}"
+        out, rc = mds_active_node.exec_command(
+            sudo=True,
+            cmd=f"cephadm shell ceph daemon {mds_daemon} perf dump | grep mdthresh_evicted",
+        )
+        mds_perf_out = out.strip().split("\n")
+
+        # for mds_node in mds_nodes:
+        #     log.info(mds_node.node.hostname)
+        #     if mds_node.node.hostname in mds:
+        #         log.info("Get the mdthresh_evicted ceph mds perf cntr value")
+        #         mds_daemon = f"mds.{mds}"
+        #         out, rc = mds_active_node.exec_command(
+        #             sudo=True,
+        #             cmd=f"cephadm shell ceph daemon {mds_daemon} perf dump | grep mdthresh_evicted",
+        #         )
+        #         mds_perf_out = out.strip().split("\n")
         mdthresh_evicted_before = mds_perf_out[0].split(":")[1]
         log.info(f"mdthresh_evicted_before:{mdthresh_evicted_before}")
         subvolume = {
