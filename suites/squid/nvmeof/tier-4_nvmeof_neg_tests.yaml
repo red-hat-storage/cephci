@@ -99,3 +99,20 @@ tests:
       module: test_ceph_nvmeof_neg_tests.py
       name: set QoS for namespace in subsystem without mandatory values and args.
       polarion-id: CEPH-83581945
+
+  - test:
+      abort-on-fail: false
+      config:
+        gw_node: node6
+        rbd_pool: rbd
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        initiator_node: node10
+        operation: CEPH-83581755
+      desc: set QoS for multiple namespace in a single go.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_neg_tests.py
+      name: set QoS for multiple namespace in a single go.
+      polarion-id: CEPH-83581755

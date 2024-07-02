@@ -3,6 +3,7 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
  with supported entities like subsystems , etc.,
 
 """
+
 import json
 import re
 from copy import deepcopy
@@ -1047,6 +1048,81 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
         return 0
 
 
+def test_ceph_83581755(ceph_cluster, rbd, pool, config):
+    """CEPH-83581755: Set QoS for multiple namespaces.
+    Args:
+        ceph_cluster (CephCluster): The Ceph cluster instance.
+        rbd (RadosBlockDevice): The RBD instance.
+    pool (str): The Ceph pool name.
+    config (dict): Configuration parameters.
+    Returns:
+        int: 0 on success, 1 on failure.
+    """
+    gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
+    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
+    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+
+    subsystem = dict()
+    listener_port = find_free_port(gw_node)
+    subsystem.update(
+        {
+            "nqn": "nqn.2016-06.io.spdk:ceph-83581755",
+            "serial": 83581755,
+            "listener_port": listener_port,
+            "allow_host": "*",
+        }
+    )
+    initiator_cfg = {
+        "subnqn": "nqn.2016-06.io.spdk:ceph-83575814",
+        "listener_port": listener_port,
+        "node": config.get("initiator_node"),
+    }
+    try:
+        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        list_args = {}
+        list_args.setdefault("args", {}).update({"subsystem": subsystem["nqn"]})
+        for i in range(2):
+            name = generate_unique_id(length=4)
+            # Create image
+            img = f"{name}-image"
+            rbd.create_image(pool, img, "10G")
+            ns_args = {
+                "args": {
+                    "subsystem": subsystem["nqn"],
+                    "rbd-pool": pool,
+                    "rbd-image": img,
+                }
+            }
+            nvmegwcli.namespace.add(**ns_args)
+
+        config.update(initiator_cfg)
+        _, namespaces = nvmegwcli.namespace.list(**list_args)
+        pattern = r"\│\s*(\d+)\s*│"
+        nsid = [int(match) for match in re.findall(pattern, namespaces)]
+
+        qos_args_without_mandatory_args = {}
+        qos_args_without_mandatory_args.setdefault("args", {}).update(
+            {"nsid": f"{nsid[0]},{nsid[1]}"}
+        )
+        _ = nvmegwcli.namespace.set_qos(**qos_args_without_mandatory_args)
+    except Exception as err:
+        if "argument --nsid: invalid int value:" not in str(err):
+            raise Exception(
+                "Set QoS was failed as expected due to invalid namespace value."
+            )
+        LOG.info("Set QoS was failed as expected due to invalid namespace value....")
+    finally:
+        cleanup_cfg = {
+            "gw_node": config.get("gw_node"),
+            "disconnect_all": [config["initiator_node"]],
+            "cleanup": ["disconnect_all", "gateway", "pool"],
+            "rbd_pool": pool,
+            "subsystems": [subsystem],
+        }
+        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        return 0
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof test execution.
 
@@ -1096,29 +1172,26 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             },
         }
         test_nvmeof.run(ceph_cluster, **cfg)
-        if config["operation"] == "CEPH-83575812":
-            test_ceph_83575812(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83576084":
-            test_ceph_83576084(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83575467":
-            test_ceph_83575467(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83576085":
-            test_ceph_83576085(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83576087":
-            test_ceph_83576087(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83575813":
-            test_ceph_83575813(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83576093":
-            test_ceph_83576093(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83575455":
-            test_ceph_83575455(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83575814":
-            test_ceph_83575814(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83581753":
-            test_ceph_83581753(ceph_cluster, rbd_obj, rbd_pool, config)
-        if config["operation"] == "CEPH-83581945":
-            test_ceph_83581945(ceph_cluster, rbd_obj, rbd_pool, config)
+        operation_mapping = {
+            "CEPH-83575812": test_ceph_83575812,
+            "CEPH-83576084": test_ceph_83576084,
+            "CEPH-83575467": test_ceph_83575467,
+            "CEPH-83576085": test_ceph_83576085,
+            "CEPH-83576087": test_ceph_83576087,
+            "CEPH-83575813": test_ceph_83575813,
+            "CEPH-83576093": test_ceph_83576093,
+            "CEPH-83575455": test_ceph_83575455,
+            "CEPH-83575814": test_ceph_83575814,
+            "CEPH-83581753": test_ceph_83581753,
+            "CEPH-83581945": test_ceph_83581945,
+            "CEPH-83581755": test_ceph_83581755,
+        }
+        operation = config["operation"]
+        if operation in operation_mapping:
+            operation_mapping[operation](ceph_cluster, rbd_obj, rbd_pool, config)
+
         return 0
+
     except Exception as err:
         LOG.error(err)
 
