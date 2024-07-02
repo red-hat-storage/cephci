@@ -330,6 +330,7 @@ def getfattr(client, file_path, attribute_name=None):
     if attribute_name:
         cmd += " -n user.{attribute_name}"
     out = client.exec_command(sudo=True, cmd=cmd)
+    log.info(out)
     return out
 
 
