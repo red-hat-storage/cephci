@@ -54,7 +54,8 @@ class Container(Cli):
     def run(
         self,
         image=None,
-        rm=False,
+        rm=None,
+        rmi=None,
         name=None,
         env=None,
         volume=None,
@@ -73,6 +74,7 @@ class Container(Cli):
         Args
             image (str): Image name
             rm (str): Image name to remove from background
+            rmi(str): Removes one or more locally stored images
             name (str): Container name
             env (list): List of environment variables
             volume (list): List of volumes
@@ -86,7 +88,7 @@ class Container(Cli):
             user (str): User to run container as
             entry_point (str): Entry point command or executable to be run
         """
-        if not image and not rm:
+        if not image and not (rm or rmi):
             raise NotSupportedError("Image or rm needs to be provided")
 
         cmd = f"{self.base_cmd} run"
@@ -127,6 +129,9 @@ class Container(Cli):
 
         if tty:
             cmd += " -t"
+
+        if rmi:
+            cmd += f" --rm {rmi}"
 
         if rm:
             cmd += " --rm"
