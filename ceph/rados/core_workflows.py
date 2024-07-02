@@ -38,7 +38,7 @@ class RadosOrchestrator:
         self.client = node.cluster.get_nodes(role="client")[0]
         self.rhbuild = node.config.get("rhbuild")
 
-    def change_recovery_flags(self, action):
+    def change_recovery_flags(self, action, flags: list = None):
         """Sets and unsets the recovery flags on the cluster
 
         This method is used to control the recovery and backfill aspects of the cluster by setting/ un-setting
@@ -47,18 +47,22 @@ class RadosOrchestrator:
 
         Args:
             action (str): "set" & "unset" are the allowed actions for the method
+            flags (list): Any additional flags that need to be set on the cluster
 
         Examples::
             change_recovery_flags(action="set")
 
         Returns: None
         """
-        flags = ["nobackfill", "norebalance", "norecover"]
+        cluster_flags = ["nobackfill", "norebalance", "norecover"]
         log.debug(
             f"{action}-ing recovery flags on the cluster to change recovery behaviour"
         )
-        for flag in flags:
-            cmd = f"ceph osd {action} {flag}"
+        if flags:
+            for flag in flags:
+                cluster_flags.append(flag)
+        for flag in cluster_flags:
+            cmd = f"ceph osd {action.lower()} {flag}"
             self.node.shell([cmd])
 
     def check_pg_state(self, pgid: str) -> list:

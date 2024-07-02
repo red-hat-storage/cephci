@@ -18,6 +18,8 @@ def run(ceph_cluster, **kw):
     """
     Test to check if the warning "OSD_UPGRADE_FINISHED" is generated when "require_osd_release" does ot match
     the current release during upgrades.
+
+    Quincy to reef bug : https://bugzilla.redhat.com/show_bug.cgi?id=2243570
     Returns:
         1 -> Fail, 0 -> Pass
     """
