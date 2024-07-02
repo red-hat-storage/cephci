@@ -1,8 +1,8 @@
-# Test suite to scale with 4 GWs having 2 subsystem to 1024 namespaces
+# Test suite to scale with 8 GWs having 2 subsystem to 1024 namespaces
 # Test config at conf/baremetal/nvme_cali_1admin_6node_2client.yaml
 # Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
 # Test attributes
-  #  4 ceph-nvmeof GWs colocated with osd on node4, node5, node 6, node7 and node8 is nvmeof initiator
+  #  8 ceph-nvmeof GWs colocated with osd on node3 to node 10 are nvmeof initiators
   #  nvmeof GW - at end of each scale step/ test below is the configuration
      # Scale-1 : 2 subsystem, 1024 namespaces,  1024 RBD images of 1TB size each
   #  nvmeof initiator - Each initiator/ client connects to a subsystem ( 1 initiator : 1 subsystem)
@@ -94,7 +94,15 @@ tests:
               service: nvmeof
               args:
                 placement:
-                  label: nvmeof-gw
+                  nodes:
+                  - node3
+                  - node4
+                  - node5
+                  - node6
+                  - node7
+                  - node8
+                  - node9
+                  - node10
               pos_args:
                 - nvmeof_pool
           - config:
@@ -132,6 +140,10 @@ tests:
                 subsystems: 2
                 port: 4420
                 nodes:
+                  - node3
+                  - node4
+                  - node5
+                  - node6
                   - node7
                   - node8
                   - node9

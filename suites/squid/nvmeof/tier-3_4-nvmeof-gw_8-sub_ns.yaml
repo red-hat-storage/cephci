@@ -4,8 +4,7 @@
 # Test attributes
   #  4 ceph-nvmeof GWs colocated with osd on node4, node5, node 6, node7 and node8 is nvmeof initiator
   #  nvmeof GW - at end of each scale step/ test below is the configuration
-     # Scale-1 : 8 subsystem, 400 namespaces,  400 RBD images of 1TB size each
-     # Scale-2 : 8 subsystem, 1648 namespaces,  1648 RBD images of 1TB size each
+     # Scale-1 : 8 subsystem, 1024 namespaces,  1024 RBD images of 1TB size each
   #  nvmeof initiator - Each initiator/ client connects to a subsystem ( 1 initiator : 1 subsystem)
   #  io test (no performance tests)
      # Tool : fio
@@ -161,7 +160,7 @@ tests:
               command: add
               args:
                 subsystems: 8
-                namespaces: 400
+                namespaces: 1024
                 image_size: 1T
                 pool: rbd
         initiators:
@@ -170,39 +169,11 @@ tests:
         run_io:
           - node: node11
             io_type: write
-      desc: Scale to 400 namespaces with IO
+      desc: Scale to 1024 namespaces with IO
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Scale to 400 namespaces with IO on 4GW and 8 subsystems
+      name: Scale to 1024 namespaces with IO on 4GW and 8 subsystems
       polarion-id: CEPH-83583003
-
-  - test:
-      abort-on-fail: false
-      config:
-        node: node7
-        rbd_pool: rbd
-        do_not_create_image: true
-        rep-pool-only: true
-        steps:
-          - config:
-              service: namespace
-              command: add
-              args:
-                subsystems: 8
-                namespaces: 1648
-                image_size: 1T
-                pool: rbd
-        initiators:
-            listener_port: 4420
-            node: node12
-        run_io:
-          - node: node12
-            io_type: write
-      desc: Scale to 2048 namespaces with IO
-      destroy-cluster: false
-      module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Scale to 2048 namespaces with IO on 4GW and 8 subsystems
-      polarion-id: CEPH-83583004
 
   - test:
       abort-on-fail: false
@@ -214,6 +185,7 @@ tests:
            verify: true
       desc: Remove nvmeof service on GW nodes
       destroy-cluster: false
+      do-not-skip-tc: true
       module: test_orch.py
       name: Delete nvmeof gateway
 
@@ -236,5 +208,6 @@ tests:
                 - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
       desc: Delete nvmeof and rbd pool from ceph cluster
       destroy-cluster: false
+      do-not-skip-tc: true
       module: test_cephadm.py
       name: Delete NVMeOF pools
