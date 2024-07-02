@@ -93,9 +93,11 @@ def run(**kw):
                     return 1
                 time.sleep(10)
 
-        mirror1.clean_up(peercluster=mirror2, pools=[poolname])
         return 0
 
     except Exception as e:
         log.exception(e)
         return 1
+
+    finally:
+        mirror1.clean_up(peercluster=mirror2, pools=[poolname])

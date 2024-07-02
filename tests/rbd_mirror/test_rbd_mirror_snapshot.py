@@ -109,10 +109,6 @@ def test_snapshot_schedule(rbd_mirror, pool_type, **kw):
                 poolname=poolname, imagename=imagename_2
             )
 
-        # Cleans up the configuration
-        mirror1.delete_image(imagespec)
-        mirror1.delete_image(imagespec_2)
-        mirror1.clean_up(peercluster=mirror2, pools=[poolname])
         return 0
 
     except ValueError as ve:
@@ -124,6 +120,12 @@ def test_snapshot_schedule(rbd_mirror, pool_type, **kw):
     except Exception as e:
         log.exception(e)
         return 1
+
+    finally:
+        # Cleans up the configuration
+        mirror1.delete_image(imagespec)
+        mirror1.delete_image(imagespec_2)
+        mirror1.clean_up(peercluster=mirror2, pools=[poolname])
 
 
 def run(**kw):
