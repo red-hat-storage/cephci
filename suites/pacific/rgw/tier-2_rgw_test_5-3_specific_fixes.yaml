@@ -183,6 +183,16 @@ tests:
         timeout: 500
 
   - test:
+      name: Test rgw multipart upload through curl
+      desc: Test rgw multipart upload through curl
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_rgw_curl_multipart_upload.yaml
+        timeout: 500
+
+  - test:
       name: Test rgw put bucket website with users of same and different tenant
       desc: Test rgw put bucket website with users of same and different tenant
       polarion-id: CEPH-11148
