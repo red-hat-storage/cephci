@@ -32,6 +32,7 @@ from ceph.utils import (
     create_ceph_nodes,
     create_ibmc_ceph_nodes,
 )
+from cephci.cluster_info import get_ceph_var_logs
 from cli.performance.memory_and_cpu_utils import (
     start_logging_processes,
     stop_logging_process,
@@ -1006,6 +1007,7 @@ def run(args):
         for cluster in ceph_cluster_dict.keys():
             installer = ceph_cluster_dict[cluster].get_nodes(role="installer")[0]
             sosreport.run(installer.ip_address, "cephuser", "cephuser", run_dir)
+            get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
 
     return jenkins_rc

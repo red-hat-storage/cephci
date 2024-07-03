@@ -29,14 +29,15 @@ Utility to gather cluster information
     Usage:
        cephci/cluster_info.py (--reuse <FILE>)
            (--output <YAML>)
-           (--ceph-logs <true/false>)
+           (--ceph-logs <BOOL>)
 
        cephci/cluster_info.py --help
 
     Options:
-       -h --help        Help
-       --reuse <FILE>   Use the stored vm state for rerun
-       --output <YAML>  Create file with cluster info collected
+       -h --help            Help
+       --reuse <FILE>       Use the stored vm state for rerun
+       --output <YAML>      Create file with cluster info collected
+       --ceph-logs <BOOL>     Collect ceph logs? True or False.
 """
 
 
@@ -169,6 +170,8 @@ def get_ceph_var_logs(cluster, log_dir):
         download_dir = os.path.join(log_dir, "ceph_logs", node.hostname)
         os.makedirs(download_dir, exist_ok=True)
         file_attributes = node.get_listdir_attr(dir_path=CEPH_VAR_LOG_DIR, sudo=True)
+        if not file_attributes:
+            continue
         for attribute in file_attributes:
             if S_ISDIR(attribute.st_mode):
                 os.makedirs(
@@ -218,11 +221,11 @@ if __name__ == "__main__":
     # Collect cluster information
     _dict, _info = _load_cluster_config(config), {}
     for name in _dict:
+        if ceph_logs in ["true", True]:
+            get_ceph_var_logs(_dict.get(name), output)
+
         _info = gather_info(_dict.get(name))
 
         # Write data to stream
         _output = os.path.join(output, f"cluster_info_{name}.yaml")
         write_output(_info, _output)
-
-        if ceph_logs:
-            get_ceph_var_logs(_dict.get(name), output)
