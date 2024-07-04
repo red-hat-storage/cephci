@@ -443,7 +443,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test LC from primary to secondary
       polarion-id: CEPH-11194
-      comments: bug-1991808, test LC rules from primary to secondary
   - test:
       abort-on-fail: true
       clusters:
@@ -485,7 +484,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test sync on bucket with 0 shards
       polarion-id: CEPH-83575573
-      comments: bug-2188022, 2180549 HotFix for Square eCommerce
 
   - test:
       abort-on-fail: true
@@ -513,7 +511,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test LC transition on multisite, and bucket stats at archive
       polarion-id: CEPH-83575377
-      comments: known failure below rhcs-6.1 and old buckets[bug-2128421]
 
   - test:
       clusters:
@@ -527,21 +524,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test LC transition on multisite with object acl set
       polarion-id: CEPH-83574048
-      comments: known issue, bug-2213801
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            config-file-name: test_Mbuckets_with_Nobjects_no_reshard_haproxy.yaml
-            script-name: test_Mbuckets_with_Nobjects.py
-            run-on-haproxy: true
-            timeout: 600
-            test-archive-bucket-stats: true
-      desc: Execute M buckets with N objects on primary and verify on secondary & archive cluster
-      polarion-id: CEPH-83575575
-      module: sanity_rgw_multisite.py
-      name: m buckets with n objects
-      comments: bug-2213138, known failure
 # test the workaround to sync only from one active zone
   - test:
       clusters:
@@ -569,8 +551,7 @@ tests:
       desc: Execute M buckets with N objects on primary and verify on secondary & archive cluster
       polarion-id: CEPH-83575575
       module: sanity_rgw_multisite.py
-      name: m buckets with n objects
-      comments: bug-2213138, workaround test, should pass
+      name: m buckets with n objects on primary and verify on secondary & archive cluster
   - test:
       clusters:
         ceph-sec:
@@ -612,7 +593,6 @@ tests:
       polarion-id: CEPH-83575576
       module: sanity_rgw_multisite.py
       name: bucket policies retained at archive site
-      comments: bug-1937618, Inditex.
   - test:
       clusters:
         ceph-pri:
@@ -660,20 +640,6 @@ tests:
       desc: enabled default encryption and zlib compression
       module: exec.py
       name: enabled default encryption and zlib compression
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_s3_copy_encryption.py
-            run-on-haproxy: true
-            config-file-name: test_server_side_copy_object_via_encryption.yaml
-            timeout: 300
-      desc: test server_side_copy_object_via_encryption
-      module: sanity_rgw_multisite.py
-      name: test server_side_copy_object_via_encryption
-      polarion-id: CEPH-83575711
-      comments: bug-2149450, Known failures below 7.1, test server_side_copy_object_via_encryption
-
   - test:
       clusters:
         ceph-pri:

@@ -32,12 +32,14 @@ def test_9475(rbd_mirror, pool_type, **kw):
             )
         time.sleep(30)
         mirror1.check_data(peercluster=mirror2, imagespec=imagespec)
-        mirror1.clean_up(peercluster=mirror2, pools=[pool])
         return 0
 
     except Exception as e:
         log.exception(e)
         return 1
+
+    finally:
+        mirror1.clean_up(peercluster=mirror2, pools=[pool])
 
 
 def run(**kw):

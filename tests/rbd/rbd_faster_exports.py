@@ -1,4 +1,5 @@
 from ceph.parallel import parallel
+from tests.rbd.exceptions import RbdBaseException
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 
@@ -20,82 +21,101 @@ def faster_exports(rbd, pool_type, **kw):
     dir_name = rbd.random_string()
     config = kw.get("config")
 
-    rbd.exec_cmd(cmd="mkdir {}".format(dir_name))
+    try:
+        rbd.exec_cmd(cmd="mkdir {}".format(dir_name))
 
-    rbd.exec_cmd(
-        cmd="rbd bench-write --io-total {} {}/{}".format(
-            config.get("io-total"), pool, image
-        )
-    )
-    rbd.exec_cmd(cmd="rbd snap create {}/{}@{}".format(pool, image, snap))
-    rbd.exec_cmd(cmd="rbd snap protect {}/{}@{}".format(pool, image, snap))
-    rbd.exec_cmd(
-        cmd="rbd clone {pool}/{}@{} {pool}/{}".format(image, snap, clone, pool=pool)
-    )
-
-    with parallel() as p:
-        p.spawn(
-            rbd.exec_cmd,
+        rbd.exec_cmd(
             cmd="rbd bench-write --io-total {} {}/{}".format(
-                config.get("io-total"), pool, clone
-            ),
+                config.get("io-total"), pool, image
+            )
         )
-        p.spawn(
-            rbd.exec_cmd,
-            cmd="rbd export {}/{} {}".format(pool, clone, dir_name + "/export9876"),
-        )
-
-    with parallel() as p:
-        p.spawn(rbd.exec_cmd, cmd="rbd resize -s {} {}/{}".format("20G", pool, image))
-        p.spawn(
-            rbd.exec_cmd,
-            cmd="rbd export {}/{} {}".format(pool, image, dir_name + "/export9877_1"),
+        rbd.exec_cmd(cmd="rbd snap create {}/{}@{}".format(pool, image, snap))
+        rbd.exec_cmd(cmd="rbd snap protect {}/{}@{}".format(pool, image, snap))
+        rbd.exec_cmd(
+            cmd="rbd clone {pool}/{}@{} {pool}/{}".format(image, snap, clone, pool=pool)
         )
 
-    with parallel() as p:
-        p.spawn(
-            rbd.exec_cmd,
-            cmd="rbd resize -s {} --allow-shrink {}/{}".format("8G", pool, image),
-        )
-        p.spawn(
-            rbd.exec_cmd,
-            cmd="rbd export {}/{} {}".format(pool, image, dir_name + "/export9877_2"),
-        )
+        with parallel() as p:
+            p.spawn(
+                rbd.exec_cmd,
+                cmd="rbd bench-write --io-total {} {}/{}".format(
+                    config.get("io-total"), pool, clone
+                ),
+            )
+            p.spawn(
+                rbd.exec_cmd,
+                cmd="rbd export {}/{} {}".format(pool, clone, dir_name + "/export9876"),
+            )
 
-    with parallel() as p:
-        p.spawn(rbd.exec_cmd, cmd="rbd flatten {}/{}".format(pool, clone))
-        p.spawn(
-            rbd.exec_cmd,
-            cmd="rbd export {}/{} {}".format(pool, image, dir_name + "/export9878"),
-        )
+        with parallel() as p:
+            p.spawn(
+                rbd.exec_cmd, cmd="rbd resize -s {} {}/{}".format("20G", pool, image)
+            )
+            p.spawn(
+                rbd.exec_cmd,
+                cmd="rbd export {}/{} {}".format(
+                    pool, image, dir_name + "/export9877_1"
+                ),
+            )
 
-    with parallel() as p:
-        p.spawn(
-            rbd.exec_cmd,
-            cmd="rbd export {}/{} {}".format(pool, clone, dir_name + "/export9879"),
-        )
-        p.spawn(rbd.exec_cmd, cmd="rbd lock add {}/{} lok".format(pool, clone))
+        with parallel() as p:
+            p.spawn(
+                rbd.exec_cmd,
+                cmd="rbd resize -s {} --allow-shrink {}/{}".format("8G", pool, image),
+            )
+            p.spawn(
+                rbd.exec_cmd,
+                cmd="rbd export {}/{} {}".format(
+                    pool, image, dir_name + "/export9877_2"
+                ),
+            )
 
-    with parallel() as p:
-        p.spawn(
-            rbd.exec_cmd,
-            cmd="rbd export {}/{} {}".format(pool, clone, dir_name + "/export9880_1"),
-        )
-        p.spawn(rbd.exec_cmd, cmd="rbd resize -s {} {}/{}".format("20G", pool, image))
+        with parallel() as p:
+            p.spawn(rbd.exec_cmd, cmd="rbd flatten {}/{}".format(pool, clone))
+            p.spawn(
+                rbd.exec_cmd,
+                cmd="rbd export {}/{} {}".format(pool, image, dir_name + "/export9878"),
+            )
 
-    with parallel() as p:
-        p.spawn(
-            rbd.exec_cmd,
-            cmd="rbd export {}/{} {}".format(pool, clone, dir_name + "/export9880_2"),
-        )
-        p.spawn(
-            rbd.exec_cmd,
-            cmd="rbd resize -s {} --allow-shrink {}/{}".format("8G", pool, image),
-        )
-    if config.get("cleanup", True):
-        rbd.clean_up(dir_name=dir_name, pools=[pool])
+        with parallel() as p:
+            p.spawn(
+                rbd.exec_cmd,
+                cmd="rbd export {}/{} {}".format(pool, clone, dir_name + "/export9879"),
+            )
+            p.spawn(rbd.exec_cmd, cmd="rbd lock add {}/{} lok".format(pool, clone))
 
-    return rbd.flag
+        with parallel() as p:
+            p.spawn(
+                rbd.exec_cmd,
+                cmd="rbd export {}/{} {}".format(
+                    pool, clone, dir_name + "/export9880_1"
+                ),
+            )
+            p.spawn(
+                rbd.exec_cmd, cmd="rbd resize -s {} {}/{}".format("20G", pool, image)
+            )
+
+        with parallel() as p:
+            p.spawn(
+                rbd.exec_cmd,
+                cmd="rbd export {}/{} {}".format(
+                    pool, clone, dir_name + "/export9880_2"
+                ),
+            )
+            p.spawn(
+                rbd.exec_cmd,
+                cmd="rbd resize -s {} --allow-shrink {}/{}".format("8G", pool, image),
+            )
+
+        return rbd.flag
+
+    except RbdBaseException as error:
+        log.error(error.message)
+        return 1
+
+    finally:
+        if config.get("cleanup", True):
+            rbd.clean_up(dir_name=dir_name, pools=[pool])
 
 
 def run(**kw):

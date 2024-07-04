@@ -561,6 +561,43 @@ def config_mirror_multi_pool(
     return output
 
 
+def compare_pool_mirror_status(mirror_obj, pool_name, status, timeout=120):
+    """
+    check if the pool mirror status is same as
+    the value passed in status argument.
+    Args:
+        mirror_obj: rbd mirror object
+        pool_name: name of the pool
+        status: expected status of the pool
+        timeout: time to wait for the status to be as expected
+    Returns:
+        0 if statuses are equal, 1 if not
+    """
+    pool_config = {"pool": pool_name, "verbose": True, "format": "json"}
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+
+    while end_time > datetime.datetime.now():
+        output, err = mirror_obj.mirror.pool.status(**pool_config)
+        if err:
+            log.error(f"Error while fetching rbd mirror pool status as {err}")
+            return 1
+
+        log.debug(f"RBD mirror status of pool: {output}")
+        pool_status = json.loads(output)
+
+        if pool_status["summary"]["health"] == status:
+            log.info(f"Mirror pool status: health: {status} as expected")
+            break
+
+        # Sleep for a short period to get pool status
+        time.sleep(30)
+
+    else:
+        log.error(f"Mirror pool status: health: {status} not as expected")
+        return 1
+    return 0
+
+
 def check_image_mirror_status(status, timeout=120, **kw):
     """
     Check if all the images in kw, have the status specified in status variable

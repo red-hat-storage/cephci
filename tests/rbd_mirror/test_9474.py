@@ -27,12 +27,14 @@ def test_9474(rbd_mirror, pool_type, **kw):
             p.spawn(hard_reboot, osd_cred, name="ceph-rbd2")
         time.sleep(60)
         mirror1.check_data(peercluster=mirror2, imagespec=imagespec)
-        mirror1.clean_up(peercluster=mirror2, pools=[pool])
         return 0
 
     except Exception as e:
         log.exception(e)
         return 1
+
+    finally:
+        mirror1.clean_up(peercluster=mirror2, pools=[pool])
 
 
 def run(**kw):

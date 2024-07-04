@@ -53,9 +53,6 @@ def run(ceph_cluster, **kw):
                 sleep(30)
         out, rc = clients[0].exec_command(sudo=True, cmd="ceph df")
         log.info(out)
-        import pdb
-
-        pdb.set_trace()
         out, rc = clients[0].exec_command(
             sudo=True,
             cmd=f"ls -lrt /mnt/ | grep {fs_io_obj.mounting_dir} |  awk {{'print $9'}} ",

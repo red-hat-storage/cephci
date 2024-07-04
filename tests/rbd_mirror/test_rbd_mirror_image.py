@@ -86,9 +86,6 @@ def run(**kw):
         mirror1.mirror_snapshot_schedule_remove(
             poolname=poolname, imagename=imagename_1
         )
-        # Cleans up the configuration
-        mirror1.delete_image(imagespec_1)
-        mirror1.clean_up(peercluster=mirror2, pools=[poolname])
         return 0
 
     except ValueError as ve:
@@ -99,3 +96,8 @@ def run(**kw):
     except Exception as e:
         log.exception(e)
         return 1
+
+    finally:
+        # Cleans up the configuration
+        mirror1.delete_image(imagespec_1)
+        mirror1.clean_up(peercluster=mirror2, pools=[poolname])

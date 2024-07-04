@@ -40,6 +40,7 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     pool_obj = PoolFunctions(node=cephadm)
+    client_node = ceph_cluster.get_nodes(role="client")[0]
 
     if config.get("ec_pool_recovery_improvement"):
         try:
@@ -770,17 +771,20 @@ def run(ceph_cluster, **kw):
 
                 # Scenario 4: Generate POOL_TOO_MANY_PGS
                 POOL_TOO_MANY_PGS = False
-                values = [128, 256, 512, 1024]
+                values = [256, 512, 1024]
                 pool_val = rados_obj.get_pg_autoscale_status(
                     pool_name=pool["pool_name"]
                 )
-                value = 64
+                value = 128
                 for val in values:
                     if value <= pool_val["pg_num_final"]:
                         value = val
                 log.debug(f"PG count selected to trigger too many pgs is : {value}")
                 rados_obj.set_pool_property(
                     pool=pool["pool_name"], props="pg_num", value=value
+                )
+                rados_obj.set_pool_property(
+                    pool=pool["pool_name"], props="pgp_num", value=value
                 )
                 end_time = datetime.datetime.now() + datetime.timedelta(seconds=1200)
                 while end_time > datetime.datetime.now():
@@ -805,6 +809,9 @@ def run(ceph_cluster, **kw):
                 POOL_PG_NUM_NOT_POWER_OF_TWO = False
                 rados_obj.set_pool_property(
                     pool=pool["pool_name"], props="pg_num", value=5
+                )
+                rados_obj.set_pool_property(
+                    pool=pool["pool_name"], props="pgp_num", value=5
                 )
                 end_time = datetime.datetime.now() + datetime.timedelta(seconds=1200)
                 while end_time > datetime.datetime.now():
@@ -966,12 +973,18 @@ def run(ceph_cluster, **kw):
         pgid = ""
         osd_pick = ""
         second_osd_pick = ""
+        rados_obj.configure_pg_autoscaler(default_mode="warn")
         for entry in pool_target_configs.values():
             pool_name = entry["pool_name"]
             try:
                 method_should_succeed(rados_obj.create_pool, **entry)
                 # Write IO to pool
-                rados_obj.bench_write(pool_name=pool_name)
+                rados_obj.bench_write(
+                    pool_name=pool_name,
+                    rados_write_duration=50,
+                    max_objs=50,
+                    verify_stats=False,
+                )
 
                 log.info("Getting a sample PG from the pool")
                 pool_id = pool_obj.get_pool_id(pool_name=pool_name)
@@ -983,72 +996,117 @@ def run(ceph_cluster, **kw):
                 osd_tree_op = rados_obj.run_ceph_command(cmd="ceph osd tree")
                 log.info(
                     f"Before bringing down osds, output from ceph osd tree : {osd_tree_op}"
+                    f"Setting norecovery, nonbackfill & no rebalance flags on the cluster so "
+                    f"that the acting set does not change upon making OSD down"
                 )
 
-                osd_pick = pg_set.pop()
-                second_osd_pick = pg_set.pop()
+                rados_obj.change_recovery_flags(action="set", flags=["noout"])
+
+                osd_pick = pg_set[0]
+                second_osd_pick = pg_set[1]
                 log.info(
                     f"Bringing down two OSDs from the acting set : {osd_pick} and {second_osd_pick}"
                 )
                 log.info(f"The OSD that will be remaining in the pg_set is : {pg_set}")
                 if not rados_obj.change_osd_state(
-                    action="stop", target=osd_pick, timeout=20
+                    action="stop", target=osd_pick, timeout=200
                 ):
                     log.error(f"Failed to stop OSD : {osd_pick}")
                     raise Exception("test-bed set-up failure")
 
+                log.info(
+                    f"At size = min_size, writes would possible as well as reads."
+                    f"Checking if read operations are allowed in pool {pool_name}"
+                )
+
+                if not pool_obj.do_rados_get(pool=pool_name, read_count=20):
+                    log.error(
+                        f"Could not perform read operations on the pool {pool_name} with 1 OSD down"
+                    )
+                    raise Exception("Reads failed on the cluster Error")
+
+                if pool_obj.do_rados_put(client=client_node, pool=pool_name, nobj=10):
+                    log.error(
+                        "UnAble to perform writes at min_size with 1 OSD down. Error"
+                    )
+                    raise Exception("Writes failed on the cluster Error")
+
+                log.info(
+                    "Able to perform read & writes operations on the cluster with 1 OSD down"
+                    " Proceeding to bring down another OSD on the PG"
+                )
+
                 if not rados_obj.change_osd_state(
-                    action="stop", target=second_osd_pick, timeout=20
+                    action="stop", target=second_osd_pick, timeout=200
                 ):
                     log.error(f"Failed to stop OSD : {second_osd_pick}")
                     raise Exception("test-bed set-up failure")
                 time.sleep(10)
 
                 # Get the min_size property of the pool
-                min_size_val = 0
                 min_size_val = rados_obj.get_pool_property(
                     pool=pool_name, props="min_size"
                 )
                 log.info(f"Current min_size of the pool - {min_size_val}")
                 post_pg_set = rados_obj.get_pg_acting_set(pg_num=pgid)
                 log.info(
-                    f"Acting set post OSDs are down and before rados put op : {post_pg_set}"
+                    f"Acting set post 2 OSDs are down and before rados put op : {post_pg_set}"
                 )
-                log.info(f"Current OSDs in acting set {post_pg_set}")
-                log.info(
-                    f"Initial pg set fetched from pool id {pool_id} for pg id {pgid} is {pg_set}"
-                )
-                if len(post_pg_set) == 1 and post_pg_set[0] == pg_set[0]:
-                    log.info(f"No change in acting set for pg {pgid}")
-                else:
-                    log.error("Acting set has changed, no need to continue the test")
-                    raise Exception("Aborting the test as acting set has changed")
+                if len(post_pg_set) != 1:
+                    log.error("Acting set contains more than 1 OSD. Fail")
+                    raise Exception("Acting set changed error")
 
-                log.info("Performing rados put op")
-                client_node = ceph_cluster.get_nodes(role="client")[0]
-                pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                log.debug(pool_stat)
-                total_objs = pool_stat["stats"]["objects"]
-                pool_obj.do_rados_put(
-                    client=client_node, pool=pool_name, nobj=10, timeout=10
+                pool_stat_1 = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                total_objs_1 = pool_stat_1["stats"]["objects"]
+                log.debug(
+                    f"pool stats when 2 OSDs from AC is down before write is {pool_stat_1}. "
+                    f"\n Total objects on the pool {total_objs_1}"
                 )
-                pool_stat_post = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                log.debug(pool_stat_post)
-                if pool_stat_post["stats"]["objects"] != total_objs:
+
+                if pool_obj.do_rados_get(pool=pool_name, read_count=20):
+                    log.error(
+                        f"Could perform read operations on the pool {pool_name} with 2 OSDs down."
+                        f"Should not be able to perform read operations"
+                    )
+                    raise Exception("Reads test failed on the cluster Error")
+
+                if not pool_obj.do_rados_put(
+                    client=client_node, pool=pool_name, nobj=5
+                ):
+                    log.error(
+                        f"Able to perform writes at min_size on the pool {pool_name}. with 2 OSDs down"
+                        f"Should not be able to perform write operations"
+                    )
+                    raise Exception("Writes test failed on the cluster Error")
+
+                log.info(
+                    "Unable to perform read & write operations on the cluster as expected with 2 OSDs down"
+                    " Proceeding to set min_size to 1 on the pool"
+                )
+
+                pool_stat_2 = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                total_objs_2 = pool_stat_2["stats"]["objects"]
+                log.debug(
+                    f"pool stats when 2 OSDs from AC is down post write is {pool_stat_2}\n"
+                    f"No of objects post write with 2 OSD down : {total_objs_2}"
+                )
+                if total_objs_2 != total_objs_1:
                     log.error(
                         "Write ops should not have been possible, number of objects in the pool have changed"
                     )
                     raise Exception(
-                        f"Pool {pool_name} has {pool_stat_post['stats']['objects']} objs | Expected {total_objs} objs"
+                        f"Pool {pool_name} has {pool_stat_2['stats']['objects']} objs |"
+                        f" Expected {total_objs_1} objs, Actually present on pool : {total_objs_2}"
                     )
-                else:
-                    ceph_health = rados_obj.run_ceph_command(cmd="ceph health detail")
-                    log.info(
-                        f"ceph health details at the time of IO not being served - {ceph_health}"
-                    )
-                    log.info(
-                        "RADOS PUT op failed as expected since cluster is in degraded state!! "
-                    )
+
+                ceph_health = rados_obj.run_ceph_command(cmd="ceph health detail")
+                log.info(
+                    f"ceph health details at the time of IO not being served - {ceph_health}"
+                )
+                log.info(
+                    "RADOS PUT & GET op failed as expected since cluster is in degraded state!! "
+                    "Modifying the min_size for the pool, so that read & write should be possible"
+                )
 
                 # Setting the min-size as 1. The IOs must be resumed and the PGs should become active+clean state.
                 if not rados_obj.set_pool_property(
@@ -1066,40 +1124,48 @@ def run(ceph_cluster, **kw):
                 log.info(
                     f"Post modification, Pg set fetched from pool id {pool_id} for pg id {pgid} is {new_pg_set}"
                 )
-                log.info(f"Current OSDs in acting set {new_pg_set}")
-                log.info(
-                    f"Initial pg set fetched from pool id {pool_id} for pg id {pgid} is {pg_set}"
-                )
-                if len(new_pg_set) == 1 and new_pg_set[0] == pg_set[0]:
+                if len(new_pg_set) == 1:
                     log.info(f"No change in acting set for pg {pgid}")
                 else:
-                    log.error("Acting set has changed, no need to continue the test")
-                    raise Exception("Aborting the test as acting set has changed")
+                    log.error("Acting set contains more than 1 OSD")
+                    raise Exception("Aborting the test as acting set invalid")
 
                 osd_tree_op = rados_obj.run_ceph_command(cmd="ceph osd tree")
                 log.info(
-                    f"After bringing down osds, output from ceph osd tree : {osd_tree_op}"
+                    f"After bringing down 2 osds, output from ceph osd tree : {osd_tree_op}"
                 )
                 time.sleep(10)
 
                 # verify IOs are resumed after sometime post setting min_size to 1
-                pool_obj.do_rados_put(
-                    client=client_node, pool=pool_name, nobj=10, timeout=10
-                )
-                pool_stat_post = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                log.debug(pool_stat_post)
-                if pool_stat_post["stats"]["objects"] <= total_objs:
+                if not pool_obj.do_rados_get(pool=pool_name, read_count=20):
                     log.error(
-                        "Write ops should have been possible, number of objects in the pool have NOT changed"
+                        f"Unable perform read operations on the pool {pool_name}"
+                        f" with 2 OSD down and min_size set to 1"
                     )
-                    raise Exception(
-                        f"Pool {pool_name} has {pool_stat_post['stats']['objects']} objs"
+                    raise Exception("Reads tests failed on the cluster Error")
+
+                if pool_obj.do_rados_put(client=client_node, pool=pool_name, nobj=5):
+                    log.error(
+                        f"Unable perform write operations on the pool {pool_name}"
+                        f" with 2 OSD down and min_size set to 1"
                     )
-                else:
-                    log.info("RADOS PUT op is successful as expected!! ")
+                    raise Exception("Writes test failed on the cluster Error")
 
                 log.info(
-                    "With cluster in degraded state and OSDs in acting set equal to min_size, IOs are served"
+                    "With cluster in degraded state and OSDs in acting set equal to min_size, i.e 1 , IOs are served"
+                )
+                pool_stat_last = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                log.debug(pool_stat_last)
+                if pool_stat_last["stats"]["objects"] <= total_objs_2:
+                    log.error(
+                        "Write ops should have been possible, number of objects in the pool have NOT changed"
+                        "with min_size set to 1 with 1 OSD in AC"
+                    )
+                    raise Exception(
+                        f"Pool {pool_name} has {pool_stat_last['stats']['objects']} objs"
+                    )
+                log.info(
+                    "RADOS PUT op is successful as expected!! with min_size set to 1"
                 )
 
                 log.info(
@@ -1110,6 +1176,9 @@ def run(ceph_cluster, **kw):
                 log.exception(e)
                 return 1
             finally:
+                log.info("\n\n\n\n ====== IN FINALLY BLOCK ====== \n\n\n\n")
+                rados_obj.change_recovery_flags(action="unset", flags=["noout"])
+                rados_obj.configure_pg_autoscaler(default_mode="on")
                 # Starting the OSD back
                 if not rados_obj.change_osd_state(action="restart", target=osd_pick):
                     log.error(f"Failed to start OSD : {osd_pick}")
@@ -1117,18 +1186,118 @@ def run(ceph_cluster, **kw):
                     action="restart", target=second_osd_pick
                 ):
                     log.error(f"Failed to start OSD : {second_osd_pick}")
-
-                # Checking the PG state. There Should not be inactive state
-                pg_state = rados_obj.get_pg_state(pg_id=pgid)
-                if any("inactive" in key for key in pg_state.split("+")):
-                    log.error(
-                        f"PG: {pgid} in inactive state after OSD down and min_size set to 1)"
-                    )
-                    return 1
-
                 rados_obj.delete_pool(pool=pool_name)
+                time.sleep(60)
                 # log cluster health
                 rados_obj.log_cluster_health()
+        return 0
+
+    if config.get("Verify_osd_in_out_behaviour"):
+        log.info(
+            "Test to verify the behaviour of the OSD when it is marked out and back in to the cluster"
+        )
+        try:
+            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
+            osd_list = []
+            for entry in osd_tree["nodes"]:
+                if entry["id"] > 0:
+                    osd_list.append(entry["id"])
+            selected_osd = random.choice(osd_list)
+
+            log.info(
+                f"OSDs on the cluster : {osd_list}\n Selected OSD for testing : {selected_osd}"
+            )
+            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
+            for entry in osd_tree["nodes"]:
+                if entry["id"] == selected_osd:
+                    log.info(f"Selected OSD details before marking out : {entry}")
+                    selected_osd_details_init = entry
+                    break
+
+            # Making the OSD out of the cluster
+            if not rados_obj.update_osd_state_on_cluster(
+                osd_id=selected_osd, state="out"
+            ):
+                log.error(f"OSD.{selected_osd} not marked out error")
+                raise Exception("OSD not marked out error")
+            log.info(f"OSD: {selected_osd} marked out successfully. ")
+
+            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
+            for entry in osd_tree["nodes"]:
+                if entry["id"] == selected_osd:
+                    log.info(f"Selected OSD details After marking out : {entry}")
+                    selected_osd_details_post = entry
+                    break
+
+            if (
+                selected_osd_details_post["crush_weight"]
+                != selected_osd_details_init["crush_weight"]
+            ):
+                log.error(
+                    f"Crush weight modified post marking the OSD.{selected_osd} out."
+                    f"Before : {selected_osd_details_init['crush_weight']} "
+                    f"After : {selected_osd_details_post['crush_weight']}"
+                )
+                raise Exception("OSD Crush weights modified error")
+
+            if selected_osd_details_post["reweight"] != 0:
+                log.error(
+                    f"reweight not modified post marking the OSD.{selected_osd} out."
+                    f"Before : {selected_osd_details_init['reweight']} "
+                    f"After : {selected_osd_details_post['reweight']}"
+                )
+                raise Exception("OSD reweights not modified error")
+
+            # Making the OSD in of the cluster
+            if not rados_obj.update_osd_state_on_cluster(
+                osd_id=selected_osd, state="in"
+            ):
+                log.error(f"OSD.{selected_osd} not marked in the cluster")
+                raise Exception("OSD not marked in error")
+
+            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
+            for entry in osd_tree["nodes"]:
+                if entry["id"] == selected_osd:
+                    log.info(f"Selected OSD details After marking IN : {entry}")
+                    selected_osd_details_last = entry
+                    break
+
+            if (
+                selected_osd_details_last["crush_weight"]
+                != selected_osd_details_init["crush_weight"]
+            ):
+                log.error(
+                    f"Crush weight modified post marking the OSD.{selected_osd} IN."
+                    f"Before : {selected_osd_details_init['crush_weight']} "
+                    f"After : {selected_osd_details_post['crush_weight']}"
+                )
+                raise Exception("OSD Crush weights modified error")
+
+            if (
+                selected_osd_details_last["reweight"]
+                != selected_osd_details_init["reweight"]
+            ):
+                log.error(
+                    f"reweight modified post marking the OSD.{selected_osd} IN."
+                    f"Before : {selected_osd_details_init['reweight']} "
+                    f"After : {selected_osd_details_last['reweight']}"
+                )
+                raise Exception("OSD reweights modified error")
+
+            log.info(
+                "Tested the behaviour of OSD upon marking it in and out of the cluster"
+            )
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+            rados_obj.update_osd_state_on_cluster(osd_id=selected_osd, state="in")
+            # log cluster health
+            rados_obj.log_cluster_health()
         return 0
 
 

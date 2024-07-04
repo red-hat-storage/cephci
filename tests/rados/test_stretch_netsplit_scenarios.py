@@ -42,6 +42,9 @@ def run(ceph_cluster, **kw):
     netsplit_site = config.get("netsplit_site", "DC1")
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
     cluster_nodes = ceph_cluster.get_nodes()
+    installer = ceph_cluster.get_nodes(role="installer")[0]
+    init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+    log.debug(f"Initial time when test was started : {init_time}")
 
     try:
         # Starting to flush IP table rules on all hosts
@@ -310,6 +313,9 @@ def run(ceph_cluster, **kw):
 
         if config.get("delete_pool"):
             rados_obj.delete_pool(pool=pool_name)
+
+        init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        log.debug(f"time when test was Ended : {init_time}")
 
         # log cluster health
         rados_obj.log_cluster_health()

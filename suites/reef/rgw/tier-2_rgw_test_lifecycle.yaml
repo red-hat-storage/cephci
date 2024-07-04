@@ -259,7 +259,6 @@ tests:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_multiple_bucket.yaml
         timeout: 300
-      comments: Product Bug 2270334, 7.0 and 7.1
 
   - test:
       name: Add a new lifecycle configuration to a bucket

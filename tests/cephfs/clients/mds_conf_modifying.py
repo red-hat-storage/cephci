@@ -50,7 +50,7 @@ def run(ceph_cluster, **kw):
                 sudo=True, cmd=f"{conf_get} defer_client_eviction_on_laggy_osds"
             )
             defer_client_eviction_on_laggy_osds = output[0].strip()
-            if defer_client_eviction_on_laggy_osds != "false":
+            if defer_client_eviction_on_laggy_osds.lower() != "false":
                 log.error(
                     f"defer_client_eviction_on_laggy_osds values is expected to be disabled by default.\n "
                     f"but the value is {defer_client_eviction_on_laggy_osds}"
@@ -226,7 +226,7 @@ def set_balance_automate_and_validate(client):
         "balance_automate"
     ]
 
-    if default_balance_automate_value != "false":
+    if default_balance_automate_value.lower() != "false":
         log.error(
             f"balance automate values is expected to be disabled by default.\n "
             f"but the value is {default_balance_automate_value}"
@@ -252,7 +252,7 @@ def set_balance_automate_and_validate(client):
     out, rc = client.exec_command(sudo=True, cmd="ceph fs get cephfs -f json")
     json_data = json.loads(out)
     balance_automate = json_data["mdsmap"]["flags_state"]["balance_automate"]
-    if balance_automate != "false":
+    if balance_automate.lower() != "false":
         log.error(
             f"balance automate values is unable to set to default value.\n "
             f"but the value is {balance_automate}"

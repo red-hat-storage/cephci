@@ -452,8 +452,8 @@ tests:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://extensa001:8080 --access-key test123 --secret test123 --default"
-              - "radosgw-admin period pull --url http://extensa001:8080 --access-key test123 --secret test123"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:extensa001}:8080 --access-key test123 --secret test123 --default"
+              - "radosgw-admin period pull --url http://{node_ip:extensa001}:8080 --access-key test123 --secret test123"
               - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:extensa012}:8080,http://{node_ip:extensa013}:8080,http://{node_ip:extensa014}:8080 --access-key test123 --secret test123"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.shared.sec.sync rgw_realm india"
@@ -501,15 +501,15 @@ tests:
           config:
             cephadm: true
             commands:
-              - "radosgw-admin zonegroup modify --endpoints=http://extensa001:5000 --rgw-zonegroup shared --rgw-realm india --access-key test123 --secret-key test123"
-              - "radosgw-admin zone modify --endpoints=http://extensa001:5000 --rgw-zonegroup shared --rgw-realm india --rgw-zone primary --access-key test123 --secret-key test123"
+              - "radosgw-admin zonegroup modify --endpoints=http://{node_ip:extensa001}:5000 --rgw-zonegroup shared --rgw-realm india --access-key test123 --secret-key test123"
+              - "radosgw-admin zone modify --endpoints=http://{node_ip:extensa001}:5000 --rgw-zonegroup shared --rgw-realm india --rgw-zone primary --access-key test123 --secret-key test123"
               - "radosgw-admin period update --commit"
         ceph-sec:
           config:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin zone modify --rgw-zone secondary --endpoints=http://extensa012:5000 --access-key test123 --secret-key test123"
+              - "radosgw-admin zone modify --rgw-zone secondary --endpoints=http://{node_ip:extensa012}:5000 --access-key test123 --secret-key test123"
               - "radosgw-admin period update --commit"
       desc: Setting up RGW multisite replication environment
       module: exec.py

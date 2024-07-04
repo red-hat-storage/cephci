@@ -48,10 +48,10 @@ def run(ceph_cluster, **kw):
     bluestore_obj = BluestoreToolWorkflows(node=cephadm)
     client = ceph_cluster.get_nodes(role="client")[0]
 
-    out, _ = cephadm.shell(args=["ceph osd ls"])
-    osd_list = out.strip().split("\n")
-
     try:
+        osd_list = rados_obj.get_active_osd_list()
+        log.info(f"List of OSDs: \n{osd_list}")
+
         if config.get("non-collocated"):
             log.info(
                 "\n\n Execution begins for CBT non-collocated scenarios ************ \n\n"

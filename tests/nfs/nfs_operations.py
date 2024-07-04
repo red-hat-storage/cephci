@@ -317,3 +317,45 @@ spec:
     # Start the rpc-statd service on server
     cmd = "sudo systemctl start rpc-statd"
     nfs_node.exec_command(cmd=cmd)
+
+
+def getfattr(client, file_path, attribute_name=None):
+    # Fetch the extended attribute for file or directory
+    """
+    Args:
+    attribute_name (str): Specific attribute name to retrieve. If None, retrieves all attributes.
+    file_path (str): Path to the file/dir whose extended attribute is to be retrieved.
+    """
+    cmd = f"getfattr -d {file_path}"
+    if attribute_name:
+        cmd += " -n user.{attribute_name}"
+    out = client.exec_command(sudo=True, cmd=cmd)
+    log.info(out)
+    return out
+
+
+def setfattr(client, file_path, attribute_name, attribute_value):
+    """
+    Sets the value of an extended attribute on a file using setfattr command.
+
+    Args:
+    - file_path (str): Path to the file/dir where the extended attribute is to be set.
+    - attribute_name (str): Name of the extended attribute to set.
+    - attribute_value (str): Value to set for the extended attribute.
+    """
+    cmd = f"setfattr -n user.{attribute_name} -v {attribute_value} {file_path}"
+    out = client.exec_command(sudo=True, cmd=cmd)
+    return out
+
+
+def removeattr(client, file_path, attribute_name):
+    """
+    Remove the value of an extended attribute on a file.
+
+    Args:
+    - file_path (str): Path to the file/dir where the extended attribute needs tp be removed.
+    - attribute_name (str): Name of the extended attribute to be removed.
+    """
+    cmd = f"setfattr -x user.{attribute_name} {file_path}"
+    out = client.exec_command(sudo=True, cmd=cmd)
+    return out

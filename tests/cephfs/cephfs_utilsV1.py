@@ -2784,7 +2784,7 @@ os.system('sudo systemctl start  network')
 
         def file_extract():
             log.info("IO tool scheduled : FILE_EXTRACT")
-            io_params = {"testdir_prefix": "file_extract_dir"}
+            io_params = {"testdir_prefix": "file_extract_dir", "compile_test": 0}
             if kwargs.get("file_extract_params"):
                 file_extract_params = kwargs.get("file_extract_params")
                 for io_param in io_params:
@@ -2798,11 +2798,36 @@ os.system('sudo systemctl start  network')
             client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
             client.exec_command(
                 sudo=True,
-                cmd=f"cd {io_path};wget -O linux.tar.gz http://download.ceph.com/qa/linux-5.4.tar.gz",
+                cmd=f"cd {io_path};wget -O linux.tar.xz http://download.ceph.com/qa/linux-6.5.11.tar.xz",
             )
             client.exec_command(
                 sudo=True,
-                cmd=f"cd {io_path};tar -xzf linux.tar.gz tardir/ ; sleep 10 ; rm -rf  tardir/",
+                cmd=f"cd {io_path};tar -xJf linux.tar.xz",
+                long_running=True,
+                timeout=3600,
+            )
+            log.info(f"untar suceeded on {mounting_dir}")
+            if io_params["compile_test"] == 1:
+                log.info("Install dependent packages")
+                cmd = "yum install -y --nogpgcheck flex bison bc elfutils-libelf-devel openssl-devel"
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+                out, rc = client.exec_command(
+                    sudo=True,
+                    cmd="grep -c processor /proc/cpuinfo",
+                )
+                cpu_cnt = out.strip()
+                log.info(f"cpu_cnt:{cpu_cnt},out:{out}")
+                cmd = f"cd {io_path}/; cd linux-6.5.11;make defconfig;make -j {cpu_cnt}"
+                client.exec_command(sudo=True, cmd=cmd, timeout=3600)
+                log.info(f"Compile test passed on {mounting_dir}")
+
+            # cleanup
+            client.exec_command(
+                sudo=True,
+                cmd=f"rm -rf  {io_path}",
             )
 
         def wget():
@@ -3724,3 +3749,180 @@ os.system('sudo systemctl start  network')
         else:
             log.info("There is no failed test, skipping debug logs upload")
             return 0
+
+    # Ceph Client Support Functions
+    def create_ceph_client(
+        self,
+        client,
+        ceph_client_name,
+        mon_caps,
+        osd_caps,
+        mds_caps,
+        keyring=True,
+        validate=True,
+    ):
+        """
+        Creates a new client
+        Args:
+            client:
+            ceph_client_name:
+            mon_caps:
+            osd_caps:
+            mds_caps:
+            validate:
+        Example :
+            create_ceph_client(client, "admin", "allow r", "allow *", "allow rwx")
+        Returns:
+
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph auth get client.{ceph_client_name}", check_ec=False
+        )
+        if rc:
+            log.error(f"user with name client.{ceph_client_name} Already exits")
+            raise CommandFailed(
+                f"user with name client.{ceph_client_name} Already exits with caps as {out}"
+            )
+        client_create_cmd = f"ceph auth add client.{ceph_client_name}"
+        if mon_caps:
+            client_create_cmd += f" mon {mon_caps}"
+        if osd_caps:
+            client_create_cmd += f" osd {osd_caps}"
+        if mds_caps:
+            client_create_cmd += f" mds {mds_caps}"
+
+        if keyring:
+            client_create_cmd += f" -o /etc/ceph/ceph.client.{ceph_client_name}.keyring"
+
+        client.exec_command(
+            sudo=True,
+            cmd=client_create_cmd,
+        )
+        if validate:
+            out, rc = client.exec_command(
+                sudo=True, cmd=f"ceph auth get client.{ceph_client_name}"
+            )
+            log.info(f"User has been created successfully with below caps {out}")
+
+        expected_caps = {
+            "mon": mon_caps.strip("'"),
+            "osd": osd_caps.strip("'"),
+            "mds": mds_caps.strip("'"),
+        }
+        actual_caps = self.parse_caps(out)
+
+        # Validate the caps
+        for cap_type, expected_value in expected_caps.items():
+            if actual_caps.get(cap_type) != expected_value:
+                log.error(
+                    f"Validation failed for {cap_type} caps: Expected {expected_value}, got {actual_caps.get(cap_type)}"
+                )
+                raise CommandFailed(
+                    f"Validation failed for {cap_type} caps: Expected {expected_value}, got {actual_caps.get(cap_type)}"
+                )
+
+        log.info("Caps validation successful")
+
+    def update_ceph_client(
+        self, client, ceph_client_name, mon_caps, osd_caps, mds_caps, validate=True
+    ):
+        """
+        Updates the existing client
+        Args:
+            client:
+            ceph_client_name:
+            mon_caps:
+            osd_caps:
+            mds_caps:
+            validate:
+
+        Returns:
+
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph auth get client.{ceph_client_name}", check_ec=False
+        )
+        if not rc:
+            log.error(f"user with name client.{ceph_client_name} does not exits")
+            raise CommandFailed(
+                f"user with name client.{ceph_client_name} does not exits {out}"
+            )
+        client_update_cmd = f"ceph auth caps client.{ceph_client_name}"
+        if mon_caps:
+            client_update_cmd += f" mon {mon_caps}"
+        if osd_caps:
+            client_update_cmd += f" osd {osd_caps}"
+        if mds_caps:
+            client_update_cmd += f" mds {mds_caps}"
+        client.exec_command(
+            sudo=True,
+            cmd=client_update_cmd,
+        )
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph auth get client.{ceph_client_name}", check_ec=False
+        )
+        expected_caps = {
+            "mon": mon_caps.strip("'"),
+            "osd": osd_caps.strip("'"),
+            "mds": mds_caps.strip("'"),
+        }
+        actual_caps = self.parse_caps(out)
+
+        # Validate the caps
+        for cap_type, expected_value in expected_caps.items():
+            if actual_caps.get(cap_type) != expected_value:
+                log.error(
+                    f"Validation failed for {cap_type} caps: Expected {expected_value}, got {actual_caps.get(cap_type)}"
+                )
+                raise CommandFailed(
+                    f"Validation failed for {cap_type} caps: Expected {expected_value}, got {actual_caps.get(cap_type)}"
+                )
+
+        log.info("Caps validation successful")
+
+    def delete_ceph_client(self, client, ceph_client_name, validate=True):
+        """
+        Deletes the client
+        Args:
+            client:
+            ceph_client_name:
+            validate:
+
+        Returns:
+
+        """
+        # Check if the client exists
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph auth get client.{ceph_client_name}", check_ec=False
+        )
+        if rc != 0:
+            log.error(f"User with name client.{ceph_client_name} does not exist")
+            raise CommandFailed(
+                f"User with name client.{ceph_client_name} does not exist {out}"
+            )
+
+        # Delete the client
+        client.exec_command(sudo=True, cmd=f"ceph auth del client.{ceph_client_name}")
+
+        # Validate the deletion if required
+        if validate:
+            out, rc = client.exec_command(
+                sudo=True,
+                cmd=f"ceph auth get client.{ceph_client_name}",
+                check_ec=False,
+            )
+            if rc == 0:
+                log.error(f"User with name client.{ceph_client_name} not deleted")
+                raise CommandFailed(
+                    f"User with name client.{ceph_client_name} not deleted"
+                )
+
+    def parse_caps(self, output):
+        caps = {}
+        for line in output.splitlines():
+            if line.strip().startswith("caps "):
+                parts = line.strip().split(" = ")
+                cap_type = parts[0].split()[-1]
+                cap_value = parts[1].strip().strip('"')
+                caps[cap_type] = cap_value
+        return caps
