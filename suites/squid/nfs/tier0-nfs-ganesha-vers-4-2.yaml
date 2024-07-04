@@ -312,3 +312,33 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+
+  - test:
+      name: Nfs verify multiple extended attribute with parallel clients access
+      module: nfs_set_retrieve_xattr_multi_client.py
+      desc: Test multiple extended attribute with multiple clients
+      polarion-id: CEPH-83592377
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+
+  - test:
+      name: Nfs verify extended attributes are preserved across filesystem operations
+      module: nfs_test_xattr_across_file_operations.py
+      desc: Test the extended attributes are preserved across filesystem operations copy and move file
+      polarion-id: CEPH-83592378
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Nfs verify extended attributes on readonly file
+      module: nfs_verify_xattr_readonly_file.py
+      desc: Test the extended attributes on the readonly file
+      polarion-id: CEPH-83592397
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1

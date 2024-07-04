@@ -1,9 +1,7 @@
 #===============================================================================================
-# Conf: conf/reef/cephadm/tier-0.yaml
-# Test cases for cluster service operation
-#    - Bootstrap
-#    - Perform stop operation for Mon and Mgr service
-#
+#    - Bootstrap RHCS 7.0 cluster
+#    - Deploy NFS-Ganesha with HA using spec file
+#    - Verify NFS-Ganesha HA scenarios
 #===============================================================================================
 tests:
   - test:
@@ -77,59 +75,62 @@ tests:
         install_packages:
           - ceph-common
         copy_admin_keyring: true
-      desc: Configure the ceph client system
+      desc: Configure the RGW,RBD client system
       destroy-cluster: false
       module: test_client.py
       name: configure client
 
   - test:
-      name: Stopping mon and mgr service
-      desc: Test Ceph orch stop mon and mgr services
-      module: test_cluster_service_operations.py
-      polarion-id: CEPH-83574435
+      name: Validate multiple ingress service
+      desc: Deploy multiple ingress service with different virtual IP
+      module: test_cephadm.py
+      polarion-id: CEPH-83592023
       config:
-        operation: stop
-        service:
-          - "mon"
-          - "mgr"
-      destroy-cluster: false
-      abort-on-fail: true
-
-  - test:
-      name: OSD service ops using systemctl
-      desc: Test stop and start OSD service using systemctl
-      module: test_osd_service_operations.py
-      polarion-id: CEPH-83573802
-      destroy-cluster: false
-      abort-on-fail: true
-
-  - test:
-      name: Validate pid limits are enforced
-      desc: Verify the pid limits are set for different daemons
-      module: test_validate_pid_limit.py
-      polarion-id: CEPH-83575590
-      destroy-cluster: false
-      abort-on-fail: true
-
-  - test:
-      name: Validate container cpu limit in cephadm
-      desc: Verify support to customize daemon container cpu limit
-      polarion-id: CEPH-83591038
-      module: test_validate_container_cpu_limit.py
-      config:
-        spec:
-          service_type: osd
-          service_id: all-available-devices
-          encrypted: true
-          placement:
-          host_pattern: '*'
-          data_devices:
-          all: true
-          extra_container_args:
-            - "--cpus=1"
-
-  - test:
-      name: Validate the crash daemon report any crashes that happened
-      desc: Verify crashes are identified and reported by crash daemon
-      polarion-id: CEPH-83592478
-      module: test_verify_crash_daemon_report_crashes.py
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nfs
+                  service_id: nfs-service
+                  placement:
+                    nodes:
+                      - node1
+                  spec:
+                    port: 3333
+                    enable_haproxy_protocol: true
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: ingress
+                  service_id: nfs.ingress.foo
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                  spec:
+                    backend_service: nfs.nfs-service
+                    frontend_port: 443
+                    monitor_port: 9049
+                    virtual_ip: 10.0.209.90/22
+                    enable_haproxy_protocol: true
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: ingress
+                  service_id: nfs.ingress.foo2
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                  spec:
+                    backend_service: nfs.nfs-service
+                    frontend_port: 443
+                    monitor_port: 9050
+                    virtual_ip: 10.0.208.231/22
+                    enable_haproxy_protocol: true

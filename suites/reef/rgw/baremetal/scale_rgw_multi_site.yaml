@@ -65,6 +65,118 @@ tests:
       clusters:
         ceph-pri:
           config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "radosgw-admin sync group create --group-id=global_group --status=enabled"
+              - "radosgw-admin sync group flow create --group-id=global_group --flow-id=global_groupflow --flow-type=symmetrical --zones=primary,secondary"
+              - "radosgw-admin sync group pipe create --group-id=global_group --pipe-id=global_grouppipe --source-zones='*' --dest-zones='*'"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin sync status"
+      desc: Configure zonegroup level sync policy
+      polarion-id: CEPH-83575382
+      module: exec.py
+      name: Configure zonegroup level sync policy
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_aws.py
+            config-file-name: ../../aws/configs/test_aws_regular_and_versioned_bucket_creation.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: create regular and versioned bucket in primary
+      module: sanity_rgw_multisite.py
+      name: create regular and versioned bucket in primary
+      polarion-id: CEPH-83575382
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - clara001
+            drivers:
+              - clara001
+              - clara011
+              - clara012
+            fill_percent: 30
+            record_sync_on_site: ceph-sec
+            bucket_prefix: reg-cosbench-bkt-
+            number_of_buckets: 1
+            number_of_objects: 5000000
+            workload_type: symmetrical
+      desc: upload 5M object to regular bucket
+      module: push_cosbench_workload.py
+      name: upload 5M object to regular bucket
+      polarion-id: CEPH-83575382
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - clara001
+            drivers:
+              - clara001
+              - clara011
+              - clara012
+            fill_percent: 30
+            record_sync_on_site: ceph-sec
+            bucket_prefix: ver-cosbench-bkt-
+            number_of_buckets: 1
+            number_of_objects: 5000000
+            workload_type: symmetrical
+      desc: upload 5M current object to versioned bucket
+      module: push_cosbench_workload.py
+      name: upload 5M current object to versioned bucket
+      polarion-id: CEPH-83575382
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - clara001
+            drivers:
+              - clara001
+              - clara011
+              - clara012
+            fill_percent: 30
+            record_sync_on_site: ceph-sec
+            bucket_prefix: ver-cosbench-bkt-
+            number_of_buckets: 1
+            number_of_objects: 5000000
+            workload_type: symmetrical
+      desc: upload 5M non-current object to versioned bucket
+      module: push_cosbench_workload.py
+      name: upload 5M non-current object to versioned bucket
+      polarion-id: CEPH-83574428
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "radosgw-admin sync group remove --group-id=global_group --status=enabled"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin sync group get"
+              - "radosgw-admin sync status"
+      desc: remove zonegroup level sync policy
+      polarion-id: CEPH-83575382
+      module: exec.py
+      name: remove zonegroup level sync policy
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
             script-name: ../aws/test_aws.py
             config-file-name: ../../aws/configs/test_aws_versioned_bucket_creation.yaml
             verify-io-on-site: ["ceph-sec"]

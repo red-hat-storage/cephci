@@ -69,6 +69,7 @@ def run(**kw):
             image_name=clone1,
             clone_version="v2",
         )
+
         # enable journal based mirroring for pool mode
         mirror1, mirror2 = [
             rbdmirror.RbdMirror(cluster, config)
@@ -103,7 +104,6 @@ def run(**kw):
         mirror1.delete_image(imagespec1)
         mirror1.delete_image(imagespec2)
         mirror1.delete_image(imagespec)
-        mirror1.clean_up(peercluster=mirror2, pools=[poolname])
         return 0
 
     except ValueError as ve:
@@ -114,3 +114,5 @@ def run(**kw):
     except Exception as e:
         log.exception(e)
         return 1
+    finally:
+        mirror1.clean_up(peercluster=mirror2, pools=[poolname])
