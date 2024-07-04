@@ -72,7 +72,7 @@ class Container(Cli):
         """Executes the provided command using podman
         Args
             image (str): Image name
-            rm (str): Image name to remove from background
+            rm (bool): Remove the container when it exits
             name (str): Container name
             env (list): List of environment variables
             volume (list): List of volumes
