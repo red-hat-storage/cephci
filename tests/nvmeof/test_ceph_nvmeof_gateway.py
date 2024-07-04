@@ -3,6 +3,7 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
  with supported entities like subsystems , etc.,
 
 """
+
 import json
 from copy import deepcopy
 
@@ -298,7 +299,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             with parallel() as p:
                 for initiator in config["initiators"]:
                     p.spawn(initiators, ceph_cluster, nvmegwcli, initiator)
-
+                    if config.get("namespaces"):
+                        for qos_args in config["namespaces"]:
+                            if qos_args["command"] == "set_qos":
+                                p.spawn(nvmegwcli.namespace.set_qos, **qos_args)
         return 0
     except Exception as err:
         LOG.error(err)
