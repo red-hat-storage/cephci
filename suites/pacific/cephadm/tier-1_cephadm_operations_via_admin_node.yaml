@@ -87,8 +87,9 @@ tests:
       desc: Verify cephadm operations via admin node for managing and expanding cluster
       config:
         label: _admin
+        path: /etc/ceph
         files:
-          - /etc/ceph/ceph.client.admin.keyring
-          - /etc/ceph/ceph.conf
+          - ceph.client.admin.keyring
+          - ceph.conf
       polarion-id: CEPH-83573725
       module: test_cephadm_operations_via_admin.py
