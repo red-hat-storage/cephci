@@ -1,5 +1,3 @@
-import os
-
 from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
 
@@ -28,6 +26,9 @@ def run(ceph_cluster, **kw):
     label = config.get("label")
     if not label:
         raise CephadmOperationsAdmin("label value not present in config")
+    path = config.get("path")
+    if not path:
+        raise CephadmOperationsAdmin("path value not present in config")
     files = config.get("files")
     if not files:
         raise CephadmOperationsAdmin("files value not present in config")
@@ -47,8 +48,9 @@ def run(ceph_cluster, **kw):
     # Verify files in new admin node
     timeout, interval = 300, 6
     for w in WaitUntil(timeout=timeout, interval=interval):
-        _files = [_f for _f in files if os.path.exists(_f)]
-        if len(_files) == len(files):
+        cmd = f"ls {path}"
+        _files = node.exec_command(sudo=True, cmd=cmd)[0].split("\n")
+        if all(file in _files for file in files):
             break
     if w.expired:
         raise CephadmOperationsAdmin(
