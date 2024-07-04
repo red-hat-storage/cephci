@@ -5,6 +5,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -98,7 +99,9 @@ def run(ceph_cluster, **kw):
 # Function for directory operations
 def dir_operations(client1, client2, fuse_mounting_dir, **kwargs):
     # Create a directory on client 1
-    client1.exec_command(sudo=True, cmd=f"mkdir {fuse_mounting_dir}/dir")
+    client1.exec_command(
+        sudo=True, cmd=f"mkdir {fuse_mounting_dir}/dir_multiclient_file_dir_ops"
+    )
 
     # Check if the directory reflects on client 2
     if kwargs.get("kernel_mounting_dir"):
@@ -114,17 +117,24 @@ def dir_operations(client1, client2, fuse_mounting_dir, **kwargs):
         raise CommandFailed("Directory does not exist on client 2")
 
     # Delete the directory on client 1
-    client1.exec_command(sudo=True, cmd=f"rmdir {fuse_mounting_dir}/dir")
+    client1.exec_command(
+        sudo=True, cmd=f"rmdir {fuse_mounting_dir}/dir_multiclient_file_dir_ops"
+    )
 
     # Check if the directory is deleted on client 2
+    validate_dir_deletion(client2, fuse_mounting_dir, **kwargs)
+
+
+@retry(CommandFailed, tries=5, delay=30)
+def validate_dir_deletion(client2, fuse_mounting_dir, **kwargs):
     if not kwargs.get("kernel_mounting_dir"):
         out, rc = client2.exec_command(sudo=True, cmd=f"ls {fuse_mounting_dir}")
     else:
         out, rc = client2.exec_command(
             sudo=True, cmd=f'ls {kwargs.get("kernel_mounting_dir")}'
         )
-    if "dir" in out:
-        log.error("Directory still exists on client 2")
+    if "dir_multiclient_file_dir_ops" in out:
+        log.error(f"Directory still exists on client 2 {out}")
         raise CommandFailed("Directory still exists on client 2")
     else:
         log.info("Directory is deleted on client 2")
