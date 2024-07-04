@@ -87,3 +87,9 @@ tests:
       module: test_ceph_volume_lvm_tags_after_osd_rm.py
       config:
         operation: lvm-zap
+
+  - test:
+      name: Validate ceph-volume fails to get an inventory list issue
+      desc: Verify getting inventory list with format as json
+      polarion-id: CEPH-83591998
+      module: test_ceph_volume_get_inventory_list.py

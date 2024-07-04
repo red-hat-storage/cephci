@@ -54,6 +54,7 @@ class Container(Cli):
     def run(
         self,
         image=None,
+        privileged=False,
         rm=False,
         name=None,
         env=None,
@@ -73,6 +74,7 @@ class Container(Cli):
         Args
             image (str): Image name
             rm (bool): Remove the container when it exits
+            privileged (bool): To run with privileged tag
             name (str): Container name
             env (list): List of environment variables
             volume (list): List of volumes
@@ -90,6 +92,9 @@ class Container(Cli):
             raise NotSupportedError("Image or rm needs to be provided")
 
         cmd = f"{self.base_cmd} run"
+
+        if privileged:
+            cmd += " --privileged"
 
         if name:
             cmd += f" --name {name}"

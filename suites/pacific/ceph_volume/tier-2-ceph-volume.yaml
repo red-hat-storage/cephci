@@ -127,3 +127,9 @@ tests:
           db_devices:
             paths:
               - PATH
+
+  - test:
+      name: Validate ceph-volume fails to get an inventory list issue
+      desc: Verify getting inventory list with format as json
+      polarion-id: CEPH-83591998
+      module: test_ceph_volume_get_inventory_list.py
