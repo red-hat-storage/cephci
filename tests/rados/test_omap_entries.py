@@ -1,7 +1,10 @@
 """
 Module to Create, test, re-balance objects and delete pool where each object has large number of KW pairs attached,
 thereby increasing the OMAP entries generated on the pool.
+Verifying the Bug#2249003 - Observing client.admin crash in thread_name 'rados' on executing 'rados clearomap'
+for a rados pool different than the one where the object is present.
 """
+import random
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -25,13 +28,23 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
+    client_node = ceph_cluster.get_nodes(role="client")[0]
 
     omap_target_configs = config["omap_config"]
+    crash_pool_name = config["crash_config"]["pool_name"]
+    if not rados_obj.create_pool(pool_name=crash_pool_name):
+        log.error(f"Failed to create pool-{crash_pool_name}")
+        return 1
+    # put the object
+    object_name = "obj1"
+    cmd_put_obj = f"rados put -p {crash_pool_name} {object_name} /etc/hosts"
+    client_node.exec_command(cmd=cmd_put_obj, sudo=True)
+    cmd_clearomap = f"rados clearomap -p {crash_pool_name} {object_name}"
 
-    # Creating pools and starting the test
-    for omap_config_key in omap_target_configs.keys():
-        omap_config = omap_target_configs[omap_config_key]
-        try:
+    try:
+        # Creating pools and starting the test
+        for omap_config_key in omap_target_configs.keys():
+            omap_config = omap_target_configs[omap_config_key]
             log.debug(
                 f"Creating replicated pool on the cluster with name {omap_config['pool_name']}"
             )
@@ -50,7 +63,6 @@ def run(ceph_cluster, **kw):
                         "max_objs": normal_objs,
                     },
                 )
-
             # calculate objects to be written with omaps and begin omap creation process
             omap_obj_num = omap_config["obj_end"] - omap_config["obj_start"]
             log.debug(
@@ -67,6 +79,9 @@ def run(ceph_cluster, **kw):
             )
 
             if omap_config["large_warn"]:
+                out, _ = cephadm.shell([f"rados ls -p {pool_name} | grep 'omap_obj'"])
+                omap_obj_list = out.split()
+                omap_obj = random.choice(omap_obj_list)
                 # Fetching the current acting set for the pool
                 acting_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
                 rados_obj.change_recovery_threads(config={}, action="set")
@@ -92,19 +107,35 @@ def run(ceph_cluster, **kw):
                     f"All the OSD's from the acting set {acting_set} were restarted "
                     f"and object movement completed for pool {pool_name}"
                 )
+        # Verification of the Bug#2249003
+        try:
+            log.info(f"The omap object name is -{omap_obj}")
+            client_node.exec_command(cmd=cmd_clearomap, sudo=True)
+            cmd_clearomap = f"rados clearomap -p {crash_pool_name} {omap_obj}"
+            client_node.exec_command(cmd=cmd_clearomap, sudo=True)
         except Exception as e:
-            log.error(f"Failed with exception: {e.__doc__}")
-            log.exception(e)
-            return 1
-        finally:
-            log.info(
-                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            log.info(f"Exception hit to execute but this is expected; {e}")
+        crash = rados_obj.do_crash_ls()
+        if crash:
+            log.error(
+                "Crashes seen on cluster after executing the clear omap command  on a non-omap pool"
             )
-            rados_obj.change_recovery_threads(config={}, action="rm")
-            # deleting the pool created after the test
-            rados_obj.delete_pool(pool=pool_name)
-            # log cluster health
-            rados_obj.log_cluster_health()
+            raise Exception("Service crash on cluster error")
+    except Exception as e:
+        log.error(f"Failed with exception: {e.__doc__}")
+        log.exception(e)
+        return 1
+
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
+        )
+        rados_obj.change_recovery_threads(config={}, action="rm")
+        # deleting the pool created after the test
+        rados_obj.delete_pool(pool=pool_name)
+        rados_obj.delete_pool(pool=crash_pool_name)
+        # log cluster health
+        rados_obj.log_cluster_health()
 
     log.info("Completed testing effects of large number of omap entries on pools ")
     return 0
