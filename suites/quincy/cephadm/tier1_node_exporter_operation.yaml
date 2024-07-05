@@ -71,7 +71,7 @@ tests:
   - test:
       name: Node-exporter service deployment with spec
       desc: Re-deploy node-exporter service with extra entrypoint args
-      module: test_node_exporter_extraentrypoint.py
+      module: test_node_exporter_extra_entrypoint.py
       polarion-id: CEPH-83591436
       config:
         specs:
