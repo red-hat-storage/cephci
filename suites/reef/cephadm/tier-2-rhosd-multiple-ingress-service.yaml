@@ -115,7 +115,7 @@ tests:
                     backend_service: nfs.nfs-service
                     frontend_port: 443
                     monitor_port: 9049
-                    virtual_ip: 10.0.209.90/22
+                    virtual_ip: 10.0.211.26/22
                     enable_haproxy_protocol: true
           - config:
               command: apply_spec
@@ -132,5 +132,5 @@ tests:
                     backend_service: nfs.nfs-service
                     frontend_port: 443
                     monitor_port: 9050
-                    virtual_ip: 10.0.208.231/22
+                    virtual_ip: 10.0.209.173/22
                     enable_haproxy_protocol: true

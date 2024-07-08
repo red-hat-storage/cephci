@@ -1,0 +1,136 @@
+#===============================================================================================
+#    - Bootstrap RHCS 7.0 cluster
+#    - Deploy NFS-Ganesha with HA using spec file
+#    - Verify NFS-Ganesha HA scenarios
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Validate multiple ingress service
+      desc: Deploy multiple ingress service with different virtual IP
+      module: test_cephadm.py
+      polarion-id: CEPH-83592023
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nfs
+                  service_id: nfs-service
+                  placement:
+                    nodes:
+                      - node1
+                  spec:
+                    port: 3333
+                    enable_haproxy_protocol: true
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: ingress
+                  service_id: nfs.ingress.foo
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                  spec:
+                    backend_service: nfs.nfs-service
+                    frontend_port: 443
+                    monitor_port: 9049
+                    virtual_ip: 10.0.195.234/22
+                    enable_haproxy_protocol: true
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: ingress
+                  service_id: nfs.ingress.foo2
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                  spec:
+                    backend_service: nfs.nfs-service
+                    frontend_port: 443
+                    monitor_port: 9050
+                    virtual_ip: 10.0.195.108/22
+                    enable_haproxy_protocol: true
