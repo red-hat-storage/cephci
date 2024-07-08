@@ -86,6 +86,11 @@ def run(ceph_cluster, **kw):
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
+        log.info("setting 'snapshot_clone_no_wait' to false")
+        clients[0].exec_command(
+            sudo=True,
+            cmd="ceph config set mgr mgr/volumes/snapshot_clone_no_wait false",
+        )
         default_fs = "cephfs"
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -209,6 +214,10 @@ def run(ceph_cluster, **kw):
         log.info("Setting back the clones to default value 4")
         client1.exec_command(
             sudo=True, cmd="ceph config set mgr mgr/volumes/max_concurrent_clones 4"
+        )
+        log.info("setting 'snapshot_clone_no_wait' to true")
+        clients[0].exec_command(
+            sudo=True, cmd="ceph config set mgr mgr/volumes/snapshot_clone_no_wait true"
         )
         if locals().get("rmclone_cancel_list", None):
             for clonevolume in rmclone_cancel_list:

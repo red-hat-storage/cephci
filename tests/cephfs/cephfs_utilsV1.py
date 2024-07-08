@@ -3750,7 +3750,8 @@ os.system('sudo systemctl start  network')
             log.info("There is no failed test, skipping debug logs upload")
             return 0
 
-    # Ceph Client Support Functions
+        # Ceph Client Support Functions
+
     def create_ceph_client(
         self,
         client,
@@ -3778,18 +3779,18 @@ os.system('sudo systemctl start  network')
         out, rc = client.exec_command(
             sudo=True, cmd=f"ceph auth get client.{ceph_client_name}", check_ec=False
         )
-        if rc:
+        if not rc:
             log.error(f"user with name client.{ceph_client_name} Already exits")
             raise CommandFailed(
                 f"user with name client.{ceph_client_name} Already exits with caps as {out}"
             )
         client_create_cmd = f"ceph auth add client.{ceph_client_name}"
         if mon_caps:
-            client_create_cmd += f" mon {mon_caps}"
+            client_create_cmd += f" mon '{mon_caps}'"
         if osd_caps:
-            client_create_cmd += f" osd {osd_caps}"
+            client_create_cmd += f" osd '{osd_caps}'"
         if mds_caps:
-            client_create_cmd += f" mds {mds_caps}"
+            client_create_cmd += f" mds '{mds_caps}'"
 
         if keyring:
             client_create_cmd += f" -o /etc/ceph/ceph.client.{ceph_client_name}.keyring"
@@ -3842,18 +3843,19 @@ os.system('sudo systemctl start  network')
         out, rc = client.exec_command(
             sudo=True, cmd=f"ceph auth get client.{ceph_client_name}", check_ec=False
         )
-        if not rc:
+        if rc:
             log.error(f"user with name client.{ceph_client_name} does not exits")
             raise CommandFailed(
                 f"user with name client.{ceph_client_name} does not exits {out}"
             )
         client_update_cmd = f"ceph auth caps client.{ceph_client_name}"
         if mon_caps:
-            client_update_cmd += f" mon {mon_caps}"
+            client_update_cmd += f" mon '{mon_caps}'"
         if osd_caps:
-            client_update_cmd += f" osd {osd_caps}"
+            client_update_cmd += f" osd '{osd_caps}'"
         if mds_caps:
-            client_update_cmd += f" mds {mds_caps}"
+            client_update_cmd += f" mds '{mds_caps}'"
+
         client.exec_command(
             sudo=True,
             cmd=client_update_cmd,

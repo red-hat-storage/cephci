@@ -110,6 +110,7 @@ def run(ceph_cluster, **kw):
             client1.exec_command(sudo=True, cmd=command)
         for fs in fs_list:
             fs_util.remove_fs(client1, fs)
+            fs_util.wait_for_mds_process(client1, fs, ispresent=False)
 
 
 @retry(CommandFailed, tries=3, delay=60)
