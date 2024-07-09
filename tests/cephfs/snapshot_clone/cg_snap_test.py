@@ -2249,6 +2249,7 @@ def cg_snap_interop_2(cg_test_params):
         for qs_member in qs_set:
             if "/" in qs_member:
                 group_name, subvol_name = re.split("/", qs_member)
+                cmd = f"ceph fs subvolume getpath {fs_name} {subvol_name} {group_name}"
                 subvol_dict.update(
                     {subvol_name: {"group_name": group_name, "mount_point": ""}}
                 )
