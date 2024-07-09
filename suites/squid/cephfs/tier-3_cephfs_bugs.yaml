@@ -254,15 +254,17 @@ tests:
       polarion-id: CEPH-83591136
       desc: Verify Ceph Health Warning for Slow MDS Requests After Cluster Installation
       abort-on-fail: false
-  - test: # https://bugzilla.redhat.com/show_bug.cgi?id=2294478
+  - test:
       name: Prevent scrub running using standby MDS
       module: cephfs_bugs.prevent_scrub_with_standby_mds.py
+      comments: BZ 2294478
       polarion-id: CEPH-83592512
       desc: Prevent scrub running using standby MDS
       abort-on-fail: false
-  - test: # https://bugzilla.redhat.com/show_bug.cgi?id=2160855
+  - test:
       name: Verify Client evict -h,--help works without running the function
       module: cephfs_bugs.evict_all_clients_add_to_blocklist.py.py
+      comments: BZ 2160855
       polarion-id: CEPH-83592513
       desc: Verify Client evict -h,--help works without running the function
       abort-on-fail: false
