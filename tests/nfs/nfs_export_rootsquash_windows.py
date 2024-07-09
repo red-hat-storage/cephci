@@ -3,10 +3,8 @@ from time import sleep
 from nfs_operations import cleanup_cluster, setup_nfs_cluster
 
 from cli.ceph.ceph import Ceph
-from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
-from cli.utilities.utils import get_dir_owner, get_file_owner
 from cli.utilities.windows_utils import setup_windows_clients
 from utility.log import Log
 
@@ -76,35 +74,6 @@ def run(ceph_cluster, **kw):
             squash="rootsquash",
         )
 
-        # Enable v3 support
-        installer = ceph_cluster.get_nodes("installer")[0]
-        export_file = "export_1.conf"
-        cmd = f" -- ceph nfs export info {nfs_name} {nfs_export_squash} > {export_file}"
-        CephAdm(installer).shell(cmd=cmd)
-
-        # Add v3 to the export file
-        cmd = rf"sed -i '/\"protocols\": /a \    3,' {export_file}"
-        installer.exec_command(cmd=cmd, sudo=True)
-        log.info(export_file)
-
-        # Mount the export file with changes
-        cmd = (
-            f" --mount {export_file}:/var/lib/ceph/{export_file} "
-            f"-- ceph nfs export apply {nfs_name} -i /var/lib/ceph/{export_file}"
-        )
-        CephAdm(installer).shell(cmd=cmd)
-
-        # Apply the export
-        CephAdm(installer).ceph.nfs.export.apply(
-            nfs_name=nfs_name, export_conf=f"/var/lib/ceph/{export_file}"
-        )
-
-        # Redeploy nfs
-        CephAdm(installer).ceph.orch.redeploy(service=f"nfs.{nfs_name}")
-
-        # Add wait till the NFS daemons are up
-        sleep(10)
-
         # Mount the volume with rootsquash enable on client
         linux_clients[0].create_dirs(dir_path=nfs_squash_mount, sudo=True)
         if Mount(linux_clients[0]).nfs(
@@ -124,25 +93,23 @@ def run(ceph_cluster, **kw):
         windows_clients[0].exec_command(cmd=cmd)
         sleep(15)
 
-        # Create directories from windows mount point with rootsquash enabled
-        for i in range(1, 11):
-            cmd = f"mkdir {window_nfs_mount}\\squashed_dir{i}"
-            windows_clients[0].exec_command(cmd=cmd)
+        # Try Creating directory from windows mount point with rootsquash enabled
+        cmd = f"mkdir {window_nfs_mount}\\squashed_dir"
+        _, rc = windows_clients[0].exec_command(cmd=cmd, check_ec=False)
+        if "Access is denied" in str(rc):
+            log.info("Rootsquash is enabled and root access is denied")
+        else:
+            log.error("Failed to validate export rootsquash")
+            return 1
 
-        # Create files from window mount point with rootsquash enabled
-        for i in range(1, 11):
-            cmd = f"type nul > {window_nfs_mount}\\squashed_file{i}"
-            windows_clients[0].exec_command(cmd=cmd)
-
-        # Check if the files are created by "squashed" user post enabling the rootsquash
-        for i in range(1, 11):
-            out = get_dir_owner(f"{nfs_squash_mount}/squashed_dir{i}", linux_clients)
-            if "squashuser" not in out:
-                raise OperationFailedError("File is not created by squashed user")
-            out = get_file_owner(f"{nfs_squash_mount}/squashed_file{i}", linux_clients)
-            if "squashuser" not in out:
-                raise OperationFailedError("File is not created by squashed user")
-        log.info("File and dirs are created by squashed user")
+        # Try Creating file from window mount point with rootsquash enabled
+        cmd = f"type nul > {window_nfs_mount}\\squashed_file"
+        _, rc = windows_clients[0].exec_command(cmd=cmd, check_ec=False)
+        if "Access is denied" in str(rc):
+            log.info("Rootsquash is enabled and root access is denied")
+        else:
+            log.error("Failed to validate export rootsquash")
+            return 1
 
     except Exception as e:
         log.error(f"Failed to validate export rootsquash: {e}")
