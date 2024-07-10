@@ -357,6 +357,19 @@ tests:
       name: Create bucket for Testing manual resharding brownfield scenario after upgrade
       polarion-id: CEPH-83574735
 
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            script-name: ../s3cmd/test_rgw_ops_log.py
+            config-file-name: ../../s3cmd/multisite_configs/test_rgw_log_details.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+            timeout: 300
+      desc: S3CMD tests, rgw log details pre upgrade
+      module: sanity_rgw_multisite.py
+      name: S3CMD tests, rgw log details pre upgrade
+      polarion-id: CEPH-83575470
+
 #   # Performing cluster upgrade
 
   - test:
@@ -376,6 +389,19 @@ tests:
             command: start
             service: upgrade
             verify_cluster_health: true
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            script-name: ../s3cmd/test_rgw_ops_log.py
+            config-file-name: ../../s3cmd/multisite_configs/test_rgw_log_details.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+            timeout: 300
+      desc: S3CMD tests, rgw log details post upgrade
+      module: sanity_rgw_multisite.py
+      name: S3CMD tests, rgw log details post upgrade
+      polarion-id: CEPH-83575470
 
   - test:
       clusters:

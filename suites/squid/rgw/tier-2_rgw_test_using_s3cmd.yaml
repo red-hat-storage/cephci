@@ -141,13 +141,14 @@ tests:
         timeout: 300
 
   - test:
-      name: S3CMD tests
+      name: Test rgw opslog io though s3cmd
       desc: S3CMD tests, Testing rgw opslog
-      polarion-id: CEPH-83575194
+      polarion-id: CEPH-83575194 # also CEPH-83575470
       module: sanity_rgw.py
       config:
         script-name: ../s3cmd/test_rgw_ops_log.py
         config-file-name: ../../s3cmd/configs/test_rgw_opslog.yaml
+        run-on-rgw: true # as logs generated on rgw nodes
         timeout: 300
 
   - test:
