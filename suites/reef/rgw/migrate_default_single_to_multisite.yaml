@@ -57,7 +57,7 @@ tests:
                       nodes:
                         - node5
                         - node4
-                        - node6
+                        - node3
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -104,7 +104,7 @@ tests:
                       nodes:
                         - node5
                         - node4
-                        - node6
+                        - node3
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83575222
       destroy-cluster: false
@@ -147,7 +147,7 @@ tests:
             rgw_endpoints:
               - node4:80
               - node5:80
-              - node6:80
+              - node3:80
         ceph-pri:
           config:
             haproxy_clients:
@@ -155,7 +155,7 @@ tests:
             rgw_endpoints:
               - node4:80
               - node5:80
-              - node6:80
+              - node3:80
 
       desc: "Configure HAproxy"
       module: haproxy.py
