@@ -1207,12 +1207,7 @@ def run(ceph_cluster, **kw):
             log.info(
                 f"OSDs on the cluster : {osd_list}\n Selected OSD for testing : {selected_osd}"
             )
-            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
-            for entry in osd_tree["nodes"]:
-                if entry["id"] == selected_osd:
-                    log.info(f"Selected OSD details before marking out : {entry}")
-                    selected_osd_details_init = entry
-                    break
+            selected_osd_details_init = rados_obj.get_osd_details(osd_id=selected_osd)
 
             # Making the OSD out of the cluster
             if not rados_obj.update_osd_state_on_cluster(
@@ -1222,12 +1217,7 @@ def run(ceph_cluster, **kw):
                 raise Exception("OSD not marked out error")
             log.info(f"OSD: {selected_osd} marked out successfully. ")
 
-            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
-            for entry in osd_tree["nodes"]:
-                if entry["id"] == selected_osd:
-                    log.info(f"Selected OSD details After marking out : {entry}")
-                    selected_osd_details_post = entry
-                    break
+            selected_osd_details_post = rados_obj.get_osd_details(osd_id=selected_osd)
 
             if (
                 selected_osd_details_post["crush_weight"]
@@ -1255,12 +1245,7 @@ def run(ceph_cluster, **kw):
                 log.error(f"OSD.{selected_osd} not marked in the cluster")
                 raise Exception("OSD not marked in error")
 
-            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
-            for entry in osd_tree["nodes"]:
-                if entry["id"] == selected_osd:
-                    log.info(f"Selected OSD details After marking IN : {entry}")
-                    selected_osd_details_last = entry
-                    break
+            selected_osd_details_last = rados_obj.get_osd_details(osd_id=selected_osd)
 
             if (
                 selected_osd_details_last["crush_weight"]
@@ -1295,9 +1280,95 @@ def run(ceph_cluster, **kw):
             log.info(
                 "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
-            rados_obj.update_osd_state_on_cluster(osd_id=selected_osd, state="in")
+            if "selected_osd" in globals() or "selected_osd" in locals():
+                rados_obj.update_osd_state_on_cluster(osd_id=selected_osd, state="in")
+
+            time.sleep(30)
             # log cluster health
             rados_obj.log_cluster_health()
+        return 0
+
+    if config.get("verify_pool_min_pg_count"):
+        log.info(
+            "test to verify if the PG autoscaler would scale up the PGs on the pool to pg_num_min"
+            "Bugzilla verified : 2244985"
+        )
+        pools = []
+        try:
+            # Setting the global pg autoscale mode to on
+            rados_obj.configure_pg_autoscaler(default_mode="on")
+            pool_configs = config["verify_pool_min_pg_count"]["pool_configs"]
+            pool_configs_path = config["verify_pool_min_pg_count"]["pool_configs_path"]
+            pg_num_min = 128
+            with open(pool_configs_path, "r") as fd:
+                pool_conf_file = yaml.safe_load(fd)
+
+            for i in pool_configs:
+                pool = pool_conf_file[i["type"]][i["conf"]]
+                pool["pg_num"] = 16
+                pool["pg_num_min"] = pg_num_min
+                pool_name = pool["pool_name"]
+                create_given_pool(rados_obj, pool)
+                pools.append(pool_name)
+                rados_obj.bench_write(
+                    pool_name=pool_name, max_objs=500, verify_stats=False
+                )
+                time.sleep(10)
+
+                log.info(
+                    f"Pool : {pool_name} created for testing with data written into it."
+                    f"Checking if the pool will be autoscaled to pg_num_min, i.e 128"
+                )
+                init_pg_count = rados_obj.get_pool_property(
+                    pool=pool_name, props="pg_num"
+                )["pg_num"]
+                log.debug(f"init PG count on the pool {pool_name} is: {init_pg_count}")
+                pg_count_reached = False
+                endtime = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+                while datetime.datetime.now() < endtime:
+                    pool_pg_num = rados_obj.get_pool_property(
+                        pool=pool_name, props="pg_num"
+                    )["pg_num"]
+                    if pool_pg_num >= pg_num_min:
+                        log.info(
+                            f"PG count on pool {pool_name} is reached pg_num_min count"
+                        )
+                        pg_count_reached = True
+                        break
+                    log.info(
+                        f"PG count on pool {pool_name} has not reached pg_num_min count"
+                        f"Expected : {pg_num_min}, Current : {pool_pg_num}"
+                    )
+                    log.debug(
+                        "Sleeping for 30 secs and checking the PG states and PG count"
+                    )
+                    time.sleep(30)
+                if not pg_count_reached:
+                    log.error(
+                        f"pg_num on pool {pool_name} did not reach the desired levels of PG count with pg_min_num"
+                        f"Expected : {pg_num_min}"
+                    )
+                    raise Exception("pg_num_min not achieved")
+                rados_obj.delete_pool(pool=pool_name)
+                log.info(
+                    f"PG count on the pool reached to pg_num_min levels for pool {pool_name}"
+                )
+
+        except Exception as err:
+            log.error(f"Hit exception during the test execution. Error : {err}")
+            return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+            for pool in pools:
+                rados_obj.delete_pool(pool=pool)
+
+            time.sleep(60)
+            # log cluster health
+            rados_obj.log_cluster_health()
+
+        log.info(" Verification of pg_min_num complete")
         return 0
 
 
