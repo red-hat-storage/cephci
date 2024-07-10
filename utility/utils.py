@@ -1074,7 +1074,6 @@ def email_results(test_result):
 
     Returns: None
     """
-
     try:
         run_id = test_result["run_id"]
         results_list = test_result["result"]
@@ -1169,9 +1168,13 @@ def create_html_file(test_result) -> str:
         suite_run_time = test_result["total_time"]
         info = test_result["info"]
         test_results = test_result["result"]
+        prefix = test_result["prefix"]
     except KeyError as kerr:
         log.error(f"Key not found : {kerr}")
         exit(1)
+
+    # Check for cluster info
+    cluster_info = test_result.get("cluster_info", None)
 
     # we are checking for /ceph/cephci-jenkins to see if the magna is already mounted
     # on system we are executing
@@ -1198,6 +1201,8 @@ def create_html_file(test_result) -> str:
         trigger_user=trigger_user,
         info=info,
         use_abs_log_link=True,
+        prefix=prefix,
+        cluster_info=cluster_info,
     )
 
     # Result.html file is stored in the folder containing the log files.
@@ -1211,6 +1216,8 @@ def create_html_file(test_result) -> str:
         trigger_user=trigger_user,
         info=info,
         use_abs_log_link=False,
+        cluster_info=cluster_info,
+        prefix=prefix,
     )
 
     abs_path = os.path.join(run_dir, "index.html")

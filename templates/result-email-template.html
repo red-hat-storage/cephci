@@ -69,6 +69,20 @@
             <th style="color: blue">Compose</th>
             <td>{{ test_results[0]['compose-id'] }}</td>
         </tr>
+        {% if cluster_info %}
+            <tr>
+                <th style="color: blue">Cluster Configuration</th>
+                <td>
+                    {% for info in cluster_info %}
+                        <a style="color: blue;" href="./cluster_info_{{ info }}.yaml">{{ info }}</a>,
+                    {% endfor %}
+                </td>
+            </tr>
+        {% endif %}
+        <tr>
+            <th style="color: blue">Cluster Logs</th>
+            <td><a style="color: blue;" href="./ceph_logs">{{ prefix }}</a></td>
+        </tr>
         <tr>
             <th style="color: blue">Results</th>
             <td>{{ log_link }}</td>
