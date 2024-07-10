@@ -114,7 +114,8 @@ def run(ceph_cluster, **kw):
         if len(do_not_match) != 0:
             passed.append(False)
             log.error("There is some mismatch")
-            log.error(print(do_not_match))
+            log.error(do_not_match)
+            log.error(result)
         else:
             passed.append(True)
 
