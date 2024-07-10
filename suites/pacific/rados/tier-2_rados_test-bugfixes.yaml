@@ -145,7 +145,7 @@ tests:
         inconsistent_obj_count: 4
         delete_pool:
           - ecpool
-      comments: Failure due to BZ#2277111
+      comments: active Bugs 2275285, 2277111
 
   - test:
       name: Verification of ceph config show & get

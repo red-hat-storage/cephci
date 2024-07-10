@@ -212,7 +212,7 @@ class PoolFunctions:
 
         E.g. -
             obj.do_rados_put(client=client_node, pool="pool_name")
-            obj.do_rados_put(client=client_node, pool="pool_name", obj_name="test-obj)
+            obj.do_rados_put(client=client_node, pool="pool_name", obj_name="test-obj")
             obj.do_rados_put(client=client_node, pool="pool_name", nobj=5)
             obj.do_rados_put(client=client_node, pool="pool_name", nobj=5, offset=512, timeout=300)
             obj.do_rados_put(client=client_node, pool="pool_name", obj_name="obj-test",
