@@ -217,6 +217,9 @@ def run(**kw):
     if install_start_kafka_broker:
         install_start_kafka(primary_rgw_node, cloud_type)
         install_start_kafka(secondary_rgw_node, cloud_type)
+    install_start_kafka_broker_archive = config.get("install_start_kafka_archive")
+    if install_start_kafka_broker_archive:
+        install_start_kafka(archive_rgw_node, cloud_type)
     if configure_kafka_broker_security:
         configure_kafka_security(primary_rgw_node, cloud_type)
         configure_kafka_security(secondary_rgw_node, cloud_type)
