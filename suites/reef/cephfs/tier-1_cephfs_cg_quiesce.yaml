@@ -129,7 +129,6 @@ tests:
       polarion-id: CEPH-83581470
       config:
        test_name: cg_snap_func_workflow_2
-      comments: product bug bz-2284364
   -
     test:
       abort-on-fail: false
@@ -180,7 +179,6 @@ tests:
       polarion-id: CEPH-83581467
       config:
        test_name: cg_snap_func_workflow_1
-      comments: product bug bz-2284364
   -
     test:
       abort-on-fail: false
@@ -222,16 +220,6 @@ tests:
       polarion-id: CEPH-83590253
       config:
        test_name: cg_snap_func_workflow_3
-      comments: product bug bz-2295781
-  -
-    test:
-      abort-on-fail: false
-      desc: "Collect and upload system logs"
-      module: cephfs_logs_util.py
-      name: cephfs-upload-logs
-      config:
-       UPLOAD_LOGS : 1
-       daemon_list : ['mds','osd','client']
   -
     test:
       abort-on-fail: false

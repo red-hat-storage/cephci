@@ -7,6 +7,7 @@ import datetime
 import random
 import string
 import time
+import traceback
 from multiprocessing import Value
 from threading import Thread
 
@@ -80,8 +81,8 @@ class CG_snap_IO(object):
         write_client = clients[0]
         qs_member_dict1 = client_mnt_dict[write_client.node.hostname]
         # To be used when multi-client IO support is added
-        # read_client = clients[1]
-        # qs_member_dict2=client_mnt_dict[read_client.node.hostname]
+        read_client = clients[1]
+        qs_member_dict2 = client_mnt_dict[read_client.node.hostname]
         cg_write_io_status = Value("i", 0)
         p = Thread(
             target=self.cg_write_io,
@@ -102,10 +103,10 @@ class CG_snap_IO(object):
             target=self.cg_read_io,
             args=(
                 cg_read_io_status,
-                write_client,
+                read_client,
                 int(io_run_time),
                 qs_members,
-                qs_member_dict1,
+                qs_member_dict2,
             ),
         )
         p.start()
@@ -131,7 +132,7 @@ class CG_snap_IO(object):
     ##########################
 
     def cg_read_io(
-        self, cg_read_io_status, write_client, io_run_time, qs_members, qs_member_dict
+        self, cg_read_io_status, read_client, io_run_time, qs_members, qs_member_dict
     ):
         """
         This is called by cg_start_io using Thread to run READ IO on quiesce set members
@@ -171,7 +172,7 @@ class CG_snap_IO(object):
                     target=self.cg_read_io_subvol,
                     args=(
                         read_proc_check_status,
-                        write_client,
+                        read_client,
                         qs_member,
                         qs_mnt_pt,
                         qs_members,
@@ -528,6 +529,9 @@ class CG_snap_IO(object):
                                     f"Read exits in {time_diff}secs after {state},a false positive error:{read_str}"
                                 )
                             else:
+                                log.error(
+                                    f"FAIL:{io_mod} io on {qs_member} failed when {qs_id} was in {state}"
+                                )
                                 cg_status = 1
                         else:
                             log.error(
@@ -780,15 +784,17 @@ class CG_snap_IO(object):
                 f"dd_io {io_type} {cmd} passed on {file_path},end_time - {end_time}: {out}"
             )
             return (0, end_time)
-        except Exception as ex:
+        except BaseException as ex:
+            log.info(ex)
+            log.info(traceback.format_exc())
             end_time = time.time()
-            if ex == "":
+            if len(str(ex)) == 0:
                 log.error(
-                    f"dd_io read timedout after 20secs on {file_path},end_time - {end_time}"
+                    f"dd_io write timedout after 20secs on {file_path},end_time - {end_time}"
                 )
             else:
                 log.error(
-                    f"dd_io read returns error on {file_path},end_time - {end_time}: {ex}"
+                    f"dd_io write returns error on {file_path},end_time - {end_time}: {ex}"
                 )
             return (1, end_time)
 
@@ -818,7 +824,9 @@ class CG_snap_IO(object):
                 log.info(f"smallfile_io {io_type} smallfile_dirs op : {smallfile_dirs}")
                 if len(smallfile_dirs) > 0:
                     break
-            except Exception as ex:
+            except BaseException as ex:
+                log.info(ex)
+                log.info(traceback.format_exc())
                 log.info(ex)
                 time.sleep(5)
         dir_cnt = len(smallfile_dirs)
@@ -856,7 +864,9 @@ class CG_snap_IO(object):
                     f"Iter{i}:smallfile_io_read passed on {smallfile_dir} with end_time {end_time}"
                 )
                 return (0, end_time)
-            except Exception as ex:
+            except BaseException as ex:
+                log.info(ex)
+                log.info(traceback.format_exc())
                 exp_str = (
                     "No such file or directory: '/var/tmp/starting_gate.tmp.notyet'"
                 )
@@ -866,7 +876,7 @@ class CG_snap_IO(object):
                         f"smallfile_io read passed on {smallfile_dir},end_time - {end_time}"
                     )
                     return (0, end_time)
-                elif ex == "":
+                elif len(str(ex)) == 0:
                     log.info(
                         f"smallfile_io read timedout after 30secs on {smallfile_dir} in Iter{i}"
                     )
@@ -878,7 +888,7 @@ class CG_snap_IO(object):
                     i += 1
 
         end_time = time.time()
-        if ex == "":
+        if len(str(ex)) == 0:
             log.error(
                 f"smallfile_io read timedout after 30secs on {smallfile_dir},end_time - {end_time}"
             )
@@ -926,7 +936,7 @@ class CG_snap_IO(object):
                     sudo=True,
                     cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
                     f"--operation {i} --threads 1 --file-size 1024 "
-                    f"--files 100 --top {dir_path}",
+                    f"--files 50 --top {dir_path}",
                     long_running=True,
                     timeout=20,
                 )
@@ -934,9 +944,11 @@ class CG_snap_IO(object):
             end_time = time.time()
             log.info(f"smallfile_io_write passed on {dir_path},end_time - {end_time}")
             return (0, end_time)
-        except Exception as ex:
+        except BaseException as ex:
+            log.info(ex)
+            log.info(traceback.format_exc())
             end_time = time.time()
-            if ex == "":
+            if len(str(ex)) == 0:
                 log.error(
                     f"smallfile_io_write timedout after 20secs on {dir_path},end_time - {end_time}"
                 )
@@ -999,8 +1011,10 @@ class CG_snap_IO(object):
                 )
                 return (0, end_time)
 
-            except Exception as ex:
-                if ex == "":
+            except BaseException as ex:
+                log.info(ex)
+                log.info(traceback.format_exc())
+                if len(str(ex)) == 0:
                     log.error(
                         f"fio read timedout after 30secs on {fio_file} in Iter{i}"
                     )
@@ -1010,7 +1024,7 @@ class CG_snap_IO(object):
                 i += 1
 
         end_time = time.time()
-        if ex == "":
+        if len(str(ex)) == 0:
             log.error(
                 f"fio read timedout after 30secs on {fio_file},end_time - {end_time}"
             )
@@ -1050,9 +1064,11 @@ class CG_snap_IO(object):
             end_time = time.time()
             log.info(f"fio write passed on {file_path},end_time - {end_time}")
             return (0, end_time)
-        except Exception as ex:
+        except BaseException as ex:
+            log.info(ex)
+            log.info(traceback.format_exc())
             end_time = time.time()
-            if ex == "":
+            if len(str(ex)) == 0:
                 log.error(
                     f"fio write timedout after 20secs on {mnt_pt},end_time - {end_time} : {ex}"
                 )
@@ -1095,7 +1111,7 @@ class CG_snap_IO(object):
                 out_list = client.exec_command(
                     sudo=True,
                     cmd=f"python3 /home/cephuser/Crefi/crefi.py "
-                    f"-n 100 --max 100k --min 10k -t {file_type} -b 2 -d 2 --multi --fop {i} -T 2 {dir_path}",
+                    f"-n 50 --max 100k --min 10k -t {file_type} -b 2 -d 2 --multi --fop {i} -T 2 {dir_path}",
                     long_running=True,
                     timeout=20,
                 )
@@ -1104,9 +1120,11 @@ class CG_snap_IO(object):
             end_time = time.time() - 1
             log.info(f"Crefi write passed on {dir_path} with end_time {end_time}")
             return (0, end_time)
-        except Exception as ex:
+        except BaseException as ex:
+            log.info(ex)
+            log.info(traceback.format_exc())
             end_time = time.time()
-            if ex == "":
+            if len(str(ex)) == 0:
                 log.error(
                     f"Crefi write timedout after 20secs on {mnt_pt},end_time - {end_time} : {ex}"
                 )
@@ -1140,10 +1158,11 @@ class CG_snap_IO(object):
                     out = out.strip()
                     files = out.split()
                     cmd_pass = 1
-                except Exception as ex:
+                except BaseException as ex:
                     log.info(ex)
+                    log.info(traceback.format_exc())
                     time.sleep(5)
-            retry_cnt = 5
+            retry_cnt = 10
             while retry_cnt > 0:
                 file_name = random.choice(files)
                 retry_cnt -= 1
@@ -1172,10 +1191,11 @@ class CG_snap_IO(object):
             end_time = time.time()
             log.info(f"linux_cmds {io_type} passed on {mnt_pt},end_time - {end_time}")
             return (0, end_time)
-        except Exception as ex:
+        except BaseException as ex:
             log.info(ex)
+            log.info(traceback.format_exc())
             end_time = time.time()
-            if ex == "":
+            if len(str(ex)) == 0:
                 log.error(
                     f"linux_cmds {io_type} timedout after 30secs on {mnt_pt},end_time - {end_time} : {ex}"
                 )
@@ -1208,7 +1228,7 @@ class CG_snap_IO(object):
             out = out.strip()
             files = out.split()
             file_name = random.choice(files)
-            retry_cnt = 5
+            retry_cnt = 10
             while "dir" in file_name and retry_cnt > 0:
                 file_name = random.choice(files)
                 retry_cnt -= 1
@@ -1234,10 +1254,11 @@ class CG_snap_IO(object):
             end_time = time.time()
             log.error(f"linux_cmds {io_type} passed on {mnt_pt},end_time - {end_time}")
             return (0, end_time)
-        except Exception as ex:
+        except BaseException as ex:
             log.info(ex)
+            log.info(traceback.format_exc())
             end_time = time.time()
-            if ex == "":
+            if len(str(ex)) == 0:
                 log.error(
                     f"linux_cmds {io_type} timedout after 20secs on {mnt_pt},end_time - {end_time} : {ex}"
                 )

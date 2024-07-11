@@ -624,9 +624,13 @@ def cg_stress(cg_test_params):
                 check_ec=False,
             )
             log.info(f"Ceph fs status and fs dump output : {out}")
+            cmd = (
+                "ceph config set mds log_to_file true;ceph config set mds debug_mds 10;"
+            )
+            cmd += "ceph config set mds debug_mds_quiesce 10"
             client.exec_command(
                 sudo=True,
-                cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
+                cmd=cmd,
                 check_ec=False,
             )
             log.info(f"Quiesce the set {qs_set}")
@@ -635,7 +639,7 @@ def cg_stress(cg_test_params):
             )
             client.exec_command(
                 sudo=True,
-                cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
+                cmd="ceph config set mds log_to_file false;",
                 check_ec=False,
             )
             time.sleep(30)
@@ -682,16 +686,20 @@ def cg_stress(cg_test_params):
             log.info(f"Query quiesce set {qs_id_val}")
             cg_snap_util.get_qs_query(client, qs_id_val)
             log.info(f"Ceph fs status and fs dump output : {out}")
+            cmd = (
+                "ceph config set mds log_to_file true;ceph config set mds debug_mds 10;"
+            )
+            cmd += "ceph config set mds debug_mds_quiesce 10"
             client.exec_command(
                 sudo=True,
-                cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
+                cmd=cmd,
                 check_ec=False,
             )
             log.info(f"Reset the quiesce set - {qs_set}")
             cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
             client.exec_command(
                 sudo=True,
-                cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
+                cmd="ceph config set mds log_to_file false",
                 check_ec=False,
             )
             log.info(f"Query quiesce set {qs_id_val}")
@@ -740,16 +748,20 @@ def cg_stress(cg_test_params):
             log.info(f"Query quiesce set {qs_id_val}")
             out = cg_snap_util.get_qs_query(client, qs_id_val)
             log.info(out)
+            cmd = (
+                "ceph config set mds log_to_file true;ceph config set mds debug_mds 10;"
+            )
+            cmd += "ceph config set mds debug_mds_quiesce 10"
             client.exec_command(
                 sudo=True,
-                cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
+                cmd=cmd,
                 check_ec=False,
             )
             log.info(f"Reset the quiesce set - {qs_set}")
             cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
             client.exec_command(
                 sudo=True,
-                cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
+                cmd="ceph config set mds log_to_file false",
                 check_ec=False,
             )
             log.info(f"Exclude a subvolume from quiesce set {qs_id_val}")
