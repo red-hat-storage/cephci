@@ -107,7 +107,7 @@ def run(ceph_cluster, **kw):
         validate_file_owner(nfs_mount1, linux_clients, owner=owner[0])
 
         # Create second export with default values
-        Ceph(linux_clients).nfs.export.create(
+        Ceph(linux_clients[0]).nfs.export.create(
             fs_name=fs_name,
             nfs_name=nfs_name,
             nfs_export=nfs_export2,
