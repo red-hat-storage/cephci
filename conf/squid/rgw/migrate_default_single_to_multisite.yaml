@@ -22,6 +22,7 @@ globals:
         role:
           - mon
           - osd
+          - rgw
 
       node4:
         disk-size: 20
@@ -41,7 +42,6 @@ globals:
       node6:
         role:
           - client
-          - rgw
 
   - ceph-cluster:
       name: ceph-sec
@@ -66,6 +66,7 @@ globals:
         role:
           - mon
           - osd
+          - rgw
 
       node4:
         disk-size: 20
@@ -85,4 +86,3 @@ globals:
       node6:
         role:
           - client
-          - rgw
