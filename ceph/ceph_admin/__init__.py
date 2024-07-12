@@ -13,12 +13,13 @@ from cli.utilities.configure import setup_ibm_licence
 from utility.log import Log
 
 from .bootstrap import BootstrapMixin
+from .registry_login import RegistryLoginMixin
 from .shell import ShellMixin
 
 logger = Log(__name__)
 
 
-class CephAdmin(BootstrapMixin, ShellMixin):
+class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
     """
     Ceph administrator base class which enables ceph pre-requisites
     and Inherits HostMixin and BootstrapMixin classes to support
@@ -138,32 +139,50 @@ class CephAdmin(BootstrapMixin, ShellMixin):
             for node in self.cluster.get_nodes():
                 node.exec_command(sudo=True, cmd=cmd)
 
-    def set_cdn_tool_repo(self):
+    def set_cdn_tool_repo(self, release=None):
         """
         Enable the cdn Tools repo on all ceph node.
-        """
-        rh_build = self.config.get("rhbuild", "6.0-rhel-9")
-        os_major_version = rh_build.split("-")[-1]
 
-        if rh_build.startswith("7"):
-            cdn_repo = {
-                "9": "rhceph-7-tools-for-rhel-9-x86_64-rpms",
-            }
-        elif rh_build.startswith("6"):
-            cdn_repo = {
-                "9": "rhceph-6-tools-for-rhel-9-x86_64-rpms",
-            }
-        elif rh_build.startswith("5"):
-            cdn_repo = {
+        Args:
+            release (Str): Ceph Release Version (default: None)
+        """
+        rh_cdn_repos = {
+            "7": {"9": "rhceph-7-tools-for-rhel-9-x86_64-rpms"},
+            "6": {"9": "rhceph-6-tools-for-rhel-9-x86_64-rpms"},
+            "5": {
                 "8": "rhceph-5-tools-for-rhel-8-x86_64-rpms",
                 "9": "rhceph-5-tools-for-rhel-9-x86_64-rpms",
-            }
-        else:
-            raise Exception(f"Unsupported version {rh_build}")
+            },
+        }
+        ibm_cdn_repos = {
+            "7": {
+                "9": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-7-rhel-9.repo"
+            },
+            "6": {
+                "9": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-6-rhel-9.repo"
+            },
+            "5": {
+                "9": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-5-rhel-9.repo",
+                "8": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-5-rhel-8.repo",
+            },
+        }
 
-        cmd = f"subscription-manager repos --enable={cdn_repo[os_major_version]}"
+        rh_build = self.config.get("rhbuild", "7.1-rhel-9")
+        _release = rh_build[0]
+        if release:
+            _release = release[0]
+        os_major_version = rh_build.split("-")[-1]
+        ibm_build = self.config.get("ibm_build")
+
+        if ibm_build:
+            repo = ibm_cdn_repos[_release][os_major_version]
+        else:
+            repo = rh_cdn_repos[_release][os_major_version]
 
         for node in self.cluster.get_nodes(ignore="client"):
+            cmd = f"subscription-manager repos --enable={repo}"
+            if ibm_build:
+                cmd = f"yum-config-manager --add-repo {repo}"
             node.exec_command(sudo=True, cmd=cmd)
 
     def setup_upstream_repository(self, repo_url=None):

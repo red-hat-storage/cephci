@@ -230,10 +230,10 @@ class BootstrapMixin:
             #       used in the CI test modules.
             #       The `set_cdn_tool_repo` should be taken out, once
             #       we have upstream build with all necessary pkg sources.
-            self.set_cdn_tool_repo()
+            self.set_cdn_tool_repo(_rhcs_version)
         elif build_type == "released" or custom_repo.lower() == "cdn":
             custom_image = False
-            self.set_cdn_tool_repo()
+            self.set_cdn_tool_repo(_rhcs_version)
             self.cluster.use_cdn = True
         elif custom_repo:
             self.set_tool_repo(repo=custom_repo)
