@@ -17,10 +17,11 @@ tests:
         ceph-pri:
           config:
             controllers:
-              - extensa010
+              - clara001
             drivers: # if drivers are not specified will use one of the rgw node
-              - extensa010
-              - extensa011
+              - clara001
+              - clara011
+              - clara012
             fill_percent: 30
       desc: prepare and push cosbench fill workload
       module: push_cosbench_workload.py
@@ -32,10 +33,11 @@ tests:
         ceph-pri:
           config:
             controllers:
-              - extensa010
+              - clara001
             drivers: # if drivers are not specified will use one of the rgw node
-              - extensa010
-              - extensa011
+              - clara001
+              - clara011
+              - clara012
             fill_percent: 30
             workload_type: hybrid
             run_time: 3600 # value in seconds
@@ -63,6 +65,182 @@ tests:
       clusters:
         ceph-pri:
           config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "radosgw-admin sync group create --group-id=global_group --status=enabled"
+              - "radosgw-admin sync group flow create --group-id=global_group --flow-id=global_groupflow --flow-type=symmetrical --zones=primary,secondary"
+              - "radosgw-admin sync group pipe create --group-id=global_group --pipe-id=global_grouppipe --source-zones='*' --dest-zones='*'"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin sync status"
+      desc: Configure zonegroup level sync policy
+      polarion-id: CEPH-83575382
+      module: exec.py
+      name: Configure zonegroup level sync policy
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_aws.py
+            config-file-name: ../../aws/configs/test_aws_regular_and_versioned_bucket_creation.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: create regular and versioned bucket in primary
+      module: sanity_rgw_multisite.py
+      name: create regular and versioned bucket in primary
+      polarion-id: CEPH-83575382
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - clara001
+            drivers:
+              - clara001
+              - clara011
+              - clara012
+            fill_percent: 30
+            record_sync_on_site: ceph-sec
+            bucket_prefix: reg-cosbench-bkt-
+            number_of_buckets: 1
+            number_of_objects: 5000000
+            workload_type: symmetrical
+      desc: upload 5M object to regular bucket
+      module: push_cosbench_workload.py
+      name: upload 5M object to regular bucket
+      polarion-id: CEPH-83575382
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - clara001
+            drivers:
+              - clara001
+              - clara011
+              - clara012
+            fill_percent: 30
+            record_sync_on_site: ceph-sec
+            bucket_prefix: ver-cosbench-bkt-
+            number_of_buckets: 1
+            number_of_objects: 5000000
+            workload_type: symmetrical
+      desc: upload 5M current object to versioned bucket
+      module: push_cosbench_workload.py
+      name: upload 5M current object to versioned bucket
+      polarion-id: CEPH-83575382
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - clara001
+            drivers:
+              - clara001
+              - clara011
+              - clara012
+            fill_percent: 30
+            record_sync_on_site: ceph-sec
+            bucket_prefix: ver-cosbench-bkt-
+            number_of_buckets: 1
+            number_of_objects: 5000000
+            workload_type: symmetrical
+      desc: upload 5M non-current object to versioned bucket
+      module: push_cosbench_workload.py
+      name: upload 5M non-current object to versioned bucket
+      polarion-id: CEPH-83574428
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "radosgw-admin sync group modify --group-id=global_group --status=allowed"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin sync status"
+      desc: Configure zonegroup level sync policy to allowed state
+      polarion-id: CEPH-83575383
+      module: exec.py
+      name: Configure zonegroup level sync policy to allowed state
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_aws.py
+            config-file-name: ../../aws/configs/test_aws_buckets_creation.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: create 20 bucket in primary
+      module: sanity_rgw_multisite.py
+      name: create 20 bucket in primary
+      polarion-id: CEPH-83575383
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            commands:
+              - "radosgw-admin sync policy get"
+              - "for i in {1..20}; do radosgw-admin sync group create --group-id=bkt_group_$i --status=enabled --bucket cos-bucket-$i; done"
+              - "for i in {1..20}; do radosgw-admin sync group pipe create --group-id=bkt_group_$i --pipe-id=bkt_pipe_$i --source-zones='*' --dest-zones='*' --bucket cos-bucket-$i; done"
+      desc: Configure bucket level sync policy
+      polarion-id: CEPH-83575383
+      module: exec.py
+      name: Configure bucket level sync policy
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - clara001
+            drivers:
+              - clara001
+              - clara011
+              - clara012
+            record_sync_on_site: ceph-sec
+            bucket_prefix: cos-bucket-
+            number_of_buckets: 2
+            number_of_objects: 1000000
+            workload_type: symmetrical
+      desc: upload 1M object each to buckets that are enabled sync from bucket level
+      module: push_cosbench_workload.py
+      name: upload 1M object each to buckets that are enabled sync from bucket level
+      polarion-id: CEPH-83575383
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "radosgw-admin sync group remove --group-id=global_group --status=enabled"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin sync group get"
+              - "radosgw-admin sync status"
+      desc: remove zonegroup level sync policy
+      polarion-id: CEPH-83575382
+      module: exec.py
+      name: remove zonegroup level sync policy
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
             script-name: ../aws/test_aws.py
             config-file-name: ../../aws/configs/test_aws_versioned_bucket_creation.yaml
             verify-io-on-site: ["ceph-sec"]
@@ -82,10 +260,11 @@ tests:
               ceph-pri:
                 config:
                   controllers:
-                    - extensa010
+                    - clara001
                   drivers:
-                    - extensa010
-                    - extensa011
+                    - clara001
+                    - clara011
+                    - clara012
                   fill_percent: 35
                   workload_type: symmetrical
                   record_sync_on_site: ceph-sec
@@ -100,10 +279,11 @@ tests:
               ceph-sec:
                 config:
                   controllers:
-                    - clara011
+                    - clara013
                   drivers:
-                    - clara011
-                    - clara012
+                    - clara013
+                    - clara014
+                    - clara015
                   fill_percent: 35
                   workload_type: symmetrical
                   record_sync_on_site: ceph-pri
@@ -119,10 +299,11 @@ tests:
         ceph-pri:
           config:
             controllers:
-              - extensa010
+              - clara001
             drivers:
-              - extensa010
-              - extensa011
+              - clara001
+              - clara011
+              - clara012
             workload_type: fill_runtime
             run_time: 7200
             record_sync_on_site: ceph-sec
@@ -156,10 +337,11 @@ tests:
               ceph-pri:
                 config:
                   controllers:
-                    - extensa010
+                    - clara001
                   drivers:
-                    - extensa010
-                    - extensa011
+                    - clara001
+                    - clara011
+                    - clara012
                   workload_type: cleanup
                   record_sync_on_site: ceph-sec
                   bucket_prefix: cosbench01-bkt-
@@ -173,10 +355,11 @@ tests:
               ceph-sec:
                 config:
                   controllers:
-                    - clara011
+                    - clara013
                   drivers:
-                    - clara011
-                    - clara012
+                    - clara013
+                    - clara014
+                    - clara015
                   workload_type: cleanup
                   record_sync_on_site: ceph-pri
                   bucket_prefix: cosbench01-bkt-

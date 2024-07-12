@@ -163,6 +163,70 @@ tests:
             cephadm: true
             commands:
               - "radosgw-admin sync status"
+              - "radosgw-admin sync group modify --group-id=global_group --status=allowed"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin sync status"
+      desc: Configure zonegroup level sync policy to allowed state
+      polarion-id: CEPH-83575383
+      module: exec.py
+      name: Configure zonegroup level sync policy to allowed state
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_aws.py
+            config-file-name: ../../aws/configs/test_aws_buckets_creation.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: create 20 bucket in primary
+      module: sanity_rgw_multisite.py
+      name: create 20 bucket in primary
+      polarion-id: CEPH-83575383
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            commands:
+              - "radosgw-admin sync policy get"
+              - "for i in {1..20}; do radosgw-admin sync group create --group-id=bkt_group_$i --status=enabled --bucket cos-bucket-$i; done"
+              - "for i in {1..20}; do radosgw-admin sync group pipe create --group-id=bkt_group_$i --pipe-id=bkt_pipe_$i --source-zones='*' --dest-zones='*' --bucket cos-bucket-$i; done"
+      desc: Configure bucket level sync policy
+      polarion-id: CEPH-83575383
+      module: exec.py
+      name: Configure bucket level sync policy
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - clara001
+            drivers:
+              - clara001
+              - clara011
+              - clara012
+            record_sync_on_site: ceph-sec
+            bucket_prefix: cos-bucket-
+            number_of_buckets: 2
+            number_of_objects: 1000000
+            workload_type: symmetrical
+      desc: upload 1M object each to buckets that are enabled sync from bucket level
+      module: push_cosbench_workload.py
+      name: upload 1M object each to buckets that are enabled sync from bucket level
+      polarion-id: CEPH-83575383
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
               - "radosgw-admin sync group remove --group-id=global_group --status=enabled"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin sync group get"
