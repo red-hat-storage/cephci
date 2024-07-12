@@ -13,12 +13,13 @@ from cli.utilities.configure import setup_ibm_licence
 from utility.log import Log
 
 from .bootstrap import BootstrapMixin
+from .registry_login import RegistryLoginMixin
 from .shell import ShellMixin
 
 logger = Log(__name__)
 
 
-class CephAdmin(BootstrapMixin, ShellMixin):
+class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
     """
     Ceph administrator base class which enables ceph pre-requisites
     and Inherits HostMixin and BootstrapMixin classes to support
