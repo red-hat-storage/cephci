@@ -9,7 +9,7 @@ from ceph.nvmegw_cli.log_level import LogLevel
 from ceph.nvmegw_cli.namespace import Namespace
 from ceph.nvmegw_cli.subsystem import Subsystem
 from ceph.nvmegw_cli.version import Version
-from cli.utilities.configs import get_registry_details
+from cephci.utils.configs import get_configs, get_registry_credentials
 from cli.utilities.containers import Registry
 
 
@@ -39,10 +39,13 @@ class NVMeGWCLI(ExecuteCommandMixin):
             clas.NVMEOF_CLI_IMAGE = self.NVMEOF_CLI_IMAGE
 
         if "icr.io" in self.NVMEOF_CLI_IMAGE:
-            registry_details = get_registry_details(ibm_build=True)
-            url = registry_details.get("registry-url")
-            username = registry_details.get("registry-username")
-            password = registry_details.get("registry-password")
+            get_configs()
+            registry = get_registry_credentials("cdn", "ibm")
+            if "stg" in self.NVMEOF_CLI_IMAGE:
+                registry = get_registry_credentials("stage", "ibm")
+            url = registry["registry"]
+            username = registry["username"]
+            password = registry["password"]
             Registry(self.node).login(url, username, password)
 
     def fetch_gateway(self):
