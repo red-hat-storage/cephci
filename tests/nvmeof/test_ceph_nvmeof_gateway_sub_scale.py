@@ -179,7 +179,7 @@ def execute_and_log_results(node):
         "cat /proc/meminfo | grep -iE 'hugepage|^mem|swap'",
         "cat /proc/cpuinfo | grep -iE 'cpu'",
         "ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
-        "top -n 1 | grep -iE '^tasks|^mib|reactor|^%cpu|python'",
+        "top -b | head -n 20",
     ]
     for cmd in commands:
         output, _ = node.installer.exec_command(cmd, sudo=True)
