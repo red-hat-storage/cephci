@@ -692,3 +692,16 @@ tests:
       polarion-id: CEPH-83574621
       module: sanity_rgw_multisite.py
       name: Change bucket ownership to a different user when encryption is enabled
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_encrypted_bucket_chown.py
+            config-file-name: test_chown_before_encrypt.yaml
+            run-on-haproxy: true
+            timeout: 300
+      desc: Change bucket ownership to a different user and then encryption is enabled
+      polarion-id: CEPH-83574618
+      module: sanity_rgw_multisite.py
+      name: Change bucket ownership to a different user and then encryption is enabled
