@@ -1,4 +1,5 @@
 """Support VM lifecycle operation in an OpenStack Cloud."""
+
 import socket
 from datetime import datetime, timedelta
 from time import sleep
@@ -79,14 +80,13 @@ class CephVMNodeV2:
     """Represent the VMNode required for cephci."""
 
     default_rhosd_network_names = [
+        "provider_net_cci_16",
+        "provider_net_cci_15",
+        "provider_net_cci_14",
+        "provider_net_cci_13",
         "provider_net_cci_12",
         "provider_net_cci_11",
         "provider_net_cci_9",
-        "provider_net_cci_8",
-        "provider_net_cci_7",
-        "provider_net_cci_6",
-        "provider_net_cci_5",
-        "provider_net_cci_4",
     ]
 
     default_rhos01_network_names = [
