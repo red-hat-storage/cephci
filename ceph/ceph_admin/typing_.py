@@ -1,3 +1,4 @@
+# flake8: noqa
 """Custom typing objects to avoid circular imports."""
 
 from datetime import datetime
