@@ -1,6 +1,7 @@
 """
 Module to verify health warning generated after crashing a ceph daemon
 """
+
 import random
 import time
 

@@ -1,4 +1,5 @@
 """Manage the Manager service via Ceph's cephadm CLI."""
+
 from typing import Dict
 
 from .apply import ApplyMixin

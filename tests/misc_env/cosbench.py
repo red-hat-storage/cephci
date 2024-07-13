@@ -21,6 +21,7 @@ Sample test script
         module: cosbench.py
         name: deploy cosbench
 """
+
 from json import loads
 from typing import Dict, List
 

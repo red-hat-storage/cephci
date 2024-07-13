@@ -1,4 +1,5 @@
 """Manage the Crash service via cephadm CLI."""
+
 from typing import Dict
 
 from .apply import ApplyMixin

@@ -1,4 +1,5 @@
 """Manage the Ceph Dashboard service via ceph CLI."""
+
 import json
 import tempfile
 from json import loads

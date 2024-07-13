@@ -1,6 +1,7 @@
 """
 Method to create OSDMAPs and verify automatic trimming and logging in mon logs
 """
+
 import datetime
 import time
 

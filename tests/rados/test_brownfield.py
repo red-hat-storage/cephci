@@ -5,7 +5,6 @@ Tests included:
 
 """
 
-
 import json
 
 from api import Api

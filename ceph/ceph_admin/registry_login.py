@@ -1,4 +1,5 @@
 """Cephadm registry login CLI Command."""
+
 from copy import deepcopy
 from typing import Dict
 

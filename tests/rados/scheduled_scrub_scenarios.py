@@ -3,7 +3,6 @@
    Based on the test cases setting the scrub parameters and verifying the functionality.
 """
 
-
 import os
 import sys
 import time

@@ -3,6 +3,7 @@ This script provides the upstream latest rpm repo path and container image.
 Please note that this script should be run under root privileges
 inorder to pull the image and podman should be installed on that host.
 """
+
 import logging
 import os
 import re

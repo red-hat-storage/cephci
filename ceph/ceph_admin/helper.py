@@ -1,6 +1,7 @@
 """
 Contains helper functions that can used across the module.
 """
+
 import json
 import os
 import tempfile

@@ -3,6 +3,7 @@ This module tests :
 1. Changes to monitor config database by setting new config.
 2. Verifies if the config can be reverted to any version and the config changes made are reverted.
 """
+
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonConfigMethods

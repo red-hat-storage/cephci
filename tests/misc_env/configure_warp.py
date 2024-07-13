@@ -21,6 +21,7 @@ Sample test script
         module: configure_warp.py
         name: Configure WARP
 """
+
 from json import loads
 from typing import Dict, List
 

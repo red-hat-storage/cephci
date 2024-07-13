@@ -1,4 +1,5 @@
 """Support VM lifecycle operation in an OpenStack Cloud."""
+
 import socket
 from datetime import datetime, timedelta
 from time import sleep

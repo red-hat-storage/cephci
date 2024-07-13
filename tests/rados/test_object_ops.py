@@ -54,10 +54,14 @@ def run(ceph_cluster, **kw):
                         "Object size needs to be multiple of 2 for parallel writes, "
                         f"Input object size has been changed to {o_size}"
                     )
-                rados_obj.run_parallel_io(
-                    pool_name=pool_name, obj_name=object_name, obj_size=o_size
-                ) if "parallel" in pool_name else rados_obj.run_concurrent_io(
-                    pool_name=pool_name, obj_name=object_name, obj_size=o_size
+                (
+                    rados_obj.run_parallel_io(
+                        pool_name=pool_name, obj_name=object_name, obj_size=o_size
+                    )
+                    if "parallel" in pool_name
+                    else rados_obj.run_concurrent_io(
+                        pool_name=pool_name, obj_name=object_name, obj_size=o_size
+                    )
                 )
                 d_stored += o_size
 

@@ -2,6 +2,7 @@
 Module to deploy 8+6 EC pool with custom CRUSH rules for testing
 
 """
+
 import time
 
 from ceph.ceph_admin import CephAdmin

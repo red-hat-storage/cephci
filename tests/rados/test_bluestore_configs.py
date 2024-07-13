@@ -1,4 +1,5 @@
 """ Module to verify scenarios related to BlueStore config changes"""
+
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -114,10 +115,10 @@ def run(ceph_cluster, **kw):
 
             for checksum in checksum_list:
                 # create pools with given config when OSD csum_type is default crc32c
-                create_pool_write_iops(
-                    param=checksum, pool_type="replicated"
-                ) if pool_type == "replicated" else create_pool_write_iops(
-                    param=checksum, pool_type="ec"
+                (
+                    create_pool_write_iops(param=checksum, pool_type="replicated")
+                    if pool_type == "replicated"
+                    else create_pool_write_iops(param=checksum, pool_type="ec")
                 )
 
             for checksum in checksum_list:
@@ -135,10 +136,10 @@ def run(ceph_cluster, **kw):
                 log.info(f"global checksum set verified - {out}")
 
                 # create pools with given config when OSD csum_type is varied
-                create_pool_write_iops(
-                    param=checksum, pool_type="replicated"
-                ) if pool_type == "replicated" else create_pool_write_iops(
-                    param=checksum, pool_type="ec"
+                (
+                    create_pool_write_iops(param=checksum, pool_type="replicated")
+                    if pool_type == "replicated"
+                    else create_pool_write_iops(param=checksum, pool_type="ec")
                 )
         except Exception as E:
             log.error(f"Verification failed with exception: {E.__doc__}")

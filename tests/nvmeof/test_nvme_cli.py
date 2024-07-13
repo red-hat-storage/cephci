@@ -4,6 +4,7 @@ Test suite that verifies the deployment of Red Hat Ceph Storage via the cephadm 
 The intent of the suite is to simulate a standard operating procedure expected by a
 customer.
 """
+
 from copy import deepcopy
 
 from ceph.ceph import Ceph

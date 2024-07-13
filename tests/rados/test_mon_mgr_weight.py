@@ -1,6 +1,7 @@
 """
 Module to ensure Mgr daemon does not crash when Monitor weights are out of place
 """
+
 import datetime
 import time
 

@@ -1,4 +1,5 @@
 """Module that executes workflows required for ODF CI tests."""
+
 import binascii
 import os
 from json import loads

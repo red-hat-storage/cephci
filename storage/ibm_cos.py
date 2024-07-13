@@ -30,6 +30,7 @@ cos:
 Reference:
   https://cloud.ibm.com/docs/cloud-object-storage?topic=cloud-object-storage-python
 """
+
 import logging
 
 import ibm_boto3

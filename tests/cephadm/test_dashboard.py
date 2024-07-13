@@ -1,4 +1,5 @@
 """Manage the ceph dashboard service via cephadm CLI."""
+
 from ceph.ceph_admin import CephAdmin, dashboard
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import get_cluster_state

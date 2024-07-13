@@ -19,6 +19,7 @@
     8) check ceph health status
     9) Perform test on both Replicated and EC pool
 """
+
 import time
 
 from test_rbd_immutable_cache import configure_immutable_cache

@@ -1,4 +1,5 @@
 """Manage the RBD Mirror service via the cephadm CLI."""
+
 from typing import Dict
 
 from .apply import ApplyMixin

@@ -5,6 +5,7 @@ playbooks supported,
 - cephadm-purge-cluster.yaml
 - cephadm-clients.yaml
 """
+
 import re
 
 from ceph.ceph_admin.common import config_dict_to_string

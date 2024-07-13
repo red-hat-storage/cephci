@@ -1,4 +1,5 @@
 """Manage the client via cephadm CLI."""
+
 import time
 from typing import Dict
 

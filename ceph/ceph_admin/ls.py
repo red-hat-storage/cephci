@@ -1,4 +1,5 @@
 """Module that interfaces with ceph orch ls CLI."""
+
 from typing import Dict, Optional, Tuple
 
 from .common import config_dict_to_string

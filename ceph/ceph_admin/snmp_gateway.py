@@ -1,4 +1,5 @@
 """Module to deploy SNMP-Gateway service and individual daemon(s)."""
+
 from typing import Dict
 
 from .apply import ApplyMixin

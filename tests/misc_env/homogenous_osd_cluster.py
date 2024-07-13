@@ -7,6 +7,7 @@ Sample test script
       module: homogenous_osd_cluster.py
       name: OSD homogenous deploy on specific devices
 """
+
 import json
 import traceback
 from typing import List

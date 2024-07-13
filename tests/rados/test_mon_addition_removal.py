@@ -2,6 +2,7 @@
 Module to test addition and removal of mon daemons
 
 """
+
 import random
 
 from ceph.ceph_admin import CephAdmin

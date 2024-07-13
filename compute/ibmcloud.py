@@ -1,4 +1,5 @@
 """Support VM lifecycle operation in an OpenStack Cloud."""
+
 import socket
 from typing import Optional
 

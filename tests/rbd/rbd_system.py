@@ -7,6 +7,7 @@ following things are done
 - Call the appropriate test script
 - Return the status code of the script.
 """
+
 from utility.log import Log
 
 log = Log(__name__)

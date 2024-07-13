@@ -29,9 +29,9 @@ def run(ceph_cluster, **kw):
         [obj.node.ip_address for obj in other_cluster.get_ceph_objects(role="mon")]
     )
 
-    config["ansi_config"][
-        "ceph_rbd_mirror_remote_cluster"
-    ] = other_cluster.get_cluster_fsid(rhbuild=config["build"])
+    config["ansi_config"]["ceph_rbd_mirror_remote_cluster"] = (
+        other_cluster.get_cluster_fsid(rhbuild=config["build"])
+    )
 
     write_configs_to_rbdmirrors_yaml(ceph_installer, config)
 

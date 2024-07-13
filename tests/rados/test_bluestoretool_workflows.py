@@ -15,6 +15,7 @@ Test Module to perform specific functionalities of ceph-bluestore-tool.
  - ceph-bluestore-tool bluefs-bdev-new-wal --path osd path --dev-target new-device
  - ceph-bluestore-tool bluefs-bdev-new-db --path osd path --dev-target new-device
 """
+
 import json
 import math
 import random

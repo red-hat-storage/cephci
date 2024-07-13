@@ -21,6 +21,7 @@ Sample test script
         module: push_cosbench_workload.py
         name: push cosbench fill workload
 """
+
 import json
 import math
 import time

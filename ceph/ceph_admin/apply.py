@@ -6,6 +6,7 @@ Module to deploy ceph role service(s) using orchestration command
 
 This is a mixin object and can be applied to the supported service classes.
 """
+
 import re
 from typing import Dict
 

@@ -1,4 +1,5 @@
 """Module that allows QE to interface with cephadm bootstrap CLI."""
+
 import json
 import tempfile
 from distutils.version import LooseVersion
@@ -215,9 +216,9 @@ class BootstrapMixin:
             # an upgrade occurs. This enables us to execute the test in the right
             # context.
             self.config["base_url"] = _details[0]
-            self.config[
-                "container_image"
-            ] = f"{_details[1]}/{_details[2]}:{_details[3]}"
+            self.config["container_image"] = (
+                f"{_details[1]}/{_details[2]}:{_details[3]}"
+            )
             self.cluster.rhcs_version = _rhcs_version
             rhbuild = f"{_rhcs_version}-{_platform}"
             base_url = _details[0]

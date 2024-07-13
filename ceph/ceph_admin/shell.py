@@ -1,4 +1,5 @@
 """Interface to cephadm shell CLI."""
+
 from copy import deepcopy
 from typing import Dict, List
 

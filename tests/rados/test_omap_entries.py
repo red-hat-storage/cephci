@@ -4,6 +4,7 @@ thereby increasing the OMAP entries generated on the pool.
 Verifying the Bug#2249003 - Observing client.admin crash in thread_name 'rados' on executing 'rados clearomap'
 for a rados pool different than the one where the object is present.
 """
+
 import random
 import time
 

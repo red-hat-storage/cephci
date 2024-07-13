@@ -5,6 +5,7 @@
     3. Set osd out
     3. Zap device path
 """
+
 from json import loads
 
 from ceph.ceph_admin.daemon import Daemon

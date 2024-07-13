@@ -1,4 +1,5 @@
 """Module that interfaces with ceph orch upgrade CLI."""
+
 from datetime import datetime, timedelta
 from json import loads
 from time import sleep

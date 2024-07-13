@@ -18,6 +18,7 @@
     7) Demote initially promoted secondary as primary
     8) Promote newly created mirrored cluster as primary
 """
+
 # import datetime
 # import time
 

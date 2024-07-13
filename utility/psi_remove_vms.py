@@ -10,6 +10,7 @@
         ceph-ci             1 week
         ceph-core           1 weeks
 """
+
 import smtplib
 import sys
 from datetime import datetime, timezone
@@ -159,9 +160,9 @@ def send_email(payload: Dict) -> list:
             recipient = email
 
             msg = MIMEMultipart("alternative")
-            msg[
-                "Subject"
-            ] = "Notification: Your subscriptions are marked/removed in RHOS-D"
+            msg["Subject"] = (
+                "Notification: Your subscriptions are marked/removed in RHOS-D"
+            )
             msg["From"] = sender
             msg["To"] = recipient
             html = """\

@@ -6,7 +6,6 @@ AS part of verification the script  perform the following tasks-
    3. While creating objects check that osds status
 """
 
-
 import datetime
 import time
 from threading import Thread

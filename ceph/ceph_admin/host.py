@@ -1,4 +1,5 @@
 """Cephadm orchestration host operations."""
+
 import json
 from copy import deepcopy
 

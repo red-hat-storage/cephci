@@ -45,7 +45,6 @@ Below configs are needed in order to run the tests
 
 """
 
-
 import yaml
 
 from utility import utils

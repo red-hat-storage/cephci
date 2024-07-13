@@ -1,6 +1,7 @@
 """
     Utility to cleanup orphan DNS record from IBM environment
 """
+
 import math
 import sys
 from typing import Dict

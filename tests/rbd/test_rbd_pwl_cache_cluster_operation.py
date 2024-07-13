@@ -28,7 +28,6 @@ Support
 - Configure cluster with PWL Cache.
 - Only replicated pool supported, No EC pools."""
 
-
 import time
 
 from ceph.ceph_admin import CephAdmin

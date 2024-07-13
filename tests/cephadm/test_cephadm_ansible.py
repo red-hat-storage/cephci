@@ -5,6 +5,7 @@ Playbook supported
 - cephadm-purge-cluster.yaml
 - cephadm-clients.yaml
 """
+
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
 from utility.log import Log
 

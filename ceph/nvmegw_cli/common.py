@@ -3,6 +3,7 @@
 - Configure spdk and start spdk.
 - Configure nvme-of targets using control.cli.
 """
+
 from json import loads
 
 from ceph.ceph_admin.common import config_dict_to_string
