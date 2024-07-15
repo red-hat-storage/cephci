@@ -52,20 +52,44 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
         ceph_version = get_ceph_version_from_cluster(clients[0])
-        fs_util.prepare_clients(clients, build)
-        fs_util.auth_list(clients)
-        log.info("checking Pre-requisites")
         if len(clients) < 1:
             log.info(
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
+        client1 = clients[0]
+        log.info("Setting OSD config to avoid impact on snap-schedule due to Scrubbing")
+        osd_cmds = {
+            "osd_stats_update_period_not_scrubbing": 2,
+            "osd_stats_update_period_scrubbing": 2,
+            "osd_pg_stat_report_interval_max": 5,
+        }
+        for osd_cmd in osd_cmds:
+            cmd = f"ceph config set osd {osd_cmd} {osd_cmds[osd_cmd]}"
+            client1.exec_command(sudo=True, cmd=cmd)
+        log.info("Verify OSD config")
+        for osd_cmd in osd_cmds:
+            cmd = f"ceph config get osd {osd_cmd}"
+            out, _ = client1.exec_command(sudo=True, cmd=cmd)
+            log.info(out)
+            if str(osd_cmds[osd_cmd]) not in str(out):
+                log.warning(
+                    f"OSD config {osd_cmd} couldn't be set to {osd_cmds[osd_cmd]}"
+                )
+
+        time.sleep(10)
+        fs_util.prepare_clients(clients, build)
+        fs_util.auth_list(clients)
+        log.info("checking Pre-requisites")
+
         default_fs = "cephfs_snap_1"
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
         )
-        client1 = clients[0]
+
+        log.info("Enable Snap Schedule")
+        client1.exec_command(sudo=True, cmd="ceph mgr module enable snap_schedule")
         fs_details = fs_util.get_fs_info(client1, fs_name=default_fs)
         if not fs_details:
             fs_util.create_fs(client1, default_fs)
@@ -74,7 +98,7 @@ def run(ceph_cluster, **kw):
         ]
         for subvolumegroup in subvolumegroup_list:
             fs_util.create_subvolumegroup(client1, **subvolumegroup)
-
+        log.info("Kernel mount")
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
         mon_node_ips = fs_util.get_mon_node_ips()
         retry_mount = retry(CommandFailed, tries=3, delay=30)(fs_util.kernel_mount)
@@ -84,7 +108,7 @@ def run(ceph_cluster, **kw):
             ",".join(mon_node_ips),
             extra_params=f",fs={default_fs}",
         )
-
+        log.info("Run IO")
         client1.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
@@ -95,11 +119,10 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True, cmd=f"mkdir -p {kernel_mounting_dir_1}/dir_kernel"
         )
-
-        log.info("Enable Snap Schedule")
         client1.exec_command(
             sudo=True, cmd=f"mkdir -p {kernel_mounting_dir_1}/snap_schedule"
         )
+        log.info("Fuse mount")
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
         fs_util.fuse_mount(
             [client1],
@@ -127,9 +150,7 @@ def run(ceph_cluster, **kw):
         commands = [
             f"ceph fs subvolume ls {default_fs}",
             "ceph config set mgr mgr/snap_schedule/allow_m_granularity true",
-            "ceph mgr module enable snap_schedule",
             f"ceph fs snap-schedule add path 1{m_granularity} --fs {default_fs}",
-            f"ceph fs snap-schedule activate path --fs {default_fs}",
         ]
         modified_commands = [
             cmd.replace("path", item) for item in sanp_schedule_list for cmd in commands
