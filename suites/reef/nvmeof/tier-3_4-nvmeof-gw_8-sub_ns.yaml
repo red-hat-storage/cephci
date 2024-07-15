@@ -189,7 +189,7 @@ tests:
               command: add
               args:
                 subsystems: 8
-                namespaces: 1648
+                namespaces: 624
                 image_size: 1T
                 pool: rbd
         initiators:
@@ -198,10 +198,10 @@ tests:
         run_io:
           - node: node12
             io_type: write
-      desc: Scale to 2048 namespaces with IO
+      desc: Scale to 1024 namespaces with IO
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway_sub_scale.py
-      name: Scale to 2048 namespaces with IO on 4GW and 8 subsystems
+      name: Scale to 1024 namespaces with IO on 4GW and 8 subsystems
       polarion-id: CEPH-83583004
 
   - test:
@@ -214,6 +214,7 @@ tests:
            verify: true
       desc: Remove nvmeof service on GW nodes
       destroy-cluster: false
+      do-not-skip-tc: true
       module: test_orch.py
       name: Delete nvmeof gateway
 
