@@ -12,6 +12,7 @@
     6. Verify if change of any image features in primary site gets mirrored in secondary site.
     7. perform test on both replicated and EC pool
 """
+
 import datetime
 import time
 

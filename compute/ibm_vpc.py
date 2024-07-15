@@ -1,4 +1,5 @@
 """IBM-Cloud VPC provider implementation for CephVMNode."""
+
 import re
 import socket
 from copy import deepcopy
@@ -391,9 +392,9 @@ class CephVMNodeIBM:
             instance_prototype_model["volume_attachments"] = volume_attachment_list
             instance_prototype_model["vpc"] = vpc_identity_model
             instance_prototype_model["image"] = image_identity_model
-            instance_prototype_model[
-                "primary_network_interface"
-            ] = network_interface_prototype_model
+            instance_prototype_model["primary_network_interface"] = (
+                network_interface_prototype_model
+            )
             instance_prototype_model["zone"] = zone_identity_model
 
             # Set up parameter values

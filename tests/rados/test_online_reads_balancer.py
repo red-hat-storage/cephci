@@ -2,6 +2,7 @@
 Module to test Reads balancer functionality on RHCS 8.0 and above clusters
 
 """
+
 import re
 import time
 

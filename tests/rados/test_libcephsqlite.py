@@ -2,6 +2,7 @@
 Module to verify libcephsqlite's ability to reopen a database connection if
 current connection is down/blocklisted.
 """
+
 import random
 import time
 

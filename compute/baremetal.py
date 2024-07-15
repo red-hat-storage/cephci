@@ -1,4 +1,5 @@
 """Collects the Baremetal information and creates the cephNode object."""
+
 from copy import deepcopy
 from os.path import expanduser
 from typing import List, Optional

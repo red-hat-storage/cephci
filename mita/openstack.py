@@ -1,4 +1,5 @@
 """Module to interface with the OpenStack API."""
+
 import datetime
 import socket
 from time import sleep

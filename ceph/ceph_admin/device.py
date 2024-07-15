@@ -1,4 +1,5 @@
 """CephADM orchestration Device operations."""
+
 from time import sleep
 from typing import Dict, Optional, Tuple
 

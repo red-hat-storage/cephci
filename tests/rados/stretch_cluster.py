@@ -8,6 +8,7 @@ New we have methods 2 Methods for deployment :
 
 Once all the code movement for stretch mode happens, Test cases will be updated to use one of the two methods mentioned.
 """
+
 import datetime
 import re
 import time

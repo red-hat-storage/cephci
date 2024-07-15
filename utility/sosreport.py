@@ -8,6 +8,7 @@ then upload all the collected logs to magna/directory(run_dir) provided
   python sosreport.py --ip x.x.x.x --username abc --password abcd --directory /tmp/cephci-run-ysfyu
   python sosreport.py -h
 """
+
 import os
 import re
 import sys

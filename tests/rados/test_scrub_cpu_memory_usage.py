@@ -1,6 +1,7 @@
 """
 The program verifies the CPU and memory consumption of OSD during the scheduled scrub
 """
+
 import datetime
 import time
 

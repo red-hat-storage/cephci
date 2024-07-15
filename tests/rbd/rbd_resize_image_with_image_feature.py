@@ -19,7 +19,6 @@ Test Case Flow:
 6. Repeat steps 1 to 5 for ecpool
 """
 
-
 from ceph.parallel import parallel
 from tests.rbd.exceptions import RbdBaseException
 from tests.rbd.rbd_utils import (

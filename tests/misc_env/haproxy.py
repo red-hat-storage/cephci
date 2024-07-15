@@ -16,6 +16,7 @@ Sample test script
         module: haproxy.py
         name: Configure HAproxy
 """
+
 from typing import List
 
 from jinja2 import Template

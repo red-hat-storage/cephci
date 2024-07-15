@@ -1,4 +1,5 @@
 """Create xUnit result files."""
+
 from datetime import timedelta
 
 from junitparser import (

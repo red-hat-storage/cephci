@@ -12,6 +12,7 @@ Example:
 This module is inherited where hosts are placed or exited from maintenance using orchestrator.
 
 """
+
 from json import loads
 from time import sleep
 from typing import Dict

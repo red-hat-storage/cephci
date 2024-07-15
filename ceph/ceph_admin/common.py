@@ -1,4 +1,5 @@
 """Contains common functions that can used across the module."""
+
 from typing import Dict
 
 

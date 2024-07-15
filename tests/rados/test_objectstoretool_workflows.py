@@ -16,6 +16,7 @@ Possible obj operations:
     remove-clone-metadata
 ceph-objectstore-tool --data-path path to osd [ --op list $obj_ID]
 """
+
 import json
 import random
 

@@ -8,6 +8,7 @@ Run shell script on installer node, then upload all the collected logs to magna
   python collect_logs.py --ip x.x.x.x --username abc --password abcd
   python collect_logs.py -h
 """
+
 import json
 import os
 import re

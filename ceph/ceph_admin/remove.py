@@ -4,6 +4,7 @@ Module to remove ceph role service(s) using orchestration command
 "ceph orch remove service.name "
 This module inherited where service deleted using "remove" operation.
 """
+
 from typing import Dict
 
 from .common import config_dict_to_string

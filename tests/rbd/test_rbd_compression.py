@@ -15,6 +15,7 @@
     5. verify "rbd_compression_hint" to "incompressible" on global, pool and image level
     6. Repeat the above steps for ecpool
 """
+
 import json
 
 from tests.rbd.rbd_utils import get_ceph_config, initial_rbd_config, set_ceph_config

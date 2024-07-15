@@ -3,6 +3,7 @@ Method to verify the onode trimming
 Bugzilla:
   https://bugzilla.redhat.com/show_bug.cgi?id=1947215
 """
+
 import datetime
 import re
 import time

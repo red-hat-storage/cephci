@@ -1,4 +1,5 @@
 """Perform the manager operations via Ceph's cephadm CLI."""
+
 from json import loads
 
 from .ceph import CephCLI

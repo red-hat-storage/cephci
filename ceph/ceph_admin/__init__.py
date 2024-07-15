@@ -7,6 +7,7 @@ operations part of the cluster lifecycle.
 Over here, we create a glue between the CLI and CephCI to allow the QE to write test
 scenarios for verifying and validating cephadm.
 """
+
 from typing import Dict
 
 from cli.utilities.configure import setup_ibm_licence

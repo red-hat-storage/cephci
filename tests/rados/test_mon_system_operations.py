@@ -7,6 +7,7 @@ Removing a monitor from a healthy cluster
 Mon daemon failure - restart and kill
 
 """
+
 import random
 
 from ceph.ceph_admin import CephAdmin

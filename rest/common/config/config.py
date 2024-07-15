@@ -1,6 +1,5 @@
 """Config file reader"""
 
-
 import json
 import os
 

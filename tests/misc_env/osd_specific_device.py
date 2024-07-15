@@ -9,6 +9,7 @@ Sample test script
       module: osd_specific_device.py
       name: OSD on specific device
 """
+
 import json
 from typing import List
 

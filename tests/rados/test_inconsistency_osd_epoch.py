@@ -3,7 +3,6 @@ This file contains the  methods to generate inconsistent objects, collect the OS
  and then change the epoch to check if the inconsistency persists.
 """
 
-
 import random
 import traceback
 

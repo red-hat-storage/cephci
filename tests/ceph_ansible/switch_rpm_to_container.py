@@ -1,4 +1,5 @@
 """switches non-containerized ceph daemon to containerized ceph daemon"""
+
 import yaml
 
 from utility.log import Log

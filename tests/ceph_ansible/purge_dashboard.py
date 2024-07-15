@@ -1,4 +1,5 @@
 """ Module to purge ceph dashboard."""
+
 import json
 
 from utility.log import Log

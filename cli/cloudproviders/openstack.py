@@ -124,9 +124,11 @@ class Openstack:
             log.error(e)
             raise CloudProviderError(e)
 
-        self.wait_for_node_state(
-            name, STATE_RUNNING, timeout, interval
-        ) if node else None
+        (
+            self.wait_for_node_state(name, STATE_RUNNING, timeout, interval)
+            if node
+            else None
+        )
 
         return True
 
@@ -299,9 +301,11 @@ class Openstack:
             log.error(e)
             raise CloudProviderError(e)
 
-        self.wait_for_volume_state(
-            name, STATE_AVAILABLE, timeout, interval
-        ) if volume else None
+        (
+            self.wait_for_volume_state(name, STATE_AVAILABLE, timeout, interval)
+            if volume
+            else None
+        )
 
         return True
 

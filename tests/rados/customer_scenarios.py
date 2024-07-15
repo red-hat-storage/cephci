@@ -15,6 +15,7 @@ Currently automated scenarios:
           new mappings for around next hour or so.. The suite `Sanity_rados` is part of the workflow for this test.
           The workflow makes sure that there have been enough operations on monitor for this test to provide results.
 """
+
 import datetime
 import json
 import re

@@ -2,6 +2,7 @@
 Tier-3 test module to perform various operations on large OMAPS
 and execute OSD compaction during IOPS with and without OSD failure
 """
+
 import random
 import time
 

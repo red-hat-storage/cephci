@@ -1,6 +1,7 @@
 """
 A tool to monitor and log memory consumption processes.
 """
+
 from __future__ import print_function
 
 import argparse

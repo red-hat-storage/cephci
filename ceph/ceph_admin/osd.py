@@ -1,4 +1,5 @@
 """Manage OSD service via cephadm CLI."""
+
 import json
 from time import sleep
 from typing import Dict

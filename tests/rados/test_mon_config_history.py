@@ -3,6 +3,7 @@ This module tests :
 1. Changes to monitor config database by setting new config
 2. Verifies if the config change is successfully logged into the config history and a new version is created
 """
+
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonConfigMethods

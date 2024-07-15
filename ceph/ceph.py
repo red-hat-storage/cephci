@@ -1,4 +1,5 @@
 """This module implements the required foundation data structures for testing."""
+
 import datetime
 import json
 import pickle
@@ -299,9 +300,11 @@ class Ceph(object):
                     if "pool" in node.hostname:
                         logger.info(node.hostname)
                         devices = node.create_lvm(
-                            devices[0:1]
-                            if not device_to_add
-                            else device_to_add.split(),
+                            (
+                                devices[0:1]
+                                if not device_to_add
+                                else device_to_add.split()
+                            ),
                             num=random.randint(1, 10) if device_to_add else None,
                             check_lvm=False if device_to_add else True,
                         )

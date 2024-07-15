@@ -1,4 +1,5 @@
 """Shrinks the Ceph monitors from the cluster"""
+
 import re
 
 from utility.log import Log

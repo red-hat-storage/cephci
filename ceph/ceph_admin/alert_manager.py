@@ -1,4 +1,5 @@
 """Deploy the alert manager service in the cluster via cephadm CLI."""
+
 from typing import Dict
 
 from .apply import ApplyMixin

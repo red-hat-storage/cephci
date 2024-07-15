@@ -17,6 +17,7 @@
     7. Perform snapshot,protect and clone of rbd images
     8. Read the cloned images from the cache path
 """
+
 import time
 
 from tests.rbd.rbd_utils import initial_rbd_config

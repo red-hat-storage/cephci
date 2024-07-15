@@ -4,6 +4,7 @@ Bugzilla:
  - https://bugzilla.redhat.com/show_bug.cgi?id=1608060
  - https://bugzilla.redhat.com/show_bug.cgi?id=1644409
 """
+
 import datetime
 import time
 

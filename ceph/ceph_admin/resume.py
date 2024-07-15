@@ -10,6 +10,7 @@ Example:
 
 This module is inherited where orchestrator operations are resumed using resume command.
 """
+
 from typing import Dict
 
 from utility.log import Log

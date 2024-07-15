@@ -1,4 +1,5 @@
 """Module to test ceph health alerts"""
+
 import traceback
 from json import loads
 from time import sleep

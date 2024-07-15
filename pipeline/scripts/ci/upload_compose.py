@@ -9,6 +9,7 @@ Note:
     we would create .repo files in /etc/yum.conf.d/ for sync operations. Also, the
     script works only on CentOS-7 due to options provided for reposync.
 """
+
 import logging
 import subprocess
 import sys
