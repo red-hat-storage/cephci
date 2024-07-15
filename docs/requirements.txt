@@ -2,4 +2,3 @@ sphinx
 sphinx-autopackagesummary
 sphinx_rtd_theme
 recommonmark
--r ../requirements.txt

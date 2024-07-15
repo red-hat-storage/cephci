@@ -15,7 +15,6 @@ formats:
 
 # Optionally set the version of Python and requirements required to build your docs
 python:
-   version: "3.7"
    install:
    - requirements: docs/requirements.txt
 
@@ -24,5 +23,6 @@ build:
   tools:
     python: "3.12"
   apt_packages:
+    - python3-dev
     - libcurl4-openssl-dev
     - libssl-dev
