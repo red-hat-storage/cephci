@@ -37,7 +37,10 @@ globals:
       node7:
         role:
           - mds
+          - osd
           - nfs
+        no-of-volumes: 4
+        disk-size: 15
       node8:
         role:
           - client
