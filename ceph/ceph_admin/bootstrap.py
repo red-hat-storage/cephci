@@ -361,10 +361,13 @@ class BootstrapMixin:
                 "prometheus",
                 "node_exporter",
                 "alertmanager",
-                "promtail",
                 "snmp_gateway",
-                "loki",
             ]
+            if self.cluster.rhcs_version >= LooseVersion("6.0"):
+                supported_overrides += [
+                    "promtail",
+                    "loki",
+                ]
             if self.cluster.rhcs_version >= LooseVersion("7.0"):
                 supported_overrides += [
                     "nvmeof",
