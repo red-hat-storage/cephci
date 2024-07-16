@@ -1371,6 +1371,54 @@ def run(ceph_cluster, **kw):
         log.info(" Verification of pg_min_num complete")
         return 0
 
+    if config.get("verify_rocksdb_compression_enabled"):
+        if float(rhbuild.split("-")[0]) >= 7.1:
+            log.debug("RocksDB compression enabled only from 7.1.")
+            log.info(
+                "Verifying if RocksDB compression is enabled by default on Cluster"
+                "Bugzilla : 2253313"
+            )
+            try:
+
+                def verify_compression(config_string):
+                    options = config_string.split(",")
+                    for option in options:
+                        if option.strip() == "compression=kLZ4Compression":
+                            return True
+                    return False
+
+                out = mon_obj.get_config(
+                    section="mon", param="bluestore_rocksdb_options"
+                )
+                if not verify_compression(config_string=out):
+                    log.error(
+                        f"RocksDB Compression not enabled. Compression string : {out}"
+                    )
+                    raise Exception("RocksDB compression not enabled")
+
+                out = mon_obj.get_config(
+                    section="osd", param="bluestore_rocksdb_options"
+                )
+                if not verify_compression(config_string=out):
+                    log.error(
+                        f"RocksDB Compression not enabled. Compression string : {out}"
+                    )
+                    raise Exception("RocksDB compression not enabled")
+
+            except Exception as err:
+                log.error(f"Hit exception : {err}")
+                return 1
+            finally:
+                pass
+            log.info("Verified that RocksDB compression is enabled at config level")
+            return 0
+        else:
+            log.info(
+                f"Test running on build : {rhbuild}, where RocksDB compression is not enabled."
+                f"Skipping the checks"
+            )
+            return 0
+
 
 def stop_osd_check_warn(rados_obj, osd_pick, pool_name, pgid):
     """Method to check health warning upon OSD failure
