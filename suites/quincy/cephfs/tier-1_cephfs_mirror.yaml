@@ -22,16 +22,7 @@
 #     Node4 - OSD,MDS
 #     Node5 - OSD, MDS
 #     Node6 - Client
-# Tests Covered :
-#   CEPH-83574114: CephFS Mirror cluster deployment using cephadm
-#   CEPH-83574099: Validate the Synchronization is successful upon enabling fs mirroring
-#   CEPH-83575625: Configure CephFS Mirroring modification of source and target cluster
-#   CEPH-83574107: Validate the Mirroring is successful upon enabling fs mirroring on multiple FS from source to the same destination
-#   CEPH-83574109: Modify User caps and validate the mirroring sync.
-#   CEPH-83574120: Modify the Remote Snap Directories
-#   CEPH-83575340: Convert a single node to HA configuration
-#   CEPH-83574100: Validate all failure scenarios to disconnect the mirroring
-#   CEPH-83580026: Validate multiple snapshots Synchronization on Mirror setup
+
 #===============================================================================================
 tests:
   - test:
@@ -261,3 +252,14 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirroring_multiple_snapshots.py
       name: Validate multiple snapshots Synchronization on Mirror setup
       polarion-id: "CEPH-83580026"
+  - test:
+      abort-on-fail: false
+      desc: "Validate Snapshot Sync status using asok file"
+      clusters:
+        ceph1:
+          config:
+            name: Validate the Synchronisation Status using asok file
+      module: cephfs_mirroring.test_cephfs_mirroring_snap_status_using_asok.py
+      name: Validate the Synchronisation Status using asok file
+      polarion-id: ""
+

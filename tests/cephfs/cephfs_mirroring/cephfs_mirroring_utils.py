@@ -1173,3 +1173,149 @@ class CephfsMirroringUtils(object):
         log.info(
             f"List of snaps after injecting failure : {snapshot_list_after_sync_failure}"
         )
+
+    def setup_subvolumes_and_mounts(
+        self, source_fs, source_clients, fs_util, subvol_group_name, subvol_details
+    ):
+        """
+        Setup subvolumes and mount them based on provided details.
+
+        Args:
+        - source_fs (str): Name of the source filesystem.
+        - source_clients (list): List of client instances.
+        - fs_util (object): Instance of the utility class for Ceph operations.
+        - subvol_group_name (str): Name of the subvolume group.
+        - subvol_details (list of dicts): Details of subvolumes to create and mount. Each dict should have keys:
+            - 'subvol_name': Name of the subvolume.
+            - 'subvol_size': Size of the subvolume.
+            - 'mount_type': Type of mount ('kernel' or 'fuse').
+            - 'mount_dir': Mount directory for the subvolume.
+
+        Returns:
+        - list: A list of subvolume paths.
+        """
+        log.info("Create Subvolumes for adding Data")
+
+        subvolumegroup_list = [
+            {"vol_name": source_fs, "group_name": subvol_group_name},
+        ]
+        for subvolumegroup in subvolumegroup_list:
+            fs_util.create_subvolumegroup(source_clients, **subvolumegroup)
+
+        subvolume_paths = []
+
+        for subvol in subvol_details:
+            subvol_name = subvol["subvol_name"]
+            subvol_size = subvol["subvol_size"]
+            mount_type = subvol["mount_type"]
+            mount_dir = subvol["mount_dir"]
+
+            # Create subvolume
+            subvolume = {
+                "vol_name": source_fs,
+                "subvol_name": subvol_name,
+                "group_name": subvol_group_name,
+                "size": subvol_size,
+            }
+            fs_util.create_subvolume(source_clients, **subvolume)
+
+            # Get subvolume path
+            log.info(f"Get the path of subvolume {subvol_name} on filesystem")
+            subvol_path, rc = source_clients.exec_command(
+                sudo=True,
+                cmd=f"ceph fs subvolume getpath {source_fs} {subvol_name} {subvol_group_name}",
+            )
+            index = subvol_path.find(f"{subvol_name}/")
+            if index != -1:
+                subvol_path = subvol_path[: index + len(f"{subvol_name}/")]
+            log.info(subvol_path)
+
+            # Store subvolume path in the list
+            subvolume_paths.append(subvol_path.strip())
+
+            # Mount subvolume based on mount type
+            if mount_type == "kernel":
+                mon_node_ips = fs_util.get_mon_node_ips()
+                fs_util.kernel_mount(
+                    [source_clients],
+                    mount_dir,
+                    ",".join(mon_node_ips),
+                )
+            elif mount_type == "fuse":
+                fs_util.fuse_mount(
+                    [source_clients],
+                    mount_dir,
+                )
+            else:
+                log.error(
+                    f"Invalid mount type: {mount_type}. Please specify 'kernel' or 'fuse'."
+                )
+        return subvolume_paths
+
+    def get_fs_mirror_status_using_asok(
+        self, cephfs_mirror_node, source_clients, fs_name
+    ):
+        """ """
+        log.info("Validate the Synchronisation on Target Cluster")
+        log.info("Install ceph-common on cephfs-mirror node")
+        if not isinstance(cephfs_mirror_node, list):
+            cephfs_mirror_node = [cephfs_mirror_node]
+        for node in cephfs_mirror_node:
+            node.exec_command(sudo=True, cmd="dnf install -y ceph-common --nogpgcheck")
+        fsid = self.get_fsid(cephfs_mirror_node[0])
+        daemon_names = self.get_daemon_name(source_clients)
+        filesystem_id = self.get_filesystem_id_by_name(source_clients, fs_name)
+        asok_files = self.get_asok_file(cephfs_mirror_node, fsid, daemon_names)
+        log.info("Get filesystem mirror status")
+        for node, asok_file in asok_files.items():
+            out, _ = asok_file[0].exec_command(
+                sudo=True,
+                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file[1]} "
+                f"fs mirror status {fs_name}@{filesystem_id} -f json",
+            )
+            fs_mirror_status = json.dump(out)
+            return fs_mirror_status
+
+    def get_fs_mirror_peer_status_using_asok(
+        self,
+        cephfs_mirror_node,
+        source_clients,
+        fs_name,
+    ):
+        """
+        Get the CephFS mirror peer status using the specified asok file.
+
+        :param cephfs_mirror_node: List of cephfs mirror nodes
+        :param fs_name: Filesystem name
+        :param fsid: Filesystem ID
+        :param asok_file: Asok file path
+        :param filesystem_id: Filesystem ID
+        :param peer_uuid: Peer UUID
+        :return: JSON response containing fs mirror peer status
+        """
+        if not isinstance(cephfs_mirror_node, list):
+            cephfs_mirror_node = [cephfs_mirror_node]
+        for node in cephfs_mirror_node:
+            node.exec_command(sudo=True, cmd="dnf install -y ceph-common --nogpgcheck")
+        fsid = self.get_fsid(cephfs_mirror_node[0])
+        daemon_names = self.get_daemon_name(source_clients)
+        filesystem_id = self.get_filesystem_id_by_name(source_clients, fs_name)
+        asok_files = self.get_asok_file(cephfs_mirror_node, fsid, daemon_names)
+        peer_uuid = self.get_peer_uuid_by_name(source_clients, fs_name)
+        log.info("Get filesystem mirror status")
+        for node, asok_file in asok_files.items():
+            out, _ = asok_file[0].exec_command(
+                sudo=True,
+                cmd=f"cd /var/run/ceph/{fsid}/ ; ceph --admin-daemon {asok_file[1]} "
+                f"fs mirror peer status {fs_name}@{filesystem_id} {peer_uuid} -f json",
+            )
+            fs_mirror_status = json.loads(out)
+            return fs_mirror_status
+
+    def validate_snaps_status_increment(self, json_before, json_after, snap_status):
+        validation_results = {}
+        for path in json_before:
+            before_snaps_synced = json_before[path].get(snap_status, 0)
+            after_snaps_synced = json_after[path].get(snap_status, 0)
+            validation_results[path] = after_snaps_synced > before_snaps_synced
+        return validation_results
