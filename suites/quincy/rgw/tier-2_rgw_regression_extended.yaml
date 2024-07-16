@@ -229,3 +229,4 @@ tests:
       module: test_s3.py
       name: execute s3tests
       polarion-id: CEPH-83575225
+      comments: known issue 55614 fixed in Ceph quincy - v17.2.7, current builds at build is 17.2.6
