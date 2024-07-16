@@ -1,3 +1,4 @@
+from ceph.utils import get_nodes_by_ids
 from rest.endpoints.nvmeof.nvmeof import NVMEoF
 from utility.log import Log
 
@@ -105,3 +106,51 @@ def add_and_verify_host(**kw):
     except Exception as e:
         log.error(f"FAILED verification of host {nqn} failed by GET {str(e)}")
         return 1
+
+
+def add_and_verify_listener(cluster, **kw):
+    """
+    Add and Verification of listener on each gateway node
+    Args:
+        kw: kw args required for Adding and Verifying Listener
+    """
+    _rest = kw.pop("rest", None)
+    nvmeof_rest = NVMEoF(rest=_rest)
+    nqn = kw.get("nqn")
+    listeners = kw.get("listeners")
+    for listener in get_nodes_by_ids(cluster, listeners):
+        trsvcid = int(kw.get("listener_port", 4420))
+        adrfam = 0
+        if nqn is None:
+            log.error("nqn is must for Adding Listener")
+            return 1
+        try:
+            log.info(
+                f"Adding a Listener with nqn {nqn} listener hosts {listener.hostname} and listener port {trsvcid}"
+            )
+            _ = nvmeof_rest.add_listener(
+                nqn=nqn,
+                host_name=listener.hostname,
+                traddr=listener.ip_address,
+                trsvcid=trsvcid,
+                adrfam=adrfam,
+            )
+        except Exception as e:
+            log.error(
+                f"Adding a Listener with nqn {nqn} "
+                f"listener hosts {listener.hostname} "
+                f"and listener port {trsvcid} failed {str(e)}"
+            )
+            return 1
+        # 2. verify added host using list GET call
+        log.info("validating listeners by list listeners REST")
+        if nqn is None or listener.hostname is None or trsvcid is None:
+            log.error("nqn,gateway hostname and ip address is must for Adding Listener")
+            return 1
+        try:
+            _ = nvmeof_rest.list_listener(subsystem_nqn=nqn)
+            log.info(f"SUCCESS: verification of host {nqn} via GET REST passed")
+            return 0
+        except Exception as e:
+            log.error(f"FAILED verification of host {nqn} failed by GET {str(e)}")
+            return 1
