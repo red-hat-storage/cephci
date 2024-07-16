@@ -3,6 +3,8 @@
   gather_facts: false
   become: true
   any_errors_fatal: true
+  vars:
+    value: "{{ value }}"
   tasks:
     - name: Set ceph config
       ceph_config:
@@ -17,4 +19,4 @@
         who: "{{ who }}"
         option: "{{ option }}"
       register: result
-      failed_when: value !=  result.stdout
+      failed_when: (value | string | lower) != (result.stdout | lower)
