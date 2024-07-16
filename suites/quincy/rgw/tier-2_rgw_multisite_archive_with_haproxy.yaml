@@ -652,6 +652,7 @@ tests:
       module: sanity_rgw_multisite.py
       name: test server_side_copy_object_via_encryption
       polarion-id: CEPH-83575711
+      comment: Known issue Bug-2298084 targeted tp 6.1z7 fixed in 7
   - test:
       clusters:
         ceph-pri:
