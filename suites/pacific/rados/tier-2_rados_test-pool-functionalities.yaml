@@ -128,6 +128,20 @@ tests:
       desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
 
   - test:
+      name: Verify autoscaler scales up pool to pg_num_min
+      module: pool_tests.py
+      polarion-id:  CEPH-83592793
+      config:
+        verify_pool_min_pg_count:
+          pool_configs:
+            - type: replicated
+              conf: sample-pool-1
+            - type: erasure
+              conf: sample-pool-2
+          pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
+      desc: Verify if PG Autoascler will autoscale pools to pg_num_min size
+
+  - test:
       name: Verify scrub logs
       module: test_scrub_log.py
       polarion-id: CEPH-83575403

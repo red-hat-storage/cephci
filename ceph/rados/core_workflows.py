@@ -503,6 +503,7 @@ class RadosOrchestrator:
                 8. crush_rule -> custom crush rule for the pool
                 9. pool_quota -> limit the maximum number of objects or the maximum number of bytes stored
                 10. app_name -> name of the application to be set on the pool
+                11. pg_num_min -> minimum no of PGs that the autoscaler should scale the PGs to
          Returns: True -> pass, False -> fail
         """
 
@@ -518,6 +519,8 @@ class RadosOrchestrator:
             cmd = f"{cmd} {kwargs['crush_rule']}"
         if kwargs.get("bulk"):
             cmd = f"{cmd} --bulk"
+        if kwargs.get("pg_num_min"):
+            cmd = f"{cmd} --pg_num_min {kwargs['pg_num_min']}"
         try:
             self.node.shell([cmd])
         except Exception as err:
@@ -3809,3 +3812,40 @@ class RadosOrchestrator:
             [total_list.remove(i) for i in exclude_list]
 
         return total_list
+
+    def get_osd_details(self, osd_id: int):
+        """
+        Method to fetch the OSD details deom the cluster for the selected OSD ID
+        Args:
+            osd_id: OSD ID whose details need to be fetched
+        Returns:
+            Dictionary of the KW paris of the OSD details.
+            eg:
+                {
+                    "id": 0,
+                    "device_class": "hdd",
+                    "name": "osd.0",
+                    "type": "osd",
+                    "type_id": 0,
+                    "crush_weight": 0.0243988037109375,
+                    "depth": 2,
+                    "pool_weights": {},
+                    "reweight": 1,
+                    "kb": 26210304,
+                    "kb_used": 46600,
+                    "kb_used_data": 10240,
+                    "kb_used_omap": 0,
+                    "kb_used_meta": 36352,
+                    "kb_avail": 26163704,
+                    "utilization": 0.17779267268323176,
+                    "var": 1,
+                    "pgs": 10,
+                    "status": "up"
+                }
+        """
+        log.info(f"Passed OSD : {osd_id} to fetch the details")
+        cmd = f"ceph osd df osd.{osd_id}"
+        out = self.run_ceph_command(cmd=cmd)
+        details = out["nodes"][0]
+        log.debug(f" OSD : {osd_id} details are : {details}")
+        return details
