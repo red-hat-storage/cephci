@@ -362,3 +362,23 @@ tests:
       config:
         nfs_version: 4.2
         clients: 2
+
+  - test:
+      name: NFS-Ganesha test selinux context with hardlink and softlink file
+      desc: Verify selinux label on hardlink and softlink file
+      module: test_nfs_selinux_context_symlinks.py
+      polarion-id: CEPH-83593151
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: NFS-Ganesha test selinux context set via mount command
+      desc: Verify selinux label set directly on NFS mount point
+      module: test_nfs_selinux_label_while_mounting.py
+      polarion-id: CEPH-83593152
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
