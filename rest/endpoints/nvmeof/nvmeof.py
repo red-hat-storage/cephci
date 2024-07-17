@@ -26,6 +26,12 @@ class NVMEoF:
         self._list_host = config_file_reader["endpoints"]["nvmeof"][
             "LIST_ALLOWED_HOSTS_SUBSYSTEM"
         ]
+        self._add_listener = config_file_reader["endpoints"]["nvmeof"][
+            "ADD_SUBSYSTEM_LISTENER"
+        ]
+        self._list_listener = config_file_reader["endpoints"]["nvmeof"][
+            "LIST_ALL_SUBSYSTEM_LISTENER"
+        ]
 
     def get_gateway_info(self):
         """
@@ -85,8 +91,30 @@ class NVMEoF:
         """
         REST GET endpoint /api/nvmeof/subsystem/{nqn}/host
         """
-        # _get_host = self._get_subsystem.format(nqn=subsystem_nqn)
-        # _get_host = f"{self._get_subsystem.format(nqn=subsystem_nqn)}/host"
         _get_host = self._list_host.format(nqn=subsystem_nqn)
         response = self._rest.get(relative_url=_get_host)
+        return response
+
+    def add_listener(self, **kw):
+        """
+        REST POST endpoint /api/nvmeof/subsystem/{nqn}/listener
+        Request data details
+        {
+            "host_name": "string",
+            "traddr": "string",
+            "trsvcid": 4420,
+            "adrfam": 0
+        }
+        """
+        data = deepcopy(kw)
+        _add_listener = self._add_listener.format(nqn=data.pop("nqn"))
+        response = self._rest.post(relative_url=_add_listener, data=json.dumps(data))
+        return response
+
+    def list_listener(self, subsystem_nqn):
+        """
+        REST GET endpoint /api/nvmeof/subsystem/{nqn}/listener
+        """
+        _get_listener = self._list_listener.format(nqn=subsystem_nqn)
+        response = self._rest.get(relative_url=_get_listener)
         return response
