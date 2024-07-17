@@ -31,8 +31,8 @@ tests:
               base_cmd_args:
                 verbose: true
               args:
-                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-5-rhel8:5-4"
-                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-5.3-20230622.ci.0/IBM-CEPH-5.3-20230622.ci.0-rhel9.repo"
+                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-5-rhel8:latest"
+                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-5-rhel-9.repo"
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
