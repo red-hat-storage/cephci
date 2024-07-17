@@ -1270,14 +1270,14 @@ class SSHConnectionManager(object):
                 self.__outage_start_time = None
                 return
             except Exception as e:
-                logger.warning(f"Connection outage to {self.ip_address}: \n{e}")
+                logger.warning(f"Error in connecting to {self.ip_address}: \n{e}")
                 if not self.__outage_start_time:
                     self.__outage_start_time = datetime.datetime.now()
 
                 logger.debug("Retrying connection in 10 seconds")
                 sleep(10)
 
-        raise AssertionError(f"Unable to establish connection with {self.ip_address}")
+        raise AssertionError(f"Unable to establish a connection with {self.ip_address}")
 
     @property
     def transport(self):
@@ -1518,12 +1518,18 @@ class CephNode(object):
 
         try:
             channel = ssh().get_transport().open_session()
-            channel.settimeout(timeout)
 
             # A mismatch between stdout and stderr streams have been observed hence
             # combining the streams and logging is set to debug level only.
             channel.set_combine_stderr(True)
             channel.exec_command(cmd)
+
+            # Channel timeout is per operation. Waiting for a specified duration or
+            # command execution completion.
+            if timeout:
+                _end_time = datetime.datetime.now() + datetime.timedelta(
+                    seconds=timeout
+                )
 
             while not channel.exit_status_ready():
                 # Prevent high resource consumption
@@ -1537,8 +1543,15 @@ class CephNode(object):
 
                         data = channel.recv(1024)
 
+                if not timeout and _end_time > datetime.datetime.now():
+                    channel.close()
+                    raise SocketTimeoutException(
+                        f"{cmd} failed to complete within {timeout}s"
+                    )
+
             logger.info(f"Command completed on {datetime.datetime.now()}")
             return channel.recv_exit_status()
+
         except socket.timeout as terr:
             logger.error(f"Command failed to execute within {timeout} seconds.")
             raise SocketTimeoutException(terr)
