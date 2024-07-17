@@ -1524,8 +1524,6 @@ class CephNode(object):
             channel.set_combine_stderr(True)
             channel.exec_command(cmd)
 
-            # Channel timeout is per operation. Waiting for a specified duration or
-            # command execution completion.
             if timeout:
                 _end_time = datetime.datetime.now() + datetime.timedelta(
                     seconds=timeout
@@ -1543,7 +1541,8 @@ class CephNode(object):
 
                         data = channel.recv(1024)
 
-                if not timeout and _end_time > datetime.datetime.now():
+                # time check - raise exception when exceeded.
+                if timeout is not None and _end_time > datetime.datetime.now():
                     channel.close()
                     raise SocketTimeoutException(
                         f"{cmd} failed to complete within {timeout}s"
