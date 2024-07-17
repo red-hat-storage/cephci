@@ -261,5 +261,5 @@ tests:
             name: Validate the Synchronisation Status using asok file
       module: cephfs_mirroring.test_cephfs_mirroring_snap_status_using_asok.py
       name: Validate the Synchronisation Status using asok file
-      polarion-id: ""
+      polarion-id: "CEPH-83593134"
 
