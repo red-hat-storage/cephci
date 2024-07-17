@@ -3,7 +3,20 @@ This file contains the  methods to verify the  inconsistent object functionality
 AS part of verification the script  perform the following tasks-
    1. Creating omaps
    2. Convert the object in to inconsistent object
-   3. Verify the functionality during scrub/deep-scrub
+   3. Use the osd_scrub_auto_repair and osd_scrub_auto_repair_num_errors to perform the PG repair
+       osd_scrub_auto_repair_num_errors - Setting this to true will enable automatic PG repair when errors are
+                                          found by scrubs or deep-scrubs.
+       osd_scrub_auto_repair_num_errors - Auto repair will not occur if more than this many errors are found
+                                          Default value is - 5
+   3. Verifying the functionality by executing the following scenarios-
+      3.1- Inconsistent objects greater than the osd_scrub_auto_repair_num_errors count
+           Creating the 4 inconsistent
+           Setting the osd_scrub_auto_repair_num_errors to 3
+           Setting the osd_scrub_auto_repair to true
+           Performing the scrub and deep-scrub on the PG
+      3.2  The inconsistent object count is less than osd_scrub_auto_repair_num_errors count
+           Setting the osd_scrub_auto_repair_num_errors to 5
+           Performing the scrub and deep-scrub on the PG
 """
 
 import time
@@ -89,8 +102,9 @@ def run(ceph_cluster, **kw):
         log.info("The osd_scrub_auto_repair value is set to true")
 
         obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "scrub")
-        if obj_count < 0:
+        if obj_count == -1:
             log.error(f"The scrub not initiated on the pg-{pg_id}")
+            rados_obj.log_cluster_health()
             return 1
 
         if obj_count != no_of_objects:
@@ -99,13 +113,15 @@ def run(ceph_cluster, **kw):
             )
             return 1
         obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "deep-scrub")
-        if obj_count < 0:
+        if obj_count == -1:
             log.error(f"The deep-scrub not initiated on the pg-{pg_id}")
+            rados_obj.log_cluster_health()
             return 1
         if obj_count != no_of_objects:
             log.error(
                 f"deep-scrub repaired the {no_of_objects - obj_count} inconsistent objects"
             )
+            rados_obj.log_cluster_health()
             return 1
         log.info(
             "Verification of Test scenario1- inconsistent objects greater than the "
@@ -120,18 +136,21 @@ def run(ceph_cluster, **kw):
         log.info("The osd_scrub_auto_repair_num_errors value is set to 5")
 
         obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "scrub")
-        if obj_count < 0:
+        if obj_count == -1:
             log.error(f"The scrub not initiated on the pg-{pg_id}")
+            rados_obj.log_cluster_health()
             return 1
 
         if obj_count != 0:
             log.error(
                 f"Scrub repaired the {no_of_objects - obj_count} inconsistent objects"
             )
+            rados_obj.log_cluster_health()
             return 1
         result = verify_pg_state(rados_obj, pg_id)
         if not result:
             log.error("The  pg state output contain repair state after scrub")
+            rados_obj.log_cluster_health()
             return 1
 
         method_should_succeed(rados_obj.delete_pool, pool_name)
@@ -146,18 +165,21 @@ def run(ceph_cluster, **kw):
             log.error("Cannot able to create the inconsistent objects")
             return 1
         obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "deep-scrub")
-        if obj_count < 0:
+        if obj_count == -1:
             log.error(f"The deep-scrub not initiated on the pg-{pg_id}")
+            rados_obj.log_cluster_health()
             return 1
 
         if obj_count != 0:
             log.error(
                 f"deep-scrub repaired the {no_of_objects - obj_count} inconsistent objects"
             )
+            rados_obj.log_cluster_health()
             return 1
         result = verify_pg_state(rados_obj, pg_id)
         if not result:
             log.error("The  pg state output contain repair state after deep-scrub")
+            rados_obj.log_cluster_health()
             return 1
 
     except Exception as e:
@@ -237,8 +259,11 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
     chk_count = 0
     while chk_count <= 10:
         inconsistent_details = rados_obj.get_inconsistent_object_details(pg_id)
+        log.debug(
+            f"The inconsistent object details of the pg-{pg_id} - {inconsistent_details}"
+        )
         obj_count = len(inconsistent_details["inconsistents"])
-        log.info(f" The inconsistent object count after{operation} is {obj_count}")
+        log.info(f" The inconsistent object count after {operation} is {obj_count}")
         chk_count = chk_count + 1
         time.sleep(30)
     return obj_count
