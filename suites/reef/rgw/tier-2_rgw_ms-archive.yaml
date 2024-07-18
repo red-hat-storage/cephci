@@ -228,7 +228,94 @@ tests:
       module: exec.py
       name: setup multisite
       polarion-id: CEPH-10362
-
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-sec
+            timeout: 300
+      desc: create non-tenanted user
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user
+      polarion-id: CEPH-83575199
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-arc
+            timeout: 300
+      desc: create non-tenanted user
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user
+      polarion-id: CEPH-83575199
+  - test:
+      name: notify copy events with kafka_broker_persistent
+      desc: notify copy events with kafka_broker_persistent
+      polarion-id: CEPH-83574066
+      module: sanity_rgw_multisite.py
+      config:
+        run-on-rgw: true
+        extra-pkgs:
+          - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
+        install_start_kafka: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_copy.yaml
+        timeout: 300
+  - test:
+      name: notify on multisite replication create events with kafka_broker on arc site
+      desc: notify on multisite replication create events with kafka_broker on arc site
+      polarion-id: CEPH-83575922
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-arc:
+          config:
+            run-on-rgw: true
+            extra-pkgs:
+              - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
+            install_start_kafka_archive: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_broker_ms_replication_from_pri.yaml
+  - test:
+      name: notify on multisite replication delete events with kafka_broker on arc site
+      desc: notify on multisite replication delete events with kafka_broker on arc site
+      polarion-id: CEPH-83575922
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-arc:
+          config:
+            run-on-rgw: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_broker_archive_delete_replication_from_pri.yaml
+            timeout: 300
+# adding the LC tests for object size filter before as they have failed in the end.
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_lifecycle_s3cmd.py
+            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_objects_size_noncurrent.yaml
+            timeout: 300
+      desc: Test LC on archive for objects size expiration
+      polarion-id: CEPH-83582000
+      module: sanity_rgw_multisite.py
+      name: Test LC on archive for objects size expiration
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_lifecycle_s3cmd.py
+            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_objects_size_noncurrent_local.yaml
+            timeout: 300
+      desc: Test LC on active for objects size expiration
+      polarion-id: CEPH-83581990
+      module: sanity_rgw_multisite.py
+      name: Test LC on active for objects size expiration
   - test:
       clusters:
         ceph-pri:
@@ -418,7 +505,21 @@ tests:
       polarion-id: CEPH-11357
       module: sanity_rgw_multisite.py
       name: test multipart download at remote site
-
+# test the workaround to sync only from one active zone
+  - test:
+      clusters:
+        ceph-arc:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zone modify --rgw-zone archive --sync_from primary --sync_from_all false"
+              - "radosgw-admin period update --commit"
+              - "radosgw-admin period get"
+            timeout: 120
+      desc: test the workaround to sync only from one active zone
+      module: exec.py
+      name: test the workaround to sync only from one active zone
+      polarian-id: CEPH-83581371
   - test:
       clusters:
         ceph-pri:
@@ -465,31 +566,6 @@ tests:
       polarion-id: CEPH-83575394
       module: sanity_rgw_multisite.py
       name: Test LC on archive for non-current versions
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: ../s3cmd/test_lifecycle_s3cmd.py
-            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_objects_size_noncurrent.yaml
-            timeout: 300
-      desc: Test LC on archive for objects size expiration
-      polarion-id: CEPH-83582000
-      module: sanity_rgw_multisite.py
-      name: Test LC on archive for objects size expiration
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: ../s3cmd/test_lifecycle_s3cmd.py
-            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_objects_size_noncurrent_local.yaml
-            timeout: 300
-      desc: Test LC on active for objects size expiration
-      polarion-id: CEPH-83581990
-      module: sanity_rgw_multisite.py
-      name: Test LC on active for objects size expiration
-
   - test:
       clusters:
         ceph-pri:
