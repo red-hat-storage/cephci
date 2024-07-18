@@ -1518,6 +1518,7 @@ class CephNode(object):
 
         try:
             channel = ssh().get_transport().open_session()
+            channel.settimeout(timeout)
 
             # A mismatch between stdout and stderr streams have been observed hence
             # combining the streams and logging is set to debug level only.
@@ -1542,7 +1543,7 @@ class CephNode(object):
                         data = channel.recv(1024)
 
                 # time check - raise exception when exceeded.
-                if timeout is not None and _end_time > datetime.datetime.now():
+                if timeout and datetime.datetime.now() > _end_time:
                     channel.close()
                     raise SocketTimeoutException(
                         f"{cmd} failed to complete within {timeout}s"
