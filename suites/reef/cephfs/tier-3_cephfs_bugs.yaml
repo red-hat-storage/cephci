@@ -223,7 +223,7 @@ tests:
       desc: Creation of pool-level snaps for pools actively associated with a filesystem is disallowed
       abort-on-fail: false
   - test:
-      name: validate standby reply node not removed after setting mds_inject_health_dummy
+      name: validate standby replay node not removed after setting mds_inject_health_dummy
       module: cephfs_bugs.test_mds_inject_health_dummy.py
       polarion-id: CEPH-83586730
       desc: validate standby reply node not removed after setting mds_inject_health_dummy
@@ -252,3 +252,4 @@ tests:
       polarion-id: CEPH-83591136
       desc: Verify Ceph Health Warning for Slow MDS Requests After Cluster Installation
       abort-on-fail: false
+
