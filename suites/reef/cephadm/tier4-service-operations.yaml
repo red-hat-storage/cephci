@@ -139,3 +139,29 @@ tests:
       desc: Verify the logrotate config created by cephadm take into account tcmu-runner
       polarion-id: CEPH-83592479
       module: test_verify_log_rotate_tcmu_runner.py
+
+  - test:
+      name: CephAdm custom config file support
+      desc: CephAdm custom config file support with grafana containers
+      polarion-id: CEPH-83575585
+      module: test_cephadm_custom_config_support.py
+      config:
+        spec:
+          service_type: grafana
+          service_name: grafana
+          custom_configs:
+            - mount_path: /usr/share/grafana/example.cert
+              content: test
+
+  - test:
+      name: Cephadm custom config file support
+      desc: Cephadm custom config file support with mon containers
+      polarion-id: CEPH-83575585
+      module: test_cephadm_custom_config_support.py
+      config:
+        spec:
+          service_type: mon
+          service_name: mon
+          custom_configs:
+            - mount_path: /usr/share/mon/example.cert
+              content: test
