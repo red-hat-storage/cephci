@@ -205,6 +205,80 @@ tests:
       name: Test cloud transition multipart upload
       polarion-id: CEPH-83575283
 
+    # configuring vault agent
+
+  - test:
+      clusters:
+        local:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart {service_name:rgw.1}"
+            timeout: 120
+      desc: Setting vault configs for sse-s3 on local site
+      module: exec.py
+      name: set sse-s3 vault configs on Local cluster
+
+  - test:
+      clusters:
+        local:
+          config:
+            script-name: test_cloud_transition.py
+            config-file-name: test_cloud_transition_encrypted.yaml
+            timeout: 500
+      desc: test cloud transition of ecnrypted objects
+      module: sanity_rgw.py
+      name: Test cloud transition of SSE-S3 encrypted objects
+      polarion-id: CEPH-83575497
+      comments: known issue Bug 2294512
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zone placement modify --rgw-zone default --placement-id default-placement  --compression zlib"
+              - "ceph orch restart {service_name:rgw.1}"
+      desc: Setting "retain_head_object" to false
+      module: exec.py
+      name: Enable compression on zone
+      polarion-id: CEPH-83575497
+
+  - test:
+      clusters:
+        local:
+          config:
+            script-name: test_cloud_transition.py
+            config-file-name: test_cloud_transition_headobject_false.yaml
+            timeout: 500
+      desc: test clould transition of compressed objects
+      module: sanity_rgw.py
+      name: Test cloud transition with compression enabled
+      polarion-id: CEPH-83575278
+      comments: known issue Bug 2294706
+
   - test:
       abort-on-fail: true
       clusters:
