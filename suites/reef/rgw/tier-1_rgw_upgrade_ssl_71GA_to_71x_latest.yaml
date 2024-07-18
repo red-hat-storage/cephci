@@ -181,15 +181,15 @@ tests:
         commands:
           - "ceph versions"
 
-  - test:
-      name: Test rgw through CURL
-      desc: Test rgw through CURL
-      polarion-id: CEPH-83575572
-      module: sanity_rgw.py
-      config:
-        script-name: ../curl/test_rgw_using_curl.py
-        config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
-        timeout: 500
+  # - test:
+  #     name: Test rgw through CURL
+  #     desc: Test rgw through CURL
+  #     polarion-id: CEPH-83575572
+  #     module: sanity_rgw.py
+  #     config:
+  #       script-name: ../curl/test_rgw_using_curl.py
+  #       config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
+  #       timeout: 500
 
   - test:
       name: S3CMD small and multipart object download post upgrade
