@@ -294,17 +294,24 @@ def _configure_rgw_daemons(node: CephNode, config: Dict) -> None:
         ("rgw_crypt_s3_kms_backend", "vault"),
         ("rgw_crypt_vault_secret_engine", config["agent"]["engine"]),
         ("rgw_crypt_vault_auth", config["agent"]["auth"]),
+        ("rgw_crypt_sse_s3_backend", "vault"),
+        ("rgw_crypt_sse_s3_vault_secret_engine", config["agent"]["engine"]),
+        ("rgw_crypt_sse_s3_vault_auth", config["agent"]["auth"]),
     ]
 
     if config["agent"]["auth"] == "token":
         configs += [
             ("rgw_crypt_vault_token_file", config["agent"]["token_file"]),
             ("rgw_crypt_vault_addr", config["url"]),
+            ("rgw_crypt_sse_s3_vault_token_file", config["agent"]["token_file"]),
+            ("rgw_crypt_sse_s3_vault_addr", config["url"]),
         ]
     else:
         configs += [
             ("rgw_crypt_vault_prefix", config["agent"]["prefix"]),
             ("rgw_crypt_vault_addr", "http://127.0.0.1:8100"),
+            ("rgw_crypt_sse_s3_vault_prefix", config["agent"]["prefix"]),
+            ("rgw_crypt_sse_s3_vault_addr", "http://127.0.0.1:8100"),
         ]
 
     for daemon in rgw_daemons:
