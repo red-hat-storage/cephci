@@ -865,6 +865,7 @@ def cg_quiesce_test(cg_quiesce_params):
     p.start()
     time.sleep(10)
     snap_qs_dict = {}
+    qs_id_val = "Not Started"
     for qs_member in qs_set:
         snap_qs_dict.update({qs_member: []})
     if p.is_alive():
@@ -964,7 +965,7 @@ def cg_quiesce_test(cg_quiesce_params):
     cg_snap_util.cleanup_cg_io(cg_io_client, mnt_pt_list)
     mnt_pt_list.clear()
 
-    snap_name = f"cg_snap_{rand_str}"
+    # snap_name = f"cg_snap_{rand_str}"
     log.info("Remove CG snapshots")
     for qs_member in qs_member_dict:
         snap_list = snap_qs_dict[qs_member]

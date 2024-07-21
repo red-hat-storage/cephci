@@ -27,7 +27,8 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
-        fs_util.auth_list(clients)
+        recreate_user = config.get("recreate_user", False)
+        fs_util.auth_list(clients, recreate=recreate_user)
         timeout = config.get("timeout", 1800)
         log.info("checking Pre-requisites")
         if not clients:

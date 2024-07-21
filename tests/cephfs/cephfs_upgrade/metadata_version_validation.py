@@ -1,7 +1,6 @@
 import json
 import traceback
 
-from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -23,9 +22,7 @@ This Script needs 2 times of run:
 def run(ceph_cluster, **kw):
     ceph_version_path = "/tmp/ceph_versions.json"
     log.info("Upgrade checking initiated")
-    fs_util = FsUtils(ceph_cluster)
     client = ceph_cluster.get_ceph_objects("client")[0]
-    fs_util.auth_list([client])
     check_list = ["mon", "mgr", "osd", "mds", "overall"]
     cluster_stat_commands = [
         "ceph fs ls",
@@ -153,7 +150,12 @@ def run(ceph_cluster, **kw):
             for line in after_upgrade_file.readlines():
                 log.info(line)
             clients = ceph_cluster.get_ceph_objects("client")
-            cmd = "dnf clean all;dnf -y install ceph-common --nogpgcheck;dnf -y update ceph-common --nogpgcheck"
+            cmd = (
+                "dnf clean all;dnf -y install ceph-common --nogpgcheck;"
+                "dnf -y update ceph-common --nogpgcheck; "
+                "dnf -y install ceph-fuse --nogpgcheck;"
+                "dnf -y update ceph-fuse --nogpgcheck;"
+            )
             for client in clients:
                 client.exec_command(sudo=True, cmd=cmd)
         else:
