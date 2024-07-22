@@ -141,7 +141,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets.yaml
-        timeout: 300
 
   - test:
       name: compresstion_with_zlib_type
@@ -151,7 +150,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
-        timeout: 300
 
   - test:
       name: compresstion_with_zstd_type
@@ -161,7 +159,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
-        timeout: 300
 
   - test:
       name: compresstion_with_snappy_type
@@ -171,7 +168,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression_snappy.yaml
-        timeout: 300
 
   - test:
       name: Mbuckets_with_Nobjects with sharing enabled
@@ -181,7 +177,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
-        timeout: 300
 
   # REST API test
   - test:
@@ -192,7 +187,6 @@ tests:
       config:
         script-name: user_op_using_rest.py
         config-file-name: test_user_with_REST.yaml
-        timeout: 300
 
   # Swift basic operation
 
@@ -204,7 +198,6 @@ tests:
       config:
         script-name: user_create.py
         config-file-name: test_modify_tenanted_subuser.yaml
-        timeout: 300
 
   - test:
        name: Swift bulk delete operation
@@ -214,7 +207,6 @@ tests:
        config:
            script-name: test_swift_bulk_delete.py
            config-file-name: test_swift_bulk_delete.yaml
-           timeout: 300
 
   - test:
       name: swift upload large object tests
@@ -224,7 +216,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_large_upload.yaml
-        timeout: 300
 
   - test:
       name: swift download large object tests
@@ -234,7 +225,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_large_download.yaml
-        timeout: 300
 
   - test:
       name: Get object with different tenant swift user with same name
@@ -244,7 +234,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_get_objects_from_tenant_swift_user.yaml
-        timeout: 300
 
   - test:
       name: delete container with different tenant swift user with same name
@@ -254,7 +243,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_delete_container_from_user_of_diff_tenant.yaml
-        timeout: 300
 
   - test:
       name: upload large object with same name using tenant swift user
@@ -264,7 +252,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_upload_large_obj_with_same_obj_name.yaml
-        timeout: 300
 
   # Versioning Tests
 
@@ -276,7 +263,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_enable.yaml
-        timeout: 300
 
   - test:
       name: Test versioning of objects copy
@@ -286,7 +272,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_copy.yaml
-        timeout: 300
 
   - test:
       name: Test suspension of object versioning
@@ -296,7 +281,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_suspend.yaml
-        timeout: 300
 
   - test:
       name: Test deletion of object versions
@@ -306,7 +290,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_delete.yaml
-        timeout: 300
 
   - test:
       name: Test suspension of versioning
@@ -316,7 +299,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_suspend.yaml
-        timeout: 300
 
   - test:
       name: Test overwrite by another user of versioned objects
@@ -326,7 +308,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_suspend_from_another_user.yaml
-        timeout: 300
 
   - test:
       name: GET object acl info operations on different object versions
@@ -336,7 +317,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_acls.yaml
-        timeout: 300
 
   - test:
       name: Deletes on an object in versioning enabled or suspended container by a new user
@@ -346,7 +326,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_delete_from_another_user.yaml
-        timeout: 300
 
   - test:
       name: Versioning with copy objects
@@ -356,7 +335,6 @@ tests:
       config:
         script-name: test_versioning_copy_objects.py
         config-file-name: test_versioning_copy_objects.yaml
-        timeout: 300
 
   # BucketPolicy Tests
   - test:
@@ -367,7 +345,6 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_replace.yaml
-        timeout: 300
 
   - test:
       name: Delete bucket policy
@@ -377,7 +354,6 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_delete.yaml
-        timeout: 300
 
   - test:
       name: Modify existing bucket policy to add a new policy in addition existing policy
@@ -387,7 +363,6 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_modify.yaml
-        timeout: 300
 
   - test:
       name: ListBucketVersions with bucket policy for users in same tenant
@@ -397,7 +372,6 @@ tests:
       config:
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_listbucketversion_with_bucketpolicy_for_tenant_user.yaml
-        timeout: 300
 
   - test:
       name: GetBucketLocation with bucket policy for users in same tenant
@@ -407,7 +381,6 @@ tests:
       config:
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_bucketlocation_using_bucketpolicy_with_tenantuser.yaml
-        timeout: 300
 
   - test:
       name: test bucket policy with multiple statements
@@ -417,7 +390,6 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_multiple_statements.yaml
-        timeout: 500
 
   - test:
       name: test bucket policy with conflicting statements
@@ -427,7 +399,6 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_multiple_conflicting_statements.yaml
-        timeout: 500
 
   - test:
       name: test bucket policy with condition blocks
@@ -437,7 +408,6 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_condition.yaml
-        timeout: 500
 
   - test:
       name: test bucket policy condition block with explicit deny
@@ -447,7 +417,15 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_condition_explicit_deny.yaml
-        timeout: 500
+
+  - test:
+      name: test bucket policy deny actions
+      desc: test bucket policy deny actions
+      polarion-id: CEPH-11216
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_deny_actions.yaml
 
   # Bucket Lifecycle Tests
 
@@ -459,7 +437,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_multiple_rule_prefix_current_days.yaml
-        timeout: 300
 
   - test:
       name: object expiration with expiration set to Date
@@ -469,7 +446,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_date.yaml
-        timeout: 300
 
   - test:
       name: object expiration for delete marker set
@@ -479,7 +455,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_delete_marker.yaml
-        timeout: 300
 
   - test:
       name: Read lifecycle configuration on a given bucket
@@ -489,7 +464,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lifecycle_config_read.yaml
-        timeout: 300
 
   - test:
       name: lifecycle with version enabled bucket containing multiple object versions
@@ -499,7 +473,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lifecycle_config_versioning.yaml
-        timeout: 300
 
   - test:
       name: Disable lifecycle configuration on a given bucket
@@ -509,7 +482,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lifecycle_config_disable.yaml
-        timeout: 300
 
   - test:
       name: Modify lifecycle configuration on a given bucket
@@ -519,7 +491,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lifecycle_config_modify.yaml
-        timeout: 300
 
   # Multi Tenant Tests
 
@@ -531,7 +502,6 @@ tests:
       config:
         script-name: test_multitenant_user_access.py
         config-file-name: test_multitenant_access.yaml
-        timeout: 300
 
   - test:
       name: Generate secret for tenant user
@@ -541,7 +511,6 @@ tests:
       config:
         script-name: test_tenant_user_secret_key.py
         config-file-name: test_tenantuser_secretkey_gen.yaml
-        timeout: 300
 
   # Bucket Listing Tests
   - test:
@@ -552,7 +521,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_flat_ordered.yaml
-        timeout: 300
 
   - test:
       name: ordered listing of versionsed bucket with top level objects
@@ -562,7 +530,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
-        timeout: 300
 
   - test:
       name: unordered listing of bucket with top level objects
@@ -572,7 +539,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_flat_unordered.yaml
-        timeout: 300
 
   - test:
       name: ordered listing of bucket with pseudo directories and objects
@@ -582,7 +548,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_pseudo_ordered.yaml
-        timeout: 300
 
   - test:
       name: ordered listing of bucket with pseudo directories only
@@ -592,7 +557,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
-        timeout: 300
 
   - test:
       name: Bucket radoslist
@@ -602,7 +566,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_radoslist.yaml
-        timeout: 300
 
   # Bucket Request Payer tests
 
@@ -614,7 +577,6 @@ tests:
       config:
         script-name: test_bucket_request_payer.py
         config-file-name: test_bucket_request_payer.yaml
-        timeout: 300
 
   - test:
       name: bucket request payer with object download
@@ -624,7 +586,6 @@ tests:
       config:
         script-name: test_bucket_request_payer.py
         config-file-name: test_bucket_request_payer_download.yaml
-        timeout: 300
 
   #resharding tests
   - test:
@@ -635,7 +596,6 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding.yaml
-        timeout: 500
 
   # AWS4 Auth tests
   - test:
@@ -646,7 +606,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
-        timeout: 300
 
   # v1 tests
   # ACLs tests
@@ -661,7 +620,6 @@ tests:
         run-on-rgw: true
         script-name: test_acls.py
         config-file-name: test_acls.yaml
-        timeout: 300
 
   - test:
       name: test acls on all users
@@ -673,7 +631,6 @@ tests:
         run-on-rgw: true
         script-name: test_acls_all_usrs.py
         config-file-name: test_acls_all_usrs.yaml
-        timeout: 300
 
   - test:
       name: test acls with copy objects on different users
@@ -685,7 +642,6 @@ tests:
         run-on-rgw: true
         script-name: test_acls_copy_obj.py
         config-file-name: test_acls_copy_obj.yaml
-        timeout: 300
 
   - test:
       name: acls reset
@@ -697,7 +653,6 @@ tests:
         run-on-rgw: true
         script-name: test_acls_reset.py
         config-file-name: test_acls_reset.yaml
-        timeout: 300
 
   # multipart test
 
@@ -711,7 +666,6 @@ tests:
         run-on-rgw: true
         script-name: test_multipart_upload_cancel.py
         config-file-name: test_multipart_upload_cancel.yaml
-        timeout: 300
 
   # User, Bucket rename, Bucket link and unlink
 
@@ -723,7 +677,6 @@ tests:
       config:
         script-name: test_user_bucket_rename.py
         config-file-name: test_user_rename.yaml
-        timeout: 500
 
   - test:
       name: Bucket rename
@@ -734,7 +687,6 @@ tests:
         test-version: v2
         script-name: test_user_bucket_rename.py
         config-file-name: test_bucket_rename.yaml
-        timeout: 500
 
   - test:
       name: Bucket link and unlink
@@ -745,7 +697,6 @@ tests:
         test-version: v2
         script-name: test_user_bucket_rename.py
         config-file-name: test_bucket_link_unlink.yaml
-        timeout: 500
 
   # Multifactor Authentication tests
   - test:
@@ -760,7 +711,6 @@ tests:
         extra-pkgs:
           8:
             - https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/o/oathtool-2.6.2-3.el8.x86_64.rpm
-        timeout: 500
 
   - test:
       name: multipart versioned object deletion with mfa token
@@ -774,7 +724,6 @@ tests:
         extra-pkgs:
           8:
             - https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/o/oathtool-2.6.2-3.el8.x86_64.rpm
-        timeout: 500
 
   - test:
       name: incorrect syntax for mfa resync commnad appropriate usage message is displayed
@@ -788,7 +737,6 @@ tests:
         extra-pkgs:
           8:
             - https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/o/oathtool-2.6.2-3.el8.x86_64.rpm
-        timeout: 500
 
   - test:
       abort-on-fail: true
@@ -826,7 +774,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
-        timeout: 300
 
   # Index-less buckets
 
@@ -839,7 +786,6 @@ tests:
         test-version: v2
         script-name: test_indexless_buckets.py
         config-file-name: test_indexless_buckets_s3.yaml
-        timeout: 500
 
   - test:
       name: Versioning with copy objects and delete with differnt user
@@ -849,7 +795,6 @@ tests:
       config:
         script-name: test_versioning_copy_objects.py
         config-file-name: test_delete_version_object_using_different_user.yaml
-        timeout: 300
 
   - test:
       name: Test deleting the current version of the object
@@ -859,7 +804,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_delete_current_version_object.yaml
-        timeout: 300
 
   - test:
       name: Test copy versioned objects to another versioned bucket
@@ -869,7 +813,6 @@ tests:
       config:
         script-name: test_versioning_copy_objects.py
         config-file-name: test_copy_version_object_to_version_bucket.yaml
-        timeout: 300
 
   - test:
       name: Test Write modify and read objects in the versioned bucket
@@ -879,7 +822,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_access_versioned_objects.yaml
-        timeout: 300
 
   - test:
       name: object lock verification
@@ -889,7 +831,6 @@ tests:
       config:
         script-name: test_object_lock.py
         config-file-name: test_object_lock_governance.yaml
-        timeout: 500
 
   - test:
       name: object level retention test Compliance
@@ -899,7 +840,6 @@ tests:
       config:
         script-name: test_object_level_retention.py
         config-file-name: test_object_level_compliance.yaml
-        timeout: 500
 
   - test:
       name: object level retention test Governance mode
@@ -909,7 +849,6 @@ tests:
       config:
         script-name: test_object_level_retention.py
         config-file-name: test_object_level_governance.yaml
-        timeout: 500
 
   - test:
       name: NFS export delete
@@ -919,7 +858,6 @@ tests:
       config:
         script-name: ../nfs_ganesha/nfs_cluster.py
         config-file-name: ../../nfs_ganesha/config/nfs_cluster_delete.yaml
-        timeout: 500
 
   - test:
       name: Test user modify with placement id
@@ -930,7 +868,6 @@ tests:
       config:
         script-name: user_create.py
         config-file-name: test_user_modify_with_placementid.yaml
-        timeout: 500
 
   - test:
       name: Bucket Lifecycle expiration of incomplete multipart
@@ -940,7 +877,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lc_incomplete_multipart.yaml
-        timeout: 300
 
   - test:
       name: Swift user with read access
@@ -950,7 +886,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_user_access_read.yaml
-        timeout: 300
 
   - test:
       name: Swift user with write access
@@ -960,7 +895,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_user_access_write.yaml
-        timeout: 300
 
   - test:
       name: Swift user with readwrite access
@@ -970,7 +904,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_user_access_readwrite.yaml
-        timeout: 300
 
   - test:
       name: Test LC with custom worktime
@@ -980,7 +913,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_custom_worktime.yaml
-        timeout: 300
 
   - test:
       name: Test Etag not empty for complete multipart upload in aws
@@ -990,7 +922,6 @@ tests:
       config:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
-        timeout: 500
 
   # - test:
   #     name: Test LC transition with rule by lc process
@@ -1001,7 +932,6 @@ tests:
   #     config:
   #       script-name: test_bucket_lifecycle_object_expiration_transition.py
   #       config-file-name: test_lc_transition_with_lc_process.yaml
-  #       timeout: 500
 
   - test:
       name: Test LC transition without rule by lc process
@@ -1011,4 +941,3 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_process_without_applying_rule.yaml
-        timeout: 500
