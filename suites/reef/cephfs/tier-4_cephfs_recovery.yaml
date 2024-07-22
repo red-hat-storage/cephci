@@ -215,4 +215,11 @@ tests:
       desc: Move data and meta_data pool to different root level bucket in OSD tree.
       abort-on-fail: false
       comments: "Unable to install ceph-base"
+  - test:
+      abort-on-fail: false
+      desc: "repair_backtrace_by_scrub"
+      module: cephfs_recovery.backtrace_damage_repair_by_scrub.py
+      polarion-id: CEPH-CEPH-83593391
+      name: "repair_backtrace_by_scrub"
+
 
