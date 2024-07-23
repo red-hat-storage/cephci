@@ -62,6 +62,11 @@ def run(ceph_cluster, **kw):
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
+        log.info("setting 'snapshot_clone_no_wait' to false")
+        clients[0].exec_command(
+            sudo=True,
+            cmd="ceph config set mgr mgr/volumes/snapshot_clone_no_wait false",
+        )
         default_fs = "cephfs_clone"
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -139,6 +144,10 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Clean Up in progess")
+        log.info("setting 'snapshot_clone_no_wait' to true")
+        clients[0].exec_command(
+            sudo=True, cmd="ceph config set mgr mgr/volumes/snapshot_clone_no_wait true"
+        )
         fs_util.remove_snapshot(client1, **snapshot)
         fs_util.remove_subvolume(client1, **subvolume)
         for subvolumegroup in subvolumegroup_list:
