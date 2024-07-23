@@ -91,6 +91,7 @@ def run(ceph_cluster, **kw):
         # Collecting the init no of objects on the pool, before maintenance mode
         pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
         init_objects = pool_stat["stats"]["objects"]
+        log.debug(f"pool stats before site down : {pool_stat}")
 
         # Checking which DC to be added to maintenance mode is It data site or Arbiter site
         if affected_site in [dc_1_name, dc_2_name]:
@@ -117,7 +118,9 @@ def run(ceph_cluster, **kw):
 
                 # Moving host into maintenance mode
                 time.sleep(10)
-                if not rados_obj.host_maintenance_enter(hostname=host, retry=25):
+                if not rados_obj.host_maintenance_enter(
+                    hostname=host, retry=25, yes_i_really_mean_it=True
+                ):
                     log.error(f"Failed to add host : {host} into maintenance mode")
                     raise Exception("Test execution Failed")
                 log.debug(
@@ -187,7 +190,9 @@ def run(ceph_cluster, **kw):
                     time.sleep(10)
 
                 log.debug(f"Proceeding to add host : {host} into maintenance mode")
-                if not rados_obj.host_maintenance_enter(hostname=host, retry=10):
+                if not rados_obj.host_maintenance_enter(
+                    hostname=host, retry=10, yes_i_really_mean_it=True
+                ):
                     log.error(f"Failed to add host : {host} into maintenance mode")
                     raise Exception("Test execution Failed")
 
@@ -225,7 +230,7 @@ def run(ceph_cluster, **kw):
 
         # Getting the number of objects post write, to check if writes were successful
         pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-        log.debug(pool_stat)
+        log.debug(f"pool stats post IOs in site down : {pool_stat}")
 
         # Objects should be more than the initial no of objects
         if pool_stat["stats"]["objects"] <= init_objects:
@@ -291,6 +296,18 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
+        log.debug(
+            "Checking if any hosts are in Maintenance mode and if found, removing them"
+        )
+        hosts = ceph_cluster.get_nodes()
+        for host in hosts:
+            if not host.role == "client":
+                if rados_obj.check_host_status(
+                    hostname=host.hostname, status="Maintenance"
+                ):
+                    rados_obj.host_maintenance_exit(hostname=host.hostname, retry=15)
+        time.sleep(60)
+
         if not post_site_down_checks(rados_obj=rados_obj):
             log.error(
                 f"Checks failed post Site {affected_site} post maintenance mode scenarios"

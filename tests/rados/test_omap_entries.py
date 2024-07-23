@@ -32,7 +32,10 @@ def run(ceph_cluster, **kw):
     client_node = ceph_cluster.get_nodes(role="client")[0]
 
     omap_target_configs = config["omap_config"]
-    crash_pool_name = config["crash_config"]["pool_name"]
+    if config.get("crash_config"):
+        crash_pool_name = config["crash_config"]["pool_name"]
+    else:
+        crash_pool_name = "test_crash_pool"
     if not rados_obj.create_pool(pool_name=crash_pool_name):
         log.error(f"Failed to create pool-{crash_pool_name}")
         return 1

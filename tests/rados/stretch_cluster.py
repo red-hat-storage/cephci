@@ -347,7 +347,11 @@ def wait_for_clean_pg_sets(
             log.debug(f"Checking for active + clean PGs on pool: {test_pool}")
             pool_pg_ids = rados_obj.get_pgid(pool_name=test_pool)
             for pg_id in pool_pg_ids:
-                pg_state = rados_obj.get_pg_state(pg_id=pg_id)
+                try:
+                    pg_state = rados_obj.get_pg_state(pg_id=pg_id)
+                except Exception as err:
+                    log.error(f"PGID : {pg_id} was not found, err: {err}")
+                    continue
                 if any(key in health_warnings for key in pg_state.split("+")):
                     all_pg_active_clean = False
                     log.debug(
