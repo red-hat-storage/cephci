@@ -1,0 +1,13 @@
+[TFA] Since in primary default realm is india, but in secondary its RealmOne, verify Io failed
+
+Signed-off-by: Anuchaithra <anrao@redhat.com>
+
+# Please enter the commit message for your changes. Lines starting
+# with '#' will be ignored, and an empty message aborts the commit.
+#
+# On branch master
+# Your branch is up to date with 'origin/master'.
+#
+# Changes to be committed:
+#	modified:   suites/reef/rgw/tier-1_rgw_ms_upgrade_multirealm_61GA_to_7x_latest.yaml
+#
