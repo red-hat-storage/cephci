@@ -3928,3 +3928,18 @@ os.system('sudo systemctl start  network')
                 cap_value = parts[1].strip().strip('"')
                 caps[cap_type] = cap_value
         return caps
+
+    def enable_distributed_pin_on_subvolumes(
+        self,
+        client,
+        fs_name,
+        subvolumegroup_name,
+        subvolume_name,
+        pin_type,
+        pin_setting,
+    ):
+        out, rc = client.exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume pin {fs_name} {subvolume_name} {pin_type} "
+            f"{pin_setting} {subvolumegroup_name}",
+        )
