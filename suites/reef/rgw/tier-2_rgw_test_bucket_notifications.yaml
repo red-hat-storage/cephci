@@ -224,6 +224,16 @@ tests:
         config-file-name: test_empty_bucket_notification_kafka_broker.yaml
         timeout: 300
 
+  - test:
+      name: remove bucket notifications using rgw-admin notification rm command
+      desc: remove bucket notifications using rgw-admin notification rm command
+      module: sanity_rgw.py
+      polarion-id: CEPH-83582345
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_rgw_admin_notif_rm.yaml
+
   # test persistent bucket notifications when kafka server is unreachable
 
   - test:
