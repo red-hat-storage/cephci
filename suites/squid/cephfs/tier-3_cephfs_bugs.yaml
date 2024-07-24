@@ -268,4 +268,11 @@ tests:
       polarion-id: CEPH-83592513
       desc: Verify Client evict -h,--help works without running the function
       abort-on-fail: false
+  - test:
+      name: clone_no_wait_if_max_concurrent
+      module: cephfs_bugs.clone_no_wait_if_max_concurrent.py
+      polarion-id: CEPH-83593402
+      desc: Additional clone create not started if max concurrent clone creating and snapshot_clone_no_wait is True
+      abort-on-fail: false
+
 

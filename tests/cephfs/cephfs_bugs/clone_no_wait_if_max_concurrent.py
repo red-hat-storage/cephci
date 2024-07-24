@@ -265,7 +265,7 @@ def max_concurrent_clone_test(client1, fs_util, concurrent_limit, default_fs, sv
         log.error(
             f"All {clone_cnt} clones creating concurrently, {exp_str} wasn't generated"
         )
-        # return 1
+        return 1
     status_list = []
     iteration = 0
     clone_target = len(clone_list) - 1
