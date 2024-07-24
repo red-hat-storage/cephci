@@ -21,7 +21,8 @@ def run(ceph_cluster, **kw):
     4. Enable enable_multiple and try creating filesystem
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -39,9 +40,10 @@ def run(ceph_cluster, **kw):
             client1.exec_command(
                 sudo=True, cmd="ceph fs flag set enable_multiple false"
             )
-        out, rc = client1.exec_command(
-            sudo=True, cmd="ceph fs volume create cephfs_new", check_ec=False
+        out, rc = fs_util.create_fs(
+            client1, vol_name="cephfs_new", check_ec=False, validate=False
         )
+
         if rc == 0:
             raise CommandFailed(
                 "We are able to create multipe filesystems even after setting enable_multiple to false"
@@ -50,7 +52,8 @@ def run(ceph_cluster, **kw):
             "We are not able to create multipe filesystems after setting enable_multiple to false as expected"
         )
         client1.exec_command(sudo=True, cmd="ceph fs flag set enable_multiple true")
-        client1.exec_command(sudo=True, cmd="ceph fs volume create cephfs_new")
+        fs_util.create_fs(client1, vol_name="cephfs_new")
+
         log.info(
             "We are able to create multipe filesystems after setting enable_multiple to True as expected"
         )

@@ -25,7 +25,8 @@ def run(ceph_cluster, **kw):
     4. validate if the mount points are still present
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -38,9 +39,8 @@ def run(ceph_cluster, **kw):
             )
             return 1
         client1 = clients[0]
-        client1.exec_command(
-            sudo=True, cmd="ceph fs volume create cephfs_new", check_ec=False
-        )
+        fs_util.create_fs(client1, vol_name="cephfs_new", check_ec=False)
+
         if not fs_util.wait_for_mds_process(client1, "cephfs_new"):
             raise CommandFailed("Failed to start MDS deamons")
         total_fs = fs_util.get_fs_details(client1)
