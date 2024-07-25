@@ -18,7 +18,7 @@ from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
-from tests.rados.rados_test_util import get_device_path, wait_for_device
+from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_stretch_site_down import (
     get_stretch_site_hosts,
@@ -161,7 +161,9 @@ def run(ceph_cluster, **kw):
         method_should_succeed(
             utils.zap_device, ceph_cluster, test_host.hostname, dev_path
         )
-        method_should_succeed(wait_for_device, test_host, target_osd, action="remove")
+        method_should_succeed(
+            wait_for_device_rados, test_host, target_osd, action="remove"
+        )
 
         # Waiting for recovery to post OSD host removal
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
@@ -188,7 +190,9 @@ def run(ceph_cluster, **kw):
         # Adding the removed OSD back and checking the cluster status
         log.debug("Adding the removed OSD back and checking the cluster status")
         utils.add_osd(ceph_cluster, test_host.hostname, dev_path, target_osd)
-        method_should_succeed(wait_for_device, test_host, target_osd, action="add")
+        method_should_succeed(
+            wait_for_device_rados, test_host, target_osd, action="add"
+        )
         time.sleep(30)
         log.debug(
             "Completed addition of OSD post removal. Checking for inactive PGs post OSD addition"

@@ -23,7 +23,7 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from ceph.utils import get_node_by_id
-from tests.rados.rados_test_util import get_device_path, wait_for_device
+from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_data_migration_bw_pools import create_given_pool
 from utility.log import Log
@@ -229,7 +229,9 @@ def run(ceph_cluster, **kw) -> int:
             method_should_succeed(
                 utils.zap_device, ceph_cluster, host.hostname, dev_path
             )
-            method_should_succeed(wait_for_device, host, target_osd, action="remove")
+            method_should_succeed(
+                wait_for_device_rados, host, target_osd, action="remove"
+            )
 
             # Checking cluster health after OSD removal
             method_should_succeed(rados_obj.run_pool_sanity_check)
@@ -239,7 +241,7 @@ def run(ceph_cluster, **kw) -> int:
 
             # Adding the removed OSD back and checking the cluster status
             utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
-            method_should_succeed(wait_for_device, host, target_osd, action="add")
+            method_should_succeed(wait_for_device_rados, host, target_osd, action="add")
             time.sleep(10)
 
             # Checking cluster health after OSD removal
