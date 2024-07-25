@@ -140,6 +140,7 @@ tests:
       desc: Scub and deep-scrub on  inconsistent objects in EC pool
       module: test_osd_ecpool_inconsistency_scenario.py
       polarion-id: CEPH-83586175
+      comments: active Bugs 2275285 2277111
       config:
         ec_pool:
           create: true
@@ -152,7 +153,6 @@ tests:
         inconsistent_obj_count: 4
         delete_pool:
           - ecpool
-      comments: Failure due to BZ#2277111
 
   - test:
       name: Verification of ceph config show & get

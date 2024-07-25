@@ -380,6 +380,8 @@ tests:
       polarion-id: CEPH-83574794
       config:
         pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
+        create_ec_pool: true
+        create_re_pool: true
       desc: verify autoscaler flags functionality
       comments: active Bugs 2252788, 2283358
 
