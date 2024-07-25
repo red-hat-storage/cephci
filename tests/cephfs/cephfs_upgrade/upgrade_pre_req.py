@@ -1,7 +1,9 @@
 import json
 import random
 import string
+import time
 import traceback
+from distutils.version import LooseVersion
 
 import requests
 import yaml
@@ -11,7 +13,8 @@ from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
-from utility.utils import get_cephci_config
+from utility.retry import retry
+from utility.utils import get_ceph_version_from_cluster, get_cephci_config
 
 log = Log(__name__)
 
@@ -48,6 +51,25 @@ def run(ceph_cluster, **kw):
             return 1
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        osd_cmds = {
+            "osd_stats_update_period_not_scrubbing": 2,
+            "osd_stats_update_period_scrubbing": 2,
+            "osd_pg_stat_report_interval_max": 5,
+        }
+        for osd_cmd in osd_cmds:
+            cmd = f"ceph config set osd {osd_cmd} {osd_cmds[osd_cmd]}"
+            clients[0].exec_command(sudo=True, cmd=cmd)
+        log.info("Verify OSD config")
+        for osd_cmd in osd_cmds:
+            cmd = f"ceph config get osd {osd_cmd}"
+            out, _ = clients[0].exec_command(sudo=True, cmd=cmd)
+            log.info(out)
+            if str(osd_cmds[osd_cmd]) not in str(out):
+                log.warning(
+                    f"OSD config {osd_cmd} couldn't be set to {osd_cmds[osd_cmd]}"
+                )
+
+        time.sleep(10)
         default_fs = "cephfs"
         version, rc = clients[0].exec_command(
             sudo=True, cmd="ceph version --format json"
@@ -312,18 +334,29 @@ def run(ceph_cluster, **kw):
                     if len(subvol_sched_snap) == 2:
                         break
         snap_util.allow_minutely_schedule(clients[0], allow=True)
+        fs_util.validate_services(clients[0], service_name="mgr")
+        time.sleep(60)
         for subvol in subvol_sched_snap:
             snap_params = {}
             snap_util.enable_snap_schedule(clients[0])
             snap_params["fs_name"] = subvol["vol_name"]
             snap_params["validate"] = True
             snap_params["client"] = clients[0]
-            sched_list = ["2M", "1h", "7d", "4w"]
+            # sched_list = ["2M", "1h", "7d", "4w"]
+            ceph_version_1 = get_ceph_version_from_cluster(clients[0])
+            sched_list = (
+                ["2m", "1h", "7d", "4w"]
+                if LooseVersion(ceph_version_1) >= LooseVersion("17.2.6")
+                else ["2M", "1h", "7d", "4w"]
+            )
             snap_params["retention"] = "5M5h5d4w"
 
             cmd = f"ceph fs subvolume getpath {subvol['vol_name']} {subvol['subvol_name']} "
             cmd += f"{subvol['group_name']}"
-            subvol_path, rc = clients[0].exec_command(
+            retry_exec = retry(CommandFailed, tries=3, delay=60)(
+                clients[0].exec_command
+            )
+            subvol_path, rc = retry_exec(
                 sudo=True,
                 cmd=cmd,
             )
@@ -372,7 +405,7 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume getpath {subvol['vol_name']} {subvol['subvol_name']} {subvol['group_name']}",
         )
-        dir_path = f"{subvol_path.strip()}/"
+        dir_path = f"{subvol_path.strip()}"
         fs_util.fs_client_authorize(
             clients[0],
             subvol["vol_name"],
@@ -410,7 +443,7 @@ def run(ceph_cluster, **kw):
         if "nautilus" not in ceph_version["version"]:
             nfs_server = ceph_cluster.get_ceph_objects("nfs")
             nfs_client = ceph_cluster.get_ceph_objects("client")
-            fs_util.auth_list(nfs_client)
+            fs_util.auth_list(nfs_client, recreate=False)
             nfs_name = "cephfs-nfs"
             fs_name = default_fs
             nfs_export_name = "/export1"
@@ -511,9 +544,9 @@ def run(ceph_cluster, **kw):
                 log.info("NFS ganesha config added successfully")
             else:
                 raise CommandFailed("NFS ganesha config adding failed")
-                rc = fs_util.nfs_ganesha_mount(
-                    nfs_client[0], nfs_mounting_dir, nfs_server[0].node.hostname
-                )
+            rc = fs_util.nfs_ganesha_mount(
+                nfs_client[0], nfs_mounting_dir, nfs_server[0].node.hostname
+            )
             if rc == 0:
                 log.info("NFS-ganesha mount passed")
             else:

@@ -151,6 +151,7 @@ tests:
             abort-on-fail: false
             config:
               timeout: 30
+              recreate_user: False
             desc: Runs IOs in parallel with upgrade process
             module: cephfs_upgrade.cephfs_io.py
             name: "creation of Prerequisites for Upgrade"
