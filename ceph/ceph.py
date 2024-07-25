@@ -1523,6 +1523,7 @@ class CephNode(object):
         ssh = self.rssh if kw.get("sudo") else self.ssh
         cmd = kw["cmd"]
         timeout = None if kw.get("timeout") == "notimeout" else kw.get("timeout", 3600)
+        _end_time = None
 
         logger.info(
             f"long running command on {self.ip_address} -- {cmd} with {timeout} seconds"
