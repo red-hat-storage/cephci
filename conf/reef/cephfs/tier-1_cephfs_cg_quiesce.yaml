@@ -9,7 +9,7 @@ globals:
           - osd
           - installer
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 30
       node2:
         role:
           - mon
@@ -17,20 +17,20 @@ globals:
           - mds
           - osd
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 30
       node3:
         role:
           - mon
           - osd
           - mds
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 30
       node4:
         role:
           - osd
           - mds
         no-of-volumes: 4
-        disk-size: 15
+        disk-size: 30
       node5:
         role: client
       node6:
