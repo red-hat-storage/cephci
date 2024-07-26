@@ -104,7 +104,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi.yaml
-        timeout: 500
   - test:
       name: STS aswi Tests to test aud claim in the web token
       desc: STS aswi Tests to test aud claim in the web token
@@ -113,7 +112,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_aud_claim.yaml
-        timeout: 500
   - test:
       name: STS aswi Tests to test azp fields in the web token
       desc: STS aswi Tests to test azp fields in the web token
@@ -122,7 +120,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_azp_claim.yaml
-        timeout: 500
   - test:
       name: STS aswi Tests to test sub fields in the web token
       desc: STS aswi Tests to test sub fields in the web token
@@ -131,7 +128,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_sub_claim.yaml
-        timeout: 500
   - test:
       name: STS aswi Tests to test aws_PrincipalTag in role's permission policy
       desc: STS aswi Tests to test aws_PrincipalTag in role's permission policy
@@ -140,7 +136,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_aws_principal_tag_role_policy.yaml
-        timeout: 500
   - test:
       name: STS aswi Tests to test aws_RequestTag in role's trust policy
       desc: STS aswi Tests to test aws_RequestTag in the condition element of a role's trust policy
@@ -149,7 +144,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_aws_request_tag_trust_policy.yaml
-        timeout: 500
   - test:
       name: STS aswi Tests to test aws_TagKeys in permission policy
       desc: STS aswi Tests to test aws_TagKeys in permission policy
@@ -158,7 +152,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_aws_tagkeys_role_policy.yaml
-        timeout: 500
   - test:
       name: STS aswi Tests to test aws_TagKeys in the trust policy
       desc: STS aswi Tests to test aws_TagKeys in the trust policy
@@ -167,7 +160,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_aws_tagkeys_trust_policy.yaml
-        timeout: 500
   - test:
       name: STS aswi Tests to test iam_ResourceTag in trust policy
       desc: STS aswi Tests to test iam_ResourceTag in trust policy
@@ -176,7 +168,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_iam_resource_tag_trust_policy.yaml
-        timeout: 500
   - test:
       name: STS aswi Tests to test allow condition when s3_Resource Tag equals aws_Principal tag in role's permission policy
       desc: STS aswi Tests to test allow condition when s3_Resource Tag equals aws_Principal tag in role's permission policy
@@ -185,7 +176,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_s3_res_equals_aws_princ_tag_role_policy.yaml
-        timeout: 500
   - test:
       name: STS aswi Tests to test s3_Resource Tag in role's permission policy
       desc: STS aswi Tests to test s3_Resource Tag in role's permission policy
@@ -194,7 +184,6 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_s3_resource_tag_role_policy.yaml
-        timeout: 500
 
   - test:
       abort-on-fail: true
@@ -215,4 +204,3 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_creds_expire_copy_in_progress.yaml
-        timeout: 500

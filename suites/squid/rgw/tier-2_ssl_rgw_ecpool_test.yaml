@@ -200,4 +200,3 @@ tests:
       config:
         script-name: test_object_level_retention.py
         config-file-name: test_object_level_governance.yaml
-        timeout: 500

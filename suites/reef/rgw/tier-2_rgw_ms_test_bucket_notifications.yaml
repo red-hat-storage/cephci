@@ -212,7 +212,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -230,7 +229,6 @@ tests:
         install_start_kafka: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_copy.yaml
-        timeout: 300
 
   - test:
       name: notify put,delete events with kafka_broker_persistent
@@ -243,7 +241,6 @@ tests:
             run-on-rgw: true
             script-name: test_bucket_notifications.py
             config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
-            timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_broker_persistent
@@ -256,7 +253,6 @@ tests:
             run-on-rgw: true
             script-name: test_bucket_notifications.py
             config-file-name: test_bucket_notification_kafka_broker_persistent_multipart.yaml
-            timeout: 300
 
   - test:
       name: notify copy events with kafka_none
@@ -269,7 +265,6 @@ tests:
             run-on-rgw: true
             script-name: test_bucket_notifications.py
             config-file-name: test_bucket_notification_kafka_none_copy.yaml
-            timeout: 300
 
   - test:
       name: notify on put,copy,delete events with kafka_broker_persistent when kafka is down
@@ -282,7 +277,6 @@ tests:
             run-on-rgw: true
             script-name: test_bucket_notifications.py
             config-file-name: test_bucket_notification_kafka_down_broker_persistent.yaml
-            timeout: 300
 
   - test:
       name: notify on multipart events with kafka_broker_persistent when kafka is down
@@ -295,7 +289,6 @@ tests:
             run-on-rgw: true
             script-name: test_bucket_notifications.py
             config-file-name: test_bucket_notification_kafka_down_broker_persistent_multipart.yaml
-            timeout: 300
 
   - test:
       name: notify on multisite replication create events with kafka_broker on pri site
@@ -308,7 +301,6 @@ tests:
             run-on-rgw: true
             script-name: test_bucket_notifications.py
             config-file-name: test_bucket_notification_kafka_broker_ms_replication_from_pri.yaml
-            timeout: 300
 
   - test:
       name: notify on multisite replication create events with kafka_broker on sec site
@@ -321,7 +313,6 @@ tests:
             run-on-rgw: true
             script-name: test_bucket_notifications.py
             config-file-name: test_bucket_notification_kafka_broker_ms_replication_from_sec.yaml
-            timeout: 300
 
 # please include test cases before below rename testcase as the process is disruptive currently
   # - test:
@@ -330,7 +321,6 @@ tests:
   #         config:
   #           script-name: test_check_sharding_enabled.py
   #           config-file-name: test_zone_rename.yaml
-  #           timeout: 300
   #     desc: Test zone rename in master
   #     module: sanity_rgw_multisite.py
   #     name: Perform zone rename in master

@@ -284,7 +284,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -299,7 +298,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: test to create "M" no of buckets and "N" no of objects
       module: sanity_rgw_multisite.py
       name: m buckets with n objects pre upgrade
@@ -313,7 +311,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_unordered.yaml
-            timeout: 300
       desc: test duration for unordered listing of buckets with top level objects
       module: sanity_rgw_multisite.py
       name: unordered listing of buckets pre upgrade
@@ -326,7 +323,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
       desc: Create bucket for Testing dynamic resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
       name: Create bucket for Testing dynamic resharding brownfield scenario after upgrade
@@ -344,7 +340,6 @@ tests:
             script-name: test_check_sharding_enabled.py
             config-file-name: test_check_sharding_enabled_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
 
 #   # Performing cluster upgrade
 
@@ -371,7 +366,6 @@ tests:
             script-name: test_swift_basic_ops.py
             config-file-name: test_swift_version_copy_op.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 500
       desc: test restoring of versioned objects in swift
       module: sanity_rgw_multisite.py
       name: swift versioning copy post upgrade
@@ -385,7 +379,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
-            timeout: 300
       desc: test the duration for ordered listing of versioned buckets
       module: sanity_rgw_multisite.py
       name: ordered listing of versioned buckets post upgrade
@@ -398,7 +391,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
       desc: Test dynamic resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
       name: Test dynamic resharding brownfield scenario after upgrade

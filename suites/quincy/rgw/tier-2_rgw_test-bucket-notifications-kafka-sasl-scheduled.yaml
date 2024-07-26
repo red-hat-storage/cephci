@@ -77,7 +77,6 @@ tests:
         configure_kafka_security: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_broker and SASL_PLAINTEXT PLAIN
@@ -88,7 +87,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify put,copy,delete events with kafka_broker and SASL_PLAINTEXT SCRAM-SHA-256
@@ -99,7 +97,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_broker.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_broker and SASL_PLAINTEXT SCRAM-SHA-256
@@ -110,7 +107,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_broker_multipart.yaml
-        timeout: 300
 
   # Tests for SASL_SSL security type
   - test:
@@ -122,7 +118,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_broker.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_broker and SASL_SSL PLAIN
@@ -133,7 +128,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_broker_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify put,copy,delete events with kafka_broker and SASL_SSL SCRAM-SHA-256
@@ -144,7 +138,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_broker.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_broker and SASL_SSL SCRAM-SHA-256
@@ -155,7 +148,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_broker_multipart.yaml
-        timeout: 300
 
   # kafka broker type none
 
@@ -169,7 +161,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_none.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none and SASL_PLAINTEXT PLAIN
@@ -180,7 +171,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_none_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify put,copy,delete events with kafka_none_persistent and SASL_PLAINTEXT PLAIN
@@ -191,7 +181,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_none_persistent.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none_persistent and SASL_PLAINTEXT PLAIN
@@ -202,7 +191,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_none_persistent_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify put,copy,delete events with kafka_none and SASL_PLAINTEXT SCRAM-SHA-256
@@ -213,7 +201,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_none.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none and SASL_PLAINTEXT SCRAM-SHA-256
@@ -224,7 +211,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_none_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify put,copy,delete events with kafka_none_persistent and SASL_PLAINTEXT SCRAM-SHA-256
@@ -235,7 +221,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_none_persistent.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none_persistent and SASL_PLAINTEXT SCRAM-SHA-256
@@ -246,7 +231,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_none_persistent_multipart.yaml
-        timeout: 300
 
   # Tests for SASL_SSL security type
   - test:
@@ -258,7 +242,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_none.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none and SASL_SSL PLAIN
@@ -269,7 +252,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_none_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify put,copy,delete events with kafka_none_persistent and SASL_SSL PLAIN
@@ -280,7 +262,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_none_persistent.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none_persistent and SASL_SSL PLAIN
@@ -291,7 +272,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_none_persistent_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify put,copy,delete events with kafka_none and SASL_SSL SCRAM-SHA-256
@@ -302,7 +282,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_none.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none and SASL_SSL SCRAM-SHA-256
@@ -313,7 +292,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_none_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify put,copy,delete events with kafka_none_persistent and SASL_SSL SCRAM-SHA-256
@@ -324,7 +302,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_none_persistent.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none_persistent and SASL_SSL SCRAM-SHA-256
@@ -335,7 +312,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_none_persistent_multipart.yaml
-        timeout: 300
 
   - test:
       name: check-ceph-health

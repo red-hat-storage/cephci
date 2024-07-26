@@ -78,4 +78,3 @@ tests:
         install_start_kafka: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
-        timeout: 300

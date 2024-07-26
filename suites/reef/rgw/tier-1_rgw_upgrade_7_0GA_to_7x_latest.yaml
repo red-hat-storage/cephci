@@ -85,7 +85,6 @@ tests:
       config:
         script-name: ../aws/test_sts_rename_large_object.py
         config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
-        timeout: 500
 
   # upgrade cluster
   - test:
@@ -101,7 +100,6 @@ tests:
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-              timeout: 300
         - test:
             name: Upgrade cluster to latest 7.x ceph version
             desc: Upgrade cluster to latest version
@@ -124,4 +122,3 @@ tests:
       config:
         script-name: ../curl/test_rgw_using_curl.py
         config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
-        timeout: 500

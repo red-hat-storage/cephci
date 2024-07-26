@@ -440,7 +440,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -454,7 +453,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-ter
-            timeout: 300
       desc: create non-tenanted user and copy user details on tertiary site
       module: sanity_rgw_multisite.py
       name: create non-tenanted user and copy user details on tertiary site
@@ -499,7 +497,6 @@ tests:
               - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart rgw.shared.sec.io"
-            timeout: 120
         ceph-pri:
           config:
             cephadm: true
@@ -511,7 +508,6 @@ tests:
               - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart rgw.shared.pri.io"
-            timeout: 120
         ceph-ter:
           config:
             cephadm: true
@@ -523,7 +519,6 @@ tests:
               - "ceph config set client.rgw.shared.ter rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.shared.ter rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart rgw.shared.ter.io"
-            timeout: 120
       desc: Setting vault configs for sse-s3 on multisite tertiary site
       module: exec.py
       name: set sse-s3 vault configs on multisite
@@ -556,5 +551,4 @@ tests:
             config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
             run-on-haproxy: true
             monitor-consistency-bucket-stats: true
-            timeout: 300
             # verify-io-on-site: ["ceph-sec"] as there is an io file issue, once its fixed need to uncomment

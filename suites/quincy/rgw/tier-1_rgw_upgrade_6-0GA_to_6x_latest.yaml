@@ -94,7 +94,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-        timeout: 300
       desc: test_sse_s3_per_bucket_encryption_normal_object_upload
       module: sanity_rgw.py
       name: sse-s3 per bucket encryption test
@@ -104,7 +103,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
-        timeout: 300
       desc: test_sse_s3_per_bucket_encryption_version_enabled
       module: sanity_rgw.py
       name: sse-s3 per bucket encryption test on a versiond bucket
@@ -113,7 +111,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-        timeout: 300
       desc: test to create "M" no of buckets and "N" no of objects with download
       module: sanity_rgw.py
       name: download objects pre upgrade
@@ -127,7 +124,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-        timeout: 300
 
   - test:
       name: Mbuckets_with_Nobjects with etag verification pre upgrade
@@ -137,7 +133,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
-        timeout: 300
 
   - test:
       name: Dynamic Resharding tests pre upgrade
@@ -147,7 +142,6 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
-        timeout: 500
 
   - test:
       name: Manual Resharding tests pre upgrade
@@ -157,7 +151,6 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
-        timeout: 500
 
   - test:
       name: Dynamic Resharding tests with version pre upgrade
@@ -167,7 +160,6 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
-        timeout: 500
 
   - test:
       config:
@@ -183,7 +175,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_flat_unordered.yaml
-        timeout: 300
       desc: test duration for unordered listing of buckets with top level objects
       module: sanity_rgw.py
       name: unordered listing of buckets pre upgrade
@@ -193,7 +184,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_basic_ops.yaml
-        timeout: 300
       desc: Test object operations with swift
       module: sanity_rgw.py
       name: swift basic operations pre upgrade
@@ -203,7 +193,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_radoslist.yaml
-        timeout: 300
       desc: Test bucket stats and radoslist on all buckets
       module: sanity_rgw.py
       name: test bucket stats and radoslist
@@ -238,7 +227,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-        timeout: 300
       desc: test to create "M" no of buckets and "N" no of objects with download
       module: sanity_rgw.py
       name: download objects post upgrade
@@ -252,7 +240,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-        timeout: 300
 
   - test:
       name: Mbuckets_with_Nobjects with etag verification post upgrade
@@ -262,7 +249,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
-        timeout: 300
 
   - test:
       name: Dynamic Resharding tests post upgrade
@@ -272,7 +258,6 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
-        timeout: 500
 
   - test:
       name: Manual Resharding tests post upgrade
@@ -282,7 +267,6 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
-        timeout: 500
 
   - test:
       name: Dynamic Resharding tests with version post upgrade
@@ -292,13 +276,11 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
-        timeout: 500
 
   - test:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_flat_ordered.yaml
-        timeout: 300
       desc: test duration for ordered listing of bucket with top level objects
       module: sanity_rgw.py
       name: ordered listing of buckets post upgrade
@@ -308,7 +290,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_flat_unordered.yaml
-        timeout: 300
       desc: test duration for unordered listing of buckets with top level objects
       module: sanity_rgw.py
       name: unordered listing of buckets post upgrade
@@ -318,7 +299,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_basic_ops.yaml
-        timeout: 300
       desc: Test object operations with swift
       module: sanity_rgw.py
       name: swift basic operations post upgrade
@@ -328,7 +308,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_radoslist.yaml
-        timeout: 300
       desc: Test bucket stats and radoslist on all buckets
       module: sanity_rgw.py
       name: test bucket stats and radoslist
@@ -337,7 +316,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-        timeout: 300
       desc: test_sse_s3_per_bucket_encryption_normal_object_upload
       module: sanity_rgw.py
       name: sse-s3 per bucket encryption test
@@ -347,7 +325,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
-        timeout: 300
       desc: test_sse_s3_per_bucket_encryption_version_enabled
       module: sanity_rgw.py
       name: sse-s3 per bucket encryption test on a versiond bucket

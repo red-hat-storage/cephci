@@ -89,7 +89,6 @@ tests:
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects.yaml
-              timeout: 300
               install_common: false
               run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects
@@ -101,7 +100,6 @@ tests:
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
-              timeout: 300
               install_common: false
               run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects with delete
@@ -113,7 +111,6 @@ tests:
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-              timeout: 300
               install_common: false
               run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects with download
@@ -125,7 +122,6 @@ tests:
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-              timeout: 300
               install_common: false
               run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects with multipart upload
@@ -141,7 +137,6 @@ tests:
               install_common: false
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_bi_purge.yaml
-              timeout: 300
 
   - test:
       name: enable bucket versioning
@@ -151,7 +146,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_enable.yaml
-        timeout: 300
   - test:
       name: Bucket Lifecycle Object_expiration_tests for non current version expiration
       desc: Test object expiration for non current version expiration
@@ -160,7 +154,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_prefix_non_current_days.yaml
-        timeout: 300
   - test:
       name: Bucket Lifecycle Object_transition_tests for Prefix filter and versioned buckets
       desc: Test object transition for Prefixand versioned buckets
@@ -169,7 +162,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_with_prefix_rule.yaml
-        timeout: 300
   - test:
       name: S3CMD small and multipart object download
       desc: S3CMD small and multipart object download or GET
@@ -178,4 +170,3 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-        timeout: 300
