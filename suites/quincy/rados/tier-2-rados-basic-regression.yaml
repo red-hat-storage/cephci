@@ -370,15 +370,18 @@ tests:
       polarion-id: CEPH-83573478
       desc: Config sources - Verify config source changes and reset config
 
-# Commenting untill bug fix : https://bugzilla.redhat.com/show_bug.cgi?id=2252788
-#  - test:
-#      name: autoscaler flags
-#      module: test_pg_autoscale_flag.py
-#      polarion-id: CEPH-83574794
-#      config:
-#        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
-#      desc: verify autoscaler flags functionality
-#      comments: Bug 2252788
+# Commenting until bug fix : https://bugzilla.redhat.com/show_bug.cgi?id=2252788
+# Other issues with noautoscale flag listed here : https://bugzilla.redhat.com/show_bug.cgi?id=2283358
+  - test:
+      name: autoscaler flags
+      module: test_pg_autoscale_flag.py
+      polarion-id: CEPH-83574794
+      config:
+        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
+        create_ec_pool: true
+        create_re_pool: true
+      desc: verify autoscaler flags functionality
+      comments: active Bugs 2252788, 2283358
 
   - test:
       name: Mon election strategies

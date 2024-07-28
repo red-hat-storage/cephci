@@ -81,15 +81,30 @@ def run(ceph_cluster, **kw):
 
         pool_name = random.choice(pools)
         obj_list = rados_obj.get_object_list(pool_name)
-        oname = random.choice(obj_list)
-        log.debug(f"Random object selected to corrupt : {oname}")
 
-        try:
-            # Create inconsistency objects
-            pg_id = rados_obj.create_inconsistent_object(pool_name, oname)
-        except Exception as err:
-            log.error(f"Unable to create inconsistent object. error {err}")
-            raise Exception("inconsistent object not generated error")
+        oname_list = random.choices(obj_list, k=10)
+        log.debug(
+            f"Selected objects {oname_list} at random to generate inconsistent objects."
+        )
+        inconsistent_obj_count = 0
+        for oname in oname_list:
+            try:
+                # Create inconsistency objects
+                pg_id = rados_obj.create_inconsistent_object(pool_name, oname)
+                inconsistent_obj_count = inconsistent_obj_count + 1
+            except Exception as err:
+                log.error(
+                    f"Failed to generate inconsistent object.Trying to convert another object. Error : {err}"
+                )
+                continue
+            if inconsistent_obj_count == 1:
+                log.info(f"The inconsistent object is created in the PG - {pg_id}")
+                break
+        if inconsistent_obj_count == 0:
+            log.error(
+                "The inconsistent object is  not created.Not performing the further tests"
+            )
+            return 1
         # Restarting the mon
         log.info("Restarting the mon services")
         mon_service = client_node.exec_command(cmd="ceph orch ls | grep mon")

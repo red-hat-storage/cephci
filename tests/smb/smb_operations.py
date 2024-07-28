@@ -425,3 +425,28 @@ def apply_smb_spec(installer, smb_spec_file, file_mount):
         CephAdm(installer, mount=file_mount).ceph.smb.apply.apply(smb_spec_file)
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to apply smb spec file, Error {e}")
+
+
+def get_samba_pid_and_memory(samba_servers):
+    """get samba pid and memory consumption(RSS)
+    Args:
+        smb_server (obj): Smb server
+    Returns:
+        smb_server_info(dic): {"samba server1": ["PID","RSS(MB)"], "samba server2": ["PID","RSS(MB)"]}
+    """
+    samba_server_info = {}
+    if not isinstance(samba_servers, list):
+        samba_servers = [samba_servers]
+
+    for samba_server in samba_servers:
+        try:
+            pid = samba_server.exec_command(sudo=True, cmd="pgrep -o smbd")[0].strip()
+            rss = samba_server.exec_command(sudo=True, cmd=f"ps -p {pid} -o rss=")[
+                0
+            ].strip()
+            samba_server_info[samba_server.hostname] = [pid, rss]
+        except Exception:
+            raise CephadmOpsExecutionError(
+                f"failed get samba process ID and rss for {samba_server}"
+            )
+    return samba_server_info

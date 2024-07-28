@@ -33,6 +33,8 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     pool_configs_path = config.get("pool_configs_path")
+    create_re_pool = config.get("create_re_pool", True)
+    create_ec_pool = config.get("create_ec_pool", False)
 
     regex = r"\s*(\d.\d)-rhel-\d"
     build = (re.search(regex, config.get("build", config.get("rhbuild")))).groups()[0]
@@ -47,16 +49,18 @@ def run(ceph_cluster, **kw):
         with open(pool_configs_path, "r") as fd:
             pool_configs = yaml.safe_load(fd)
 
-        pool_conf = pool_configs["replicated"]["sample-pool-1"]
-        create_given_pool(rados_obj, pool_conf)
-        rados_obj.set_pool_property(
-            pool=pool_conf["pool_name"], props="pg_autoscale_mode", value="warn"
-        )
-        pool_conf = pool_configs["erasure"]["sample-pool-1"]
-        create_given_pool(rados_obj, pool_conf)
-        rados_obj.set_pool_property(
-            pool=pool_conf["pool_name"], props="pg_autoscale_mode", value="off"
-        )
+        if create_re_pool:
+            pool_conf = pool_configs["replicated"]["sample-pool-1"]
+            create_given_pool(rados_obj, pool_conf)
+            rados_obj.set_pool_property(
+                pool=pool_conf["pool_name"], props="pg_autoscale_mode", value="warn"
+            )
+        if create_ec_pool:
+            pool_conf = pool_configs["erasure"]["sample-pool-1"]
+            create_given_pool(rados_obj, pool_conf)
+            rados_obj.set_pool_property(
+                pool=pool_conf["pool_name"], props="pg_autoscale_mode", value="off"
+            )
 
         # Fetching the pools on the cluster and their autoscaling mode
         pre_autoscale_status = rados_obj.get_pg_autoscale_status()

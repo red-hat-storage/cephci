@@ -632,19 +632,20 @@ class FsUtils(object):
         Args:
             clients:
             **kwargs:
-
+            recreate : if passed as false then will not create user if already exists or
+                any kwargs like mds, osd are passed then it will create irrespective of this filed
         Returns:
 
         """
         fs_info = self.get_fs_info(clients[0])
         for client in clients:
             log.info("Giving required permissions for clients:")
-            client.exec_command(
+            out, rc = client.exec_command(
                 sudo=True,
                 cmd=f"ceph auth get client.{client.node.hostname}",
                 check_ec=False,
             )
-            if client.node.exit_status == 0:
+            if not rc and kwargs.get("recreate", True):
                 client.exec_command(
                     sudo=True, cmd=f"ceph auth del client.{client.node.hostname}"
                 )
@@ -714,17 +715,18 @@ class FsUtils(object):
                     cmd=f"chmod 644 /etc/ceph/ceph.client.{client.node.hostname}_{kwargs.get('path')}.keyring",
                 )
             else:
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"ceph auth get-or-create client.{client.node.hostname}"
-                    f" mon 'allow *' mds "
-                    f"'allow *, allow * path=/' osd 'allow *'"
-                    f" -o /etc/ceph/ceph.client.{client.node.hostname}.keyring",
-                )
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"chmod 644 /etc/ceph/ceph.client.{client.node.hostname}.keyring",
-                )
+                if kwargs.get("recreate", True):
+                    client.exec_command(
+                        sudo=True,
+                        cmd=f"ceph auth get-or-create client.{client.node.hostname}"
+                        f" mon 'allow *' mds "
+                        f"'allow *, allow * path=/' osd 'allow *'"
+                        f" -o /etc/ceph/ceph.client.{client.node.hostname}.keyring",
+                    )
+                    client.exec_command(
+                        sudo=True,
+                        cmd=f"chmod 644 /etc/ceph/ceph.client.{client.node.hostname}.keyring",
+                    )
         return 0
 
     @retry(CommandFailed, tries=3, delay=60)
@@ -3928,3 +3930,18 @@ os.system('sudo systemctl start  network')
                 cap_value = parts[1].strip().strip('"')
                 caps[cap_type] = cap_value
         return caps
+
+    def enable_distributed_pin_on_subvolumes(
+        self,
+        client,
+        fs_name,
+        subvolumegroup_name,
+        subvolume_name,
+        pin_type,
+        pin_setting,
+    ):
+        out, rc = client.exec_command(
+            sudo=True,
+            cmd=f"ceph fs subvolume pin {fs_name} {subvolume_name} {pin_type} "
+            f"{pin_setting} {subvolumegroup_name}",
+        )

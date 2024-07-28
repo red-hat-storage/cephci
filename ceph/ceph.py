@@ -1145,6 +1145,18 @@ class CommandFailed(Exception):
     pass
 
 
+class TimeoutException(Exception):
+    """Operation timeout exception."""
+
+    pass
+
+
+def check_timeout(end_time, timeout):
+    """Raises an exception when current time is greater"""
+    if timeout and datetime.datetime.now() >= end_time:
+        raise TimeoutException("Command exceed the allocated execution time.")
+
+
 class RolesContainer(object):
     """
     Container for single or multiple node roles.
@@ -1511,6 +1523,7 @@ class CephNode(object):
         ssh = self.rssh if kw.get("sudo") else self.ssh
         cmd = kw["cmd"]
         timeout = None if kw.get("timeout") == "notimeout" else kw.get("timeout", 3600)
+        _end_time = None
 
         logger.info(
             f"long running command on {self.ip_address} -- {cmd} with {timeout} seconds"
@@ -1521,7 +1534,7 @@ class CephNode(object):
             channel.settimeout(timeout)
 
             # A mismatch between stdout and stderr streams have been observed hence
-            # combining the streams and logging is set to debug level only.
+            # combining the streams and logging is set to debug level.
             channel.set_combine_stderr(True)
             channel.exec_command(cmd)
 
@@ -1532,22 +1545,17 @@ class CephNode(object):
 
             while not channel.exit_status_ready():
                 # Prevent high resource consumption
-                sleep(2)
-
+                sleep(1)
                 if channel.recv_ready():
                     data = channel.recv(1024)
                     while data:
                         for line in data.splitlines():
                             logger.debug(line)
 
+                        check_timeout(_end_time, timeout)
                         data = channel.recv(1024)
 
-                # time check - raise exception when exceeded.
-                if timeout and datetime.datetime.now() > _end_time:
-                    channel.close()
-                    raise SocketTimeoutException(
-                        f"{cmd} failed to complete within {timeout}s"
-                    )
+                check_timeout(_end_time, timeout)
 
             logger.info(f"Command completed on {datetime.datetime.now()}")
             return channel.recv_exit_status()
@@ -1555,6 +1563,10 @@ class CephNode(object):
         except socket.timeout as terr:
             logger.error(f"Command failed to execute within {timeout} seconds.")
             raise SocketTimeoutException(terr)
+        except TimeoutException as tex:
+            channel.close()
+            logger.error(f"{cmd} failed to execute within {timeout}s.")
+            raise CommandFailed(tex)
         except BaseException as be:  # noqa
             logger.exception(be)
             raise CommandFailed(be)

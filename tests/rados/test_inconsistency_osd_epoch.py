@@ -50,27 +50,39 @@ def run(ceph_cluster, **kw):
         obj_list = rados_obj.get_object_list(pool_name)
         log.debug(f"All the objects added onto the pool are : {obj_list}")
 
-        oname = random.choice(obj_list)
+        oname_list = random.choices(obj_list, k=10)
         log.debug(
-            f"Selected object {oname} at random to generate inconsistent objects."
+            f"Selected objects {oname_list} at random to generate inconsistent objects."
         )
+        inconsistent_obj_count = 0
+        for oname in oname_list:
+            primary_osd = rados_obj.get_osd_map(pool=pool_name, obj=oname)[
+                "acting_primary"
+            ]
+            log.debug(f"The object stored in the primary osd number-{primary_osd}")
 
-        primary_osd = rados_obj.get_osd_map(pool=pool_name, obj=oname)["acting_primary"]
-        log.debug(f"The object stored in the primary osd number-{primary_osd}")
+            # getting the OSD epoch before generating inconsistent objects
+            epoch_cmd = "ceph osd dump"
+            init_epoch = rados_obj.run_ceph_command(cmd=epoch_cmd)["epoch"]
+            log.info(f"Initial epoch before generating inconsistency is {init_epoch}")
 
-        # getting the OSD epoch before generating inconsistent objects
-        epoch_cmd = "ceph osd dump"
-        init_epoch = rados_obj.run_ceph_command(cmd=epoch_cmd)["epoch"]
-        log.info(f"Initial epoch before generating inconsistency is {init_epoch}")
-
-        # Create inconsistency objects
-        try:
-            pg_id = rados_obj.create_inconsistent_object(pool_name, oname)
-        except Exception as err:
-            log.error(f"Failed to generate inconsistent object. Error : {err}")
-            raise Exception("Inconsistent object not generated error")
-
-        log.debug(f"PG ID {pg_id} has inconsistent object generated on it.")
+            # Create inconsistency objects
+            try:
+                pg_id = rados_obj.create_inconsistent_object(pool_name, oname)
+                inconsistent_obj_count = inconsistent_obj_count + 1
+            except Exception as err:
+                log.error(
+                    f"Failed to generate inconsistent object.Trying to convert another object. Error : {err}"
+                )
+                continue
+            if inconsistent_obj_count == 1:
+                log.info(f"The inconsistent object is created in the PG - {pg_id}")
+                break
+        if inconsistent_obj_count == 0:
+            log.error(
+                "The inconsistent object is  not created.Not performing the further tests"
+            )
+            return 1
 
         # Checking for inconsistency in the PG list
         inconsistent_pg_list = rados_obj.get_inconsistent_pg_list(pool_name)

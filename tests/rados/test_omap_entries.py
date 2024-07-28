@@ -41,6 +41,7 @@ def run(ceph_cluster, **kw):
     cmd_put_obj = f"rados put -p {crash_pool_name} {object_name} /etc/hosts"
     client_node.exec_command(cmd=cmd_put_obj, sudo=True)
     cmd_clearomap = f"rados clearomap -p {crash_pool_name} {object_name}"
+    pools = []
 
     try:
         # Creating pools and starting the test
@@ -53,6 +54,7 @@ def run(ceph_cluster, **kw):
             # And testing only on RE pools.
             method_should_succeed(rados_obj.create_pool, **omap_config)
             pool_name = omap_config.pop("pool_name")
+            pools.append(pool_name)
             normal_objs = omap_config["normal_objs"]
             if normal_objs > 0:
                 # create n number of objects without any omap entry
@@ -133,8 +135,11 @@ def run(ceph_cluster, **kw):
         )
         rados_obj.change_recovery_threads(config={}, action="rm")
         # deleting the pool created after the test
-        rados_obj.delete_pool(pool=pool_name)
+        for pool in pools:
+            rados_obj.delete_pool(pool=pool)
         rados_obj.delete_pool(pool=crash_pool_name)
+
+        time.sleep(60)
         # log cluster health
         rados_obj.log_cluster_health()
 

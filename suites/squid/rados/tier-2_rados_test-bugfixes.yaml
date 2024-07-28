@@ -140,6 +140,7 @@ tests:
       desc: Scub and deep-scrub on  inconsistent objects in EC pool
       module: test_osd_ecpool_inconsistency_scenario.py
       polarion-id: CEPH-83586175
+      comments: active Bugs 2275285, 2277111
       config:
         ec_pool:
           create: true

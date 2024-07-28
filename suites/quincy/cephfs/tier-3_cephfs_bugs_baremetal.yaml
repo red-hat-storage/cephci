@@ -144,3 +144,10 @@ tests:
       polarion-id: CEPH-83586294
       desc: Validate if MDS Cache Oversized Warning seen when standby-allow is added
       abort-on-fail: false
+  - test:
+      name: Validate if no repeated mclientscaps(revoke) entries found in MDS.
+      module: cephfs_bugs.test_validate_mclientcaps_revoke_ack.py
+      polarion-id: CEPH-83584084
+      desc: Validate if no repeated mclientscaps(revoke) entries found in MDS.
+      abort-on-fail: false
+
