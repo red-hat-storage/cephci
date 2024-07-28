@@ -4,7 +4,9 @@
 # Test-Suite: tier-2_cephfs_test_metrics.yaml
 # Conf file : conf/reef/cephfs/tier-2_cephfs_9-node-cluster.yaml
 # Test-Case Covered:
-#   CEPH-83588303 - Validate the metrics of the clients that mds provides
+#   CEPH-83588355 - Validate the metrics of the clients that mds provides (funcational)
+#   CEPH-83588303 - Validate the metrics of the clients that mds provides (scale)
+#   CEPH-83588357 - Validate the metrics of the clients that mds provides (negative case)
 #=======================================================================================================================
 tests:
   -
@@ -146,16 +148,16 @@ tests:
       module: test_client.py
       name: "configure client"
   - test:
-      name: MDS client metrics functional
-      module: cephfs_metrics.cephfs_metrics_functional.py
-      polarion-id: CEPH-83588303
-      desc: Verify MDS client metrics
-      abort-on-fail: false
-  - test:
       name: MDS client metrics scale
       module: cephfs_metrics.cephfs_metrics_scale.py
       polarion-id: CEPH-83588355
       desc: Verify MDS metrics in multiple clients
+      abort-on-fail: false
+  - test:
+      name: MDS client metrics functional
+      module: cephfs_metrics.cephfs_metrics_functional.py
+      polarion-id: CEPH-83588303
+      desc: Verify MDS client metrics
       abort-on-fail: false
   - test:
       name: MDS client metrics negative case

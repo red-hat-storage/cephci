@@ -3591,10 +3591,10 @@ os.system('sudo systemctl start  network')
         client_id = client_id.replace('"', "").replace("\n", "")
         log.info(f"Client ID : {client_id} for Mounted Directory : {mounted_dir}")
         cmd = f""" ceph tell mds.{ranked_mds} counter dump 2>/dev/null | \
-            jq -r '. | to_entries | map(select(.key | match("mds_client_metrics"))) | \
-            .[].value[] | select(.labels.client != null and (.labels.client | contains("{client_id}"))
-            and (.labels.rank == "0"))'
-            """
+                    jq -r '. | to_entries | map(select(.key | match("mds_client_metrics"))) | \
+                    .[].value[] | select(.labels.client != null and (.labels.client | contains("{client_id}"))
+                    and (.labels.rank == "0"))'
+                    """
         metrics_out, _ = client.exec_command(sudo=True, cmd=cmd)
         log.info(
             f"Metrics for MDS : {ranked_mds} Mounted Directory: {mounted_dir} and Client : {client_id} is {metrics_out}"
