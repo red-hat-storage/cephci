@@ -146,16 +146,16 @@ tests:
       module: test_client.py
       name: "configure client"
   - test:
-      name: MDS client metrics functional
-      module: cephfs_metrics.cephfs_metrics_functional.py
-      polarion-id: CEPH-83588303
-      desc: Verify MDS client metrics
-      abort-on-fail: false
-  - test:
       name: MDS client metrics scale
       module: cephfs_metrics.cephfs_metrics_scale.py
       polarion-id: CEPH-83588355
       desc: Verify MDS metrics in multiple clients
+      abort-on-fail: false
+  - test:
+      name: MDS client metrics functional
+      module: cephfs_metrics.cephfs_metrics_functional.py
+      polarion-id: CEPH-83588303
+      desc: Verify MDS client metrics
       abort-on-fail: false
   - test:
       name: MDS client metrics negative case
