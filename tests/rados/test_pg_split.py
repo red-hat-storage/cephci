@@ -9,7 +9,7 @@ from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.rados_test_util import (
     create_pools,
     get_device_path,
-    wait_for_device,
+    wait_for_device_rados,
     write_to_pools,
 )
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
@@ -135,12 +135,14 @@ def run(ceph_cluster, **kw):
             method_should_succeed(
                 utils.zap_device, ceph_cluster, host.hostname, dev_path
             )
-            method_should_succeed(wait_for_device, host, target_osd, action="remove")
+            method_should_succeed(
+                wait_for_device_rados, host, target_osd, action="remove"
+            )
             time.sleep(60)
 
             # Adding the removed OSD back and checking the cluster status
             utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
-            method_should_succeed(wait_for_device, host, target_osd, action="add")
+            method_should_succeed(wait_for_device_rados, host, target_osd, action="add")
             time.sleep(20)
 
             utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
@@ -310,7 +312,9 @@ def run(ceph_cluster, **kw):
                     ceph_cluster, target_osd, unmanaged=True
                 )
                 utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
-                method_should_succeed(wait_for_device, host, target_osd, action="add")
+                method_should_succeed(
+                    wait_for_device_rados, host, target_osd, action="add"
+                )
             utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
 
         if config.get("delete_pools"):
