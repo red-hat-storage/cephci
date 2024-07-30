@@ -221,6 +221,7 @@ tests:
       polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
+      comments: Known issue tracker https://tracker.ceph.com/issues/67304
   # add datalog omap tests
   - test:
       name:  datalog omap offload on secondary
