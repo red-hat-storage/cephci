@@ -279,7 +279,7 @@ def run(ceph_cluster, **kw):
         if config.get("cleanup", True):
 
             log.info("Unmount the paths")
-            paths_to_unmount = [kernel_mounting_dir, fuse_mounting_dir]
+            paths_to_unmount = [f"{kernel_mounting_dir}_1", f"{fuse_mounting_dir}_1"]
             for path in paths_to_unmount:
                 source_clients[0].exec_command(sudo=True, cmd=f"umount -l {path}")
 
