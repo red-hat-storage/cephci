@@ -279,4 +279,13 @@ tests:
       abort-on-fail: false
       config:
         nfs_version: 3
+
+  - test:
+      name: NFS-Ganesha export config with Access Type as NONE
+      desc: Verify edit export config with access type as NONE
+      module: nfs_edit_export_config_with_access_none.py
+      polarion-id: CEPH-83593466
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
         clients: 1
