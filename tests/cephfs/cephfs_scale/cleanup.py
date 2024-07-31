@@ -2,6 +2,7 @@ import json
 import time
 import traceback
 
+from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.log import Log
 
@@ -23,38 +24,19 @@ def run(ceph_cluster, **kw):
     :return: 0 on success, 1 on failure
     """
     try:
-        config = kw.get("config")
         fs_util_v1 = FsUtilsV1(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
         default_fs = "cephfs"
         subvolume_group_name = "subvolgroup1"
-        client_count = config.get("num_of_clients", 0)
 
-        if client_count > len(clients):
-            log.error(
-                f"Clients required to perform the test is {client_count} but "
-                f"the conf file has only {len(clients)}"
-            )
-            return 1
+        mount_path = "/mnt/cephfs_"
 
-        for client in clients:
-            client.exec_command(
-                sudo=True,
-                cmd="rm -rf /mnt/*/*",
-                long_running=True,
-            )
+        with parallel() as p:
+            for client in clients:
+                p.spawn(remove_directory, client, mount_path)
 
-        for client in clients:
-            client.exec_command(
-                sudo=True,
-                cmd="umount -l /mnt/*",
-                long_running=True,
-            )
-            client.exec_command(
-                sudo=True,
-                cmd="rm -rf /mnt/*",
-                long_running=True,
-            )
+            for client in clients:
+                p.spawn(umount_and_remove, client, mount_path)
 
         list_and_remove_subvolumes(clients[0], default_fs, subvolume_group_name)
 
@@ -64,10 +46,7 @@ def run(ceph_cluster, **kw):
 
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
         for mds in mds_nodes:
-            mds.exec_command(
-                sudo=True,
-                cmd="rm -rf /var/log/ceph/*/ceph-mds.*",
-            )
+            mds.exec_command(sudo=True, cmd="rm -rf /var/log/ceph/*/ceph-mds.*")
 
         log.info("Cleanup process completed successfully")
 
@@ -99,10 +78,9 @@ def check_cephfs_data_usage(client, fs_name):
                     f"Current percent used for cephfs.{fs_name}.data: {percent_used * 100:.2f}%"
                 )
 
-                # Check if the percent used is 0.00%
                 if percent_used == 0:
                     log.info(
-                        f"cephfs.{fs_name}.data's percentage used has been reduced to 0.%."
+                        f"cephfs.{fs_name}.data's percentage used has been reduced to 0%."
                     )
                     return
                 else:
@@ -123,16 +101,13 @@ def list_and_remove_subvolumes(client, default_fs, subvolume_group_name):
     :param default_fs: Name of the CephFS filesystem
     :param subvolume_group_name: Name of the subvolume group
     """
-    # List all subvolumes
     out, rc = client.exec_command(
         sudo=True,
         cmd=f"ceph fs subvolume ls {default_fs} {subvolume_group_name} --format json",
     )
 
-    # Parse the JSON output
     subvolumes = json.loads(out)
 
-    # Iterate over each subvolume and remove it
     for subvolume in subvolumes:
         subvolume_name = subvolume["name"]
         log.info(f"Removing subvolume: {subvolume_name}")
@@ -141,3 +116,40 @@ def list_and_remove_subvolumes(client, default_fs, subvolume_group_name):
             cmd=f"ceph fs subvolume rm {default_fs} {subvolume_name} {subvolume_group_name}",
             long_running=True,
         )
+
+
+def remove_directory(client, mount_path):
+    """
+    Remove files in the specified directory on the client.
+
+    :param client: Client object to execute the command
+    :param mount_path: Path to the directory to be cleaned up
+    """
+    client.exec_command(
+        sudo=True,
+        cmd=f"rm -rf {mount_path}*/*",
+        long_running=True,
+    )
+    log.info(f"Successfully deleted files on {client.node.hostname}")
+
+
+def umount_and_remove(client, mount_path):
+    """
+    Unmount and remove the specified mount path on the client.
+
+    :param client: Client object to execute the command
+    :param mount_path: Path to be unmounted and removed
+    """
+    client.exec_command(
+        sudo=True,
+        cmd=f"umount -l {mount_path}*/",
+        long_running=True,
+    )
+    log.info(f"Successfully unmounted on {client.node.hostname}")
+
+    client.exec_command(
+        sudo=True,
+        cmd=f"rm -rf {mount_path}*/",
+        long_running=True,
+    )
+    log.info(f"Successfully deleted mount path on {client.node.hostname}")

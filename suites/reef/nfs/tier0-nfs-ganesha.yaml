@@ -302,3 +302,22 @@ tests:
           client01 : create_files
           client02 : setuid_bit
           client03 : perform_lookups
+
+  - test:
+      name: NFS-Ganesha test cmount_path param in export file
+      desc: Verify cmount_path entry in export file
+      module: nfs_validate_cmount_path_export_conf.py
+      polarion-id: CEPH-83593816
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+
+  - test:
+      name: NFS-Ganesha export config with Access Type as NONE
+      desc: Verify edit export config with access type as NONE
+      module: nfs_edit_export_config_with_access_none.py
+      polarion-id: CEPH-83593466
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1

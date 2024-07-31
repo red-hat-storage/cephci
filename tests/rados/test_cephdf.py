@@ -12,7 +12,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
-from tests.rados.rados_test_util import get_device_path, wait_for_device
+from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 
@@ -206,12 +206,12 @@ def run(ceph_cluster, **kw):
             assert utils.zap_device(
                 ceph_cluster, host=osd_host.hostname, device_path=dev_path
             )
-            assert wait_for_device(
+            assert wait_for_device_rados(
                 host=osd_host, osd_id=osd_id, action="remove", timeout=1000
             )
 
             out, _ = cephadm.shell(["ceph config set osd osd_crush_initial_weight 0"])
-            assert wait_for_device(host=osd_host, osd_id=osd_id, action="add")
+            assert wait_for_device_rados(host=osd_host, osd_id=osd_id, action="add")
             assert utils.set_osd_in(ceph_cluster, all=True)
             time.sleep(8)  # blind sleep to let osd stats show up
 

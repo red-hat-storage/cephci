@@ -108,7 +108,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_s3cmd.yaml
-        timeout: 300
 
   - test:
       name: S3CMD large object download with GC
@@ -118,7 +117,6 @@ tests:
       config:
         script-name: ../s3cmd/test_large_object_gc.py
         config-file-name: ../../s3cmd/configs/test_large_object_gc.yaml
-        timeout: 300
 
   - test:
       name: S3CMD object header size check
@@ -128,7 +126,6 @@ tests:
       config:
         script-name: ../s3cmd/test_header_size.py
         config-file-name: ../../s3cmd/configs/test_header_size.yaml
-        timeout: 300
 
   - test:
       name: S3CMD bucket stats consistency
@@ -138,7 +135,6 @@ tests:
       config:
         script-name: ../s3cmd/test_bucket_stats.py
         config-file-name: ../../s3cmd/configs/test_bucket_stats.yaml
-        timeout: 300
 
   - test:
       name: Test rgw opslog io though s3cmd
@@ -149,7 +145,6 @@ tests:
         script-name: ../s3cmd/test_rgw_ops_log.py
         config-file-name: ../../s3cmd/configs/test_rgw_opslog.yaml
         run-on-rgw: true # as logs generated on rgw nodes
-        timeout: 300
 
   - test:
       name: Test single delete marker for versioned object using s3cmd
@@ -159,7 +154,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
-        timeout: 300
 
   - test:
       name: S3CMD object download
@@ -169,7 +163,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-        timeout: 300
 
   - test:
       name: Test Ratelimit at global scope
@@ -179,7 +172,6 @@ tests:
       config:
         script-name: ../s3cmd/test_ratelimit_global.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_global.yaml
-        timeout: 300
 
   - test:
       name: Test Ratelimit for versioned buckets
@@ -189,7 +181,6 @@ tests:
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_versioned_bucket.yaml
-        timeout: 300
 
   - test:
       name: Test Ratelimit for tenanted users
@@ -199,7 +190,6 @@ tests:
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml
-        timeout: 300
 
   - test:
       name: Test Ratelimit Debt
@@ -209,7 +199,6 @@ tests:
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_debt.yaml
-        timeout: 300
 
   - test:
       name: Test ratelimit on bucket owner change
@@ -220,7 +209,6 @@ tests:
       config:
         script-name: ../s3cmd/test_ratelimit_bucketowner.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_bucketowner.yaml
-        timeout: 300
 
 # Testing s3cmd malformed url
   - test:
@@ -231,7 +219,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_put.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd cp operation with malformed bucket url
@@ -241,7 +228,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_cp.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd del operation with malformed bucket url
@@ -251,7 +237,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_del.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd get operation with malformed bucket url
@@ -261,7 +246,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_get.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd ls operation with malformed bucket url
@@ -271,7 +255,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_ls.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd multipart operation with malformed bucket url
@@ -281,7 +264,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_multipart.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd mv operation with malformed bucket url
@@ -291,7 +273,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_mv.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd sync operation with malformed bucket url
@@ -301,7 +282,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_sync.yaml
-        timeout: 300
 
   - test:
       name: Test deletlifecycle rule via s3cmd
@@ -311,7 +291,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_deletelifecycle.yaml
-        timeout: 300
 
   - test:
       name: Test by adding almost 10K buckets to the resharding queue
@@ -321,7 +300,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_disable_and_enable_dynamic_resharding_with_1k_bucket.yaml
-        timeout: 300
+        timeout: 5000
 
   - test:
       name: Test multipart upload with failed upload parts using s3cmd and boto3
@@ -331,4 +310,3 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_multipart_upload_with_failed_parts_using_s3cmd_and_boto3.yaml
-        timeout: 500

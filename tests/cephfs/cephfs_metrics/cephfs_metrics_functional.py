@@ -67,7 +67,10 @@ def run(ceph_cluster, **kw):
         # Get initial MDS metrics
         mds_metric = fs_util.get_mds_metrics(client1, 0, fuse_mounting_dir_1)
         log.info("Verifying opened_inodes, pinned_icaps and total_inodes")
-
+        ceph_health, _ = client1.exec_command(sudo=True, cmd="ceph -s")
+        log.info(ceph_health)
+        fs_status, _ = client1.exec_command(sudo=True, cmd="ceph fs status")
+        log.info(fs_status)
         # Initialize dictionaries to store initial inode metrics
         inode_dic = {}
         inode_list = ["opened_inodes", "pinned_icaps", "total_inodes"]
@@ -205,16 +208,13 @@ def run(ceph_cluster, **kw):
         if final_opened_files <= mds_metric4["counters"]["opened_files"]:
             log.error("Failed to verify opened_files")
             return 1
-
         # Kill the tail processes
         try:
             for pid in pids:
                 client1.exec_command(sudo=True, cmd=f"kill {pid}")
         except CommandFailed as e:
             log.error(f"Failed to kill tail processes: {e}")
-
         time.sleep(2)
-
         # Get MDS metrics after killing the tail processes
         final_metrics2 = fs_util.get_mds_metrics(client1, 0, fuse_mounting_dir_1)
         log.info(f"final_metrics after killing tail process: {final_metrics2}")
@@ -238,7 +238,7 @@ def run(ceph_cluster, **kw):
         # Perform write operations
         client1.exec_command(
             sudo=True,
-            cmd=f"dd if=/dev/zero of={fuse_mounting_dir_1}/{rand}_read bs=100M count=10",
+            cmd=f"dd if=/dev/zero of={fuse_mounting_dir_1}/{rand}_read bs=10M count=400",
         )
         client1.exec_command(
             sudo=True, cmd=f"cp {fuse_mounting_dir_1}/{rand}_read /{rand}_copy"
@@ -267,7 +267,10 @@ def run(ceph_cluster, **kw):
             if previous_read >= current_read:
                 log.error(f"Failed to verify {read}")
                 return 1
-
+        ceph_health, _ = client1.exec_command(sudo=True, cmd="ceph -s")
+        log.info(ceph_health)
+        fs_status, _ = client1.exec_command(sudo=True, cmd="ceph fs status")
+        log.info(fs_status)
         return 0
 
     except CommandFailed as e:
@@ -281,6 +284,10 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
+        ceph_health, _ = client1.exec_command(sudo=True, cmd="ceph -s")
+        log.info(ceph_health)
+        fs_status, _ = client1.exec_command(sudo=True, cmd="ceph fs status")
+        log.info(fs_status)
         # Cleanup
         fs_util.client_clean_up(
             "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_1

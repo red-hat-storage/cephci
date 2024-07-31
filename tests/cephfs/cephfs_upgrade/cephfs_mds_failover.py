@@ -28,7 +28,6 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
-        fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
         if not clients:
             log.info(

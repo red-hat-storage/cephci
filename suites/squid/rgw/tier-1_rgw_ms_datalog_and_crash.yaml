@@ -277,7 +277,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -293,7 +292,7 @@ tests:
           config:
             script-name: test_multisite_bucket_granular_sync_policy.py
             config-file-name: test_bucket_granularsync_storage_class_symm.yaml
-            timeout: 300
+            timeout: 5500
 
   - test:
       clusters:
@@ -301,7 +300,6 @@ tests:
           config:
             config-file-name: test_data_omap_offload.yaml
             script-name: test_data_omap_offload.py
-            timeout: 300
             verify-io-on-site: [ "ceph-sec" ]
       desc: Execute datalog omap offload on primary cluster
       module: sanity_rgw_multisite.py
@@ -314,7 +312,6 @@ tests:
           config:
             config-file-name: test_data_omap_offload_multipart.yaml
             script-name: test_data_omap_offload.py
-            timeout: 300
             verify-io-on-site: [ "ceph-sec" ]
       desc: Execute datalog omap offload with multipart objects on primary
       module: sanity_rgw_multisite.py
@@ -331,7 +328,7 @@ tests:
           config:
             script-name: test_multisite_bucket_granular_sync_policy.py
             config-file-name: test_bucket_granularsync_owner_translation_direc.yaml
-            timeout: 300
+            timeout: 5500
 
   - test:
       clusters:
@@ -339,7 +336,6 @@ tests:
           config:
             config-file-name: test_data_omap_offload_versioned_bucket.yaml
             script-name: test_data_omap_offload.py
-            timeout: 300
             verify-io-on-site: [ "ceph-sec" ]
       desc: Execute datalog omap offload on versioned bucket on primary
       module: sanity_rgw_multisite.py
@@ -356,7 +352,6 @@ tests:
           config:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_datalog_trim_command.yaml
-            timeout: 300
 
   - test:
       name: bucket granular sync policy on bucket with flow directional and storage class
@@ -368,7 +363,7 @@ tests:
           config:
             script-name: test_multisite_bucket_granular_sync_policy.py
             config-file-name: test_bucket_granularsync_storage_class_direc.yaml
-            timeout: 300
+            timeout: 5500
 
   - test:
       name: bucket creation on primary for crash check
@@ -380,7 +375,6 @@ tests:
           config:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_bucket_sync_cmd_crash.yaml
-            timeout: 300
             verify-io-on-site: ["ceph-sec"]
 
   - test:
@@ -393,5 +387,4 @@ tests:
           config:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_bucket_sync_cmd_crash.yaml
-            timeout: 300
             verify-io-on-site: ["ceph-pri"]

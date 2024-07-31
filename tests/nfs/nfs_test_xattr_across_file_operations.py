@@ -5,6 +5,7 @@ from utility.log import Log
 
 log = Log(__name__)
 
+
 def fetch_xattr(client, file_path):
 
     # Fetch the extended attribute of the file
@@ -18,13 +19,12 @@ def fetch_xattr(client, file_path):
         log.info(f"Attribute Name: {attr_name}")
         log.info(f"Attribute Value: {attr_value}")
         if attr_name == "myattr" and attr_value == "value":
-            log.info(
-                "Validated :Attribute 'myattr' is set to 'value' in the output."
-            )
+            log.info("Validated :Attribute 'myattr' is set to 'value' in the output.")
             break
         else:
             log.info("Attribute 'myattr' set to 'value' not found in the output.")
             return 1
+
 
 def run(ceph_cluster, **kw):
     """Verify the extended attributes accross filesystem operation - Copy and mv
@@ -91,14 +91,18 @@ def run(ceph_cluster, **kw):
 
         # Perform cp operation and validate the extended attribute
         copy_filename = "Testfile_cp"
-        cmd = f"cp --preserve=all {nfs_mount}/{move_filename} {nfs_mount}/{copy_filename}"
+        cmd = (
+            f"cp --preserve=all {nfs_mount}/{move_filename} {nfs_mount}/{copy_filename}"
+        )
         clients[0].exec_command(cmd=cmd, sudo=True)
 
         # Fetch the extended attribute of the file
         fetch_xattr(client=clients[0], file_path=f"{nfs_mount}/{copy_filename}")
 
     except Exception as e:
-        log.error(f"Failed to perform xattr operation validation across filesystem operation : {e}")
+        log.error(
+            f"Failed to perform xattr operation validation across filesystem operation : {e}"
+        )
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
         return 1

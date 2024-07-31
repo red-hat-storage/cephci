@@ -77,7 +77,14 @@ def smb_load(
         process.join()
 
     # cleanup
-    cleanup(client, load_test_config)
+    cleanup(
+        client,
+        smb_server,
+        smb_share,
+        smb_user_name,
+        smb_user_password,
+        load_test_config,
+    )
 
 
 def set_smb2_02(smb_server):
@@ -318,7 +325,9 @@ def delete(smbclient, load_test_config, process):
         raise OperationFailedError(f"delete operation failed, Error {e}")
 
 
-def cleanup(client, load_test_config):
+def cleanup(
+    client, smb_server, smb_share, smb_user_name, smb_user_password, load_test_config
+):
     """clean up
     Args:
         client (obj): client obj
@@ -326,7 +335,10 @@ def cleanup(client, load_test_config):
     """
     try:
         load_dir = load_test_config["load_dir"]
-        cmd = f'smbclient -U user1%passwd //10.0.209.9/share1 -c "deltree {load_dir}"'
+        cmd = (
+            f"smbclient -U {smb_user_name}%{smb_user_password} "
+            f"//{smb_server.ip_address}/{smb_share} -c 'deltree {load_dir}'"
+        )
         time.sleep(3)
         client.exec_command(
             sudo=True,

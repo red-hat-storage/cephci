@@ -81,7 +81,7 @@ def run(ceph_cluster, **kw):
             f"The pg number is -{pg_num}"
         )
         delete_and_healthCheck(rados_obj, pool_name)
-
+        log.info("=========Scenario1: Test completed===========")
         log.info(
             "Scenario2: Verify that the pg_num should not decrease after setting the norecover flag"
         )
@@ -97,8 +97,13 @@ def run(ceph_cluster, **kw):
                     f"Scenario2:-The pool pg num is increased to the - {final_pg_num}"
                 )
                 break
+            time.sleep(20)
         old_pg_num = pool_obj.get_pg_autoscaler_value(pool_name, "pg_num_target")
         log.info(f"Scenario2:The current pg number is -{old_pg_num}")
+        utils.configure_osd_flag(ceph_cluster, "set", "norecover")
+        log.info("Scenario2:The norecover is set on the cluster")
+        # Removed the bulk flag
+        pool_obj.rm_bulk_flag(pool_name=pool_name)
         rados_obj.log_cluster_health()
         rados_obj.bench_write(
             pool_name=pool_name, byte_size=1024, rados_write_duration=10
@@ -135,7 +140,7 @@ def run(ceph_cluster, **kw):
             f"The pg number is -{pg_num}"
         )
         delete_and_healthCheck(rados_obj, pool_name)
-
+        log.info("=========Scenario2: Test completed===========")
         log.info(
             "Scenario3:Modify the pg number manually and verify that the pg_num should not increase "
             "after setting the norecover flag"
@@ -169,6 +174,7 @@ def run(ceph_cluster, **kw):
             f"Scenario3:The pg_num is increased after unsetting the recover flag.The pg_num is -{pg_num}"
         )
         method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        log.info("=========Scenario3: Test completed===========")
         log.info(
             "Scenario4:Modify the pg number manually and verify that the pg_num should not decrease "
             "after setting the norecover flag"
@@ -210,7 +216,7 @@ def run(ceph_cluster, **kw):
             f"The pg number is -{pg_num}"
         )
         delete_and_healthCheck(rados_obj, pool_name)
-
+        log.info("=========Scenario4: Test completed===========")
         log.info(
             "Scenario5:Checking the recovery of cluster after setting norecover flag"
         )
@@ -254,6 +260,7 @@ def run(ceph_cluster, **kw):
             "Scenario5:Recovery not stated on the cluster after setting the recover flag"
         )
         delete_and_healthCheck(rados_obj, pool_name)
+        log.info("=========Scenario5: Test completed===========")
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
@@ -289,6 +296,7 @@ def check_status(pool_object, current_pg_num, pool_name):
         log.info(f"The {pool_name} pg number is -{new_pg_num}")
         if new_pg_num != current_pg_num:
             return False
+        time.sleep(30)
     return True
 
 

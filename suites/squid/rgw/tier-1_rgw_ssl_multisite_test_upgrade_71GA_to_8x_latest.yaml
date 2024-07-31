@@ -293,7 +293,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -311,7 +310,6 @@ tests:
             script-name: test_multisite_syncpolicy_prefix_tag.py
             config-file-name: test_multisite_syncpolicy_prefix_tag.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
 
 
   - test:
@@ -321,7 +319,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: test to create "M" buckets and "N" objects with multipart upload
       module: sanity_rgw_multisite.py
       name: multipart upload of M buckets with N objects
@@ -334,7 +331,6 @@ tests:
             script-name: test_swift_basic_ops.py
             config-file-name: test_swift_basic_ops.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: Test object operations with swift
       module: sanity_rgw_multisite.py
       name: swift basic operations pre upgrade
@@ -348,7 +344,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered.yaml
-            timeout: 300
       desc: test duration for ordered listing of bucket with top level objects
       module: sanity_rgw_multisite.py
       name: ordered listing of buckets pre upgrade
@@ -361,7 +356,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
       desc: Create bucket for Testing dynamic resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
       name: Create bucket for Testing dynamic resharding brownfield scenario after upgrade
@@ -374,7 +368,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_multisite_manual_resharding_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
       desc: Create bucket for Testing manual resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
       name: Create bucket for Testing manual resharding brownfield scenario after upgrade
@@ -411,7 +404,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            timeout: 300
 
   - test:
       name: Granular multisite sync policy group transition
@@ -423,7 +415,6 @@ tests:
           config:
             script-name: test_multisite_sync_policy.py
             config-file-name: test_sync_policy_state_change.yaml
-            timeout: 300
 
   - test:
       clusters:
@@ -432,7 +423,6 @@ tests:
             script-name: test_swift_basic_ops.py
             config-file-name: test_swift_object_expire_op.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 500
       desc: test object expiration with swift
       module: sanity_rgw_multisite.py
       name: swift object expiration post upgrade
@@ -445,7 +435,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
       desc: Test dynamic resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
       name: Test dynamic resharding brownfield scenario after upgrade
@@ -458,7 +447,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_multisite_manual_resharding_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
       desc: Test manual resharding brownfield scenario after upgrade
       module: sanity_rgw_multisite.py
       name: Test manual resharding brownfield scenario after upgrade

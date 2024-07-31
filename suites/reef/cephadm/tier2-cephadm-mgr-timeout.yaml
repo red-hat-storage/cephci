@@ -1,0 +1,105 @@
+#===============================================================================================
+# Tier-level: 2
+# Test-Case:
+#      Validate that cephadm commands get timed out after setting the
+#      default_cephadm_command_timeout
+#
+# Cluster Configuration:
+#   conf/reef/cephadm/tier-0.yaml
+#
+# Test steps:
+#   (1) Bootstrap cluster with all services
+#   (2) Set default_cephadm_command_timeout using below command
+#       - # ceph config set mgr mgr/cephadm/default_cephadm_command_timeout 120
+#   (3) Download the 'cephadm-hold-lock.py' script and execute it using below command
+#       - # python3 cephadm-hold-lock.py hold-lock --fsid 4f7cd5d0-263b-11ee-9d53-fa163e26fc8c &
+#   (4) Check that hold-lock process is running under 'ps aux'
+#   (5) Refresh devices using below command
+#       - # ceph orch device ls --refresh
+#   (6) Check that the ceph-volume inventory process is running under 'ps aux'
+#   (7) Wait for the length of time the timeout is set in the step (2) and check if the command
+#       gets timed out using below command
+#       - # ceph health detail
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Test mgr cephadm command timeout
+      desc: Test mgr cephadm command timeout
+      polarion-id: CEPH-83593815
+      module: test_cephadm_mgr_timeout.py

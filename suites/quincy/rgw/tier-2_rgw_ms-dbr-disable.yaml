@@ -204,7 +204,6 @@ tests:
             script-name: user_create.py
             config-file-name: tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create tenanted user
       module: sanity_rgw_multisite.py
       name: create tenanted user

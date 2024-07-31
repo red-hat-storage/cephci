@@ -1,5 +1,9 @@
 from smb_load import smb_load
-from smb_operations import deploy_smb_service_imperative, smb_cleanup
+from smb_operations import (
+    deploy_smb_service_imperative,
+    get_samba_pid_and_memory,
+    smb_cleanup,
+)
 
 from utility.log import Log
 
@@ -80,6 +84,14 @@ def run(ceph_cluster, **kw):
             custom_dns,
         )
 
+        # PID and RSS value before load test
+        samba_servers_info = get_samba_pid_and_memory(smb_nodes[0])
+        inital_pid = samba_servers_info[smb_nodes[0].hostname][0]
+        inital_rss = round(
+            int(samba_servers_info[smb_nodes[0].hostname][1]) / (1024**2), 3
+        )
+        log.info(f"Inital process and rss value PID: {inital_pid} RSS: {inital_rss} GB")
+
         # Load testing
         smb_load(
             installer,
@@ -90,6 +102,21 @@ def run(ceph_cluster, **kw):
             smb_user_password,
             load_test_config,
         )
+
+        # PID and RSS value after load test
+        samba_servers_info = get_samba_pid_and_memory(smb_nodes[0])
+        final_pid = samba_servers_info[smb_nodes[0].hostname][0]
+        final_rss = round(
+            int(samba_servers_info[smb_nodes[0].hostname][1]) / (1024**2), 3
+        )
+        log.info(f"Final process and rss value PID: {final_pid} RSS: {final_rss} GB")
+
+        if inital_pid != final_pid:
+            log.error(
+                f"SMBD pid not matching after load test inital pid: {inital_pid}, final pid: {final_pid}"
+            )
+            return 1
+
     except Exception as e:
         log.error(f"Failed to deploy samba with auth_mode 'user' : {e}")
         return 1

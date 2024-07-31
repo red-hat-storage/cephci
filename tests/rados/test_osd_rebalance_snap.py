@@ -7,7 +7,7 @@ from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.rados_test_util import (
     create_pools,
     get_device_path,
-    wait_for_device,
+    wait_for_device_rados,
     write_to_pools,
 )
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
@@ -77,10 +77,10 @@ def run(ceph_cluster, **kw):
             wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
         )
         method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
-        method_should_succeed(wait_for_device, host, osd_id, action="remove")
+        method_should_succeed(wait_for_device_rados, host, osd_id, action="remove")
 
         utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
-        method_should_succeed(wait_for_device, host, osd_id, action="add")
+        method_should_succeed(wait_for_device_rados, host, osd_id, action="add")
 
         snapshots = []
         if pool.get("snapshot", "False"):
@@ -127,7 +127,7 @@ def run(ceph_cluster, **kw):
         if osd_id not in active_osd_list:
             utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
             utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
-            method_should_succeed(wait_for_device, host, osd_id, action="add")
+            method_should_succeed(wait_for_device_rados, host, osd_id, action="add")
 
         utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
         rados_obj.change_recovery_threads(config=pool, action="rm")

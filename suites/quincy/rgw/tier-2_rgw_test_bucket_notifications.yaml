@@ -73,7 +73,6 @@ tests:
         install_start_kafka: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
-        timeout: 300
 
   - test:
       name: notify copy events with kafka_broker_persistent and verify details of event record
@@ -84,7 +83,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_copy.yaml
-        timeout: 300
 
   # kafka broker type none with persistent flag enabled
 
@@ -97,7 +95,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_persistent_delete.yaml
-        timeout: 300
 
   - test:
       name: notify copy events with kafka_none_persistent
@@ -108,7 +105,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_persistent_copy.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none_persistent
@@ -119,7 +115,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_persistent_multipart.yaml
-        timeout: 300
 
   # kafka broker type none
 
@@ -132,7 +127,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_delete.yaml
-        timeout: 300
 
   - test:
       name: notify copy events with kafka_none
@@ -143,7 +137,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_copy.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none and verify timestamp of event record
@@ -154,7 +147,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_none_multipart.yaml
-        timeout: 300
 
   # kafka broker type broker
 
@@ -167,7 +159,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_delete.yaml
-        timeout: 300
 
   - test:
       name: notify copy events with kafka_broker
@@ -178,7 +169,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_copy.yaml
-        timeout: 300
 
   - test:
       name: notify on copy, delete events with kafka_broker_persistent configured with metadata filter
@@ -189,7 +179,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_filter.yaml
-        timeout: 300
 
   - test:
       name: notify on copy, delete events with kafka_broker_persistent on manually resharded buckets
@@ -200,7 +189,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_manual_reshard.yaml
-        timeout: 300
 
   - test:
       name: notify on copy, delete events with kafka_broker_persistent on dynamically resharded buckets
@@ -211,7 +199,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_dynamic_reshard.yaml
-        timeout: 300
 
   - test:
       name: put empty bucket notifications
@@ -222,7 +209,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_empty_bucket_notification_kafka_broker.yaml
-        timeout: 300
 
   - test:
       name: check-ceph-health

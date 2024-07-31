@@ -382,3 +382,33 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+
+  - test:
+      name: NFS-Ganesha test disk utilization with different file sizes
+      desc: Verify space allocation with different file sizes
+      module: nfs_test_space_allocation_diff_sizes.py
+      polarion-id: CEPH-83593414
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: NFS-Ganesha system correctly handles allocation requests beyond the current EOF
+      desc: Verify space allocation beyond file size
+      module: nfs_test_allocation_beyond_size.py
+      polarion-id: CEPH-83593489
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: NFS-Ganesha test cmount_path param in export file
+      desc: Verify cmount_path entry in export file
+      module: nfs_validate_cmount_path_export_conf.py
+      polarion-id: CEPH-83593816
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
