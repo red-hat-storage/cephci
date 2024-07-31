@@ -5,7 +5,7 @@
 #      default_cephadm_command_timeout
 #
 # Cluster Configuration:
-#   conf/quincy/cephadm/tier-0.yaml
+#   conf/squid/cephadm/1admin-4node-1client-cluster.yaml
 #
 # Test steps:
 #   (1) Bootstrap cluster with all services
