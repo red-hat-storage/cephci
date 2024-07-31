@@ -25,3 +25,15 @@ class Daemon(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def rotate_key(self, daemon_name):
+        """
+        Rotates the key for a given daemon
+        Args:
+            daemon_name (str) : daemon name
+        """
+        cmd = f"{self.base_cmd} rotate-key {daemon_name}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
