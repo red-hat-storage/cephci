@@ -151,4 +151,11 @@ tests:
       desc: Verify ceph orch ps output does show an incorrect amount of used memory for OSDs
       module: test_verify_incorrect_mem_usage.py
       polarion-id: CEPH-83584007
+      abort-on-fail: false
+
+  - test:
+      name: Test OSD blocklisted clients
+      desc: Verify ceph OSD blocklist client list
+      module: test_osd_blocklist_operations.py
+      polarion-id: CEPH-83593817
       abort-on-fail: true
