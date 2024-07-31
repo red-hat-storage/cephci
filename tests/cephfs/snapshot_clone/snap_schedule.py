@@ -66,11 +66,11 @@ def run(ceph_cluster, **kw):
         }
         for osd_cmd in osd_cmds:
             cmd = f"ceph config set osd {osd_cmd} {osd_cmds[osd_cmd]}"
-            client1.exec_command(sudo=True, cmd=cmd)
+            client1.exec_command(sudo=True, cmd=cmd, check_ec=False)
         log.info("Verify OSD config")
         for osd_cmd in osd_cmds:
             cmd = f"ceph config get osd {osd_cmd}"
-            out, _ = client1.exec_command(sudo=True, cmd=cmd)
+            out, _ = client1.exec_command(sudo=True, cmd=cmd, check_ec=False)
             log.info(out)
             if str(osd_cmds[osd_cmd]) not in str(out):
                 log.warning(

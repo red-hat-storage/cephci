@@ -54,12 +54,13 @@ def run(ceph_cluster, **kw):
         )
         cluster_id = f"test-nfs_{rand}"
         path = "/"
+        export_id = "1"
         fs_name = "cephfs"
         bind = "/ceph"
         user_id = (
             f"nfs.{cluster_id}.{fs_name}"
             if int(build.split(".")[0]) > 7
-            else f"nfs.{cluster_id}.{fs_name}"
+            else f"nfs.{cluster_id}.{export_id}"
         )
 
         passed = []
