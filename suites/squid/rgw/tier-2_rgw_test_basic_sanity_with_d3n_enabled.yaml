@@ -71,14 +71,12 @@ tests:
       config:
         script-name: test_d3n_cache.py
         config-file-name: test_d3n_cache_enable.yaml
-        timeout: 500
         run-on-rgw: true
 
   - test:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-        timeout: 300
         install_common: false
         run-on-rgw: true
       desc: test to create "M" no of buckets and "N" no of objects with multipart upload
@@ -90,7 +88,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects.yaml
-        timeout: 300
         install_common: false
         run-on-rgw: true
       desc: test to create "M" no of buckets and "N" no of objects
@@ -107,7 +104,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_multiple_delete_marker.yaml
-        timeout: 300
 
   - test:
       name: object expiration for versioned buckets with filter Prefix test multiple rules.
@@ -117,7 +113,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_multiple_rule_prefix_current_days.yaml
-        timeout: 300
 
   - test:
       name: Basic ACLs Test
@@ -129,7 +124,6 @@ tests:
         run-on-rgw: true
         script-name: test_acls.py
         config-file-name: test_acls.yaml
-        timeout: 300
 
   - test:
       name: Test Rate limits on a User and Bucket level using s3cmd
@@ -140,7 +134,6 @@ tests:
         run-on-rgw: true
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_rate_limit.yaml
-        timeout: 300
 
   - test:
       name: Manual Resharding tests
@@ -150,4 +143,3 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding.yaml
-        timeout: 500

@@ -76,7 +76,6 @@ tests:
         configure_kafka_security: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_ssl_kafka_broker.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_broker and SSL security
@@ -87,7 +86,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_ssl_kafka_broker_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify put,copy,delete events with kafka_broker_persistent and SSL security
@@ -98,7 +96,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_ssl_kafka_broker_persistent.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_broker_persistent and SSL security
@@ -109,7 +106,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_ssl_kafka_broker_persistent_multipart.yaml
-        timeout: 300
 
   # kafka broker type none
 
@@ -122,7 +118,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_ssl_kafka_none.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none and SSL security
@@ -133,7 +128,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_ssl_kafka_none_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify put,copy,delete events with kafka_none_persistent and SSL security
@@ -144,7 +138,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_ssl_kafka_none_persistent.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_none_persistent and SSL security
@@ -155,7 +148,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_ssl_kafka_none_persistent_multipart.yaml
-        timeout: 300
 
   - test:
       name: check-ceph-health

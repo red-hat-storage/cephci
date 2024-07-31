@@ -210,4 +210,3 @@ tests:
         test-version: v2
         script-name: test_byte_range.py
         config-file-name: test_byte_range.yaml
-        timeout: 500

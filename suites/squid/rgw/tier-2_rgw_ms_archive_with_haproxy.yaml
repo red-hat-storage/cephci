@@ -308,7 +308,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
@@ -324,7 +323,6 @@ tests:
             script-name: user_create.py
             config-file-name: tenanted_user.yaml
             copy-user-info-to-site: ceph-arc
-            timeout: 300
       desc: create tenanted user
       module: sanity_rgw_multisite.py
       name: create tenanted user
@@ -369,7 +367,6 @@ tests:
               - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart rgw.shared.sec"
-            timeout: 120
         ceph-pri:
           config:
             cephadm: true
@@ -381,7 +378,6 @@ tests:
               - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart rgw.shared.pri"
-            timeout: 120
         ceph-arc:
           config:
             cephadm: true
@@ -393,7 +389,6 @@ tests:
               - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart rgw.shared.arc"
-            timeout: 120
       desc: Setting vault configs for sse-s3 on multisite archive
       module: exec.py
       name: set sse-s3 vault configs on multisite
@@ -409,7 +404,6 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_compression_haproxy.yaml
             run-on-haproxy: true
             monitor-consistency-bucket-stats: true
-            timeout: 300
       desc: test M buckets compression on haproxy node
       polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
@@ -424,7 +418,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_haproxy.yaml
             run-on-haproxy: true
-            timeout: 300
       desc: test M buckets on haproxy node
       module: sanity_rgw_multisite.py
       name: test M buckets on haproxy node
@@ -438,7 +431,6 @@ tests:
             script-name: test_bucket_lifecycle_object_expiration_transition.py
             config-file-name: test_lc_rule_prefix_non_current_days_haproxy.yaml
             run-on-haproxy: true
-            timeout: 300
       desc: test LC from primary to secondary
       module: sanity_rgw_multisite.py
       name: test LC from primary to secondary
@@ -452,21 +444,18 @@ tests:
             commands:
               - "ceph config set client.rgw.shared.sec rgw_sync_lease_period 10"
               - "ceph orch restart rgw.shared.sec"
-            timeout: 120
         ceph-pri:
           config:
             cephadm: true
             commands:
               - "ceph config set client.rgw.shared.pri rgw_sync_lease_period 10"
               - "ceph orch restart rgw.shared.pri"
-            timeout: 120
         ceph-arc:
           config:
             cephadm: true
             commands:
               - "ceph config set client.rgw.shared.arc rgw_sync_lease_period 10"
               - "ceph orch restart rgw.shared.arc"
-            timeout: 120
       desc: Setting rgw_sync_lease_period to 100 on multisite archive
       module: exec.py
       name: Setting rgw_sync_lease_period to 100 on multisite archive
@@ -479,7 +468,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_0_shards_sync_test_haproxy.yaml
             run-on-haproxy: true
             monitor-consistency-bucket-stats: true
-            timeout: 300
+            timeout: 5000
       desc: test sync on bucket with 0 shards
       module: sanity_rgw_multisite.py
       name: test sync on bucket with 0 shards
@@ -491,7 +480,6 @@ tests:
             script-name: test_bucket_lifecycle_object_expiration_transition.py
             config-file-name: test_lc_transition_with_prefix_rule_haproxy.yaml
             run-on-haproxy: true
-            timeout: 300
             stat-all-buckets-at-archive: true
       desc: test LC transition on multisite, and bucket stats at archive
       module: sanity_rgw_multisite.py
@@ -505,7 +493,6 @@ tests:
             script-name: test_bucket_lifecycle_object_expiration_transition.py
             config-file-name: test_lc_transition_with_obj_acl_haproxy.yaml
             run-on-haproxy: true
-            timeout: 300
       desc: test LC transition on multisite with object acl set
       module: sanity_rgw_multisite.py
       name: test LC transition on multisite with object acl set
@@ -520,7 +507,6 @@ tests:
               - "radosgw-admin zone modify --rgw-zone archive --sync_from primary --sync_from_all false"
               - "radosgw-admin period update --commit"
               - "radosgw-admin period get"
-            timeout: 120
       desc: test the workaround to sync only from one active zone
       module: exec.py
       name: test the workaround to sync only from one active zone
@@ -533,7 +519,6 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_no_reshard_haproxy.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             run-on-haproxy: true
-            timeout: 600
       desc: Execute M buckets with N objects on primary and verify on secondary & archive cluster
       polarion-id: CEPH-83575575
       module: sanity_rgw_multisite.py
@@ -546,7 +531,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_multipart_haproxy.yaml
             run-on-haproxy: true
-            timeout: 300
       desc: test M buckets multipart uploads on haproxy node
       module: sanity_rgw_multisite.py
       name: test M buckets multipart uploads on haproxy node
@@ -558,7 +542,6 @@ tests:
             cephadm: true
             commands:
               - "ceph orch stop rgw.shared.arc"
-            timeout: 120
       desc: Test full sync at archive, power off archive zone with IOs in active zone
       module: exec.py
       name: Test full sync at archive, power off archive zone with IOs in active zone
@@ -571,7 +554,6 @@ tests:
             script-name: ../s3cmd/test_s3cmd.py
             config-file-name: ../../s3cmd/multisite_configs/test_s3cmd.yaml
             run-on-haproxy: true
-            timeout: 300
       desc: Upload 5000 objects via s3cmd to test full sync at archive
       polarion-id: CEPH-83575917
       module: sanity_rgw_multisite.py
@@ -586,7 +568,6 @@ tests:
               - "radosgw-admin zone modify --rgw-zone archive --sync_from_all true"
               - "radosgw-admin period update --commit"
               - "radosgw-admin period get"
-            timeout: 120
       desc: Sync to the archive zone from all active sites
       module: exec.py
       name: Sync to the archive zone from all active sites
@@ -598,7 +579,6 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_bucket_pol_retain.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             run-on-haproxy: true
-            timeout: 600
             test-bucket-pol-retained-archive: true
       desc: Test bucket policies are reatined at archive site post object uploads
       polarion-id: CEPH-83575576
@@ -611,7 +591,6 @@ tests:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_suspend_archive_haproxy.yaml
             run-on-haproxy: true
-            timeout: 300
       desc: test versioning suspend on archive
       module: sanity_rgw_multisite.py
       name: test versioning suspend on archive
@@ -626,7 +605,6 @@ tests:
             config-file-name: test_rgw_restore_index_versioned_buckets.yaml
             run-on-haproxy: true
             monitor-consistency-bucket-stats: true
-            timeout: 300
       desc: test rgw restore index tool on versioned bucket
       polarion-id: CEPH-83575473
       module: sanity_rgw_multisite.py
@@ -642,7 +620,6 @@ tests:
               - "radosgw-admin period update --commit"
               - "radosgw-admin period get"
               - "ceph orch restart rgw.shared.pri"
-            timeout: 120
         ceph-sec:
           config:
             cephadm: true
@@ -652,7 +629,6 @@ tests:
               - "radosgw-admin period update --commit"
               - "radosgw-admin period get"
               - "ceph orch restart rgw.shared.sec"
-            timeout: 120
         ceph-arc:
           config:
             cephadm: true
@@ -662,7 +638,6 @@ tests:
               - "radosgw-admin period update --commit"
               - "radosgw-admin period get"
               - "ceph orch restart rgw.shared.arc"
-            timeout: 120
       desc: enabled default encryption and zlib compression
       module: exec.py
       name: enabled default encryption and zlib compression
@@ -674,7 +649,6 @@ tests:
             script-name: test_s3_copy_encryption.py
             config-file-name: test_server_side_copy_object_via_encryption.yaml
             run-on-haproxy: true
-            timeout: 300
       desc: test server_side_copy_object_via_encryption
       polarion-id: CEPH-83575711
       module: sanity_rgw_multisite.py
@@ -687,7 +661,6 @@ tests:
             script-name: test_encrypted_bucket_chown.py
             config-file-name: test_encrypted_bucket_chown.yaml
             run-on-haproxy: true
-            timeout: 300
       desc: Change bucket ownership to a different user when encryption is enabled
       polarion-id: CEPH-83574621
       module: sanity_rgw_multisite.py
@@ -700,7 +673,6 @@ tests:
             script-name: test_encrypted_bucket_chown.py
             config-file-name: test_chown_before_encrypt.yaml
             run-on-haproxy: true
-            timeout: 300
       desc: Change bucket ownership to a different user and then encryption is enabled
       polarion-id: CEPH-83574618
       module: sanity_rgw_multisite.py

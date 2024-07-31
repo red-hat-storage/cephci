@@ -256,7 +256,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -284,7 +283,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_multipart_archive_colocated.yaml
             run-on-haproxy: true
-            timeout: 300
       desc: Perform IOs and test bucket versioned at the colocated archive zone
       module: sanity_rgw_multisite.py
       name: Perform IOs and test bucket versioned at the colocated archive zone

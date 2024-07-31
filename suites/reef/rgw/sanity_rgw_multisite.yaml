@@ -210,7 +210,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
@@ -227,7 +226,6 @@ tests:
             script-name: test_check_sharding_enabled.py
             config-file-name: test_check_sharding_enabled_greenfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
   - test:
       clusters:
         ceph-pri:
@@ -235,7 +233,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_multisite_manual_resharding_greenfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
-            timeout: 300
       desc: Test manual resharding on greenfield deployment
       abort-on-fail: true
       module: sanity_rgw_multisite.py
@@ -247,7 +244,6 @@ tests:
           config:
             config-file-name: test_bucket_create_del.yaml
             script-name: test_Mbuckets_with_Nobjects.py
-            timeout: 300
       desc: bucket create and delete operation
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -260,7 +256,6 @@ tests:
             config-file-name: test_multisite_async_data_notifications.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: test_async_data_notifications_on_primary
       polarion-id: CEPH-83575231
       module: sanity_rgw_multisite.py
@@ -276,7 +271,6 @@ tests:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_unordered.yaml
             monitor-consistency-bucket-stats: true
-            timeout: 300
   - test:
       name: test aws4 signature version on primary
       desc: test_Mbuckets_with_Nobjects_aws4 on primary
@@ -287,7 +281,6 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
-            timeout: 300
   - test:
       name: test encryption on primary
       desc: test_Mbuckets_with_Nobjects_enc on primary
@@ -299,7 +292,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
             config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
-            timeout: 300
   - test:
       name: multipart upload on primary
       desc: test_Mbuckets_with_Nobjects_multipart on primary
@@ -311,7 +303,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-            timeout: 300
   - test:
       name: LargeObjGet_GC on primary
       desc: test_LargeObjGet_GC on primary
@@ -322,7 +313,6 @@ tests:
           config:
             script-name: test_LargeObjGet_GC.py
             config-file-name: test_LargeObjGet_GC.yaml
-            timeout: 300
   - test:
       name: modify bucket policy on primary
       desc: test_bucket_policy_modify.yaml on primary
@@ -334,7 +324,6 @@ tests:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_bucket_policy_modify.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
   - test:
       name: test encryption on primary
       desc: test_Mbuckets_with_Nobjects_enc on primary
@@ -346,7 +335,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
             config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
-            timeout: 300
   - test:
       name:  datalog omap offload on secondary
       desc: Execute datalog omap offload on secondary
@@ -358,7 +346,6 @@ tests:
             script-name: test_data_omap_offload.py
             config-file-name: test_data_omap_offload.yaml
             verify-io-on-site: ["ceph-pri"]
-            timeout: 300
   - test:
       name: datalog trim command with delete marker enabled on Primary
       desc: Execute datalog trim command with delete marker enabled on Primary
@@ -369,7 +356,6 @@ tests:
           config:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_datalog_trim_command.yaml
-            timeout: 300
             verify-io-on-site: ["ceph-sec"]
   - test:
       clusters:
@@ -402,7 +388,6 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart {service_name:shared.sec}"
-            timeout: 120
         ceph-pri:
           config:
             cephadm: true
@@ -414,7 +399,6 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart {service_name:shared.pri}"
-            timeout: 120
       desc: Setting vault configs for sse-s3 on multisite
       module: exec.py
       name: set sse-s3 vault configs on multisite
@@ -425,7 +409,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-            timeout: 300
       desc: test_sse_s3_per_bucket_encryption_normal_object_upload
       module: sanity_rgw_multisite.py
       name: sse-s3 per bucket encryption test
@@ -436,7 +419,6 @@ tests:
           config:
             script-name: test_bucket_lifecycle_object_expiration_transition.py
             config-file-name: test_sse_kms_per_bucket_multipart_object_download_after_transition.yaml
-            timeout: 300
       desc: test_sse_kms_per_bucket_multipart_object_download_after_transition
       module: sanity_rgw_multisite.py
       name: test_sse_kms_per_bucket_multipart_object_download_after_transition
@@ -451,7 +433,6 @@ tests:
             install_start_kafka: true
             script-name: test_bucket_notifications.py
             config-file-name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard.yaml
-            timeout: 300
       desc: test_sse_s3_per_bucket_with_notifications_dynamic_reshard
       module: sanity_rgw_multisite.py
       name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard
@@ -462,7 +443,6 @@ tests:
           config:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_sse_kms_per_bucket_with_bucket_policy.yaml
-            timeout: 300
       desc: test_sse_kms_per_bucket_with_bucket_policy
       module: sanity_rgw_multisite.py
       name: test_sse_kms_per_bucket_with_bucket_policy
@@ -473,7 +453,6 @@ tests:
           config:
             script-name: test_sts_using_boto.py
             config-file-name: test_sse_s3_per_object_with_sts.yaml
-            timeout: 300
       desc: test_sse_s3_per_object_with_sts
       module: sanity_rgw_multisite.py
       name: test_sse_s3_per_object_with_sts
@@ -496,7 +475,6 @@ tests:
               - "echo '\nextra_container_args:\n - \"-v /usr/local/gklm:/usr/local/gklm\"' >> /root/rgw_spec.yaml"
               - "ceph orch apply -i /root/rgw_spec.yaml"
               - "sleep 20"
-            timeout: 120
         ceph-sec:
           config:
             role: rgw
@@ -509,7 +487,6 @@ tests:
               - "echo '\nextra_container_args:\n - \"-v /usr/local/gklm:/usr/local/gklm\"' >> /root/rgw_spec.yaml"
               - "ceph orch apply -i /root/rgw_spec.yaml"
               - "sleep 20"
-            timeout: 120
       desc: Setting up certs, mount the certs path and redeploy rgw
       module: exec.py
       name: Setting up certs, mount the certs path and redeploy rgw
@@ -526,7 +503,6 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_cert /usr/local/gklm/rgwselfsigned.cert"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_key /usr/local/gklm/rgwselfsigned.key"
               - "ceph orch restart {service_name:shared.pri}"
-            timeout: 120
         ceph-sec:
           config:
             cephadm: true
@@ -537,7 +513,6 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_cert /usr/local/gklm/rgwselfsigned.cert"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_key /usr/local/gklm/rgwselfsigned.key"
               - "ceph orch restart {service_name:shared.sec}"
-            timeout: 120
       desc: Setting sse_kms configs with kmip backend for gklm
       module: exec.py
       name: Setting sse_kms configs with kmip backend for gklm
@@ -550,7 +525,6 @@ tests:
           config:
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_kmip_gklm_per_bucket_encryption_normal_object_upload.yaml
-            timeout: 300
       desc: test_sse_kms_kmip_gklm_per_bucket_encryption_normal_object_upload
       module: sanity_rgw_multisite.py
       name: test_sse_kms_kmip_gklm_per_bucket_encryption_normal_object_upload
@@ -561,7 +535,6 @@ tests:
           config:
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_kmip_gklm_per_bucket_encryption_multipart_object_upload.yaml
-            timeout: 300
       desc: test_sse_kms_kmip_gklm_per_bucket_encryption_multipart_object_upload
       module: sanity_rgw_multisite.py
       name: test_sse_kms_kmip_gklm_per_bucket_encryption_multipart_object_upload
@@ -572,7 +545,6 @@ tests:
           config:
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_kmip_gklm_per_bucket_encryption_version_enabled.yaml
-            timeout: 300
       desc: test_sse_kms_kmip_gklm_per_bucket_encryption_version_enabled
       module: sanity_rgw_multisite.py
       name: test_sse_kms_kmip_gklm_per_bucket_encryption_version_enabled
@@ -583,7 +555,6 @@ tests:
           config:
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_kmip_gklm_per_object.yaml
-            timeout: 300
       desc: test_sse_kms_kmip_gklm_per_object
       module: sanity_rgw_multisite.py
       name: test_sse_kms_kmip_gklm_per_object
@@ -594,7 +565,6 @@ tests:
           config:
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_kmip_gklm_per_object_versioninig_enabled.yaml
-            timeout: 300
       desc: test_sse_kms_kmip_gklm_per_object_versioninig_enabled
       module: sanity_rgw_multisite.py
       name: test_sse_kms_kmip_gklm_per_object_versioninig_enabled
@@ -611,7 +581,6 @@ tests:
           config:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_bucket_sync_cmd_crash.yaml
-            timeout: 300
             verify-io-on-site: ["ceph-pri"]
   - test:
       name: Bucket Granular Sync policy tests
@@ -624,7 +593,6 @@ tests:
             script-name: test_multisite_sync_policy.py
             config-file-name: test_multisite_mirror_sync_policy.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
   - test:
       name: Basic ACLs Test
       desc: Test basic acls
@@ -637,7 +605,6 @@ tests:
             run-on-rgw: true
             script-name: test_acls.py
             config-file-name: test_acls.yaml
-            timeout: 300
   - test:
       clusters:
         ceph-pri:
@@ -645,7 +612,6 @@ tests:
             config-file-name: test_user_with_REST.yaml
             script-name: user_op_using_rest.py
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: user operations using REST
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -660,4 +626,3 @@ tests:
           config:
             script-name: test_bucket_request_payer.py
             config-file-name: test_bucket_request_payer.yaml
-            timeout: 300

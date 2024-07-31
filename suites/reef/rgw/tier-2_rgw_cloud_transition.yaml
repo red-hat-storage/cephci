@@ -161,7 +161,6 @@ tests:
           config:
             script-name: test_cloud_transition.py
             config-file-name: test_cloud_transition_headobject_true.yaml
-            timeout: 500
       desc: test clould transition basic workflow
       module: sanity_rgw.py
       name: Test cloud transition retain headobject
@@ -187,7 +186,6 @@ tests:
           config:
             script-name: test_cloud_transition.py
             config-file-name: test_cloud_transition_headobject_false.yaml
-            timeout: 500
       desc: test clould transition basic workflow
       module: sanity_rgw.py
       name: Test cloud transition no retain headobject
@@ -199,7 +197,6 @@ tests:
           config:
             script-name: test_cloud_transition.py
             config-file-name: test_cloud_transition_multipart.yaml
-            timeout: 500
       desc: test cloud transition basic workflow
       module: sanity_rgw.py
       name: Test cloud transition multipart upload
@@ -234,7 +231,6 @@ tests:
               - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart {service_name:rgw.1}"
-            timeout: 120
       desc: Setting vault configs for sse-s3 on local site
       module: exec.py
       name: set sse-s3 vault configs on Local cluster
@@ -245,7 +241,6 @@ tests:
   #        config:
   #          script-name: test_cloud_transition.py
   #          config-file-name: test_cloud_transition_encrypted.yaml
-  #          timeout: 500
   #    desc: test cloud transition of ecnrypted objects
   #    module: sanity_rgw.py
   #    name: Test cloud transition of SSE-S3 encrypted objects
@@ -272,7 +267,6 @@ tests:
   #        config:
   #          script-name: test_cloud_transition.py
   #          config-file-name: test_cloud_transition_headobject_false.yaml
-  #          timeout: 500
   #    desc: test clould transition of compressed objects
   #    module: sanity_rgw.py
   #    name: Test cloud transition with compression enabled

@@ -109,7 +109,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
-        timeout: 300
 
   - test:
       name: compresstion_with_snappy_type
@@ -119,8 +118,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression_snappy.yaml
-        timeout: 300
-
   - test:
       name: compresstion_with_Zlib_type
       desc: test compresstion with Zlib
@@ -129,13 +126,11 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
-        timeout: 300
 
   - test:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-        timeout: 300
       desc: test_sse_s3_per_bucket_encryption_normal_object_upload
       module: sanity_rgw.py
       name: sse-s3 per bucket encryption test on a regular bucket
@@ -145,7 +140,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
-        timeout: 300
       desc: sse_s3_per_bucket_enc_multipart_upload
       module: sanity_rgw.py
       name: sse_s3_per_bucket_enc_multipart_upload
@@ -155,7 +149,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_object.yaml
-        timeout: 300
       desc: test_sse_s3_per_object_encryption
       module: sanity_rgw.py
       name: sse-s3 per object encryption test on a regular bucket

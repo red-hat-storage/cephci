@@ -82,7 +82,6 @@ tests:
         install_start_kafka: true
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
-        timeout: 300
 
   - test:
       name: Test non-current deletion via s3cmd
@@ -92,7 +91,6 @@ tests:
       config:
         script-name: ../s3cmd/test_lifecycle_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_lc_expiration_noncurrent_when_current_object_deleted_via_s3cmd.yaml
-        timeout: 300
 
   - test:
       name: Bucket Lifecycle expiration of incomplete multipart
@@ -102,7 +100,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lc_incomplete_multipart.yaml
-        timeout: 300
 
   # Object lock no overwrite
   - test:
@@ -114,7 +111,6 @@ tests:
       config:
         script-name: test_object_lock_no_overwrite.py
         config-file-name: test_object_lock_no_overwrite.yaml
-        timeout: 500
   - test:
       name: S3CMD small and multipart object download
       desc: S3CMD small and multipart object download or GET
@@ -123,7 +119,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-        timeout: 300
 
   - test:
       name: Swift user with read access
@@ -133,7 +128,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_user_access_read.yaml
-        timeout: 300
 
   - test:
       name: Swift user with write access
@@ -143,7 +137,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_user_access_write.yaml
-        timeout: 300
 
   - test:
       name: Swift user with readwrite access
@@ -153,8 +146,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_user_access_readwrite.yaml
-        timeout: 300
-
   - test:
       name: Test rgw put bucket website with users of same and different tenant
       desc: Test rgw put bucket website with users of same and different tenant
@@ -163,7 +154,6 @@ tests:
       config:
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_put_bucket_website_with_tenant_same_and_different_user.yaml
-        timeout: 500
 
   - test:
       name: Test rgw get bucket website with users of same and different tenant
@@ -173,7 +163,6 @@ tests:
       config:
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_get_bucket_website_with_tenant_same_and_different_user.yaml
-        timeout: 500
 
   - test:
       name: Test LC with custom worktime
@@ -183,7 +172,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_custom_worktime.yaml
-        timeout: 300
 
   - test:
       name: Test Etag not empty for complete multipart upload in aws
@@ -193,7 +181,6 @@ tests:
       config:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
-        timeout: 500
 
   - test:
       name: Test S3 PUT requests with non ascii characters in body
@@ -203,7 +190,6 @@ tests:
       config:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_aws_non_ascii.yaml
-        timeout: 500
 
   - test:
       name: Test bucket listing with markers on versioned bucket
@@ -213,7 +199,6 @@ tests:
       config:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_versioned_list_marker.yaml
-        timeout: 500
 
   - test:
       name: Test LDAP auth for RGW
@@ -223,7 +208,6 @@ tests:
       config:
         script-name: ../aws/test_ldap_auth.py
         config-file-name: ../../aws/configs/test_ldap_auth.yaml
-        timeout: 300
         run-on-rgw: true
 
   - test:
@@ -235,7 +219,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_with_lc_process.yaml
-        timeout: 500
 
   - test:
       name: Test LC transition without rule by lc process
@@ -245,7 +228,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_process_without_applying_rule.yaml
-        timeout: 500
 
   - test:
       abort-on-fail: false
