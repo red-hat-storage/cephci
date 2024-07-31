@@ -171,6 +171,7 @@ tests:
       config:
         script-name: ../s3cmd/test_ratelimit_global.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_global.yaml
+      comments: known issue BZ 2301986
 
   - test:
       name: Test Ratelimit for versioned buckets
@@ -180,6 +181,7 @@ tests:
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_versioned_bucket.yaml
+      comments: known issue BZ 2301986
 
   - test:
       name: Test Ratelimit for tenanted users
@@ -189,6 +191,7 @@ tests:
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml
+      comments: known issue BZ 2301986
 
   - test:
       name: Test Ratelimit Debt
@@ -198,6 +201,7 @@ tests:
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_debt.yaml
+      comments: known issue BZ 2301986
 
   - test:
       name: Test ratelimit on bucket owner change

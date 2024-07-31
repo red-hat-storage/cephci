@@ -199,6 +199,7 @@ tests:
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml
+      comments: known issue BZ 2301986
   - test:
       name: test swift enable version on conatainer of different user
       desc: test swift enable version on conatainer of different user
