@@ -3,6 +3,7 @@ import random
 import re
 import string
 import time
+from distutils.version import LooseVersion
 
 from ceph.ceph import CommandFailed
 from utility.log import Log
@@ -83,7 +84,7 @@ class FsUtils(object):
                 + self.mon_node_ip[-1].strip("/0")
             )
             self.mon_node_ip = self.mon_node_ip.split(" ")
-            if build.startswith(("4", "5", "6", "7")):
+            if LooseVersion(build) > LooseVersion("3"):
                 self.mon_node_ip[0] = re.search(
                     r"\W+v\w+:(\d+.\d+.\d+.\d+:\d+)/0,v\w+:(\d+.\d+.\d+.\d+:\d+)/0\W",
                     self.mon_node_ip[0],
