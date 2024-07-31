@@ -26,8 +26,8 @@ def run(ceph_cluster, **kw):
     rotate_conf = [entry for entry in out.split("\n") if "killall" in entry]
 
     # Verify tcmu-runner is part of killall and pkill
-    for lists in rotate_conf.split(" || "):
-        if "tcmu-runner" not in lists:
+    for item in rotate_conf[0].split(" || ")[:-1]:
+        if "tcmu-runner" not in item:
             raise OperationFailedError(
                 "Tcmu-runner is not in killall/pkill entries. Ref : #2204505"
             )
