@@ -109,10 +109,10 @@ def run_test(ceph_cluster, **kw):
 
         osd_map = rados_obj.get_osd_map(pool=pool_name, obj=object_name)
         acting_pg_set = osd_map["acting"]
-        log.info(f"Acting set for {object_name} in {pool_name}: {acting_pg_set}")
         if not acting_pg_set:
             log.error("Failed to retrieve acting pg set")
             return 1
+        log.info(f"Acting set for {object_name} in {pool_name}: {acting_pg_set}")
         verification_dict.update({"acting_pg_set": acting_pg_set})
 
         time.sleep(5)
@@ -151,11 +151,12 @@ def run_test(ceph_cluster, **kw):
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=1800)
 
         # Retrieve new acting pg set
-        new_acting_pg_set = rados_obj.get_pg_acting_set()
-        log.info(f"New acting set for {pool_name}: {new_acting_pg_set}")
+        osd_map = rados_obj.get_osd_map(pool=pool_name, obj=object_name)
+        new_acting_pg_set = osd_map["acting"]
         if not new_acting_pg_set:
             log.error("Failed to retrieve new acting pg set")
             return 1
+        log.info(f"New acting set for {pool_name}: {new_acting_pg_set}")
         verification_dict.update({"new_acting_pg_set": new_acting_pg_set})
 
         # Retrieve new acting osd hosts and all the osds on these hosts
