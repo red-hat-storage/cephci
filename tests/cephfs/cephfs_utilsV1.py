@@ -151,6 +151,19 @@ class FsUtils(object):
                 output_dict["data_pool_name"] = fs["data_pools"][0]
         return output_dict
 
+    def get_pool_num(self, client, pool_name):
+        # Execute the command to get the pool list in JSON format
+        out, rc = client.exec_command(sudo=True, cmd="ceph osd lspools --format json")
+
+        # Parse the JSON output
+        pools = json.loads(out)
+
+        # Search for the pool name and return the pool number
+        for pool in pools:
+            if pool["poolname"] == pool_name:
+                return pool["poolnum"]
+        return None
+
     def get_mds_nodes(self, client, fs_name="cephfs"):
         """
         Gets the mds node objects based on the filesystem name provided
@@ -1707,6 +1720,63 @@ class FsUtils(object):
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
         return cmd_out, cmd_rc
 
+    def create_osd_pool(
+        self,
+        client,
+        pool_name,
+        pg_num=None,
+        pgp_num=None,
+        erasure=False,
+        validate=True,
+        **kwargs,
+    ):
+        """
+        Creates an OSD pool with given arguments.
+        It supports the following optional arguments:
+        Args:
+            client:
+            pool_name:
+            pg_num: int
+            pgp_num: int
+            erasure: bool
+            validate: bool
+            **kwargs:
+                erasure_code_profile: str
+                crush_rule_name: str
+                expected_num_objects: int
+                autoscale_mode: str (on, off, warn)
+                check_ec: bool (default: True)
+        Returns:
+            Returns the cmd_out and cmd_rc for the create command.
+        """
+        if erasure:
+            pool_cmd = f"ceph osd pool create {pool_name} {pg_num or ''} {pgp_num or ''} erasure"
+            if kwargs.get("erasure_code_profile"):
+                pool_cmd += f" {kwargs.get('erasure_code_profile')}"
+        else:
+            pool_cmd = f"ceph osd pool create {pool_name} {pg_num or ''} {pgp_num or ''} replicated"
+
+        if kwargs.get("crush_rule_name"):
+            pool_cmd += f" {kwargs.get('crush_rule_name')}"
+        if kwargs.get("expected_num_objects"):
+            pool_cmd += f" {kwargs.get('expected_num_objects')}"
+        if erasure and kwargs.get("autoscale_mode"):
+            pool_cmd += f" --autoscale-mode={kwargs.get('autoscale_mode')}"
+
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=pool_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+
+        if validate:
+            out, rc = client.exec_command(
+                sudo=True, cmd="ceph osd pool ls --format json"
+            )
+            pool_ls = json.loads(out)
+            if pool_name not in pool_ls:
+                raise CommandFailed(f"Creation of OSD pool: {pool_name} failed")
+
+        return cmd_out, cmd_rc
+
     def fs_client_authorize(
         self, client, fs_name, client_name, dir_name, permission, **kwargs
     ):
@@ -2260,6 +2330,31 @@ os.system('sudo systemctl start  network')
             md5sum = out.strip().split()
             file_dict[file] = md5sum[0]
         return file_dict
+
+    def set_xattrs(
+        self,
+        client,
+        directory,
+        key,
+        value,
+    ):
+        set_cmd = f"setfattr -n {key} -v {value}"
+        client.exec_command(sudo=True, cmd=f"{set_cmd} {directory}")
+
+    def get_xattrs(self, client, directory, key):
+        get_cmd = f"getfattr --only-values -n {key} {directory}"
+        out, rc = client.exec_command(sudo=True, cmd=f"{get_cmd}")
+
+        return out, rc
+
+    def rm_xattrs(
+        self,
+        client,
+        directory,
+        key,
+    ):
+        set_cmd = f"setfattr -x {key}"
+        client.exec_command(sudo=True, cmd=f"{set_cmd} {directory}")
 
     def set_quota_attrs(self, client, file, bytes, directory, **kwargs):
         """

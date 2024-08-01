@@ -215,4 +215,9 @@ tests:
       desc: Move data and meta_data pool to different root level bucket in OSD tree.
       abort-on-fail: false
       comments: "Unable to install ceph-base"
-
+  - test:
+      name: validate all xattrs for filesystem,
+      module: cephfs_generic.validate_xattr_set_get.py
+      polarion-id: CEPH-83593150
+      desc: Validate all extended attributes that are supported in filesystem
+      abort-on-fail: false
