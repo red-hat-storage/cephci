@@ -221,3 +221,9 @@ tests:
       polarion-id: CEPH-83593150
       desc: Validate all extended attributes that are supported in filesystem
       abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "repair_backtrace_by_scrub"
+      module: cephfs_recovery.backtrace_damage_repair_by_scrub.py
+      polarion-id: CEPH-CEPH-83593391
+      name: "repair_backtrace_by_scrub"
