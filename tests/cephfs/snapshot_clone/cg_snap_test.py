@@ -2606,11 +2606,18 @@ def cg_snap_neg_1(cg_test_params):
                     qs_id_list.append(qs_id_val)
                 except Exception as ex:
                     log.info(ex)
-                    test_fail += 1
 
             for quiesce_proc in quiesce_procs:
                 quiesce_proc.join()
             time.sleep(30)
+
+            for qs_id in qs_id_list:
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id)
+                state = qs_query_out["sets"][qs_id]["state"]["name"]
+                if "QUIESCED" not in state:
+                    test_fail += 1
+                    log.error(f"Quiesce failed on Quiesce set id {qs_id}")
+
             log.info("Perform snapshot creation on all members")
             rand_str = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
@@ -2649,7 +2656,11 @@ def cg_snap_neg_1(cg_test_params):
                     cg_snap_util.cg_quiesce_release(client, qs_id, if_await=True)
                 except Exception as ex:
                     log.info(ex)
-                    test_fail += 1
+                    qs_query_out = cg_snap_util.get_qs_query(client, qs_id)
+                    state = qs_query_out["sets"][qs_id]["state"]["name"]
+                    if "RELEASED" not in state:
+                        test_fail += 1
+                        log.error(f"Release failed on Quiesce set id {qs_id}")
 
             if test_fail >= 1:
                 i = repeat_cnt
