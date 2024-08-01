@@ -136,6 +136,12 @@ def check_scrub_workflow(installer, rados_obj, acting_sets, task) -> bool:
     """
     log.debug(f"Started to verify logging upon {task}")
     for pgid in acting_sets.keys():
+        """
+        updated log lines for EC pool in OSD logs.
+        Jul 30 04:53:01 ceph-pdhiran-vpbopt-node3 ceph-osd[18769]: log_channel(cluster) log [DBG] : 9.0s0 scrub starts
+        Jul 30 04:53:01 ceph-pdhiran-vpbopt-node3 ceph-osd[18769]: log_channel(cluster) log [DBG] : 9.0 scrub ok
+        """
+
         log.debug(f"Checking OSD logs of PG: {pgid}. OSDs : {acting_sets[pgid]}")
         init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
         log.debug(f"Initial time when {task} was started : {init_time}")
@@ -145,15 +151,15 @@ def check_scrub_workflow(installer, rados_obj, acting_sets, task) -> bool:
             if not rados_obj.start_check_scrub_complete(pg_id=pgid):
                 log.error(f"Could not complete scrub on pg : {pgid}")
                 return False
-            log_lines = [f"{pgid} scrub starts", f"{pgid} scrub ok"]
+            log_lines = [rf"{pgid}\S* scrub starts", rf"{pgid}\S* scrub ok"]
 
         elif task == "deep-scrub":
             if not rados_obj.start_check_deep_scrub_complete(pg_id=pgid):
                 log.error(f"Could not complete deep-scrub on pg : {pgid}")
                 return False
             log_lines = [
-                f"{pgid} deep-scrub starts",
-                f"{pgid} deep-scrub ok",
+                rf"{pgid}\S* deep-scrub starts",
+                rf"{pgid}\S* deep-scrub ok",
             ]
 
         time.sleep(10)
@@ -205,9 +211,9 @@ def verify_scrub_log(
         daemon_type="osd",
         daemon_id=osd,
     )
-    log.debug(f"Journalctl logs : {log_lines}")
+    log.debug(f"\n\nJournalctl logs : {log_lines}\n\n")
     for line in lines:
-        if line not in log_lines:
+        if not re.search(line, log_lines):
             log.error(f" did not find logging on OSD : {osd}")
             log.error(f"Journalctl logs lines: {log_lines}")
             log.error(f"expected logs lines: {lines}")

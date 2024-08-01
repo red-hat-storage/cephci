@@ -28,6 +28,17 @@ def run(ceph_cluster, **kw):
     cephadm_obj = CephAdmin(cluster=ceph_cluster, **config)
     cluster_obj = Orch(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm_obj)
+    verify_warning = config.get("verify_warning", True)
+    verify_daemons = config.get("verify_daemons", False)
+    verify_cluster_usage = config.get("verify_cluster_usage", False)
+
+    log.debug("Collecting daemon info and Cluster usage info before the upgrade")
+    pre_upgrade_orch_ps = rados_obj.run_ceph_command(cmd="ceph orch ps")
+    pre_upgrade_df_detail = rados_obj.run_ceph_command(cmd="ceph df detail")
+    if not rados_obj.verify_max_avail():
+        log.error("MAX_AVAIL deviates on the cluster more than expected")
+        # Not failing the workflow as of now
+        # raise Exception("MAX_AVAIL not proper error")
 
     log.debug("Starting upgrade")
     try:
@@ -80,24 +91,53 @@ def run(ceph_cluster, **kw):
                         "expected health warning not yet generated on the cluster."
                         f" health_warns on cluster : {ceph_health_status}"
                     )
-        if not warn_flag:
-            log.error("expected warning not generated on the cluster. Fail")
-            raise Exception("Warning not raised")
-
         if not upgrade_complete:
             log.error("Upgrade was not completed on the cluster. Fail")
             raise Exception("Upgrade not complete")
 
-        status_report = rados_obj.run_ceph_command(cmd="ceph report", client_exec=True)
-        ceph_health_status = list(status_report["health"]["checks"].keys())
-        expected_health_warns = "OSD_UPGRADE_FINISHED"
-        if expected_health_warns in ceph_health_status:
-            log.error(
-                "Warning about the mismatched release present on the cluster. Fail. "
+        if verify_warning:
+            if not warn_flag:
+                log.error("expected warning not generated on the cluster. Fail")
+                raise Exception("Warning not raised")
+            status_report = rados_obj.run_ceph_command(
+                cmd="ceph report", client_exec=True
             )
-            out = rados_obj.run_ceph_command(cmd="ceph health detail")
-            log.error(f"\n\nHealth detail on the cluster :\n {out}\n\n")
-            raise Exception("Warning present post upgrade")
+            ceph_health_status = list(status_report["health"]["checks"].keys())
+            expected_health_warns = "OSD_UPGRADE_FINISHED"
+            if expected_health_warns in ceph_health_status:
+                log.error(
+                    "Warning about the mismatched release present on the cluster. Fail. "
+                )
+                out = rados_obj.run_ceph_command(cmd="ceph health detail")
+                log.error(f"\n\nHealth detail on the cluster :\n {out}\n\n")
+                raise Exception("Warning present post upgrade")
+
+            log.info(
+                "Warning OSD_UPGRADE_FINISHED was found on in"
+                " health status and Removed once upgrade was completed"
+            )
+
+        if not rados_obj.verify_max_avail():
+            log.error(
+                "MAX_AVAIL deviates on the cluster more than expected post upgrade"
+            )
+            # Not failing the workflow as of now
+            # raise Exception("MAX_AVAIL not proper error")
+
+        if verify_daemons:
+            if not rados_obj.daemon_check_post_tests(
+                pre_test_orch_ps=pre_upgrade_orch_ps
+            ):
+                log.error("There are daemons missing post upgrade")
+                raise Exception("Daemons missing post upgrade error")
+            log.info("All the daemon existence verified")
+
+        if verify_cluster_usage:
+            if not rados_obj.compare_df_stats(pre_test_df_stats=pre_upgrade_df_detail):
+                log.error("Cluster usage changed post upgrade")
+                # Not failing tests as of now due to RAW usage changes
+                # raise Exception("Cluster usage changed post upgrade error")
+            log.info("Cluster usage before and after upgrade verified")
 
         log.info("Warning about the mismatched release found on cluster. Pass. ")
         log.info("Completed upgrade on the cluster")

@@ -1,4 +1,4 @@
-# Use cluster-conf file: conf/quincy/rados/stretch-mode-host-location-attrs.yaml
+# Use cluster-conf file: conf/baremetal/rados_extensa_1admin_5node_1client.yaml
 # Stretch mode tests performing site down scenarios
 
 tests:
@@ -111,9 +111,7 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        nodes:
-          - node6:
-              release: 7
+        node: node6
         install_packages:
           - ceph-common
           - ceph-base
