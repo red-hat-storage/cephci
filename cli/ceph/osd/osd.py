@@ -1,6 +1,7 @@
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
 
+from .blocklist import Blocklist
 from .crush import Crush
 from .pool import Pool
 
@@ -13,6 +14,7 @@ class Osd(Cli):
         self.base_cmd = f"{base_cmd} osd"
         self.pool = Pool(nodes, self.base_cmd)
         self.crush = Crush(nodes, self.base_cmd)
+        self.blocklist = Blocklist(nodes, self.base_cmd)
 
     def lspools(self):
         """To list cluster pools"""
