@@ -181,7 +181,7 @@ def run(ceph_cluster, **kw):
     script_dir = DIR[test_version]["script"]
     config_dir = DIR[test_version]["config"]
     lib_dir = DIR[test_version]["lib"]
-    # timeout = config.get("timeout", 300)
+    timeout = config.get("timeout", 3600)
 
     if test_config["config"]:
         log.info("creating custom config")
@@ -202,6 +202,7 @@ def run(ceph_cluster, **kw):
         + config_file_name
         + append_param,
         long_running=True,
+        timeout=timeout,
     )
 
     if run_io_verify:

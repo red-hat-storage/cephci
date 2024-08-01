@@ -86,6 +86,31 @@ tests:
                 - "ceph osd tree"
 
   - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+
+  - test:
       name: RGW Service deployment
       desc: RGW Service deployment
       module: test_cephadm.py
@@ -109,7 +134,7 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        nodes: node8
+        node: node8
         install_packages:
           - ceph-common
           - ceph-base
@@ -141,6 +166,148 @@ tests:
       desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
       abort-on-fail: true
 
+
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      polarion-id: CEPH-83574972
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          pool: rbd_rep_pool
+          image: rbd_rep_image
+          size: 10G
+        io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+      desc: Perform rgw tests
+
+  - test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293"
+
+  - test:
+      name: nfs-ganesha_with_cephfs
+      module: nfs-ganesha_basics.py
+      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+      polarion-id: CEPH-83574439
+      abort-on-fail: false
+
+  - test:
+      name: Verify stretch Cluster
+      module: stretch_cluster.py
+      polarion-id: CEPH-83573630
+      config:
+        verify_forced_recovery: true
+        osd_max_backfills: 16
+        osd_recovery_max_active: 16
+        rados_write_duration: 200
+      desc: Verify forced recovery and healthy on a stretch configured cluster
+
+  - test:
+      name: test stretch Cluster site down - Data site
+      module: test_stretch_site_down.py
+      polarion-id: CEPH-83574975
+      config:
+        pool_name: test_stretch_pool6
+        shutdown_site: DC1
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when we have only 1 of 2 DC's surviving
+      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster site down with delay - Data site
+      module: test_stretch_site_down.py
+      polarion-id: CEPH-83571705
+      config:
+        pool_name: test_stretch_pool9
+        shutdown_site: DC1
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+        add_network_delay: true
+      desc: Test the cluster when we have only 1 of 2 DC's surviving with network delay
+      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster site down - Arbiter site
+      module: test_stretch_site_down.py
+      polarion-id: CEPH-83574974
+      config:
+        pool_name: test_stretch_pool5
+        shutdown_site: arbiter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when the arbiter site is shut down
+      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster maintenance mode - arbiter site
+      module: test_stretch_site_maintenance_modes.py
+      polarion-id: CEPH-83574976
+      config:
+        pool_name: test_stretch_pool2
+        affected_site: arbiter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when the arbiter site is moved to maintenance mode
+      abort-on-fail: true
+
+  - test:
+      name: test stretch Cluster site reboot - Data site
+      module: test_stretch_site_reboot.py
+      polarion-id: CEPH-83574977
+      config:
+        pool_name: test_stretch_pool3
+        affected_site: DC1
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when the data site is rebooted
+
+  - test:
+      name: test stretch Cluster site reboot - Arbiter site
+      module: test_stretch_site_reboot.py
+      polarion-id: CEPH-83574977
+      config:
+        pool_name: test_stretch_pool4
+        affected_site: arbiter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when the arbiter site is rebooted
+
+  - test:
+      name: Mon replacement on Data site
+      module: test_stretch_mon_replacements.py
+      polarion-id: CEPH-83574971
+      config:
+        pool_name: test_stretch_pool5
+        replacement_site: DC1
+        tiebreaker_mon_site_name: arbiter
+        add_mon_without_location: true
+        delete_pool: true
+      desc: Test stretch Cluster mon replacement - Data site
+
+  - test:
+      name: Mon replacement on Arbiter site
+      module: test_stretch_mon_replacements.py
+      polarion-id: CEPH-83574971
+      config:
+        pool_name: test_stretch_pool6
+        replacement_site: arbiter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test stretch Cluster mon replacement - Arbiter site
+
 # Commenting test until fix for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2249962
 # New Bug: https://bugzilla.redhat.com/show_bug.cgi?id=2265116
   - test:
@@ -154,3 +321,46 @@ tests:
         delete_pool: true
       desc: Test stretch Cluster netsplit scenario between data sites
       comments: Active bug - 2249962
+
+  - test:
+      name: OSD and host replacement
+      module: test_stretch_osd_serviceability_scenarios.py
+      polarion-id: CEPH-83575474
+      config:
+        pool_name: test_stretch_pool7
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test stretch Cluster osd and Host replacement
+
+  - test:
+      name: Netsplit Scenarios data-arbiter sites
+      module: test_stretch_netsplit_scenarios.py
+      polarion-id: CEPH-83574979
+      config:
+        pool_name: test_stretch_pool7
+        netsplit_site: arbiter
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test stretch Cluster netsplit scenario between data site and arbiter site
+
+  - test:
+      name: Negative scenarios - post-deployment
+      module: test_stretch_negative_scenarios.py
+      polarion-id: CEPH-83584499
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: arbiter
+      desc: Perform post-deployment negative tests on stretch mode
+
+  - test:
+      name: test stretch Cluster maintenance mode - data site
+      module: test_stretch_site_maintenance_modes.py
+      polarion-id: CEPH-83574976
+      config:
+        pool_name: test_stretch_pool1
+        affected_site: DC1
+        tiebreaker_mon_site_name: arbiter
+        delete_pool: true
+      desc: Test the cluster when the Data site is moved to maintenance mode
+      abort-on-fail: true

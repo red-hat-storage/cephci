@@ -117,7 +117,6 @@ tests:
       config:
         script-name: ../s3cmd/test_lifecycle_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_lc_expiration_noncurrent_when_current_object_deleted_via_s3cmd.yaml
-        timeout: 300
 
   - test:
       name: Bucket Lifecycle expiration of incomplete multipart
@@ -127,7 +126,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lc_incomplete_multipart.yaml
-        timeout: 300
   - test:
       name: S3CMD small and multipart object download
       desc: S3CMD small and multipart object download or GET
@@ -136,7 +134,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-        timeout: 300
 
   - test:
       name: Swift user with read access
@@ -146,7 +143,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_user_access_read.yaml
-        timeout: 300
 
   - test:
       name: Swift user with write access
@@ -156,7 +152,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_user_access_write.yaml
-        timeout: 300
 
   - test:
       name: Swift user with readwrite access
@@ -166,7 +161,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_user_access_readwrite.yaml
-        timeout: 300
 
   - test:
       name: Test LC with custom worktime
@@ -176,7 +170,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_custom_worktime.yaml
-        timeout: 300
 
   - test:
       name: Test Etag not empty for complete multipart upload in aws
@@ -187,7 +180,6 @@ tests:
       config:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
-        timeout: 500
 
   - test:
       name: Test S3 PUT requests with non ascii characters in body
@@ -197,7 +189,6 @@ tests:
       config:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_aws_non_ascii.yaml
-        timeout: 500
 
   # - test:
   #     name: Test LC transition with rule by lc process
@@ -208,7 +199,6 @@ tests:
   #     config:
   #       script-name: test_bucket_lifecycle_object_expiration_transition.py
   #       config-file-name: test_lc_transition_with_lc_process.yaml
-  #       timeout: 500
 
   - test:
       name: Test LC transition without rule by lc process
@@ -218,7 +208,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_process_without_applying_rule.yaml
-        timeout: 500
 
   - test:
       abort-on-fail: false

@@ -44,6 +44,8 @@ def run(ceph_cluster, **kw) -> int:
     verify_inflation = config.get("verify_inflation", False)
     installer = ceph_cluster.get_nodes(role="installer")[0]
     log.debug(f"Verifying pglog dups trimming on OSDs, test img : {test_image}")
+    flag_set_cmds = ["ceph osd set noout", "ceph osd set pause"]
+    flag_unset_cmds = ["ceph osd unset noout", "ceph osd unset pause"]
 
     try:
         with open(pool_configs_path, "r") as fd:
@@ -99,8 +101,6 @@ def run(ceph_cluster, **kw) -> int:
             )
 
         log.debug("Setting noout and pause flags")
-        flag_set_cmds = ["ceph osd set noout", "ceph osd set pause"]
-        flag_unset_cmds = ["ceph osd unset noout", "ceph osd unset pause"]
         [rados_obj.node.shell([cmd]) for cmd in flag_set_cmds]
 
         # sleeping for 10 seconds for pause flag to take effect
@@ -212,11 +212,13 @@ def run(ceph_cluster, **kw) -> int:
     finally:
         log.info("\n-----------------In Finally Block-----------------------\n")
         CONTINEOUS_IO = False
-        contineous_io_thread.join()
-        time.sleep(2)
-        [rados_obj.node.shell([cmd]) for cmd in flag_set_cmds]
-        for pool in pools:
-            rados_obj.delete_pool(pool=pool)
+        if "contineous_io_thread" in locals() or "contineous_io_thread" in globals():
+            contineous_io_thread.join()
+        time.sleep(10)
+        [rados_obj.node.shell([cmd]) for cmd in flag_unset_cmds]
+        if "pools" in locals() or "pools" in globals():
+            for pool in pools:
+                rados_obj.delete_pool(pool=pool)
 
         mon_obj.remove_config(section="mgr", name="mgr/cephadm/no_five_one_rgw")
         mon_obj.remove_config(section="osd", name="osd_max_pg_log_entries")

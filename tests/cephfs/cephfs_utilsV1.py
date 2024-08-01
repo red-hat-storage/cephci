@@ -15,6 +15,7 @@ import re
 import string
 import subprocess
 import time
+from json import JSONDecodeError
 from time import sleep
 
 import paramiko
@@ -149,6 +150,19 @@ class FsUtils(object):
                 output_dict["metadata_pool_name"] = fs["metadata_pool"]
                 output_dict["data_pool_name"] = fs["data_pools"][0]
         return output_dict
+
+    def get_pool_num(self, client, pool_name):
+        # Execute the command to get the pool list in JSON format
+        out, rc = client.exec_command(sudo=True, cmd="ceph osd lspools --format json")
+
+        # Parse the JSON output
+        pools = json.loads(out)
+
+        # Search for the pool name and return the pool number
+        for pool in pools:
+            if pool["poolname"] == pool_name:
+                return pool["poolnum"]
+        return None
 
     def get_mds_nodes(self, client, fs_name="cephfs"):
         """
@@ -1706,6 +1720,63 @@ class FsUtils(object):
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
         return cmd_out, cmd_rc
 
+    def create_osd_pool(
+        self,
+        client,
+        pool_name,
+        pg_num=None,
+        pgp_num=None,
+        erasure=False,
+        validate=True,
+        **kwargs,
+    ):
+        """
+        Creates an OSD pool with given arguments.
+        It supports the following optional arguments:
+        Args:
+            client:
+            pool_name:
+            pg_num: int
+            pgp_num: int
+            erasure: bool
+            validate: bool
+            **kwargs:
+                erasure_code_profile: str
+                crush_rule_name: str
+                expected_num_objects: int
+                autoscale_mode: str (on, off, warn)
+                check_ec: bool (default: True)
+        Returns:
+            Returns the cmd_out and cmd_rc for the create command.
+        """
+        if erasure:
+            pool_cmd = f"ceph osd pool create {pool_name} {pg_num or ''} {pgp_num or ''} erasure"
+            if kwargs.get("erasure_code_profile"):
+                pool_cmd += f" {kwargs.get('erasure_code_profile')}"
+        else:
+            pool_cmd = f"ceph osd pool create {pool_name} {pg_num or ''} {pgp_num or ''} replicated"
+
+        if kwargs.get("crush_rule_name"):
+            pool_cmd += f" {kwargs.get('crush_rule_name')}"
+        if kwargs.get("expected_num_objects"):
+            pool_cmd += f" {kwargs.get('expected_num_objects')}"
+        if erasure and kwargs.get("autoscale_mode"):
+            pool_cmd += f" --autoscale-mode={kwargs.get('autoscale_mode')}"
+
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=pool_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+
+        if validate:
+            out, rc = client.exec_command(
+                sudo=True, cmd="ceph osd pool ls --format json"
+            )
+            pool_ls = json.loads(out)
+            if pool_name not in pool_ls:
+                raise CommandFailed(f"Creation of OSD pool: {pool_name} failed")
+
+        return cmd_out, cmd_rc
+
     def fs_client_authorize(
         self, client, fs_name, client_name, dir_name, permission, **kwargs
     ):
@@ -2259,6 +2330,31 @@ os.system('sudo systemctl start  network')
             md5sum = out.strip().split()
             file_dict[file] = md5sum[0]
         return file_dict
+
+    def set_xattrs(
+        self,
+        client,
+        directory,
+        key,
+        value,
+    ):
+        set_cmd = f"setfattr -n {key} -v {value}"
+        client.exec_command(sudo=True, cmd=f"{set_cmd} {directory}")
+
+    def get_xattrs(self, client, directory, key):
+        get_cmd = f"getfattr --only-values -n {key} {directory}"
+        out, rc = client.exec_command(sudo=True, cmd=f"{get_cmd}")
+
+        return out, rc
+
+    def rm_xattrs(
+        self,
+        client,
+        directory,
+        key,
+    ):
+        set_cmd = f"setfattr -x {key}"
+        client.exec_command(sudo=True, cmd=f"{set_cmd} {directory}")
 
     def set_quota_attrs(self, client, file, bytes, directory, **kwargs):
         """
@@ -3266,6 +3362,35 @@ os.system('sudo systemctl start  network')
         log.info(service_ls)
         if service_ls[0]["status"]["running"] != service_ls[0]["status"]["size"]:
             raise CommandFailed(f"All {service_name} are Not UP")
+        return True
+
+    @retry(CommandFailed, tries=3, delay=60)
+    def validate_fs_services(self, client, service_name, is_present=True):
+        """
+        Validate if the Service is up and if it's not up, rety based on the
+        count with a delay of 60 sec.
+        Args:
+            client : client node.
+            service_name : name of the service which needs to be validated.
+        Return:
+            If the service is not up - with an interval of 60 sec, retry for 3 times before failing.
+        """
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph orch ls --service_name={service_name} --format json"
+        )
+        try:
+            service_ls = json.loads(out)
+            log.info(service_ls)
+            if is_present:
+                if (
+                    service_ls[0]["status"]["running"]
+                    != service_ls[0]["status"]["size"]
+                ):
+                    raise CommandFailed(f"All {service_name} are Not UP")
+                return True
+        except JSONDecodeError:
+            if "No services reported" not in out:
+                raise CommandFailed(f"All Services are not down.. {out}")
         return True
 
     def validate_ports(self, client, service_name, port):

@@ -101,5 +101,5 @@ tests:
   - test:
       name: Test mgr cephadm command timeout
       desc: Test mgr cephadm command timeout
-      polarion-id: CEPH-83574672
+      polarion-id: CEPH-83593815
       module: test_cephadm_mgr_timeout.py

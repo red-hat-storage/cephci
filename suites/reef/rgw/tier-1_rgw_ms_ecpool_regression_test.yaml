@@ -257,7 +257,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -269,7 +268,6 @@ tests:
           config:
             config-file-name: test_Mbuckets_with_Nobjects.yaml
             script-name: test_Mbuckets_with_Nobjects.py
-            timeout: 300
             verify-io-on-site: [ "ceph-pri" ]
       desc: Execute M buckets with N objects on secondary cluster
       polarion-id: CEPH-9789
@@ -285,7 +283,6 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
-            timeout: 300
   - test:
       name: delete buckets and objects on primary
       desc: test_Mbuckets_with_Nobjects_delete on primary
@@ -296,7 +293,6 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
-            timeout: 300
   - test:
       name: test encryption on primary
       desc: test_Mbuckets_with_Nobjects_enc on primary
@@ -308,7 +304,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
             config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
-            timeout: 300
   - test:
       name: test sharding on primary
       desc: test_Mbuckets_with_Nobjects_sharding on primary
@@ -319,7 +314,6 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_sharding.yaml
-            timeout: 300
 
   - test:
       name: replace bucket policy on primary
@@ -332,7 +326,6 @@ tests:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_bucket_policy_replace.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
   - test:
       name: suspend bucket versioning on primary
       desc: test_versioning_objects_suspend on secondary
@@ -344,7 +337,6 @@ tests:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_suspend.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
   - test:
       name: reverting object to one of the versions on primary
       desc: test_versioning_objects_copy on secondary
@@ -355,7 +347,6 @@ tests:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_copy.yaml
-            timeout: 300
   - test:
       name: enable bucket versioning on primary
       desc: test_versioning_enable on secondary
@@ -367,7 +358,6 @@ tests:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_enable.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
   - test:
       name: ordered listing of bucket with pseudo directories and objects
       desc: measure execution time for ordered listing of bucket with pseudo directories and objects
@@ -378,7 +368,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_pseudo_ordered.yaml
-            timeout: 300
   - test:
       name: listing flat unordered buckets on primary
       desc: test_bucket_listing_flat_unordered.yaml on secondary
@@ -389,7 +378,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_unordered.yaml
-            timeout: 300
 
   - test:
       name: listing flat ordered versioned buckets on primary
@@ -401,7 +389,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
-            timeout: 300
   - test:
       name: listing flat ordered buckets on secondary
       desc: test_bucket_listing_flat_ordered on secondary
@@ -413,7 +400,6 @@ tests:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered.yaml
             monitor-consistency-bucket-stats: true
-            timeout: 300
   - test:
       name: listing pseudo ordered dir only buckets on secondary
       desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
@@ -425,4 +411,3 @@ tests:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
             monitor-consistency-bucket-stats: true
-            timeout: 300

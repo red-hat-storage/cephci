@@ -136,3 +136,9 @@ tests:
           custom_configs:
             - mount_path: /usr/share/mon/example.cert
               content: test
+
+  - test:
+      name: Verify support for key rotation
+      desc: Validate the key rotation feature
+      polarion-id: CEPH-83593829
+      module: test_validate_key_rotate.py

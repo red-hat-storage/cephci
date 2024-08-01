@@ -1,4 +1,3 @@
-import json
 import random
 import string
 import time
@@ -48,21 +47,39 @@ def run(ceph_cluster, **kw):
             jq_check = client.exec_command(cmd="rpm -qa | grep jq")
             if "jq" not in jq_check:
                 client.exec_command(sudo=True, cmd="yum install -y jq")
+        fs_details = fs_util.get_fs_info(client1)
+        if not fs_details:
+            fs_util.create_fs(client1, "cephfs")
         cephfs = "cephfs"
         # Generate random string for directory names
         rand = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
         )
-        # remove all the fs
-        current_fs, _ = client1.exec_command(sudo=True, cmd="ceph fs ls --format=json")
-        fs_names = json.loads(current_fs)
-        fs_list = [item["name"] for item in fs_names]
-        for fs in fs_list:
-            fs_util.remove_fs(client1, fs)
+        ceph_health, _ = client1.exec_command(sudo=True, cmd="ceph -s")
+        print(ceph_health)
+        fs_status, _ = client1.exec_command(sudo=True, cmd="ceph fs status")
+        print(fs_status)
         # Create CephFS
         fs_util.create_fs(client1, cephfs)
-        # max mds set 2
+        mds_nodes = ceph_cluster.get_nodes("mds")
+        host_list = [node.hostname for node in mds_nodes]
+        hosts = " ".join(host_list)
+        client1.exec_command(
+            sudo=True,
+            cmd=f"ceph orch apply mds cephfs --placement='4 {hosts}'",
+            check_ec=False,
+        )
+        time.sleep(60)
+        # max mds set 3
         client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 3")
+        # standby replay true
+        client1.exec_command(
+            sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
+        )
+        ceph_health, _ = client1.exec_command(sudo=True, cmd="ceph -s")
+        log.info(ceph_health)
+        fs_status, _ = client1.exec_command(sudo=True, cmd="ceph fs status")
+        log.info(fs_status)
         # Define mount directories
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse_{rand}_1"
         fuse_mounting_dir_2 = f"/mnt/cephfs_fuse_{rand}_2"
@@ -70,11 +87,14 @@ def run(ceph_cluster, **kw):
         fuse_mounting_dir_4 = f"/mnt/cephfs_fuse_{rand}_4"
         cephfs = "cephfs"
         # Mount CephFS using ceph-fuse and kernel
+        out_test, _ = client1.exec_command(sudo=True, cmd="ceph fs status")
+        log.info(out_test)
         fs_util.fuse_mount([client1], fuse_mounting_dir_1)
         fs_util.fuse_mount([client2], fuse_mounting_dir_2)
         fs_util.fuse_mount([client3], fuse_mounting_dir_3)
         fs_util.fuse_mount([client4], fuse_mounting_dir_4)
         # Get initial MDS metrics
+        # pdb.set_trace()
         mds_metric_client1 = fs_util.get_mds_metrics(
             client1, 0, fuse_mounting_dir_1, cephfs
         )
@@ -434,6 +454,10 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
+        ceph_health, _ = client1.exec_command(sudo=True, cmd="ceph -s")
+        log.info(ceph_health)
+        fs_status, _ = client1.exec_command(sudo=True, cmd="ceph fs status")
+        log.info(fs_status)
         # Cleanup
         fs_util.client_clean_up(
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir_1
@@ -447,5 +471,3 @@ def run(ceph_cluster, **kw):
         fs_util.client_clean_up(
             "umount", fuse_clients=[client4], mounting_dir=fuse_mounting_dir_4
         )
-        # remove volumes
-        fs_util.remove_fs(client1, cephfs)

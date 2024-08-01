@@ -283,7 +283,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -301,7 +300,6 @@ tests:
             script-name: test_multisite_syncpolicy_prefix_tag.py
             config-file-name: test_multisite_syncpolicy_prefix_tag.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
 
   # - test:
   #     name: Delete object version with id null
@@ -314,7 +312,6 @@ tests:
   #         config:
   #           script-name: ../aws/test_delete_version_id_null.py
   #           config-file-name: ../../aws/configs/test_delete_version_id_null.yaml
-  #           timeout: 300
 
   # Performing cluster upgrade
   - test:
@@ -347,7 +344,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            timeout: 300
 
   - test:
       name: Granular multisite sync policy group transition
@@ -359,4 +355,3 @@ tests:
           config:
             script-name: test_multisite_sync_policy.py
             config-file-name: test_sync_policy_state_change.yaml
-            timeout: 300

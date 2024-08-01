@@ -233,7 +233,6 @@ tests:
             set-env: true
             script-name: user_create.py
             config-file-name: tenanted_user.yaml
-            timeout: 300
 
   #  Dynamic resharding tests
   - test:
@@ -247,7 +246,6 @@ tests:
           config:
             script-name: test_check_sharding_enabled.py
             config-file-name: test_check_sharding_enabled_greenfield.yaml
-            timeout: 300
 
   - test:
       clusters:
@@ -255,7 +253,6 @@ tests:
           config:
             config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
             script-name: test_dynamic_bucket_resharding.py
-            timeout: 300
       desc: Resharding test - dynamic resharding on versioned bucket
       name: Dynamic Resharding on versioned buckets
       polarion-id: CEPH-83571740
@@ -267,7 +264,6 @@ tests:
           config:
             script-name: test_quota_management.py
             config-file-name: test_quota_bucket_max_size.yaml
-            timeout: 300
       desc: test bucket quota max size (single site)
       module: sanity_rgw.py
       name: test bucket quota max size (single site)
@@ -279,7 +275,6 @@ tests:
           config:
             script-name: test_quota_management.py
             config-file-name: test_quota_user_max_objects.yaml
-            timeout: 300
       desc: test user quota max objects (single site)
       module: sanity_rgw.py
       name: test user quota max objects (single site)
@@ -291,7 +286,6 @@ tests:
           config:
             script-name: test_quota_management.py
             config-file-name: test_quota_user_max_size.yaml
-            timeout: 300
       desc: test user quota max size (single site)
       module: sanity_rgw.py
       name: test user quota max size (single site)
@@ -303,7 +297,6 @@ tests:
           config:
             script-name: test_dynamic_bucket_resharding.py
             config-file-name: test_bucket_index_shards.yaml
-            timeout: 300
       desc: test_metadata_integrity_with_0_num_shards (single site)
       module: sanity_rgw.py
       name: test_metadata_integrity_with_0_num_shards (single site)
@@ -399,7 +392,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
 
   - test:
       clusters:
@@ -408,7 +400,6 @@ tests:
             config-file-name: test_user_bucket_create.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: user and bucket create operation
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -421,7 +412,6 @@ tests:
             config-file-name: test_user_modify_op.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: Modify suspend enable and delete user operation
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -434,7 +424,6 @@ tests:
             config-file-name: test_user_bucket_rename.yaml
             script-name: test_user_bucket_rename.py
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: rename user and bucket and link unlink bucket operation
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -450,7 +439,6 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_reshard_cancel_cmd.yaml
-            timeout: 300
             verify-io-on-site: ["ceph-pri"]
 
   - test:
@@ -463,7 +451,6 @@ tests:
           config:
             script-name: test_bucket_lifecycle_object_expiration_transition.py
             config-file-name: test_lc_rule_prefix_and_tag.yaml
-            timeout: 300
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
 
   - test:
@@ -476,7 +463,6 @@ tests:
           config:
             script-name: test_bucket_lc_object_exp_multipart.py
             config-file-name: test_bucket_lc_object_exp_multipart.yaml
-            timeout: 300
             verify-io-on-site: ["ceph-pri"]
 
 # Log trimming tests
@@ -490,8 +476,8 @@ tests:
           config:
             script-name: test_bilog_trimming.py
             config-file-name: test_mdlog_trimming.yaml
-            timeout: 300
             verify-io-on-site: ["ceph-sec"]
+            timeout: 5000
 
   - test:
       name: Datalog trimming test on primary
@@ -503,7 +489,6 @@ tests:
           config:
             script-name: test_bilog_trimming.py
             config-file-name: test_datalog_trimming.yaml
-            timeout: 300
             verify-io-on-site: ["ceph-sec"]
 
   - test:
@@ -516,7 +501,6 @@ tests:
           config:
             script-name: test_bilog_trimming.py
             config-file-name: test_bilog_trimming.yaml
-            timeout: 300
 
   - test:
       name: bucket request payer
@@ -528,4 +512,3 @@ tests:
           config:
             script-name: test_bucket_request_payer.py
             config-file-name: test_bucket_request_payer.yaml
-            timeout: 300

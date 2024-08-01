@@ -51,7 +51,9 @@ def run(ceph_cluster, **kw):
             return 1
         client1 = clients[0]
         log.info("Install ceph-base as we require while generating crush map")
-        client1.exec_command(sudo=True, cmd="yum install ceph-base -y --nogpgcheck")
+        client1.exec_command(
+            sudo=True, cmd="yum install ceph-base -y --nogpgcheck", check_ec=False
+        )
         fs_details = fs_util.get_fs_info(client1)
         fs_name = "cephfs"
         if not fs_details:

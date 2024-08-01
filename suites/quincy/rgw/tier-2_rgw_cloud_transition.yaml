@@ -161,7 +161,6 @@ tests:
           config:
             script-name: test_cloud_transition.py
             config-file-name: test_cloud_transition_headobject_true.yaml
-            timeout: 500
       desc: test clould transition basic workflow
       module: sanity_rgw.py
       name: Test cloud transition retain headobject
@@ -187,7 +186,6 @@ tests:
           config:
             script-name: test_cloud_transition.py
             config-file-name: test_cloud_transition_headobject_false.yaml
-            timeout: 500
       desc: test clould transition basic workflow
       module: sanity_rgw.py
       name: Test cloud transition no retain headobject
@@ -199,7 +197,6 @@ tests:
           config:
             script-name: test_cloud_transition.py
             config-file-name: test_cloud_transition_multipart.yaml
-            timeout: 500
       desc: test clould transition basic workflow
       module: sanity_rgw.py
       name: Test cloud transition multipart upload

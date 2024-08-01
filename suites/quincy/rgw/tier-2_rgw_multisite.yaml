@@ -278,7 +278,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       polarion-id: CEPH-83575199
       module: sanity_rgw_multisite.py
@@ -294,7 +293,7 @@ tests:
           config:
             script-name: test_multisite_bucket_granular_sync_policy.py
             config-file-name: test_multisite_granular_bucketsync_enabled_forbidden.yaml
-            timeout: 300
+            timeout: 5500
 
   - test:
       name: bucket granular sync policy on forbidden allowed semantic with symmetrical and directional flow
@@ -306,7 +305,7 @@ tests:
           config:
             script-name: test_multisite_bucket_granular_sync_policy.py
             config-file-name: test_multisite_granular_bucketsync_forbidden_allowed.yaml
-            timeout: 300
+            timeout: 5500
 
   - test:
       name: bucket granular sync policy on forbidden enabled semantic with directional and symmetrical flow
@@ -318,4 +317,4 @@ tests:
           config:
             script-name: test_multisite_bucket_granular_sync_policy.py
             config-file-name: test_multisite_granular_bucketsync_forbidden_enabled.yaml
-            timeout: 300
+            timeout: 5500

@@ -110,7 +110,6 @@ tests:
         test-version: v2
         script-name: test_sts_using_boto.py
         config-file-name: test_sts_using_boto.yaml
-        timeout: 500
   - test:
       name: STS Tests to perform assume role call with permissive session policies
       desc: Perform assume role call with permissive session policies
@@ -120,7 +119,6 @@ tests:
         run-on-rgw: true
         script-name: test_sts_using_boto_session_policy.py
         config-file-name: test_sts_using_boto_permissive_session_policy.yaml
-        timeout: 500
   - test:
       name: STS Tests to perform assume role call with restrictive session policies
       desc: Perform assume role call with restrictive session policies
@@ -130,7 +128,6 @@ tests:
         run-on-rgw: true
         script-name: test_sts_using_boto_session_policy.py
         config-file-name: test_sts_using_boto_restricted_session_policy.yaml
-        timeout: 500
   - test:
       name: STS Tests to perform Server Side Copy
       desc: Perform Server Side Copy
@@ -140,7 +137,6 @@ tests:
         run-on-rgw: true
         script-name: test_sts_using_boto_server_side_copy.py
         config-file-name: test_sts_using_boto_server_side_copy.yaml
-        timeout: 500
   - test:
       name: STS Tests for handling non-existent object condition
       desc: STS test using boto for handling non-existent object condition
@@ -150,7 +146,6 @@ tests:
         run-on-rgw: true
         script-name: test_sts_using_boto_unexisting_object.py
         config-file-name: test_sts_using_boto.yaml
-        timeout: 500
   - test:
       name: STS test with invalid arn in the role's policy
       desc: STS test with invalid arn in the role's policy
@@ -160,7 +155,6 @@ tests:
         run-on-rgw: true
         script-name: test_sts_using_boto.py
         config-file-name: test_sts_using_boto_invalid_arn_policy.yaml
-        timeout: 500
   - test:
       name: STS test with invalid principal in the role's policy
       desc: STS test with invalid principal in the role's policy
@@ -169,7 +163,6 @@ tests:
       config:
         script-name: test_sts_using_boto.py
         config-file-name: test_sts_invalid_principal.yaml
-        timeout: 500
   - test:
       name: reshard cancel command
       desc: reshard cancel command
@@ -179,7 +172,6 @@ tests:
         run-on-rgw: true
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_reshard_cancel_cmd.yaml
-        timeout: 500
 
   - test:
       name: Multipart upload with Bucket policy enabled
@@ -190,7 +182,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_with_multipart_upload.yaml
-        timeout: 500
 
   - test:
       name: DBR tests with custom objs_per_shard and max_dynamic_shard
@@ -201,7 +192,6 @@ tests:
         run-on-rgw: true
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dbr_with_custom_objs_per_shard_and_max_dynamic_shard.yaml
-        timeout: 500
 
   - test:
       name: DBR tests with custom objs_per_shard max_dynamic_shard and reshard_thread_interval
@@ -212,7 +202,6 @@ tests:
         run-on-rgw: true
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dbr_with_custom_objs_per_shard_max_dynamic_shard_and_reshard_thread_interval.yaml
-        timeout: 500
 
   - test:
       name: Bucket setlifeycle with invalid date in LC conf
@@ -223,7 +212,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_invalid_date.yaml
-        timeout: 300
 
   - test:
       name: LC enabled on bucket removes pre and post uploaded objects
@@ -234,7 +222,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lc_enable_object_exp.yaml
-        timeout: 300
 
   - test:
       name: Control functionality for RGW lifecycle
@@ -245,7 +232,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_rgw_enable_lc_threads.yaml
-        timeout: 300
 
   - test:
       name: Test ACL Operations
@@ -257,7 +243,6 @@ tests:
         test-version: v2
         script-name: test_acl_ops.py
         config-file-name: test_acl_ops.yaml
-        timeout: 300
 
   - test:
       name: Test single delete marker for versioned object using LC
@@ -268,7 +253,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_multiple_delete_marker.yaml
-        timeout: 300
 
   - test:
       name: Test NFS cluster and export create
@@ -279,7 +263,6 @@ tests:
         run-on-rgw: true
         script-name: ../nfs_ganesha/nfs_cluster.py
         config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
-        timeout: 300
 
   - test:
       abort-on-fail: true
@@ -302,7 +285,6 @@ tests:
       config:
         script-name: test_LargeObjGet_GC.py
         config-file-name: test_bucket_remove_with_multipart_abort.yaml
-        timeout: 500
 
   - test:
       name: Test functionality of bucket check fix
@@ -312,7 +294,6 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_bucket_check_fix.yaml
-        timeout: 500
 
   # - test:
   #     name: Test functionality of user stat reset
@@ -323,7 +304,6 @@ tests:
   #     config:
   #       script-name: test_Mbuckets_with_Nobjects.py
   #       config-file-name: test_user_stats_reset.yaml
-  #       timeout: 500
 
   - test:
       name: Test bucket listing is not truncated
@@ -333,7 +313,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_list_not_truncated.yaml
-        timeout: 500
 
   - test:
       name: Test bi put with incomplete multipart upload

@@ -72,7 +72,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_down_broker_persistent.yaml
-        timeout: 300
 
   - test:
       name: test kafka_broker_persistent notifications for multipart upload events when kafka server is down
@@ -83,7 +82,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_down_broker_persistent_multipart.yaml
-        timeout: 300
 
   # test event time 0 fix for multipart uploads
 
@@ -96,7 +94,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_multipart.yaml
-        timeout: 300
 
   - test:
       name: notify on multipart upload events with kafka_broker
@@ -107,7 +104,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_multipart.yaml
-        timeout: 300
 
   # Test Bucket notifications for lifecycle events
 
@@ -120,7 +116,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lc_object_exp_multipart.py
         config-file-name: test_bucket_lc_object_exp_multipart_notifications.yaml
-        timeout: 300
 
   - test:
       name: notify on lifecycle expiration delete marker
@@ -131,7 +126,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_delete_marker_notifications.yaml
-        timeout: 300
 
   - test:
       name: notify on lifecycle expiration events
@@ -142,7 +136,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_expiration_notifications.yaml
-        timeout: 300
 
   - test:
       name: notify on lifecycle expiration with parallel lc processing
@@ -153,7 +146,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_expiration_parallel_notifications.yaml
-        timeout: 300
 
   - test:
       name: notify on lifecycle expiration non current objects with prefix rule
@@ -164,7 +156,6 @@ tests:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_prefix_non_current_days_notifications.yaml
-        timeout: 300
 
   # testing rgw through curl
   - test:
@@ -175,7 +166,6 @@ tests:
       config:
         script-name: ../curl/test_quota_using_curl.py
         config-file-name: ../../curl/configs/test_quota_mgmt_bucket_quota_using_curl.yaml
-        timeout: 500
   - test:
       name: Test rgw user quota using CURL
       desc: Test rgw user quota using CURL
@@ -184,7 +174,6 @@ tests:
       config:
         script-name: ../curl/test_quota_using_curl.py
         config-file-name: ../../curl/configs/test_quota_mgmt_user_quota_using_curl.yaml
-        timeout: 500
   - test:
       name: Test rgw bucket quota conflict using CURL
       desc: Test rgw bucket quota conflict using CURL
@@ -193,7 +182,6 @@ tests:
       config:
         script-name: ../curl/test_quota_using_curl.py
         config-file-name: ../../curl/configs/test_quota_mgmt_conflict_bucket_quota_using_curl.yaml
-        timeout: 500
 
   - test:
       name: check-ceph-health

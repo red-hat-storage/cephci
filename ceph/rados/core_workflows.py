@@ -291,12 +291,15 @@ class RadosOrchestrator:
         log.error(f"pool {pool} not found")
         return {}
 
-    def host_maintenance_enter(self, hostname: str, retry: int = 10) -> bool:
+    def host_maintenance_enter(
+        self, hostname: str, retry: int = 10, yes_i_really_mean_it: bool = False
+    ) -> bool:
         """
         Adds the specified host into maintenance mode
         Args:
             hostname: name of the host which needs to be added into maintenance mode
             retry: max number of retries to put host into maintenance mode
+            yes_i_really_mean_it: Passes yes i really mean it flag during comand execution
         Returns:
             True -> Host successfully added to maintenance mode
             False -> Host Could not be added to maintenance mode
@@ -307,6 +310,8 @@ class RadosOrchestrator:
         while iteration <= retry:
             iteration += 1
             cmd = f"ceph orch host maintenance enter {hostname} --force"
+            if yes_i_really_mean_it and self.rhbuild.split(".")[0] >= "7":
+                cmd = f"ceph orch host maintenance enter {hostname} --force --yes-i-really-mean-it"
             try:
                 out, err = self.client.exec_command(cmd=cmd, sudo=True, timeout=600)
                 log.debug(f"o/p of maintenance enter cmd : {out}, err stream : {err}")
@@ -638,6 +643,7 @@ class RadosOrchestrator:
             pg_num = kwargs["pg_num"]
 
         else:
+            log.info("No argument provided, returning the acting set for PG 1.0")
             # Collecting the acting set for a random pool ID 1 from cluster
             pg_num = "1.0"
 
@@ -1745,6 +1751,305 @@ class RadosOrchestrator:
         orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
         log.debug(orch_ps_out)
         return orch_ps_out["status"], orch_ps_out["status_desc"]
+
+    def daemon_check_post_tests(
+        self, pre_test_orch_ps: dict, pre_crash_report: list = None
+    ) -> bool:
+        """
+        Method that compares the daemons & their placement beforw and after the test, to check if any daemon is
+        removed, added or placement is changed onto another host.
+
+        Args:
+            pre_test_orch_ps : output of "ceph orch ps" before the tests/ operations
+            pre_crash_report : output of "ceph crash ls" before the tests/ operations
+        Returns:
+            Pass -> True, fail -> False
+        """
+        # Load JSON data
+        orch_ps_data = pre_test_orch_ps
+        cmd = "ceph orch ps"
+        orch_ps_new_data = self.run_ceph_command(cmd=cmd)
+
+        # Function to collect daemon_name and hostname by daemon_type
+        def collect_daemon_info(data):
+            daemon_info = {}
+            for entry in data:
+                daemon_type = entry["daemon_type"]
+                daemon_name = entry["daemon_name"]
+                hostname = entry["hostname"]
+                if daemon_type not in daemon_info:
+                    daemon_info[daemon_type] = {}
+                daemon_info[daemon_type][daemon_name] = hostname
+            return daemon_info
+
+        # Collect daemon information from both JSON structures
+        orch_ps_daemons = collect_daemon_info(orch_ps_data)
+        orch_ps_new_daemons = collect_daemon_info(orch_ps_new_data)
+
+        # Compare daemons and print the results
+        all_match = True
+        for daemon_type, daemons in orch_ps_daemons.items():
+            if daemon_type in orch_ps_new_daemons:
+                log.debug(f"Verification for Daemon Type: {daemon_type}")
+                for daemon_name, hostname in daemons.items():
+                    log.debug(
+                        f"Verification for Daemon: {daemon_name} on host {hostname}"
+                    )
+                    if daemon_name in orch_ps_new_daemons[daemon_type]:
+                        log.debug(
+                            f"Daemon: {daemon_name} present post test."
+                            f" Checking if host is updated post tests"
+                        )
+                        new_hostname = orch_ps_new_daemons[daemon_type][daemon_name]
+                        log.debug(
+                            f"Daemon: {daemon_name} present post test."
+                            f"Old hostname {hostname} , New hostname : {new_hostname} fro daemon {daemon_name}"
+                            f" Checking if host is updated post tests"
+                        )
+                        is_same = hostname == new_hostname
+                        if not is_same:
+                            all_match = False
+                            log.error(f"Daemon Type: {daemon_type}")
+                            log.error(f"  Daemon Name: {daemon_name}")
+                            log.error(f"    Old Hostname: {hostname}")
+                            log.error(f"    New Hostname: {new_hostname}")
+                            log.error(f"    Same Hostname: {is_same}")
+                    else:
+                        all_match = False
+                        log.error(f"Daemon Type: {daemon_type}")
+                        log.error(f"  Daemon Name: {daemon_name}")
+                        log.error(f"    Old Hostname: {hostname}")
+                        log.error("    New Hostname: Not found")
+                        log.error("    Same Hostname: False")
+            else:
+                all_match = False
+                log.error(f"Daemon Type: {daemon_type} not found post tests")
+
+        # Check for missing daemons in orch_ps_new
+        for daemon_type, daemons in orch_ps_daemons.items():
+            if daemon_type not in orch_ps_new_daemons:
+                all_match = False
+                log.error(f"Daemon Type: {daemon_type} is missing post tests")
+            else:
+                for daemon_name in daemons:
+                    if daemon_name not in orch_ps_new_daemons[daemon_type]:
+                        all_match = False
+                        log.error(
+                            f"Daemon Name: {daemon_name} in "
+                            f"Daemon Type: {daemon_type} is missing in orch ps post tests."
+                        )
+
+        # Check for new daemons added in orch_ps post upgrade
+        for daemon_type, daemons in orch_ps_new_daemons.items():
+            if daemon_type not in orch_ps_daemons:
+                # all_match = False
+                log.error(f"New Daemon Type: {daemon_type} not present post upgrade")
+            else:
+                for daemon_name in daemons:
+                    if daemon_name not in orch_ps_daemons[daemon_type]:
+                        # Not failing the method if new daemons are added to the cluster post upgrade
+                        # all_match = False
+                        log.error(
+                            f"New Daemon Name: {daemon_name} in Daemon Type: {daemon_type} found post tests."
+                        )
+
+        if pre_crash_report:
+            # Checking for new crashes on the cluster since tests started
+            crashes = self.run_ceph_command(cmd="ceph crash ls")
+            # Convert lists to sets
+            set_crash1 = set(pre_crash_report)
+            set_crash2 = set(crashes)
+
+            new_crashes = list(set_crash2 - set_crash1)
+            log.debug(f"New crashes post start of test execution are : {new_crashes}")
+            if len(new_crashes) > 0:
+                log.error("New crashes observed on the cluster post starting the test")
+                all_match = False
+
+        return all_match
+
+    def compare_df_stats(self, pre_test_df_stats):
+        """
+        Method to compare the 'total_bytes', 'total_avail_bytes', 'total_used_bytes' in ceph before and after the tests,
+        and also check the 'stored', 'objects', 'stored_raw', 'avail_raw' for each pool on the cluster, to check if it's
+        same before and after the tests.
+
+        Note: If IO's are being run during the tests, this method cannot be used, as the method validates if the
+        two df stats outputs are same
+        Args:
+            pre_test_df_stats: Output of "ceph df detail" in json format collected before starting the tests
+        Returns:
+            Pass -> True, Fail -> False
+        """
+
+        def bytes_to_gb(value):
+            return round(value / (1024**3), 1)
+
+        def within_variance(old_value, new_value, variance=0.25):
+            if old_value == 0 and new_value == 0:
+                return True  # Both are zero, so they are the same
+            if old_value == 0 or new_value == 0:
+                return False  # One is zero and the other is not, so they differ
+            return abs(old_value - new_value) / old_value <= variance
+
+        df_stats_data = pre_test_df_stats
+        df_stats_new_data = self.run_ceph_command(cmd="ceph df detail")
+        check_pass = True
+
+        # Compare overall stats
+        overall_keys = ["total_bytes", "total_avail_bytes", "total_used_bytes"]
+        for key in overall_keys:
+            old_value_gb = bytes_to_gb(df_stats_data["stats"].get(key, 0))
+            new_value_gb = bytes_to_gb(df_stats_new_data["stats"].get(key, 0))
+            log.info(f"Value in {key}: old {old_value_gb} GB , new {new_value_gb} GB")
+            if not within_variance(old_value_gb, new_value_gb):
+                log.error(
+                    f"Difference in {key}: {old_value_gb} GB != {new_value_gb} GB"
+                )
+                check_pass = False
+
+        # Compare each pool
+        old_pools = {pool["name"]: pool["stats"] for pool in df_stats_data["pools"]}
+        new_pools = {pool["name"]: pool["stats"] for pool in df_stats_new_data["pools"]}
+
+        for pool_name, old_pool_stats in old_pools.items():
+            if pool_name in new_pools:
+                new_pool_stats = new_pools[pool_name]
+                pool_keys = ["stored", "objects", "stored_raw", "avail_raw"]
+                for key in pool_keys:
+                    old_value_gb = bytes_to_gb(old_pool_stats.get(key, 0))
+                    new_value_gb = bytes_to_gb(new_pool_stats.get(key, 0))
+                    log.info(
+                        f"Values in {key} for pool {pool_name}: old {old_value_gb} GB , new {new_value_gb} GB"
+                    )
+                    if not within_variance(old_value_gb, new_value_gb):
+                        log.error(
+                            f"Difference in {key} for pool {pool_name}: {old_value_gb} GB != {new_value_gb} GB"
+                        )
+                        check_pass = False
+        log.info(
+            "All compared values in the ceph df stats, and they are in the 5% variance"
+        )
+        return check_pass
+
+    def get_ideal_max_avail_pools(self, default_replica_size: int = 3) -> float:
+        """
+        Method to calculate the MAX_AVAIL on the pools on the cluster, by calculating the formula below
+        ([min(osd.avail for osd in OSD_up) - ( min(osd.avail for osd in OSD_up).total_size * (1 - full_ratio)) ] *
+        len(osd.avail for osd in OSD_up))/pool.size()
+
+        Args:
+            default_replica_size: replica size on the pools. default is 3
+
+        Returns:
+            MAX_AVAIL size calculated in float
+        """
+
+        def kb_to_gb(kb):
+            return round(kb / (1024 * 1024), 1)
+
+        def calculate_max_avail(
+            most_used_avail_gb, most_used_total_gb, full_ratio, replica_size, total_osds
+        ):
+            max_avail = (
+                (most_used_avail_gb - (most_used_total_gb * (1 - full_ratio)))
+                * total_osds
+            ) / replica_size
+            return round(max_avail, 1)
+
+        data = self.run_ceph_command(cmd="ceph osd df tree")
+        full_ratio = self.run_ceph_command(cmd="ceph osd dump")["full_ratio"]
+        replica_size = default_replica_size
+        total_osds = 0
+        most_used_osd = None
+        most_used_kb = 0
+        most_used_total_kb = 0
+        most_used_avail_kb = 0
+
+        for node in data["nodes"]:
+            if node["type"] == "osd":
+                total_osds += 1
+                if node["kb_used"] > most_used_kb:
+                    most_used_kb = node["kb_used"]
+                    most_used_osd = node
+                    most_used_total_kb = node[
+                        "kb"
+                    ]  # Assuming 'kb' represents the total size of the OSD
+                    most_used_avail_kb = node["kb_avail"]
+
+        most_used_avail_gb = kb_to_gb(most_used_avail_kb)
+        most_used_total_gb = kb_to_gb(most_used_total_kb)
+
+        log.debug(
+            f"total OSDs on cluster : {total_osds},\n"
+            f"Most used OSD : {most_used_osd}"
+            f"Most utilization on OSD avail space:  {most_used_avail_gb},\n"
+            f"most used OSD total space : {most_used_total_gb})"
+        )
+
+        max_avail = calculate_max_avail(
+            most_used_avail_gb, most_used_total_gb, full_ratio, replica_size, total_osds
+        )
+        log.info(f"max avail calculated is = {max_avail}")
+        return max_avail
+
+    def verify_max_avail(self, variance: float = 0.20):
+        """
+        method to verify if the max df calculated by the cluster is as expected on the pool
+        bug : https://bugzilla.redhat.com/show_bug.cgi?id=2109129
+
+        Args:
+            variance: % of acceptable difference between the calculated vs actual
+
+        Returns:
+            Pass -> true, Fail -> False
+        """
+
+        def kb_to_gb(kb):
+            return round(kb / (1024 * 1024), 1)
+
+        max_avail_by_pool = {}
+        size_by_pool = {}
+        check_pass = True
+        ceph_df = self.run_ceph_command(cmd="ceph df detail")
+        pool_detail = self.run_ceph_command(cmd="ceph osd pool ls detail")
+
+        # ceph df detail
+        for pool in ceph_df["pools"]:
+            pool_name = pool["name"]
+            max_avail = kb_to_gb(pool["stats"]["max_avail"])
+            max_avail_by_pool[pool_name] = max_avail
+
+        # ceph osd pool ls detail
+        for entry in pool_detail:
+            pool_name = entry["pool_name"]
+            size = entry["size"]
+            if entry["type"] != 1:
+                log.debug(f"pool : {pool_name} is a non replicated pool.")
+                break
+            size_by_pool[pool_name] = size
+
+        for pool in size_by_pool:
+            ideal_max_avail = self.get_ideal_max_avail_pools(
+                default_replica_size=size_by_pool[pool]
+            )
+            pool_max_avail = max_avail_by_pool[pool]
+            is_within_variance = (
+                lambda value, new_value, var: abs(value - new_value) / value <= variance
+            )
+
+            if not is_within_variance(ideal_max_avail, pool_max_avail, variance):
+                log.error(
+                    f"The MAX_AVAIL for pool : {pool} with size : {size_by_pool[pool]} is not same as expected.\n"
+                    f"Actual on cluster : {pool_max_avail}\n"
+                    f"Calculated value : {ideal_max_avail}\n"
+                )
+                check_pass = False
+
+            log.debug(
+                f"The MAX_AVAIL on the pool is as expected for pool : {pool} is as expected"
+            )
+        return check_pass
 
     def get_osd_stat(self):
         """

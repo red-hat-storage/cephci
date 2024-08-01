@@ -217,6 +217,7 @@ def verify_mon_db_trim(ceph_cluster, node: CephAdmin, **kwargs):
     mon_db_max_size = max(mon_db_size_list)
     # Getting the trend of mon DB size when the operations were running on cluster.
     mon_db_size_size_change = list()
+    mon_db_size_list = [value for value in mon_db_size_list if value is not None]
     for i in range(len(mon_db_size_list) - 1):
         mon_db_size_size_change.append(mon_db_size_list[i + 1] - mon_db_size_list[i])
 
@@ -300,14 +301,21 @@ def get_mondb_size(mon_node, mon_daemons) -> int:
     daemon = [
         mon for mon in mon_daemons if re.search(mon["hostname"], mon_node.hostname)
     ][0]
-    cmd = f"podman exec {daemon['container_id']} du -ch /var/lib/ceph/mon/"
+    cmd = f"podman exec {daemon['container_id']} du -ch --exclude='*.tmp' /var/lib/ceph/mon/"
     log.info(
         f"Collecting the size of the DB on node: {mon_node.hostname} by executing the command : {cmd}"
     )
-    output, err = mon_node.exec_command(sudo=True, cmd=cmd)
+    try:
+        output, err = mon_node.exec_command(sudo=True, cmd=cmd)
+    except Exception as error:
+        log.error(
+            f"Command to fetch the db usage could not be run. Error : {error}"
+            f"Command error : {err}"
+        )
+        return None
     regex = r"\s*([\d]*)[M|G]\s+[\w\W]*store.db"
     match = re.search(regex, output)
-    size = match.groups()[0] if match else 0
+    size = match.groups()[0] if match else None
     log.debug(f"the size of the cluster DB is {int(size)}")
     return int(size)
 

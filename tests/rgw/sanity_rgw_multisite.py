@@ -196,7 +196,7 @@ def run(**kw):
     script_dir = TEST_DIR[test_version]["script"]
     config_dir = TEST_DIR[test_version]["config"]
     lib_dir = TEST_DIR[test_version]["lib"]
-    # timeout = config.get("timeout", 600)
+    timeout = config.get("timeout", 3600)
     # install extra package which are test specific
     distro_version_id = primary_rgw_node.distro_info["VERSION_ID"]
     if extra_pkgs:
@@ -243,6 +243,7 @@ def run(**kw):
         + config_file_name
         + append_param,
         long_running=True,
+        timeout=timeout,
     )
     if test_status == 0:
         copy_user_to_site = clusters.get(config.get("copy-user-info-to-site"))
