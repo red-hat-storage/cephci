@@ -17,6 +17,7 @@ import subprocess
 import time
 import traceback
 from json import JSONDecodeError
+from threading import Thread
 from time import sleep
 
 import paramiko
@@ -4408,3 +4409,192 @@ os.system('sudo systemctl start  network')
             if stop_flag:
                 log.info("Exited as stop flag is set to True")
                 break
+
+    def mds_mem_cpu_load(
+        self, client, target_usage_pct, mds_name, mds_node, subvol_list, mnt_info
+    ):
+        """
+        In this method,
+          - mount subvolumes, captures initial mem and cpu usage by mds
+          - start IO and track mem and cpu usage by mds
+          - When usage is atleast target_usage_pct i.e., say 70%, returns as 0
+          - If target_usage_pct could not be achived in timeout(60sec), returns 1
+        Input params:
+        client : Ceph client to run cmds
+        target_usage_pct : Its minimum percentage usage of mem and cpu by mds
+        to be achived in this method, type - int, value to be between 30-80
+        mds_name : Active mds whose usage to be monitored
+        subvol_list : subvolumes list to mount and run IO
+        client_list: Client objects to mount subvolumes, as one subvolume per client
+        """
+
+        if target_usage_pct < 30 or target_usage_pct > 80:
+            log.error(
+                f"target_usage_pct is {target_usage_pct}, it needs to in range 30-80 for this test"
+            )
+        initial_mds_mem_used_pct, initial_mds_cpu_used_pct = self.get_mds_cpu_mem_usage(
+            client, mds_name, mds_node
+        )
+        log.info(
+            f"MDS MEM,CPU initial usage: MEM - {initial_mds_mem_used_pct},CPU - {initial_mds_cpu_used_pct}"
+        )
+        # Mount subvolumes and write dataset
+        log.info("Write Dataset on subvolumes")
+        io_type = "write"
+        write_procs = []
+        for sv in subvol_list:
+            sv_name = sv["subvol_name"]
+            client_sv = mnt_info[sv_name]["client"]
+            path = mnt_info[sv_name]["path"]
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(3))
+            )
+            io_path = f"{path}/smallfile_dir_{rand_str}"
+
+            repeat_cnt = 1
+            p = Thread(
+                target=self.mds_systest_io,
+                args=(client_sv, io_path, io_type, repeat_cnt),
+            )
+            p.start()
+            write_procs.append(p)
+            mnt_info[sv_name].update({"io_path": io_path})
+        for p in write_procs:
+            p.join()
+        mds_mem_used_pct, mds_cpu_used_pct = self.get_mds_cpu_mem_usage(
+            client, mds_name, mds_node
+        )
+        log.info(
+            f"MDS MEM and CPU usage after Write op: MEM - {mds_mem_used_pct},CPU - {mds_cpu_used_pct}"
+        )
+        if float(mds_mem_used_pct) >= float(target_usage_pct) and float(
+            mds_cpu_used_pct
+        ) >= float(target_usage_pct):
+            return 0
+        log.info("Start Read ops and track cpu and mem usage by mds in parallel")
+        rw_procs = []
+        repeat_cnt = 2
+        io_type = "read"
+        i = 0
+        for sv in mnt_info:
+            i += 1
+            client_sv = mnt_info[sv]["client"]
+            io_path = mnt_info[sv]["io_path"]
+            if i == 3:
+                io_type = "write"
+                rand_str = "".join(
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in list(range(3))
+                )
+                io_path = f"{path}/smallfile_dir_{rand_str}"
+            p = Thread(
+                target=self.mds_systest_io,
+                args=(client_sv, io_path, io_type, repeat_cnt),
+            )
+            p.start()
+            rw_procs.append(p)
+
+        # If CPU and MEM usage crosses target_usage_pct exit as 0
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
+        while end_time > datetime.datetime.now():
+            mds_mem_used_pct, mds_cpu_used_pct = self.get_mds_cpu_mem_usage(
+                client, mds_name, mds_node
+            )
+            log.info(
+                f"MDS MEM and CPU usage after Read op: MEM - {mds_mem_used_pct},CPU - {mds_cpu_used_pct}"
+            )
+            if float(mds_mem_used_pct) >= float(target_usage_pct) and float(
+                mds_cpu_used_pct
+            ) >= float(target_usage_pct):
+                return 0
+            time.sleep(5)
+        return 1
+
+    def get_mds_cpu_mem_usage(self, client, mds_name, mds_node):
+        # Get mem cache limit
+        out, rc = client.exec_command(
+            sudo=True,
+            cmd="ceph config get mds mds_cache_memory_limit",
+        )
+        mds_mem_limit = float(out.strip())
+        out, rc = client.exec_command(
+            sudo=True,
+            cmd=f"ceph orch ps| grep {mds_name}",
+        )
+        mds_info = out.strip()
+        mds_mem_usage = mds_info.split()[7]
+        mds_mem_used = self.convert_to_bytes(mds_mem_usage)
+        mds_mem_used_pct = (mds_mem_used / mds_mem_limit) * 100
+        out = ""
+        retry_cnt = 20
+        iter = 0
+        while "ceph-mds" not in out and retry_cnt > 0:
+            iter += 1
+            out, rc = mds_node.exec_command(
+                sudo=True,
+                cmd="top -d 3 -n 5 -b | grep ceph-mds > top_out.txt;cat top_out.txt",
+            )
+            out = out.strip()
+            retry_cnt -= 1
+            log.info(f"top output:{out}")
+            time.sleep(2)
+
+        top_out = out.split("\n")
+        log.info(f"top_out:{top_out}")
+        mds_cpu_used_pct_list = []
+        for line in top_out:
+            log.info(f"line:{line}")
+            mds_cpu_used_pct_tmp = line.split()[8]
+            mds_cpu_used_pct_list.append(mds_cpu_used_pct_tmp)
+        mds_cpu_used_pct = max(mds_cpu_used_pct_list)
+
+        return mds_mem_used_pct, mds_cpu_used_pct
+
+    def mds_systest_io(self, client, io_path, io_type, repeat_cnt):
+        i = 0
+        while i < repeat_cnt:
+            if io_type == "read":
+                cmd = "python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 1"
+                cmd += f" --files 10000 --top {io_path}"
+                out, rc = client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                    long_running=True,
+                    timeout=3600,
+                )
+
+                i += 1
+            elif io_type == "write":
+                cmd = f"mkdir {io_path}"
+                try:
+                    out, rc = client.exec_command(
+                        sudo=True,
+                        cmd=cmd,
+                    )
+                except CommandFailed as ex:
+                    log.info(ex)
+                cmd = "python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 1"
+                cmd += f" --files 10000 --top {io_path} "
+                try:
+                    out, rc = client.exec_command(
+                        sudo=True,
+                        cmd=cmd,
+                        long_running=True,
+                        timeout=3600,
+                    )
+                except CommandFailed as ex:
+                    log.info(ex)
+
+    def convert_to_bytes(self, mem_size):
+        m = re.findall(r"(\d+.*\d+)(\w+)", mem_size)[0]
+        size_val = m[0]
+        size_type = m[1]
+        log.info(f"size_val:{size_val},size_type:{size_type}")
+        if "G" in size_type:
+            bytes_val = float(size_val) * 1024 * 1024 * 1024
+        elif "M" in size_type:
+            bytes_val = float(size_val) * 1024 * 1024
+        elif "K" in size_type:
+            bytes_val = float(size_val) * 1024
+        return bytes_val
