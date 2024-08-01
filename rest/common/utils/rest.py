@@ -276,8 +276,11 @@ class REST(object):
                 response.status_code == requests.codes.OKAY
                 or response.status_code == requests.codes.CREATED
                 or response.status_code == requests.codes.ACCEPTED
+                or response.status_code == requests.codes.NO_CONTENT
             ):
                 # Decode(Deserialize) the json object using json.loads
+                if response.status_code == requests.codes.NO_CONTENT:
+                    return {}
                 return_val = json.loads(response.text)
                 log.debug(f"<< {json.dumps(return_val, indent=2)}")
                 return return_val
