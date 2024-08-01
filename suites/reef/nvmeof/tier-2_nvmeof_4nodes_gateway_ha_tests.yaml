@@ -71,6 +71,45 @@ tests:
   #  Configure Initiators
   #  Run IO on NVMe Targets
 
+  - test:
+      name: NVMe Service deployment with spec
+      desc: NVMe services with mTLS deployment using spec file.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: nvmeof
+                  service_id: rbd
+                  mtls: true
+                  placement:
+                    nodes:
+                      - node6
+                      - node7
+                  spec:
+                    pool: rbd
+                    enable_auth: true                     # boolean as string
+          - config:
+              command: shell
+              args:
+                - ceph config set mon mon_allow_pool_delete true
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd rbd --yes-i-really-really-mean-it
+
   # 4 GW Single node failure
   - test:
       abort-on-fail: true

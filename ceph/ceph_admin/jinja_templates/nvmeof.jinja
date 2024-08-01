@@ -1,0 +1,22 @@
+{%- set nlt = "\n  " -%}
+{%- set newline = "\n" -%}
+{% set cert_list = ['server_cert', 'server_key', 'client_cert', 'client_key', 'root_ca_cert'] %}
+---
+service_type: {{ spec['service_type'] }}
+service_id: {{ spec['service_id'] }}
+{%+ if spec['unmanaged'] -%}unmanaged: {{ spec['unmanaged'] }}
+{% endif -%}
+placement:
+{%- if spec['placement']['count_per_host'] -%}{{ nlt }}count_per_host: {{ spec['placement']['count_per_host'] }}{%- endif -%}
+{%- if spec['placement']['count'] -%}{{ nlt }}count: {{ spec['placement']['count'] }}{%- endif -%}
+{%- if spec['placement']['hosts'] -%}{{ nlt }}hosts: {{ spec['placement']['hosts'] }}{%- endif -%}
+{%- if spec['placement']['label'] -%}{{ nlt }}label: {{ spec['placement']['label'] }}{%- endif -%}
+{%- if spec['placement']['host_pattern'] -%}{{ nlt }}host_pattern: '{{ spec['placement']['host_pattern'] }}'{%- endif %}
+{%+ if spec['spec'] -%}
+spec:{%+ for key, value in spec['spec'].items() -%}{%- if key not in cert_list -%}{{ nlt }}{{ key }}: {{ value }}{% else %}{{ nlt }}{{ key }}: |
+    {{ value | indent(4) }}{%- endif -%}
+{% endfor %}
+{% endif %}
+
+{%- if spec['extra_container_args'] -%}extra_container_args: {{ spec['extra_container_args'] }}
+{% endif -%}

@@ -17,6 +17,7 @@ from jinja2 import Template
 from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids
 from utility.log import Log
+from utility.ssl_certs import CertificateGenerator
 from utility.utils import generate_self_signed_certificate
 
 LOG = Log(__name__)
@@ -24,6 +25,28 @@ LOG = Log(__name__)
 
 class UnknownSpecFound(Exception):
     pass
+
+
+def create_nvme_certificates(node, **kwargs):
+    """Create NVMe mTLS Server, client keys and certificates.
+
+    Args:
+        node: CephNode
+        kwargs: cert arguments
+    """
+    domain_name = kwargs["domain"]
+    node_ips = kwargs.get("ips", None)
+    dest_path = "/etc/mtls"
+    node.exec_command(cmd=f"mkdir -p {dest_path}", sudo=True)
+    if node_ips:
+        is_server, key, cert = True, "server.key", "server.crt"
+    else:
+        is_server, key, cert = False, "client.key", "client.crt"
+
+    server_cert_gen = CertificateGenerator(node, domain_name, ips=node_ips)
+    server_cert_gen.generate_key()
+    server_cert_gen.generate_certificate(is_server=is_server)
+    return server_cert_gen.save_files(key, cert, dest_path)
 
 
 class GenerateServiceSpec:
@@ -385,6 +408,70 @@ class GenerateServiceSpec:
 
         return template.render(spec=spec)
 
+    def generate_nvmeof_spec(self, spec):
+        """Return spec content for nvmeof service.
+
+        If mTLS is required, then
+
+        Args:
+            spec (Dict): nvmeof service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: nvmeof
+                service_id: rbd
+                unmanaged: boolean    # true or false
+                mtls: true
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: nvmeof
+                spec:
+                   pool: rbd
+                   enable_auth: true
+                   server_cert: <server-cert>
+                   server_key: <server-key>
+                   client_cert: <client-cert>
+                   client_key: <client-key>
+        """
+        template = self._get_template("nvmeof")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        mtls = spec.pop("mtls", None)
+        if mtls:
+            spec["spec"]["enable_auth"] = True
+
+            # server cert
+            node_ips = [
+                self.get_addr(i) for i in get_nodes_by_ids(self.cluster, node_names)
+            ]
+            key, cert = create_nvme_certificates(
+                self.node,
+                domain="nvme-server",
+                ips=node_ips,
+            )
+            spec["spec"]["root_ca_cert"] = cert.strip()
+            spec["spec"]["server_cert"] = cert.strip()
+            spec["spec"]["server_key"] = key.strip()
+
+            # client cert
+            key, cert = create_nvme_certificates(
+                self.node,
+                domain="nvme-client",
+            )
+            spec["spec"]["client_cert"] = cert.strip()
+            spec["spec"]["client_key"] = key.strip()
+
+        return template.render(spec=spec)
+
     def generate_rgw_spec(self, spec):
         """
         Return spec content for rgw service
@@ -630,6 +717,7 @@ class GenerateServiceSpec:
             "snmp-gateway": self.generate_snmp_spec,
             "snmp-destination": self.generate_snmp_dest_conf,
             "ingress": self.generate_ingress_spec,
+            "nvmeof": self.generate_nvmeof_spec,
         }
 
         try:
@@ -656,7 +744,7 @@ class GenerateServiceSpec:
 
         LOG.info(f"Spec yaml file content:\n{spec_content}")
         # Create spec yaml file
-        temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+        temp_file = tempfile.NamedTemporaryFile(dir="/tmp", suffix=".yaml")
         spec_file = self.node.node.remote_file(
             sudo=True, file_name=temp_file.name, file_mode="w"
         )
