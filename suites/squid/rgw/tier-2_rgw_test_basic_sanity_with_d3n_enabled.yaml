@@ -134,6 +134,7 @@ tests:
         run-on-rgw: true
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_rate_limit.yaml
+      comments: known issue BZ 2301986
 
   - test:
       name: Manual Resharding tests
