@@ -4154,3 +4154,16 @@ class RadosOrchestrator:
         details = out["nodes"][0]
         log.debug(f" OSD : {osd_id} details are : {details}")
         return details
+
+    def get_osd_size(self, osd_id):
+        """
+        Method returns the size of the OSD in KB
+        Args:
+            osd_id: osd id
+        Returns: The total size of the osd in KB
+
+        """
+        total_size_osd = self.get_osd_df_stats(
+            tree=False, filter_by="name", filter=f"osd.{osd_id}"
+        )["summary"]["total_kb"]
+        return total_size_osd
