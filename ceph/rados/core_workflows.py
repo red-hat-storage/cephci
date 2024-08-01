@@ -638,6 +638,7 @@ class RadosOrchestrator:
             pg_num = kwargs["pg_num"]
 
         else:
+            log.info("No argument provided, returning the acting set for PG 1.0")
             # Collecting the acting set for a random pool ID 1 from cluster
             pg_num = "1.0"
 

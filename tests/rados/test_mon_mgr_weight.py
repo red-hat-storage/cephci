@@ -19,8 +19,8 @@ def run(ceph_cluster, **kw):
     Covers:
         - BZ-2236226
         - BZ-2269541
-    Should cover:
         - BZ-2269542
+    Should cover:
         - BZ-2269543
     Test to verify Mgr daemon does not crash when Monitor weights are out of place
     # Steps
@@ -40,8 +40,8 @@ def run(ceph_cluster, **kw):
     log.info("Running test case to verify Mgr stability when Mon weights are modified")
 
     try:
-        if not rhbuild.startswith("7"):
-            log.info("Test is not valid for Pacific & Quincy, BZ yet to be back-ported")
+        if rhbuild.startswith("5"):
+            log.info("Test is not valid for Pacific, BZ yet to be back-ported")
             return 0
 
         # fetch active MGR for the cluster

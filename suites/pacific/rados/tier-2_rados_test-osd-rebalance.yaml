@@ -140,7 +140,7 @@ tests:
         run_iteration: 3
         create_pool: true
         pool_name: test-osd-df
-        write_iteration: 4
+        write_iteration: 10
         delete_pool: true
 
   # Below test is currently failing, BZ raised #2214864
