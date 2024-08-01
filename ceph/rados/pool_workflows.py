@@ -753,6 +753,7 @@ class PoolFunctions:
                 test_pg_split: Set bulk flag to increase PG count
                 test_pg_merge: Remove the bulk flag to reduce PG count
                 modify_threshold: change threshold set on the cluster if the automatic scaling is not possible
+                timeout: timeout for PGs to scale up or down
 
             Note: test_pg_split & test_pg_merge are mutually exclusive and only 1 KW arg can be passed at a time.
 
@@ -764,9 +765,10 @@ class PoolFunctions:
         )
 
         overwrite_recovery_threads = kwargs.get("overwrite_recovery_threads", True)
-        test_pg_split = kwargs.get("test_pg_split", True)
-        test_pg_merge = kwargs.get("test_pg_merge", True)
+        test_pg_split = kwargs.get("test_pg_split")
+        test_pg_merge = kwargs.get("test_pg_merge")
         modify_threshold = kwargs.get("modify_threshold", False)
+        timeout = kwargs.get("timeout", 14000)
 
         if overwrite_recovery_threads:
             self.rados_obj.change_recovery_threads(config={}, action="set")
@@ -777,6 +779,7 @@ class PoolFunctions:
                 f"PG autoscale mode of the pool is not on. Status of pool : {autoscale_status}"
                 f"Turning the autoscale mode to ON for pool : {pool}"
             )
+
             self.rados_obj.set_pool_property(
                 pool=pool, props="pg_autoscale_mode", value="on"
             )
@@ -792,7 +795,9 @@ class PoolFunctions:
         if test_pg_split:
             # checking if bulk is already set on pool
             if self.rados_obj.get_pool_property(pool=pool, props="bulk")["bulk"]:
-                log.error(f"Bulk flag already set on pool : {pool}")
+                log.error(
+                    f"Bulk flag already set on pool : {pool}, cannot set again to test PG split"
+                )
                 return False, 0
 
             log.info(
@@ -806,8 +811,8 @@ class PoolFunctions:
                 log.error(f"Bulk flag could not be set on pool : {pool}")
                 return False, 0
 
-            pg_count_bulk_true = self.rados_obj.get_pool_details(pool=pool)[
-                "pg_num_target"
+            pg_count_bulk_true = self.rados_obj.get_pg_autoscale_status(pool_name=pool)[
+                "pg_num_final"
             ]
             log.debug(
                 f"PG count on pool {pool} post addition of bulk flag : {pg_count_bulk_true}"
@@ -847,7 +852,7 @@ class PoolFunctions:
                 )
 
                 inactive_pg = 0
-                endtime = datetime.datetime.now() + datetime.timedelta(seconds=14000)
+                endtime = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
                 while datetime.datetime.now() < endtime:
                     pool_pg_num = self.rados_obj.get_pool_property(
                         pool=pool, props="pg_num"
@@ -902,30 +907,32 @@ class PoolFunctions:
 
         if test_pg_merge:
             # checking if bulk is already set on pool
-            if self.rados_obj.get_pool_property(pool=pool, props="bulk")["bulk"]:
-                log.error(f"Bulk flag already set on pool : {pool}")
+            if not self.rados_obj.get_pool_property(pool=pool, props="bulk")["bulk"]:
+                log.error(
+                    f"Bulk flag already removed from pool : {pool}, cannot remove again  to test PG merge"
+                )
                 return False, 0
 
             log.info(
-                f"Starting to merge the PGs of the pool {pool} by setting bulk flag"
+                f"Starting to merge the PGs of the pool {pool} by removing bulk flag"
             )
             self.rados_obj.set_pool_property(pool=pool, props="bulk", value="false")
             time.sleep(20)
 
-            # checking if bulk was set successfully
+            # checking if bulk was unset successfully
             if self.rados_obj.get_pool_property(pool=pool, props="bulk")["bulk"]:
                 log.error(f"Bulk flag could not be un-set on pool : {pool}")
                 return False, 0
 
-            pg_count_bulk_false = self.rados_obj.get_pool_details(pool=pool)[
-                "pg_num_target"
-            ]
+            pg_count_bulk_false = self.rados_obj.get_pg_autoscale_status(
+                pool_name=pool
+            )["pg_num_final"]
             log.debug(
                 f"Calculated PG count on pool {pool} post removal of bulk flag : {pg_count_bulk_false}"
             )
 
             inactive_pg = 0
-            endtime = datetime.datetime.now() + datetime.timedelta(seconds=14000)
+            endtime = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
             while datetime.datetime.now() < endtime:
                 pool_pg_num = self.rados_obj.get_pool_property(
                     pool=pool, props="pg_num"

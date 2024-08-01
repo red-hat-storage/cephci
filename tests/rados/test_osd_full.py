@@ -468,7 +468,7 @@ def run(ceph_cluster, **kw):
                 }
                 bench_obj.write(client=client_node, pool_name=pool_name, **full_config)
 
-                time.sleep(7)  # blind sleep to let all objs show up in ceph df stats
+                time.sleep(20)  # blind sleep to let all objs show up in ceph df stats
                 pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
                 if pool_stat["stats"]["objects"] != full_objs + 1:
                     log.error(f"Pool {pool_name} is not having {full_objs+1} objects")
