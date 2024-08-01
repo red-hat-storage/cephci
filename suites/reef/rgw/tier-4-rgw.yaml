@@ -224,7 +224,6 @@ tests:
       desc: increase ulimit number of open files to 16384
       module: exec.py
       name: increase ulimit number of open files to 16384
-      polarion-id: CEPH-10362
 
   - test:
       name: test s3select with depth1 queries on csv objects
