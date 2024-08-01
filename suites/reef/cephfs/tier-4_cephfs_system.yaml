@@ -17,6 +17,7 @@
 #   CEPH-11240: mds_shutdown_together_io_continue
 #   CEPH-83572891: MDS admin socket dump testing
 #   CEPH-83572890: MDS admin socket perf flush log testing
+#   CEPH-83591709: MDS Standby-Replay System testing
 #=======================================================================================================================
 tests:
   -
@@ -221,6 +222,12 @@ tests:
       module: cephfs_system.mds_admin_daemon_socket_perf_flush_log.py
       polarion-id: CEPH-83572890
       name: "MDS admin socket perf flush log testing"
+  - test:
+      abort-on-fail: false
+      desc: "MDS Standy-Replay system testing"
+      module: cephfs_system.mds_failover_standby_replay_systemic_test.py
+      polarion-id: CEPH-83591709
+      name: "mds_failover_standby_replay_systemic_test"
   - test:
       abort-on-fail: false
       desc: "Fill the cluster with 95 percentage and delete the contents"
