@@ -21,6 +21,7 @@
 """
 
 import datetime
+import json
 from collections import defaultdict
 
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -189,3 +190,34 @@ class RadosScrubber(RadosOrchestrator):
             return True
         log.error(f"Failed to {flag} OSD flag {value}")
         return False
+
+    def get_dump_scrubs(self, osd_id):
+        """
+        Method is used to return the osd dump scrubs
+         Args:
+             osd_id: osd id number
+        Returns:
+              Dump scrub output in the json format.
+        """
+        base_cmd = f"cephadm shell --name osd.{osd_id} ceph daemon  osd.{osd_id}  dump_scrubs -f json 2>/dev/null"
+        acting_osd_node = self.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+        out_put_tuple = acting_osd_node.exec_command(sudo=True, cmd=base_cmd)
+        out_put = tuple(x for x in out_put_tuple if x)
+        return json.loads(out_put[0])
+
+    def get_pg_dump_scrub(self, osd_id, pg_id):
+        """
+        Method is used to retrive the dump scrub of a pg
+        Args:
+             osd_id: osd id number
+             pg_id: pg id
+        Returns:
+              Dump scrub output of a PG in the json format.
+
+        """
+        dump_scrub = self.get_dump_scrubs(osd_id)
+        for pg_no in dump_scrub:
+            if pg_no["pgid"] == pg_id:
+                return pg_no
+        log.error(f"The provided {pg_id} is not exist in dump scrub")
+        return None
