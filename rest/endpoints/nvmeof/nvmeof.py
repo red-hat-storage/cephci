@@ -32,6 +32,12 @@ class NVMEoF:
         self._list_listener = config_file_reader["endpoints"]["nvmeof"][
             "LIST_ALL_SUBSYSTEM_LISTENER"
         ]
+        self._add_namespace = config_file_reader["endpoints"]["nvmeof"][
+            "CREATE_NAMESPACE_SUBSYSTEM"
+        ]
+        self._list_namespace = config_file_reader["endpoints"]["nvmeof"][
+            "LIST_NAMESPACES_SUBSYSTEM"
+        ]
 
     def get_gateway_info(self):
         """
@@ -117,4 +123,30 @@ class NVMEoF:
         """
         _get_listener = self._list_listener.format(nqn=subsystem_nqn)
         response = self._rest.get(relative_url=_get_listener)
+        return response
+
+    def add_namespace(self, **kw):
+        """
+        REST POST endpoint /api/nvmeof/subsystem/{nqn}/namespace
+        Request data details
+        {
+            "rbd_image_name": "string",
+            "rbd_pool": "rbd",
+            "create_image": true,
+            "size": 1024,
+            "block_size": 512,
+            "load_balancing_group": null
+        }
+        """
+        data = deepcopy(kw)
+        _add_namespace = self._add_namespace.format(nqn=data.pop("nqn"))
+        response = self._rest.post(relative_url=_add_namespace, data=json.dumps(data))
+        return response
+
+    def list_namespace(self, subsystem_nqn):
+        """
+        REST GET endpoint /api/nvmeof/subsystem/{nqn}/namespace
+        """
+        _get_namespace = self._list_namespace.format(nqn=subsystem_nqn)
+        response = self._rest.get(relative_url=_get_namespace)
         return response

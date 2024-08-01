@@ -154,3 +154,59 @@ def add_and_verify_listener(cluster, **kw):
         except Exception as e:
             log.error(f"FAILED verification of host {nqn} failed by GET {str(e)}")
             return 1
+
+
+def add_and_verify_namespace(**kw):
+    """
+    Add and Verification of namespace on  gateway node
+    Args:
+        kw: kw args required for Adding and Verifying Namespace
+    """
+    _rest = kw.pop("rest", None)
+    nvmeof_rest = NVMEoF(rest=_rest)
+    nqn = kw.get("nqn")
+    rbd_image_name = kw.get("rbd_image_name")
+    rbd_pool = kw.get("rbd_pool")
+    create_image = kw.get("create_image")
+    size = kw.get("size")
+    block_size = kw.get("block_size")
+    load_balancing_group = kw.get("load_balancing_group")
+    if nqn is None or rbd_pool is None or rbd_image_name is None:
+        log.error("nqn, rbd pool and rbd image name are  must for Adding Namespace")
+        return 1
+    try:
+        log.info(
+            f"Adding a Namespace with nqn {nqn} rbd pool {rbd_pool} and rbd image name {rbd_image_name}"
+        )
+        _ = nvmeof_rest.add_namespace(
+            nqn=nqn,
+            rbd_image_name=rbd_image_name,
+            rbd_pool=rbd_pool,
+            create_image=create_image,
+            size=size,
+            block_size=block_size,
+            load_balancing_group=load_balancing_group,
+        )
+    except Exception as e:
+        log.error(
+            f"Adding a Namesapce with nqn {nqn} "
+            f"rbd pool name  {rbd_pool} "
+            f"and rbd image name  {rbd_image_name} failed {str(e)}"
+        )
+        return 1
+    # 2. verify List  Namespace  using list GET call
+    log.info("validating Namespace by list namespaces REST")
+    if nqn is None or rbd_pool is None or rbd_image_name is None:
+        log.error("nqn, rbd pool and rbd image name are must for Adding Namespace")
+        return 1
+    try:
+        _ = nvmeof_rest.list_namespace(subsystem_nqn=nqn)
+        log.info(
+            f"SUCCESS: verification of namespace {nqn} {rbd_pool} {rbd_image_name} via GET REST passed"
+        )
+        return 0
+    except Exception as e:
+        log.error(
+            f"FAILED verification of namespace {nqn} {rbd_pool} {rbd_image_name} failed by GET {str(e)}"
+        )
+        return 1

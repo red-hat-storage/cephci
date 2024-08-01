@@ -90,6 +90,12 @@ tests:
               - node6
               - node7
             allow_host: "*"
+            rbd_image_name: autoimage1
+            rbd_pool: rbd
+            create_image: true
+            size: 21474836480
+            block_size: 512
+            load_balancing_group: null
         initiators:                             # Configure Initiators with all pre-req
           - nqn: connect-all
             listener_port: 4420

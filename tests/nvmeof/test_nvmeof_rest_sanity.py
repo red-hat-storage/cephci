@@ -5,6 +5,7 @@ from rest.common.utils.rest import rest
 from rest.workflows.nvmeof.nvmeof import (
     add_and_verify_host,
     add_and_verify_listener,
+    add_and_verify_namespace,
     create_and_verify_subsystem,
     get_info_nvmeof_gateway,
 )
@@ -24,6 +25,7 @@ def sanity_workflow(config):
     """
     _rest = rest()
     ceph_cluster = config.get("ceph_cluster")
+
     # 1. Get nvmeof gateway info
     rc_nvmeof_gw = get_info_nvmeof_gateway(rest=_rest)
     if rc_nvmeof_gw:
@@ -45,6 +47,10 @@ def sanity_workflow(config):
         rc_addlistener = add_and_verify_listener(ceph_cluster, **_subsystem)
         if rc_addlistener:
             log.error("FAILED: Add listener and validations")
+            return 1
+        rc_addnamespace = add_and_verify_namespace(**_subsystem)
+        if rc_addnamespace:
+            log.error("FAILED: Add Namespace and validations")
             return 1
     return 0
 
