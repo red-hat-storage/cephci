@@ -15,6 +15,7 @@ import re
 import string
 import subprocess
 import time
+import traceback
 from json import JSONDecodeError
 from time import sleep
 
@@ -22,6 +23,7 @@ import paramiko
 
 from ceph.ceph import CommandFailed, SSHConnectionManager
 from ceph.parallel import parallel
+from ceph.utils import check_ceph_healthly
 from mita.v2 import get_openstack_driver
 from utility.log import Log
 from utility.retry import retry
@@ -4070,3 +4072,339 @@ os.system('sudo systemctl start  network')
             cmd=f"ceph fs subvolume pin {fs_name} {subvolume_name} {pin_type} "
             f"{pin_setting} {subvolumegroup_name}",
         )
+
+    def set_and_validate_mds_standby_replay(self, clients, fs_name, boolean):
+        """
+        Set and validate the MDS standby-replay configuration for a Ceph file system.
+
+        This method configures the allow_standby_replay setting for the specified Ceph file system,
+        and then validates that the setting has been applied correctly by examining the MDS map.
+
+        Args:
+            clients (object): The client object used to execute commands.
+            fs_name (str): The name of the Ceph file system.
+            boolean (bool): The desired state for the allow_standby_replay setting.
+
+        Returns:
+            dict: A dictionary containing the result of the validation, including:
+                - active_mds (list): A list of tuples with active MDS information.
+                - standby_replay_mds (list): A list of tuples with standby-replay MDS information.
+                - standby_replay_enabled (bool): The state of the allow_standby_replay setting.
+                - max_mds (int): The max_mds value from the MDS map.
+                - rank_mismatch (bool): Whether there is a mismatch between active and standby-replay MDS ranks.
+            If an error occurs, returns a dictionary with an "error" key.
+
+        Raises:
+            Exception: If any unexpected error occurs during the process.
+        """
+        try:
+            # Set standby-replay
+            clients.exec_command(
+                sudo=True,
+                cmd=f"ceph fs set {fs_name} allow_standby_replay {boolean}",
+                check_ec=False,
+            )
+
+            # Retrieve the MDS map to validate
+            out = clients.exec_command(
+                sudo=True,
+                cmd=f"ceph fs get {fs_name} -f json",
+                check_ec=False,
+            )
+
+            json_data = json.loads(out[0])
+
+            log.info(f"Get command output: {json_data}")
+
+            mds_map = json_data.get("mdsmap", {})
+
+            active_mds = []
+            standby_replay_mds = []
+
+            # Check if allow_standby_replay is set to the desired value
+            standby_replay_enabled = mds_map.get("flags_state", {}).get(
+                "allow_standby_replay", False
+            )
+            log.info(f"Enabled Values : {standby_replay_enabled}")
+            if standby_replay_enabled != boolean:
+                log.error(
+                    f"Failed to validate allow_standby_replay. Expected: {boolean}, Found: {standby_replay_enabled}"
+                )
+                return 1
+            else:
+                log.info(
+                    f"Found: {standby_replay_enabled} - allow_standby_replay for {fs_name} set to {boolean}"
+                )
+
+            # Get max_mds value
+            max_mds = mds_map.get("max_mds", None)
+
+            # Classify MDS by state
+            for info in mds_map.get("info", {}).values():
+                if "active" in info["state"]:
+                    active_mds.append((info["name"], info["rank"], info["state"]))
+                elif "standby-replay" in info["state"]:
+                    standby_replay_mds.append(
+                        (info["name"], info["rank"], info["state"])
+                    )
+
+            # Validation
+            active_rank_set = {mds[1] for mds in active_mds}
+            standby_replay_rank_set = {mds[1] for mds in standby_replay_mds}
+
+            rank_mismatch = not (
+                active_rank_set == standby_replay_rank_set
+                and len(active_mds) == len(standby_replay_mds)
+            )
+
+            result = {
+                "active_mds": active_mds,
+                "standby_replay_mds": standby_replay_mds,
+                "standby_replay_enabled": standby_replay_enabled,
+                "max_mds": max_mds,
+                "rank_mismatch": rank_mismatch,
+            }
+
+            # Log the result in JSON format
+            log.info(json.dumps(result, indent=4))
+
+            log.info(
+                f"Successfully set and validated allow_standby_replay to {boolean} for {fs_name}"
+            )
+            return result
+
+        except Exception as e:
+            log.error(f"An unexpected error occurred: {e}")
+            return {"error": "An unexpected error occurred"}
+
+    def create_files_in_path(self, clients, path, num_of_files, batch_size):
+        """
+        Creates a specified number of files in the given path on the client.
+
+        This method ensures the specified directory exists and then creates the
+        desired number of files in batches to avoid overwhelming the filesystem.
+
+        Args:
+            clients (object): The client object used to execute commands.
+            path (str): The directory where files will be created.
+            num_of_files (int): The total number of files to create.
+            batch_size (int): The number of files to create per batch to avoid overwhelming the filesystem.
+
+        Returns:
+            None
+
+        Raises:
+            Exception: If an error occurs during file creation.
+
+        Example:
+            To create 100 files in batches of 10 in the directory '/mnt/test':
+            create_files_in_path(clients, '/mnt/test', 100, 10)
+        """
+        try:
+            log.info(f"Checking if path exists: {path}")
+            check_path_cmd = f"sudo test -d {path}"
+            _, rc = clients.exec_command(sudo=True, cmd=check_path_cmd, check_ec=False)
+
+            if rc != 0:
+                log.info(f"Path doesn't exist, creating path: {path}")
+                create_path_cmd = f"sudo mkdir -p {path}"
+                clients.exec_command(sudo=True, cmd=create_path_cmd)
+
+            log.info(f"Path exists or created successfully: {path}")
+
+            for i in range(0, num_of_files, batch_size):
+                batch_end = min(i + batch_size, num_of_files)
+                for j in range(i, batch_end):
+                    file_path = os.path.join(path, f"file_{j}.txt")
+                    create_file_cmd = (
+                        f"echo 'Created files {j}' | sudo tee {file_path} > /dev/null"
+                    )
+                    clients.exec_command(sudo=True, cmd=create_file_cmd)
+                log.info(f"Created files {i} to {batch_end - 1}")
+            log.info(f"Successfully created {num_of_files} files in {path}")
+        except Exception as e:
+            log.error(f"An error occurred: {e}")
+
+    def get_mds_states_active_standby_replay(self, fs_name, clients):
+        """
+        Extracts and returns the MDS nodes and their states for the given filesystem.
+
+        This method retrieves the MDS map for the specified Ceph filesystem and
+        constructs a dictionary that maps each active MDS node to its associated
+        standby-replay nodes.
+
+        Args:
+            fs_name (str): The name of the Ceph filesystem.
+            clients (object): The client object used to execute commands.
+
+        Returns:
+            dict: A dictionary where keys are MDS ranks and values are dictionaries
+                  containing 'active' MDS nodes and their associated 'standby-replay' nodes.
+
+        Example:
+            {
+                0: {'active': 'mds.a', 'standby-replay': ['mds.b', 'mds.c']},
+                1: {'active': 'mds.d', 'standby-replay': ['mds.e']}
+            }
+        """
+        # Retrieve the MDS map to validate
+        out = clients.exec_command(
+            sudo=True,
+            cmd=f"ceph fs get {fs_name} -f json",
+            check_ec=False,
+        )
+
+        json_data = json.loads(out[0])
+
+        mds_info = json_data.get("mdsmap", {}).get("info", {})
+        mds_dict = {}
+
+        for gid, mds in mds_info.items():
+            if "active" in mds["state"]:
+                rank = mds["rank"]
+                active_node = mds["name"]
+                mds_dict[rank] = {"active": active_node, "standby-replay": []}
+
+        for gid, mds in mds_info.items():
+            if "standby-replay" in mds["state"]:
+                rank = mds["rank"]
+                standby_replay_node = mds["name"]
+                if rank in mds_dict:
+                    mds_dict[rank]["standby-replay"].append(standby_replay_node)
+        return mds_dict
+
+    def runio_reboot_active_mds_nodes(
+        self,
+        fs_util,
+        ceph_cluster,
+        fs_name,
+        clients,
+        num_of_osds,
+        build,
+        mount_paths,
+        mount_type,
+    ):
+        """
+        Processes the active MDS nodes by running IO operations and rebooting the active MDS nodes.
+
+        This method performs the following steps:
+        1. Identifies the active MDS nodes.
+        2. Runs IO operations in parallel on the specified mount paths.
+        3. Reboots the active MDS nodes one by one.
+        4. Checks the cluster health before and after each reboot.
+        5. Ensures the cluster remains healthy throughout the process.
+
+        Args:
+            fs_util: An instance of a filesystem utility class to run IO operations.
+            ceph_cluster: An instance representing the Ceph cluster.
+            fs_name (str): The name of the filesystem.
+            clients (list): List of clients to execute commands.
+            num_of_osds (int): Number of OSDs in the cluster.
+            build (str): Build information.
+            mount_paths (list): List of directories for mounts (either kernel or fuse).
+            mount_type (str): Type of mount paths provided ("kernel" or "fuse").
+
+        Returns:
+            None
+        """
+        # Get active MDS nodes using the provided utility function
+        mds = self.get_active_mdss(clients, fs_name)
+        active_mds_hostnames = [i.split(".")[1] for i in mds]
+        log.info(f"Active MDS Nodes are: {active_mds_hostnames}")
+
+        ceph_nodes = ceph_cluster.get_ceph_objects()
+        log.info(f"Ceph Nodes : {ceph_nodes}")
+        server_list = []
+        for node in ceph_nodes:
+            if node.node.hostname in active_mds_hostnames:
+                log.info(f"{node.node.hostname} is added to server list")
+                server_list.append(node)
+        active_nodes = list(set(server_list))
+        log.info(f"New Set of Active Nodes are : {active_nodes}")
+
+        global stop_flag
+        stop_flag = False
+
+        with parallel() as p:
+            for mount_dir in mount_paths:
+                p.spawn(
+                    self.start_io_time,
+                    fs_util,
+                    clients,
+                    mount_dir,
+                    timeout=0,
+                )
+
+            for mds in active_nodes:
+                cluster_health_beforeIO = check_ceph_healthly(
+                    clients,
+                    num_of_osds,
+                    len(active_nodes),
+                    build,
+                    None,
+                    30,
+                )
+                try:
+                    self.reboot_node(ceph_node=mds)
+                except Exception as e:
+                    stop_flag = True
+                    log.error(e)
+                    log.error(traceback.format_exc())
+
+                cluster_health_afterIO = check_ceph_healthly(
+                    clients,
+                    num_of_osds,
+                    len(active_nodes),
+                    build,
+                    None,
+                    30,
+                )
+                if cluster_health_afterIO == cluster_health_beforeIO:
+                    log.info("Cluster is healthy")
+                else:
+                    log.error("Cluster is not healthy")
+            log.info("Rebooted all the nodes and cluster is healthy")
+            log.info("Setting stop flag")
+            stop_flag = True
+
+    def start_io_time(self, fs_util, clients, mounting_dir, timeout=300):
+        """
+        Starts IO operations on the specified directory for a given duration.
+
+        This method continuously runs IO operations using the 'smallfile' tool in a loop,
+        creating new directories for each iteration.
+        The loop runs until the specified
+        timeout is reached or a global stop flag is set.
+
+        Args:
+            fs_util: An instance of a filesystem utility class to run IO operations.
+            clients: The client node where the IO operations will be executed.
+            mounting_dir (str): The directory path where IO operations will be performed.
+            timeout (int): The duration (in seconds) to run the IO operations. Default is 300 seconds.
+
+        Global Variables:
+            stop_flag (bool): A global flag to stop the IO operations when set to True.
+
+        Returns:
+            None
+        """
+        global stop_flag
+        iter = 0
+        if timeout:
+            stop = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        else:
+            stop = 0
+        while True:
+            if stop and datetime.datetime.now() > stop:
+                log.info("Timed out *************************")
+                break
+            clients.exec_command(
+                sudo=True, cmd=f"mkdir -p {mounting_dir}/run_ios_{iter}"
+            )
+            fs_util.run_ios(
+                clients, f"{mounting_dir}/run_ios_{iter}", io_tools=["smallfile"]
+            )
+            iter = iter + 1
+            if stop_flag:
+                log.info("Exited as stop flag is set to True")
+                break
