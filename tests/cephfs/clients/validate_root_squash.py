@@ -192,7 +192,7 @@ def run(ceph_cluster, **kw):
                 fs_util,
                 clients[0],
                 fuse_mount_dir,
-                timeout=0,
+                timeout=300,
             )
             p.spawn(
                 start_io_time,
@@ -571,11 +571,13 @@ def run(ceph_cluster, **kw):
             stop_flag = True
             return 0
     except Exception as e:
+        global stop_flag
         stop_flag = True
         log.error(e)
         log.error(traceback.format_exc())
     finally:
         log.info("Cleanup In Progress")
+        global stop_flag
         stop_flag = True
         for cl in [client, client1]:
             log.info("Unmounting the mounts if created")

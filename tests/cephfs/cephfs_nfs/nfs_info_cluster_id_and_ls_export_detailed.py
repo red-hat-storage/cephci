@@ -59,7 +59,7 @@ def run(ceph_cluster, **kw):
         bind = "/ceph"
         user_id = (
             f"nfs.{cluster_id}.{fs_name}"
-            if int(build.split(".")[0]) > 7
+            if int(build.split(".")[0]) == 7
             else f"nfs.{cluster_id}.{export_id}"
         )
 
