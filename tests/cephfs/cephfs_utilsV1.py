@@ -3390,6 +3390,8 @@ os.system('sudo systemctl start  network')
                 ):
                     raise CommandFailed(f"All {service_name} are Not UP")
                 return True
+            else:
+                raise CommandFailed(f"All {service_name} are still UP")
         except JSONDecodeError:
             if "No services reported" not in out:
                 raise CommandFailed(f"All Services are not down.. {out}")
