@@ -20,6 +20,45 @@ from utility.utils import generate_unique_id
 LOG = Log(__name__)
 
 
+def deploy_nvme_services(ceph_cluster, config):
+    """Deploy NVMe Service with apply or with spec"""
+    rbd_pool = config["rbd_pool"]
+    gw_nodes = get_nodes_by_ids(ceph_cluster, config["gw_nodes"])
+
+    cfg = {
+        "no_cluster_state": False,
+        "config": {
+            "command": "apply",
+            "service": "nvmeof",
+            "args": {"placement": {"nodes": [i.hostname for i in gw_nodes]}},
+            "pos_args": [rbd_pool],
+        },
+    }
+    if config.get("mtls"):
+        cfg = {
+            "no_cluster_state": False,
+            "config": {
+                "command": "apply_spec",
+                "service": "nvmeof",
+                "validate-spec-services": True,
+                "specs": [
+                    {
+                        "service_type": "nvmeof",
+                        "service_id": rbd_pool,
+                        "mtls": True,
+                        "placement": {"nodes": [i.hostname for i in gw_nodes]},
+                        "spec": {
+                            "pool": rbd_pool,
+                            "enable_auth": True,
+                        },
+                    }
+                ],
+            },
+        }
+
+    test_nvmeof.run(ceph_cluster, **cfg)
+
+
 def configure_listeners(cluster, nodes, config):
     """Configure Listeners on subsystem."""
     listeners = get_nodes_by_ids(cluster, nodes)
@@ -192,20 +231,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         if key == "nvmeof_cli_image":
             NVMeGWCLI.NVMEOF_CLI_IMAGE = value
             break
-    gw_nodes = get_nodes_by_ids(ceph_cluster, config["gw_nodes"])
 
     try:
         if config.get("install"):
-            cfg = {
-                "no_cluster_state": False,
-                "config": {
-                    "command": "apply",
-                    "service": "nvmeof",
-                    "args": {"placement": {"nodes": [i.hostname for i in gw_nodes]}},
-                    "pos_args": [rbd_pool],
-                },
-            }
-            test_nvmeof.run(ceph_cluster, **cfg)
+            deploy_nvme_services(ceph_cluster, config)
 
         ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
         nvmegwcli = ha.gateways[0]
@@ -220,7 +249,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     )
 
         # HA failover and failback
-
         ha.run()
 
         return 0
