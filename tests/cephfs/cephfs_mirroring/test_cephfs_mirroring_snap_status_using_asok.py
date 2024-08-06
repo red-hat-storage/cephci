@@ -325,7 +325,12 @@ def run(ceph_cluster, **kw):
                 )
 
             log.info("Remove Subvolume Group")
-            fs_util_ceph1.remove_subvolumegroup(source_clients[0], subvol_group_name)
+            fs_util_ceph1.remove_subvolumegroup(
+                source_clients[0],
+                vol_name=source_fs,
+                group_name=subvol_group_name,
+                validate=False,
+            )
 
             log.info("Delete the mounted paths")
             source_clients[0].exec_command(
