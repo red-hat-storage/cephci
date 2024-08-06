@@ -127,9 +127,7 @@ def run(ceph_cluster, **kw):
         fs_util_v1.prepare_clients(qs_clients, build)
         default_fs = config.get("fs_name", "cephfs")
         qs_cnt_def = random.randrange(5, 11)
-        # qs_cnt_def = 2
         qs_cnt = config.get("qs_cnt", qs_cnt_def)
-        restore_mds = 0
         nfs_exists = 0
         fs_util_v1.auth_list(qs_clients)
 

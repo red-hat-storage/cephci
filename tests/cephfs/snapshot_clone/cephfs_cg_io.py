@@ -572,7 +572,16 @@ class CG_snap_IO(object):
                                 f"time_before_state:{time_before_state},end_time:{end_time}"
                             )
                             log.info(f"age_ref:{age_ref},curr_time:{curr_time}")
-                            if float(time_before_state) > float(end_time):
+                            osd_unhealthy = 0
+                            ceph_health, _ = client.exec_command("ceph health detail")
+                            log.info(ceph_health)
+                            if "Slow OSD" in ceph_health:
+                                osd_unhealthy = 1
+                            if osd_unhealthy == 1:
+                                log.info(
+                                    f"Ceph had {ceph_health} when {io_mod} {io_type} failed in {state}.Ignoring.."
+                                )
+                            elif float(time_before_state) > float(end_time):
                                 log.info(
                                     f"WARN: {io_mod} {io_type} fails in QS state {state} on {qs_member}"
                                 )
