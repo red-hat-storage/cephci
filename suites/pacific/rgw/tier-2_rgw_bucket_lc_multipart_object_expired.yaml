@@ -116,7 +116,6 @@ tests:
       config:
         script-name: test_bucket_lc_object_exp_multipart.py
         config-file-name: test_bucket_lc_object_exp_multipart.yaml
-        timeout: 300
 
   - test:
       name: lifecycle with version enabled bucket containing only one object version
@@ -126,7 +125,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_current_version_object_expiration.yaml
-        timeout: 300
 
   - test:
       name: Multipart object expiration through lc
@@ -136,4 +134,3 @@ tests:
       config:
         script-name: test_bucket_lc_object_exp_multipart.py
         config-file-name: test_bucket_lc_multipart_object_expiration.yaml
-        timeout: 300

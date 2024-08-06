@@ -130,7 +130,6 @@ tests:
               install_start_kafka: true
               script-name: test_bucket_notifications.py
               config-file-name: test_empty_bucket_notification_kafka_broker.yaml
-              timeout: 300
         - test:
             name: test_bi_purge for a bucket
             desc: test bi_purge should not error
@@ -140,7 +139,6 @@ tests:
               install_common: false
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_bi_purge.yaml
-              timeout: 300
  # STS tests
   - test:
       name: Test rename of large object using sts user through AWS
@@ -150,7 +148,6 @@ tests:
       config:
         script-name: ../aws/test_sts_rename_large_object.py
         config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
-        timeout: 500
   - test:
       name: Test s3_copy_obj on user with admin flag through AWS
       desc: TESCO-Segfault with s3CopyObj with admin user
@@ -159,7 +156,6 @@ tests:
       config:
         script-name: ../aws/test_sts_rename_large_object.py
         config-file-name: ../../aws/configs/test_s3copyObj_admin_user.yaml
-        timeout: 500
 
  # testing rgw through curl
   - test:
@@ -170,7 +166,6 @@ tests:
       config:
         script-name: ../curl/test_rgw_using_curl.py
         config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
-        timeout: 500
 
   - test:
       name: Test rgw put object through curl using transfer_encoding chunked
@@ -180,7 +175,6 @@ tests:
       config:
         script-name: ../curl/test_rgw_using_curl.py
         config-file-name: ../../curl/configs/test_curl_transfer_encoding_chunked.yaml
-        timeout: 500
 
   - test:
       name: Test rgw multipart upload through curl
@@ -190,7 +184,6 @@ tests:
       config:
         script-name: ../curl/test_rgw_using_curl.py
         config-file-name: ../../curl/configs/test_rgw_curl_multipart_upload.yaml
-        timeout: 500
 
   - test:
       name: Test rgw put bucket website with users of same and different tenant
@@ -200,7 +193,6 @@ tests:
       config:
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_put_bucket_website_with_tenant_same_and_different_user.yaml
-        timeout: 500
 
   - test:
       name: Test rgw get bucket website with users of same and different tenant
@@ -210,4 +202,3 @@ tests:
       config:
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_get_bucket_website_with_tenant_same_and_different_user.yaml
-        timeout: 500

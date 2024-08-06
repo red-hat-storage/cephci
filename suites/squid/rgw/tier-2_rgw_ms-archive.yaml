@@ -330,6 +330,7 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: [ "ceph-sec","ceph-arc" ]
+            timeout: 5000
       desc: Execute M buckets with N objects on primary and verify on secondary & archive cluster
       polarion-id: CEPH-9789
       module: sanity_rgw_multisite.py
