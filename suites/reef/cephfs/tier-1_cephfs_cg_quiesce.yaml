@@ -183,16 +183,6 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "Enable ceph debug logs"
-      module: cephfs_logs_util.py
-      name: cephfs-enable-logs
-      config:
-       ENABLE_LOGS : 1
-       daemon_list : ['mds','osd','mgr','client']
-       daemon_dbg_level : {'mds':10,'osd':5,'mgr':5,'client':10}
-  -
-    test:
-      abort-on-fail: false
       desc: "Verify parallel quiesce calls to same quiesce set members"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
@@ -220,12 +210,3 @@ tests:
       polarion-id: CEPH-83590253
       config:
        test_name: cg_snap_func_workflow_3
-  -
-    test:
-      abort-on-fail: false
-      desc: "Disable ceph debug logs"
-      module: cephfs_logs_util.py
-      name: cephfs-disable-logs
-      config:
-       DISABLE_LOGS : 1
-       daemon_list : ['mds','osd','mgr','client']
