@@ -97,7 +97,6 @@ tests:
       config:
         script-name: test_manual_lc_process_single_bucket.py
         config-file-name: test_lc_process_single_bucket_expired.yaml
-        timeout: 300
       desc: test LC process for a single bucket with expired objects
       module: sanity_rgw.py
       name: Test LC process for single bucket expired
@@ -107,7 +106,6 @@ tests:
       config:
         script-name: test_manual_lc_process_single_bucket.py
         config-file-name: test_lc_process_single_bucket_nonexpired.yaml
-        timeout: 300
       desc: test LC process for a single bucket with non expired objects
       module: sanity_rgw.py
       name: Test LC process for single bucket non-expired
@@ -122,7 +120,6 @@ tests:
         test-version: v2
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_suspended_delete.yaml
-        timeout: 500
 
   - test:
       name: Get object and its version from same and different tenant users
@@ -133,4 +130,3 @@ tests:
         test-version: v2
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: get_object_and_its_versions_tenat_user.yaml
-        timeout: 500

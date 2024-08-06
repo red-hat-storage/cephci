@@ -237,7 +237,6 @@ tests:
             script-name: user_create.py
             config-file-name: tenanted_user.yaml
             copy-user-info-to-site: ceph-arc
-            timeout: 300
       desc: create tenanted user
       module: sanity_rgw_multisite.py
       name: create tenanted user
@@ -249,8 +248,8 @@ tests:
           config:
             config-file-name: test_Mbuckets_with_Nobjects.yaml
             script-name: test_Mbuckets_with_Nobjects.py
-            timeout: 300
             verify-io-on-site: [ "ceph-sec","ceph-arc" ]
+            timeout: 5000
       desc: Execute M buckets with N objects on primary and verify on secondary & archive cluster
       polarion-id: CEPH-9789
       module: sanity_rgw_multisite.py
@@ -263,7 +262,6 @@ tests:
           config:
             config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
             script-name: test_dynamic_bucket_resharding.py
-            timeout: 300
             verify-io-on-site: [ "ceph-sec", "ceph-arc" ]
       desc: Resharding test - dynamic resharding on primary and verify on secondary & archive cluster
       name: Dynamic Resharding - dynamic
@@ -276,7 +274,6 @@ tests:
           config:
             config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
             script-name: test_dynamic_bucket_resharding.py
-            timeout: 300
             verify-io-on-site: [ "ceph-sec", "ceph-arc" ]
       desc: Resharding test - dynamic resharding on versioned bucket on primary and verify on secondary & archive cluster
       name: Dynamic Resharding with versioning on primary and verify on archive
@@ -289,7 +286,6 @@ tests:
           config:
             config-file-name: test_manual_resharding_without_bucket_delete.yaml
             script-name: test_dynamic_bucket_resharding.py
-            timeout: 300
             verify-io-on-site: [ "ceph-sec", "ceph-arc" ]
       desc: Resharding test - manual resharding
       name: Manual Resharding on primary and verify on secondary & archive cluster

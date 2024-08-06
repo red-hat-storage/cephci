@@ -68,7 +68,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_put.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd cp operation with malformed bucket url
@@ -78,7 +77,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_cp.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd del operation with malformed bucket url
@@ -88,7 +86,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_del.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd get operation with malformed bucket url
@@ -98,7 +95,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_get.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd ls operation with malformed bucket url
@@ -108,7 +104,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_ls.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd multipart operation with malformed bucket url
@@ -118,7 +113,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_multipart.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd mv operation with malformed bucket url
@@ -128,7 +122,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_mv.yaml
-        timeout: 300
 
   - test:
       name: test s3cmd sync operation with malformed bucket url
@@ -138,4 +131,3 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd_malformed_url.py
         config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_sync.yaml
-        timeout: 300

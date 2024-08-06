@@ -112,7 +112,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_bucket_lc_multiple_bucket.yaml
-        timeout: 300
 
   - test:
       name: Bucket Lifecycle Object_transition_tests for 100 buckets
@@ -122,7 +121,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_multiple_bucket.yaml
-        timeout: 300
 
   - test:
       name: Enable lifecycle and disable it on a bucket before objects expires
@@ -132,7 +130,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lc_disable_object_exp.yaml
-        timeout: 300
 
   - test:
       name: Add a new lifecycle configuration to a bucket
@@ -142,7 +139,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_add_new_lc_to_bucket.yaml
-        timeout: 300
 
   - test:
       name: Add a lifecycle configuration to a bucket with tenant user
@@ -152,4 +148,3 @@ tests:
       config:
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_bucket_put_get_lifecycle_configuration_with_tenant_users.yaml
-        timeout: 300

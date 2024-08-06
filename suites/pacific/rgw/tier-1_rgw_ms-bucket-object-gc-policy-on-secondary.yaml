@@ -237,7 +237,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -249,7 +248,6 @@ tests:
           config:
             config-file-name: test_Mbuckets_with_Nobjects.yaml
             script-name: test_Mbuckets_with_Nobjects.py
-            timeout: 300
             verify-io-on-site: [ "ceph-pri" ]
       desc: Execute M buckets with N objects on secondary cluster
       polarion-id: CEPH-9789
@@ -266,7 +264,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
-            timeout: 300
   - test:
       name: test aws4 signature version on secondary
       desc: test_Mbuckets_with_Nobjects_aws4 on secondary
@@ -277,7 +274,6 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
-            timeout: 300
   - test:
       name: delete buckets and objects on secondary
       desc: test_Mbuckets_with_Nobjects_delete on secondary
@@ -288,7 +284,6 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
-            timeout: 300
   - test:
       name: download objects on secondary
       desc: test_Mbuckets_with_Nobjects_download on secondary
@@ -300,7 +295,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            timeout: 300
   - test:
       name: test encryption on secondary
       desc: test_Mbuckets_with_Nobjects_enc on secondary
@@ -312,7 +306,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
-            timeout: 300
   - test:
       name: multipart upload on secondary
       desc: test_Mbuckets_with_Nobjects_multipart on secondary
@@ -324,7 +317,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-            timeout: 300
   - test:
       name: test Mbuckets on secondary
       desc: test_Mbuckets on secondary
@@ -336,7 +328,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets.yaml
-            timeout: 300
 
   - test:
       name: create tenanted user
@@ -350,7 +341,6 @@ tests:
             script-name: user_create.py
             config-file-name: tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
 
   - test:
       name: modify bucket policy on secondary
@@ -363,7 +353,6 @@ tests:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_bucket_policy_modify.yaml
             verify-io-on-site: ["ceph-pri"]
-            timeout: 300
   - test:
       name: delete bucket policy on secondary
       desc: test_bucket_policy_delete.yaml on secondary
@@ -375,7 +364,6 @@ tests:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_bucket_policy_delete.yaml
             verify-io-on-site: ["ceph-pri"]
-            timeout: 300
 
   - test:
       name: replace bucket policy on secondary
@@ -388,4 +376,3 @@ tests:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_bucket_policy_replace.yaml
             verify-io-on-site: ["ceph-pri"]
-            timeout: 300

@@ -225,7 +225,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -265,7 +264,6 @@ tests:
             config-file-name: ../configs/test_byte_range.yaml
             multisite-replication-disabled: True
             verify-io-on-site: ["ceph-sec"]
-            timeout: 500
 
   - test:
       name: Test the byte ranges with get object on secondary zone and check multisite replication doesn't happen
@@ -280,4 +278,3 @@ tests:
             config-file-name: ../configs/test_byte_range.yaml
             multisite-replication-disabled: True
             verify-io-on-site: ["ceph-pri"]
-            timeout: 500

@@ -102,7 +102,6 @@ tests:
       config:
         script-name: test_quota_management.py
         config-file-name: test_quota_bucket_max_objects.yaml
-        timeout: 300
       desc: test bucket quota max objects
       module: sanity_rgw.py
       name: test bucket quota max objects
@@ -112,7 +111,6 @@ tests:
       config:
         script-name: test_quota_management.py
         config-file-name: test_quota_bucket_max_size.yaml
-        timeout: 300
       desc: test bucket quota max size
       module: sanity_rgw.py
       name: test bucket quota max size
@@ -122,7 +120,6 @@ tests:
       config:
         script-name: test_quota_management.py
         config-file-name: test_quota_user_max_objects.yaml
-        timeout: 300
       desc: test user quota max objects
       module: sanity_rgw.py
       name: test user quota max objects
@@ -132,7 +129,6 @@ tests:
       config:
         script-name: test_quota_management.py
         config-file-name: test_quota_user_max_size.yaml
-        timeout: 300
       desc: test user quota max size
       module: sanity_rgw.py
       name: test user quota max size

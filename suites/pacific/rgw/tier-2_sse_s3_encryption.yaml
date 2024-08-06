@@ -90,7 +90,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-        timeout: 300
       desc: test_sse_s3_per_bucket_encryption_normal_object_upload
       module: sanity_rgw.py
       name: sse-s3 per bucket encryption test
@@ -100,7 +99,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
-        timeout: 300
       desc: test_sse_s3_per_bucket_encryption_version_enabled
       module: sanity_rgw.py
       name: sse-s3 per bucket encryption test on a versiond bucket
@@ -110,7 +108,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_object.yaml
-        timeout: 300
       desc: test_sse_s3_per_object
       module: sanity_rgw.py
       name: sse-s3 per object encryption test
@@ -120,7 +117,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_object_versioninig_enabled.yaml
-        timeout: 300
       desc: test_sse_s3_per_object_with_versioning
       module: sanity_rgw.py
       name: test_sse_s3_per_object_with_versioning
@@ -130,7 +126,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
-        timeout: 300
       desc: sse_s3_per_bucket_enc_multipart_upload
       module: sanity_rgw.py
       name: sse_s3_per_bucket_enc_multipart_upload
@@ -140,7 +135,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_kms_per_object_versioninig_enabled.yaml
-        timeout: 300
       desc: test_sse_kms_per_object_with_versioning
       module: sanity_rgw.py
       name: test_sse_kms_per_object_with_versioning
@@ -150,7 +144,6 @@ tests:
       config:
         script-name: test_sse_s3_kms_with_vault.py
         config-file-name: test_sse_kms_per_object.yaml
-        timeout: 300
       desc: test_sse_kms_per_object
       module: sanity_rgw.py
       name: test_sse_kms_per_object
@@ -163,7 +156,6 @@ tests:
         install_start_kafka: true
         script-name: test_bucket_policy_ops.py
         config-file-name: test_sse_kms_per_bucket_with_bucket_policy.yaml
-        timeout: 300
       desc: test_sse_kms_per_bucket_with_bucket_policy
       module: sanity_rgw.py
       name: test_sse_kms_per_bucket_with_bucket_policy
@@ -172,7 +164,6 @@ tests:
       config:
         script-name: test_sts_using_boto.py
         config-file-name: test_sse_s3_per_object_with_sts.yaml
-        timeout: 300
       desc: test_sse_s3_per_object_with_sts
       module: sanity_rgw.py
       name: test_sse_s3_per_object_with_sts
@@ -182,7 +173,6 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_bucket_index_shards.yaml
-        timeout: 300
       desc: test_metadata_integrity_with_0_num_shards
       module: sanity_rgw.py
       name: test_metadata_integrity_with_0_num_shards

@@ -209,7 +209,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create user
@@ -220,7 +219,6 @@ tests:
           config:
             config-file-name: test_bucket_create_del.yaml
             script-name: test_Mbuckets_with_Nobjects.py
-            timeout: 300
       desc: bucket create and delete operation
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -233,7 +231,6 @@ tests:
             config-file-name: test_multisite_async_data_notifications.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: test_async_data_notifications_on_primary
       polarion-id: CEPH-83575231
       module: sanity_rgw_multisite.py
@@ -246,7 +243,6 @@ tests:
             config-file-name: test_multisite_async_data_notifications.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
-            timeout: 300
       desc: test_async_data_notifications_on_secondary
       polarion-id: CEPH-83575268
       module: sanity_rgw_multisite.py
@@ -286,7 +282,6 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart {service_name:shared.sec}"
-            timeout: 120
         ceph-pri:
           config:
             cephadm: true
@@ -298,7 +293,6 @@ tests:
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_prefix /v1/transit "
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_secret_engine transit"
               - "ceph orch restart {service_name:shared.pri}"
-            timeout: 120
       desc: Setting vault configs for sse-s3 on multisite
       module: exec.py
       name: set sse-s3 vault configs on multisite
@@ -310,7 +304,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-            timeout: 300
       desc: test_sse_s3_per_bucket_encryption_normal_object_upload
       module: sanity_rgw_multisite.py
       name: sse-s3 per bucket encryption test
@@ -322,7 +315,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
-            timeout: 300
       desc: test_sse_s3_per_bucket_encryption_version_enabled
       module: sanity_rgw_multisite.py
       name: sse-s3 per bucket encryption test on a versiond bucket
@@ -334,7 +326,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_s3_per_object_versioninig_enabled.yaml
-            timeout: 300
       desc: test_sse_s3_per_object_with_versioning
       module: sanity_rgw_multisite.py
       name: est_sse_s3_per_object_with_versioning
@@ -346,7 +337,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_per_object_versioninig_enabled.yaml
-            timeout: 300
       desc: test_sse_kms_per_object_with_versioning
       module: sanity_rgw_multisite.py
       name: test_sse_kms_per_object_with_versioning
@@ -358,7 +348,6 @@ tests:
             set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_per_bucket_encryption_version_enabled.yaml
-            timeout: 300
       desc: test_sse_kms_per_bucket_with_versioning
       module: sanity_rgw_multisite.py
       name: test_sse_kms_per_bucket_with_versioning

@@ -113,7 +113,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_enable.yaml
-        timeout: 300
   - test:
       name: overwrite objects after suspending versioning
       desc: test to overwrite objects after suspending versioning
@@ -122,7 +121,6 @@ tests:
       config:
         script-name: test_versioning_with_objects.py
         config-file-name: test_versioning_objects_suspend_re-upload.yaml
-        timeout: 300
   - test:
       name: Bucket Lifecycle Object_expiration_tests for Prefix and tag based filter and for more than one days
       desc: Test object expiration for Prefix and tag based filter and for more than one days
@@ -131,7 +129,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_prefix_and_tag.yaml
-        timeout: 300
   - test:
       name: Bucket Lifecycle Object_expiration_tests for non current version expiration
       desc: Test object expiration for non current version expiration
@@ -140,7 +137,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_prefix_non_current_days.yaml
-        timeout: 300
   - test:
       name: Bucket Lifecycle Object_transition_tests for Prefix filter and versioned buckets
       desc: Test object transition for Prefixand versioned buckets
@@ -149,7 +145,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_with_prefix_rule.yaml
-        timeout: 300
   - test:
       name: Dynamic Resharding tests
       desc: Resharding test - dynamic
@@ -158,7 +153,6 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding.yaml
-        timeout: 500
   - test:
       name: swift versioning tests
       desc: Test versioned object in swift
@@ -167,7 +161,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_versioning.yaml
-        timeout: 500
   - test:
       name: swift versioning copy tests
       desc: restore versioned object in swift
@@ -176,7 +169,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_version_copy_op.yaml
-        timeout: 500
   - test:
       name: swift object expire tests
       desc: object expire in swift
@@ -185,7 +177,6 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_object_expire_op.yaml
-        timeout: 500
   - test:
       name: object lock verification
       desc: object lock test
@@ -194,7 +185,6 @@ tests:
       config:
         script-name: test_object_lock.py
         config-file-name: test_object_lock_compliance.yaml
-        timeout: 500
   - test:
       name: S3CMD small and multipart object download
       desc: S3CMD small and multipart object download or GET
@@ -203,4 +193,3 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-        timeout: 300

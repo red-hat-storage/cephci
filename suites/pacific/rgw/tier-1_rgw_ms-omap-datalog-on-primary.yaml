@@ -277,7 +277,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -289,7 +288,6 @@ tests:
           config:
             config-file-name: test_data_omap_offload.yaml
             script-name: test_data_omap_offload.py
-            timeout: 300
             verify-io-on-site: [ "ceph-sec" ]
       desc: Execute datalog omap offload on primary cluster
       module: sanity_rgw_multisite.py
@@ -302,7 +300,6 @@ tests:
           config:
             config-file-name: test_data_omap_offload_multipart.yaml
             script-name: test_data_omap_offload.py
-            timeout: 300
             verify-io-on-site: [ "ceph-sec" ]
       desc: Execute datalog omap offload with multipart objects on primary
       module: sanity_rgw_multisite.py
@@ -315,7 +312,6 @@ tests:
           config:
             config-file-name: test_data_omap_offload_versioned_bucket.yaml
             script-name: test_data_omap_offload.py
-            timeout: 300
             verify-io-on-site: [ "ceph-sec" ]
       desc: Execute datalog omap offload on versioned bucket on primary
       module: sanity_rgw_multisite.py
@@ -332,7 +328,6 @@ tests:
           config:
             script-name:  test_Mbuckets_with_Nobjects.py
             config-file-name:  test_datalog_trim_command.yaml
-            timeout: 300
             verify-io-on-site: ["ceph-sec"]
 
   - test:
@@ -345,7 +340,6 @@ tests:
           config:
             script-name: ../s3cmd/test_s3cmd.py
             config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-            timeout: 300
             # verify-io-on-site: ["ceph-sec"] as there is an io file issue, once its fixed need to uncomment
 
   # - test:
@@ -359,4 +353,3 @@ tests:
   #         config:
   #           script-name: test_Mbuckets_with_Nobjects.py
   #           config-file-name: test_changing_data_log_num_shards_cause_no_crash.yaml
-  #           timeout: 300

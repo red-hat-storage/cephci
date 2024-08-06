@@ -99,7 +99,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_prefix_dot.yaml
-        timeout: 300
       desc: test lc with prefix containing dot
       module: sanity_rgw.py
       name: test lc with prefix containing dot
@@ -109,7 +108,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_prefix_hyphen.yaml
-        timeout: 300
       desc: test lc with prefix containing hyphen
       module: sanity_rgw.py
       name: test lc with prefix containing hyphen
@@ -119,7 +117,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_prefix_slash.yaml
-        timeout: 300
       desc: test lc with prefix containing slash
       module: sanity_rgw.py
       name: test lc with prefix containing slash
@@ -129,7 +126,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_prefix_underscore.yaml
-        timeout: 300
       desc: test lc with prefix containing underscore
       module: sanity_rgw.py
       name: test lc with prefix containing underscore
@@ -144,7 +140,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_prefix_and_TAG_rule.yaml
-        timeout: 300
   - test:
       name: Bucket Lifecycle Object_transition_tests multiple rules and different storage class
       desc: Test Object_transition_tests multiple rules and different storage class
@@ -153,7 +148,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_multiple_rules.yaml
-        timeout: 300
   - test:
       name: Bucket Lifecycle Object_transition_tests multiple pool transition
       desc: Bucket Lifecycle Object_transition_tests multiple pool transition
@@ -171,7 +165,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_ecpool_with_prefix_rule.yaml
-        timeout: 300
 
   # bucket lifecycle with resharding
 
@@ -183,7 +176,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_expiration_dynamic_reshard.yaml
-        timeout: 300
 
   - test:
       name: test lifecycle expiration with manual resharding and Test if LC policy is applied via lc list and lc get
@@ -193,4 +185,3 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_expiration_manual_reshard.yaml
-        timeout: 300

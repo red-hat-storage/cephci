@@ -272,7 +272,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -283,7 +282,6 @@ tests:
           config:
             config-file-name: test_bucket_create_del.yaml
             script-name: test_Mbuckets_with_Nobjects.py
-            timeout: 300
       desc: bucket create and delete operation
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -295,7 +293,6 @@ tests:
             config-file-name: test_user_bucket_create.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: user and bucket create operation
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -307,7 +304,6 @@ tests:
             config-file-name: test_user_modify_op.yaml
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: Modify suspend enable and delete user operation
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -319,7 +315,6 @@ tests:
             config-file-name: test_user_bucket_rename.yaml
             script-name: test_user_bucket_rename.py
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: rename user and bucket and link unlink bucket operation
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -331,7 +326,6 @@ tests:
             config-file-name: test_user_with_REST.yaml
             script-name: user_op_using_rest.py
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: user operations using REST
       polarion-id: CEPH-83574811
       module: sanity_rgw_multisite.py
@@ -344,7 +338,6 @@ tests:
   #         config:
   #           script-name: test_check_sharding_enabled.py
   #           config-file-name: test_zone_rename.yaml
-  #           timeout: 300
   #     desc: Test zone rename in non master that is secondary
   #     module: sanity_rgw_multisite.py
   #     name: Perform zone rename in non master that is secondary

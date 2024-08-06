@@ -332,7 +332,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -348,7 +347,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
-            timeout: 300
   - test:
       name: listing flat ordered buckets on primary
       desc: test_bucket_listing_flat_ordered on secondary
@@ -359,7 +357,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered.yaml
-            timeout: 300
   - test:
       name: listing flat unordered buckets on primary
       desc: test_bucket_listing_flat_unordered.yaml on secondary
@@ -370,7 +367,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_unordered.yaml
-            timeout: 300
   - test:
       name: listing pseudo ordered dir only buckets on primary
       desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
@@ -381,7 +377,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
-            timeout: 300
   - test:
       name: ordered listing of bucket with pseudo directories and objects
       desc: measure execution time for ordered listing of bucket with pseudo directories and objects
@@ -392,7 +387,6 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_pseudo_ordered.yaml
-            timeout: 300
   - test:
       name: Test Copy of objects with Versioned and non-versionsed buckets on primary
       desc: test_versioning_copy_objects on secondary
@@ -403,7 +397,6 @@ tests:
           config:
             script-name: test_versioning_copy_objects.py
             config-file-name: test_versioning_copy_objects.yaml
-            timeout: 300
   - test:
       name: enable bucket versioning on primary
       desc: test_versioning_enable on secondary
@@ -415,7 +408,6 @@ tests:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_enable.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
   - test:
       name: setting acls to versioned objects on primary
       desc: test_versioning_objects_acls on secondary
@@ -427,7 +419,6 @@ tests:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_acls.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
   - test:
       name: reverting object to one of the versions on primary
       desc: test_versioning_objects_copy on secondary
@@ -438,7 +429,6 @@ tests:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_copy.yaml
-            timeout: 300
   - test:
       name: delete versioned objects on primary
       desc: test_versioning_objects_delete on secondary
@@ -449,7 +439,6 @@ tests:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_delete.yaml
-            timeout: 300
   - test:
       name: enabling bucket versioning and uploading objects on primary
       desc: test_versioning_objects_enable on secondary
@@ -461,7 +450,6 @@ tests:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_enable.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
   - test:
       name: suspend bucket versioning on primary
       desc: test_versioning_objects_suspend on secondary
@@ -473,4 +461,3 @@ tests:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_suspend.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
