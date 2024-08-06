@@ -210,3 +210,38 @@ def add_and_verify_namespace(**kw):
             f"FAILED verification of namespace {nqn} {rbd_pool} {rbd_image_name} failed by GET {str(e)}"
         )
         return 1
+
+
+def cleanup(**kw):
+    """
+    All REST cleanup needed to this moment
+    scope:
+        (1) Delete namespace
+        (2) Delete subsystem
+    """
+    _rest = kw.pop("rest", None)
+    nvmeof_rest = NVMEoF(rest=_rest)
+    nqn = kw.get("nqn")
+
+    # 1. Delete all namespaces first
+    try:
+        namespaces = nvmeof_rest.list_namespace(subsystem_nqn=nqn)
+        for _namespace in namespaces:
+            _ = nvmeof_rest.delete_namespace(subsystem_nqn=nqn, nsid=_namespace["nsid"])
+        namespaces_after_delete = nvmeof_rest.list_namespace(subsystem_nqn=nqn)
+        if len(namespaces_after_delete) != 0:
+            log.error(f"FAILED Deleting of namespace for susbsystem {nqn} failed ")
+            return 1
+    except Exception as e:
+        log.error(
+            f"FAILED Deleting or Listing of namespace for susbsystem {nqn} failed  {str(e)}"
+        )
+        return 1
+
+    # 2. Now Delete the subsystem
+    try:
+        _ = nvmeof_rest.delete_subsystem(subsystem_nqn=nqn)
+        log.info("=======CLEANUP SUCCESS=======")
+        return 0
+    except Exception as e:
+        log.error(f"FAILED: subsystem delete failed {str(e)}")

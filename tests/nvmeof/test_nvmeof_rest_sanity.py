@@ -6,6 +6,7 @@ from rest.workflows.nvmeof.nvmeof import (
     add_and_verify_host,
     add_and_verify_listener,
     add_and_verify_namespace,
+    cleanup,
     create_and_verify_subsystem,
     get_info_nvmeof_gateway,
 )
@@ -95,6 +96,26 @@ def teardown(ceph_cluster, rbd_obj, config):
         rbd_obj.clean_up(pools=[config["rbd_pool"]])
 
 
+def rest_teardown(config):
+    """
+    Cleanup the ceph-nvme gw entities using REST calls
+
+    Args:
+        config: test config
+    """
+    _rest = rest()
+
+    # Cleanup up per subsystem level entities
+    subsystems = config.get("subsystems", {})
+    for _subsystem in subsystems:
+        _subsystem.update({"rest": _rest})
+        rc_cleanup = cleanup(**_subsystem)
+        if rc_cleanup:
+            log.error("FAIL: cleanup failed")
+            return 1
+    return 0
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof HA test execution.
 
@@ -143,7 +164,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         nodes: node6
     """
     config = kwargs["config"]
-    rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+    _ = initial_rbd_config(**kwargs)["rbd_reppool"]
     config["ceph_cluster"] = ceph_cluster
     try:
         rc_s = sanity_workflow(config)
@@ -152,5 +173,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         rc_s = 1
     finally:
         if config.get("cleanup"):
-            teardown(ceph_cluster, rbd_obj, config)
-    return rc_s
+            rc_c = rest_teardown(config)
+    if rc_s or rc_c:
+        return 1
+    return 0

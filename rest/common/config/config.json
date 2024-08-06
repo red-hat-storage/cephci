@@ -21,7 +21,9 @@
             "ADD_SUBSYSTEM_LISTENER": "/api/nvmeof/subsystem/{nqn}/listener",
             "LIST_NAMESPACES_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace",
             "CREATE_NAMESPACE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace",
-            "GET_INFO_NAMESPACE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace/{nsid}"
+            "GET_INFO_NAMESPACE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace/{nsid}",
+            "DELETE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}",
+            "DELETE_NAMESPACE": "/api/nvmeof/subsystem/{nqn}/namespace/{nsid}"
         }
     }
 }

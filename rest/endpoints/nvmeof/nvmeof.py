@@ -38,6 +38,12 @@ class NVMEoF:
         self._list_namespace = config_file_reader["endpoints"]["nvmeof"][
             "LIST_NAMESPACES_SUBSYSTEM"
         ]
+        self._delete_namespace = config_file_reader["endpoints"]["nvmeof"][
+            "DELETE_NAMESPACE"
+        ]
+        self._delete_subsystem = config_file_reader["endpoints"]["nvmeof"][
+            "DELETE_SUBSYSTEM"
+        ]
 
     def get_gateway_info(self):
         """
@@ -149,4 +155,20 @@ class NVMEoF:
         """
         _get_namespace = self._list_namespace.format(nqn=subsystem_nqn)
         response = self._rest.get(relative_url=_get_namespace)
+        return response
+
+    def delete_namespace(self, subsystem_nqn, nsid):
+        """
+        REST DELETE endpoint /api/nvmeof/subsystem/{nqn}/namespace/{nsid}
+        """
+        _delete_namespace = self._delete_namespace.format(nqn=subsystem_nqn, nsid=nsid)
+        response = self._rest.delete(relative_url=_delete_namespace)
+        return response
+
+    def delete_subsystem(self, subsystem_nqn):
+        """
+        REST DELETE endpoint /api/nvmeof/subsystem/{nqn}
+        """
+        _delete_subsystem = self._delete_subsystem.format(nqn=subsystem_nqn)
+        response = self._rest.delete(relative_url=_delete_subsystem)
         return response

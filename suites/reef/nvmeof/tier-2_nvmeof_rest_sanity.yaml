@@ -69,6 +69,7 @@ tests:
   - test:
       abort-on-fail: true
       config:
+        cleanup: true
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
