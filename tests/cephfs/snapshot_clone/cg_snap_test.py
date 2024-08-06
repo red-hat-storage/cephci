@@ -284,8 +284,6 @@ def run(ceph_cluster, **kw):
             test_status = cg_snap_test_func(cg_test_params)
 
             if test_status == 1:
-                if test_name == "cg_snap_interop_workflow_1":
-                    restore_mds = 1
                 assert False, f"Test {test_name} failed"
             else:
                 log.info(f"Test {test_name} passed \n")
@@ -325,19 +323,7 @@ def run(ceph_cluster, **kw):
             log.error("Failed to set fragmentation size to default")
 
         log.info(f"FS fragmentation size:{new_frag_size}")
-        if restore_mds == 1:
-            mds_cnt = len(mds_nodes)
-            cmd = f'ceph orch apply mds {default_fs} --placement="{mds_cnt}'
 
-            for mds_node in mds_nodes:
-                cmd += f" {mds_node.node.hostname}"
-            cmd += '"'
-            log.info("Restoring MDS config")
-            out, rc = client1.exec_command(sudo=True, cmd=cmd)
-            client1.exec_command(
-                sudo=True,
-                cmd=f"ceph fs set {default_fs} max_mds 2",
-            )
         if nfs_exists == 1:
             client1.exec_command(
                 sudo=True,
@@ -2216,17 +2202,13 @@ def cg_snap_interop_1(cg_test_params):
         mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
     cg_snap_util.cleanup_cg_io(client, mnt_pt_list, del_data=0)
     mnt_pt_list.clear()
-    cmd = f'ceph orch apply mds {fs_name} --placement="{len(mds_nodes)}'
-
-    for mds_nodes_iter in mds_nodes:
-        cmd += f" {mds_nodes_iter.node.hostname}"
-    cmd += '"'
-    log.info(f"Restoring MDS config - {mds_cnt} MDS, Active - {max_mds_val}")
-    out, rc = client.exec_command(sudo=True, cmd=cmd)
     client.exec_command(
         sudo=True,
-        cmd=f"ceph fs set {fs_name} max_mds {max_mds_val}",
+        cmd=f"ceph fs set {fs_name} max_mds 2",
     )
+    if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+        log.error("Ceph cluster is not healthy after max_mds set to 2")
+        test_fail += 1
     if cg_test_io_status.value == 1:
         log.error(
             f"CG IO test exits with failure during quiesce test on qs_set-{qs_id_val}"
