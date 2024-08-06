@@ -858,9 +858,17 @@ def cg_quiesce_test(cg_quiesce_params):
     log.info(f"Start the IO on quiesce set members - {qs_set}")
     cg_test_io_status = Value("i", 0)
     io_run_time = 40
+    ephemeral_pin = 1
     p = Thread(
         target=cg_snap_io.start_cg_io,
-        args=([cg_io_client], qs_set, client_mnt_dict, cg_test_io_status, io_run_time),
+        args=(
+            [cg_io_client, cg_io_client],
+            qs_set,
+            client_mnt_dict,
+            cg_test_io_status,
+            io_run_time,
+            ephemeral_pin,
+        ),
     )
     p.start()
     time.sleep(10)
@@ -918,22 +926,34 @@ def cg_quiesce_test(cg_quiesce_params):
         log.info(
             "Copy the contents from pre-upgrade snapshots to AFS on existing subvolumes"
         )
-        for sv in qs_info.keys():
-            client = qs_info[sv]["mnt_client"]
-            mnt_pt = qs_info[sv]["mnt_pt"]
-            snap_list = qs_info[sv]["snap_list"]
-            cmd = f"mkdir {mnt_pt}/new_dir_{rand_str};cp -r {mnt_pt}/.snap/*{snap_name}*/* {mnt_pt}/new_dir_{rand_str}"
-            for client_tmp in cg_quiesce_params["clients"]:
-                if client == client_tmp.node.hostname:
-                    out, rc = client_tmp.exec_command(sudo=True, cmd=cmd)
-                    log.info(out)
+        for qs_member in qs_member_dict:
+            mnt_pt = qs_member_dict[qs_member]["mount_point"]
+            if qs_info.get(qs_member):
+                if qs_info[qs_member].get("snap_list"):
+                    retry_cnt = 0
+                    rand_str = "".join(
+                        random.choice(string.ascii_lowercase + string.digits)
+                        for _ in list(range(3))
+                    )
+                    cmd = f"mkdir {mnt_pt}/new_dir_{rand_str};"
+                    out, rc = cg_io_client.exec_command(sudo=True, cmd=cmd)
+                    while retry_cnt < 5:
+                        snap_list = qs_info[qs_member]["snap_list"]
+                        snap_name = random.choice(snap_list)
+                        cmd = f"cp -r {mnt_pt}/.snap/*{snap_name}*/* {mnt_pt}/new_dir_{rand_str}/"
+                        try:
+                            out, rc = cg_io_client.exec_command(sudo=True, cmd=cmd)
+                            retry_cnt = 5
+                        except BaseException as ex:
+                            if "No such file or directory" in str(ex):
+                                retry_cnt += 1
                     cmd = (
                         f"diff {mnt_pt}/.snap/*{snap_name}* {mnt_pt}/new_dir_{rand_str}"
                     )
-                    out, rc = client_tmp.exec_command(sudo=True, cmd=cmd)
+                    out, rc = cg_io_client.exec_command(sudo=True, cmd=cmd)
                     log.info(out)
                     log.info(
-                        f"Restore from old snapshot {snap_name} to AFS suceeds after CG quiesce test on {sv}"
+                        f"Restore from old snapshot {snap_name} to AFS suceeds after CG quiesce test on {qs_member}"
                     )
 
     log.info(f"cg_test_io_status : {cg_test_io_status.value}")
@@ -941,7 +961,7 @@ def cg_quiesce_test(cg_quiesce_params):
     if p.is_alive():
         proc_stop = 0
         log.info("CG IO is running after quiesce lifecycle")
-        io_run_time *= 2
+        io_run_time *= 5
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=io_run_time)
         while (datetime.datetime.now() < end_time) and (proc_stop == 0):
             if p.is_alive():
