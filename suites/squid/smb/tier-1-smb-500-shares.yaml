@@ -80,7 +80,7 @@ tests:
       name: Deploy samba with 500 shares
       desc: Deploy samba with 500 shares using auth_mode 'user'
       module: smb_deployment_500_shares.py
-      polarion-id:
+      polarion-id: CEPH-83593847
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb

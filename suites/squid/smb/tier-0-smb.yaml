@@ -80,7 +80,7 @@ tests:
       name: Deploy samba with auth_mode 'user' using imperative style(CLI Commands)
       desc: Deploy samba with auth_mode 'user' using imperative style(CLI Commands)
       module: smb_deployment_imperative_method
-      polarion-id:
+      polarion-id: CEPH-83593843
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
@@ -97,7 +97,7 @@ tests:
       name: Deploy samba with auth_mode 'AD' using imperative style(CLI Commands)
       desc: Deploy samba with auth_mode 'Active Directory(AD)' using imperative style(CLI Commands)
       module: smb_deployment_imperative_method
-      polarion-id:
+      polarion-id: CEPH-83593844
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
@@ -116,7 +116,7 @@ tests:
       name: Deploy samba with auth_mode 'user' using declarative style(Spec File)
       desc: Deploy samba with auth_mode 'user' using declarative style(Spec File)
       module: smb_deployment_declarative_method.py
-      polarion-id:
+      polarion-id: CEPH-83593845
       config:
         file_type: yaml
         file_mount: /tmp
@@ -155,7 +155,7 @@ tests:
       name: Deploy samba with auth_mode 'AD' using declarative style(Spec File)
       desc: Deploy samba with auth_mode 'Active Directory(AD)' using declarative style(Spec File)
       module: smb_deployment_declarative_method.py
-      polarion-id:
+      polarion-id: CEPH-83593846
       config:
         file_type: yaml
         file_mount: /tmp

@@ -80,7 +80,7 @@ tests:
       name: samba with client multi-connections
       desc: Load Testing - samba with client multi-connections
       module: smb_multi_connection.py
-      polarion-id:
+      polarion-id: CEPH-83593849
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
