@@ -86,7 +86,7 @@ tests:
       name: Ceph samba load test
       desc: Setup Ceph cluster with SMB, run load test and check process id
       module: smb_multi_connection.py
-      polarion-id:
+      polarion-id: CEPH-83593850
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb

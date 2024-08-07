@@ -86,7 +86,7 @@ tests:
       name: Deploy Active Directory and join domain to perform AD basic operations
       desc: Deploy samba with auth_mode 'Active Directory(AD)' and perform basic AD operations
       module: smb_ad_dc.py
-      polarion-id:
+      polarion-id: CEPH-83594037
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
