@@ -186,6 +186,24 @@ tests:
         config-file-name: test_sts_aswi_s3_resource_tag_role_policy.yaml
 
   - test:
+      name: STS aswi Tests to veify role policy allow actions
+      desc: STS aswi Tests to veify role policy allow actions
+      polarion-id: CEPH-83593390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_verify_role_policy_allow_actions.yaml
+
+  - test:
+      name: STS aswi Tests to veify role policy deny actions
+      desc: STS aswi Tests to veify role policy deny actions
+      polarion-id: CEPH-83593390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_verify_role_policy_deny_actions.yaml
+
+  - test:
       abort-on-fail: true
       config:
         roles:

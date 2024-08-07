@@ -129,6 +129,22 @@ tests:
         script-name: test_sts_using_boto_session_policy.py
         config-file-name: test_sts_using_boto_restricted_session_policy.yaml
   - test:
+      name: STS test to verify session policy allow actions
+      desc: STS test to verify session policy allow actions
+      polarion-id: CEPH-83593390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_using_boto_session_policy.py
+        config-file-name: test_sts_using_boto_verify_session_policy_allow_actions.yaml
+  - test:
+      name: STS test to verify session policy deny actions
+      desc: STS test to verify session policy deny actions
+      polarion-id: CEPH-83593390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_using_boto_session_policy.py
+        config-file-name: test_sts_using_boto_verify_session_policy_deny_actions.yaml
+  - test:
       name: STS Tests to perform Server Side Copy
       desc: Perform Server Side Copy
       polarion-id: CEPH-83574522

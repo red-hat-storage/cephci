@@ -345,6 +345,15 @@ tests:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_condition_explicit_deny.yaml
 
+  - test:
+      name: test bucket policy deny actions
+      desc: test bucket policy deny actions
+      polarion-id: CEPH-11216
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_deny_actions.yaml
+
   # Bucket Lifecycle Tests
   - test:
       name: object expiration for versioned buckets with filter Prefix test multiple rules.
