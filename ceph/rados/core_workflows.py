@@ -3815,6 +3815,11 @@ class RadosOrchestrator:
         if not daemon_id:
             return self.run_ceph_command(cmd=base_cmd, client_exec=True)
 
+        if daemon_type == "osd" and daemon_id:
+            return self.run_ceph_command(
+                cmd=f"{base_cmd} {daemon_type}.{daemon_id}", client_exec=True
+            )
+
         out = self.run_ceph_command(cmd=f"{base_cmd} {daemon_id}", client_exec=True)
         if out is None:
             log.error(
