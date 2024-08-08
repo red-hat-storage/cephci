@@ -450,3 +450,79 @@ def get_samba_pid_and_memory(samba_servers):
                 f"failed get samba process ID and rss for {samba_server}"
             )
     return samba_server_info
+
+
+def smb_cifs_mount(
+    smb_node,
+    client,
+    smb_share,
+    smb_user_name,
+    smb_user_password,
+    auth_mode,
+    domain_realm,
+    cifs_mount_point,
+):
+    """Smb cifs mount
+    Args:
+        smb_node (obj): Smb node obj
+        client (obj): Client object
+        smb_share (str): Smb share
+        smb_user_name (str): Smb username
+        smb_user_password (str): Smb password
+        auth_mode (str): Smb auth mode (user or active-directory)
+        domain_realm (str): Smb AD domain relam
+        cifs_mount_point (str): Smb cifs mount point
+    """
+    try:
+        # Create cifs mount dir
+        cmd = f"mkdir {cifs_mount_point}"
+        client.exec_command(
+            sudo=True,
+            cmd=cmd,
+        )
+        # Mount smb share using cifs
+        if auth_mode == "user":
+            cmd = (
+                f"mount.cifs //{smb_node.ip_address}/{smb_share} {cifs_mount_point}"
+                f" -o username={smb_user_name},password={smb_user_password}"
+            )
+            client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+        elif auth_mode == "active-directory":
+            cmd = (
+                f"mount.cifs //{smb_node.ip_address}/{smb_share} {cifs_mount_point}"
+                f" -o username={smb_user_name},password={smb_user_password}"
+                f",domian={domain_realm.split('.')[0].upper()}"
+            )
+            client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+    except Exception as e:
+        raise CephadmOpsExecutionError(
+            f"Fail to mount smb share {smb_share} using cifs, Error {e}"
+        )
+
+
+def generate_apply_smb_spec(installer, file_type, smb_spec, file_mount):
+    """Generate and apply smb spec
+    Args:
+        installer (obj): Installer node obj
+        file_type (str): spec file type (yaml or json)
+        smb_spec (dir): smb spec details
+    """
+    try:
+        # Create smb spec file
+        smb_spec_file = generate_smb_spec(installer, file_type, smb_spec)
+
+        # Apply smb spec file
+        apply_smb_spec(installer, smb_spec_file, file_mount)
+
+        # Check smb service
+        verify_smb_service(installer, service_name="smb")
+    except Exception as e:
+        raise CephadmOpsExecutionError(
+            f"Fail to generate and apply smb spec, Error {e}"
+        )
