@@ -493,7 +493,7 @@ tests:
   - test:
       name: test acls on all users
       desc: Test acls on all users
-      polarion-id: CEPH-14240 # also applies to CEPH-14241
+      polarion-id: CEPH-14240 # also applies to CEPH-14241, CEPH-10487, CEPH-10488
       module: sanity_rgw.py
       config:
         test-version: v1
@@ -515,7 +515,7 @@ tests:
   - test:
       name: acls reset
       desc: Test acls reset
-      polarion-id: CEPH-14260
+      polarion-id: CEPH-14260 # also applies to CEPH-10489
       module: sanity_rgw.py
       config:
         test-version: v1
