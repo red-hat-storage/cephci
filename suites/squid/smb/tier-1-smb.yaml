@@ -1,0 +1,169 @@
+#========================================================================
+# Test-Case: Tier 1
+#
+# Cluster Configuration:
+#    conf/squid/smb/1admin-4node-1client-cluster.yaml
+#========================================================================
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+          - cifs-utils
+      copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Verify IO runs over cifs mount
+      desc: Verify IO runs over cifs mount
+      module: smb_cifs_mount.py
+      polarion-id: CEPH-83594252
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cifs_mount_point: "/mnt/smb"
+        file_count: 10
+
+  - test:
+      name: Validate SMB share options are getting overwritten after restarting cephfs mds service
+      desc: Validate SMB share options are getting overwritten after restarting cephfs mds service
+      module: smb_service_restart.py
+      polarion-id: CEPH-83594250
+      config:
+        restart_service: mds.cephfs
+        change_resource_names: ceph.smb.share
+        change_resource_option: readonly
+        change_value: true
+        file_type: yaml
+        file_mount: /tmp
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        spec:
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            readonly: true
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+        name: Validate SMB share options are getting overwritten after restarting smb service
+        desc: Validate SMB share options are getting overwritten after restarting smb service
+        module: smb_service_restart.py
+        polarion-id: CEPH-83594251
+        config:
+          restart_service: smb.smb1
+          change_resource_names: ceph.smb.share
+          change_resource_option: readonly
+          change_value: true
+          file_type: yaml
+          file_mount: /tmp
+          cephfs_volume: cephfs
+          smb_subvolume_group: smb
+          smb_subvolumes: [sv1]
+          smb_subvolume_mode: '0777'
+          smb_cluster_id: smb1
+          auth_mode: user
+          smb_user_name: user1
+          smb_user_password: passwd
+          smb_shares: [share1]
+          path: "/"
+          spec:
+            - resource_type: ceph.smb.share
+              cluster_id: smb1
+              share_id: share1
+              readonly: true
+              cephfs:
+                volume: cephfs
+                subvolumegroup: smb
+                subvolume: sv1
+                path: /
