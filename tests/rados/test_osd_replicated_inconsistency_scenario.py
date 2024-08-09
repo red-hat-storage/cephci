@@ -248,7 +248,9 @@ def create_pool_inconsistent_object(
         try:
             # Create inconsistency objects
             try:
-                pg_id = rados_object.create_inconsistent_object(pool_name, obj)
+                pg_id = rados_object.create_inconsistent_object(
+                    pool_name, obj, num_keys=1
+                )
                 pg_id_list.append(pg_id)
             except Exception as err:
                 log.info(

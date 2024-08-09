@@ -164,7 +164,7 @@ class RadosOrchestrator:
             if client_exec:
                 out, err = self.client.exec_command(cmd=cmd, sudo=True, timeout=timeout)
             else:
-                out, err = self.node.shell([cmd], timeout=timeout)
+                out, err = self.node.shell([cmd], timeout=timeout, print_output=False)
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
             return None
@@ -718,6 +718,8 @@ class RadosOrchestrator:
                 1. balancer_mode: There are currently two supported balancer modes (str)
                    -> crush-compat
                    -> upmap (default )
+                   -> upmap-read
+                   -> read
                 2. target_max_misplaced_ratio : the percentage of PGs that are allowed to misplaced by balancer (float)
                     target_max_misplaced_ratio = .07
                 3. sleep_interval : number of seconds to sleep in between runs (int)
@@ -2197,9 +2199,13 @@ class RadosOrchestrator:
         for pgid in pool_pgids:
             # Checking the PG state. There Should not be inactive state
             pg_state = self.get_pg_state(pg_id=pgid)
-            if any("unknown" in key for key in pg_state.split("+")):
-                log.error(f"PG: {pgid} in inactive state)")
-                return False
+            if pg_state:
+                if any("unknown" in key for key in pg_state.split("+")):
+                    log.error(f"PG: {pgid} in inactive state)")
+                    return False
+            else:
+                log.error(f"PG : {pgid} not present on cluster")
+                continue
         log.info(
             f"Completed checking for inactive PGs on Pool : {pool_name}. No inactive PGs found"
         )
@@ -2720,7 +2726,7 @@ class RadosOrchestrator:
             log.error("Failed to clean pg inconsistent in the cluster")
             return False
 
-    def create_inconsistent_object(self, pool_name, object_name):
+    def create_inconsistent_object(self, pool_name, object_name, num_keys: int = 3):
         """
         The method converts the object into inconsistent object
         The logic implemented in the code is-
@@ -2733,6 +2739,7 @@ class RadosOrchestrator:
         Args:
             pool_name: pool name
             object_name: object name in the pool
+            num_keys: number of keys to be deleted for inconsistent object to be generated
         Returns: After converting the object in to inconsistent,method returns the pg id
         """
         osd_map_output = self.get_osd_map(pool=pool_name, obj=object_name)
@@ -2751,6 +2758,7 @@ class RadosOrchestrator:
         key_list = self.get_object_key_list(primary_osd, pg_id, object_name)
         log.debug(f"Key list before deletion : {key_list}")
         rm_key_count = 0
+        deleted_keys = []
         for obj_key in key_list:
             log.info(f" Deleting the key :{obj_key} in the {object_name} object")
             self.rm_object_key(primary_osd, pg_id, object_name, obj_key)
@@ -2761,9 +2769,14 @@ class RadosOrchestrator:
                     f"The key:{obj_key} from object:{object_name} could not be deleted. Fail"
                 )
                 raise Exception("Object key not deleted error")
-            log.debug(f"Successfully Deleted the {obj_key} from object: {object_name}")
             rm_key_count += 1
-            if rm_key_count == 3:
+            deleted_keys.append(obj_key)
+            log.debug(
+                f"Successfully Deleted the {obj_key} from object: {object_name}"
+                f"Total keys deleted on the object : {rm_key_count}"
+                f"Keys removed : {deleted_keys}"
+            )
+            if rm_key_count == num_keys:
                 break
         log.debug(
             f"Done with deleting KW pairs on the OSD : {primary_osd} for Obj : object_name"
@@ -2784,7 +2797,7 @@ class RadosOrchestrator:
         # sleeping for 10 seconds
         time.sleep(10)
         assert self.check_inconsistent_health(inconsistent_present=True)
-        log.info(f"The inconsistent object is created in the pg{pg_id}")
+        log.info(f"The inconsistent object is created in the pg: {pg_id}")
         return pg_id
 
     def start_check_scrub_complete(

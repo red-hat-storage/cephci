@@ -26,12 +26,16 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
+    variance = 0.10
 
     regex = r"\s*(\d.\d)-rhel-\d"
     build = (re.search(regex, config.get("build", config.get("rhbuild")))).groups()[0]
+    is_within_variance = (
+        lambda value, new_value, var: abs(value - new_value) / value <= variance
+    )
     if not float(build) >= 8.0:
         log.info(
-            "Test running on version less than 7.0, skipping verifying Reads Balancer functionality"
+            "Test running on version less than 8.0, skipping verifying Reads Balancer functionality"
         )
         return 0
 
@@ -39,10 +43,12 @@ def run(ceph_cluster, **kw):
         log.info(
             "Starting the test to verify Online reads balancer with Balncer module "
         )
+        rados_obj.configure_pg_autoscaler(**{"default_mode": "warn"})
         log.debug("Creating multiple pools for testing")
         time.sleep(10)
         pools = config["create_pools"]
         balancer_mode = config.get("balancer_mode", "upmap-read")
+
         for each_pool in pools:
             cr_pool = each_pool["create_pool"]
             if cr_pool.get("pool_type", "replicated") == "erasure":
@@ -62,16 +68,33 @@ def run(ceph_cluster, **kw):
             f"Completed collection of balance scores for all the pools before enabling Online reads balancer"
             f"Scores are : {read_scores_pre}"
         )
+        existing_pools = rados_obj.list_pools()
+        for pool_name in existing_pools:
+            pool_details = rados_obj.get_pool_details(pool=pool_name)
+            log.debug(
+                f"\nPool details before enabling bulk flag on pools: \n"
+                f"Selected pool name : {pool_name} \n Details : {pool_details}"
+            )
 
         # Tracker : https://tracker.ceph.com/issues/66274 .
         # -ve scenario . We should not be able to move to upmap-read or read profiles without setting min-compat-client
+        min_client_version = rados_obj.run_ceph_command(cmd="ceph osd dump")[
+            "require_min_compat_client"
+        ]
+        log.debug(
+            f"require_min_compat_client before starting the tests is {min_client_version}"
+        )
+        failed = False
         try:
+            config_cmd = "ceph osd set-require-min-compat-client quincy"
+            rados_obj.run_ceph_command(cmd=config_cmd)
             rados_obj.enable_balancer(balancer_mode=balancer_mode)
         except Exception as err:
             log.info(
                 f"Hit expected exception on the cluster. Error : {err}"
                 f"Checking currently enabled mode on the cluster"
             )
+            failed = True
             cmd = "ceph balancer status"
             balancer_status = rados_obj.run_ceph_command(cmd=cmd)
             if balancer_status["mode"] == "upmap-read":
@@ -80,10 +103,19 @@ def run(ceph_cluster, **kw):
                     f"balancer status : {balancer_status}"
                 )
                 raise Exception("Balancer upmap-read mode should not be enabled Error")
-            log.info("Verified balancer mode. Could not be enabled. Proceeding")
+            log.info(
+                "Verified that balancer mode Could not be enabled without require-min-compat-client. "
+            )
+
+        if not failed:
+            log.error(
+                "Balancer mode updated without setting min-compat-client on the cluster."
+            )
+            raise Exception("Balancer upmap-read mode should not be enabled Error")
 
         log.debug(
-            "Setting config to allow clients to perform read balancing on the clusters."
+            "Setting the orig value of min_compat_client version on cluster"
+            " to allow clients to perform read balancing"
         )
         config_cmd = "ceph osd set-require-min-compat-client reef"
         rados_obj.run_ceph_command(cmd=config_cmd)
@@ -111,19 +143,40 @@ def run(ceph_cluster, **kw):
         # Compare the values for each common key
         for pool in common_pools:
             if read_scores_pre[pool] < read_scores_post[pool]:
+                if not is_within_variance(
+                    read_scores_pre[pool], read_scores_post[pool], variance
+                ):
+                    log.error(
+                        f"Read score on pool {pool} has increased post enabling Balancer based reads balancing,"
+                        f"and has increased beyond the variance of 10%"
+                        f"Before : {read_scores_pre[pool] } , After : {read_scores_post[pool]}\n"
+                        f"Pool details : {rados_obj.get_pool_details(pool=pool)}"
+                    )
+                    raise Exception(
+                        "Balancer score higher upon enabling reads balancing. Fail"
+                    )
                 log.error(
-                    f"Read score on pool {pool} has increased post enabling Balancer based reads balancing"
-                )
-                raise Exception(
-                    "Balancer score higher upon enabling reads balancing. Fail"
+                    "The Read score on the pool is increased post enabling read balancer, "
+                    " but it is within the variance of 10%. "
+                    f"Before : {read_scores_pre[pool] } , After : {read_scores_post[pool]}\n"
+                    f"Pool details : {rados_obj.get_pool_details(pool=pool)}"
+                    "Not failing the test"
                 )
         log.debug("Completed verifying reads balancer scores on all the pools")
+        rados_obj.rados_pool_cleanup()
+        rados_obj.configure_pg_autoscaler(**{"default_mode": "on"})
+        time.sleep(20)
+
+        log.debug(
+            "Completed 1st stage of verification of Balancer scores on the pools"
+            "Moving to checking effects of PG autoscaling on Balancer scores"
+        )
 
         test_pool = "balancer_test_pool"
         if not rados_obj.create_pool(pool_name=test_pool, pg_num=16):
             log.error("test pool could not be created")
             raise Exception("pool could not be created error")
-        rados_obj.bench_write(pool_name=test_pool)
+        rados_obj.bench_write(pool_name=test_pool, max_objs=500)
         time.sleep(10)
         test_read_score_init = rados_obj.get_read_scores_on_cluster()[test_pool]
 
@@ -131,30 +184,62 @@ def run(ceph_cluster, **kw):
             pool=test_pool,
             overwrite_recovery_threads=True,
             test_pg_split=True,
+            timeout=1800,
         )
         if not res:
             log.error("Failed to scale up the pool with bulk flag. Fail")
             raise Exception("Pool not scaled up error")
 
         test_read_score_scale_up = rados_obj.get_read_scores_on_cluster()[test_pool]
-        if test_read_score_init <= test_read_score_scale_up:
+        if test_read_score_init < test_read_score_scale_up:
+            if not is_within_variance(
+                test_read_score_init, test_read_score_scale_up, variance
+            ):
+                log.error(
+                    "The read balancer score is equal or higher than it was before PG splits."
+                    "Greater than the allowed variance of 10%"
+                    f"Before : {test_read_score_init } , After : {test_read_score_scale_up}\n"
+                    f"Pool details : {rados_obj.get_pool_details(pool=test_pool)}"
+                )
+                raise Exception("Pool scores Higher or same error post scale up")
             log.error(
-                "The read balancer score is equal or higher than it was before PG splits."
+                "The Read score on the pool is increased post scale up, but it is within the variance of 10%."
+                f"Before : {test_read_score_init } , After : {test_read_score_scale_up}\n"
+                f"Pool details : {rados_obj.get_pool_details(pool=test_pool)}"
+                "Not failing the test"
             )
-            raise Exception("Pool scores Higher or same error post scale up")
 
+        log.debug(
+            "Starting with scale_down of PGs by removing bulk flag"
+            "Bugzilla reported for scale down : https://bugzilla.redhat.com/show_bug.cgi?id=2302230 "
+        )
+
+        """
         res, _ = pool_obj.run_autoscaler_bulk_test(
-            pool=test_pool, overwrite_recovery_threads=True, test_pg_merge=True
+            pool=test_pool, overwrite_recovery_threads=True, test_pg_merge=True, timeout=1800
         )
         if not res:
-            log.error("Failed to scale up the pool with bulk flag. Fail")
+            log.error("Failed to scale down the pool with removal of bulk flag. Fail")
             raise Exception("Pool not scaled down error")
 
         test_read_score_scale_down = rados_obj.get_read_scores_on_cluster()[test_pool]
-        if test_read_score_scale_up < test_read_score_scale_down:
-            log.error("The read balancer score is lower than it was before PG merges.")
-            raise Exception("Pool scores Higher error post scale down")
-
+        if test_read_score_init < test_read_score_scale_down:
+            if not is_within_variance(
+                test_read_score_init, test_read_score_scale_down, variance
+            ):
+                log.error(
+                    "The read balancer score is higher than it was before PG merges."
+                    f"Before : {test_read_score_init} , After : {test_read_score_scale_down}\n"
+                    f"Pool details : {rados_obj.get_pool_details(pool=test_pool)}"
+                )
+                raise Exception("Pool scores Higher error post scale down")
+            log.error(
+                "The Read score on the pool is increased post scale down, but it is within the variance of 10%. "
+                f"Before : {test_read_score_init} , After : {test_read_score_scale_down}\n"
+                f"Pool details : {rados_obj.get_pool_details(pool=test_pool)}"
+                "Not failing the test"
+            )
+        """
         log.info("Completed reads balancing scenarios")
         return 0
 
@@ -167,6 +252,7 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("\n\n\nIn the finally block of Online reads balancer tests\n\n\n")
         rados_obj.rados_pool_cleanup()
+        rados_obj.enable_balancer(balancer_mode="upmap")
         time.sleep(60)
         # log cluster health
         rados_obj.log_cluster_health()

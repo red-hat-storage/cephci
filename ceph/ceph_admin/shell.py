@@ -22,6 +22,7 @@ class ShellMixin:
         check_status: bool = True,
         timeout: int = 600,
         long_running: bool = False,
+        print_output: bool = True,
     ):
         """
         Ceph orchestrator shell interface to run ceph commands.
@@ -32,6 +33,7 @@ class ShellMixin:
             check_status (Bool): check command status
             timeout (Int): Maximum time allowed for execution.
             long_running (Bool): Long running command (default: False)
+            print_output ( Bool): Flag to decide whether the output should be printed in log or not
 
         Returns:
             out (Str), err (Str) stdout and stderr response
@@ -55,5 +57,6 @@ class ShellMixin:
         )
 
         if isinstance(out, tuple):
-            LOG.debug(out[0])
+            if print_output:
+                LOG.debug(out[0])
         return out
