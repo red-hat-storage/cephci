@@ -35,15 +35,23 @@ def create_nvme_certificates(node, **kwargs):
         kwargs: cert arguments
     """
     domain_name = kwargs["domain"]
-    node_ips = kwargs.get("ips", None)
-    dest_path = "/etc/mtls"
-    node.exec_command(cmd=f"mkdir -p {dest_path}", sudo=True)
-    if node_ips:
-        is_server, key, cert = True, "server.key", "server.crt"
-    else:
-        is_server, key, cert = False, "client.key", "client.crt"
 
-    server_cert_gen = CertificateGenerator(node, domain_name, ips=node_ips)
+    _nodes = kwargs.get("nodes", [])
+    is_server = kwargs.get("is_server", False)
+    dest_path = "/etc/mtls"
+
+    if is_server:
+        key, cert = "server.key", "server.crt"
+        node_ips = [i.ip_address for i in _nodes]
+    else:
+        key, cert = "client.key", "client.crt"
+        node_ips = []
+
+    _nodes.append(node)
+    for node in _nodes:
+        node.exec_command(cmd=f"mkdir -p {dest_path}", sudo=True)
+
+    server_cert_gen = CertificateGenerator(_nodes, domain_name, ips=node_ips)
     server_cert_gen.generate_key()
     server_cert_gen.generate_certificate(is_server=is_server)
     return server_cert_gen.save_files(key, cert, dest_path)
@@ -450,13 +458,12 @@ class GenerateServiceSpec:
             spec["spec"]["enable_auth"] = True
 
             # server cert
-            node_ips = [
-                self.get_addr(i) for i in get_nodes_by_ids(self.cluster, node_names)
-            ]
+            nodes = get_nodes_by_ids(self.cluster, node_names)
             key, cert = create_nvme_certificates(
                 self.node,
-                domain="nvme-server",
-                ips=node_ips,
+                domain="nvme.server",
+                nodes=nodes,
+                is_server=True,
             )
             spec["spec"]["root_ca_cert"] = cert.strip()
             spec["spec"]["server_cert"] = cert.strip()
@@ -465,7 +472,9 @@ class GenerateServiceSpec:
             # client cert
             key, cert = create_nvme_certificates(
                 self.node,
-                domain="nvme-client",
+                domain="nvme.client",
+                nodes=nodes,
+                is_server=False,
             )
             spec["spec"]["client_cert"] = cert.strip()
             spec["spec"]["client_key"] = key.strip()
