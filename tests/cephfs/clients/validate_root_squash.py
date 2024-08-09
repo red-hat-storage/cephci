@@ -133,7 +133,7 @@ def run(ceph_cluster, **kw):
             # fsname={fs_list[1]} root_squash path=/",
             mds_caps=f"allow rw fsname={fs_list[0]} root_squash, allow rw fsname={fs_list[0]} path=/volumes",
             # f", allow rw fsname={fs_list[1]}",
-            osd_caps=f"allow rw tag {fs_list[0]} data={fs_list[0]}, allow rw tag {fs_list[1]} data={fs_list[1]}",
+            osd_caps=f"allow rw tag cephfs data={fs_list[0]}, allow rw tag cephfs data={fs_list[1]}",
         )
         fs_util.create_ceph_client(
             client,
@@ -145,7 +145,7 @@ def run(ceph_cluster, **kw):
             # fsname={fs_list[1]} root_squash path=/",
             mds_caps=f"allow rw fsname={fs_list[0]} root_squash, allow rw fsname={fs_list[0]} path=/volumes"
             f", allow rw fsname={fs_list[1]}",
-            osd_caps=f"allow rw tag {fs_list[0]} data={fs_list[0]}, allow rw tag {fs_list[1]} data={fs_list[1]}",
+            osd_caps=f"allow rw tag cephfs data={fs_list[0]}, allow rw tag cephfs data={fs_list[1]}",
         )
         fs_util.create_ceph_client(
             client,
@@ -199,6 +199,7 @@ def run(ceph_cluster, **kw):
                 fs_util,
                 clients[0],
                 kernel_mount_dir,
+                timeout=300,
             )
 
             log.info(
@@ -571,13 +572,11 @@ def run(ceph_cluster, **kw):
             stop_flag = True
             return 0
     except Exception as e:
-        global stop_flag
         stop_flag = True
         log.error(e)
         log.error(traceback.format_exc())
     finally:
         log.info("Cleanup In Progress")
-        global stop_flag
         stop_flag = True
         for cl in [client, client1]:
             log.info("Unmounting the mounts if created")
