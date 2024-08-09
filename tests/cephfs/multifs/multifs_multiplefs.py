@@ -24,7 +24,8 @@ def run(ceph_cluster, **kw):
     4. Run IOs on the FSs
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -48,11 +49,8 @@ def run(ceph_cluster, **kw):
             )
             daemon_ls_before = json.loads(out)
             daemon_count_before = len(daemon_ls_before)
-            client1.exec_command(
-                sudo=True,
-                cmd=f"ceph fs volume create cephfs_{i}",
-                check_ec=False,
-            )
+            fs_util.create_fs(client1, vol_name=f"cephfs_{i}", check_ec=False)
+
             fs_util.wait_for_mds_process(client1, f"cephfs_{i}")
             out_after, rc = client1.exec_command(
                 sudo=True, cmd="ceph orch ps --daemon_type mds -f json"

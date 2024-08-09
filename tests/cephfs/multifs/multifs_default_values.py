@@ -26,8 +26,10 @@ def run(ceph_cluster, **kw):
     4. Run IOs on the FS
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
         config = kw.get("config")
+
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
 
@@ -53,17 +55,9 @@ def run(ceph_cluster, **kw):
         ]
         hosts_1 = " ".join(host_list_1)
         fs_host_list = [host_list, host_list_1]
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph fs volume create {fs_list[0]} --placement='2 {hosts}'",
-            check_ec=False,
-        )
+        fs_util.create_fs(client1, vol_name=fs_list[0], placement=f"2 {hosts}")
         fs_util.wait_for_mds_process(client1, fs_list[0])
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph fs volume create {fs_list[1]} --placement='2 {hosts_1}'",
-            check_ec=False,
-        )
+        fs_util.create_fs(client1, vol_name=fs_list[1], placement=f"2 {hosts_1}")
         fs_util.wait_for_mds_process(client1, fs_list[1])
         for fs, host_ls in zip(fs_list, fs_host_list):
             validate_services_placements(client1, f"mds.{fs}", host_ls)

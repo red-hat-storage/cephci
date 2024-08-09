@@ -38,7 +38,14 @@ def run(ceph_cluster, **kw):
     3. Del SubvolumeGroups
     """
     try:
-        fs_util_v1 = FsUtilsv1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsv1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsv1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        # fs_util_v1 = FsUtilsv1(ceph_cluster)
         snap_util = SnapUtils(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
@@ -53,7 +60,7 @@ def run(ceph_cluster, **kw):
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
         nfs_name = "cephfs-nfs"

@@ -51,7 +51,13 @@ def run(ceph_cluster, **kw):
     3. ceph fs subvolumegroup rm <vol_name> <group_name>
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -63,15 +69,15 @@ def run(ceph_cluster, **kw):
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
         )
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_details = fs_util.get_fs_info(client1, default_fs)
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, default_fs)
         subvolumegroup_list = [
             {"vol_name": default_fs, "group_name": "subvolgroup_clone_status_1"},
             {"vol_name": default_fs, "group_name": "subvolgroup_clone_status_2"},
@@ -97,6 +103,7 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",fs={default_fs}",
         )
         client1.exec_command(
             sudo=True,
@@ -135,7 +142,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [client1],
             fuse_mounting_dir_2,
-            extra_params=f" -r {clonevol_path.strip()}",
+            extra_params=f" -r {clonevol_path.strip()} --client_fs {default_fs}",
         )
         client1.exec_command(
             sudo=True, cmd=f"diff -qr {kernel_mounting_dir_1} {fuse_mounting_dir_2}"
@@ -162,7 +169,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [client1],
             fuse_mounting_dir_3,
-            extra_params=f" -r {clonevol_path.strip()}",
+            extra_params=f" -r {clonevol_path.strip()} --client_fs {default_fs}",
         )
         client1.exec_command(
             sudo=True, cmd=f"diff -qr {kernel_mounting_dir_1} {fuse_mounting_dir_3}"

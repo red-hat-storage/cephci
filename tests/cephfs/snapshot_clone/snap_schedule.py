@@ -47,7 +47,13 @@ def run(ceph_cluster, **kw):
     5. Remove FS
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -82,7 +88,7 @@ def run(ceph_cluster, **kw):
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
 
-        default_fs = "cephfs_snap_1"
+        default_fs = "cephfs_snap_1" if not erasure else "cephfs_snap_1_ec"
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
