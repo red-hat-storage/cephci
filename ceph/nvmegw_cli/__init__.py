@@ -14,16 +14,18 @@ from cli.utilities.containers import Registry
 
 
 class NVMeGWCLI(ExecuteCommandMixin):
-    def __init__(self, node, port=5500) -> None:
-        super().__init__(node, port)
-        self.connection = Connection(node, port)
-        self.gateway = Gateway(node, port)
-        self.host = Host(node, port)
-        self.loglevel = LogLevel(node, port)
-        self.listener = Listener(node, port)
-        self.namespace = Namespace(node, port)
-        self.subsystem = Subsystem(node, port)
-        self.version = Version(node, port)
+    def __init__(self, node, port=5500, mtls=False) -> None:
+        self.node = node
+        self.port = port
+        self._mtls = mtls
+        self.connection = Connection(node, port, mtls)
+        self.gateway = Gateway(node, port, mtls)
+        self.host = Host(node, port, mtls)
+        self.loglevel = LogLevel(node, port, mtls)
+        self.listener = Listener(node, port, mtls)
+        self.namespace = Namespace(node, port, mtls)
+        self.subsystem = Subsystem(node, port, mtls)
+        self.version = Version(node, port, mtls)
 
         self.name = " "
         for clas in [
@@ -47,6 +49,36 @@ class NVMeGWCLI(ExecuteCommandMixin):
             username = registry["username"]
             password = registry["password"]
             Registry(self.node).login(url, username, password)
+
+    def setter(self, attribute, value):
+        """Method to set lower class attributes.
+
+        Ensure lower class has these attributes and setter method.
+
+        Args:
+            attribute: attribute which has to be set
+            value: value to be set on attribute.
+        """
+        for clas in [
+            self.loglevel,
+            self.gateway,
+            self.version,
+            self.connection,
+            self.host,
+            self.subsystem,
+            self.namespace,
+            self.listener,
+        ]:
+            setattr(clas, attribute, value)
+
+    @property
+    def mtls(self):
+        return self._mtls
+
+    @mtls.setter
+    def mtls(self, value):
+        self._mtls = value
+        self.setter("mtls", value)
 
     def fetch_gateway(self):
         """Return Gateway info"""
