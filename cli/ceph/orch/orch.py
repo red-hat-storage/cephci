@@ -135,3 +135,15 @@ class Orch(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def restart(self, service):
+        """
+        Restart a service.
+        Args:
+          service (str): name of the service to be restart
+        """
+        cmd = f"{self.base_cmd} restart {service}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
