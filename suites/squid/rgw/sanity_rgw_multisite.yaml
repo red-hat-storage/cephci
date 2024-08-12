@@ -48,14 +48,16 @@ tests:
                   args:
                     all-available-devices: true
               - config:
-                  command: apply
-                  service: rgw
-                  pos_args:
-                    - shared.pri
-                  args:
-                    placement:
-                      nodes:
-                        - node5
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.pri
+                      placement:
+                        nodes:
+                          - node5
+                      spec:
+                        disable_multisite_sync_traffic: true
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -93,14 +95,16 @@ tests:
                   args:
                     all-available-devices: true
               - config:
-                  command: apply
-                  service: rgw
-                  pos_args:
-                    - shared.sec
-                  args:
-                    placement:
-                      nodes:
-                        - node5
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.sec
+                      placement:
+                        nodes:
+                          - node5
+                      spec:
+                        disable_multisite_sync_traffic: true
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83575222
       destroy-cluster: false
