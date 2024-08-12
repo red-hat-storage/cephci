@@ -84,7 +84,15 @@ def run(ceph_cluster, **kw):
 
     """
     try:
-        fs_util_v1 = FsUtilsv1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsv1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsv1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        # fs_util_v1 = FsUtilsv1(ceph_cluster)
+
         snap_util = SnapUtils(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
@@ -100,7 +108,7 @@ def run(ceph_cluster, **kw):
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
         nfs_name = "cephfs-nfs"
@@ -179,11 +187,7 @@ def run(ceph_cluster, **kw):
                         )
                         daemon_ls_before = json.loads(out)
                         daemon_count_before = len(daemon_ls_before)
-                        client1.exec_command(
-                            sudo=True,
-                            cmd=f"ceph fs volume create cephfs_{i}",
-                            check_ec=False,
-                        )
+                        fs_util_v1.create_fs(client1, f"cephfs_{i}")
                         fs_util_v1.wait_for_mds_process(client1, f"cephfs_{i}")
                         out_after, rc = client1.exec_command(
                             sudo=True, cmd="ceph orch ps --daemon_type mds -f json"

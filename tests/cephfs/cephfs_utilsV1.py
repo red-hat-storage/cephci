@@ -55,7 +55,7 @@ def function_execution_time(func):
 
 
 class FsUtils(object):
-    def __init__(self, ceph_cluster):
+    def __init__(self, ceph_cluster, **kwargs):
         """
         FS Utility object
         Args:
@@ -68,6 +68,8 @@ class FsUtils(object):
         self.mgrs = ceph_cluster.get_ceph_objects("mgr")
         self.osds = ceph_cluster.get_ceph_objects("osd")
         self.mdss = ceph_cluster.get_ceph_objects("mds")
+        self.clients = ceph_cluster.get_ceph_objects("client")
+        self.test_data = kwargs.get("test_data")
 
     def prepare_clients(self, clients, build):
         """
@@ -1253,6 +1255,96 @@ class FsUtils(object):
                     )
         return cmd_out, cmd_rc
 
+    def create_osd_pool(
+        self,
+        client,
+        pool_name,
+        pg_num=None,
+        pgp_num=None,
+        erasure=False,
+        validate=True,
+        **kwargs,
+    ):
+        """
+        Creates an OSD pool with given arguments.
+        It supports the following optional arguments:
+        Args:
+            client:
+            pool_name:
+            pg_num: int
+            pgp_num: int
+            erasure: bool
+            validate: bool
+            **kwargs:
+                erasure_code_profile: str
+                crush_rule_name: str
+                expected_num_objects: int
+                autoscale_mode: str (on, off, warn)
+                check_ec: bool (default: True)
+        Returns:
+            Returns the cmd_out and cmd_rc for the create command.
+        """
+        if erasure:
+            pool_cmd = f"ceph osd pool create {pool_name} {pg_num or ''} {pgp_num or ''} erasure"
+            if kwargs.get("erasure_code_profile"):
+                pool_cmd += f" {kwargs.get('erasure_code_profile')}"
+        else:
+            pool_cmd = f"ceph osd pool create {pool_name} {pg_num or ''} {pgp_num or ''} replicated"
+
+        if kwargs.get("crush_rule_name"):
+            pool_cmd += f" {kwargs.get('crush_rule_name')}"
+        if kwargs.get("expected_num_objects"):
+            pool_cmd += f" {kwargs.get('expected_num_objects')}"
+        if erasure and kwargs.get("autoscale_mode"):
+            pool_cmd += f" --autoscale-mode={kwargs.get('autoscale_mode')}"
+
+        cmd_out, cmd_rc = client.exec_command(
+            sudo=True, cmd=pool_cmd, check_ec=kwargs.get("check_ec", True)
+        )
+
+        if validate:
+            out, rc = client.exec_command(
+                sudo=True, cmd="ceph osd pool ls --format json"
+            )
+            pool_ls = json.loads(out)
+            if pool_name not in pool_ls:
+                raise CommandFailed(f"Creation of OSD pool: {pool_name} failed")
+
+        return cmd_out, cmd_rc
+
+    @staticmethod
+    def str_to_bool(value):
+        """
+        Convert a string representation of a boolean to an actual boolean.
+
+        Args:
+            value (str): The string representation of the boolean value.
+
+        Returns:
+            bool: The corresponding boolean value.
+
+        Raises:
+            ValueError: If the string does not represent a boolean value.
+        """
+        if isinstance(value, str):
+            value = value.strip().lower()
+            if value in {"true", "1", "t", "yes", "y"}:
+                return True
+            elif value in {"false", "0", "f", "no", "n"}:
+                return False
+        raise ValueError(f"Cannot convert {value} to bool")
+
+    @staticmethod
+    def get_custom_config_value(test_data, key_name):
+        if "custom-config" in test_data and isinstance(
+            test_data["custom-config"], list
+        ):
+            for config in test_data["custom-config"]:
+                key, value = config.split("=")
+                if key == key_name:
+                    return FsUtils.str_to_bool(value.lower())
+        return False
+
     def create_fs(self, client, vol_name, validate=True, **kwargs):
         """
         This Function creates the cephfs volume with vol_name given
@@ -1267,17 +1359,57 @@ class FsUtils(object):
         Returns:
 
         """
-        fs_cmd = f"ceph fs volume create {vol_name}"
-        if kwargs.get("placement"):
-            fs_cmd += f" --placement='{kwargs.get('placement')}'"
+
+        erasure = (
+            FsUtils.get_custom_config_value(self.test_data, "erasure")
+            if self.test_data
+            else False
+        )
+        if erasure:
+            self.create_osd_pool(
+                client, f"cephfs.{vol_name}.data-ec", pg_num=64, erasure=True
+            )
+            self.create_osd_pool(
+                client, f"cephfs.{vol_name}.meta", pg_num=64, erasure=False
+            )
+            client.exec_command(
+                sudo=True,
+                cmd=f"ceph osd pool set cephfs.{vol_name}.data-ec allow_ec_overwrites true",
+            )
+            fs_cmd = f"ceph fs new {vol_name} cephfs.{vol_name}.meta cephfs.{vol_name}.data-ec --force"
+        else:
+            fs_cmd = f"ceph fs volume create {vol_name}"
+            if kwargs.get("placement"):
+                fs_cmd += f" --placement='{kwargs.get('placement')}'"
+
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=fs_cmd, check_ec=kwargs.get("check_ec", True)
         )
-        if validate:
+        if kwargs.get("check_ec", True) and validate:
             out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
             volname_ls = json.loads(out)
             if vol_name not in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
+        apply_cmd = f"ceph orch apply mds {vol_name}"
+        if erasure and validate:
+            if kwargs.get("placement"):
+                apply_cmd += f" --placement='{kwargs.get('placement')}'"
+            client.exec_command(
+                sudo=True,
+                cmd=f"{apply_cmd}",
+            )
+            time.sleep(20)
+            retry_mds_status = retry(CommandFailed, tries=3, delay=30)(
+                self.get_mds_status
+            )
+            retry_mds_status(
+                client,
+                1,
+                vol_name=vol_name,
+                expected_status="active",
+            )
+            # self.wait_for_mds_process(client,process_name=vol_name)
+
         return cmd_out, cmd_rc
 
     def create_subvolumegroup(
@@ -1721,63 +1853,6 @@ class FsUtils(object):
             volname_ls = json.loads(out)
             if vol_name in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
-        return cmd_out, cmd_rc
-
-    def create_osd_pool(
-        self,
-        client,
-        pool_name,
-        pg_num=None,
-        pgp_num=None,
-        erasure=False,
-        validate=True,
-        **kwargs,
-    ):
-        """
-        Creates an OSD pool with given arguments.
-        It supports the following optional arguments:
-        Args:
-            client:
-            pool_name:
-            pg_num: int
-            pgp_num: int
-            erasure: bool
-            validate: bool
-            **kwargs:
-                erasure_code_profile: str
-                crush_rule_name: str
-                expected_num_objects: int
-                autoscale_mode: str (on, off, warn)
-                check_ec: bool (default: True)
-        Returns:
-            Returns the cmd_out and cmd_rc for the create command.
-        """
-        if erasure:
-            pool_cmd = f"ceph osd pool create {pool_name} {pg_num or ''} {pgp_num or ''} erasure"
-            if kwargs.get("erasure_code_profile"):
-                pool_cmd += f" {kwargs.get('erasure_code_profile')}"
-        else:
-            pool_cmd = f"ceph osd pool create {pool_name} {pg_num or ''} {pgp_num or ''} replicated"
-
-        if kwargs.get("crush_rule_name"):
-            pool_cmd += f" {kwargs.get('crush_rule_name')}"
-        if kwargs.get("expected_num_objects"):
-            pool_cmd += f" {kwargs.get('expected_num_objects')}"
-        if erasure and kwargs.get("autoscale_mode"):
-            pool_cmd += f" --autoscale-mode={kwargs.get('autoscale_mode')}"
-
-        cmd_out, cmd_rc = client.exec_command(
-            sudo=True, cmd=pool_cmd, check_ec=kwargs.get("check_ec", True)
-        )
-
-        if validate:
-            out, rc = client.exec_command(
-                sudo=True, cmd="ceph osd pool ls --format json"
-            )
-            pool_ls = json.loads(out)
-            if pool_name not in pool_ls:
-                raise CommandFailed(f"Creation of OSD pool: {pool_name} failed")
-
         return cmd_out, cmd_rc
 
     def fs_client_authorize(

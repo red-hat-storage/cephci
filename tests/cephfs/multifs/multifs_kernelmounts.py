@@ -24,7 +24,8 @@ def run(ceph_cluster, **kw):
     4. validate if the mount points are still present
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -43,10 +44,8 @@ def run(ceph_cluster, **kw):
         ]
         hosts = " ".join(host_list)
         fs_name = "cephfs_new"
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph fs volume create {fs_name} --placement='2 {hosts}'",
-            check_ec=False,
+        fs_util.create_fs(
+            client1, vol_name=fs_name, placement=f"2 {hosts}", check_ec=False
         )
 
         for host in host_list:

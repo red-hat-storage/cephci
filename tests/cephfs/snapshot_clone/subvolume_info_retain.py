@@ -42,7 +42,13 @@ def run(ceph_cluster, **kw):
     3. Del SubvolumeGroups
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -54,7 +60,7 @@ def run(ceph_cluster, **kw):
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -62,7 +68,7 @@ def run(ceph_cluster, **kw):
         client1 = clients[0]
         fs_details = fs_util.get_fs_info(client1)
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, default_fs)
         subvolumegroup_list = [
             {"vol_name": default_fs, "group_name": "subvolgroup_info_retain"},
         ]
@@ -87,6 +93,7 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",fs={default_fs}",
         )
         client1.exec_command(
             sudo=True,
@@ -153,8 +160,8 @@ def run(ceph_cluster, **kw):
         )
         return 0
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
     finally:
         log.info("Clean Up in progess")
