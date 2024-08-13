@@ -3487,9 +3487,10 @@ os.system('sudo systemctl start  network')
         if spec_frontend_port not in status_ports:
             raise CommandFailed(f"The frontend port{port} is not matching")
 
+    @retry(CommandFailed, tries=10, delay=30)
     def get_ceph_health_status(self, client, validate=True, status=["HEALTH_OK"]):
         """
-        Validate if the Ceph Health is OK or in ERROR State.
+        Validate if the Ceph Health is OK or in WARN/ERROR State.
         Args:
             client : client node.
         Return:
@@ -3502,6 +3503,7 @@ os.system('sudo systemctl start  network')
         if health_status not in status:
             raise CommandFailed(f"Ceph Cluster is in {health_status} State")
         log.info("Ceph Cluster is Healthy")
+        return health_status
 
     @retry(CommandFailed, tries=10, delay=30)
     def wait_for_host_online(self, client1, node):
@@ -4145,6 +4147,28 @@ os.system('sudo systemctl start  network')
         pin_type,
         pin_setting,
     ):
+        """
+        Enable distributed pinning on a specified subvolume in a Ceph file system.
+
+        Parameters:
+        self: object
+            The instance of the class that this method belongs to.
+        client: object
+            The client object used to execute commands on the Ceph cluster.
+        fs_name: str
+            The name of the Ceph file system.
+        subvolumegroup_name: str
+            The name of the subvolume group that contains the subvolume.
+        subvolume_name: str
+            The name of the subvolume on which to enable distributed pinning.
+        pin_type: str
+            The type of pinning to apply (e.g., "random" or "distributed").
+        pin_setting: boolean
+            The pinning setting to apply (e.g., 1, 0).
+
+        Returns:
+        None
+        """
         out, rc = client.exec_command(
             sudo=True,
             cmd=f"ceph fs subvolume pin {fs_name} {subvolume_name} {pin_type} "
@@ -4385,20 +4409,20 @@ os.system('sudo systemctl start  network')
         Returns:
             None
         """
-        # Get active MDS nodes using the provided utility function
+        # Get active MDS nodes
         mds = self.get_active_mdss(clients, fs_name)
         active_mds_hostnames = [i.split(".")[1] for i in mds]
         log.info(f"Active MDS Nodes are: {active_mds_hostnames}")
 
-        ceph_nodes = ceph_cluster.get_ceph_objects()
+        ceph_nodes = ceph_cluster.get_nodes()
         log.info(f"Ceph Nodes : {ceph_nodes}")
         server_list = []
         for node in ceph_nodes:
-            if node.node.hostname in active_mds_hostnames:
-                log.info(f"{node.node.hostname} is added to server list")
+            if node.hostname in active_mds_hostnames:
+                log.info(f"{node.hostname} is added to server list")
                 server_list.append(node)
         active_nodes = list(set(server_list))
-        log.info(f"New Set of Active Nodes are : {active_nodes}")
+        log.info(f"New set of Active MDS Nodes are: {active_nodes}")
 
         global stop_flag
         stop_flag = False
@@ -4423,7 +4447,7 @@ os.system('sudo systemctl start  network')
                     30,
                 )
                 try:
-                    self.reboot_node(ceph_node=mds)
+                    self.reboot_node_v1(ceph_node=mds)
                 except Exception as e:
                     stop_flag = True
                     log.error(e)
@@ -4433,6 +4457,100 @@ os.system('sudo systemctl start  network')
                     clients,
                     num_of_osds,
                     len(active_nodes),
+                    build,
+                    None,
+                    30,
+                )
+                if cluster_health_afterIO == cluster_health_beforeIO:
+                    log.info("Cluster is healthy")
+                else:
+                    log.error("Cluster is not healthy")
+            log.info("Rebooted all the nodes and cluster is healthy")
+            log.info("Setting stop flag")
+            stop_flag = True
+
+    def runio_reboot_s_replay_mds_nodes(
+        self,
+        fs_util,
+        ceph_cluster,
+        fs_name,
+        clients,
+        num_of_osds,
+        build,
+        mount_paths,
+        mount_type,
+    ):
+        """
+        Processes the standby-replay MDS nodes by running IO operations and rebooting the standby-replay MDS nodes.
+
+        This method performs the following steps:
+        1. Identifies the standby-replay MDS nodes.
+        2. Runs IO operations in parallel on the specified mount paths.
+        3. Reboots the standby-replay MDS nodes one by one.
+        4. Checks the cluster health before and after each reboot.
+        5. Ensures the cluster remains healthy throughout the process.
+
+        Args:
+            fs_util: An instance of a filesystem utility class to run IO operations.
+            ceph_cluster: An instance representing the Ceph cluster.
+            fs_name (str): The name of the filesystem.
+            clients (list): List of clients to execute commands.
+            num_of_osds (int): Number of OSDs in the cluster.
+            build (str): Build information.
+            mount_paths (list): List of directories for mounts (either kernel or fuse).
+            mount_type (str): Type of mount paths provided ("kernel" or "fuse").
+
+        Returns:
+            None
+        """
+        # Get standby-replay MDS nodes
+        mds = self.get_standby_replay_mdss(clients, fs_name)
+        s_replay_mds_hostnames = [i.split(".")[1] for i in mds]
+        log.info(f"standby-replay MDS Nodes are: {s_replay_mds_hostnames}")
+
+        ceph_nodes = ceph_cluster.get_nodes()
+        log.info(f"Ceph Nodes : {ceph_nodes}")
+        server_list = []
+        for node in ceph_nodes:
+            if node.hostname in s_replay_mds_hostnames:
+                log.info(f"{node.hostname} is added to server list")
+                server_list.append(node)
+        s_replay_nodes = list(set(server_list))
+        log.info(f"Set of standby-replay MDS Nodes are: {s_replay_nodes}")
+
+        global stop_flag
+        stop_flag = False
+
+        with parallel() as p:
+            for mount_dir in mount_paths:
+                p.spawn(
+                    self.start_io_time,
+                    fs_util,
+                    clients,
+                    mount_dir,
+                    timeout=0,
+                )
+
+            for mds in s_replay_nodes:
+                cluster_health_beforeIO = check_ceph_healthly(
+                    clients,
+                    num_of_osds,
+                    len(s_replay_nodes),
+                    build,
+                    None,
+                    30,
+                )
+                try:
+                    self.reboot_node_v1(ceph_node=mds)
+                except Exception as e:
+                    stop_flag = True
+                    log.error(e)
+                    log.error(traceback.format_exc())
+
+                cluster_health_afterIO = check_ceph_healthly(
+                    clients,
+                    num_of_osds,
+                    len(s_replay_nodes),
                     build,
                     None,
                     30,
@@ -4675,3 +4793,170 @@ os.system('sudo systemctl start  network')
         elif "K" in size_type:
             bytes_val = float(size_val) * 1024
         return bytes_val
+
+    def reboot_node_v1(self, ceph_node, timeout=300):
+        """
+        Reboots a specified Ceph node and attempts to reconnect within a given timeout period.
+
+        Parameters:
+        self: object
+            The instance of the class that this method belongs to.
+        ceph_node: object
+            The Ceph node object to be rebooted.
+        timeout: int, optional
+            The maximum time (in seconds) to wait for the node to reconnect after reboot.
+            Defaults to 300 seconds.
+
+        Returns:
+        None
+
+        Raises:
+        RuntimeError
+            If the node fails to reconnect within the specified timeout period.
+        """
+        ceph_node.exec_command(sudo=True, cmd="reboot", check_ec=False)
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        while datetime.datetime.now() < endtime:
+            try:
+                sleep(20)
+                ceph_node.reconnect()
+                return
+            except BaseException:
+                log.error(
+                    "Failed to reconnect to the node {node} after reboot ".format(
+                        node=ceph_node.ip_address
+                    )
+                )
+        raise RuntimeError(
+            "Failed to reconnect to the node {node} after reboot ".format(
+                node=ceph_node.ip_address
+            )
+        )
+
+    def runio_modify_max_mds(
+        self,
+        fs_util,
+        fs_name,
+        clients,
+        mount_paths,
+        mount_type,
+        max_mds_value,
+    ):
+        """
+        Run I/O operations in parallel on multiple CephFS mounts and modify the max_mds setting.
+
+        Parameters:
+        self: object
+            The instance of the class that this method belongs to.
+        fs_util: object
+            The file system utility object used to perform operations on CephFS.
+        fs_name: str
+            The name of the Ceph file system.
+        clients: list
+            A list of client nodes that will run I/O operations.
+        mount_paths: list
+            A list of mount paths where I/O operations will be performed.
+        mount_type: str
+            The type of mount (e.g., kernel, fuse).
+        max_mds_value: int
+            The value to set for max_mds.
+
+        Returns:
+        None
+        """
+
+        global stop_flag
+        stop_flag = False
+
+        with parallel() as p:
+            for mount_dir in mount_paths:
+                p.spawn(
+                    self.start_io_time,
+                    fs_util,
+                    clients,
+                    mount_dir,
+                    timeout=0,
+                )
+                try:
+                    log.info(f"Setting max_mds to {max_mds_value} on fs {fs_name}")
+                    set_result = self.set_and_validate_max_mds(
+                        clients, fs_name, max_mds_value
+                    )
+                    log.info(
+                        f"Set result of max_mds of {fs_name} to {max_mds_value} is {set_result}"
+                    )
+                except Exception as e:
+                    stop_flag = True
+                    log.error(e)
+                    log.error(traceback.format_exc())
+
+            log.info("Modification of max_mds were successful")
+            log.info("Setting stop flag")
+            stop_flag = True
+
+    def set_and_validate_max_mds(self, clients, fs_name, max_mds_value):
+        """
+        Set the max_mds value for a specified Ceph file system and validate the change.
+
+        Parameters:
+        self: object
+            The instance of the class that this method belongs to.
+        clients: object
+            The client object used to execute commands on the Ceph cluster.
+        fs_name: str
+            The name of the Ceph file system.
+        max_mds_value: int
+            The value to set for max_mds.
+
+        Returns:
+        bool
+            True if the max_mds value was set and validated successfully, False otherwise.
+        """
+        clients.exec_command(
+            sudo=True, cmd=f"ceph fs set {fs_name} max_mds {max_mds_value}"
+        )
+
+        out = clients.exec_command(
+            sudo=True,
+            cmd=f"ceph fs get {fs_name} -f json",
+            check_ec=False,
+        )
+
+        json_data = json.loads(out[0])
+        log.info(f"Get command output: {json_data}")
+
+        current_max_mds = json_data.get("mdsmap", {}).get("max_mds")
+        if current_max_mds == max_mds_value:
+            log.info(f"Validation successful: max_mds is set to {max_mds_value}")
+            return True
+        else:
+            log.error(
+                f"Validation failed: expected max_mds {max_mds_value}, but got {current_max_mds}"
+            )
+            return False
+
+    def get_fsmap(self, clients, fs_name):
+        """
+        Retrieve the file system map for a specified Ceph file system.
+
+        Parameters:
+        self: object
+            The instance of the class that this method belongs to.
+        clients: object
+            The client object used to execute commands on the Ceph cluster.
+        fs_name: str
+            The name of the Ceph file system.
+
+        Returns:
+        dict
+            A dictionary containing the file system map in JSON format.
+        """
+        out = clients.exec_command(
+            sudo=True,
+            cmd=f"ceph fs get {fs_name} -f json-pretty",
+            check_ec=False,
+        )
+
+        json_data = json.loads(out[0])
+        log.info(f"Get command output: {json_data}")
+        return json_data
