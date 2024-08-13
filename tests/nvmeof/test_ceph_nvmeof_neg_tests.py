@@ -56,7 +56,7 @@ def test_ceph_83575812(ceph_cluster, rbd, pool, config):
         "node": config["initiator_node"],
     }
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         name = generate_unique_id(length=4)
 
         # Create image
@@ -109,7 +109,7 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
         "node": config["initiator_node"],
     }
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         name = generate_unique_id(length=4)
 
         # Create image
@@ -212,7 +212,7 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
         "node": config["initiator_node"],
     }
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         name = generate_unique_id(length=4)
 
         # Create images
@@ -306,7 +306,7 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         name = generate_unique_id(length=4)
 
         # Create image
@@ -399,7 +399,7 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         name = generate_unique_id(length=4)
 
         # Create image
@@ -490,7 +490,7 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
     }
 
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         name = generate_unique_id(length=4)
 
         # Create image
@@ -598,7 +598,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
     _file = f"{_dir}/test.log"
 
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         name = generate_unique_id(length=4)
 
         # Create image
@@ -718,7 +718,7 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
     client = get_node_by_id(ceph_cluster, config["initiator_node"])
     initiator = Initiator(client)
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         name = generate_unique_id(length=4)
 
         # Create image
@@ -817,7 +817,7 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
         "node": config.get("initiator_node"),
     }
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         name = generate_unique_id(length=4)
 
         # Create image
@@ -895,7 +895,7 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
         "node": config.get("initiator_node"),
     }
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         list_args = {}
         list_args.setdefault("args", {}).update(
             {"subsystem": "nqn.2016-06.io.spdk:ceph-83581753"}
@@ -985,7 +985,7 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
         "node": config.get("initiator_node"),
     }
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         list_args = {}
         list_args.setdefault("args", {}).update({"subsystem": subsystem["nqn"]})
         list_args.setdefault("base_cmd_args", {}).update({"format": "json"})
@@ -1092,7 +1092,7 @@ def test_ceph_83581755(ceph_cluster, rbd, pool, config):
         "node": config.get("initiator_node"),
     }
     try:
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         list_args = {}
         list_args.setdefault("args", {}).update({"subsystem": subsystem["nqn"]})
         list_args.setdefault("base_cmd_args", {}).update({"format": "json"})

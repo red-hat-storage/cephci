@@ -491,7 +491,7 @@ def nvmeof(ceph_cluster, **args):
             "listener_port": subsystem["listener_port"],
             "node": args["initiator_node"],
         }
-        configure_subsystems(rbd, pool, nvmegwcli, subsystem)
+        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         try:
             for i in range(args["image"]["count"]):
                 rbd.create_image(pool, f"{name}-image{i}", args["image"]["size"])
