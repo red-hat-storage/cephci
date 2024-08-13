@@ -6,7 +6,6 @@ import string
 import time
 import traceback
 from datetime import datetime, timedelta
-from threading import Thread
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1

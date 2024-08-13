@@ -159,7 +159,7 @@ def wait_for_healthy_ceph(client1, fs_util, wait_time_secs):
 
 def run(ceph_cluster, **kw):
     """
-    CEPH-83591709 - MDS Failover to Standy-Replay MDS when CPU and MEM usage by MDS is 70%
+    CEPH-83591710 - MDS Failover to Standy-Replay MDS when CPU and MEM usage by MDS is 70%
 
     Test Steps:
     Set mds_cache_memory_limit to 2GB(1073741824)
