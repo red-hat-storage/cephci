@@ -177,7 +177,7 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
         extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!encryption'"
         tests = "s3tests"
 
-        if not build.startswith("7"):
+        if not build.split(".")[0] >= "7":
             extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616"
 
             if not encryption:
