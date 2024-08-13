@@ -4606,7 +4606,14 @@ os.system('sudo systemctl start  network')
                 break
 
     def mds_mem_cpu_load(
-        self, client, target_usage_pct, mds_name, mds_node, subvol_list, mnt_info
+        self,
+        client,
+        mem_target_usage_pct,
+        cpu_target_usage_pct,
+        mds_name,
+        mds_node,
+        subvol_list,
+        mnt_info,
     ):
         """
         In this method,
@@ -4622,11 +4629,6 @@ os.system('sudo systemctl start  network')
         subvol_list : subvolumes list to mount and run IO
         client_list: Client objects to mount subvolumes, as one subvolume per client
         """
-
-        if target_usage_pct < 30 or target_usage_pct > 80:
-            log.error(
-                f"target_usage_pct is {target_usage_pct}, it needs to in range 30-80 for this test"
-            )
         initial_mds_mem_used_pct, initial_mds_cpu_used_pct = self.get_mds_cpu_mem_usage(
             client, mds_name, mds_node
         )
@@ -4663,9 +4665,9 @@ os.system('sudo systemctl start  network')
         log.info(
             f"MDS MEM and CPU usage after Write op: MEM - {mds_mem_used_pct},CPU - {mds_cpu_used_pct}"
         )
-        if float(mds_mem_used_pct) >= float(target_usage_pct) and float(
+        if float(mds_mem_used_pct) >= float(mem_target_usage_pct) and float(
             mds_cpu_used_pct
-        ) >= float(target_usage_pct):
+        ) >= float(cpu_target_usage_pct):
             return 0
         log.info("Start Read ops and track cpu and mem usage by mds in parallel")
         rw_procs = []
@@ -4699,9 +4701,9 @@ os.system('sudo systemctl start  network')
             log.info(
                 f"MDS MEM and CPU usage after Read op: MEM - {mds_mem_used_pct},CPU - {mds_cpu_used_pct}"
             )
-            if float(mds_mem_used_pct) >= float(target_usage_pct) and float(
+            if float(mds_mem_used_pct) >= float(mem_target_usage_pct) and float(
                 mds_cpu_used_pct
-            ) >= float(target_usage_pct):
+            ) >= float(cpu_target_usage_pct):
                 return 0
             time.sleep(5)
         return 1
@@ -4715,7 +4717,7 @@ os.system('sudo systemctl start  network')
         mds_mem_limit = float(out.strip())
         out, rc = client.exec_command(
             sudo=True,
-            cmd=f"ceph orch ps| grep {mds_name}",
+            cmd=f"ceph orch ps --refresh| grep {mds_name}",
         )
         mds_info = out.strip()
         mds_mem_usage = mds_info.split()[7]
@@ -4738,21 +4740,24 @@ os.system('sudo systemctl start  network')
         top_out = out.split("\n")
         log.info(f"top_out:{top_out}")
         mds_cpu_used_pct_list = []
-        for line in top_out:
-            log.info(f"line:{line}")
-            mds_cpu_used_pct_tmp = line.split()[8]
-            mds_cpu_used_pct_list.append(mds_cpu_used_pct_tmp)
-        mds_cpu_used_pct = max(mds_cpu_used_pct_list)
+        if len(top_out) <= 1:
+            return mds_mem_used_pct, 0
+        else:
+            for line in top_out:
+                log.info(f"line:{line}")
+                mds_cpu_used_pct_tmp = line.split()[8]
+                mds_cpu_used_pct_list.append(mds_cpu_used_pct_tmp)
+            mds_cpu_used_pct = max(mds_cpu_used_pct_list)
 
-        return mds_mem_used_pct, mds_cpu_used_pct
+            return mds_mem_used_pct, mds_cpu_used_pct
 
     def mds_systest_io(self, client, io_path, io_type, repeat_cnt):
         i = 0
         while i < repeat_cnt:
             if io_type == "read":
                 cmd = "python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 1"
-                cmd += f" --files 10000 --top {io_path}"
-                out, rc = client.exec_command(
+                cmd += f" --files 7000 --top {io_path}"
+                client.exec_command(
                     sudo=True,
                     cmd=cmd,
                     long_running=True,
@@ -4763,16 +4768,16 @@ os.system('sudo systemctl start  network')
             elif io_type == "write":
                 cmd = f"mkdir {io_path}"
                 try:
-                    out, rc = client.exec_command(
+                    client.exec_command(
                         sudo=True,
                         cmd=cmd,
                     )
                 except CommandFailed as ex:
                     log.info(ex)
                 cmd = "python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 1"
-                cmd += f" --files 10000 --top {io_path} "
+                cmd += f" --files 7000 --top {io_path} "
                 try:
-                    out, rc = client.exec_command(
+                    client.exec_command(
                         sudo=True,
                         cmd=cmd,
                         long_running=True,
@@ -4780,6 +4785,7 @@ os.system('sudo systemctl start  network')
                     )
                 except CommandFailed as ex:
                     log.info(ex)
+                i += 1
 
     def convert_to_bytes(self, mem_size):
         m = re.findall(r"(\d+.*\d+)(\w+)", mem_size)[0]
