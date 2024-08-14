@@ -245,7 +245,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             with parallel() as p:
                 for subsys_args in config["subsystems"]:
                     subsys_args["ceph_cluster"] = ceph_cluster
-                    p.spawn(configure_subsystems, rbd_obj, rbd_pool, ha, subsys_args)
+                    p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
 
         # HA failover and failback
         ha.run()
