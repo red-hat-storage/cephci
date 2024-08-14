@@ -1,0 +1,87 @@
+#===============================================================================================
+#-------------------------------------
+#-----    Smoke Test suite     ------
+#-------------------------------------
+# Conf: conf/quincy/cephadm/tier-0.yaml
+# Smoke test cases for
+#    - Bootstrap
+#    - Deploy services
+#    - Deploy custom RGW using spec file
+#===============================================================================================
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      name: Deploy custom RGW using spec file
+      desc: Deploy custom RGW realm/zone using orchestrator and a specification file (customer_bz)
+      polarion-id: CEPH-83594641
+      module: test_deploy_rgw_using_spec.py
+      config:
+        specs:
+          rgw_realm: mytestrealm
+          rgw_zonegroup: mytestzonegroup
+          rgw_zone: mytestzone
+          placement:
+              count: 2
+          spec:
+            rgw_frontend_port: 5500
