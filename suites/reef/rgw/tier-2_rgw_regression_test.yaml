@@ -563,6 +563,14 @@ tests:
       config:
         script-name: ../curl/test_quota_using_curl.py
         config-file-name: ../../curl/configs/test_quota_mgmt_conflict_bucket_quota_using_curl.yaml
+  - test:
+      name: Test rgw user capability user-info-without-keys using curl
+      desc: Test rgw user capability user-info-without-keys using curl
+      polarion-id: CEPH-83582351
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_rgw_user_cap_user_info_without_keys.yaml
 
   - test:
       name: Test bucket listing is not truncated
