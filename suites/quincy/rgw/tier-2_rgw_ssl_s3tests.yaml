@@ -93,7 +93,7 @@ tests:
                     ssl: true
                     rgw_frontend_ssl_certificate: create-cert
       desc: RHCS cluster deployment using cephadm.
-      polarion-id: CEPH-83573777
+      polarion-id: CEPH-83574478
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
@@ -165,3 +165,4 @@ tests:
       module: test_s3.py
       name: execute s3tests
       polarion-id: CEPH-83575225
+      comments: known issue 55614 fixed in Ceph quincy - v17.2.7, current builds at build is 17.2.6
