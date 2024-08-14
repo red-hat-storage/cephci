@@ -37,6 +37,7 @@ class HighAvailability:
         self.cluster = ceph_cluster
         self.config = config
         self.gateways = []
+        self.mtls = config.get("mtls")
         self.orch = Orch(cluster=self.cluster, **{})
         self.daemon = Daemon(cluster=self.cluster, **{})
         self.nvme_pool = config["rbd_pool"]
@@ -44,7 +45,7 @@ class HighAvailability:
 
         for gateway in gateways:
             gw_node = get_node_by_id(self.cluster, gateway)
-            self.gateways.append(NVMeGateway(gw_node))
+            self.gateways.append(NVMeGateway(gw_node, self.mtls))
 
         self.ana_ids = [i.ana_group_id for i in self.gateways]
         self.fail_ops = {

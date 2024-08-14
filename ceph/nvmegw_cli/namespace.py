@@ -2,9 +2,19 @@ from ceph.nvmegw_cli.execute import ExecuteCommandMixin
 
 
 class Namespace(ExecuteCommandMixin):
-    def __init__(self, node, port) -> None:
-        super().__init__(node, port)
+    def __init__(self, node, port, mtls=False) -> None:
+        self.node = node
+        self.port = port
         self.name = "namespace"
+        self._mtls = mtls
+
+    @property
+    def mtls(self):
+        return self._mtls
+
+    @mtls.setter
+    def mtls(self, value):
+        self._mtls = value
 
     def set_qos(self, **kwargs):
         """Set QoS for namespace."""
