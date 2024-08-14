@@ -368,3 +368,106 @@ tests:
             module: push_cosbench_workload.py
             name: push cosbench cleanup workload from secondary
             polarion-id: CEPH-83575074
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.pri.io rgw_dynamic_resharding false"
+              - "ceph config set client.rgw.shared.pri.sync rgw_dynamic_resharding false"
+              - "ceph orch restart {service_name:shared.pri.io}"
+              - "ceph orch restart {service_name:shared.pri.sync}"
+      desc: Set rgw_dynamic_resharding to false
+      name: disable dynamic rehsarding from primary
+      polarion-id: CEPH-83575305
+      module: exec.py
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - clara001
+            drivers:
+              - clara001
+              - clara011
+              - clara012
+            workload_type: fill
+            bucket_prefix: bkt-dynamic-
+            number_of_buckets: 1
+            number_of_objects: 10000000
+            record_sync_on_site: ceph-sec
+      desc: post disabling dynamic resharding in primary create and upload 10M objects
+      module: push_cosbench_workload.py
+      name: push cosbench fill workload
+      polarion-id: CEPH-83575305
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin bucket stats --bucket bkt-dynamic-1 | egrep 'num_shards|num_objects'"
+              - "radosgw-admin bucket reshard --bucket bkt-dynamic-1 --num-shards 45"
+              - "radosgw-admin bucket stats --bucket bkt-dynamic-1 | egrep 'num_shards|num_objects'"
+              - "radosgw-admin sync status"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin bucket stats --bucket bkt-dynamic-1 | egrep 'num_shards|num_objects'"
+              - "radosgw-admin sync status"
+      desc: test manually resharding bucket bkt-dynamic-1 to 45
+      name: manually resharding bucket bkt-dynamic-1 to 45
+      polarion-id: CEPH-83575305
+      module: exec.py
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - clara001
+            drivers:
+              - clara001
+              - clara011
+              - clara012
+            workload_type: symmetrical
+            bucket_prefix: bkt-dynamic-
+            number_of_buckets: 1
+            number_of_objects: 10000000
+            object_prefix: new-obj-
+            record_sync_on_site: ceph-sec
+      desc: upload 1OM objects post manual resharding to 45
+      module: push_cosbench_workload.py
+      name: upload 1OM objects post manual resharding to 45
+      polarion-id: CEPH-83575305
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.pri.io rgw_dynamic_resharding true"
+              - "ceph config set client.rgw.shared.pri.sync rgw_dynamic_resharding true"
+              - "ceph orch restart {service_name:shared.pri.io}"
+              - "ceph orch restart {service_name:shared.pri.sync}"
+              - "radosgw-admin bucket stats --bucket bkt-dynamic-1 | egrep 'num_shards|num_objects'"
+              - "radosgw-admin sync status"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin bucket stats --bucket bkt-dynamic-1 | egrep 'num_shards|num_objects'"
+              - "radosgw-admin sync status"
+      desc: Set rgw_dynamic_resharding to true
+      name: enable dynamic rehsarding from primary
+      polarion-id: CEPH-83575305
+      module: exec.py
