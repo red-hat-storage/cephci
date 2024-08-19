@@ -22,6 +22,7 @@ CONTAINER_IMAGES = [
     "snmp_gateway",
     "loki",
     "nvmeof",
+    "samba",
 ]
 
 
@@ -99,6 +100,7 @@ def set_container_image_config(node, configs):
                 snmp_gateway: snmp gateway image URL
                 loki: loki image URL
                 nvmeof: nvmeof image URL
+                samba: samba image URL
     """
     # Set CephAdm object
     cephadm = CephAdm(node)
