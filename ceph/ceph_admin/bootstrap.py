@@ -373,6 +373,10 @@ class BootstrapMixin:
                 supported_overrides += [
                     "nvmeof",
                 ]
+            if self.cluster.rhcs_version >= LooseVersion("8.0"):
+                supported_overrides += [
+                    "samba",
+                ]
 
             for image in supported_overrides:
                 image_key = f"{image}_image"
