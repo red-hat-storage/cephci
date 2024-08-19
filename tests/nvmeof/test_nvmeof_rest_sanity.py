@@ -104,12 +104,13 @@ def rest_teardown(config):
         config: test config
     """
     _rest = rest()
+    ceph_cluster = config.get("ceph_cluster")
 
     # Cleanup up per subsystem level entities
     subsystems = config.get("subsystems", {})
     for _subsystem in subsystems:
         _subsystem.update({"rest": _rest})
-        rc_cleanup = cleanup(**_subsystem)
+        rc_cleanup = cleanup(ceph_cluster, **_subsystem)
         if rc_cleanup:
             log.error("FAIL: cleanup failed")
             return 1

@@ -19,11 +19,13 @@
             "ALLOW_HOSTS_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/host",
             "LIST_ALL_SUBSYSTEM_LISTENER": "/api/nvmeof/subsystem/{nqn}/listener",
             "ADD_SUBSYSTEM_LISTENER": "/api/nvmeof/subsystem/{nqn}/listener",
+            "DELETE_SUBSYSTEM_LISTENER": "/api/nvmeof/subsystem/{nqn}/listener/{host_name}/{traddr}",
             "LIST_NAMESPACES_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace",
             "CREATE_NAMESPACE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace",
             "GET_INFO_NAMESPACE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}/namespace/{nsid}",
             "DELETE_SUBSYSTEM": "/api/nvmeof/subsystem/{nqn}",
-            "DELETE_NAMESPACE": "/api/nvmeof/subsystem/{nqn}/namespace/{nsid}"
+            "DELETE_NAMESPACE": "/api/nvmeof/subsystem/{nqn}/namespace/{nsid}",
+            "SUBSYSTEM_CONNECTION_CHECK": "/api/nvmeof/subsystem/{nqn}/connection"
         }
     }
 }
