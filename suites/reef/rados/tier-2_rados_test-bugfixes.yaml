@@ -13,6 +13,7 @@
 #     6. https://bugzilla.redhat.com/show_bug.cgi?id=2264054
 #     7. https://bugzilla.redhat.com/show_bug.cgi?id=2264052
 #     8. https://bugzilla.redhat.com/show_bug.cgi?id=2260306
+#     9. https://bugzilla.redhat.com/show_bug.cgi?id=2237038
 #===============================================================================================
 tests:
   - test:
@@ -198,4 +199,8 @@ tests:
       polarion-id: CEPH-83590688
       desc: Generate Slow OSD heartbeats by inducing network delay
 
-
+  - test:
+      name: Client connection over v1 port
+      module: test_v1client.py
+      polarion-id: CEPH-83594645
+      desc: Ensure client connection over v1 port does not crash
