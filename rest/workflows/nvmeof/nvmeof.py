@@ -47,7 +47,18 @@ def create_and_verify_subsystem(**kw):
         log.error(f"creating a subsystem with nqn {nqn} failed {str(e)}")
         return 1
 
-    # 2. verify created subsystem using list GET call
+    # 2. Verify subsystem connection
+    log.info(f"subsystem {nqn} connection check ")
+    try:
+        subs_con_check_res = nvmeof_rest.subsystem_connection_check(subsystem_nqn=nqn)
+        log.info(f"SUCCESS: connection check of subsystem {nqn}")
+    except Exception as e:
+        log.error(
+            f"FAILED connection check of subsystem {nqn} {subs_con_check_res} {str(e)}"
+        )
+        return 1
+
+    # 3. verify created subsystem using list GET call
     log.info("validating subsystem by list subsystem REST")
     try:
         list_ss_response = nvmeof_rest.list_subsystem()
@@ -212,12 +223,13 @@ def add_and_verify_namespace(**kw):
         return 1
 
 
-def cleanup(**kw):
+def cleanup(cluster, **kw):
     """
     All REST cleanup needed to this moment
     scope:
         (1) Delete namespace
-        (2) Delete subsystem
+        (2) Delete listener
+        (3) Delete subsystem
     """
     _rest = kw.pop("rest", None)
     nvmeof_rest = NVMEoF(rest=_rest)
@@ -238,10 +250,27 @@ def cleanup(**kw):
         )
         return 1
 
-    # 2. Now Delete the subsystem
+    # 2. Delete all listeners
+    listeners = kw.get("listeners")
+    for listener in get_nodes_by_ids(cluster, listeners):
+        try:
+            _del_listener_res = nvmeof_rest.delete_listener(
+                subsytem_nqn=nqn,
+                host_name=listener.hostname,
+                traddr=listener.ip_address,
+            )
+            log.info(f"SUCCESS: deleting listener {listener.ip_address}")
+        except Exception as e:
+            log.error(
+                f"FAILED: Deleting listener {listener.ip_address} for subsystem {nqn} {_del_listener_res} {str(e)}"
+            )
+            return 1
+
+    # 3. Now Delete the subsystem
     try:
         _ = nvmeof_rest.delete_subsystem(subsystem_nqn=nqn)
         log.info("=======CLEANUP SUCCESS=======")
         return 0
     except Exception as e:
         log.error(f"FAILED: subsystem delete failed {str(e)}")
+        return 1
