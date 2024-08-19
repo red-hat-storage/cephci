@@ -127,7 +127,7 @@ tests:
               command: add
               args:
                 subsystems: 2
-                max-namespaces: 2048
+                max-namespaces: 1024
           - config:
               service: listener
               command: add
