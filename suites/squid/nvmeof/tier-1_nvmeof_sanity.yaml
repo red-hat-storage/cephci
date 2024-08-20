@@ -49,7 +49,7 @@ tests:
       module: test_cephadm.py
       name: deploy cluster
 
-##  Test cases to be executed
+#  Test cases to be executed
   - test:
       abort-on-fail: true
       config:
@@ -94,6 +94,7 @@ tests:
                   label: nvmeof-gw
               pos_args:
                 - rbd
+                - gw_group1
       desc: NVMeoF Gateway deployment using cephadm
       destroy-cluster: false
       do-not-skip-tc: true
@@ -105,6 +106,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
