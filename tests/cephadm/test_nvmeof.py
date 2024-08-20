@@ -1,9 +1,28 @@
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import get_cluster_state
 from ceph.ceph_admin.nvmeof import NVMeoF
+from distutils.version import LooseVersion
 from utility.log import Log
+from functools import wraps
 
 log = Log(__name__)
+
+
+def apply_nvme_version_specific_cfg(func):
+    """Decorator to add version-specific configuration."""
+    @wraps(func)
+    def wrapper(ceph_cluster, **kwargs):
+        version = kwargs.get("version")
+
+        if version == LooseVersion("8.0"):
+            pos_args = kwargs.get("config").get("pos_args", [])
+            pos_args.append("gw1")
+            # Update the cfg with the modified pos_args
+            kwargs["config"]["pos_args"] = pos_args
+
+        return func(ceph_cluster, **kwargs)
+    return wrapper
+
 
 
 def run(ceph_cluster, **kw):

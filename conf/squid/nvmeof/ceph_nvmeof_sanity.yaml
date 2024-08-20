@@ -35,6 +35,15 @@ globals:
         role:
           - nvmeof-gw
       node7:
+        role:
+          - nvmeof-gw
+      node8:
+        role:
+          - nvmeof-gw
+      node9:
+        role:
+          - nvmeof-gw
+      node10:
         id: node10
         role:
           - client

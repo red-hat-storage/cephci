@@ -286,7 +286,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     "pos_args": [rbd_pool],
                 },
             }
-            test_nvmeof.run(ceph_cluster, **cfg)
+            # Inject cfg and version into kwargs for decorator to modify if needed
+            kwargs["cfg"] = cfg
+            kwargs["cfg"]["version"] = ceph_cluster.rhcs_version
+            # Apply the decorator manually
+            decorated_run = test_nvmeof.apply_nvme_version_specific_cfg(test_nvmeof.run)
+            decorated_run(ceph_cluster, **kwargs["cfg"])
 
         if config.get("subsystems"):
             with parallel() as p:
