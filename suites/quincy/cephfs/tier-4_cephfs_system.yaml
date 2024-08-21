@@ -2,7 +2,7 @@
 #=======================================================================================================================
 # Tier-level: 4
 # Test-Suite: tier-4_cephfs_system.yaml
-# Conf file : conf/quincy/cephfs/tier_0_fs.yaml
+# Conf file : conf/quincy/cephfs/tier-2_cephfs_upgrade.yaml
 # Test-Case Covered:
 #   CEPH-11261: MON node power failure, with client IO
 #   CEPH-11263: MDS node power failure, with client IO
@@ -18,6 +18,7 @@
 #   CEPH-83572891: MDS admin socket dump testing
 #   CEPH-83572890: MDS admin socket perf flush log testing
 #.  CEPH-83591709: MDS Standy-Replay system testing
+#   CEPH-83594640: MDS Cache Trimming and Client Caps Recall test
 #=======================================================================================================================
 tests:
   -
@@ -114,8 +115,22 @@ tests:
         id: client.1
         install_packages:
           - ceph-common
-        node: node7
+        node: node8
       desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+        node: node9
+      desc: "Configure the Cephfs client system 2"
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
@@ -228,6 +243,12 @@ tests:
       module: cephfs_system.mds_failover_standby_replay_systemic_test.py
       polarion-id: CEPH-83591709
       name: "mds_failover_standby_replay_systemic_test"
+  - test:
+      abort-on-fail: false
+      desc: "MDS Cache Trimming and Client Caps Recall test"
+      module: cephfs_system.mds_cache_trimming_caps_recall.py
+      polarion-id: CEPH-83594640
+      name: "mds_cache_trimming_caps_recall"
   - test:
       abort-on-fail: false
       desc: "Fill the cluster with 95 percentage and delete the contents"
