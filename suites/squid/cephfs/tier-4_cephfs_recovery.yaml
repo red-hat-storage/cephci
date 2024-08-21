@@ -221,4 +221,15 @@ tests:
       polarion-id: CEPH-83593150
       desc: Validate all extended attributes that are supported in filesystem
       abort-on-fail: false
-
+  - test:
+      abort-on-fail: false
+      desc: "journal_tool_journal_mode"
+      module: journal_tool_journal_mode.py
+      name: journal_tool_journal_mode
+      polarion-id: "CEPH-83594249"
+  - test:
+      abort-on-fail: false
+      desc: "journal_tool_header_mode"
+      module: journal_tool_header_mode.py
+      name: journal_tool_header_mode
+      polarion-id: "CEPH-83594266"
