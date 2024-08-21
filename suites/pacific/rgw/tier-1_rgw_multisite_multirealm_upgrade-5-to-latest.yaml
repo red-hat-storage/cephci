@@ -463,7 +463,6 @@ tests:
             set-env: true
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            verify-io-on-site: ["ceph-sec"]
       desc: test to create "M" no of buckets and "N" no of objects with download
       module: sanity_rgw_multisite.py
       name: download objects post upgrade

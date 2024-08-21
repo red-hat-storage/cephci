@@ -212,8 +212,8 @@ tests:
         timeout: 300
 
   - test:
-      name: Test by adding almost 10K buckets to the resharding queue
-      desc: disable and enable dynamic resharding for 10K buckets
+      name: Test by adding almost 1K buckets to the resharding queue
+      desc: disable and enable dynamic resharding for 1K buckets
       polarion-id: CEPH-11478
       module: sanity_rgw.py
       config:
