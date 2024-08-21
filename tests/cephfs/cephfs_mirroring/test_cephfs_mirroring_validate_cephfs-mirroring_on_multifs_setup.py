@@ -32,8 +32,15 @@ def run(ceph_cluster, **kw):
     try:
         config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
-        fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"))
-        fs_util_ceph2 = FsUtils(ceph_cluster_dict.get("ceph2"))
+        test_data = kw.get("test_data")
+        # fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"), test_data=test_data)
+        fs_util_ceph2 = FsUtils(ceph_cluster_dict.get("ceph2"), test_data=test_data)
         fs_mirroring_utils = CephfsMirroringUtils(
             ceph_cluster_dict.get("ceph1"), ceph_cluster_dict.get("ceph2")
         )
@@ -92,52 +99,71 @@ def run(ceph_cluster, **kw):
         log.info(len(mds_nodes))
         source_fs_1 = "cephfs1"
         source_fs_2 = "cephfs2"
+
+        source_fs_1 = "cephfs1" if not erasure else "cephfs1-ec"
+        source_fs_2 = "cephfs2" if not erasure else "cephfs2-ec"
+
         mds_names = []
         for mds in mds_nodes:
             mds_names.append(mds.node.hostname)
         hosts_list1 = mds_names[-6:-4]
         mds_hosts_1 = " ".join(hosts_list1) + " "
         log.info(f"MDS host list 1 {mds_hosts_1}")
-        source_clients[0].exec_command(
-            sudo=True,
-            cmd=f'ceph fs volume create {source_fs_1} --placement="2 {mds_hosts_1}"',
+        fs_util_ceph1.create_fs(
+            source_clients[0], source_fs_1, placement=f"2 {mds_hosts_1}"
         )
+        # source_clients[0].exec_command(
+        #     sudo=True,
+        #     cmd=f'ceph fs volume create {source_fs_1} --placement="2 {mds_hosts_1}"',
+        # )
         fs_util_ceph1.wait_for_mds_process(source_clients[0], source_fs_1)
 
         hosts_list2 = mds_names[-4:-2]
         mds_hosts_2 = " ".join(hosts_list2) + " "
         log.info(f"MDS host list 2 {mds_hosts_2}")
-        source_clients[0].exec_command(
-            sudo=True,
-            cmd=f'ceph fs volume create {source_fs_2} --placement="2 {mds_hosts_2}"',
+        fs_util_ceph1.create_fs(
+            source_clients[0], source_fs_2, placement=f"2 {mds_hosts_2}"
         )
+        # source_clients[0].exec_command(
+        #     sudo=True,
+        #     cmd=f'ceph fs volume create {source_fs_2} --placement="2 {mds_hosts_2}"',
+        # )
         fs_util_ceph1.wait_for_mds_process(source_clients[0], source_fs_2)
 
         log.info("Create required filesystem on Target Cluster...")
         mds_nodes = ceph_cluster_dict.get("ceph2").get_ceph_objects("mds")
         log.info(f"Available MDS Nodes {mds_nodes[0]}")
         log.info(len(mds_nodes))
-        target_fs_1 = "cephfs-rem1"
-        target_fs_2 = "cephfs-rem2"
+        # target_fs_1 = "cephfs-rem1"
+        # target_fs_2 = "cephfs-rem2"
+
+        target_fs_1 = "cephfs-rem1" if not erasure else "cephfs-rem1-ec"
+        target_fs_2 = "cephfs-rem2" if not erasure else "cephfs-rem2-ec"
         mds_names = []
         for mds in mds_nodes:
             mds_names.append(mds.node.hostname)
         hosts_list1 = mds_names[-4:-2]
         mds_hosts_1 = " ".join(hosts_list1) + " "
         log.info(f"MDS host list 1 {mds_hosts_1}")
-        target_clients[0].exec_command(
-            sudo=True,
-            cmd=f'ceph fs volume create {target_fs_1} --placement="2 {mds_hosts_1}"',
+        fs_util_ceph2.create_fs(
+            target_clients[0], target_fs_1, placement=f"2 {mds_hosts_1}"
         )
+        # target_clients[0].exec_command(
+        #     sudo=True,
+        #     cmd=f'ceph fs volume create {target_fs_1} --placement="2 {mds_hosts_1}"',
+        # )
         fs_util_ceph1.wait_for_mds_process(target_clients[0], target_fs_1)
 
         hosts_list2 = mds_names[-2:]
         mds_hosts_2 = " ".join(hosts_list2) + " "
         log.info(f"MDS host list 2 {mds_hosts_2}")
-        target_clients[0].exec_command(
-            sudo=True,
-            cmd=f'ceph fs volume create {target_fs_2} --placement="2 {mds_hosts_2}"',
+        fs_util_ceph2.create_fs(
+            target_clients[0], target_fs_2, placement=f"2 {mds_hosts_2}"
         )
+        # target_clients[0].exec_command(
+        #     sudo=True,
+        #     cmd=f'ceph fs volume create {target_fs_2} --placement="2 {mds_hosts_2}"',
+        # )
         fs_util_ceph1.wait_for_mds_process(target_clients[0], target_fs_2)
 
         target_user1 = "mirror_remote1"

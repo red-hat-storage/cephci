@@ -40,8 +40,16 @@ def run(ceph_cluster, **kw):
     try:
         config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
-        fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"))
-        fs_util_ceph2 = FsUtils(ceph_cluster_dict.get("ceph2"))
+        test_data = kw.get("test_data")
+        # fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"), test_data=test_data)
+        fs_util_ceph2 = FsUtils(ceph_cluster_dict.get("ceph2"), test_data=test_data)
+
         fs_mirroring_utils = CephfsMirroringUtils(
             ceph_cluster_dict.get("ceph1"), ceph_cluster_dict.get("ceph2")
         )
@@ -63,8 +71,17 @@ def run(ceph_cluster, **kw):
         fs_util_ceph2.prepare_clients(target_clients, build)
         fs_util_ceph1.auth_list(source_clients)
         fs_util_ceph2.auth_list(target_clients)
-        source_fs = "cephfs_nw_1"
-        target_fs = "cephfs_rem_1"
+        # source_fs = "cephfs_nw_1"
+        # target_fs = "cephfs_rem_1"
+        source_fs = "cephfs_nw_1" if not erasure else "cephfs_nw_1-ec"
+        target_fs = "cephfs_rem_1" if not erasure else "cephfs_rem_1-ec"
+        fs_details_source = fs_util_ceph1.get_fs_info(source_clients[0], source_fs)
+        if not fs_details_source:
+            fs_util_ceph1.create_fs(source_clients[0], source_fs)
+        fs_details_target = fs_util_ceph1.get_fs_info(target_clients[0], target_fs)
+        if not fs_details_target:
+            fs_util_ceph1.create_fs(target_clients[0], target_fs)
+
         target_user = "mirror_remote_nw"
         target_site_name = "remote_site_nw"
         fs_details = fs_util_ceph1.get_fs_info(source_clients[0], source_fs)
