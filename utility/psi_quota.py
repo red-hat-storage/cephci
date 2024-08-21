@@ -251,7 +251,7 @@ def run(args: Dict) -> None:
     osp_cred = load_file(osp_cred_file)
     glbs = osp_cred.get("globals")
     os_cred = glbs.get("openstack-credentials")
-    projects = ["ceph-jenkins", "ceph-ci", "ceph-core"]
+    projects = ["ceph-jenkins", "ceph-ci", "ceph-core", "ceph-sys-test"]
     quota_details = []
     for project in projects:
         os_cred["project"] = project
