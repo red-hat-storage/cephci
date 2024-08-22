@@ -4971,3 +4971,32 @@ os.system('sudo systemctl start  network')
         json_data = json.loads(out[0])
         log.info(f"Get command output: {json_data}")
         return json_data
+
+    def get_mds_config(self, client, fs_name):
+        out, rc = client.exec_command(
+            cmd=f"ceph fs status {fs_name} -f json", client_exec=True
+        )
+        log.info(out)
+        parsed_data = json.loads(out)
+        mds_config = parsed_data.get("mdsmap")
+        return mds_config
+
+    def get_mds_standby_replay_pair(self, client, fs_name, mds_config):
+        mds_pair_info = {}
+        for mds in mds_config:
+            if mds.get("state") == "active":
+                active_mds = mds["name"]
+                mds_pair_info.update({mds["rank"]: {}})
+                out, rc = client.exec_command(
+                    cmd=f"ceph fs status {fs_name}", client_exec=True
+                )
+                out_list = out.split("\n")
+                for out_iter in out_list:
+                    exp_str = f"{mds['rank']}-s"
+                    if exp_str in out_iter:
+                        standby_replay_mds = out_iter.split()[2]
+                        mds_pair_info[mds["rank"]].update(
+                            {active_mds: standby_replay_mds}
+                        )
+        log.info(f"MDS Standby Replay pair info : {mds_pair_info}")
+        return mds_pair_info

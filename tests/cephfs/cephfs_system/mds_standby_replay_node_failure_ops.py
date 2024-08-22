@@ -56,37 +56,10 @@ def mds_standby_replay_setup(client, default_fs, mds_nodes, fs_util):
         return 1
 
 
-def get_mds_config(client, fs_name):
-    out, rc = client.exec_command(
-        cmd=f"ceph fs status {fs_name} -f json", client_exec=True
-    )
-    log.info(out)
-    parsed_data = json.loads(out)
-    mds_config = parsed_data.get("mdsmap")
-    return mds_config
-
-
-def get_mds_standby_replay_pair(client, fs_name, mds_config):
-    mds_pair_info = {}
-    for mds in mds_config:
-        if mds.get("state") == "active":
-            active_mds = mds["name"]
-            mds_pair_info.update({mds["rank"]: {}})
-            out, rc = client.exec_command(
-                cmd=f"ceph fs status {fs_name}", client_exec=True
-            )
-            out_list = out.split("\n")
-            for out_iter in out_list:
-                exp_str = f"{mds['rank']}-s"
-                if exp_str in out_iter:
-                    standby_replay_mds = out_iter.split()[2]
-                    mds_pair_info[mds["rank"]].update({active_mds: standby_replay_mds})
-    log.info(f"MDS Standby Replay pair info : {mds_pair_info}")
-    return mds_pair_info
-
-
-def validate_standby_replay_mds(client, fs_name, initial_mds_config, initial_mds_pair):
-    mds_config = get_mds_config(client, fs_name)
+def validate_standby_replay_mds(
+    client, fs_name, fs_util, initial_mds_config, initial_mds_pair
+):
+    mds_config = fs_util.get_mds_config(client, fs_name)
     initial_standby_replay_mds = {}
     for mds in initial_mds_config:
         if mds.get("state") == "standby-replay":
@@ -106,9 +79,9 @@ def validate_standby_replay_mds(client, fs_name, initial_mds_config, initial_mds
         log.error(f"StandbyReplay MDS count before and after is not same,{str}")
         return 1
     sleep(5)
-    mds_config1 = get_mds_config(client, fs_name)
+    mds_config1 = fs_util.get_mds_config(client, fs_name)
     standby_replay_mds1 = {}
-    mds_pair = get_mds_standby_replay_pair(client, fs_name, mds_config)
+    mds_pair = fs_util.get_mds_standby_replay_pair(client, fs_name, mds_config)
     log.info(f"mds_pair before:{initial_mds_pair},mds_pair after: {mds_pair}")
     for mds in mds_config1:
         if mds.get("state") == "standby-replay":
@@ -213,9 +186,9 @@ def run(ceph_cluster, **kw):
             new_client_hostname="admin",
             extra_params=f" --client_fs {fs_name}",
         )
-        initial_mds_config = get_mds_config(clients[0], fs_name)
+        initial_mds_config = fs_util_v1.get_mds_config(clients[0], fs_name)
         log.info(f"Initial MDS config before node reboot test: {initial_mds_config}")
-        initial_mds_pair = get_mds_standby_replay_pair(
+        initial_mds_pair = fs_util_v1.get_mds_standby_replay_pair(
             clients[0], fs_name, initial_mds_config
         )
         standby_replay_nodes = []
@@ -275,26 +248,26 @@ def run(ceph_cluster, **kw):
 
             log.info("Rebooted all Standby-Replay MDS nodes and cluster is Healthy")
 
-            mds_config = get_mds_config(clients[0], fs_name)
+            mds_config = fs_util_v1.get_mds_config(clients[0], fs_name)
             log.info(f"MDS config after node reboot: {mds_config}")
             log.info("Validate Standby-Replay node configuration after node reboot")
             if validate_standby_replay_mds(
-                clients[0], fs_name, initial_mds_config, initial_mds_pair
+                clients[0], fs_name, fs_util_v1, initial_mds_config, initial_mds_pair
             ):
                 test_fail += 1
                 log.error(
                     "StandbyReplay MDS configuration validate after node reboot test failed"
                 )
 
-            initial_mds_config = get_mds_config(clients[0], fs_name)
+            initial_mds_config = fs_util_v1.get_mds_config(clients[0], fs_name)
             log.info(
                 f"Initial MDS config before daemon restart test: {initial_mds_config}"
             )
-            initial_mds_pair = get_mds_standby_replay_pair(
+            initial_mds_pair = fs_util_v1.get_mds_standby_replay_pair(
                 clients[0], fs_name, initial_mds_config
             )
             if validate_standby_replay_mds(
-                clients[0], fs_name, initial_mds_config, initial_mds_pair
+                clients[0], fs_name, fs_util_v1, initial_mds_config, initial_mds_pair
             ):
                 test_fail += 1
             standby_replay_nodes = []
@@ -335,18 +308,18 @@ def run(ceph_cluster, **kw):
                     log.error("cluster is not healty")
             log.info("Restarted Standby-Replay mds services and cluster is Healthy")
 
-            mds_config = get_mds_config(clients[0], fs_name)
+            mds_config = fs_util_v1.get_mds_config(clients[0], fs_name)
             log.info(f"MDS config after daemon restart: {mds_config}")
             log.info("Validate Standby-Replay node configuration after daemon restart")
             if validate_standby_replay_mds(
-                clients[0], fs_name, initial_mds_config, initial_mds_pair
+                clients[0], fs_name, fs_util_v1, initial_mds_config, initial_mds_pair
             ):
                 test_fail += 1
-            initial_mds_config = get_mds_config(clients[0], fs_name)
+            initial_mds_config = fs_util_v1.get_mds_config(clients[0], fs_name)
             log.info(
                 f"Initial MDS config before daemon kill test: {initial_mds_config}"
             )
-            initial_mds_pair = get_mds_standby_replay_pair(
+            initial_mds_pair = fs_util_v1.get_mds_standby_replay_pair(
                 clients[0], fs_name, initial_mds_config
             )
             standby_replay_nodes = []
@@ -386,11 +359,11 @@ def run(ceph_cluster, **kw):
                 else:
                     log.error("cluster is not healty")
             log.info("killed Standby-Replay mds services and cluster is Healthy")
-            mds_config = get_mds_config(clients[0], fs_name)
+            mds_config = fs_util_v1.get_mds_config(clients[0], fs_name)
             log.info(f"MDS config after daemon kill: {mds_config}")
             log.info("Validate Standby-Replay node configuration after daemon kill")
             if validate_standby_replay_mds(
-                clients[0], fs_name, initial_mds_config, initial_mds_pair
+                clients[0], fs_name, fs_util_v1, initial_mds_config, initial_mds_pair
             ):
                 test_fail += 1
             for mds in mds_nodes:

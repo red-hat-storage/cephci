@@ -17,6 +17,7 @@
 #   CEPH-11240: mds_shutdown_together_io_continue
 #   CEPH-83572891: MDS admin socket dump testing
 #   CEPH-83572890: MDS admin socket perf flush log testing
+#.  CEPH-83595235: MDS standby replay node failures ops with client IO
 #.  CEPH-83591709: MDS Standy-Replay system testing
 #   CEPH-83594640: MDS Cache Trimming and Client Caps Recall test
 #=======================================================================================================================
@@ -237,6 +238,14 @@ tests:
       module: cephfs_system.mds_admin_daemon_socket_perf_flush_log.py
       polarion-id: CEPH-83572890
       name: "MDS admin socket perf flush log testing"
+  - test:
+      abort-on-fail: false
+      desc: "StandbyReplay MDS node failures ops with client IO"
+      module: cephfs_system.mds_standby_replay_node_failure_ops.py
+      polarion-id: CEPH-83595235
+      name: "mds_standby_replay_node_failure_ops"
+      config:
+        num_of_osds: 12
   - test:
       abort-on-fail: false
       desc: "MDS Standy-Replay system testing"
