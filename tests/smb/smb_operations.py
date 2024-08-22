@@ -526,3 +526,68 @@ def generate_apply_smb_spec(installer, file_type, smb_spec, file_mount):
         raise CephadmOpsExecutionError(
             f"Fail to generate and apply smb spec, Error {e}"
         )
+
+
+def win_mount(
+    clients, mount_point, samba_server, smb_share, smb_user_name, smb_user_password
+):
+    """Window mount
+    Args:
+        clients (obj): window clients node obj
+        mount_point (str): mount point
+        samba_server (obj): Smb server node obj
+        smb_share (str): Smb share
+        smb_user_name (str): Smb username
+        smb_user_password (str): Smb password
+    """
+    try:
+        for client in clients:
+            cmd = (
+                f"net use {mount_point} \\\\{samba_server}\\{smb_share}"
+                f" /user:{smb_user_name} {smb_user_password} /persistent:yes"
+            )
+            client.exec_command(cmd=cmd)
+    except Exception as e:
+        raise CephadmOpsExecutionError(f"Fail to mount, Error {e}")
+
+
+def clients_cleanup(
+    clients,
+    mount_point,
+    samba_server,
+    smb_share,
+    smb_user_name,
+    smb_user_password,
+    windows_client=False,
+):
+    """Clients cleanup
+    Args:
+        clients (obj): window clients node obj
+        mount_point (str): mount point
+        samba_server (obj): Smb server node obj
+        smb_share (str): Smb share
+        smb_user_name (str): Smb username
+        smb_user_password (str): Smb password
+        windows_client (bool): trur or false
+    """
+    try:
+        if windows_client:
+            for client in clients:
+                client.exec_command(
+                    cmd=f"rd /s /q {mount_point}\\",
+                )
+                client.exec_command(
+                    cmd=f"net use {mount_point} /delete",
+                )
+        else:
+            for client in clients:
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"rm -rf {mount_point}",
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"umount {mount_point}",
+                )
+    except Exception as e:
+        raise CephadmOpsExecutionError(f"Fail to cleanup clients, Error {e}")
