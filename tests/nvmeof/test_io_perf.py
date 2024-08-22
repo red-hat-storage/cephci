@@ -13,13 +13,13 @@ from ceph.ceph import Ceph
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.cephadm import test_nvmeof, test_orch
 from tests.nvmeof.test_ceph_nvmeof_gateway import (
     configure_subsystems,
     disconnect_initiator,
     initiators,
     teardown,
 )
+from tests.nvmeof.workflows.nvme_utils import deploy_nvme_service
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.io.fio_profiles import IO_Profiles
 from utility.log import Log
@@ -366,7 +366,7 @@ def librbd(ceph_cluster, **args):
               - pool
     """
     # Create RBD Image
-    pool = args["pool"]
+    pool = args["rbd_pool"]
     rbd = args["rbd"]
     client = get_node_by_id(ceph_cluster, args["node"])
     client.exec_command(cmd=f"mkdir -p {ARTIFACTS_DIR}", sudo=True)
@@ -452,7 +452,7 @@ def nvmeof(ceph_cluster, **args):
                   - initiators
     """
     # Create RBD Image
-    pool = args["pool"]
+    pool = args["rbd_pool"]
     rbd = args["rbd"]
 
     # Configure NVMEoF Gateway
@@ -462,87 +462,83 @@ def nvmeof(ceph_cluster, **args):
     initiator = get_node_by_id(ceph_cluster, args["initiator_node"])
     initiator.exec_command(cmd=f"mkdir -p {ARTIFACTS_DIR}", sudo=True)
 
-    # Install Gateway
-    if args.get("install_gw"):
-        cfg = {
-            "no_cluster_state": False,
-            "config": {
-                "command": "apply",
-                "service": "nvmeof",
-                "args": {
-                    "placement": {"nodes": [args["gw_node"]]},
-                },
-                "pos_args": [pool],
-            },
-        }
-        test_nvmeof.run(ceph_cluster, **cfg)
+    try:
+        # Install Gateway
+        deploy_nvme_service(ceph_cluster, args)
 
-    for count in range(args["iterations"]):
-        name = generate_unique_id(4)
-        subsystem = {
-            "nqn": f"nqn.2016-06.io.spdk:{generate_unique_id(4)}",
-            "serial": generate_unique_id(2),
-            "allow_host": "*",
-            "listener_port": find_free_port(gw_node),
-            "node": args["gw_node"],
-        }
-        initiator_cfg = {
-            "subnqn": subsystem["nqn"],
-            "listener_port": subsystem["listener_port"],
-            "node": args["initiator_node"],
-        }
-        configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
-        try:
-            for i in range(args["image"]["count"]):
-                rbd.create_image(pool, f"{name}-image{i}", args["image"]["size"])
-                ns_args = {
-                    "args": {
-                        "subsystem": subsystem["nqn"],
-                        "rbd-pool": pool,
-                        "rbd-image": f"{name}-image{i}",
-                    }
-                }
-                nvmegwcli.namespace.add(**ns_args)
-
-            # Run with profiles and collect results
-            for io_profile in args["io_profiles"]:
-                initiator_cfg["io_args"] = IO_Profiles[io_profile]
-                initiator_cfg["io_args"].update(
-                    {
-                        "test_name": f"{io_profile}-{name}-{count}-nvmeof",
-                        "output_dir": ARTIFACTS_DIR,
-                    }
-                )
-                # apply overrides
-                initiator_cfg["io_args"].update(args.get("io_overrides", {}))
-
-                [
-                    parse_fio_output(
-                        get_node_by_id(ceph_cluster, args["initiator_node"]), i
-                    )
-                    for i in initiators(ceph_cluster, nvmegwcli, initiator_cfg)
-                ]
-
-                # disconnect initiator
-                disconnect_initiator(
-                    ceph_cluster, args["initiator_node"], initiator_cfg
-                )
-        except Exception as err:
-            raise Exception(err)
-        finally:
-            # disconnect and delete subsystems
-            cleanup_cfg = {
-                "gw_node": args["gw_node"],
-                "cleanup": ["subsystems", "disconnect_all"],
-                "subsystems": [subsystem],
-                "initiators": [initiator_cfg],
+        for count in range(args["iterations"]):
+            name = generate_unique_id(4)
+            subsystem = {
+                "nqn": f"nqn.2016-06.io.spdk:{generate_unique_id(4)}",
+                "serial": generate_unique_id(2),
+                "allow_host": "*",
+                "listener_port": find_free_port(gw_node),
+                "node": args["gw_node"],
             }
+            initiator_cfg = {
+                "subnqn": subsystem["nqn"],
+                "listener_port": subsystem["listener_port"],
+                "node": args["initiator_node"],
+            }
+            configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
+            try:
+                for i in range(args["image"]["count"]):
+                    rbd.create_image(pool, f"{name}-image{i}", args["image"]["size"])
+                    ns_args = {
+                        "args": {
+                            "subsystem": subsystem["nqn"],
+                            "rbd-pool": pool,
+                            "rbd-image": f"{name}-image{i}",
+                        }
+                    }
+                    nvmegwcli.namespace.add(**ns_args)
 
-            teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+                # Run with profiles and collect results
+                for io_profile in args["io_profiles"]:
+                    initiator_cfg["io_args"] = IO_Profiles[io_profile]
+                    initiator_cfg["io_args"].update(
+                        {
+                            "test_name": f"{io_profile}-{name}-{count}-nvmeof",
+                            "output_dir": ARTIFACTS_DIR,
+                        }
+                    )
+                    # apply overrides
+                    initiator_cfg["io_args"].update(args.get("io_overrides", {}))
 
-            # cleanup images
-            for i in range(args["image"]["count"]):
-                rbd.remove_image(pool, f"{name}-image{i}")
+                    [
+                        parse_fio_output(
+                            get_node_by_id(ceph_cluster, args["initiator_node"]), i
+                        )
+                        for i in initiators(ceph_cluster, nvmegwcli, initiator_cfg)
+                    ]
+
+                    # disconnect initiator
+                    disconnect_initiator(
+                        ceph_cluster, args["initiator_node"], initiator_cfg["subnqn"]
+                    )
+            except Exception as err:
+                raise Exception(err)
+            finally:
+                # disconnect and delete subsystems
+                cleanup_cfg = {
+                    "gw_node": args["gw_node"],
+                    "cleanup": ["subsystems", "disconnect_all"],
+                    "subsystems": [subsystem],
+                    "initiators": [initiator_cfg],
+                }
+                args.update(cleanup_cfg)
+                teardown(ceph_cluster, rbd, nvmegwcli, args)
+
+                # cleanup images
+                for i in range(args["image"]["count"]):
+                    rbd.remove_image(pool, f"{name}-image{i}")
+    finally:
+        cleanup_cfg = {
+            "gw_node": args["gw_node"],
+            "cleanup": ["gateway"],
+        }
+        args.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, args)
 
 
 IO_PROTO = {
@@ -617,15 +613,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             IO_PROTO[io["proto"]](
                 ceph_cluster=ceph_cluster,
                 rbd=rbd_obj,
-                pool=rbd_pool,
+                rbd_pool=rbd_pool,
                 iterations=iterations,
                 io_profiles=io_profiles,
                 **io,
             )
-
-        # cleanup pool
-        if not config.get("do_not_delete_pool"):
-            rbd_obj.clean_up(pools=[rbd_pool])
 
         # Build artifacts, Create CSV and Json file
         run_cfg = kwargs["run_config"]
@@ -657,17 +649,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         raise Exception(err)
     finally:
         # cleanup pool
-        if not config.get("do_not_delete_pool"):
-            rbd_obj.clean_up(pools=[rbd_pool])
+        rbd_obj.clean_up(pools=[rbd_pool])
 
-        # delete NVMe Gateway
-        if config.get("delete_gateway"):
-            cfg = {
-                "config": {
-                    "command": "remove",
-                    "service": "nvmeof",
-                    "args": {"service_name": f"nvmeof.{rbd_pool}"},
-                }
-            }
-            test_orch.run(ceph_cluster, **cfg)
     return 0

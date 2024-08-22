@@ -19,12 +19,13 @@ from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rbd.workflows.cluster_operations import operation, osd_remove_and_add_back
 from ceph.utils import get_node_by_id
 from cli.utilities.utils import reboot_node
-from tests.cephadm import test_nvmeof, test_orch
+from tests.cephadm import test_orch
 from tests.nvmeof.test_ceph_nvmeof_gateway import (
     configure_subsystems,
     initiators,
     teardown,
 )
+from tests.nvmeof.workflows.nvme_utils import deploy_nvme_service
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.retry import retry
@@ -84,7 +85,8 @@ def test_ceph_83575812(ceph_cluster, rbd, pool, config):
             "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
 
 
 def test_ceph_83576084(ceph_cluster, rbd, pool, config):
@@ -187,7 +189,8 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
             "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
 
 
 def test_ceph_83575467(ceph_cluster, rbd, pool, config):
@@ -243,13 +246,18 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
         gw_info_bkp = json.loads(gw_info_bkp.strip())["subsystems"]
 
         # restart nvmeof service
+        group = config.get("gw_group", "")
+        service_name = f"nvmeof.{pool}"
+        if group:
+            service_name = f"{service_name}.{group}"
         restart_cfg = {
+            "no_cluster_state": False,
             "config": {
-                "service": f"nvmeof.{pool}",
+                "service": service_name,
                 "command": "restart",
-                "args": {"verify": True},
-                "pos_args": [f"nvmeof.{pool}"],
-            }
+                "args": {"verify": True, "service_name": service_name},
+                "pos_args": [service_name],
+            },
         }
         test_orch.run(ceph_cluster, **restart_cfg)
         gw_info = list_subsystems(**sub_args)
@@ -269,7 +277,8 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
             "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
 
 
 def test_ceph_83576085(ceph_cluster, rbd, pool, config):
@@ -362,7 +371,8 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
             "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
 
 
 def test_ceph_83576087(ceph_cluster, rbd, pool, config):
@@ -464,7 +474,8 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
             "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
 
 
 def test_ceph_83576093(ceph_cluster, rbd, pool, config):
@@ -547,9 +558,12 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
         if not reboot_node(gw_node):
             raise Exception("Host did not started post reboot!!!!!")
 
+        service_name = f"nvmeof.{pool}"
+        gw_group = config.get("gw_group")
+        service_name = f"{service_name}.{gw_group}" if gw_group else service_name
         check_service_exists(
             ceph_cluster.get_nodes(role="installer")[0],
-            service_name=f"nvmeof.{pool}",
+            service_name=service_name,
             service_type="nvmeof",
         )
         client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
@@ -566,7 +580,8 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
             "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
 
 
 def test_ceph_83575455(ceph_cluster, rbd, pool, config):
@@ -690,7 +705,8 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
             "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
 
 
 def test_ceph_83575813(ceph_cluster, rbd, pool, config):
@@ -779,7 +795,8 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
             "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
 
 
 def test_ceph_83575814(ceph_cluster, rbd, pool, config):
@@ -860,7 +877,8 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
             "cleanup": ["disconnect_all", "gateway", "pool"],
             "rbd_pool": pool,
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
 
 
 def test_ceph_83581753(ceph_cluster, rbd, pool, config):
@@ -951,7 +969,8 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
             "rbd_pool": pool,
             "subsystems": [subsystem],
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
         return 0
 
 
@@ -1058,7 +1077,8 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
             "rbd_pool": pool,
             "subsystems": [subsystem],
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
         return 0
 
 
@@ -1138,7 +1158,8 @@ def test_ceph_83581755(ceph_cluster, rbd, pool, config):
             "rbd_pool": pool,
             "subsystems": [subsystem],
         }
-        teardown(ceph_cluster, rbd, nvmegwcli, cleanup_cfg)
+        config.update(cleanup_cfg)
+        teardown(ceph_cluster, rbd, nvmegwcli, config)
         return 0
 
 
@@ -1180,17 +1201,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             break
 
     try:
-        gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-        cfg = {
-            "no_cluster_state": False,
-            "config": {
-                "command": "apply",
-                "service": "nvmeof",
-                "args": {"placement": {"nodes": [gw_node.hostname]}},
-                "pos_args": [rbd_pool],
-            },
-        }
-        test_nvmeof.run(ceph_cluster, **cfg)
+        deploy_nvme_service(ceph_cluster, config)
         operation_mapping = {
             "CEPH-83575812": test_ceph_83575812,
             "CEPH-83576084": test_ceph_83576084,

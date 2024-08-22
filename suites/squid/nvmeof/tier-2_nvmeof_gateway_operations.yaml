@@ -94,6 +94,7 @@ tests:
                   label: nvmeof-gw
               pos_args:
                 - rbd
+                - gw_group1
       desc: NVMeoF Gateway deployment using cephadm
       destroy-cluster: false
       do-not-skip-tc: true
@@ -183,7 +184,7 @@ tests:
               command: add              # add Host access
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
-                host: "*"
+                host: '"*"'
           - config:
               service: host
               command: list             # List access hosts
@@ -194,7 +195,7 @@ tests:
               command: delete           # access host del
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
-                host: "*"
+                host: '"*"'
           - config:
               service: namespace
               command: add              # Namespace add
@@ -285,7 +286,7 @@ tests:
          command: remove
          service: nvmeof
          args:
-           service_name: nvmeof.rbd
+           service_name: nvmeof.rbd.gw_group1
            verify: true
       desc: NVMeoF Gateway deployment using cephadm
       destroy-cluster: false

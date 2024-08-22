@@ -80,7 +80,6 @@ tests:
           - FIO_WRITE_BS_4k_IODepth8_LIBAIO
           - FIO_READ_BS_4k_IODepth8_LIBAIO
         rbd_pool: rbd
-        do_not_delete_pool: true
         io_exec:
             -   proto: librbd
                 image:
@@ -93,7 +92,7 @@ tests:
                     count: 1
                 gw_node: node6          # gateway node
                 initiator_node: node10   # client node
-                install_gw: true
+                gw_group: gw_group1
 
   - test:
       name: libRBD-VS-NVMeoF ReadWrite-IOType 4k-block-size single-10G-vol
@@ -105,7 +104,6 @@ tests:
         io_profiles:
           - FIO_RW_BS_4k_IODepth8_RWRatio70R_LIBAIO
         rbd_pool: rbd
-        do_not_delete_pool: true
         io_exec:
           -   proto: librbd
               image:
@@ -118,6 +116,7 @@ tests:
                 count: 1
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
+              gw_group: gw_group1
 
   - test:
       name: libRBD VS NVMeoF Random-WRITE-READ-IOType 4kblocksize single-10G-vol
@@ -130,7 +129,6 @@ tests:
           - FIO_RandWRITE_BS_4k_IODepth8_LIBAIO
           - FIO_RandREAD_BS_4k_IODepth8_LIBAIO
         rbd_pool: rbd
-        do_not_delete_pool: true
         io_exec:
           -   proto: librbd
               image:
@@ -143,6 +141,7 @@ tests:
                 count: 1
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
+              gw_group: gw_group1
 
   - test:
       name: libRBD VS NVMeoF Random-READWRITE-IOType 4kblocksize single-10G-vol
@@ -154,8 +153,6 @@ tests:
         io_profiles:
           - FIO_RW_BS_4k_IODepth8_RandRWRatio70R_LIBAIO
         rbd_pool: rbd
-        do_not_delete_pool: false
-        delete_gateway: node6
         io_exec:
           -   proto: librbd
               image:
@@ -168,3 +165,4 @@ tests:
                 count: 1
               gw_node: node6          # gateway node
               initiator_node: node10   # client node
+              gw_group: gw_group1
