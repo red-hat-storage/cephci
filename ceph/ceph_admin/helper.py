@@ -278,11 +278,25 @@ class GenerateServiceSpec:
                   nodes:
                     - node2
                     - node3
+                spec:
+                  crush_locations:
+                    node1:
+                    - datacenter=DC1
+                    node2:
+                    - datacenter=DC2
         """
         template = self._get_template("common_svc_template")
         node_names = spec["placement"].pop("nodes", None)
         if node_names:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        # Ensure 'crush_locations' under 'spec' are handled if present
+        if "spec" in spec and "crush_locations" in spec["spec"]:
+            crush_locations = {}
+            for host in spec["spec"]["crush_locations"].keys():
+                hostname = self.get_hostnames([host])[0]
+                crush_locations[hostname] = spec["spec"]["crush_locations"][host]
+            spec["spec"]["crush_locations"] = crush_locations
 
         return template.render(spec=spec)
 

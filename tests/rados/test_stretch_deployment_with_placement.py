@@ -184,45 +184,71 @@ def run(ceph_cluster, **kw):
             )
             return True
 
-        # Setting up the mon locations on the cluster
-        if not (set_mon_crush_location(dc=dc_1) & set_mon_crush_location(dc=dc_2)):
-            log.error("Failed to set Crush locations to the Data Site mon daemons")
-            raise Exception("Stretch mode deployment Failed")
-
-        # Set-up locations on the Data sites. now 4 mons should be with location attributes added.
         mon_dump_cmd = "ceph mon dump"
+        loc_absent = False
         mons = rados_obj.run_ceph_command(mon_dump_cmd)
-        if len([mon for mon in mons["mons"] if mon["crush_location"] == "{}"]) != 1:
-            log.error(
-                f"Cluster does not have 4 data site mons with location attributes added"
-                f"Added hosts : {[entry['name'] for entry in mons['mons'] if entry.get('crush_location') != '{}']}"
+        for mon in mons["mons"]:
+            if mon["crush_location"] == "{}":
+                log.debug(f"Mon location attributes not present on mon : {mon}")
+                loc_absent = True
+
+        if loc_absent:
+            log.debug(
+                "Crush locations not added during bootstrap,"
+                "Manually adding the crush locations on the Mon daemons"
             )
-            raise Exception("Stretch mode deployment Failed")
+            # Setting up the mon locations on the cluster
+            if not (set_mon_crush_location(dc=dc_1) & set_mon_crush_location(dc=dc_2)):
+                log.error("Failed to set Crush locations to the Data Site mon daemons")
+                raise Exception("Stretch mode deployment Failed")
 
-        # Directly selecting tiebreaker mon as we have confirmed only 1 mon exists without location
-        tiebreaker_mon = [
-            entry["name"]
-            for entry in mons["mons"]
-            if entry.get("crush_location") == "{}"
-        ][0]
-        # Setting up CRUSH location on the final Arbiter mon
-        arbiter_cmd = f"ceph mon set_location {tiebreaker_mon} datacenter={tiebreaker_mon_site_name}"
-        try:
-            rados_obj.run_ceph_command(arbiter_cmd)
-
-            # Verifying is tiebreaker mon is set with CRUSH locations successfully via mon dump
+            tiebreaker_mon = None
             mons = rados_obj.run_ceph_command(mon_dump_cmd)
             for mon in mons["mons"]:
-                if mon["name"] == tiebreaker_mon:
-                    if mon["crush_location"] == "{}":
-                        log.error("Location attribute not added on the arbiter mon")
-                        raise Exception("Stretch mode deployment Failed")
-                    break
-        except Exception:
-            log.error(f"Failed to set location on mon : {entry['name']}")
-            raise Exception("Stretch mode deployment Failed")
+                if (
+                    mon["crush_location"]
+                    == "{datacenter=" + f"{tiebreaker_mon_site_name}" + "}"
+                ):
+                    tiebreaker_mon = mon["name"]
 
-        log.info("Set-up CRUSH location attributes on all the mon daemons")
+            if not tiebreaker_mon:
+                # Directly selecting tiebreaker mon as we have confirmed only 1 mon exists without location
+                tiebreaker_mon = [
+                    entry["name"]
+                    for entry in mons["mons"]
+                    if entry.get("crush_location") == "{}"
+                ][0]
+                # Setting up CRUSH location on the final Arbiter mon
+                arbiter_cmd = f"ceph mon set_location {tiebreaker_mon} datacenter={tiebreaker_mon_site_name}"
+            try:
+                rados_obj.run_ceph_command(arbiter_cmd)
+            except Exception:
+                log.error(f"Failed to set location on mon : {entry['name']}")
+                raise Exception("Stretch mode deployment Failed")
+
+            log.debug("Completed setting up crush locations on the mon daemons")
+        else:
+            log.debug(
+                "Mon locations present on the cluster with bootstrap. "
+                "Manually setting the crush locations not required"
+            )
+        log.info(
+            "Verified that CRUSH location attributes Set-up on all the mon daemons"
+        )
+        try:
+            mons = rados_obj.run_ceph_command(mon_dump_cmd)
+            for mon in mons["mons"]:
+                if (
+                    mon["crush_location"]
+                    == "{datacenter=" + f"{tiebreaker_mon_site_name}" + "}"
+                ):
+                    tiebreaker_mon = mon["name"]
+        except Exception as err:
+            log.error(
+                f"Failed to find mon with tiebreaker site : {tiebreaker_mon_site_name} \n"
+                f"Error : {err}"
+            )
+            raise Exception("Tiebreaker mon not set")
 
         osd_tree_cmd = "ceph osd tree"
         buckets = rados_obj.run_ceph_command(osd_tree_cmd)
