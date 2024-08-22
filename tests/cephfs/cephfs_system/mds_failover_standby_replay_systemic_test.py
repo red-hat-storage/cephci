@@ -159,7 +159,7 @@ def wait_for_healthy_ceph(client1, fs_util, wait_time_secs):
 
 def run(ceph_cluster, **kw):
     """
-    CEPH-83591709 - MDS Failover to Standy-Replay MDS when CPU and MEM usage by MDS is 70%
+    CEPH-83591710 - MDS Failover to Standy-Replay MDS when CPU and MEM usage by MDS is 70%
 
     Test Steps:
     Set mds_cache_memory_limit to 2GB(1073741824)
@@ -219,8 +219,8 @@ def run(ceph_cluster, **kw):
         crash_status_before = fs_util_v1.get_crash_ls_new(client)
         log.info(f"Crash status before Test: {crash_status_before}")
 
-        log.info("Set MDS Cache memory limit to 2GB and verify")
-        set_verify_mds_config(client, "2147483648")
+        log.info("Set MDS Cache memory limit to 900MB and verify")
+        set_verify_mds_config(client, "943718400")
         log.info("Setup test configuration")
         setup_params = test_setup(fs_util_v1, ceph_cluster, client)
         sv_list = setup_params["sv_list"]
@@ -275,7 +275,7 @@ def run(ceph_cluster, **kw):
         log.info("Start MDS Load to increased MEM and CPU usage by 70%")
         if (
             fs_util_v1.mds_mem_cpu_load(
-                client, 70, active_mds, active_mds_node, sv_list, mnt_info
+                client, 70, 70, active_mds, active_mds_node, sv_list, mnt_info
             )
             == 1
         ):

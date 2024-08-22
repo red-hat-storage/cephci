@@ -44,6 +44,12 @@ class NVMEoF:
         self._delete_subsystem = config_file_reader["endpoints"]["nvmeof"][
             "DELETE_SUBSYSTEM"
         ]
+        self._subsystem_con_check = config_file_reader["endpoints"]["nvmeof"][
+            "SUBSYSTEM_CONNECTION_CHECK"
+        ]
+        self._delete_listener = config_file_reader["endpoints"]["nvmeof"][
+            "DELETE_SUBSYSTEM_LISTENER"
+        ]
 
     def get_gateway_info(self):
         """
@@ -80,6 +86,8 @@ class NVMEoF:
     def get_subsystem(self, subsystem_nqn):
         """
         REST GET endpoint /api/nvmeof/subsystem/{nqn}
+        Args:
+            subsystem_nqn: nqn to be queried upon
         """
         _get_subsystem = self._get_subsystem.format(nqn=subsystem_nqn)
         response = self._rest.get(relative_url=_get_subsystem)
@@ -102,6 +110,8 @@ class NVMEoF:
     def list_host(self, subsystem_nqn):
         """
         REST GET endpoint /api/nvmeof/subsystem/{nqn}/host
+        Args:
+            subsystem_nqn: nqn to be queried upon
         """
         _get_host = self._list_host.format(nqn=subsystem_nqn)
         response = self._rest.get(relative_url=_get_host)
@@ -126,6 +136,8 @@ class NVMEoF:
     def list_listener(self, subsystem_nqn):
         """
         REST GET endpoint /api/nvmeof/subsystem/{nqn}/listener
+        Args:
+            subsystem_nqn: nqn to be queried upon
         """
         _get_listener = self._list_listener.format(nqn=subsystem_nqn)
         response = self._rest.get(relative_url=_get_listener)
@@ -152,6 +164,8 @@ class NVMEoF:
     def list_namespace(self, subsystem_nqn):
         """
         REST GET endpoint /api/nvmeof/subsystem/{nqn}/namespace
+        Args:
+            subsystem_nqn: nqn to be queried upon
         """
         _get_namespace = self._list_namespace.format(nqn=subsystem_nqn)
         response = self._rest.get(relative_url=_get_namespace)
@@ -160,6 +174,9 @@ class NVMEoF:
     def delete_namespace(self, subsystem_nqn, nsid):
         """
         REST DELETE endpoint /api/nvmeof/subsystem/{nqn}/namespace/{nsid}
+        Args:
+            subsystem_nqn: nqn to be queried upon
+            nsid: nsid to be deleted
         """
         _delete_namespace = self._delete_namespace.format(nqn=subsystem_nqn, nsid=nsid)
         response = self._rest.delete(relative_url=_delete_namespace)
@@ -168,7 +185,33 @@ class NVMEoF:
     def delete_subsystem(self, subsystem_nqn):
         """
         REST DELETE endpoint /api/nvmeof/subsystem/{nqn}
+        Args:
+            subsystem_nqn: nqn to be queried upon
         """
         _delete_subsystem = self._delete_subsystem.format(nqn=subsystem_nqn)
         response = self._rest.delete(relative_url=_delete_subsystem)
+        return response
+
+    def subsystem_connection_check(self, subsystem_nqn):
+        """
+        REST GET endpoint /api/nvmeof/subsystem/{nqn}/connection
+        Args:
+            subsystem_nqn: nqn to be queried upon
+        """
+        _subs_con_check = self._subsystem_con_check.format(nqn=subsystem_nqn)
+        response = self._rest.get(relative_url=_subs_con_check)
+        return response
+
+    def delete_listener(self, subsytem_nqn, host_name, traddr):
+        """
+        REST DELETE endpoint /api/nvmeof/subsystem/{nqn}/listener/{host_name}/{traddr}
+        Args:
+            subsystem_nqn: nqn to be queried upon
+            host_name: NVMeoF hostname of the listener
+            traddr: NVMeoF transport address
+        """
+        _del_listener = self._delete_listener.format(
+            nqn=subsytem_nqn, host_name=host_name, traddr=traddr
+        )
+        response = self._rest.delete(relative_url=_del_listener)
         return response

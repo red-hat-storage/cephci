@@ -74,6 +74,7 @@ tests:
           - gateway
         gw_node: node2
         rbd_pool: rbd
+        gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -84,7 +85,7 @@ tests:
             serial: 1
             bdevs:
               count: 1
-              size: 10G
+              size: 5G
             listener_port: 5001
             allow_host: "*"
         initiators:                              # Configure Initiators with all pre-req
@@ -103,6 +104,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        gw_group: gw_group2
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -119,7 +121,7 @@ tests:
             serial: 2
             bdevs:
               count: 1
-              size: 10G
+              size: 5G
             listener_port: 5002
             allow_host: "*"
         initiators:                            # Configure Initiators with all pre-req
@@ -138,6 +140,7 @@ tests:
       config:
         gw_node: node2
         rbd_pool: rbd
+        gw_group: 1group
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -154,7 +157,7 @@ tests:
             serial: 1
             bdevs:
               count: 1
-              size: 10G
+              size: 5G
             listener_port: 5006
             allow_host: "*"
         initiators:                             # Configure Initiators with all pre-req
@@ -173,6 +176,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        gw_group: group
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -189,14 +193,14 @@ tests:
             serial: 3
             bdevs:
               count: 1
-              size: 10G
+              size: 5G
             listener_port: 5003
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
             serial: 4
             bdevs:
               count: 1
-              size: 10G
+              size: 5G
             listener_port: 5004
             allow_host: "*"
         initiators:                             # Configure Initiators with all pre-req
@@ -218,6 +222,7 @@ tests:
       config:
         gw_node: node6                       # Deploying multiple gateways on the cluster
         rbd_pool: rbd
+        gw_group: gw__group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -234,7 +239,7 @@ tests:
             serial: 1
             bdevs:
               count: 1
-              size: 10G
+              size: 5G
             listener_port: 5005
             allow_host: "*"
         initiators: # Configure Initiators with all pre-req
@@ -252,6 +257,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -265,10 +271,11 @@ tests:
       polarion-id: CEPH-83575812
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node6
         rbd_pool: rbd
+        gw_group: gw_group2
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -286,6 +293,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -303,6 +311,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:

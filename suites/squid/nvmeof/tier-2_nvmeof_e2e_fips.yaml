@@ -70,6 +70,7 @@ tests:
       abort-on-fail: true
       config:
         gw_node: node6
+        gw_group: gw_group1
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true

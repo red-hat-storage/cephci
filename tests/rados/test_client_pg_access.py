@@ -26,6 +26,7 @@ def run(ceph_cluster, **kw):
     Returns:
         1 -> Fail, 0 -> Pass
     """
+    global num_objects
     log.info(run.__doc__)
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
@@ -34,6 +35,17 @@ def run(ceph_cluster, **kw):
     client_node = rados_obj.ceph_cluster.get_nodes(role="client")[0]
     pool_target_configs = config["verify_client_pg_access"]["configurations"]
     num_snaps = config["verify_client_pg_access"]["num_snapshots"]
+    try:
+        num_objects = config["verify_client_pg_access"]["num_objects"]
+    except KeyError:
+        print("Variable num_objects is not defined.Assigning to the default value")
+        num_objects = 250
+    # Check if num of objects variable is assigned
+    if num_objects is None or not num_objects or num_objects < 0:
+        log.info(
+            "The number of objects are not defined properly and assigned to the default value 250 "
+        )
+        num_objects = 250
     log.debug(
         "Verifying the effects of rados put, get, snap & delete on pool with single PG"
     )
@@ -57,7 +69,7 @@ def run(ceph_cluster, **kw):
 
             # Creating and reading objects
             with parallel() as p:
-                p.spawn(do_rados_put, client_node, pool_name, 500)
+                p.spawn(do_rados_put, client_node, pool_name, num_objects)
                 p.spawn(do_rados_get, client_node, pool_name, 1)
 
             # Creating and deleting snapshots on the pool

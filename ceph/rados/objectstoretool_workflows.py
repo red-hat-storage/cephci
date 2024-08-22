@@ -44,7 +44,12 @@ class objectstoreToolWorkflows:
         self.client = node.cluster.get_nodes(role="client")[0]
 
     def run_cot_command(
-        self, cmd: str, osd_id: int, timeout: int = 300, mount: bool = False
+        self,
+        cmd: str,
+        osd_id: int,
+        timeout: int = 300,
+        mount: bool = False,
+        start: bool = True,
     ) -> str:
         """
         Runs ceph-objectstore-tool commands within OSD container
@@ -54,6 +59,7 @@ class objectstoreToolWorkflows:
             timeout: Maximum time allowed for execution.
             mount: boolean to control mounting of /tmp directory
             to cephadm container
+            start: flag to control OSD start after command execution
         Returns:
             output of respective ceph-objectstore-tool command in string format
         """
@@ -71,7 +77,8 @@ class objectstoreToolWorkflows:
             log.error(f"Exception hit while command execution. {er}")
             raise
         finally:
-            self.rados_obj.change_osd_state(action="start", target=osd_id)
+            if start:
+                self.rados_obj.change_osd_state(action="start", target=osd_id)
         return str(out)
 
     def help(self, osd_id: int):
@@ -150,20 +157,23 @@ class objectstoreToolWorkflows:
             _cmd = f"--pgid {pgid} {_cmd}"
         return self.run_cot_command(cmd=_cmd, osd_id=osd_id, mount=True)
 
-    def set_bytes(self, osd_id: int, obj: str, in_file, pgid: str = None):
+    def set_bytes(
+        self, osd_id: int, obj: str, in_file, pgid: str = None, start: bool = True
+    ):
         """Module to set byte data for an object using input file
         Args:
             osd_id: OSD ID for which cot will be executed
             pgid: Placement group ID
             obj: obj identifier
             in_file: output file for redirection
+            start: flag to control osd restart
         Returns:
             Returns the output of cbt repair cmd
         """
         _cmd = f"'{obj}' set-bytes < {in_file}"
         if pgid:
             _cmd = f"--pgid {pgid} {_cmd}"
-        return self.run_cot_command(cmd=_cmd, osd_id=osd_id, mount=True)
+        return self.run_cot_command(cmd=_cmd, osd_id=osd_id, mount=True, start=start)
 
     def remove_object(self, osd_id: int, pgid: str, obj: str):
         """Module to remove an object within a placement group

@@ -29,6 +29,7 @@ class SystemCtl:
             "--type=service",
             "--no-legend",
             "--no-pager",
+            "--all",
             repr(regex),
             "--output=json-pretty",
         ]

@@ -37,6 +37,8 @@ class HighAvailability:
         self.cluster = ceph_cluster
         self.config = config
         self.gateways = []
+        self.mtls = config.get("mtls")
+        self.gateway_group = config.get("gw_group", "")
         self.orch = Orch(cluster=self.cluster, **{})
         self.daemon = Daemon(cluster=self.cluster, **{})
         self.nvme_pool = config["rbd_pool"]
@@ -44,7 +46,7 @@ class HighAvailability:
 
         for gateway in gateways:
             gw_node = get_node_by_id(self.cluster, gateway)
-            self.gateways.append(NVMeGateway(gw_node))
+            self.gateways.append(NVMeGateway(gw_node, self.mtls))
 
         self.ana_ids = [i.ana_group_id for i in self.gateways]
         self.fail_ops = {
@@ -108,7 +110,7 @@ class HighAvailability:
         """Fetch ANA states and convert into python dict."""
 
         out, _ = self.orch.shell(
-            args=["ceph", "nvme-gw", "show", self.nvme_pool, repr(gw_group)]
+            args=["ceph", "nvme-gw", "show", self.nvme_pool, repr(self.gateway_group)]
         )
         states = {}
         for data in out.split("}"):
@@ -233,7 +235,7 @@ class HighAvailability:
         out = json.loads(out)
         if out[0]["status"] == 1:
             return True
-        elif out[0]["status"] == -1:
+        elif out[0]["status"] in [-1, 0]:
             return False
 
     def ceph_daemon(self, gateway, action, wait_for_active_state=True):

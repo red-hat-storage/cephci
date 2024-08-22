@@ -83,7 +83,6 @@ tests:
         io_overrides:
           bs: 128k
         rbd_pool: rbd
-        do_not_delete_pool: true
         io_exec:
             -   proto: librbd
                 image:
@@ -96,7 +95,7 @@ tests:
                     count: 1
                 gw_node: node7          # gateway node
                 initiator_node: node11   # client node
-                install_gw: true
+                gw_group: gw_group1
 
   - test:
       name: libRBD VS NVMeoF ReadWrite IOType 128k blocksize
@@ -108,7 +107,6 @@ tests:
         io_profiles:
           - FIO_RW_BS_4k_IODepth8_RWRatio70R_LIBAIO
         rbd_pool: rbd
-        do_not_delete_pool: true
         io_overrides:
           bs: 128k
         io_exec:
@@ -123,6 +121,7 @@ tests:
                 count: 1
               gw_node: node7          # gateway node
               initiator_node: node11   # client node
+              gw_group: gw_group1
 
   - test:
       name: libRBD VS NVMeoF Random WriteNRead IOType 128k blocksize
@@ -135,7 +134,6 @@ tests:
           - FIO_RandWRITE_BS_4k_IODepth8_LIBAIO
           - FIO_RandREAD_BS_4k_IODepth8_LIBAIO
         rbd_pool: rbd
-        do_not_delete_pool: true
         io_overrides:
           bs: 128k
         io_exec:
@@ -150,6 +148,7 @@ tests:
                 count: 1
               gw_node: node7          # gateway node
               initiator_node: node11   # client node
+              gw_group: gw_group1
 
   - test:
       name: libRBD VS NVMeoF Random ReadWrite IOType
@@ -161,8 +160,6 @@ tests:
         io_profiles:
           - FIO_RW_BS_4k_IODepth8_RandRWRatio70R_LIBAIO
         rbd_pool: rbd
-        do_not_delete_pool: false
-        delete_gateway: node7
         io_overrides:
           bs: 128k
         io_exec:
@@ -177,3 +174,4 @@ tests:
                 count: 1
               gw_node: node7          # gateway node
               initiator_node: node11   # client node
+              gw_group: gw_group1

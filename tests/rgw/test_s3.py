@@ -90,6 +90,25 @@ KC_REALM = {{ data.webidentity.realm }}
 {% endif %}
 
 """
+S3CONF_ACC = """
+{%- if data.iamroot %}
+[iam root]
+display_name = {{ data.iamroot.name }}
+user_id = {{ data.iamroot.id }}
+access_key = {{ data.iamroot.access_key }}
+secret_key = {{ data.iamroot.secret_key }}
+email = {{ data.iamroot.email }}
+{% endif %}
+
+{%- if data.iamrootalt %}
+[iam alt root]
+display_name = {{ data.iamrootalt.name }}
+user_id = {{ data.iamrootalt.id }}
+access_key = {{ data.iamrootalt.access_key }}
+secret_key = {{ data.iamrootalt.secret_key }}
+email = {{ data.iamrootalt.email }}
+{% endif %}
+"""
 
 
 def run(**kw):
@@ -177,7 +196,7 @@ def execute_s3_tests(node: CephNode, build: str, encryption: bool = False) -> in
         extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!encryption'"
         tests = "s3tests"
 
-        if not build.startswith("7"):
+        if not build.split(".")[0] >= "7":
             extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616"
 
             if not encryption:
@@ -388,9 +407,16 @@ def create_s3_conf(
     create_s3_user(node=rgw_node, user_prefix="alt", data=data)
     create_s3_user(node=rgw_node, user_prefix="tenant", data=data)
     create_s3_user(node=rgw_node, user_prefix="iam", data=data)
+    create_s3_user(node=rgw_node, user_prefix="iamroot", data=data)
+    create_s3_user(node=rgw_node, user_prefix="iamrootalt", data=data)
 
     if kms_keyid:
         data["main"]["kms_keyid"] = kms_keyid
+
+    global S3CONF
+    global S3CONF_ACC
+    if build.split(".")[0] >= "8":
+        S3CONF = S3CONF + S3CONF_ACC
 
     templ = Template(S3CONF)
     _config = templ.render(data=data)

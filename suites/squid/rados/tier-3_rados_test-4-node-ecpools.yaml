@@ -438,6 +438,7 @@ tests:
       config:
         verify_client_pg_access:
           num_snapshots: 20
+          num_objects: 250
           configurations:
             pool-1:
               profile_name: ec86_12

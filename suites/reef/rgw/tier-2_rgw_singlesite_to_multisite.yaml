@@ -476,7 +476,7 @@ tests:
             script-name: test_bucket_lc_object_exp_multipart.py
             config-file-name: test_bucket_lc_object_exp_multipart.yaml
             verify-io-on-site: ["ceph-pri"]
-            timeout: 5000
+            timeout: 5500
 
 # Log trimming tests
   - test:

@@ -3123,14 +3123,21 @@ class RadosOrchestrator:
             host_node: node object of the host which needs to be converted
         Returns: None
         """
+        installer_node = self.ceph_cluster.get_nodes(role="installer")[0]
         # copy /etc/ceph/ files to input host
-        ceph_conf, _ = self.node.shell(["cat /etc/ceph/ceph.conf"])
-        ceph_keyring, _ = self.node.shell(["cat /etc/ceph/ceph.keyring"])
+        ceph_conf, _ = installer_node.exec_command(
+            cmd="cat /etc/ceph/ceph.conf", sudo=True
+        )
+        ceph_keyring, _ = installer_node.exec_command(
+            cmd="cat /etc/ceph/ceph.client.admin.keyring", sudo=True
+        )
         host_node.exec_command(sudo=True, cmd="mkdir -p /etc/ceph")
 
         for cont in [ceph_conf, ceph_keyring]:
             file_name = (
-                "/etc/ceph/ceph.conf" if cont == ceph_conf else "/etc/ceph/ceph.keyring"
+                "/etc/ceph/ceph.conf"
+                if cont == ceph_conf
+                else "/etc/ceph/ceph.client.admin.keyring"
             )
             file_ = host_node.remote_file(sudo=True, file_name=file_name, file_mode="w")
             file_.write(cont)

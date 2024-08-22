@@ -1,14 +1,24 @@
 """SSL Cert generation module."""
 
-import datetime
 import ipaddress
+from datetime import datetime, timedelta
 
-from cryptography import x509
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.hazmat.primitives.serialization import NoEncryption
-from cryptography.x509.oid import NameOID
+from cryptography.x509 import (
+    AuthorityKeyIdentifier,
+    BasicConstraints,
+    CertificateBuilder,
+    IPAddress,
+    Name,
+    NameAttribute,
+    NameOID,
+    SubjectAlternativeName,
+    SubjectKeyIdentifier,
+    random_serial_number,
+)
 
 from utility.log import Log
 
@@ -16,8 +26,8 @@ LOG = Log(__name__)
 
 
 class CertificateGenerator:
-    def __init__(self, node, common_name, ips=None, key_size=4096, days_valid=3650):
-        self.node = node
+    def __init__(self, nodes, common_name, ips=None, key_size=4096, days_valid=3650):
+        self.nodes = nodes
         self.common_name = common_name
         self.ips = ips
         self.key_size = key_size
@@ -36,33 +46,42 @@ class CertificateGenerator:
         if self.private_key is None:
             raise ValueError("Private key is not generated.")
 
-        subject = x509.Name(
-            [
-                x509.NameAttribute(NameOID.COMMON_NAME, self.common_name),
-            ]
-        )
+        subject = issuer = Name([NameAttribute(NameOID.COMMON_NAME, self.common_name)])
 
-        certificate_builder = (
-            x509.CertificateBuilder()
-            .subject_name(subject)
-            .issuer_name(subject)
-            .public_key(self.private_key.public_key())
-            .serial_number(x509.random_serial_number())
-            .not_valid_before(datetime.datetime.now())
-            .not_valid_after(
-                # Valid for a specified number of days
-                datetime.datetime.now()
-                + datetime.timedelta(days=self.days_valid)
-            )
+        # Create the CertificateBuilder
+        builder = CertificateBuilder(
+            subject_name=subject,
+            issuer_name=issuer,
+            public_key=self.private_key.public_key(),
+            serial_number=random_serial_number(),
+            not_valid_before=datetime.utcnow(),
+            not_valid_after=datetime.utcnow() + timedelta(days=self.days_valid),
         )
 
         if is_server and self.ips:
-            san = x509.SubjectAlternativeName(
-                [x509.IPAddress(ipaddress.ip_address(ip)) for ip in self.ips]
+            san = SubjectAlternativeName(
+                [IPAddress(ipaddress.ip_address(ip)) for ip in self.ips]
             )
-            certificate_builder = certificate_builder.add_extension(san, critical=False)
+            builder = builder.add_extension(san, critical=False)
 
-        self.certificate = certificate_builder.sign(
+        builder = builder.add_extension(
+            BasicConstraints(ca=True, path_length=None), critical=True
+        )
+
+        # Generate Subject Key Identifier
+        subject_key_identifier = SubjectKeyIdentifier.from_public_key(
+            self.private_key.public_key()
+        )
+        builder = builder.add_extension(subject_key_identifier, critical=False)
+
+        # Add Authority Key Identifier
+        authority_key_identifier = AuthorityKeyIdentifier.from_issuer_public_key(
+            self.private_key.public_key()
+        )
+        builder = builder.add_extension(authority_key_identifier, critical=False)
+
+        # Create the certificate
+        self.certificate = builder.sign(
             self.private_key, hashes.SHA256(), default_backend()
         )
 
@@ -93,11 +112,13 @@ class CertificateGenerator:
         with open(cert_path, "wb") as cert_file:
             cert_file.write(certificate_pem)
 
-        self.node.upload_file(key_path, f"{dest_path}/{key_path}", sudo=True)
-        self.node.upload_file(cert_path, f"{dest_path}/{cert_path}", sudo=True)
+        for node in self.nodes:
+            node.upload_file(key_path, f"{dest_path}/{key_path}", sudo=True)
+            node.upload_file(cert_path, f"{dest_path}/{cert_path}", sudo=True)
 
-        LOG.info(
-            f"""Private key and certificate have been generated and
-              saved to {dest_path}/{key_path} and {dest_path}/{cert_path}."""
-        )
+            LOG.info(
+                f"""Private key and certificate have been generated and
+                saved to {dest_path}/{key_path} and {dest_path}/{cert_path}."""
+            )
+
         return private_key_pem.decode("ascii"), certificate_pem.decode("ascii")

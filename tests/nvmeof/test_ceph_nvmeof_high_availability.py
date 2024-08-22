@@ -10,9 +10,9 @@ from ceph.ceph import Ceph
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
-from ceph.utils import get_node_by_id, get_nodes_by_ids
-from tests.cephadm import test_nvmeof, test_orch
+from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.nvme_utils import delete_nvme_service, deploy_nvme_service
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id
@@ -20,30 +20,31 @@ from utility.utils import generate_unique_id
 LOG = Log(__name__)
 
 
-def configure_listeners(cluster, nodes, config):
+def configure_listeners(ha_obj, nodes, config):
     """Configure Listeners on subsystem."""
-    listeners = get_nodes_by_ids(cluster, nodes)
     lb_group_ids = {}
-    for node in listeners:
-        nvmegwcli = NVMeGWCLI(node)
+    for node in nodes:
+        nvmegwcli = ha_obj.check_gateway(node)
+        hostname = nvmegwcli.fetch_gateway_hostname()
         listener_config = {
             "args": {
                 "subsystem": config["nqn"],
-                "traddr": node.ip_address,
+                "traddr": nvmegwcli.node.ip_address,
                 "trsvcid": config["listener_port"],
-                "host-name": nvmegwcli.fetch_gateway_hostname(),
+                "host-name": hostname,
             }
         }
         nvmegwcli.listener.add(**listener_config)
-        lb_group_ids.update({node.hostname: nvmegwcli.fetch_gateway_lb_group_id()})
+        lb_group_ids.update({hostname: nvmegwcli.ana_group_id})
     return lb_group_ids
 
 
-def configure_subsystems(rbd, pool, nvmegwcli, config):
+def configure_subsystems(pool, ha, config):
     """Configure Ceph-NVMEoF Subsystems."""
     sub_args = {"subsystem": config["nqn"]}
     ceph_cluster = config["ceph_cluster"]
 
+    nvmegwcli = ha.gateways[0]
     # Add Subsystem
     nvmegwcli.subsystem.add(
         **{
@@ -61,7 +62,7 @@ def configure_subsystems(rbd, pool, nvmegwcli, config):
     listeners = [nvmegwcli.node.hostname]
     if config.get("listeners"):
         listeners = config["listeners"]
-    lb_groups = configure_listeners(ceph_cluster, listeners, config)
+    lb_groups = configure_listeners(ha, listeners, config)
 
     # Add Host access
     nvmegwcli.host.add(**{"args": {**sub_args, **{"host": repr(config["allow_host"])}}})
@@ -117,18 +118,7 @@ def teardown(ceph_cluster, rbd_obj, config):
 
     # Delete the gateway
     if "gateway" in config["cleanup"]:
-        cfg = {
-            "no_cluster_state": False,
-            "config": {
-                "command": "remove",
-                "service": "nvmeof",
-                "args": {
-                    "service_name": f"nvmeof.{config['rbd_pool']}",
-                    "verify": True,
-                },
-            },
-        }
-        test_orch.run(ceph_cluster, **cfg)
+        delete_nvme_service(ceph_cluster, config)
 
     # Delete the pool
     if "pool" in config["cleanup"]:
@@ -192,35 +182,21 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         if key == "nvmeof_cli_image":
             NVMeGWCLI.NVMEOF_CLI_IMAGE = value
             break
-    gw_nodes = get_nodes_by_ids(ceph_cluster, config["gw_nodes"])
 
     try:
         if config.get("install"):
-            cfg = {
-                "no_cluster_state": False,
-                "config": {
-                    "command": "apply",
-                    "service": "nvmeof",
-                    "args": {"placement": {"nodes": [i.hostname for i in gw_nodes]}},
-                    "pos_args": [rbd_pool],
-                },
-            }
-            test_nvmeof.run(ceph_cluster, **cfg)
+            deploy_nvme_service(ceph_cluster, config)
 
         ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-        nvmegwcli = ha.gateways[0]
 
         # Configure Subsystem
         if config.get("subsystems"):
             with parallel() as p:
                 for subsys_args in config["subsystems"]:
                     subsys_args["ceph_cluster"] = ceph_cluster
-                    p.spawn(
-                        configure_subsystems, rbd_obj, rbd_pool, nvmegwcli, subsys_args
-                    )
+                    p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
 
         # HA failover and failback
-
         ha.run()
 
         return 0

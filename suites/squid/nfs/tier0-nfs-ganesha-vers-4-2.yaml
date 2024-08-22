@@ -412,3 +412,13 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+
+  - test:
+      name: NFS-Ganesha test partial deallocation
+      desc: Verify space deallocation operation via truncate
+      module: test_nfs_partial_deallocation.py
+      polarion-id: CEPH-83594590
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2

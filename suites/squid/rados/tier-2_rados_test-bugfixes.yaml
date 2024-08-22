@@ -13,6 +13,7 @@
 #     6. https://bugzilla.redhat.com/show_bug.cgi?id=2264054
 #     7. https://bugzilla.redhat.com/show_bug.cgi?id=2264052
 #     8. https://bugzilla.redhat.com/show_bug.cgi?id=2260306
+#     9. https://bugzilla.redhat.com/show_bug.cgi?id=2237038
 #===============================================================================================
 tests:
   - test:
@@ -136,6 +137,18 @@ tests:
       desc: verify OSD resiliency when 'bluefs_shared_alloc_size' is below 'bluestore_min_alloc_size'
 
   - test:
+      name: Verification the recovery flag functionality
+      desc: Verify the pg_num and recovery status
+      module: test_norecovery_flag_functionality.py
+      polarion-id: CEPH-83591783
+      config:
+        replicated_pool:
+          create: true
+          pool_name: recovery_pool
+      delete_pool:
+        - recovery_pool
+
+  - test:
       name: Inconsistent objects in  EC pool functionality check
       desc: Scub and deep-scrub on  inconsistent objects in EC pool
       module: test_osd_ecpool_inconsistency_scenario.py
@@ -169,3 +182,9 @@ tests:
         slow-osd-heartbeat: true
       polarion-id: CEPH-83590688
       desc: Generate Slow OSD heartbeats by inducing network delay
+
+  - test:
+      name: Client connection over v1 port
+      module: test_v1client.py
+      polarion-id: CEPH-83594645
+      desc: Ensure client connection over v1 port does not crash

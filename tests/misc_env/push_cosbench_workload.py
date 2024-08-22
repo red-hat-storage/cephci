@@ -49,7 +49,7 @@ fill_workload = """<?xml version="1.0" encoding="UTF-8" ?>
     </workstage>
 
     <workstage name="preparing_cluster">
-        <work type="prepare" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count);oprefix=pri-obj;
+        <work type="prepare" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count);oprefix=obj_prefix;
         objects=r(obj_num_start,objects_count);sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB"/>
     </workstage>
   </workflow>
@@ -68,15 +68,15 @@ hybrid_workload = """<?xml version="1.0" encoding="UTF-8" ?>
     <workstage name="MAIN">
         <work name="hybrid" workers="1" runtime="run_time" >
             <operation name="writeOP" type="write" ratio="36" config="cprefix=bucket_prefix;containers=u(1,2);
-            oprefix=pri-obj;objects=u(obj_num_start,objects_count);
+            oprefix=obj_prefix;objects=u(obj_num_start,objects_count);
             sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB" />
             <operation name="deleteOP" type="delete" ratio="5" config="cprefix=bucket_prefix;containers=u(3,4);
-            oprefix=pri-obj;objects=u(obj_num_start,objects_count);
+            oprefix=obj_prefix;objects=u(obj_num_start,objects_count);
             sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB" />
             <operation name="readOP" type="read" ratio="44" config="cprefix=bucket_prefix;containers=u(5,6);
-            oprefix=pri-obj;objects=u(obj_num_start,objects_count)" />
+            oprefix=obj_prefix;objects=u(obj_num_start,objects_count)" />
             <operation name="listOP" type="list" ratio="15" config="cprefix=bucket_prefix;containers=u(5,6);
-            oprefix=pri-obj;objects=u(obj_num_start,objects_count)" />
+            oprefix=obj_prefix;objects=u(obj_num_start,objects_count)" />
         </work>
     </workstage>
   </workflow>
@@ -114,7 +114,7 @@ fill_runtime_workload = """<?xml version="1.0" encoding="UTF-8" ?>
     <workstage name="MAIN">
         <work name="fill with runtime" workers="1" runtime="run_time" >
             <operation name="writeOP" type="write" ratio="100" config="cprefix=bucket_prefix;
-            containers=r(1,bucket_count);oprefix=pri-obj;objects=r(obj_num_start,objects_count);
+            containers=r(1,bucket_count);oprefix=obj_prefix;objects=r(obj_num_start,objects_count);
             sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB" />
         </work>
     </workstage>
@@ -137,7 +137,7 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
         workload xml file name which is created on controller node
     """
     global fill_workload, avail_storage, hybrid_workload, bucket_prefix, symm_workload, bucket_count, cleanup_workload
-    global fill_runtime_workload, objects_count
+    global fill_runtime_workload, objects_count, obj_prefix
     workload_type = config.get("workload_type", "fill")
     if workload_type == "fill":
         workload_conf = fill_workload
@@ -150,7 +150,9 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     elif workload_type == "fill_runtime":
         workload_conf = fill_runtime_workload
     bucket_prefix = config.get("bucket_prefix", "pri-bkt")
+    obj_prefix = config.get("object_prefix", "pri-obj")
     workload_conf = workload_conf.replace("bucket_prefix", f"{bucket_prefix}")
+    workload_conf = workload_conf.replace("obj_prefix", f"{obj_prefix}")
     bucket_count = config.get("number_of_buckets", 6)
     workload_conf = workload_conf.replace("bucket_count", f"{bucket_count}")
     run_time = config.get("run_time", 3600)

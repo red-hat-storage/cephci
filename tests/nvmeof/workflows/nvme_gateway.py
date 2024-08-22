@@ -6,14 +6,24 @@ from utility.systemctl import SystemCtl
 
 
 class NVMeGateway(NVMeGWCLI):
-    def __init__(self, node):
+    def __init__(self, node, mtls=False):
         """NVMe Gateway Class"""
         self.node = node
-        super(NVMeGateway, self).__init__(node)
+        super(NVMeGateway, self).__init__(node, mtls=mtls)
+        self._mtls = mtls
         self._ana_group = self.fetch_gateway()
         self._ana_group_id = self.ana_group["load_balancing_group"]
         self._daemon_name = self.ana_group["name"].split(".", 1)[1]
         self.systemctl = SystemCtl(node)
+
+    @property
+    def mtls(self):
+        return self._mtls
+
+    @mtls.setter
+    def mtls(self, value):
+        self._mtls = value
+        self.setter("mtls", value)
 
     @property
     def ana_group_id(self):

@@ -12,7 +12,7 @@ from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.cephadm import test_nvmeof, test_orch
+from tests.nvmeof.workflows.nvme_utils import delete_nvme_service, deploy_nvme_service
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id, run_fio
@@ -20,20 +20,30 @@ from utility.utils import generate_unique_id, run_fio
 LOG = Log(__name__)
 
 
-def configure_subsystems(rbd, pool, nvmegwcli, config):
+def configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, config):
     """Configure Ceph-NVMEoF Subsystems."""
     sub_args = {"subsystem": config["nqn"]}
     nvmegwcli.subsystem.add(
         **{"args": {**sub_args, **{"max-namespaces": config.get("max_ns", 32)}}}
     )
-
     listener_cfg = {
         "host-name": nvmegwcli.fetch_gateway_hostname(),
         "traddr": nvmegwcli.node.ip_address,
         "trsvcid": config["listener_port"],
     }
     nvmegwcli.listener.add(**{"args": {**listener_cfg, **sub_args}})
-    nvmegwcli.host.add(**{"args": {**sub_args, **{"host": repr(config["allow_host"])}}})
+    if config.get("allow_host"):
+        nvmegwcli.host.add(
+            **{"args": {**sub_args, **{"host": repr(config["allow_host"])}}}
+        )
+
+    if config.get("hosts"):
+        for host in config["hosts"]:
+            initiator_node = get_node_by_id(ceph_cluster, host)
+            initiator = Initiator(initiator_node)
+            host_nqn = initiator.nqn()
+            nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
+
     if config.get("bdevs"):
         name = generate_unique_id(length=4)
         with parallel() as p:
@@ -179,15 +189,7 @@ def teardown(ceph_cluster, rbd_obj, nvmegwcli, config):
 
     # Delete the gateway
     if "gateway" in config["cleanup"]:
-        cfg = {
-            "no_cluster_state": False,
-            "config": {
-                "command": "remove",
-                "service": "nvmeof",
-                "args": {"service_name": f"nvmeof.{config['rbd_pool']}"},
-            },
-        }
-        test_orch.run(ceph_cluster, **cfg)
+        delete_nvme_service(ceph_cluster, config)
 
     # Delete the pool
     if "pool" in config["cleanup"]:
@@ -277,22 +279,18 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     try:
         if config.get("install"):
-            cfg = {
-                "no_cluster_state": False,
-                "config": {
-                    "command": "apply",
-                    "service": "nvmeof",
-                    "args": {"placement": {"nodes": [gw_node.hostname]}},
-                    "pos_args": [rbd_pool],
-                },
-            }
-            test_nvmeof.run(ceph_cluster, **cfg)
+            deploy_nvme_service(ceph_cluster, config)
 
         if config.get("subsystems"):
             with parallel() as p:
                 for subsys_args in config["subsystems"]:
                     p.spawn(
-                        configure_subsystems, rbd_obj, rbd_pool, nvmegwcli, subsys_args
+                        configure_subsystems,
+                        ceph_cluster,
+                        rbd_obj,
+                        rbd_pool,
+                        nvmegwcli,
+                        subsys_args,
                     )
 
         if config.get("initiators"):

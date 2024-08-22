@@ -72,6 +72,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
@@ -90,6 +91,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:

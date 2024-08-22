@@ -194,6 +194,15 @@ tests:
         script-name: test_swift_basic_ops.py
         config-file-name: test_upload_large_obj_with_same_obj_name.yaml
 
+  - test:
+      name: Test the swift URL at root
+      desc: Test the swift URL at root
+      polarion-id: CEPH-83572699
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_at_root.yaml
+
   # Versioning Tests
 
   - test:
@@ -324,6 +333,16 @@ tests:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_deny_actions.yaml
 
+  - test:
+      name: test bucket policy for object torrent
+      desc: Same tenant and cross tenanted user access to object torrent
+      polarion-id: CEPH-11209
+      module: sanity_rgw.py
+      config:
+        script-name: test_policy_torrent.py
+        config-file-name: test_policy_torrent.yaml
+      comments: known issue BZ 2299815
+
   # Bucket Lifecycle Tests
   - test:
       name: object expiration for versioned buckets with filter Prefix test multiple rules.
@@ -425,7 +444,7 @@ tests:
   - test:
       name: acls reset
       desc: Test acls reset
-      polarion-id: CEPH-14260
+      polarion-id: CEPH-14260 # also applies to CEPH-10489
       module: sanity_rgw.py
       config:
         test-version: v1
@@ -436,7 +455,7 @@ tests:
   - test:
       name: test acls on all users
       desc: Test acls on all users
-      polarion-id: CEPH-14240 # also applies to CEPH-14241
+      polarion-id: CEPH-14240 # also applies to CEPH-14241, CEPH-10487, CEPH-10488
       module: sanity_rgw.py
       config:
         test-version: v1
@@ -544,6 +563,14 @@ tests:
       config:
         script-name: ../curl/test_quota_using_curl.py
         config-file-name: ../../curl/configs/test_quota_mgmt_conflict_bucket_quota_using_curl.yaml
+  - test:
+      name: Test rgw user capability user-info-without-keys using curl
+      desc: Test rgw user capability user-info-without-keys using curl
+      polarion-id: CEPH-83582351
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_rgw_user_cap_user_info_without_keys.yaml
 
   - test:
       name: Test bucket listing is not truncated
