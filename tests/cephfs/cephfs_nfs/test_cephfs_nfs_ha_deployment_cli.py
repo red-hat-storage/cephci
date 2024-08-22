@@ -33,7 +33,13 @@ def run(ceph_cluster, **kw):
         log.info(f"Running cephfs {tc} test case")
         config = kw["config"]
         build = config.get("build", config.get("rhbuild"))
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsV1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
         fs_util_v1.prepare_clients(clients, build)
@@ -68,7 +74,11 @@ def run(ceph_cluster, **kw):
             secrets.choice(string.digits) for i in range(3)
         )
         export_path = "/"
-        fs_name = "cephfs"
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util_v1.get_fs_info(client1, fs_name)
+
+        if not fs_details:
+            fs_util_v1.create_fs(client1, fs_name)
         client1.exec_command(
             sudo=True,
             cmd=f"ceph nfs export create cephfs {nfs_name} "

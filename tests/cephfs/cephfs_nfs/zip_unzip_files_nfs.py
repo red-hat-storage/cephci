@@ -38,7 +38,13 @@ def run(ceph_cluster, **kw):
         config = kw["config"]
         build = config.get("build", config.get("rhbuild"))
 
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
         fs_util.prepare_clients(clients, build)
@@ -67,7 +73,11 @@ def run(ceph_cluster, **kw):
             secrets.choice(string.digits) for i in range(3)
         )
         export_path = "/"
-        fs_name = "cephfs"
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client1, fs_name)
         nfs_mounting_dir = "/mnt/nfs_" + "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
