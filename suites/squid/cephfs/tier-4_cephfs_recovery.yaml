@@ -233,3 +233,8 @@ tests:
       module: journal_tool_header_mode.py
       name: journal_tool_header_mode
       polarion-id: "CEPH-83594266"
+  - test:
+      desc: "repair_backtrace_by_scrub"
+      module: cephfs_recovery.backtrace_damage_repair_by_scrub.py
+      polarion-id: CEPH-83593391
+      name: "repair_backtrace_by_scrub"

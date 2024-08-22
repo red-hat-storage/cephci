@@ -53,7 +53,7 @@ tests:
   #  Configure Initiators
   #  Run IO on NVMe Targets
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         verify_cluster_health: true
         steps:
@@ -73,6 +73,7 @@ tests:
                   label: nvmeof-gw
               pos_args:
                 - nvmeof_pool
+                - gw_group1
           - config:
               command: shell
               args:
@@ -105,7 +106,7 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         node: node5
         rbd_pool: rbd
@@ -153,7 +154,7 @@ tests:
       polarion-id: CEPH-83575783
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node5
         vmware_clients:
@@ -174,7 +175,7 @@ tests:
          command: remove
          service: nvmeof
          args:
-           service_name: nvmeof.nvmeof_pool
+           service_name: nvmeof.nvmeof_pool.gw_group1
            verify: true
       desc: Remove nvmeof service on GW node
       destroy-cluster: false

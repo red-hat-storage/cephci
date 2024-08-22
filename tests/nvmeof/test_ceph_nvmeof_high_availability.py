@@ -10,9 +10,9 @@ from ceph.ceph import Ceph
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
-from ceph.utils import get_node_by_id, get_nodes_by_ids
-from tests.cephadm import test_nvmeof, test_orch
+from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.nvme_utils import delete_nvme_service, deploy_nvme_service
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id
@@ -20,48 +20,8 @@ from utility.utils import generate_unique_id
 LOG = Log(__name__)
 
 
-def deploy_nvme_services(ceph_cluster, config):
-    """Deploy NVMe Service with apply or with spec"""
-    rbd_pool = config["rbd_pool"]
-    gw_nodes = get_nodes_by_ids(ceph_cluster, config["gw_nodes"])
-
-    cfg = {
-        "no_cluster_state": False,
-        "config": {
-            "command": "apply",
-            "service": "nvmeof",
-            "args": {"placement": {"nodes": [i.hostname for i in gw_nodes]}},
-            "pos_args": [rbd_pool],
-        },
-    }
-    if config.get("mtls"):
-        cfg = {
-            "no_cluster_state": False,
-            "config": {
-                "command": "apply_spec",
-                "service": "nvmeof",
-                "validate-spec-services": True,
-                "specs": [
-                    {
-                        "service_type": "nvmeof",
-                        "service_id": rbd_pool,
-                        "mtls": True,
-                        "placement": {"nodes": [i.hostname for i in gw_nodes]},
-                        "spec": {
-                            "pool": rbd_pool,
-                            "enable_auth": True,
-                        },
-                    }
-                ],
-            },
-        }
-
-    test_nvmeof.run(ceph_cluster, **cfg)
-
-
 def configure_listeners(ha_obj, nodes, config):
     """Configure Listeners on subsystem."""
-    # listeners = get_nodes_by_ids(obj, nodes)
     lb_group_ids = {}
     for node in nodes:
         nvmegwcli = ha_obj.check_gateway(node)
@@ -158,18 +118,7 @@ def teardown(ceph_cluster, rbd_obj, config):
 
     # Delete the gateway
     if "gateway" in config["cleanup"]:
-        cfg = {
-            "no_cluster_state": False,
-            "config": {
-                "command": "remove",
-                "service": "nvmeof",
-                "args": {
-                    "service_name": f"nvmeof.{config['rbd_pool']}",
-                    "verify": True,
-                },
-            },
-        }
-        test_orch.run(ceph_cluster, **cfg)
+        delete_nvme_service(ceph_cluster, config)
 
     # Delete the pool
     if "pool" in config["cleanup"]:
@@ -236,7 +185,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     try:
         if config.get("install"):
-            deploy_nvme_services(ceph_cluster, config)
+            deploy_nvme_service(ceph_cluster, config)
 
         ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
 

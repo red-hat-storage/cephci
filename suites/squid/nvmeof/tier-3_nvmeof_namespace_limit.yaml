@@ -86,6 +86,7 @@ tests:
                   label: nvmeof-gw
               pos_args:
                 - nvmeof_pool
+                - gw_group1
           - config:
               command: shell
               args:
@@ -296,7 +297,7 @@ tests:
          command: remove
          service: nvmeof
          args:
-           service_name: nvmeof.nvmeof_pool
+           service_name: nvmeof.nvmeof_pool.gw_group1
            verify: true
       desc: Remove nvmeof service on GW node
       destroy-cluster: false
