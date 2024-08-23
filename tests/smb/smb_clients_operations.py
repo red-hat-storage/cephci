@@ -10,7 +10,7 @@ from smb_operations import (
 )
 
 from cli.exceptions import ConfigError
-from cli.utilities.utils import create_files, perform_lookups
+from cli.utilities.utils import create_files, perform_lookups, remove_files, rename_file
 from cli.utilities.windows_utils import setup_windows_clients
 from utility.log import Log
 
@@ -149,6 +149,30 @@ def run(ceph_cluster, **kw):
                 thread_operations.append(
                     Thread(
                         target=perform_lookups,
+                        args=(
+                            clients[int(client[-2:]) - 1],
+                            mount_point,
+                            file_count,
+                            windows_client,
+                        ),
+                    )
+                )
+            elif operation == "rename_file":
+                thread_operations.append(
+                    Thread(
+                        target=rename_file,
+                        args=(
+                            clients[int(client[-2:]) - 1],
+                            mount_point,
+                            file_count,
+                            windows_client,
+                        ),
+                    )
+                )
+            elif operation == "remove_files":
+                thread_operations.append(
+                    Thread(
+                        target=remove_files,
                         args=(
                             clients[int(client[-2:]) - 1],
                             mount_point,
