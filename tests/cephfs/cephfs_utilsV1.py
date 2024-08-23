@@ -577,6 +577,7 @@ class FsUtils(object):
             sleep(300)
             return 0
 
+    @retry(CommandFailed, tries=3, delay=10)
     def config_blacklist_manual_evict(self, active_mds, rank, service_name, **kwargs):
         """
         Configure black list on osd and manually evict client
@@ -605,10 +606,14 @@ class FsUtils(object):
             clients = self.ceph_cluster.get_ceph_objects("client")
             ip_add = self.manual_evict(clients[0], rank)
             out, rc = clients[0].exec_command(sudo=True, cmd="ceph osd blacklist ls")
-            print(out)
+            log.info(out)
             log.info(f"{ip_add} which is evicated manually")
             if ip_add not in out:
                 return 0
+            else:
+                raise CommandFailed(
+                    f"{ip_add} which is evicated manually not yet blocklisted . {out}"
+                )
 
     def validate_fs_info(self, client, fs_name="cephfs"):
         """
