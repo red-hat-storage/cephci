@@ -32,7 +32,13 @@ def run(ceph_cluster, **kw):
     """
     try:
         log.info(f"MetaData Information {log.metadata} in {__name__}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
 
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
@@ -198,7 +204,11 @@ def run(ceph_cluster, **kw):
         umount_fs(clients[0], kernel_mounting_dir)
 
         log.info("mount with recovery_session Options")
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(clients[0], default_fs)
+
+        if not fs_details:
+            fs_util.create_fs(clients[0], default_fs)
         log.info("mount with recovery_session with option no")
         subvolume = {
             "vol_name": default_fs,
@@ -216,12 +226,12 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
-            extra_params=",conf=/etc/ceph/ceph.conf,mount_timeout=100,recover_session=no",
+            extra_params=f",conf=/etc/ceph/ceph.conf,mount_timeout=100,recover_session=no,fs={default_fs}",
             validate=True,
         )
-
+        active_mds = fs_util.get_active_mdss(clients[0], default_fs)
         out, rc = clients[0].exec_command(
-            sudo=True, cmd="ceph tell mds.0 client ls -f json"
+            sudo=True, cmd=f"ceph tell mds.{active_mds[0]} client ls -f json"
         )
         get_client_details = json.loads(out)
         for kernel_client in get_client_details:
@@ -253,7 +263,7 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
-            extra_params=",conf=/etc/ceph/ceph.conf,mount_timeout=100,recover_session=clean",
+            extra_params=f",conf=/etc/ceph/ceph.conf,mount_timeout=100,recover_session=clean,fs={default_fs}",
             validate=True,
         )
         out, rc = clients[0].exec_command(

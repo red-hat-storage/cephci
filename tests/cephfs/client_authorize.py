@@ -82,12 +82,22 @@ def run(ceph_cluster, **kw):
         rhbuild = config.get("rhbuild")
         from tests.cephfs.cephfs_utilsV1 import FsUtils
 
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         client = ceph_cluster.get_ceph_objects("client")
         mon_node_ip = fs_util.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
         fs_count = 1
-        fs_name = "cephfs"
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client[0], fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client[0], fs_name)
         client_number = 1
         """
         Testing multiple cephfs client authorize for 5.x and
