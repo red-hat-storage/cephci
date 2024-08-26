@@ -77,6 +77,76 @@ tests:
       abort-on-fail: true
 
   - test:
+      name: samba with client multi-connections
+      desc: Load Testing - samba with client multi-connections
+      module: smb_multi_connection.py
+      polarion-id: CEPH-83593849
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        load_test:
+          total_load_process: 3
+          thread_per_load_process: 3
+          load_runtime: 50 # In sec
+          load_file_size: 3 # In mb
+          load_dir: loadtest
+          port: 445
+          actions:
+            - write
+            - read
+            - delete
+  - test:
+      name: Ceph samba load test
+      desc: Setup Ceph cluster with SMB, run load test and check process id
+      module: smb_multi_connection.py
+      polarion-id: CEPH-83593850
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        load_test:
+          total_load_process: 1
+          thread_per_load_process: 3
+          load_runtime: 300 # In sec
+          load_file_size: 3 # In mb
+          load_dir: loadtest
+          port: 445
+          actions:
+            - write
+            - read
+            - delete
+  - test:
+      name: Deploy samba with 500 shares
+      desc: Deploy samba with 500 shares using auth_mode 'user'
+      module: smb_deployment_500_shares.py
+      polarion-id: CEPH-83593847
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: 500
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: 500
+        path: "/"
+  - test:
       name: Deploy samba with 500 shares using declarative style(Spec File)
       desc: Deploy samba with 500 shares using auth_mode 'user'
       module: smb_deployment_multi_shares_declarative_method.py
