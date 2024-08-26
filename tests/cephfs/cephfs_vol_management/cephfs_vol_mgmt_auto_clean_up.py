@@ -19,12 +19,20 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83574188"
         log.info(f"Running CephFS tests for BZ-{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         fs_util.auth_list([client1])
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -39,10 +47,11 @@ def run(ceph_cluster, **kw):
             [clients[0]],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
         )
         out1, err1 = fs_util.create_subvolume(
             client1,
-            "cephfs",
+            f"{fs_name}",
             subvol_name,
             pool_layout=invalid_pool,
             validate=False,
@@ -53,7 +62,7 @@ def run(ceph_cluster, **kw):
             return 1
         out2, err2 = client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs subvolume getpath cephfs {subvol_name}",
+            cmd=f"ceph fs subvolume getpath {fs_name} {subvol_name}",
             check_ec=False,
         )
         if out2 == 0:

@@ -29,7 +29,8 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-11333"
         log.info(f"Running CephFS tests for BZ-{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")

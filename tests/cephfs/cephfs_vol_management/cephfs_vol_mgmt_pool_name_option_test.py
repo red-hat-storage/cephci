@@ -23,12 +23,20 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83573528"
         log.info(f"Running CephFS tests for BZ-{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         fs_util.auth_list([client1])
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -40,13 +48,14 @@ def run(ceph_cluster, **kw):
             [clients[0]],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
         )
         pool_names = ["ceph-fs-pool"]
 
         for pool_name in pool_names:
             client1.exec_command(f"ceph osd pool create {pool_name}")
             output, err = client1.exec_command(
-                f"ceph fs add_data_pool cephfs {pool_name}"
+                f"ceph fs add_data_pool {fs_name} {pool_name}"
             )
             if output == 1:
                 return 1
@@ -54,9 +63,9 @@ def run(ceph_cluster, **kw):
                 random.choice(string.ascii_lowercase + string.digits)
                 for _ in list(range(10))
             )
-            fs_util.create_subvolume(client1, "cephfs", f"subvol_{subvol_name}")
+            fs_util.create_subvolume(client1, f"{fs_name}", f"subvol_{subvol_name}")
             run_ios(client1, kernel_mounting_dir_1)
-            fs_util.remove_subvolume(client1, "cephfs", f"subvol_{subvol_name}")
+            fs_util.remove_subvolume(client1, f"{fs_name}", f"subvol_{subvol_name}")
 
         return 0
     except Exception as e:

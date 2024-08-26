@@ -22,12 +22,20 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83574187"
         log.info(f"Running CephFS tests for Polarion ID -{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         fs_util.auth_list([client1])
         random_name = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -36,10 +44,11 @@ def run(ceph_cluster, **kw):
         subvol_name = "subvol_name_" + random_name
         namespace = "namespace_" + random_name
         fs_util.create_subvolume(
-            client1, "cephfs", subvol_name, namespace_isolated=namespace
+            client1, f"{fs_name}", subvol_name, namespace_isolated=namespace
         )
         out1, err1 = client1.exec_command(
-            sudo=True, cmd=f"ceph fs subvolume info cephfs {subvol_name}  --format json"
+            sudo=True,
+            cmd=f"ceph fs subvolume info {fs_name} {subvol_name}  --format json",
         )
         isolated_pool_name = f"fsvolumens_{subvol_name}"
         output1 = json.loads(out1)
@@ -47,7 +56,7 @@ def run(ceph_cluster, **kw):
         if target_ns_name != isolated_pool_name:
             log.error("Isolated namespace name are not identical")
             return 1
-        fs_util.remove_subvolume(client1, "cephfs", subvol_name)
+        fs_util.remove_subvolume(client1, f"{fs_name}", subvol_name)
         return 0
 
     except Exception as e:

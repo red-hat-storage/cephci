@@ -22,13 +22,21 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83574161"
         log.info(f"Running CephFS tests for BZ-{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
         result = 0
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         fs_util.auth_list([client1])
         subvolume_group = "non_exist_subvolume_group_name"
         subvolume_name_generate = "".join(
@@ -36,7 +44,7 @@ def run(ceph_cluster, **kw):
             for _ in list(range(5))
         )
         subvolume = {
-            "vol_name": "cephfs",
+            "vol_name": f"{fs_name}",
             "subvol_name": f"subvol_{subvolume_name_generate}",
             "size": "5368706371",
             "group_name": f"{subvolume_group}",
