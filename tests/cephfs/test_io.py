@@ -18,7 +18,9 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         io_func = []
         if config.get("cephfs"):
-            fs_util = FsUtils(ceph_cluster)
+            test_data = kw.get("test_data")
+            fs_util = FsUtils(ceph_cluster, test_data=test_data)
+
             fs_util.prepare_clients(clients, build)
             fs_util.auth_list(clients)
             client_count = config.get("cephfs").get("num_of_clients", 1)
