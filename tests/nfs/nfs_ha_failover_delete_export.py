@@ -1,3 +1,4 @@
+import json
 from threading import Thread
 from time import sleep
 
@@ -97,5 +98,41 @@ def run(ceph_cluster, **kw):
 
     except Exception as e:
         log.error(f"Error : {e}")
+        log.info("Cleaning up")
+        Ceph(clients[0]).nfs.cluster.delete(nfs_name)
+        # Delete the subvolume
+        for i in range(len(clients)):
+            cmd = "ceph fs subvolume ls cephfs --group_name ganeshagroup"
+            out = clients[0].exec_command(sudo=True, cmd=cmd)
+            json_string, _ = out
+            data = json.loads(json_string)
+            # Extract names of subvolume
+            for item in data:
+                subvol = item["name"]
+                cmd = f"ceph fs subvolume rm cephfs {subvol} --group_name ganeshagroup"
+                clients[0].exec_command(sudo=True, cmd=cmd)
+
+        # Delete the subvolume group
+        cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
+        clients[0].exec_command(sudo=True, cmd=cmd)
         return 1
+
+    finally:
+        log.info("Cleaning up")
+        Ceph(clients[0]).nfs.cluster.delete(nfs_name)
+        # Delete the subvolume
+        for i in range(len(clients)):
+            cmd = "ceph fs subvolume ls cephfs --group_name ganeshagroup"
+            out = clients[0].exec_command(sudo=True, cmd=cmd)
+            json_string, _ = out
+            data = json.loads(json_string)
+            # Extract names of subvolume
+            for item in data:
+                subvol = item["name"]
+                cmd = f"ceph fs subvolume rm cephfs {subvol} --group_name ganeshagroup"
+                clients[0].exec_command(sudo=True, cmd=cmd)
+
+        # Delete the subvolume group
+        cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
+        clients[0].exec_command(sudo=True, cmd=cmd)
     return 0

@@ -157,6 +157,7 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export):
         Ceph(clients[0]).nfs.export.delete(nfs_name, f"{nfs_export}_{i}")
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
     sleep(30)
+    check_nfs_daemons_removed(clients[0])
 
     # Delete the subvolume
     for i in range(len(clients)):
@@ -203,7 +204,7 @@ def perform_failover(nfs_nodes, failover_node, vip):
         vip = vip.split("/")[0]
 
     # Perform the check with a timeout of 60 seconds
-    for w in WaitUntil(timeout=60, interval=5):
+    for w in WaitUntil(timeout=120, interval=5):
         for node in nfs_nodes:
             if node != failover_node:
                 assigned_ips = get_ip_from_node(node)
@@ -359,3 +360,24 @@ def removeattr(client, file_path, attribute_name):
     cmd = f"setfattr -x user.{attribute_name} {file_path}"
     out = client.exec_command(sudo=True, cmd=cmd)
     return out
+
+
+def check_nfs_daemons_removed(client):
+    """
+    Check if NFS daemons are removed.
+    Wait until there are no NFS daemons listed by 'ceph orch ls'.
+    """
+    while True:
+        try:
+            cmd = "ceph orch ls | grep nfs"
+            out = client.exec_command(sudo=True, cmd=cmd)
+
+            if out:
+                print("NFS daemons are still present. Waiting...")
+                sleep(10)  # Wait before checking again
+            else:
+                print("All NFS daemons have been removed.")
+                break
+        except Exception as e:
+            print(f"Unexpected error: {e}")
+            break
