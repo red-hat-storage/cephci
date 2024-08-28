@@ -155,6 +155,10 @@ def run(ceph_cluster, **kw):
             rados_obj.change_recovery_threads(config=ec_config, action="rm")
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         log.info("Successfully tested EC pool recovery with K osd's surviving")
         return 0
@@ -268,6 +272,10 @@ def run(ceph_cluster, **kw):
             rados_obj.rados_pool_cleanup()
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         return 0
 
     if config.get("test_autoscaler_bulk_feature"):
@@ -376,6 +384,10 @@ def run(ceph_cluster, **kw):
             rados_obj.delete_pool(pool=pool_name)
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         log.info("Verified the workings of bulk flag")
         return 0
 
@@ -487,6 +499,10 @@ def run(ceph_cluster, **kw):
             rados_obj.change_recovery_threads(config=config, action="rm")
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         log.info("Target ratio tests completed")
         return 0
@@ -508,6 +524,10 @@ def run(ceph_cluster, **kw):
             mon_obj.remove_config(**pg_conf)
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         log.info("Set and verified the value for mon_target_pg_per_osd ")
         return 0
 
@@ -555,6 +575,10 @@ def run(ceph_cluster, **kw):
             rados_obj.rados_pool_cleanup()
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         log.info("pg_min_num tests completed")
         return 0
 
@@ -608,14 +632,18 @@ def run(ceph_cluster, **kw):
             if config.get("delete_pool"):
                 rados_obj.delete_pool(pool=pool_name)
 
-                # Unsetting the no-autoscale flag
-                cmd = f'{"ceph osd pool unset noautoscale"}'
-                rados_obj.run_ceph_command(cmd=cmd)
-                # unsetting the debug_mgr to default
-                cmd = f'{"ceph config rm mgr debug_mgr"}'
-                rados_obj.run_ceph_command(cmd=cmd)
-                # log cluster health
-                rados_obj.log_cluster_health()
+            # Unsetting the no-autoscale flag
+            cmd = f'{"ceph osd pool unset noautoscale"}'
+            rados_obj.run_ceph_command(cmd=cmd)
+            # unsetting the debug_mgr to default
+            cmd = f'{"ceph config rm mgr debug_mgr"}'
+            rados_obj.run_ceph_command(cmd=cmd)
+            # log cluster health
+            rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         log.info(" Verification of pg num checking completed")
         return 0
@@ -875,7 +903,7 @@ def run(ceph_cluster, **kw):
 
                 # Scenario 6: Remove all warnings
                 log.info(
-                    f"Setting the PG autosclaer to 'ON' on pool {pool['pool_name']} "
+                    f"Setting the PG autoscaler to 'ON' on pool {pool['pool_name']} "
                 )
                 rados_obj.set_pool_property(
                     pool=pool["pool_name"], props="pg_autoscale_mode", value="on"
@@ -923,6 +951,10 @@ def run(ceph_cluster, **kw):
             time.sleep(60)
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         return 0
 
     if config.get("Verify_pool_min_size_behaviour"):
@@ -974,6 +1006,10 @@ def run(ceph_cluster, **kw):
             time.sleep(60)
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         return 0
 
     if config.get("Verify_degraded_pool_min_size_behaviour"):
@@ -1210,6 +1246,10 @@ def run(ceph_cluster, **kw):
                 time.sleep(60)
                 # log cluster health
                 rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         return 0
 
     if config.get("Verify_osd_in_out_behaviour"):
@@ -1306,6 +1346,10 @@ def run(ceph_cluster, **kw):
             time.sleep(30)
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         return 0
 
     if config.get("verify_pool_min_pg_count"):
@@ -1387,6 +1431,10 @@ def run(ceph_cluster, **kw):
             time.sleep(60)
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         log.info(" Verification of pg_min_num complete")
         return 0

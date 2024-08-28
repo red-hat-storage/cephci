@@ -264,5 +264,9 @@ def run(ceph_cluster, **kw):
         mon_obj.set_mon_service_managed_type(unmanaged=False)
         # log cluster health
         rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
     log.info("All the tests completed on the cluster, Pass!!!")
     return 0

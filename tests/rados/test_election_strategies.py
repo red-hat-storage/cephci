@@ -95,6 +95,10 @@ def run(ceph_cluster, **kw):
             )
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         log.info("Completed all mon election test scenarios valid for stretch mode")
         return 0
@@ -191,6 +195,10 @@ def run(ceph_cluster, **kw):
                 return 1
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         log.info("Completed all mon election test cases")
         return 0
