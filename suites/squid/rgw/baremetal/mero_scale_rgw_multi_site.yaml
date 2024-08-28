@@ -1,0 +1,359 @@
+# Test suite for for baremetal rgw-multisite deployment and testing multisite sync at scale.
+#
+# This suite deploys a Longevity environment on baremetal machines. It is a multisite environment with each site having a storage capacity of 617Tb.
+# each site has around 4 osd hosts and a total of 16 osds.
+# A single realm (India) spanning across two RHCS clusters. It has a
+# zonegroup (shared) which also spans across the clusters. There exists a master (primary)
+# and secondary (secondary) zone within this group. The master zone is part of the pri
+# cluster whereas the sec zone is part of the sec datacenter (cluster).
+
+# The deployment is evaluated by running IOs across the environments.
+# tested with conf file: conf/baremetal/mero_multisite_1admin_3node_along_client.yaml
+
+tests:
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers: # if drivers are not specified will use one of the rgw node
+              - mero003
+              - mero004
+            fill_percent: 30
+      desc: prepare and push cosbench fill workload
+      module: push_cosbench_workload.py
+      name: push cosbench fill workload
+      polarion-id: CEPH-83574428
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers: # if drivers are not specified will use one of the rgw node
+              - mero003
+              - mero004
+            fill_percent: 30
+            workload_type: hybrid
+            run_time: 3600 # value in seconds
+      desc: initiate cosbench hybrid workload
+      module: push_cosbench_workload.py
+      name: push cosbench hybrid workload
+      polarion-id: CEPH-83575831
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-sec
+            timeout: 300
+      desc: create non-tenanted user
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user
+      polarion-id: CEPH-83575199
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "radosgw-admin sync group create --group-id=global_group --status=enabled"
+              - "radosgw-admin sync group flow create --group-id=global_group --flow-id=global_groupflow --flow-type=symmetrical --zones=primary,secondary"
+              - "radosgw-admin sync group pipe create --group-id=global_group --pipe-id=global_grouppipe --source-zones='*' --dest-zones='*'"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin sync status"
+      desc: Configure zonegroup level sync policy
+      polarion-id: CEPH-83575382
+      module: exec.py
+      name: Configure zonegroup level sync policy
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_aws.py
+            config-file-name: ../../aws/configs/test_aws_regular_and_versioned_bucket_creation.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: create regular and versioned bucket in primary
+      module: sanity_rgw_multisite.py
+      name: create regular and versioned bucket in primary
+      polarion-id: CEPH-83575382
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            fill_percent: 30
+            record_sync_on_site: ceph-sec
+            bucket_prefix: reg-cosbench-bkt-
+            number_of_buckets: 1
+            number_of_objects: 5000000
+            workload_type: symmetrical
+      desc: upload 5M object to regular bucket
+      module: push_cosbench_workload.py
+      name: upload 5M object to regular bucket
+      polarion-id: CEPH-83575382
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            fill_percent: 30
+            record_sync_on_site: ceph-sec
+            bucket_prefix: ver-cosbench-bkt-
+            number_of_buckets: 1
+            number_of_objects: 5000000
+            workload_type: symmetrical
+      desc: upload 5M current object to versioned bucket
+      module: push_cosbench_workload.py
+      name: upload 5M current object to versioned bucket
+      polarion-id: CEPH-83575382
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            fill_percent: 30
+            record_sync_on_site: ceph-sec
+            bucket_prefix: ver-cosbench-bkt-
+            number_of_buckets: 1
+            number_of_objects: 5000000
+            workload_type: symmetrical
+      desc: upload 5M non-current object to versioned bucket
+      module: push_cosbench_workload.py
+      name: upload 5M non-current object to versioned bucket
+      polarion-id: CEPH-83574428
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "radosgw-admin sync group modify --group-id=global_group --status=allowed"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin sync status"
+      desc: Configure zonegroup level sync policy to allowed state
+      polarion-id: CEPH-83575383
+      module: exec.py
+      name: Configure zonegroup level sync policy to allowed state
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_aws.py
+            config-file-name: ../../aws/configs/test_aws_buckets_creation.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: create 20 bucket in primary
+      module: sanity_rgw_multisite.py
+      name: create 20 bucket in primary
+      polarion-id: CEPH-83575383
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            commands:
+              - "radosgw-admin sync policy get"
+              - "for i in {1..20}; do radosgw-admin sync group create --group-id=bkt_group_$i --status=enabled --bucket cos-bucket-$i; done"
+              - "for i in {1..20}; do radosgw-admin sync group pipe create --group-id=bkt_group_$i --pipe-id=bkt_pipe_$i --source-zones='*' --dest-zones='*' --bucket cos-bucket-$i; done"
+      desc: Configure bucket level sync policy
+      polarion-id: CEPH-83575383
+      module: exec.py
+      name: Configure bucket level sync policy
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            record_sync_on_site: ceph-sec
+            bucket_prefix: cos-bucket-
+            number_of_buckets: 2
+            number_of_objects: 1000000
+            workload_type: symmetrical
+      desc: upload 1M object each to buckets that are enabled sync from bucket level
+      module: push_cosbench_workload.py
+      name: upload 1M object each to buckets that are enabled sync from bucket level
+      polarion-id: CEPH-83575383
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "radosgw-admin sync group remove --group-id=global_group --status=enabled"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin sync group get"
+              - "radosgw-admin sync status"
+      desc: remove zonegroup level sync policy
+      polarion-id: CEPH-83575382
+      module: exec.py
+      name: remove zonegroup level sync policy
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_aws.py
+            config-file-name: ../../aws/configs/test_aws_versioned_bucket_creation.yaml
+            verify-io-on-site: ["ceph-sec"]
+            timeout: 300
+      desc: create versioned bucket in primary
+      module: sanity_rgw_multisite.py
+      name: create versioned bucket in primary
+      polarion-id: CEPH-83575073
+
+  - test:
+      name: Parallel upload of objects to versioned bucket
+      desc: Parallel upload of objects to versioned bucket
+      module: test_parallel.py
+      parallel:
+        - test:
+            clusters:
+              ceph-pri:
+                config:
+                  controllers:
+                    - mero003
+                  drivers:
+                    - mero003
+                    - mero004
+                  fill_percent: 35
+                  workload_type: symmetrical
+                  record_sync_on_site: ceph-sec
+                  bucket_prefix: cosbench01-bkt-
+                  number_of_buckets: 1
+            desc: initiate cosbench push workload from primary
+            module: push_cosbench_workload.py
+            name: push cosbench push workload from primary
+            polarion-id: CEPH-83575073
+        - test:
+            clusters:
+              ceph-sec:
+                config:
+                  controllers:
+                    - mero009
+                  drivers:
+                    - mero009
+                    - mero011
+                  fill_percent: 35
+                  workload_type: symmetrical
+                  record_sync_on_site: ceph-pri
+                  bucket_prefix: cosbench01-bkt-
+                  number_of_buckets: 1
+            desc: initiate cosbench push workload from secondary
+            module: push_cosbench_workload.py
+            name: push cosbench push workload from secondary
+            polarion-id: CEPH-83575073
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            workload_type: fill_runtime
+            run_time: 7200
+            record_sync_on_site: ceph-sec
+            bucket_prefix: cosbench01-bkt-
+            number_of_buckets: 1
+            number_of_objects: 2000000
+      desc: initiate cosbench fill workload for versioned bucket
+      name: push cosbench fill workload for versioned bucket
+      module: push_cosbench_workload.py
+      polarion-id: CEPH-83575077
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - radosgw-admin bucket sync markers --bucket cosbench01-bkt-1 --source-zone secondary
+      desc: Run radosgw-admin bucket sync markers from primary
+      name: Run radosgw-admin bucket sync markers from primary
+      polarion-id: CEPH-83575077
+      module: exec.py
+
+  - test:
+      name: Parallel delete of objects from bucket
+      desc: Parallel delete of objects from bucket
+      module: test_parallel.py
+      parallel:
+        - test:
+            clusters:
+              ceph-pri:
+                config:
+                  controllers:
+                    - mero003
+                  drivers:
+                    - mero003
+                    - mero004
+                  workload_type: cleanup
+                  record_sync_on_site: ceph-sec
+                  bucket_prefix: cosbench01-bkt-
+                  number_of_buckets: 1
+            desc: initiate cosbench cleanup workload from primary
+            module: push_cosbench_workload.py
+            name: push cosbench cleanup workload from primary
+            polarion-id: CEPH-83575074
+        - test:
+            clusters:
+              ceph-sec:
+                config:
+                  controllers:
+                    - mero009
+                  drivers:
+                    - mero009
+                    - mero011
+                  workload_type: cleanup
+                  record_sync_on_site: ceph-pri
+                  bucket_prefix: cosbench01-bkt-
+                  number_of_buckets: 1
+            desc: initiate cosbench cleanup workload from secondary
+            module: push_cosbench_workload.py
+            name: push cosbench cleanup workload from secondary
+            polarion-id: CEPH-83575074
