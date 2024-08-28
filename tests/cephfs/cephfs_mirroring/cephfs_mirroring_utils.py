@@ -1240,11 +1240,13 @@ class CephfsMirroringUtils(object):
                     [source_clients],
                     mount_dir,
                     ",".join(mon_node_ips),
+                    extra_params=f",fs={source_fs}",
                 )
             elif mount_type == "fuse":
                 fs_util.fuse_mount(
                     [source_clients],
                     mount_dir,
+                    extra_params=f" --client_fs {source_fs}",
                 )
             else:
                 log.error(
