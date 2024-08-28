@@ -153,7 +153,7 @@ def cephfs_top_stats_validate(client, fs_name, mnt_info):
             mnt_pass += 1
     if mnt_pass != 3:
         test_fail += 1
-        log.error(f"Validation of Mountinfo in cephfs-top dump output failed")
+        log.error("Validation of Mountinfo in cephfs-top dump output failed")
     for id in fs_info:
         log.info(
             f"fs_info[id]['mount_point@host/addr']:{fs_info[id]['mount_point@host/addr']}"
@@ -169,7 +169,7 @@ def cephfs_top_stats_validate(client, fs_name, mnt_info):
     if mnt_pnt_pass < 3:
         test_fail += 1
         log.error(
-            f"BZ 2307251 : Validation of Mountpoint in cephfs-top dump output failed"
+            "BZ 2307251 : Validation of Mountpoint in cephfs-top dump output failed"
         )
     if test_fail > 0:
         return 1
@@ -220,9 +220,9 @@ def mds_fail_cephfs_top_check(client, fs_name):
             retry_cnt = 0
 
     if len(fs_info) == 0:
-        log.info(f"Validated that cephfs-top shows no entries if MDS is down")
+        log.info("Validated that cephfs-top shows no entries if MDS is down")
         return 0
-    log.error(f"cephfs-top validation when MDS is down,failed")
+    log.error("cephfs-top validation when MDS is down,failed")
     return 1
 
 
@@ -410,7 +410,7 @@ def run(ceph_cluster, **kw):
         log.info("Setup test configuration")
         setup_params = test_setup(fs_util_v1, ceph_cluster, client)
 
-        log.info('Install "cephfs-top" by "dnf install cephfs-top\”')
+        log.info("Install cephfs-top by dnf install cephfs-top")
         client.exec_command(
             sudo=True,
             cmd="dnf install cephfs-top -y",
