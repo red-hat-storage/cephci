@@ -100,6 +100,7 @@ tests:
       desc: Testing reads balancer online tool functionality in RHCS
       polarion-id: CEPH-83576078
       config:
+        negative_scenarios: true
         online_command_verification: true
         create_pools:
           - create_pool:

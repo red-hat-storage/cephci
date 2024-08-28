@@ -390,3 +390,20 @@ tests:
       polarion-id: CEPH-83573627
       module: test_election_strategies.py
       desc: Change Mon election strategies and verify status
+
+  - test:
+      name: EC Profile tests
+      module: pool_tests.py
+      polarion-id: CEPH-83596295
+      config:
+        Verify_ec_profile:
+          name: test
+          profile_name: test_profile
+          pool_name: ec_profile_test
+          k: 2
+          m: 2
+          plugin: jerasure
+          rados_write_duration: 100
+          rados_read_duration: 50
+          crush-failure-domain: host
+      desc: Verify the behaviour of EC profiles in ceph

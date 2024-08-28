@@ -113,7 +113,12 @@ def get_device_path(host, osd_id):
     log.debug(f"containers on the host :\n {out}\n")
     try:
         container_id = [
-            item["Names"][0] for item in out if f"osd.{osd_id}" in item["Command"]
+            item["Names"][0]
+            for item in out
+            if item.get("Names")
+            and item.get("Names")[0]
+            and item.get("Command")
+            and f"osd.{osd_id}" in item["Command"]
         ][0]
     except Exception as err:
         log.error(f"host exception : {err}")

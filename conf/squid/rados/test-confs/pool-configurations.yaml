@@ -31,8 +31,8 @@ erasure:
     pool_name: ec86_msr_pool
     pool_type: erasure
     k: 8
-    m: 4
-    create_rule: true
+    m: 6
+    create_rule: false
     crush-osds-per-failure-domain: 4
     crush-num-failure-domains: 4
     plugin: jerasure
@@ -42,8 +42,8 @@ erasure:
     pool_name: ec86_msr_pool1
     pool_type: erasure
     k: 8
-    m: 4
-    create_rule: true
+    m: 6
+    create_rule: false
     crush-osds-per-failure-domain: 4
     crush-num-failure-domains: 4
     plugin: jerasure

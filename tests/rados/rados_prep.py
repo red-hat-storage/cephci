@@ -39,43 +39,55 @@ def run(ceph_cluster, **kw):
     if config.get("ec_pool"):
         ec_config = config.get("ec_pool")
         ec_config.setdefault("pool_name", f"ecpool_{uuid}")
-        if not rados_obj.create_erasure_pool(name=uuid, **ec_config):
-            log.error("Failed to create the EC Pool")
-            return 1
-
-        if ec_config.get("test_overwrites_pool"):
-            if not rados_obj.verify_ec_overwrites(**ec_config):
+        try:
+            if not rados_obj.create_erasure_pool(name=uuid, **ec_config):
                 log.error("Failed to create the EC Pool")
                 return 1
-        else:
-            if not rados_obj.bench_write(**ec_config):
-                log.error("Failed to write objects into the EC Pool")
-                return 1
-            rados_obj.bench_read(**ec_config)
-            log.info("Created the EC Pool, Finished writing data into the pool")
 
-        if ec_config.get("delete_pool"):
-            if not rados_obj.delete_pool(pool=ec_config["pool_name"]):
-                log.error("Failed to delete EC Pool")
-                return 1
+            if ec_config.get("test_overwrites_pool"):
+                if not rados_obj.verify_ec_overwrites(**ec_config):
+                    log.error("Failed to create the EC Pool")
+                    return 1
+            else:
+                if not rados_obj.bench_write(**ec_config):
+                    log.error("Failed to write objects into the EC Pool")
+                    return 1
+                rados_obj.bench_read(**ec_config)
+                log.info("Created the EC Pool, Finished writing data into the pool")
+
+                if ec_config.get("delete_pool"):
+                    if not rados_obj.delete_pool(pool=ec_config["pool_name"]):
+                        log.error("Failed to delete EC Pool")
+                        return 1
+        except Exception as err:
+            log.error(f"Hit Exception during EC pool testing. \n ERROR : \n {err}\n")
+            rados_obj.rados_pool_cleanup()
+            return 1
 
     if config.get("replicated_pool"):
         rep_config = config.get("replicated_pool")
         rep_config.setdefault("pool_name", f"repool_{uuid}")
-        if not rados_obj.create_pool(
-            **rep_config,
-        ):
-            log.error("Failed to create the replicated Pool")
-            return 1
-        if not rados_obj.bench_write(**rep_config):
-            log.error("Failed to write objects into the EC Pool")
-            return 1
-        rados_obj.bench_read(**rep_config)
-        log.info("Created the replicated Pool, Finished writing data into the pool")
-        if rep_config.get("delete_pool"):
-            if not rados_obj.delete_pool(pool=rep_config["pool_name"]):
-                log.error("Failed to delete replicated Pool")
+        try:
+            if not rados_obj.create_pool(
+                **rep_config,
+            ):
+                log.error("Failed to create the replicated Pool")
                 return 1
+            if not rados_obj.bench_write(**rep_config):
+                log.error("Failed to write objects into the EC Pool")
+                return 1
+            rados_obj.bench_read(**rep_config)
+            log.info("Created the replicated Pool, Finished writing data into the pool")
+            if rep_config.get("delete_pool"):
+                if not rados_obj.delete_pool(pool=rep_config["pool_name"]):
+                    log.error("Failed to delete replicated Pool")
+                    return 1
+        except Exception as err:
+            log.error(
+                f"Hit Exception during Replicated pool testing. \n ERROR : \n {err}\n"
+            )
+            rados_obj.rados_pool_cleanup()
+            return 1
 
     if config.get("set_pool_configs"):
         changes = config["set_pool_configs"]

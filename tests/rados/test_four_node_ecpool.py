@@ -306,10 +306,26 @@ def run(ceph_cluster, **kw):
 
         log.debug("Completed restart of all the OSDs on the Host")
 
+        log.debug("Starting to reboot all the OSD hosts and waiting till recovery")
+        osd_nodes = ceph_cluster.get_nodes(role="osd")
+        for node in osd_nodes:
+            log.debug(f"Proceeding to reboot the host : {node.hostname}")
+            node.exec_command(cmd="reboot", sudo=True)
+            time.sleep(2)
+            log.info(
+                f"\nceph status : {rados_obj.run_ceph_command(cmd='ceph -s', client_exec=True)}\n"
+            )
+            # Waiting for recovery to post OSD host addition
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
+            # Checking cluster health after OSD removal
+            method_should_succeed(rados_obj.run_pool_sanity_check)
+            log.info(f"reboot of OSD host : {node.hostname} is successful.")
+        log.debug("Done with reboot of all the OSD hosts")
+
         log.debug("Starting test to remove OSD from the host.")
         # Remove one OSD
         inactive_pgs = 0
-        node_label = "osd-bak"
+        node_label = "osd"
         try:
             node_id = ceph_cluster.get_nodes(role=node_label)[0]
         except Exception as err:
@@ -371,7 +387,7 @@ def run(ceph_cluster, **kw):
         log.info("Completed the removal and addition of OSD daemons")
 
         if config.get("remove_host", True):
-            node_id = "node6"
+            node_id = "node5"
             # Adding a new host to the cluster
             try:
                 service_obj.add_new_hosts(add_nodes=[node_id])
