@@ -10,7 +10,6 @@ def get_inventory_list(node, output_format):
         "/run/lock/lvm:/run/lock/lvm:z",
         "/var/run/udev/:/var/run/udev/:z",
         "/dev:/dev",
-        "/etc/ceph:/etc/ceph:z",
         "/run/lvm/:/run/lvm/",
         "/var/lib/ceph/:/var/lib/ceph/:z",
         "/var/log/ceph/:/var/log/ceph/:z",
