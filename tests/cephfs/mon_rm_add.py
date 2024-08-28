@@ -54,7 +54,7 @@ def wait_for_cmd(client1, process_name, count, timeout=180, interval=5):
     raise CommandFailed
 
 
-def mon_rm_add(fs_util, mons, client):
+def mon_rm_add(fs_util, mons, client, fs_name="cephfs"):
     try:
         global stop_flag
         log.info("removing mon")
@@ -65,11 +65,11 @@ def mon_rm_add(fs_util, mons, client):
         initial_mon_count = str(len(mon_hosts))
         initial_mon_count.rstrip()
         count = str(int(initial_mon_count) - 1)
-        cmd = f"ceph orch  --verbose apply mon cephfs --placement='{mons_hosts}'"
+        cmd = f"ceph orch --verbose apply mon {fs_name} --placement='{mons_hosts}'"
         client.exec_command(sudo=True, cmd=cmd)
         wait_for_cmd(client, "mon", count)
         mons_hosts = " ".join([str(elem) for elem in mon_hosts])
-        cmd = f"ceph orch  --verbose apply mon cephfs --placement='{mons_hosts}'"
+        cmd = f"ceph orch  --verbose apply mon {fs_name} --placement='{mons_hosts}'"
         client.exec_command(sudo=True, cmd=cmd)
         wait_for_cmd(client, "mon", initial_mon_count)
         stop_flag = True
@@ -101,10 +101,21 @@ def run(ceph_cluster, get_fs_info=None, **kw):
         tc = "CEPH-11259"
         log.info("Running cephfs %s test case" % (tc))
 
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         client = ceph_cluster.get_ceph_objects("client")
         mons = ceph_cluster.get_ceph_objects("mon")
         client1 = client[0]
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client1, fs_name)
         mount_dir = "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
@@ -113,9 +124,18 @@ def run(ceph_cluster, get_fs_info=None, **kw):
         mon_node_ip = fs_util.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
         fs_util.kernel_mount(
-            [client1], kernel_mount_dir, mon_node_ip, new_client_hostname="admin"
+            [client1],
+            kernel_mount_dir,
+            mon_node_ip,
+            new_client_hostname="admin",
+            extra_params=f",fs={fs_name}",
         )
-        fs_util.fuse_mount([client1], fuse_mount_dir, new_client_hostname="admin")
+        fs_util.fuse_mount(
+            [client1],
+            fuse_mount_dir,
+            new_client_hostname="admin",
+            extra_params=f" --client_fs {fs_name}",
+        )
         with parallel() as p:
             p.spawn(mon_rm_add, fs_util, mons, client1)
             p.spawn(
