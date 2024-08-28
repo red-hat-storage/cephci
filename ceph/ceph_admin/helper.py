@@ -457,6 +457,7 @@ class GenerateServiceSpec:
                 spec:
                    pool: rbd
                    enable_auth: true
+                   group: group1
                    server_cert: <server-cert>
                    server_key: <server-key>
                    client_cert: <client-cert>

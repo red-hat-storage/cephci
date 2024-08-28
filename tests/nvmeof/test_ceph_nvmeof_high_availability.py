@@ -7,14 +7,20 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway HA
 from copy import deepcopy
 
 from ceph.ceph import Ceph
+from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.ha import HighAvailability
-from tests.nvmeof.workflows.nvme_utils import delete_nvme_service, deploy_nvme_service
+from tests.nvmeof.workflows.nvme_utils import (
+    delete_nvme_service,
+    deploy_nvme_service,
+    get_nvme_service_name,
+)
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
+from utility.retry import retry
 from utility.utils import generate_unique_id
 
 LOG = Log(__name__)
@@ -125,6 +131,71 @@ def teardown(ceph_cluster, rbd_obj, config):
         rbd_obj.clean_up(pools=[config["rbd_pool"]])
 
 
+def test_ceph_83595464(ceph_cluster, config):
+    """Switch mTLS to non-mTLS and Vice Versa in NVMe service.
+
+    This test case is partially automated due to Bug,
+    which doesn't hold the spec file data structure with certs.
+    In this case, Invalid data structure create problematic with redeployment.
+
+    Todo: Need to revisit once the fix is available.
+
+    Bugzilla: https://bugzilla.redhat.com/show_bug.cgi?id=2299705
+
+    - Get the NVMe service config.
+    - Disable the mTLS setting.
+    - Run NVMe CLI w/o certs, keys to validate the scenario
+
+    Args:
+        obj: HA instance object
+    """
+    rbd_pool = config["rbd_pool"]
+
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+
+    with parallel() as p:
+        for subsys_args in config["subsystems"]:
+            subsys_args["ceph_cluster"] = ceph_cluster
+            p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+    ha.run()
+
+    # Update the config
+    config["mtls"] = False
+    service_name = get_nvme_service_name(rbd_pool, config.get("gw_group", None))
+
+    subsystem = config["subsystems"][0]
+    subsystem["nqn"] += generate_unique_id(length=2)
+    subsystem["ceph_cluster"] = ceph_cluster
+
+    # Deploy/Reconfigure the service without mTLS
+    deploy_nvme_service(ceph_cluster, config)
+
+    @retry(IOError, tries=3, delay=3)
+    def redeploy_svc():
+        ha.orch.op("redeploy", {"pos_args": [service_name]})
+        if not check_service_exists(
+            ha.orch.installer,
+            service_type="nvmeof",
+            service_name=service_name,
+            interval=20,
+            timeout=600,
+        ):
+            raise IOError("service check failed, Try again....")
+
+    redeploy_svc()
+
+    # Validate the deployment without mTLS
+    ha.mtls = False
+    for gw in ha.gateways:
+        gw.mtls = False
+        gw.setter("mtls", False)
+    configure_subsystems(rbd_pool, ha, subsystem)
+
+
+testcases = {"CEPH-83595464": test_ceph_83595464}
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof HA test execution.
 
@@ -184,6 +255,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             break
 
     try:
+        # Any test case to run
+        if config.get("test_case"):
+            test_case_run = testcases[config["test_case"]]
+            test_case_run(ceph_cluster, config)
+            return 0
+
         if config.get("install"):
             deploy_nvme_service(ceph_cluster, config)
 
@@ -198,7 +275,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
         # HA failover and failback
         ha.run()
-
         return 0
     except Exception as err:
         LOG.error(err)

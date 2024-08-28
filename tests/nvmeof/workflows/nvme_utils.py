@@ -10,6 +10,13 @@ class NVMeDeployConfigParamRequired(Exception):
     pass
 
 
+def get_nvme_service_name(pool, group=None):
+    svc_name = f"nvmeof.{pool}"
+    if group:
+        svc_name = f"{svc_name}.{group}"
+    return svc_name
+
+
 def apply_nvme_sdk_cli_support(ceph_cluster, config):
     """Configure NVMe deployment CLI w.r.t release support.
 
