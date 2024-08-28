@@ -22,12 +22,20 @@ def run(ceph_cluster, **kw):
     5. Check if the metadata key and value are deleted
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         fs_util.auth_list([client1])
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -39,6 +47,7 @@ def run(ceph_cluster, **kw):
             [clients[0]],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
         )
         subvol_random = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -47,7 +56,7 @@ def run(ceph_cluster, **kw):
 
         subvol_name = "subvol_" + subvol_random
 
-        fs_util.create_subvolume(client1, "cephfs", subvol_name)
+        fs_util.create_subvolume(client1, f"{fs_name}", subvol_name)
 
         key_value = {}
 
@@ -67,12 +76,12 @@ def run(ceph_cluster, **kw):
             key_value[key_random] = value_random
             client1.exec_command(
                 sudo=True,
-                cmd=f"ceph fs subvolume metadata set cephfs {subvol_name} {key_random} {value_random}",
+                cmd=f"ceph fs subvolume metadata set {fs_name} {subvol_name} {key_random} {value_random}",
             )
 
         metadata_result_out, ec1 = client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs subvolume metadata ls cephfs {subvol_name} --format plain",
+            cmd=f"ceph fs subvolume metadata ls {fs_name} {subvol_name} --format plain",
         )
         metadata_result = json.loads(metadata_result_out)
         log.info("Metadata CREATION testing is done")
@@ -100,7 +109,7 @@ def run(ceph_cluster, **kw):
         for k1, v1 in key_value.items():
             get_dict_out, ec1 = client1.exec_command(
                 sudo=True,
-                cmd=f"ceph fs subvolume metadata ls cephfs {subvol_name} --format plain",
+                cmd=f"ceph fs subvolume metadata ls {fs_name} {subvol_name} --format plain",
             )
             get_dict = json.loads(get_dict_out)
             if k1 in get_dict and get_dict[k1] == v1:
@@ -115,12 +124,12 @@ def run(ceph_cluster, **kw):
         for k1, v1 in key_value.items():
             client1.exec_command(
                 sudo=True,
-                cmd=f"ceph fs subvolume metadata rm cephfs {subvol_name} {k1}",
+                cmd=f"ceph fs subvolume metadata rm {fs_name} {subvol_name} {k1}",
             )
 
             rm_dict_out, ec1 = client1.exec_command(
                 sudo=True,
-                cmd=f"ceph fs subvolume metadata ls cephfs {subvol_name} --format plain",
+                cmd=f"ceph fs subvolume metadata ls {fs_name} {subvol_name} --format plain",
             )
             rm_dict = json.loads(rm_dict_out)
             if k1 in rm_dict:

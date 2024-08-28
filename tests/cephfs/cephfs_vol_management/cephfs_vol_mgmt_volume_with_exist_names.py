@@ -20,7 +20,8 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83573428"
         log.info(f"Running CephFS tests{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
         fs_details = fs_util.get_fs_info(client1)
@@ -30,16 +31,14 @@ def run(ceph_cluster, **kw):
         fs_name = "cephfs_sample"
         subvol_name = "subvol_sample"
         subvol_group_name = "subvol_group_name_sample"
-        client1.exec_command(sudo=True, cmd=f"ceph fs volume create {fs_name}")
+        fs_util.create_fs(client1, f"{fs_name}")
         fs_util.create_subvolume(client1, fs_name, subvol_name)
         fs_util.create_subvolumegroup(client1, fs_name, subvol_group_name)
         log.info("FS and Subvolume and Subvolume group are created")
-        out1, err1 = client1.exec_command(
-            sudo=True, cmd=f"ceph fs volume create {fs_name}"
-        )
+
         out2, err2 = fs_util.create_subvolume(client1, fs_name, subvol_name)
         out3, err3 = fs_util.create_subvolumegroup(client1, fs_name, subvol_group_name)
-        if out1 == 0 or out2 == 0 or out3 == 0:
+        if out2 == 0 or out3 == 0:
             return 1
         log.info("Cleaning up the FS and subvolume and Subvolume group")
         client1.exec_command(

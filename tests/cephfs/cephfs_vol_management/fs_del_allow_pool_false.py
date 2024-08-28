@@ -20,7 +20,8 @@ def run(ceph_cluster, **kw):
     3. Del cephfs_new should error out
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))

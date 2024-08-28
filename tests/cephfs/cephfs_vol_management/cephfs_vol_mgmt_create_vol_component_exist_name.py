@@ -22,14 +22,22 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83573428"
         log.info(f"Running CephFS tests for BZ-{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         fs_util.auth_list([client1])
         fs_util.prepare_clients(clients, build)
 
@@ -43,7 +51,7 @@ def run(ceph_cluster, **kw):
         log.info("Ceph Build number is " + build[0])
         fs_util.create_fs(client1, volume_name)
         fs_util.create_subvolume(client1, volume_name, subvolume_name)
-        fs_util.create_subvolumegroup(client1, "cephfs", subvolume_group_name)
+        fs_util.create_subvolumegroup(client1, f"{fs_name}", subvolume_group_name)
         output1, err1 = fs_util.create_fs(client1, volume_name, check_ec=False)
         output2, err2 = fs_util.create_subvolume(
             client1, volume_name, subvolume_name, check_ec=False
