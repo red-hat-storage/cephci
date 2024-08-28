@@ -34,7 +34,13 @@ def run(ceph_cluster, **kw):
     3. ceph fs volume rm cephfs_new --yes-i-really-mean-it
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
@@ -51,38 +57,45 @@ def run(ceph_cluster, **kw):
         tc1 = "83571366"
         log.info(f"Execution of testcase {tc1} started")
         log.info("Create and list a volume")
+        fs_name = "cephfs_new" if not erasure else "cephfs_new-ec"
+        pool_name = (
+            f"cephfs.{fs_name}.data" if not erasure else f"cephfs.{fs_name}.data-ec"
+        )
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client1, fs_name)
         commands = [
-            "ceph fs volume create cephfs_new",
-            "ceph fs subvolumegroup create cephfs_new snap_group cephfs.cephfs_new.data",
-            "ceph fs subvolume create cephfs_new snap_vol --size 5368706371 --group_name snap_group",
+            f"ceph fs subvolumegroup create {fs_name} snap_group {pool_name}",
+            f"ceph fs subvolume create {fs_name} snap_vol --size 5368706371 --group_name snap_group",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
             results.append(f"{command} successfully executed")
 
-        if not fs_util.wait_for_mds_process(client1, "cephfs_new"):
+        if not fs_util.wait_for_mds_process(client1, f"{fs_name}"):
             raise CommandFailed("Failed to start MDS deamons")
         log.info("Get the path of sub volume")
         subvol_path, rc = client1.exec_command(
-            sudo=True, cmd="ceph fs subvolume getpath cephfs_new snap_vol snap_group"
+            sudo=True, cmd=f"ceph fs subvolume getpath {fs_name} snap_vol snap_group"
         )
         log.info("Make directory fot mounting")
         client1.exec_command(sudo=True, cmd="mkdir /mnt/mycephfs1")
 
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph-fuse -r {subvol_path.strip()} /mnt/mycephfs1 --client_fs cephfs_new",
+            cmd=f"ceph-fuse -r {subvol_path.strip()} /mnt/mycephfs1 --client_fs {fs_name}",
         )
         fs_util.create_file_data(client1, "/mnt/mycephfs1", 3, "snap1", "snap_1_data ")
         client1.exec_command(
             sudo=True,
-            cmd="ceph fs subvolume snapshot create cephfs_new snap_vol snap_1 --group_name snap_group",
+            cmd=f"ceph fs subvolume snapshot create {fs_name} snap_vol snap_1 --group_name snap_group",
         )
 
         fs_util.create_file_data(client1, "/mnt/mycephfs1", 3, "snap2", "snap_2_data ")
         client1.exec_command(
             sudo=True,
-            cmd="ceph fs subvolume snapshot create cephfs_new snap_vol snap_2 --group_name snap_group",
+            cmd=f"ceph fs subvolume snapshot create {fs_name} snap_vol snap_2 --group_name snap_group",
         )
 
         fs_util.create_file_data(client1, "/mnt/mycephfs1", 3, "snap3", "snap_3_data ")
@@ -118,12 +131,12 @@ def run(ceph_cluster, **kw):
 
         log.info("cleanup the system")
         commands = [
-            "ceph fs subvolume snapshot rm cephfs_new snap_vol snap_1 --group_name snap_group",
-            "ceph fs subvolume snapshot rm cephfs_new snap_vol snap_2 --group_name snap_group",
-            "ceph fs subvolume rm cephfs_new snap_vol --group_name snap_group",
-            "ceph fs subvolumegroup rm cephfs_new snap_group",
+            f"ceph fs subvolume snapshot rm {fs_name} snap_vol snap_1 --group_name snap_group",
+            f"ceph fs subvolume snapshot rm {fs_name} snap_vol snap_2 --group_name snap_group",
+            f"ceph fs subvolume rm {fs_name} snap_vol --group_name snap_group",
+            f"ceph fs subvolumegroup rm {fs_name} snap_group",
             "ceph config set mon mon_allow_pool_delete true",
-            "ceph fs volume rm cephfs_new --yes-i-really-mean-it",
+            f"ceph fs volume rm {fs_name} --yes-i-really-mean-it",
             "rm -rf /mnt/mycephfs1",
         ]
         for command in commands:

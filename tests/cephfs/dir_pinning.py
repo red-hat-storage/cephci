@@ -32,7 +32,13 @@ def run(ceph_cluster, **kw):
         start = timeit.default_timer()
         config = kw.get("config")
         fs_util = FsUtils(ceph_cluster)
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsV1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
         client_info, rc = fs_util.get_clients(build)
@@ -49,15 +55,29 @@ def run(ceph_cluster, **kw):
         tc = "11227"
         dir_name = "dir"
         log.info(f"Running cephfs {tc} test case")
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util_v1.get_fs_info(clients[0], fs_name)
 
+        if not fs_details:
+            fs_util_v1.create_fs(clients[0], fs_name)
         fs_util_v1.auth_list(clients)
-        fs_util_v1.fuse_mount(client1, client_info["mounting_dir"])
-        fs_util_v1.fuse_mount(client2, client_info["mounting_dir"])
-        fs_util_v1.kernel_mount(
-            client3, client_info["mounting_dir"], installer[0].ip_address
+        fs_util_v1.fuse_mount(
+            client1, client_info["mounting_dir"], extra_params=f" --client_fs {fs_name}"
+        )
+        fs_util_v1.fuse_mount(
+            client2, client_info["mounting_dir"], extra_params=f" --client_fs {fs_name}"
         )
         fs_util_v1.kernel_mount(
-            client4, client_info["mounting_dir"], installer[0].ip_address
+            client3,
+            client_info["mounting_dir"],
+            installer[0].ip_address,
+            extra_params=f",fs={fs_name}",
+        )
+        fs_util_v1.kernel_mount(
+            client4,
+            client_info["mounting_dir"],
+            installer[0].ip_address,
+            extra_params=f",fs={fs_name}",
         )
         rc = fs_util_v1.activate_multiple_mdss(clients)
         if rc == 0:
