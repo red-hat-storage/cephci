@@ -43,3 +43,19 @@ class Host(Cli):
         if not out:
             return False
         return True
+
+    def add(self, hostname, ip_address, label=None):
+        """
+        Use the cephadm orchestrator to add hosts to the storage cluster:
+        Args:
+            hostname (str): Hostname of the node to be added
+            ip_address (str): Ip address of the node to be added
+            label (str): Label to be added to the node
+        """
+        cmd = f"{self.base_cmd} add {hostname} {ip_address}"
+        if label:
+            cmd += f" {label}"
+        out = self.execute(cmd=cmd, sudo=True)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
