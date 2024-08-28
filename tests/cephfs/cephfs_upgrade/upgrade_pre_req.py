@@ -58,17 +58,16 @@ def run(ceph_cluster, **kw):
         }
         for osd_cmd in osd_cmds:
             cmd = f"ceph config set osd {osd_cmd} {osd_cmds[osd_cmd]}"
-            clients[0].exec_command(sudo=True, cmd=cmd)
-        log.info("Verify OSD config")
-        for osd_cmd in osd_cmds:
-            cmd = f"ceph config get osd {osd_cmd}"
-            out, _ = clients[0].exec_command(sudo=True, cmd=cmd)
-            log.info(out)
-            if str(osd_cmds[osd_cmd]) not in str(out):
-                log.warning(
-                    f"OSD config {osd_cmd} couldn't be set to {osd_cmds[osd_cmd]}"
-                )
-
+            out, rc = clients[0].exec_command(sudo=True, cmd=cmd, check_ec=False)
+            if not rc:
+                cmd = f"ceph config get osd {osd_cmd}"
+                out, _ = clients[0].exec_command(sudo=True, cmd=cmd, check_ec=False)
+                log.info(out)
+                if out:
+                    if str(osd_cmds[osd_cmd]) not in str(out):
+                        log.warning(
+                            f"OSD config {osd_cmd} couldn't be set to {osd_cmds[osd_cmd]}"
+                        )
         time.sleep(10)
         default_fs = "cephfs"
         version, rc = clients[0].exec_command(
@@ -405,7 +404,7 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume getpath {subvol['vol_name']} {subvol['subvol_name']} {subvol['group_name']}",
         )
-        dir_path = f"{subvol_path.strip()}"
+        dir_path = f"{subvol_path.strip()}/"
         fs_util.fs_client_authorize(
             clients[0],
             subvol["vol_name"],
