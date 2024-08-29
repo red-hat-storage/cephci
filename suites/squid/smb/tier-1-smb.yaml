@@ -314,3 +314,25 @@ tests:
             vfs_objects: acl_xattr
             map_acl_inherit: yes
             store_dos_attributes: yes
+
+  - test:
+      name: Verify changing owner and permission of file using cifs mount
+      desc: Verify changing owner and permission of file using cifs mount
+      module: smb_change_permission.py
+      polarion-id: CEPH-83595847
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cifs_mount_point: "/mnt/smb"
+        system_users:
+          user1: "batman"
+          user2: "superman"
+        file_name: "testfile"
