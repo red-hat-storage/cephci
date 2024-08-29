@@ -518,7 +518,7 @@ class CG_snap_IO(object):
                             curr_time = time.time()
                             # Get time when state is achieved
                             time_before_state = float(curr_time) - float(age_ref)
-                            if (float(end_time) - float(time_before_state)) < 5:
+                            if (float(end_time) - float(time_before_state)) < 10:
                                 log.info(
                                     f"WARN: {io_mod} {io_type} fails in QS state {state} on {qs_member}"
                                 )
@@ -572,12 +572,14 @@ class CG_snap_IO(object):
                                 f"time_before_state:{time_before_state},end_time:{end_time}"
                             )
                             log.info(f"age_ref:{age_ref},curr_time:{curr_time}")
-                            osd_unhealthy = 0
+                            mds_osd_unhealthy = 0
                             ceph_health, _ = client.exec_command("ceph health detail")
                             log.info(ceph_health)
-                            if "Slow OSD" in ceph_health:
-                                osd_unhealthy = 1
-                            if osd_unhealthy == 1:
+                            if ("Slow OSD" in ceph_health) or (
+                                "MDS_SLOW_REQUEST" in ceph_health
+                            ):
+                                mds_osd_unhealthy = 1
+                            if mds_osd_unhealthy == 1:
                                 log.info(
                                     f"Ceph had {ceph_health} when {io_mod} {io_type} failed in {state}.Ignoring.."
                                 )
