@@ -30,12 +30,19 @@ def run(ceph_cluster, **kw):
         2. Remove all the cephfs mounts
         """
 
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+
         log.info("checking Pre-requisites")
         if len(clients) < 1:
             log.info(
@@ -48,6 +55,11 @@ def run(ceph_cluster, **kw):
         kernel_1_checksum = []
         fuse_1_checksum = []
         fuse_2_checksum = []
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client1, fs_name)
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -58,6 +70,7 @@ def run(ceph_cluster, **kw):
             [client1],
             kernel_mounting_dir,
             ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
         )
         command = f"mkdir -p {kernel_mounting_dir}kernel_client_1/dir_{{1..11}}"
         client1.exec_command(sudo=True, cmd=command)
@@ -75,18 +88,21 @@ def run(ceph_cluster, **kw):
                     [client1],
                     kernel_mounting_dir_1,
                     ",".join(mon_node_ips),
+                    extra_params=f",fs={fs_name}",
                 )
                 fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
                 mon_node_ips = fs_util.get_mon_node_ips()
                 fs_util.fuse_mount(
                     [client2],
                     fuse_mounting_dir_1,
+                    extra_params=f" --client_fs {fs_name}",
                 )
                 fuse_mounting_dir_2 = f"/mnt/cephfs_fuse{mounting_dir}_2/"
                 mon_node_ips = fs_util.get_mon_node_ips()
                 fs_util.fuse_mount(
                     [client3],
                     fuse_mounting_dir_2,
+                    extra_params=f" --client_fs {fs_name}",
                 )
 
                 if x != 1:

@@ -21,7 +21,13 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-11329"
         log.info(f"Running CephFS tests for -{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -29,9 +35,11 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         fs_util.auth_list([client1])
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -39,7 +47,9 @@ def run(ceph_cluster, **kw):
         )
         client1.exec_command(sudo=True, cmd="yum install -y --nogpgcheck ceph-fuse")
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
-        fs_util.fuse_mount([client1], fuse_mounting_dir_1)
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_1, extra_params=f" --client_fs {fs_name}"
+        )
         fs_util.run_ios(client1, fuse_mounting_dir_1, ["dd", "smallfile"])
 
         log.info("Setting the client config values")
@@ -59,7 +69,7 @@ def run(ceph_cluster, **kw):
                 return 1
 
         if LooseVersion(ceph_version) >= LooseVersion("18.2"):
-            set_balance_automate_and_validate(client1)
+            set_balance_automate_and_validate(client1, fs_name=fs_name)
 
         conf_default = [
             ["mds_cache_mid", ""],
@@ -216,11 +226,11 @@ def run(ceph_cluster, **kw):
         log.info("Successfully reset all the client config values to default")
 
 
-def set_balance_automate_and_validate(client):
+def set_balance_automate_and_validate(client, fs_name="cephfs"):
     log.info(
         "Validate if the Balance Automate is set to False by default and reset after toggling the values"
     )
-    out, rc = client.exec_command(sudo=True, cmd="ceph fs get cephfs -f json")
+    out, rc = client.exec_command(sudo=True, cmd=f"ceph fs get {fs_name} -f json")
     json_data = json.loads(out)
     default_balance_automate_value = json_data["mdsmap"]["flags_state"][
         "balance_automate"
@@ -234,8 +244,8 @@ def set_balance_automate_and_validate(client):
         raise CommandFailed("Set Balance Automate value is not set to default value")
 
     log.info("Set Balance Automate to True and Validate")
-    client.exec_command(sudo=True, cmd="ceph fs set cephfs balance_automate true")
-    out, rc = client.exec_command(sudo=True, cmd="ceph fs get cephfs -f json")
+    client.exec_command(sudo=True, cmd=f"ceph fs set {fs_name} balance_automate true")
+    out, rc = client.exec_command(sudo=True, cmd=f"ceph fs get {fs_name} -f json")
     json_data = json.loads(out)
     balance_automate = json_data["mdsmap"]["flags_state"]["balance_automate"]
 
@@ -247,9 +257,9 @@ def set_balance_automate_and_validate(client):
         raise CommandFailed("Unable to set Balance Automate value to True")
 
     log.info("Set Balance Automate back to Default Value")
-    client.exec_command(sudo=True, cmd="ceph fs set cephfs balance_automate false")
+    client.exec_command(sudo=True, cmd=f"ceph fs set {fs_name} balance_automate false")
 
-    out, rc = client.exec_command(sudo=True, cmd="ceph fs get cephfs -f json")
+    out, rc = client.exec_command(sudo=True, cmd=f"ceph fs get {fs_name} -f json")
     json_data = json.loads(out)
     balance_automate = json_data["mdsmap"]["flags_state"]["balance_automate"]
     if str(balance_automate).lower() != "false":

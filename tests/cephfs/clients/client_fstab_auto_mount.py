@@ -37,7 +37,14 @@ def run(ceph_cluster, **kw):
         log.info("Running cephfs %s test case" % (tc))
         config = kw.get("config")
         num_of_osds = config.get("num_of_osds")
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsV1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
 
         fs_util = FsUtils(ceph_cluster)
 
@@ -53,6 +60,9 @@ def run(ceph_cluster, **kw):
         client2.append(client_info["fuse_clients"][1])
         client3.append(client_info["kernel_clients"][0])
         client4.append(client_info["kernel_clients"][1])
+        fs_details = fs_util_v1.get_fs_info(client1[0], default_fs)
+        if not fs_details:
+            fs_util_v1.create_fs(client1[0], default_fs)
         rc1 = fs_util_v1.auth_list(client1)
         rc2 = fs_util_v1.auth_list(client2)
         rc3 = fs_util_v1.auth_list(client3)
@@ -64,18 +74,30 @@ def run(ceph_cluster, **kw):
             log.error("auth list failed")
             return 1
 
-        fs_util_v1.fuse_mount(client1, client_info["mounting_dir"], fstab=True)
-        fs_util_v1.fuse_mount(client2, client_info["mounting_dir"], fstab=True)
+        fs_util_v1.fuse_mount(
+            client1,
+            client_info["mounting_dir"],
+            fstab=True,
+            extra_params=f" --client_fs {default_fs}",
+        )
+        fs_util_v1.fuse_mount(
+            client2,
+            client_info["mounting_dir"],
+            fstab=True,
+            extra_params=f" --client_fs {default_fs}",
+        )
         fs_util_v1.kernel_mount(
             client3,
             client_info["mounting_dir"],
             ",".join(client_info["mon_node_ip"]),
+            extra_params=f",fs={default_fs}",
             fstab=True,
         )
         fs_util_v1.kernel_mount(
             client4,
             client_info["mounting_dir"],
             ",".join(client_info["mon_node_ip"]),
+            extra_params=f",fs={default_fs}",
             fstab=True,
         )
 
@@ -87,15 +109,16 @@ def run(ceph_cluster, **kw):
             None,
             300,
         )
-        rc = fs_util_v1.activate_multiple_mdss(client_info["clients"][0:])
-        if rc == 0:
-            log.info("Activate multiple mdss successfully")
-        else:
-            raise CommandFailed("Activate multiple mdss failed")
+        # rc = fs_util_v1.activate_multiple_mdss(client_info["clients"][0:], default_fs)
+        # if rc == 0:
+        #     log.info("Activate multiple mdss successfully")
+        # else:
+        #     raise CommandFailed("Activate multiple mdss failed")
+        client1[0].exec_command(sudo=True, cmd=f"ceph fs set {default_fs} max_mds 2")
         client1[0].exec_command(
-            sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
+            sudo=True, cmd=f"ceph fs set {default_fs} allow_standby_replay true"
         )
-        fs_name = "cephfs"
+        fs_name = default_fs
         for mon in fs_util_v1.mons:
             FsUtilsV1.deamon_op(mon, "mon.ceph", "restart")
         for mon in fs_util_v1.mons:
@@ -326,7 +349,7 @@ def run(ceph_cluster, **kw):
                 "umount",
             )
             client1[0].exec_command(
-                sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
+                sudo=True, cmd=f"ceph fs set {default_fs} allow_standby_replay true"
             )
             for mon in fs_util_v1.mons:
                 FsUtilsV1.deamon_op(mon, "mon.ceph", "restart")
@@ -342,7 +365,7 @@ def run(ceph_cluster, **kw):
             )
 
             client1[0].exec_command(
-                sudo=True, cmd="ceph fs set cephfs allow_standby_replay true"
+                sudo=True, cmd=f"ceph fs set {default_fs} allow_standby_replay true"
             )
             for mon in fs_util_v1.mons:
                 FsUtilsV1.deamon_op(mon, "mon.ceph", "restart")

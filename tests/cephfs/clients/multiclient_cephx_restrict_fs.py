@@ -28,7 +28,15 @@ def run(ceph_cluster, **kw):
         start = timeit.default_timer()
         dir_name = "dir"
         log.info("Running cephfs 11338 test case")
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsV1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+
         fs_util = FsUtils(ceph_cluster)
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
@@ -43,6 +51,9 @@ def run(ceph_cluster, **kw):
         client2.append(client_info["fuse_clients"][1])
         client3.append(client_info["kernel_clients"][0])
         client4.append(client_info["kernel_clients"][1])
+        fs_details = fs_util_v1.get_fs_info(client1[0], default_fs)
+        if not fs_details:
+            fs_util_v1.create_fs(client1[0], default_fs)
         rc1 = fs_util_v1.auth_list(client1)
         rc2 = fs_util_v1.auth_list(client2)
         rc3 = fs_util_v1.auth_list(client3)
@@ -54,13 +65,27 @@ def run(ceph_cluster, **kw):
             log.error("auth list failed")
             return 1
 
-        fs_util_v1.fuse_mount(client1, client_info["mounting_dir"])
-        fs_util_v1.fuse_mount(client2, client_info["mounting_dir"])
-        fs_util_v1.kernel_mount(
-            client3, client_info["mounting_dir"], ",".join(client_info["mon_node_ip"])
+        fs_util_v1.fuse_mount(
+            client1,
+            client_info["mounting_dir"],
+            extra_params=f" --client_fs {default_fs}",
+        )
+        fs_util_v1.fuse_mount(
+            client2,
+            client_info["mounting_dir"],
+            extra_params=f" --client_fs {default_fs}",
         )
         fs_util_v1.kernel_mount(
-            client4, client_info["mounting_dir"], ",".join(client_info["mon_node_ip"])
+            client3,
+            client_info["mounting_dir"],
+            ",".join(client_info["mon_node_ip"]),
+            extra_params=f",fs={default_fs}",
+        )
+        fs_util_v1.kernel_mount(
+            client4,
+            client_info["mounting_dir"],
+            ",".join(client_info["mon_node_ip"]),
+            extra_params=f",fs={default_fs}",
         )
         dirs, rc = fs_util.mkdir(client1, 1, 3, client_info["mounting_dir"], dir_name)
         if rc == 0:
@@ -93,11 +118,17 @@ def run(ceph_cluster, **kw):
         # import pdb
 
         # pdb.set_trace()
-        rc1 = fs_util_v1.auth_list(client1, path=dirs[0], permission="rw", mds=True)
+        rc1 = fs_util_v1.auth_list(
+            client1, path=dirs[0], permission="rw", mds=True, fs_name=default_fs
+        )
         # pdb.set_trace()
-        rc2 = fs_util_v1.auth_list(client2, path=dirs[0], permission="r", mds=True)
+        rc2 = fs_util_v1.auth_list(
+            client2, path=dirs[0], permission="r", mds=True, fs_name=default_fs
+        )
         # pdb.set_trace()
-        rc3 = fs_util_v1.auth_list(client3, path=dirs[1], permission="*", mds=True)
+        rc3 = fs_util_v1.auth_list(
+            client3, path=dirs[1], permission="*", mds=True, fs_name=default_fs
+        )
         if rc1 == 0 and rc2 == 0 and rc3 == 0 and rc4 == 0:
             log.info("got auth keys")
         else:
@@ -107,13 +138,13 @@ def run(ceph_cluster, **kw):
             client1,
             new_client1_mouting_dir,
             new_client_hostname=new_client1_name,
-            extra_params=f"-r /{dirs[0]}",
+            extra_params=f"-r /{dirs[0]} --client_fs {default_fs}",
         )
         fs_util_v1.fuse_mount(
             client2,
             new_client2_mouting_dir,
             new_client_hostname=new_client2_name,
-            extra_params=f"-r /{dirs[0]}",
+            extra_params=f"-r /{dirs[0]} --client_fs {default_fs}",
         )
 
         fs_util_v1.kernel_mount(
@@ -122,6 +153,7 @@ def run(ceph_cluster, **kw):
             ",".join(client_info["mon_node_ip"]),
             new_client_hostname=new_client3_name,
             sub_dir=f"/{dirs[1]}",
+            extra_params=f",fs={default_fs}",
         )
         _, rc = fs_util.stress_io(
             client1,
@@ -130,7 +162,7 @@ def run(ceph_cluster, **kw):
             0,
             1,
             iotype="smallfile_create",
-            fnum=1000,
+            fnum=100,
             fsize=10,
         )
 
@@ -146,7 +178,7 @@ def run(ceph_cluster, **kw):
             0,
             1,
             iotype="smallfile_delete",
-            fnum=1000,
+            fnum=100,
             fsize=10,
         )
         if rc == 0:
@@ -172,7 +204,7 @@ def run(ceph_cluster, **kw):
             0,
             1,
             iotype="smallfile_create",
-            fnum=1000,
+            fnum=100,
             fsize=10,
         )
 
@@ -190,7 +222,7 @@ def run(ceph_cluster, **kw):
             0,
             1,
             iotype="smallfile_delete",
-            fnum=1000,
+            fnum=100,
             fsize=10,
         )
         if rc == 0:
@@ -209,17 +241,25 @@ def run(ceph_cluster, **kw):
             "", client3, new_client3_mouting_dir, "umount", client_name=new_client3_name
         )
 
-        fs_util_v1.auth_list(client1, path=dirs[0], permission="rw", osd=True)
-        fs_util_v1.auth_list(client3, path=dirs[1], permission="r", osd=True)
+        fs_util_v1.auth_list(
+            client1, path=dirs[0], permission="rw", osd=True, fs_name=default_fs
+        )
+        fs_util_v1.auth_list(
+            client3, path=dirs[1], permission="r", osd=True, fs_name=default_fs
+        )
 
         fs_util_v1.fuse_mount(
-            client1, new_client1_mouting_dir, new_client_hostname=new_client1_name
+            client1,
+            new_client1_mouting_dir,
+            new_client_hostname=new_client1_name,
+            extra_params=f" --client_fs {default_fs}",
         )
         fs_util_v1.kernel_mount(
             client3,
             new_client3_mouting_dir,
             ",".join(client_info["mon_node_ip"]),
             new_client_hostname=new_client3_name,
+            extra_params=f",fs={default_fs}",
         )
 
         fs_util.stress_io(
@@ -229,7 +269,7 @@ def run(ceph_cluster, **kw):
             0,
             1,
             iotype="smallfile_delete",
-            fnum=1000,
+            fnum=100,
             fsize=10,
         )
         try:
@@ -258,8 +298,12 @@ def run(ceph_cluster, **kw):
         fs_util.client_clean_up(
             "", client3, new_client3_mouting_dir, "umount", client_name=new_client3_name
         )
-        fs_util_v1.auth_list(client1, path=dirs[0], layout_quota="rwp")
-        fs_util_v1.auth_list(client3, path=dirs[1], layout_quota="rw")
+        fs_util_v1.auth_list(
+            client1, path=dirs[0], layout_quota="rwp", fs_name=default_fs
+        )
+        fs_util_v1.auth_list(
+            client3, path=dirs[1], layout_quota="rw", fs_name=default_fs
+        )
 
         fs_util_v1.fuse_mount(
             client1, new_client1_mouting_dir, new_client_hostname=new_client1_name

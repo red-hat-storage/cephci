@@ -24,12 +24,21 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-11340"
         log.info(f"Running CephFS tests for {tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
+
         fs_util.auth_list([client1])
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -52,30 +61,33 @@ def run(ceph_cluster, **kw):
         log.info("give client1 read write permission for /")
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs authorize cephfs client.{name1} / rw /dir1 rw /dir2 r "
+            cmd=f"ceph fs authorize {fs_name} client.{name1} / rw /dir1 rw /dir2 r "
             f"-o /etc/ceph/ceph.client.{name1}.keyring",
         )
         log.info("give client2 only read permission for /dir1")
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs authorize cephfs client.{name2} / r /dir1 r -o /etc/ceph/ceph.client.{name2}.keyring",
+            cmd=f"ceph fs authorize {fs_name} client.{name2} / r /dir1 r -o /etc/ceph/ceph.client.{name2}.keyring",
         )
         # give client3 read write permission for /dir2
         log.info("give client3 read write permission for /dir2")
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs authorize cephfs client.{name3} / r /dir2 rw -o /etc/ceph/ceph.client.{name3}.keyring",
+            cmd=f"ceph fs authorize {fs_name} client.{name3} / r /dir2 rw -o /etc/ceph/ceph.client.{name3}.keyring",
         )
         # mount 3 clients
         log.info("mount 3 clients")
         client1.exec_command(
-            sudo=True, cmd=f"ceph-fuse -n client.{name1} {fuse_mounting_dir_1}"
+            sudo=True,
+            cmd=f"ceph-fuse -n client.{name1} {fuse_mounting_dir_1} --client_fs {fs_name}",
         )
         client1.exec_command(
-            sudo=True, cmd=f"ceph-fuse -n client.{name2} {fuse_mounting_dir_2}"
+            sudo=True,
+            cmd=f"ceph-fuse -n client.{name2} {fuse_mounting_dir_2} --client_fs {fs_name}",
         )
         client1.exec_command(
-            sudo=True, cmd=f"ceph-fuse -n client.{name3} {fuse_mounting_dir_3}"
+            sudo=True,
+            cmd=f"ceph-fuse -n client.{name3} {fuse_mounting_dir_3} --client_fs {fs_name}",
         )
         log.info("Client1 can read write in /")
         client1.exec_command(sudo=True, cmd=f"mkdir {fuse_mounting_dir_1}dir1")
