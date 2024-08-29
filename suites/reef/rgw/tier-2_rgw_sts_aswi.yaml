@@ -94,7 +94,7 @@ tests:
                   placement:
                     host_pattern: "*"
 
-  # STS aswi tests
+  # STS aswi tests with Keycloak
 
   - test:
       name: test STS assume role with web identity
@@ -202,6 +202,36 @@ tests:
       config:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_verify_role_policy_deny_actions.yaml
+
+
+# STS aswi tests with IBM Security Verify as Identity Provider
+
+  - test:
+      name: test STS aswi with ISV
+      desc: test STS aswi with ISV
+      polarion-id: CEPH-83595848
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_isv.yaml
+
+  - test:
+      name: STS aswi Tests to veify role policy allow actions with ISV
+      desc: STS aswi Tests to veify role policy allow actions with ISV
+      polarion-id: CEPH-83595848
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_isv_verify_role_policy_allow_actions.yaml
+
+  - test:
+      name: STS aswi Tests to veify role policy deny actions with ISV
+      desc: STS aswi Tests to veify role policy deny actions with ISV
+      polarion-id: CEPH-83595848
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_isv_verify_role_policy_deny_actions.yaml
 
   - test:
       abort-on-fail: true
