@@ -301,3 +301,31 @@ class ServiceabilityMethods:
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)
             raise
+
+    def remove_osds_from_host(self, host_obj):
+        """
+        Method to remove all existing OSDs from the given host
+        Args:
+            host_obj: node object of the OSD host
+        Returns:
+            None | raises exception in case of failure
+        """
+        try:
+            # get list of osd_id on the host to be removed
+            rm_osd_list = self.rados_obj.collect_osd_daemon_ids(osd_node=host_obj)
+            dev_path_list = []
+            for osd_id in rm_osd_list:
+                dev_path_list.append(
+                    rados_utils.get_device_path(host=host_obj, osd_id=osd_id)
+                )
+                osd_utils.set_osd_out(self.cluster, osd_id=osd_id)
+                osd_utils.osd_remove(self.cluster, osd_id=osd_id)
+            time.sleep(30)
+            for dev_path in dev_path_list:
+                assert osd_utils.zap_device(
+                    self.cluster, host=host_obj.hostname, device_path=dev_path
+                )
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            raise
