@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+# -*- code: utf-8 -*-
 """Purge Ceph Cluster.
 
 Usage:
@@ -17,6 +19,11 @@ import json
 
 import paramiko
 from docopt import docopt
+
+
+def disable_cephadm_module(ssh_client):
+    """CephAdm module is disabled to daemon deployment."""
+    return ssh_client.exec_command("cephadm shell -- ceph mgr module disable cephadm")
 
 
 def execute_ssh_command(ssh_client, command):
@@ -54,10 +61,18 @@ def main():
     node_ips = get_node_ips(ssh_installer)
     node_ips.remove(installer_node_ip)
     print("Cluster Node IPs list:", node_ips)
+
+    disable_cephadm_module(ssh_installer)
+
     for node_ip in node_ips:
         ssh_node = paramiko.SSHClient()
         ssh_node.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         ssh_node.connect(node_ip, username=username, password=password)
+
+        # Ensure cephadm package is installed
+        _cmd = "dnf install -y cephadm"
+        _out = execute_ssh_command(ssh_node, _cmd)
+        print("Command output of package install ", _out)
 
         command = f"cephadm rm-cluster --force --zap-osds --fsid {fsid}"
         output = execute_ssh_command(ssh_node, command)
