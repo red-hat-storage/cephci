@@ -196,6 +196,21 @@ tests:
   - test:
       abort-on-fail: true
       config:
+        command: add
+        id: client.1
+        node: node7
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
         node: node7
         sudo: True
         commands:
