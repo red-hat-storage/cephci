@@ -321,3 +321,13 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+
+  - test:
+      name: Nfs-Ganesha test export creation from multiple cephfs filesystem
+      module: nfs_test_multiple_filesystem_exports.py
+      desc:  Nfs-Ganesha create multiple exports mapped to multiple cephfs filesystem
+      polarion-id: CEPH-83595738
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1

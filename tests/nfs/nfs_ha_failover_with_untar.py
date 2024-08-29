@@ -80,6 +80,10 @@ def run(ceph_cluster, **kw):
 
     except Exception as e:
         log.error(f"Error : {e}")
+        log.info("Cleaning up")
+        sleep(100)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        log.info("Cleaning up successfull")
         return 1
     finally:
         log.info("Cleaning up")

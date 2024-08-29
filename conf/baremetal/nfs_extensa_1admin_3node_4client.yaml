@@ -54,6 +54,7 @@ globals:
             - crash
             - rgw
             - mds
+            - nfs
           volumes:
             - /dev/sdb
             - /dev/sdc
