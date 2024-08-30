@@ -129,7 +129,7 @@ def run(ceph_cluster, **kw):
         if result["return_code"] != 0:
             log.error("Error while scrubbing")
             return 1
-        retry_health = retry(CommandFailed, tries=10, delay=30)(
+        retry_health = retry(CommandFailed, tries=4, delay=30)(
             fs_util.get_ceph_health_status
         )
         retry_health(client1)
