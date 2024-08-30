@@ -3492,7 +3492,7 @@ os.system('sudo systemctl start  network')
         if spec_frontend_port not in status_ports:
             raise CommandFailed(f"The frontend port{port} is not matching")
 
-    @retry(CommandFailed, tries=10, delay=30)
+    @retry(CommandFailed, tries=4, delay=30)
     def get_ceph_health_status(self, client, validate=True, status=["HEALTH_OK"]):
         """
         Validate if the Ceph Health is OK or in WARN/ERROR State.
