@@ -41,7 +41,13 @@ def run(ceph_cluster, **kw):
         config = kw["config"]
         build = config.get("build", config.get("rhbuild"))
 
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
         fs_util.prepare_clients(clients, build)
@@ -51,7 +57,11 @@ def run(ceph_cluster, **kw):
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
         nfs_name = "cephfs-nfs"
-        fs_name = "cephfs"
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client1, fs_name)
         client1.exec_command(
             sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
         )
@@ -111,12 +121,13 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",fs={fs_name}",
         )
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
         fs_util.fuse_mount(
             [clients[0]],
             fuse_mounting_dir_1,
-            extra_params=f" -r {subvol_path.strip()}",
+            extra_params=f" -r {subvol_path.strip()} --client_fs {fs_name}",
         )
         client1.exec_command(
             sudo=True, cmd=f"mkdir -p {kernel_mounting_dir_1}/kernel_dir"
