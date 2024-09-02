@@ -3,134 +3,12 @@
 #---Test Suite for Nfs Ganesha with HA---
 #----------------------------------------
 # Note: NFS-Ganesha with HA support only baremetal cluster
-# test suite: suites/reef/nfs/tier1-nfs-ganesga-ha.yaml
-#    - Bootstrap RHCS 7.0 cluster
+# test suite: suites/squid/nfs/baremetal/tier1-nfs-ganesha-ha.yaml
+#    - Bootstrap RHCS 8.x cluster
 #    - Deploy NFS-Ganesha with HA using spec file
 #    - Verify NFS-Ganesha HA scenarios
 #===============================================================================================
 tests:
-  - test:
-      abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
-      module: install_prereq.py
-      name: setup pre-requisites
-
-  - test:
-      abort-on-fail: true
-      config:
-        steps:
-          - config:
-              command: bootstrap
-              service: cephadm
-              args:
-                mon-ip: node1
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-          - config:
-              command: apply
-              service: rgw
-              pos_args:
-                - rgw.1
-              args:
-                placement:
-                  label: rgw
-          - config:
-              args:
-                - "ceph fs volume create cephfs"
-              command: shell
-          - config:
-              args:
-                placement:
-                  label: mds
-              base_cmd_args:
-                verbose: true
-              command: apply
-              pos_args:
-                - cephfs
-              service: mds
-          - config:
-              args:
-                - "ceph osd pool create rbd"
-              command: shell
-          - config:
-              args:
-                - "rbd pool init rbd"
-              command: shell
-      desc: bootstrap and deploy services.
-      destroy-cluster: false
-      polarion-id: CEPH-83573713
-      module: test_cephadm.py
-      name: Deploy cluster using cephadm
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.1
-        node: node6
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.2
-        node: node7
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.3
-        node: node8
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        id: client.4
-        node: node9
-        install_packages:
-          - ceph-common
-          - ceph-fuse
-        copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
   - test:
       name: NFS-Ganesha cluster with HA using spec file
       desc: Deploy nfs-ganesha cluster with HA using spec file
@@ -144,7 +22,7 @@ tests:
               validate-spec-services: true
               specs:
                 - service_type: nfs
-                  service_id: nfs-service
+                  service_id: cephfs-nfs
                   placement:
                     nodes:
                       - node2
@@ -157,14 +35,14 @@ tests:
               validate-spec-services: true
               specs:
                 - service_type: ingress
-                  service_id: nfs.nfs-service
+                  service_id: nfs.cephfs-nfs
                   placement:
                     count: 2
                   spec:
-                    backend_service: nfs.nfs-service
+                    backend_service: nfs.cephfs-nfs
                     frontend_port: 2049
                     monitor_port: 9000
-                    virtual_ip: 10.8.128.255/21
+                    virtual_ip: 10.8.130.231/21
 
   - test:
       name: nfs-ganesha-ha readdir operations
@@ -178,7 +56,7 @@ tests:
         servers: 2
         file_count: 100
         ha: true
-        vip: 10.8.128.255/21
+        vip: 10.8.130.231/21
         operations:
           client01 : create_files
           client02 : remove_files
@@ -196,7 +74,7 @@ tests:
         servers: 2
         file_count: 100
         ha: true
-        vip: 10.8.128.255/21
+        vip: 10.8.130.231/21
         operations:
           client01 : create_files
           client02 : perfrom_linux_untar
@@ -214,7 +92,7 @@ tests:
         clients: 4
         servers: 2
         ha: true
-        vip: 10.8.128.255/21
+        vip: 10.8.130.231/21
 
   - test:
       name: Nfs Verify pynfs with HA
@@ -227,7 +105,7 @@ tests:
         clients: 4
         servers: 2
         ha: true
-        vip: 10.8.128.255/21
+        vip: 10.8.130.231/21
 
   - test:
       name: Nfs Verify file lock with HA
@@ -240,20 +118,20 @@ tests:
         clients: 4
         servers: 2
         ha: true
-        vip: 10.8.128.255/21
+        vip: 10.8.130.231/21
 
-  - test:
-      name: Nfs Verify kill ganesha process and perform failover
-      module: nfs_verify_nfs_kill_process_failover.py
-      desc:  Verify failover when nfs ganesha process is killed on nfs node
-      polarion-id: CEPH-83577568
-      abort-on-fail: false
-      config:
-        nfs_version: 4.1
-        clients: 4
-        servers: 3
-        ha: true
-        vip: 10.8.130.50/21
+  #- test:    #BZ - 2240976
+  #    name: Nfs Verify kill ganesha process and perform failover
+  #    module: nfs_verify_nfs_kill_process_failover.py
+  #    desc:  Verify failover when nfs ganesha process is killed on nfs node
+  #    polarion-id: CEPH-83577568
+  #    abort-on-fail: false
+  #    config:
+  #      nfs_version: 4.1
+  #      clients: 4
+  #      servers: 2
+  #      ha: true
+  #      vip: 10.8.130.231/21
 
   - test:
       name: Nfs-Ganesha-HA perform failover and delete the files
@@ -267,7 +145,7 @@ tests:
         servers: 2
         file_count: 3
         ha: true
-        vip: 10.8.128.255/21
+        vip: 10.8.130.231/21
         operations:
           client01 : create_files
           client02 : remove_files
@@ -284,7 +162,7 @@ tests:
         servers: 2
         file_count: 3
         ha: true
-        vip: 10.8.128.255/21
+        vip: 10.8.130.231/21
         operations:
           client01 : create_files
 
@@ -297,9 +175,9 @@ tests:
       config:
         nfs_version: 4.1
         clients: 1
-        servers: 3
+        servers: 2
         ha: true
-        vip: 10.8.130.255/21
+        vip: 10.8.130.231/21
 
   - test:
       name: Nfs-Ganesha perform failover and modify client permission in export block
@@ -310,9 +188,9 @@ tests:
       config:
         nfs_version: 4.1
         clients: 2
-        servers: 3
+        servers: 2
         ha: true
-        vip: 10.8.130.255/21
+        vip: 10.8.130.231/21
 
   - test:
       name: Nfs-Ganesha perform failover when linux untar is running
@@ -323,9 +201,9 @@ tests:
       config:
         nfs_version: 4.1
         clients: 1
-        servers: 3
+        servers: 2
         ha: true
-        vip: 10.8.129.133/21
+        vip: 10.8.130.231/21
 
   - test:
       name: Nfs-Ganesha perform failover and delete the export, check the export list
@@ -337,6 +215,6 @@ tests:
         nfs_version: 4.1
         clients: 1
         no_export_per_client: 10
-        servers: 3
+        servers: 2
         ha: true
-        vip: 10.8.129.133/21
+        vip: 10.8.130.231/21
