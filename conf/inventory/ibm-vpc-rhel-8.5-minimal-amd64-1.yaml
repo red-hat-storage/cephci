@@ -4,9 +4,9 @@ id: rhel
 instance:
   create:
     image-name: rhel-85-server-released
-    network_name: sn-01-cephqe-pvt-network
-    private_key: ibmc-shared
-    group_access: cephqe-sec-grp-all-access
+    network_name: sn-20240306-02
+    private_key: cephci-private-key
+    group_access: flick-outgoing-rejoicing-broadways
     profile: bx2-2x8
 
   setup:  |
