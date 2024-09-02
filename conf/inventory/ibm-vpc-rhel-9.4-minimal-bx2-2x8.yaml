@@ -5,7 +5,7 @@ instance:
   create:
     image-name: ibm-redhat-9-4-minimal-amd64-1
     network_name: sn-20240306-02
-    private_key: ceph-qe-jenkins
+    private_key: cephci-private-key
     group_access: flick-outgoing-rejoicing-broadways
     profile: bx2-2x8
 
