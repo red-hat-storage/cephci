@@ -863,7 +863,7 @@ tests:
       name: Test user modify with placement id
       desc: Test user modify with placement id
       polarion-id: CEPH-83575880
-      comment: Known issue Bug-2245699
+      comments: Known issue Bug-2245699
       module: sanity_rgw.py
       config:
         script-name: user_create.py
