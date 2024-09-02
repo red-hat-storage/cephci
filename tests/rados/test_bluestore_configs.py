@@ -160,6 +160,10 @@ def run(ceph_cluster, **kw):
             wait_for_clean_pg_sets(rados_obj, timeout=300, sleep_interval=10)
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         log.info("BlueStore Checksum algorithm verification completed.")
         return 0
@@ -241,6 +245,10 @@ def run(ceph_cluster, **kw):
             wait_for_clean_pg_sets(rados_obj, timeout=300, sleep_interval=10)
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         log.info("BlueStore cache size tuning verification completed.")
         return 0

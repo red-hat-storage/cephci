@@ -79,6 +79,10 @@ def run(ceph_cluster, **kw):
     )
     # Check the ceph status
     rados_obj.log_cluster_health()
+    # check for crashes
+    if rados_obj.check_crash_status():
+        log.error("Test failed due to crash")
+        return 1
     log.info("End of Scenario-1: Verification of MGR fail scenario passed")
 
     log.info("Scenario 2: Verification of MGR restart scenario")
@@ -100,6 +104,10 @@ def run(ceph_cluster, **kw):
         f"All the mgrs are up and running.The mgr daemons after restart are -{mgr_daemons_after_restart}"
     )
     rados_obj.log_cluster_health()
+    # check for crashes
+    if rados_obj.check_crash_status():
+        log.error("Test failed due to crash")
+        return 1
     time.sleep(10)
     log.info("End of Scenario 2: Verification of MGR restart scenario passed")
     log.info(

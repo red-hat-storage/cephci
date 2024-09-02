@@ -128,6 +128,10 @@ def run(ceph_cluster, **kw):
             )
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         log.info(
             "Verification of ceph config show and ceph config get output has been completed"
@@ -217,6 +221,10 @@ def run(ceph_cluster, **kw):
 
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         log.info(
             "Verification of Slow OSD heartbeat with default timeout of 1 sec has been completed"
         )
@@ -299,6 +307,10 @@ def run(ceph_cluster, **kw):
 
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         log.info(
             "Verification of automatic removal of Slow OSD heartbeat warning has been completed "
         )
@@ -454,6 +466,10 @@ def run(ceph_cluster, **kw):
 
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         log.info(
             "Verification of OSD resiliency when 'bluefs_shared_alloc_size' "
             "is below 'bluestore_min_alloc_size' has been completed "

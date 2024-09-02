@@ -4192,3 +4192,17 @@ class RadosOrchestrator:
             tree=False, filter_by="name", filter=f"osd.{osd_id}"
         )["summary"]["total_kb"]
         return total_size_osd
+
+    def check_crash_status(self):
+        """
+        Module to check crashes on the cluster
+        Returns:
+            True -> crash detected
+            False -> No crashes observed
+        """
+        # logging any existing crashes on the cluster
+        crash_list = self.do_crash_ls()
+        if crash_list:
+            log.error("!!!ERROR: Crash exists in the cluster \n\n:" f"{crash_list}")
+            return True
+        return False

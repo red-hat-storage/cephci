@@ -114,6 +114,10 @@ def run(ceph_cluster, **kw):
                 )
                 # log cluster health
                 rados_object.log_cluster_health()
+                # check for crashes after test execution
+                if rados_object.check_crash_status():
+                    log.error("Test failed due to crash at the end of test")
+                    return 1
         return 0
 
     if config.get("scenario") == "mclock_chg_chk":
@@ -196,6 +200,10 @@ def run(ceph_cluster, **kw):
                         return 1
                     # log cluster health
                     rados_object.log_cluster_health()
+                    # check for crashes after test execution
+                    if rados_object.check_crash_status():
+                        log.error("Test failed due to crash at the end of test")
+                        return 1
 
                 # The logic implemented is -
                 # 1.Getting the expected value of the parameter using the config show
@@ -249,6 +257,10 @@ def run(ceph_cluster, **kw):
                             mon_object.remove_config(section="osd", name=param[0])
                             # log cluster health
                             rados_object.log_cluster_health()
+                            # check for crashes after test execution
+                            if rados_object.check_crash_status():
+                                log.error("Test failed due to crash at the end of test")
+                                return 1
 
     # RocksDB compression parameter check
     if config.get("scenario") == "rocksdb_compression":
