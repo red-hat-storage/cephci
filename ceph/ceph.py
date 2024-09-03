@@ -1926,7 +1926,7 @@ class CephNode(object):
             "https://www.redhat.com/security/897da07a.txt",
             "https://www.redhat.com/security/f21541eb.txt",
             "https://prodsec.redhat.com/keys/00da75f2.txt",
-            "http://file.rdu.redhat.com/~kdreyer/keys/00da75f2.txt",
+            "http://file.corp.redhat.com/~kdreyer/keys/00da75f2.txt",
             "https://www.redhat.com/security/data/fd431d51.txt",
         ]
 

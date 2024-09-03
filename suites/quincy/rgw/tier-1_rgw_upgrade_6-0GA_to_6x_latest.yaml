@@ -164,7 +164,6 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_flat_ordered.yaml
-        timeout: 300
       desc: test duration for ordered listing of bucket with top level objects
       module: sanity_rgw.py
       name: ordered listing of buckets pre upgrade

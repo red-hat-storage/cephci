@@ -168,7 +168,7 @@ tests:
   - test:
       name: Run xfs test on kernel
       module: xfs_test.py
-      polarion-id: CEPH-83575623
+      polarion-id: CEPH-83592787
       desc: Run xfs test on kernel
       abort-on-fail: false
   - test:

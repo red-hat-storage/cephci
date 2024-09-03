@@ -3,7 +3,9 @@ from time import sleep
 
 from nfs_operations import cleanup_cluster, perform_failover, setup_nfs_cluster
 
+from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
+from cli.utilities.filesys import Mount, Unmount
 from cli.utilities.utils import get_ip_from_node
 from utility.log import Log
 
@@ -17,7 +19,7 @@ def get_file_lock(client):
         client (ceph): Ceph client node
     """
     cmd = """python3 -c 'from fcntl import flock, LOCK_EX, LOCK_NB, LOCK_UN;from time import sleep;f = open(
-"/mnt/nfs/sample_file", "w");flock(f.fileno(), LOCK_EX | LOCK_NB);sleep(30);flock(f.fileno(), LOCK_UN)'"""
+"/mnt/nfs_lock_mount/sample_file", "w");flock(f.fileno(), LOCK_EX | LOCK_NB);sleep(30);flock(f.fileno(), LOCK_UN)'"""
     client.exec_command(cmd=cmd, sudo=True)
 
 
@@ -51,6 +53,8 @@ def run(ceph_cluster, **kw):
     nfs_export = "/export"
     nfs_mount = "/mnt/nfs"
     fs = "cephfs"
+    nfs_lock_mount = "/mnt/nfs_lock_mount"
+    nfs_lock_export = "/nfs_lock_export"
     nfs_server_name = [nfs_node.hostname for nfs_node in servers]
 
     try:
@@ -74,8 +78,29 @@ def run(ceph_cluster, **kw):
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
 
+    # Create export for locking test
+    Ceph(clients[0]).nfs.export.create(
+        fs_name=fs_name,
+        nfs_name=nfs_name,
+        nfs_export=nfs_lock_export,
+        fs=fs_name,
+    )
+
+    # Mount the export on 2 clients in parallel
+    for client in clients[:2]:
+        client.create_dirs(dir_path=nfs_lock_mount, sudo=True)
+        if Mount(client).nfs(
+            mount=nfs_lock_mount,
+            version=version,
+            port=port,
+            server=vip.split("/")[0],
+            export=nfs_lock_export,
+        ):
+            raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
+    log.info("Mount succeeded on client")
+
     # Create a file on Client 1
-    file_path = f"{nfs_mount}/sample_file"
+    file_path = f"{nfs_lock_mount}/sample_file"
     clients[0].exec_command(cmd=f"touch {file_path}", sudo=True)
 
     # Perform File Lock from client 1
@@ -125,5 +150,13 @@ def run(ceph_cluster, **kw):
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
 
+    # Cleaning up the locking mount point
+    log.info("Unmounting nfs-ganesha lock mount on client:")
+    for client in clients[:2]:
+        if Unmount(client).unmount(nfs_lock_mount):
+            raise OperationFailedError(f"Failed to unmount nfs on {client.hostname}")
+        log.info("Removing nfs-ganesha lock mount dir on client:")
+        client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_lock_mount}")
+    Ceph(clients[0]).nfs.export.delete(nfs_name, nfs_lock_export)
     cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
     return 0

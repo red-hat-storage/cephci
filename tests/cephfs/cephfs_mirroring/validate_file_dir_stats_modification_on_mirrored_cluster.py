@@ -17,8 +17,15 @@ def run(ceph_cluster, **kw):
         log.info(f"Running CephFS tests for Polarion ID -{tc}")
         config = kw.get("config")
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
-        fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"))
-        fs_util_ceph2 = FsUtils(ceph_cluster_dict.get("ceph2"))
+        test_data = kw.get("test_data")
+        # fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"), test_data=test_data)
+        fs_util_ceph2 = FsUtils(ceph_cluster_dict.get("ceph2"), test_data=test_data)
         fs_mirroring_utils = CephfsMirroringUtils(
             ceph_cluster_dict.get("ceph1"), ceph_cluster_dict.get("ceph2")
         )
@@ -41,6 +48,8 @@ def run(ceph_cluster, **kw):
         fs_name = "".join(random.choice(string.ascii_lowercase) for i in range(3))
         source_fs = f"cephfs_{fs_name}"
         target_fs = f"cephfs_{fs_name}"
+        source_fs = f"cephfs_{fs_name}" if not erasure else f"cephfs-ec_{fs_name}"
+        target_fs = f"cephfs_{fs_name}" if not erasure else f"cephfs-ec_{fs_name}"
         # create fs
         fs_util_ceph1.create_fs(source_clients[0], source_fs)
         fs_util_ceph2.create_fs(target_clients[0], target_fs)

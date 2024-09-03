@@ -577,6 +577,7 @@ class FsUtils(object):
             sleep(300)
             return 0
 
+    @retry(CommandFailed, tries=3, delay=10)
     def config_blacklist_manual_evict(self, active_mds, rank, service_name, **kwargs):
         """
         Configure black list on osd and manually evict client
@@ -605,10 +606,14 @@ class FsUtils(object):
             clients = self.ceph_cluster.get_ceph_objects("client")
             ip_add = self.manual_evict(clients[0], rank)
             out, rc = clients[0].exec_command(sudo=True, cmd="ceph osd blacklist ls")
-            print(out)
+            log.info(out)
             log.info(f"{ip_add} which is evicated manually")
             if ip_add not in out:
                 return 0
+            else:
+                raise CommandFailed(
+                    f"{ip_add} which is evicated manually not yet blocklisted . {out}"
+                )
 
     def validate_fs_info(self, client, fs_name="cephfs"):
         """
@@ -3487,7 +3492,7 @@ os.system('sudo systemctl start  network')
         if spec_frontend_port not in status_ports:
             raise CommandFailed(f"The frontend port{port} is not matching")
 
-    @retry(CommandFailed, tries=10, delay=30)
+    @retry(CommandFailed, tries=4, delay=30)
     def get_ceph_health_status(self, client, validate=True, status=["HEALTH_OK"]):
         """
         Validate if the Ceph Health is OK or in WARN/ERROR State.
@@ -4966,3 +4971,32 @@ os.system('sudo systemctl start  network')
         json_data = json.loads(out[0])
         log.info(f"Get command output: {json_data}")
         return json_data
+
+    def get_mds_config(self, client, fs_name):
+        out, rc = client.exec_command(
+            cmd=f"ceph fs status {fs_name} -f json", client_exec=True
+        )
+        log.info(out)
+        parsed_data = json.loads(out)
+        mds_config = parsed_data.get("mdsmap")
+        return mds_config
+
+    def get_mds_standby_replay_pair(self, client, fs_name, mds_config):
+        mds_pair_info = {}
+        for mds in mds_config:
+            if mds.get("state") == "active":
+                active_mds = mds["name"]
+                mds_pair_info.update({mds["rank"]: {}})
+                out, rc = client.exec_command(
+                    cmd=f"ceph fs status {fs_name}", client_exec=True
+                )
+                out_list = out.split("\n")
+                for out_iter in out_list:
+                    exp_str = f"{mds['rank']}-s"
+                    if exp_str in out_iter:
+                        standby_replay_mds = out_iter.split()[2]
+                        mds_pair_info[mds["rank"]].update(
+                            {active_mds: standby_replay_mds}
+                        )
+        log.info(f"MDS Standby Replay pair info : {mds_pair_info}")
+        return mds_pair_info

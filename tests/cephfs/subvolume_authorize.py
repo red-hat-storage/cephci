@@ -178,12 +178,22 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         rhbuild = config.get("rhbuild")
 
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         client = ceph_cluster.get_ceph_objects("client")
         mon_node_ip = fs_util.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
 
-        fs_name = "cephfs"
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client[0], fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client[0], fs_name)
         subvolume_name = "sub1"
         subvolgroup_name = ""
         if "4." in rhbuild:
@@ -240,12 +250,13 @@ def run(ceph_cluster, **kw):
                 mon_node_ip,
                 new_client_hostname=client_name,
                 sub_dir=f"{subvol_path}",
+                extra_params=f",fs={fs_name}",
             )
             fs_util.fuse_mount(
                 client,
                 fuse_mount_dir,
                 new_client_hostname=client_name,
-                extra_params=f" -r {subvol_path}",
+                extra_params=f" -r {subvol_path} --client_fs {fs_name}",
             )
             log.info(f"Testing read-write operation on {client_name}")
             rc = test_read_write_op(
@@ -267,6 +278,7 @@ def run(ceph_cluster, **kw):
                 fuse_mount_dir2,
                 client_name,
                 mon_node_ip,
+                fs_name=fs_name,
             )
             if rc != 1:
                 return 1
@@ -327,12 +339,13 @@ def run(ceph_cluster, **kw):
                 mon_node_ip,
                 new_client_hostname=client_name,
                 sub_dir=f"{subvol_path}",
+                extra_params=f",fs={fs_name}",
             )
             fs_util.fuse_mount(
                 client,
                 fuse_mount_dir,
                 new_client_hostname=client_name,
-                extra_params=f" -r {subvol_path}",
+                extra_params=f" -r {subvol_path} --client_fs {fs_name}",
             )
             log.info(f"Testing read operation for {client_name}")
             commands = [
@@ -364,6 +377,7 @@ def run(ceph_cluster, **kw):
                 fuse_mount_dir2,
                 client_name,
                 mon_node_ip,
+                fs_name=fs_name,
             )
             if rc != 1:
                 return 1

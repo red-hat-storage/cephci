@@ -457,6 +457,7 @@ class GenerateServiceSpec:
                 spec:
                    pool: rbd
                    enable_auth: true
+                   group: group1
                    server_cert: <server-cert>
                    server_key: <server-key>
                    client_cert: <client-cert>
@@ -546,19 +547,20 @@ class GenerateServiceSpec:
 
         if spec.get("spec", False):
             if spec["spec"].get("rgw_frontend_ssl_certificate", False):
-                subject = {
-                    "common_name": spec["placement"]["hosts"][0],
-                    "ip_address": self.cluster.get_node_by_hostname(
-                        spec["placement"]["hosts"][0]
-                    ).ip_address,
-                }
-                key, cert, ca = generate_self_signed_certificate(subject=subject)
-                pem = key + cert + ca
-                cert_value = "|\n" + pem
-                spec["spec"]["rgw_frontend_ssl_certificate"] = "\n    ".join(
-                    cert_value.split("\n")
-                )
-                LOG.debug(pem)
+                if spec["spec"].get("rgw_frontend_ssl_certificate") == "create-cert":
+                    subject = {
+                        "common_name": spec["placement"]["hosts"][0],
+                        "ip_address": self.cluster.get_node_by_hostname(
+                            spec["placement"]["hosts"][0]
+                        ).ip_address,
+                    }
+                    key, cert, ca = generate_self_signed_certificate(subject=subject)
+                    pem = key + cert + ca
+                    cert_value = "|\n" + pem
+                    spec["spec"]["rgw_frontend_ssl_certificate"] = "\n    ".join(
+                        cert_value.split("\n")
+                    )
+                    LOG.debug(pem)
 
         LOG.info(f"Generated rgw specification : {spec}")
 

@@ -60,6 +60,10 @@ def run(ceph_cluster, **kw):
             change_config_for_slow_ops(rados_obj=rados_obj, action="rm", **db_config)
             # log cluster health
             rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
     log.info("Completed running the customer Scenario(s)")
     return 0

@@ -10,6 +10,7 @@ from .mgr.mgr import Mgr
 from .nfs.nfs import Nfs
 from .orch.orch import Orch
 from .osd.osd import Osd
+from .restful.restful import RestFul
 from .rgw.rgw import Rgw
 from .smb.smb import Smb
 
@@ -33,6 +34,7 @@ class Ceph(Cli):
         self.fs = Fs(nodes, self.base_cmd)
         self.osd = Osd(nodes, self.base_cmd)
         self.smb = Smb(nodes, self.base_cmd)
+        self.restful = RestFul(nodes, self.base_cmd)
 
     def version(self):
         """Get ceph version."""

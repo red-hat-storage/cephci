@@ -57,7 +57,7 @@ enabled=1
     client.exec_command(cmd="sudo yum install -y wget")
     client.exec_command(
         cmd="sudo wget -O /etc/yum.repos.d/rh_7_nightly.repo "
-        "http://file.rdu.redhat.com/~kdreyer/repos/rhel-7-nightly.repo"
+        "https://gitlab.cee.redhat.com/ceph/repos/raw/master/rhel-7-nightly.repo"
     )
     kernel_repo = client.remote_file(
         sudo=True, file_name="/etc/yum.repos.d/rh_kernel.repo", file_mode="w"

@@ -18,18 +18,26 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83574163"
         log.info(f"Running CephFS tests for BZ-{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         fs_util.auth_list([client1])
         subvol_group_name = "subvol_group"
         invalid_pool_name = "non_exist_pool"
         out1, err1 = fs_util.create_subvolumegroup(
             client1,
-            "cephfs",
+            f"{fs_name}",
             subvol_group_name,
             validate=False,
             pool_layout=invalid_pool_name,
@@ -37,7 +45,7 @@ def run(ceph_cluster, **kw):
         )
         out2, err2 = client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs subvolume getpath cephfs {subvol_group_name}",
+            cmd=f"ceph fs subvolume getpath {fs_name} {subvol_group_name}",
             check_ec=False,
         )
         if out1 == 0 or out2 == 0:

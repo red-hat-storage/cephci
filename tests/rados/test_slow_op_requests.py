@@ -21,14 +21,14 @@ def run(ceph_cluster, **kw):
     - Capture the node time to stop reading the logs - format %Y-%m-%d %H:%M:%S
     - Query slow requests in the logs for the given time interval
     """
-    try:
-        log.info(run.__doc__)
-        config = kw["config"]
-        cephadm = CephAdmin(cluster=ceph_cluster, **config)
-        rados_obj = RadosOrchestrator(node=cephadm)
-        client_node = ceph_cluster.get_nodes(role="client")[0]
-        installer = ceph_cluster.get_nodes(role="installer")[0]
+    log.info(run.__doc__)
+    config = kw["config"]
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rados_obj = RadosOrchestrator(node=cephadm)
+    client_node = ceph_cluster.get_nodes(role="client")[0]
+    installer = ceph_cluster.get_nodes(role="installer")[0]
 
+    try:
         log.info("Running slow op requests tests")
         rados_obj.enable_file_logging()
         installer.exec_command(cmd="sudo timedatectl set-timezone UTC")
@@ -61,3 +61,7 @@ def run(ceph_cluster, **kw):
 
         # log cluster health
         rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1

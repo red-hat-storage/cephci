@@ -28,7 +28,7 @@ from .parallel import parallel
 
 log = Log(__name__)
 RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
-DEFAULT_OSBS_SERVER = "http://file.rdu.redhat.com/~kdreyer/osbs/"
+DEFAULT_OSBS_SERVER = "http://file.corp.redhat.com/~kdreyer/osbs/"
 
 
 def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
@@ -709,8 +709,8 @@ def setup_deb_repos(node, ubuntu_repo):
         "https://www.redhat.com/security/897da07a.txt",
         "https://www.redhat.com/security/f21541eb.txt",
         # 'https://prodsec.redhat.com/keys/00da75f2.txt',
-        # TODO: replace file file.rdu.redhat.com/~kdreyer with prodsec.redhat.com when it's back
-        "http://file.rdu.redhat.com/~kdreyer/keys/00da75f2.txt",
+        # TODO: replace file file.corp.redhat.com/~kdreyer with prodsec.redhat.com when it's back
+        "http://file.corp.redhat.com/~kdreyer/keys/00da75f2.txt",
         "https://www.redhat.com/security/data/fd431d51.txt",
     ]
 

@@ -62,12 +62,15 @@ class Api:
 
         return response.status_code, response.json()
 
-    def get(self, data=None, header=None, verify=DEFAULT_VERIFY, check_sc=False):
+    def get(
+        self, data=None, header=None, auth=None, verify=DEFAULT_VERIFY, check_sc=False
+    ):
         """Get method for request
 
         Args:
             data (dict): Request payload
             header (dict): Request header
+            auth (tuple): Request authentication
             verify (bool): Request URL verifier
             check_sc (bool): Check for status code validation
         """
@@ -85,18 +88,25 @@ class Api:
             params["headers"] = header
             LOG.info(f"Request HEADER - {header}")
 
+        if auth:
+            params["auth"] = auth
+            LOG.info(f"Request AUTH - {auth}")
+
         response = requests.get(**params)
         if check_sc:
             return self._response(response)
 
         return response
 
-    def post(self, data=None, header=None, verify=DEFAULT_VERIFY, check_sc=False):
+    def post(
+        self, data=None, header=None, auth=None, verify=DEFAULT_VERIFY, check_sc=False
+    ):
         """Post method for request
 
         Args:
             data (dict): Request payload
             header (dict): Request header
+            auth (tuple): Request authentication
             verify (bool): Request URL verifier
             check_sc (bool): Check for status code validation
         """
@@ -114,6 +124,10 @@ class Api:
             params["headers"] = header
             LOG.info(f"Request HEADER - {header}")
 
+        if auth:
+            params["auth"] = auth
+            LOG.info(f"Request AUTH - {auth}")
+
         response = requests.post(**params)
         if check_sc:
             return self._response(response)
@@ -123,8 +137,74 @@ class Api:
     def put(self):
         pass
 
-    def delete(self):
-        pass
+    def delete(
+        self, data=None, header=None, auth=None, verify=DEFAULT_VERIFY, check_sc=False
+    ):
+        """Delete method for request
 
-    def patch(Self):
-        pass
+        Args:
+            data (dict): Request payload
+            header (dict): Request header
+            auth (tuple): Request authentication
+            verify (bool): Request URL verifier
+            check_sc (bool): Check for status code validation
+        """
+        LOG.info(f"Request URL - {self.url}")
+        LOG.info(f"Request VERIFY - {verify}")
+        LOG.info("Request METHOD - Delete")
+
+        params = {"url": self.url, "verify": verify}
+
+        if data:
+            params["data"] = json.dumps(data)
+            LOG.debug(f"Request DATA - {data}")
+
+        if header:
+            params["headers"] = header
+            LOG.info(f"Request HEADER - {header}")
+
+        if auth:
+            params["auth"] = auth
+            LOG.info(f"Request AUTH - {auth}")
+
+        response = requests.delete(**params)
+        if check_sc:
+            return self._response(response)
+
+        return response
+
+    def patch(
+        self, data=None, header=None, auth=None, verify=DEFAULT_VERIFY, check_sc=False
+    ):
+        """Patch method for request
+
+        Args:
+            data (dict): Request payload
+            header (dict): Request header
+            auth (tuple): Request authentication
+            verify (bool): Request URL verifier
+            check_sc (bool): Check for status code validation
+        """
+        LOG.info(f"Request URL - {self.url}")
+        LOG.info(f"Request VERIFY - {verify}")
+        LOG.info("Request METHOD - Patch")
+
+        params = {"url": self.url, "verify": verify}
+
+        if data:
+            params["data"] = json.dumps(data)
+            LOG.debug(f"Request DATA - {data}")
+
+        if header:
+            params["headers"] = header
+            LOG.info(f"Request HEADER - {header}")
+
+        if auth:
+            params["auth"] = auth
+            LOG.info(f"Request AUTH - {auth}")
+
+        response = requests.patch(**params)
+        if check_sc:
+            return self._response(response)
+
+        return response

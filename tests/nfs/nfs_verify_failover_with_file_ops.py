@@ -130,6 +130,7 @@ def run(ceph_cluster, **kw):
         log.error(
             f"Failed to perform faiolver while delete in progress from client2. Error: {e}"
         )
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
     finally:
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)

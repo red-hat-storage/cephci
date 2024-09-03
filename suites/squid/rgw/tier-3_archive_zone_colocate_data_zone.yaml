@@ -260,6 +260,19 @@ tests:
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
       polarion-id: CEPH-83575199
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - node4
+            rgw_endpoints:
+              - node4:80
+
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
 
 
   - test:
