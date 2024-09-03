@@ -34,6 +34,12 @@
 #   CEPH-83573868: Verify root_squash cap works in multiFS.
 #   CEPH-83581592: Verify Client eviction is deferred if OSD was laggy.
 #   CEPH-83581613: Verify Client is blocklisted if session metadata is bloated.
+#   CEPH-83591419: Validate Root Sqaush operations on Cephfs
+#   CEPH-83595737: Validate selinux relabel on kernel client
+#
+# Bugs :
+# https://bugzilla.redhat.com/show_bug.cgi?id=2309363
+
 #=======================================================================================================================
 tests:
   -
@@ -397,4 +403,12 @@ tests:
       module: clients.validate_root_squash.py
       name: Validate Root Sqaush operations on Cephfs
       polarion-id: "CEPH-83591419"
+  - test:
+      abort-on-fail: false
+      desc: "Validate selinux relabel on kernel client"
+      module: clients.test_selinux_relabel.py
+      name: Validate selinux relabels
+      comments: "BZ-2309363"
+      polarion-id: "CEPH-83595737"
+
 
