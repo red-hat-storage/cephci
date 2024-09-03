@@ -503,6 +503,7 @@ class HighAvailability:
             client = NVMeInitiator(node, self.gateways[0])
             client.connect_targets(io_client)
             self.clients.append(client)
+        return self.clients
 
     def fetch_namespaces(self, gateway, failed_ana_grp_ids=[]):
         """Fetch all namespaces for failed gateways.
