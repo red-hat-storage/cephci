@@ -101,9 +101,11 @@ def run(**kw):
     cloud_type = config.get("cloud-type")
     primary_cluster = clusters.get("ceph-rgw1", clusters[list(clusters.keys())[0]])
     secondary_cluster = clusters.get("ceph-rgw2", clusters[list(clusters.keys())[1]])
-    primary_rgw_node = primary_cluster.get_ceph_object("rgw").node
+    primary_rgw_nodes = primary_cluster.get_ceph_objects("rgw")
+    primary_rgw_node = primary_rgw_nodes[0].node
     primary_client_node = primary_cluster.get_ceph_object("client").node
-    secondary_rgw_node = secondary_cluster.get_ceph_object("rgw").node
+    secondary_rgw_nodes = secondary_cluster.get_ceph_objects("rgw")
+    secondary_rgw_node = secondary_rgw_nodes[0].node
     secondary_client_node = secondary_cluster.get_ceph_object("client").node
     run_on_rgw = (
         True
@@ -166,6 +168,12 @@ def run(**kw):
         set_test_env(config, secondary_client_node)
         set_test_env(config, primary_rgw_node)
         set_test_env(config, secondary_rgw_node)
+        if len(primary_rgw_nodes) > 1:
+            for i in range(1, len(primary_rgw_nodes)):
+                set_test_env(config, primary_rgw_nodes[i].node)
+        if len(secondary_rgw_nodes) > 1:
+            for i in range(1, len(secondary_rgw_nodes)):
+                set_test_env(config, secondary_rgw_nodes[i].node)
         if archive_cluster_exists:
             set_test_env(config, archive_rgw_node)
             set_test_env(config, archive_client_node)
