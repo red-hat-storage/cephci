@@ -12,15 +12,14 @@ from ceph.ceph import Ceph
 from ceph.ceph_admin.orch import Orch
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.parallel import parallel
-from ceph.utils import get_nodes_by_ids
 from cephci.utils.configs import get_configs, get_registry_credentials
 from cli.utilities.containers import Registry
-from tests.cephadm import test_nvmeof
 from tests.nvmeof.test_ceph_nvmeof_high_availability import (
     configure_subsystems,
     teardown,
 )
 from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.nvme_utils import deploy_nvme_service
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 
@@ -199,7 +198,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     container_image = config.get("container_image")
     upgrade = config["upgrade"]
     overrides = kwargs.get("test_data", {}).get("custom-config")
-    gw_nodes = get_nodes_by_ids(ceph_cluster, config["gw_nodes"])
 
     # Todo: Fix the CDN NVMe CLI image issue with framework support.
     for key, value in dict(item.split("=") for item in overrides).items():
@@ -211,16 +209,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     try:
         if config.get("install"):
-            cfg = {
-                "no_cluster_state": False,
-                "config": {
-                    "command": "apply",
-                    "service": "nvmeof",
-                    "args": {"placement": {"nodes": [i.hostname for i in gw_nodes]}},
-                    "pos_args": [rbd_pool],
-                },
-            }
-            test_nvmeof.run(ceph_cluster, **cfg)
+            deploy_nvme_service(ceph_cluster, config)
 
         ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
         nvmegwcli = ha.gateways[0]
@@ -230,9 +219,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             with parallel() as p:
                 for subsys_args in config["subsystems"]:
                     subsys_args["ceph_cluster"] = ceph_cluster
-                    p.spawn(
-                        configure_subsystems, rbd_obj, rbd_pool, nvmegwcli, subsys_args
-                    )
+                    p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
 
         pre_upg_versions = fetch_nvme_versions(ha.gateways)
 
