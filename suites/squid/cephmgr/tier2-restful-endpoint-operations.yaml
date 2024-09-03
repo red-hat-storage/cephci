@@ -132,10 +132,10 @@ tests:
   - test:
       name: ceph-mgr RESTful module GET method on pool endpoint
       polarion-id: CEPH-83595195
-      module: tests/mgr/test_restful_operations_pool_endpoint.py
+      module: test_restful_operations_pool_endpoint.py
       config:
         endpoint: /pool
-        mthod: GET
+        method: GET
         username: test_user
         status_code: 200
       desc: Use the GET method view pool information
@@ -143,7 +143,7 @@ tests:
   - test:
       name: ceph-mgr RESTful module POST method on pool endpoint
       polarion-id: CEPH-83595195
-      module: tests/mgr/test_restful_operations_pool_endpoint.py
+      module: test_restful_operations_pool_endpoint.py
       config:
         endpoint: /pool
         method: POST
@@ -157,7 +157,7 @@ tests:
   - test:
       name: ceph-mgr RESTful module GET method on pool_<arg> endpoint
       polarion-id: CEPH-83595195
-      module: tests/mgr/test_restful_operations_pool_endpoint.py
+      module: test_restful_operations_pool_endpoint.py
       config:
         endpoint: /pool
         method: GET
@@ -169,13 +169,13 @@ tests:
   - test:
       name: ceph-mgr RESTful module PATCH method on pool_<arg> endpoint
       polarion-id: CEPH-83595195
-      module: tests/mgr/test_restful_operations_pool_endpoint.py
+      module: test_restful_operations_pool_endpoint.py
       config:
         endpoint: /pool
         method: PATCH
         username: test_user
         status_code: 200
-        pool_name: test_pool1
+        args: test_pool1
         data:
           size: 2
       desc: Use the PATCH method to modify information about a pool_id
