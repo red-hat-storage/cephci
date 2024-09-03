@@ -24,6 +24,20 @@
 #             "Show the information for the pool id"
 #        "PATCH":
 #             "Modify the information for the pool id"
+#   - Test all supported methods for /osd and /osd/<arg> endpoint
+#    "/osd":
+#       "GET":
+#             "Show the information for all the pools"
+#    "/osd/<arg>":
+#        "GET":
+#             "Show the information for the OSD id"
+#        "PATCH":
+#             "Modify the information for the OSD id"
+#    "/osd/<arg>/command":
+#       "GET":
+#            "Show the implementated commands for the OSD id"
+#       "POST":
+#              "Run the implemented command for the OSD id"
 #===============================================================================================
 
 tests:
@@ -165,3 +179,67 @@ tests:
         data:
           size: 2
       desc: Use the PATCH method to modify information about a pool_id
+
+  - test:
+      name: ceph-mgr RESTful module GET method on osd endpoint
+      polarion-id: CEPH-83596212
+      module: test_restful_operations_osd_endpoint.py
+      config:
+        endpoint: /osd
+        method: GET
+        username: test_user
+        status_code: 200
+      desc: Use the GET method view osd information
+
+  - test:
+      name: ceph-mgr RESTful module GET method on osd_<arg> endpoint
+      polarion-id: CEPH-83596212
+      module: test_restful_operations_osd_endpoint.py
+      config:
+        endpoint: /osd
+        method: GET
+        username: test_user
+        status_code: 200
+        args: 1
+      desc: Use the GET method to view information about a osd id
+
+  - test:
+      name: ceph-mgr RESTful module GET method on osd_<arg>_command endpoint
+      polarion-id: CEPH-83596212
+      module: test_restful_operations_osd_endpoint.py
+      config:
+        endpoint: /osd
+        method: GET
+        username: test_user
+        status_code: 200
+        args: 1
+        command: True
+      desc: Use the GET method to view implemented commands for the OSD id
+
+  - test:
+      name: ceph-mgr RESTful module PATCH method on osd_<arg> endpoint
+      polarion-id: CEPH-83596212
+      module: test_restful_operations_osd_endpoint.py
+      config:
+        endpoint: /osd
+        method: PATCH
+        username: test_user
+        status_code: 200
+        args: 1
+        data:
+          weight: 2
+      desc: Use the PATCH method to modify the config of OSD id
+
+  - test:
+      name: ceph-mgr RESTful module POST method on osd_<arg>_command endpoint
+      polarion-id: CEPH-83596212
+      module: test_restful_operations_osd_endpoint.py
+      config:
+        endpoint: /osd
+        method: POST
+        username: test_user
+        status_code: 200
+        args: 1
+        data:
+          command: repair
+      desc: Use the POST method to run implemented command for the OSD id
