@@ -56,7 +56,7 @@ def _post(config, url, endpoint, username, key, status_code):
     )
 
 
-def _patch(config, osd_node, url, username, key, endpoint, status_code):
+def _patch(config, osd_node, url, endpoint, username, key, status_code):
     data = config.get("data")
     if not data:
         raise ConfigError(CONFIG_ERR_MSG.format("data"))
@@ -121,11 +121,11 @@ def run(ceph_cluster, **kw):
     url = f"https://{mgr_ip}:8003"
 
     if method == "GET":
-        return _get(config, osd_node, url, username, key, endpoint, status_code)
+        return _get(config, osd_node, url, endpoint, username, key, status_code)
 
     elif method == "POST":
-        return _post(config, url, username, key, endpoint, status_code)
+        return _post(config, url, endpoint, username, key, status_code)
 
     elif method == "PATCH":
-        return _patch(config, osd_node, url, username, key, endpoint, status_code)
+        return _patch(config, osd_node, url, endpoint, username, key, status_code)
     return 0
