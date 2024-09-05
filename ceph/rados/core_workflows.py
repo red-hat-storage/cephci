@@ -2007,49 +2007,47 @@ class RadosOrchestrator:
             Pass -> true, Fail -> False
         """
 
-        def kb_to_gb(kb):
-            return round(kb / (1024 * 1024), 1)
+        def bytes_to_gb(kb):
+            return round(kb / (1 << 30), 1)
 
-        max_avail_by_pool = {}
-        size_by_pool = {}
+        pool_data = {}
         check_pass = True
-        ceph_df = self.run_ceph_command(cmd="ceph df detail")
+        ceph_df = self.get_cephdf_stats()
         pool_detail = self.run_ceph_command(cmd="ceph osd pool ls detail")
 
-        # ceph df detail
-        for pool in ceph_df["pools"]:
-            pool_name = pool["name"]
-            max_avail = kb_to_gb(pool["stats"]["max_avail"])
-            max_avail_by_pool[pool_name] = max_avail
-
-        # ceph osd pool ls detail
+        # capture size of each replicated pool
         for entry in pool_detail:
-            pool_name = entry["pool_name"]
-            size = entry["size"]
-            if entry["type"] != 1:
-                log.debug(f"pool : {pool_name} is a non replicated pool.")
-                break
-            size_by_pool[pool_name] = size
+            if entry["type"] == 1:
+                pool_name = entry["pool_name"]
+                size = entry["size"]
+                pool_data[pool_name] = {"size": size}
 
-        for pool in size_by_pool:
+        # note max avail for each replicated pool
+        for pool in ceph_df["pools"]:
+            _pool_name = pool["name"]
+            if _pool_name in pool_data.keys():
+                max_avail = bytes_to_gb(pool["stats"]["max_avail"])
+                pool_data[_pool_name].update({"max_avail": max_avail})
+
+        for pool in pool_data:
             ideal_max_avail = self.get_ideal_max_avail_pools(
-                default_replica_size=size_by_pool[pool]
+                default_replica_size=pool_data[pool]["size"]
             )
-            pool_max_avail = max_avail_by_pool[pool]
+            pool_max_avail = pool_data[pool]["max_avail"]
             is_within_variance = (
                 lambda value, new_value, var: abs(value - new_value) / value <= variance
             )
 
             if not is_within_variance(ideal_max_avail, pool_max_avail, variance):
                 log.error(
-                    f"The MAX_AVAIL for pool : {pool} with size : {size_by_pool[pool]} is not same as expected.\n"
+                    f"The MAX_AVAIL for pool : {pool} with size : {pool_data[pool]['size']} is not same as expected.\n"
                     f"Actual on cluster : {pool_max_avail}\n"
                     f"Calculated value : {ideal_max_avail}\n"
                 )
                 check_pass = False
 
-            log.debug(
-                f"The MAX_AVAIL on the pool is as expected for pool : {pool} is as expected"
+            log.info(
+                f"The MAX_AVAIL on the pool {pool} is as expected: {pool_max_avail}"
             )
         return check_pass
 
