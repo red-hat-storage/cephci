@@ -518,7 +518,32 @@ class CG_snap_IO(object):
                             curr_time = time.time()
                             # Get time when state is achieved
                             time_before_state = float(curr_time) - float(age_ref)
-                            if (float(end_time) - float(time_before_state)) < 10:
+                            ceph_health, _ = client.exec_command("ceph health detail")
+                            if "Slow OSD" in ceph_health:
+                                log.info(
+                                    f"Ceph had {ceph_health} when {io_mod} {io_type} failed in {state}.Ignoring.."
+                                )
+                            elif "MDS_SLOW_REQUEST" in ceph_health:
+                                log.info(
+                                    "Wait for 30secs to check if MDS Slowness issue resolves"
+                                )
+                                retry_cnt = 0
+                                while retry_cnt < 31:
+                                    ceph_health, _ = client.exec_command(
+                                        "ceph health detail"
+                                    )
+                                    if "MDS_SLOW_REQUEST" in ceph_health:
+                                        time.sleep(5)
+                                        retry_cnt += 5
+                                    else:
+                                        log.info(
+                                            f"MDS_SLOW_REQUEST issue is resolved in {retry_cnt}secs"
+                                        )
+                                        retry_cnt = 31
+                                cg_status = (
+                                    1 if ("MDS_SLOW_REQUEST" in ceph_health) else 0
+                                )
+                            elif (float(end_time) - float(time_before_state)) < 10:
                                 log.info(
                                     f"WARN: {io_mod} {io_type} fails in QS state {state} on {qs_member}"
                                 )
@@ -529,6 +554,7 @@ class CG_snap_IO(object):
                                 log.info(
                                     f"Read exits in {time_diff}secs after {state},a false positive error:{read_str}"
                                 )
+                                cg_status = 0
                             else:
                                 log.error(
                                     f"FAIL:{io_mod} io on {qs_member} failed when {qs_id} was in {state}"
@@ -572,17 +598,33 @@ class CG_snap_IO(object):
                                 f"time_before_state:{time_before_state},end_time:{end_time}"
                             )
                             log.info(f"age_ref:{age_ref},curr_time:{curr_time}")
-                            mds_osd_unhealthy = 0
                             ceph_health, _ = client.exec_command("ceph health detail")
                             log.info(ceph_health)
-                            if ("Slow OSD" in ceph_health) or (
-                                "MDS_SLOW_REQUEST" in ceph_health
-                            ):
-                                mds_osd_unhealthy = 1
-                            if mds_osd_unhealthy == 1:
+                            if "Slow OSD" in ceph_health:
                                 log.info(
                                     f"Ceph had {ceph_health} when {io_mod} {io_type} failed in {state}.Ignoring.."
                                 )
+                            elif "MDS_SLOW_REQUEST" in ceph_health:
+                                log.info(
+                                    "Wait for 30secs to check if MDS Slowness issue resolves"
+                                )
+                                retry_cnt = 0
+                                while retry_cnt < 31:
+                                    ceph_health, _ = client.exec_command(
+                                        "ceph health detail"
+                                    )
+                                    if "MDS_SLOW_REQUEST" in ceph_health:
+                                        time.sleep(5)
+                                        retry_cnt += 5
+                                    else:
+                                        log.info(
+                                            f"MDS_SLOW_REQUEST issue is resolved in {retry_cnt}secs"
+                                        )
+                                        retry_cnt = 31
+                                cg_status = (
+                                    1 if ("MDS_SLOW_REQUEST" in ceph_health) else 0
+                                )
+
                             elif float(time_before_state) > float(end_time):
                                 log.info(
                                     f"WARN: {io_mod} {io_type} fails in QS state {state} on {qs_member}"
