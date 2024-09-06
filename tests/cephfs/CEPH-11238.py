@@ -22,7 +22,13 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
 
         config = kw.get("config")
 
@@ -42,12 +48,16 @@ def run(ceph_cluster, **kw):
         client2 = clients[1]
         client3 = clients[2]
         client4 = clients[3]
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
 
+        if not fs_details:
+            fs_util.create_fs(client1, fs_name)
         cephfs = {
             "fill_data": 20,
             "io_tool": "smallfile",
             "mount": "fuse",
-            "filesystem": "cephfs",
+            "filesystem": fs_name,
             "mount_dir": "/mnt/mycephfs1",
         }
         fs_io(client=clients[0], fs_config=cephfs, fs_util=fs_util)
@@ -64,7 +74,7 @@ def run(ceph_cluster, **kw):
 
         mon_node_ips = fs_util.get_mon_node_ips()
 
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
 
         fs_util.fuse_mount(
             [clients[0]],
