@@ -2,7 +2,7 @@
 #------------------------------------------------------------------------------------------
 #----- Tier-2 test to verify all functionalities of COT and CBT tool ------
 #------------------------------------------------------------------------------------------
-# Conf: conf/squid/rados/7-node-cluster.yaml
+# Conf: conf/squid/rados/13-node-cluster.yaml
 # Test suite is targeted only for OpenStack
 #===============================================================================================
 tests:
@@ -189,6 +189,14 @@ tests:
       config:
         non-collocated: true
       desc: Verify ceph-bluestore-tool functionalities for non-collocated OSDs
+
+  - test:
+      name: cbt utility bluefs spillover
+      module: test_bluestoretool_workflows.py
+      polarion-id: CEPH-83595766
+      config:
+        bluefs-spillover: true
+      desc: Verify BlueFS Spillover warning with dedicated wal/db
 
   - test:
       name: ceph-objectstore-tool utility

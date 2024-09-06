@@ -247,6 +247,10 @@ def run(ceph_cluster, **kw):
         rados_obj.change_osd_state(action="start", target=osd_id)
         # log cluster health
         rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
 
     log.info("Completed testing effects of large number of omap entries on pools ")
     return 0

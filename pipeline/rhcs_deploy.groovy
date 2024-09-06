@@ -15,7 +15,7 @@ def argsMap = [
         "rgwSecure": "suites/pacific/integrations/ocs_rgw_ssl.yaml",
     ],
     "6": [
-        "inventory": "conf/inventory/rhel-9.0-server-x86_64-large.yaml",
+        "inventory": "conf/inventory/rhel-9.4-server-x86_64-xlarge.yaml",
         "globalConf": "conf/quincy/integrations/7_node_ceph.yaml",
         "suite": "suites/quincy/integrations/ocs.yaml",
         "platform": "rhel-9",
@@ -29,16 +29,17 @@ def argsMap = [
         ]
     ],
     "7": [
-        "inventory": "conf/inventory/rhel-9.0-server-x86_64-large.yaml",
+        "inventory": "conf/inventory/rhel-9.4-server-x86_64-xlarge.yaml",
         "globalConf": "conf/reef/integrations/7_node_ceph.yaml",
         "suite": "suites/reef/integrations/ocs.yaml",
         "platform": "rhel-9",
         "rgwSecure": "suites/reef/integrations/ocs_rgw_ssl.yaml",
         "overrides": [
-            "grafana_image": "registry-proxy.engineering.redhat.com/rh-osbs/grafana:9.4.7-1",
-            "prometheus_image": "registry.redhat.io/openshift4/ose-prometheus:v4.12",
-            "node_exporter_image": "registry.redhat.io/openshift4/ose-prometheus-node-exporter:v4.12",
-            "alertmanager_image": "registry.redhat.io/openshift4/ose-prometheus-alertmanager:v4.12"
+            "grafana_image": "registry-proxy.engineering.redhat.com/rh-osbs/grafana:10.4.0-15",
+            "haproxy_image": "registry-proxy.engineering.redhat.com/rh-osbs/haproxy:2.4.22-27",
+            "keepalived_image": "registry-proxy.engineering.redhat.com/rh-osbs/keepalived:2.2.8-26",
+            "snmp_gateway_image": "registry-proxy.engineering.redhat.com/rh-osbs/snmp-notifier:1.2.1-76",
+            "promtail_image": "registry-proxy.engineering.redhat.com/rh-osbs/promtail:v2.4.0-34"
         ]
     ]
 ]

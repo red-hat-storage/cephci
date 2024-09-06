@@ -182,6 +182,10 @@ def run(ceph_cluster, **kw):
         time.sleep(10)
         # log cluster health
         rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
 
 
 def remove_parameter_configuration(mon_obj):

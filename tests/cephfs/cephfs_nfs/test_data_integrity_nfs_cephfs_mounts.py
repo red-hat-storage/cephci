@@ -47,7 +47,13 @@ def run(ceph_cluster, **kw):
         log.info(f"Running cephfs {tc} test case")
         config = kw["config"]
         build = config.get("build", config.get("rhbuild"))
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
         fs_util.prepare_clients(clients, build)
@@ -56,7 +62,11 @@ def run(ceph_cluster, **kw):
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
         nfs_name = "cephfs-nfs"
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, default_fs)
+
+        if not fs_details:
+            fs_util.create_fs(client1, default_fs)
         client1.exec_command(sudo=True, cmd="ceph mgr module enable nfs")
         client1.exec_command(
             sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"

@@ -50,12 +50,23 @@ def run(ceph_cluster, **kw):
 
     """
     try:
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
+
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        erasure = (
+            fs_util_v1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
 
-        fs_name = "cephfs"
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util_v1.get_fs_info(clients[0], fs_name)
+
+        if not fs_details:
+            fs_util_v1.create_fs(clients[0], fs_name)
         fs_util_v1.prepare_clients(clients, build)
         fs_util_v1.auth_list(clients)
         mon_node_ip = fs_util_v1.get_mon_node_ips()

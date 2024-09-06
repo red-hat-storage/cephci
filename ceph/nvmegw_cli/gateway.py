@@ -21,3 +21,9 @@ class Gateway(ExecuteCommandMixin):
 
     def version(self, **kwargs):
         return self.run_nvme_cli("version", **kwargs)
+
+    def set_log_level(self, **kwargs):
+        return self.run_nvme_cli("set_log_level", **kwargs)
+
+    def get_log_level(self, **kwargs):
+        return self.run_nvme_cli("get_log_level", **kwargs)

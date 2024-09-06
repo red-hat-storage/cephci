@@ -131,6 +131,10 @@ def run(ceph_cluster, **kw):
         method_should_succeed(rados_object.delete_pool, pool_name)
         time.sleep(10)
         rados_object.log_cluster_health()
+        # check for crashes after test execution
+        if rados_object.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
     return 0
 
 

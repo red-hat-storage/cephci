@@ -109,6 +109,10 @@ def run(ceph_cluster, **kw):
         rados_obj.delete_pool(pool="re_pool_parallel_io")
         # log cluster health
         rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
 
     log.info(
         "Verification of concurrent and parallel IOPS on an object completed successfully"

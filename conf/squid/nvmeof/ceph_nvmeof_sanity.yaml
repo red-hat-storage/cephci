@@ -32,38 +32,9 @@ globals:
         no-of-volumes: 4
         disk-size: 20
       node6:
-        id: node6
         role:
           - nvmeof-gw
       node7:
-        id: node7
-        role:
-          - nvmeof-gw
-      node8:
-        id: node8
-        role:
-          - nvmeof-gw
-      node9:
-        id: node9
-        role:
-          - nvmeof-gw
-      node10:
         id: node10
-        role:
-          - nvmeof-gw
-      node11:
-        id: node11
-        role:
-          - nvmeof-gw
-      node12:
-        id: node12
-        role:
-          - nvmeof-gw
-      node13:
-        id: node13
-        role:
-          - nvmeof-gw
-      node14:
-        id: node14
         role:
           - client

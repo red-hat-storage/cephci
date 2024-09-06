@@ -1,4 +1,3 @@
-# This test to verify the archive zone with multisite
 tests:
 
   # Cluster deployment stage
@@ -219,15 +218,20 @@ tests:
               - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
               - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone archive --endpoints http://{node_ip:node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --tier-type=archive"
+              - "radosgw-admin zone modify  --rgw-realm india --rgw-zonegroup shared --rgw-zone archive  --sync-from-all false --sync-from-rm secondary --sync-from primary"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_zonegroup shared"
               - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_zone archive"
+              - "radosgw-admin zone modify --rgw-zone archive --sync_from primary --sync_from_all false"
+              - "radosgw-admin period update --commit"
+              - "radosgw-admin period get"
               - "ceph orch restart {service_name:shared.arc}"
       desc: Setting up RGW multisite replication environment with archive zone
       module: exec.py
       name: setup multisite
       polarion-id: CEPH-10362
+
   - test:
       clusters:
         ceph-pri:
@@ -252,256 +256,7 @@ tests:
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
       polarion-id: CEPH-83575199
-  - test:
-      name: notify copy events with kafka_broker_persistent
-      desc: notify copy events with kafka_broker_persistent
-      polarion-id: CEPH-83574066
-      module: sanity_rgw_multisite.py
-      config:
-        run-on-rgw: true
-        extra-pkgs:
-          - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
-        install_start_kafka: true
-        script-name: test_bucket_notifications.py
-        config-file-name: test_bucket_notification_kafka_broker_persistent_copy.yaml
-  - test:
-      name: notify on multisite replication create events with kafka_broker on arc site
-      desc: notify on multisite replication create events with kafka_broker on arc site
-      polarion-id: CEPH-83575922
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-arc:
-          config:
-            run-on-rgw: true
-            extra-pkgs:
-              - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
-            install_start_kafka_archive: true
-            script-name: test_bucket_notifications.py
-            config-file-name: test_bucket_notification_kafka_broker_ms_replication_from_pri.yaml
-  - test:
-      name: notify on multisite replication delete events with kafka_broker on arc site
-      desc: notify on multisite replication delete events with kafka_broker on arc site
-      polarion-id: CEPH-83575922
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-arc:
-          config:
-            run-on-rgw: true
-            script-name: test_bucket_notifications.py
-            config-file-name: test_bucket_notification_kafka_broker_archive_delete_replication_from_pri.yaml
-# adding the LC tests for object size filter before as they have failed in the end.
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: ../s3cmd/test_lifecycle_s3cmd.py
-            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_objects_size_noncurrent.yaml
-      desc: Test LC on archive for objects size expiration
-      polarion-id: CEPH-83582000
-      module: sanity_rgw_multisite.py
-      name: Test LC on archive for objects size expiration
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: ../s3cmd/test_lifecycle_s3cmd.py
-            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_objects_size_noncurrent_local.yaml
-      desc: Test LC on active for objects size expiration
-      polarion-id: CEPH-83581990
-      module: sanity_rgw_multisite.py
-      name: Test LC on active for objects size expiration
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            set-env: true
-            script-name: user_create.py
-            config-file-name: tenanted_user.yaml
-            copy-user-info-to-site: ceph-arc
-      desc: create tenanted user
-      module: sanity_rgw_multisite.py
-      name: create tenanted user
-      polarion-id: CEPH-83575199
 
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            config-file-name: test_Mbuckets_with_Nobjects.yaml
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: [ "ceph-sec","ceph-arc" ]
-            timeout: 5000
-      desc: Execute M buckets with N objects on primary and verify on secondary & archive cluster
-      polarion-id: CEPH-9789
-      module: sanity_rgw_multisite.py
-      name: m buckets with n objects
-
-  - test:
-      name: bucket granular sync policy with directional flow having archive zone
-      desc: Test bucket granular sync policy with directional flow having archive zone
-      polarion-id: CEPH-83575879
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_multisite_bucket_granular_sync_policy.py
-            config-file-name: test_multisite_granular_bucketsync_archive_directional.yaml
-            timeout: 5500
-
-# Dynamic resharding test
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
-            script-name: test_dynamic_bucket_resharding.py
-            verify-io-on-site: [ "ceph-sec", "ceph-arc" ]
-      desc: Resharding test - dynamic resharding on primary and verify on secondary & archive cluster
-      name: Dynamic Resharding - dynamic
-      polarion-id: CEPH-83571740
-      module: sanity_rgw_multisite.py
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
-            script-name: test_dynamic_bucket_resharding.py
-            verify-io-on-site: [ "ceph-sec", "ceph-arc" ]
-      desc: Resharding test - dynamic resharding on versioned bucket on primary and verify on secondary & archive cluster
-      name: Dynamic Resharding with versioning on primary and verify on archive
-      polarion-id: CEPH-83575393
-      module: sanity_rgw_multisite.py
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            config-file-name: test_manual_resharding_without_bucket_delete.yaml
-            script-name: test_dynamic_bucket_resharding.py
-            verify-io-on-site: [ "ceph-sec", "ceph-arc" ]
-      desc: Resharding test - manual resharding
-      name: Manual Resharding on primary and verify on secondary & archive cluster
-      polarion-id: CEPH-83571740
-      module: sanity_rgw_multisite.py
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bilog_trimming.py
-            config-file-name: test_bilog_trim_archive.yaml
-      desc: test no bilogs are generated at archive zone
-      polarion-id: CEPH-83575468
-      module: sanity_rgw_multisite.py
-      name: test no bilogs are generated at archive zone
-
-# configuring vault agent on all the sites
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            install:
-              - agent
-            run-on-rgw: true
-        ceph-sec:
-          config:
-            install:
-              - agent
-            run-on-rgw: true
-        ceph-arc:
-          config:
-            install:
-              - agent
-            run-on-rgw: true
-      desc: Setup and configure vault agent
-      destroy-cluster: false
-      module: install_vault.py
-      name: configure vault agent
-      polarion-id: CEPH-83575226
-
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_prefix /v1/transit "
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "radosgw-admin zone placement modify --rgw-zone secondary --placement-id default-placement  --compression zlib"
-              - "radosgw-admin period update --commit"
-              - "ceph orch restart {service_name:shared.sec}"
-        ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_prefix /v1/transit "
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "radosgw-admin zone placement modify --rgw-zone primary --placement-id default-placement  --compression zlib"
-              - "radosgw-admin period update --commit"
-              - "ceph orch restart {service_name:shared.pri}"
-        ceph-arc:
-          config:
-            cephadm: true
-            commands:
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_prefix /v1/transit "
-              - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "radosgw-admin zone placement modify --rgw-zone archive --placement-id default-placement  --compression zlib"
-              - "radosgw-admin period update --commit"
-              - "ceph orch restart {service_name:shared.arc}"
-      desc: Setting vault configs for sse-s3 on multisite
-      module: exec.py
-      name: sse-s3 vault configs, and zlib compression
-      polarian-id: CEPH-83575916
-
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_s3_bucket_enc_multipart_download_remote_site.yaml
-      desc: test multipart download at remote site
-      polarion-id: CEPH-11357
-      module: sanity_rgw_multisite.py
-      name: test multipart download at remote site
-# test the workaround to sync only from one active zone
-  - test:
-      clusters:
-        ceph-arc:
-          config:
-            cephadm: true
-            commands:
-              - "radosgw-admin zone modify --rgw-zone archive --sync_from primary --sync_from_all false"
-              - "radosgw-admin period update --commit"
-              - "radosgw-admin period get"
-      desc: test the workaround to sync only from one active zone
-      module: exec.py
-      name: test the workaround to sync only from one active zone
-      polarian-id: CEPH-83581371
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_s3_bucket_enc_multipart_download_archive_site.yaml
-      desc: test multipart+encrypt object access at the archive site
-      polarion-id: CEPH-83573390
-      module: sanity_rgw_multisite.py
-      name: test multipart+encrypt object access at the archive site
   - test:
       clusters:
         ceph-pri:
@@ -544,3 +299,49 @@ tests:
       polarion-id: CEPH-83581997
       module: sanity_rgw_multisite.py
       name: Test LC on active for newer noncurrents
+
+  - test:
+      name: notify on multisite replication create events with kafka_broker on arc site
+      desc: notify on multisite replication create events with kafka_broker on arc site
+      polarion-id: CEPH-83575922
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-arc:
+          config:
+            run-on-rgw: true
+            extra-pkgs:
+              - wget https://download.oracle.com/java/17/latest/jdk-17_linux-x64_bin.rpm
+            install_start_kafka_archive: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_broker_ms_replication_from_pri.yaml
+  - test:
+      name: notify on multisite replication delete events with kafka_broker on arc site
+      desc: notify on multisite replication delete events with kafka_broker on arc site
+      polarion-id: CEPH-83575922
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-arc:
+          config:
+            run-on-rgw: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_bucket_notification_kafka_broker_archive_delete_replication_from_pri.yaml
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_lifecycle_s3cmd.py
+            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_archive_objects_size_noncurrent.yaml
+      desc: Test LC on archive for objects size expiration
+      polarion-id: CEPH-83582000
+      module: sanity_rgw_multisite.py
+      name: Test LC on archive for objects size expiration
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_lifecycle_s3cmd.py
+            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_lifecycle_objects_size_noncurrent_local.yaml
+      desc: Test LC on active for objects size expiration
+      polarion-id: CEPH-83581990
+      module: sanity_rgw_multisite.py
+      name: Test LC on active for objects size expiration

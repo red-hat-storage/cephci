@@ -229,13 +229,19 @@ tests:
       name: "repair_backtrace_by_scrub"
   - test:
       abort-on-fail: false
-      desc: "journal_tool_journal_mode"
-      module: journal_tool_journal_mode.py
+      desc: "cephfs_journal_tool_journal_mode_functional"
+      module: cephfs_journal_tool.journal_tool_journal_mode.py
       name: journal_tool_journal_mode
       polarion-id: "CEPH-83594249"
   - test:
       abort-on-fail: false
-      desc: "journal_tool_header_mode"
-      module: journal_tool_header_mode.py
+      desc: "cephfs_journal_tool_header_mode_functional"
+      module: cephfs_journal_tool.journal_tool_header_mode.py
       name: journal_tool_header_mode
       polarion-id: "CEPH-83594266"
+  - test:
+      abort-on-fail: false
+      desc: "cephfs_journal_tool_event_mode_functional"
+      module: cephfs_journal_tool.journal_tool_event_mode.py
+      name: journal_tool_event_mode
+      polarion-id: "CEPH-83595482"

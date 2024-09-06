@@ -11,9 +11,6 @@ class NVMeoF(ApplyMixin, Orch):
 
     SERVICE_NAME = "nvmeof"
 
-    def __init__(self, cluster, **config):
-        super().__init__(cluster, **config)
-
     def apply(self, config: Dict) -> None:
         """
         Deploy the NVMEoF service using the provided configuration.

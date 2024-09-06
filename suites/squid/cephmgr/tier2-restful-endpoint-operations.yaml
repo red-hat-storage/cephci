@@ -1,0 +1,245 @@
+#===============================================================================================
+# Test Suite: Test `api/auth` cephapi
+#
+# Conf: conf/squid/cephmgr/1admin-4node-1client-ceph-mgr.yaml
+#
+# Setup:
+#   - Bootstrap with pre-defined dashboard credentials
+#   - Host management
+#   - Ceph role Service deployment
+#   - Configure client for RGW and RBD systems
+#
+# Test cases:
+#   - Test all supported methods for /pool and /pool/<arg> endpoint
+#    "/pool":
+#       "GET":
+#             "Show the information for all the pools"
+#       "POST":
+#              "Create a new pool",
+#              "Requires name and pg_num dict arguments"
+#    "/pool/<arg>":
+#        "DELETE":
+#             "Remove the pool data for the pool id"
+#        "GET":
+#             "Show the information for the pool id"
+#        "PATCH":
+#             "Modify the information for the pool id"
+#   - Test all supported methods for /osd and /osd/<arg> endpoint
+#    "/osd":
+#       "GET":
+#             "Show the information for all the pools"
+#    "/osd/<arg>":
+#        "GET":
+#             "Show the information for the OSD id"
+#        "PATCH":
+#             "Modify the information for the OSD id"
+#    "/osd/<arg>/command":
+#       "GET":
+#            "Show the implementated commands for the OSD id"
+#       "POST":
+#              "Run the implemented command for the OSD id"
+#===============================================================================================
+
+tests:
+  - test:
+      name: Setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using CephAdm
+      desc: Bootstrap and deploy services
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure Client
+      desc: Configure the RGW, RBD clients
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: ceph-mgr RESTful module enable
+      polarion-id: CEPH-11387
+      module: test_restful_module_enable.py
+      config:
+        username: test_user
+      desc: Enable the mgr RESTful module using CLI
+
+  - test:
+      name: ceph-mgr RESTful module GET method on pool endpoint
+      polarion-id: CEPH-83595195
+      module: test_restful_operations_pool_endpoint.py
+      config:
+        endpoint: /pool
+        method: GET
+        username: test_user
+        status_code: 200
+      desc: Use the GET method view pool information
+
+  - test:
+      name: ceph-mgr RESTful module POST method on pool endpoint
+      polarion-id: CEPH-83595195
+      module: test_restful_operations_pool_endpoint.py
+      config:
+        endpoint: /pool
+        method: POST
+        username: test_user
+        status_code: 200
+        data:
+          name: test_pool1
+          pg_num: 32
+      desc: Use the POST method to create a new pool
+
+  - test:
+      name: ceph-mgr RESTful module GET method on pool_<arg> endpoint
+      polarion-id: CEPH-83595195
+      module: test_restful_operations_pool_endpoint.py
+      config:
+        endpoint: /pool
+        method: GET
+        username: test_user
+        status_code: 200
+        args: test_pool1
+      desc: Use the GET method to information about a pool id
+
+  - test:
+      name: ceph-mgr RESTful module PATCH method on pool_<arg> endpoint
+      polarion-id: CEPH-83595195
+      module: test_restful_operations_pool_endpoint.py
+      config:
+        endpoint: /pool
+        method: PATCH
+        username: test_user
+        status_code: 200
+        args: test_pool1
+        data:
+          size: 2
+      desc: Use the PATCH method to modify information about a pool_id
+
+  - test:
+      name: ceph-mgr RESTful module GET method on osd endpoint
+      polarion-id: CEPH-83596212
+      module: test_restful_operations_osd_endpoint.py
+      config:
+        endpoint: /osd
+        method: GET
+        username: test_user
+        status_code: 200
+      desc: Use the GET method view osd information
+
+  - test:
+      name: ceph-mgr RESTful module GET method on osd_<arg> endpoint
+      polarion-id: CEPH-83596212
+      module: test_restful_operations_osd_endpoint.py
+      config:
+        endpoint: /osd
+        method: GET
+        username: test_user
+        status_code: 200
+        args: 1
+      desc: Use the GET method to view information about a osd id
+
+  - test:
+      name: ceph-mgr RESTful module GET method on osd_<arg>_command endpoint
+      polarion-id: CEPH-83596212
+      module: test_restful_operations_osd_endpoint.py
+      config:
+        endpoint: /osd
+        method: GET
+        username: test_user
+        status_code: 200
+        args: 1
+        command: True
+      desc: Use the GET method to view implemented commands for the OSD id
+
+  - test:
+      name: ceph-mgr RESTful module PATCH method on osd_<arg> endpoint
+      polarion-id: CEPH-83596212
+      module: test_restful_operations_osd_endpoint.py
+      config:
+        endpoint: /osd
+        method: PATCH
+        username: test_user
+        status_code: 200
+        args: 1
+        data:
+          weight: 2
+      desc: Use the PATCH method to modify the config of OSD id
+
+  - test:
+      name: ceph-mgr RESTful module POST method on osd_<arg>_command endpoint
+      polarion-id: CEPH-83596212
+      module: test_restful_operations_osd_endpoint.py
+      config:
+        endpoint: /osd
+        method: POST
+        username: test_user
+        status_code: 200
+        args: 1
+        data:
+          command: repair
+      desc: Use the POST method to run implemented command for the OSD id

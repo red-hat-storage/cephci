@@ -190,3 +190,9 @@ tests:
       polarion-id: CEPH-83573836
       desc: Verify enable and disble mgr module for stats works
       abort-on-fail: false
+  - test:
+      name: cephfs-top negative testing
+      module: cephfs_top.cephfs_top_negative_tests.py
+      polarion-id: CEPH-83575020
+      desc: cephfs-top negative testing
+      abort-on-fail: false

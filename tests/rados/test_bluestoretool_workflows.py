@@ -16,6 +16,7 @@ Test Module to perform specific functionalities of ceph-bluestore-tool.
  - ceph-bluestore-tool bluefs-bdev-new-db --path osd path --dev-target new-device
 """
 
+import datetime
 import json
 import math
 import random
@@ -24,6 +25,9 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.bluestoretool_workflows import BluestoreToolWorkflows
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.rados_bench import RadosBench
+from ceph.rados.serviceability_workflows import ServiceabilityMethods
+from ceph.utils import get_node_by_id
 from tests.misc_env.lvm_deployer import create_lvms
 from utility.log import Log
 
@@ -48,6 +52,8 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     bluestore_obj = BluestoreToolWorkflows(node=cephadm)
     client = ceph_cluster.get_nodes(role="client")[0]
+    bench_obj = RadosBench(mon_node=cephadm, clients=client)
+    service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
 
     try:
         osd_list = rados_obj.get_active_osd_list()
@@ -215,6 +221,212 @@ def run(ceph_cluster, **kw):
                 )
                 log.info(out)
                 log.debug(f"OSD metadata for osd.{osd_id}: \n {osd_metadata}")
+        if config.get("bluefs-spillover"):
+            log.info(
+                "\n\n ******** Running test to check BlueFS spillover **********"
+                "\n CEPH-83595766"
+                "\n BZ-2129414 \n\n"
+            )
+
+            # addition of small device as wal/db fails with CBT
+            # BZ -
+            if False:
+                osd_id = random.choice(osd_list)
+
+                log.info(
+                    f"\n -------------------------------------------"
+                    f"\n Adding a dedicated WAL/DB device for OSD.{osd_id}"
+                    f"\n -------------------------------------------"
+                )
+                osd_metadata = ceph_cluster.get_osd_metadata(
+                    osd_id=int(osd_id), client=client
+                )
+                log.debug(f"OSD metadata for osd.{osd_id}: \n {osd_metadata}")
+
+                if (
+                    int(osd_metadata["bluefs_dedicated_wal"]) == 1
+                    or int(osd_metadata["bluefs_dedicated_db"]) == 1
+                ):
+                    log.info(
+                        f"OSD.{osd_id} already has WAL/DB partition, choosing another OSD"
+                    )
+
+                    osd_id = random.choice(osd_list)
+                    log.info(
+                        f"\n -------------------------------------------"
+                        f"\n Adding a dedicated WAL/DB device for OSD.{osd_id}"
+                        f"\n -------------------------------------------"
+                    )
+
+                osd_host = rados_obj.fetch_host_node(
+                    daemon_type="osd", daemon_id=osd_id
+                )
+                empty_devices = rados_obj.get_available_devices(
+                    node_name=osd_host.hostname, device_type="hdd"
+                )
+                if not empty_devices:
+                    log.error(
+                        f"No spare disks available on OSD host {osd_host.hostname}"
+                    )
+                    raise Exception(
+                        f"No spare disks available on OSD host {osd_host.hostname}"
+                    )
+
+                db_size = 4 << 20
+                log.info(db_size)
+                wal_db_size = "4M"
+                log.info(wal_db_size)
+
+                log.info(
+                    f"List of available devices on osd host {osd_host.hostname}: {empty_devices}"
+                )
+
+                lvm_list = create_lvms(
+                    node=osd_host, count=2, size=wal_db_size, devices=[empty_devices[0]]
+                )
+                log.info(f"List of LVMs created on {osd_host.hostname}: {lvm_list}")
+                db_target = lvm_list.pop()
+                log.info(f"DB will be added on device: {db_target}")
+                out = bluestore_obj.add_db_device(
+                    osd_id=osd_id, new_device=db_target, db_size=db_size
+                )
+                log.info(out)
+                assert "DB device added" in out
+                osd_metadata = ceph_cluster.get_osd_metadata(
+                    osd_id=int(osd_id), client=client
+                )
+                log.debug(f"OSD metadata for osd.{osd_id}: \n {osd_metadata}")
+
+                if not int(osd_metadata["bluefs_dedicated_db"]) == 1:
+                    log.error("'bluefs_dedicated_db' entry in OSD metadata is not 1")
+                    raise AssertionError(
+                        "'bluefs_dedicated_db' entry in OSD metadata is not 1"
+                    )
+
+                wal_target = lvm_list.pop()
+                log.info(f"WAL will be added on device: {wal_target}")
+
+                out = bluestore_obj.add_wal_device(osd_id=osd_id, new_device=wal_target)
+                log.info(out)
+                assert "WAL device added" in out
+                osd_metadata = ceph_cluster.get_osd_metadata(
+                    osd_id=int(osd_id), client=client
+                )
+                log.debug(f"OSD metadata for osd.{osd_id}: \n {osd_metadata}")
+
+                if not int(osd_metadata["bluefs_dedicated_wal"]) == 1:
+                    log.error("'bluefs_dedicated_wal' entry in OSD metadata is not 1")
+                    raise AssertionError(
+                        "'bluefs_dedicated_wal' entry in OSD metadata is not 1"
+                    )
+
+            # using additional host node13 to add OSD
+            node13_obj = get_node_by_id(ceph_cluster, "node13")
+            empty_devices = rados_obj.get_available_devices(
+                node_name=node13_obj.hostname, device_type="hdd"
+            )
+            if len(empty_devices) < 2:
+                log.error(
+                    f"Need at least 2 spare disks available on host {node13_obj.hostname}"
+                )
+                raise Exception(
+                    f"Two spare disks not available on host {node13_obj.hostname}"
+                )
+
+            wal_db_size = "4M"
+            log.info(wal_db_size)
+
+            log.info(
+                f"List of available devices on osd host {node13_obj.hostname}: {empty_devices}"
+            )
+
+            lvm_list = create_lvms(
+                node=node13_obj, count=2, size=wal_db_size, devices=[empty_devices[0]]
+            )
+            log.info(f"List of LVMs created on {node13_obj.hostname}: {lvm_list}")
+
+            # manually add OSD with wal/db on node13
+            db_target = lvm_list.pop()
+            log.info(f"DB will be added on device: {db_target}")
+            data_dev = empty_devices[1]
+            log.info(f"Data device will be on disk: {data_dev}")
+            add_cmd = f"ceph orch daemon add osd {node13_obj.hostname}:data_devices={data_dev},db_devices={db_target}"
+            out, err = cephadm.shell(args=[add_cmd])
+
+            if not ("Created osd" in out and f"on host '{node13_obj.hostname}" in out):
+                log.error(f"OSD addition on {node13_obj.hostname} failed")
+                log.error(err)
+                raise Exception(f"OSD addition on {node13_obj.hostname} failed")
+            time.sleep(30)
+
+            node13_osds = rados_obj.collect_osd_daemon_ids(osd_node=node13_obj)
+            log.info(f"OSD IDs on {node13_obj.hostname}: {node13_osds}")
+
+            # create a data pool and fill cluster til 20% capacity
+            assert rados_obj.create_pool(pool_name="db-spillover")
+
+            # determine the number of objects to be written to the pool
+            # to achieve 20% utilization
+            bench_obj_size_kb = 16384
+
+            # determine how much % cluster is already filled
+            current_fill_ratio = rados_obj.get_cephdf_stats()["stats"][
+                "total_used_raw_ratio"
+            ]
+
+            osd_df_stats = rados_obj.get_osd_df_stats(
+                tree=False, filter_by="name", filter="osd.0"
+            )
+            osd_size = osd_df_stats["nodes"][0]["kb"]
+            num_objs = int(
+                (osd_size * (0.2 - current_fill_ratio) / bench_obj_size_kb) + 1
+            )
+
+            # fill the cluster till 20% capacity
+            bench_config = {
+                "seconds": 300,
+                "b": f"{bench_obj_size_kb}KB",
+                "no-cleanup": True,
+                "max-objects": num_objs,
+            }
+            bench_obj.write(client=client, pool_name="db-spillover", **bench_config)
+            time.sleep(10)
+
+            # log the cluster and pool fill %
+            cluster_fill = (
+                int(rados_obj.get_cephdf_stats()["stats"]["total_used_raw_ratio"]) * 100
+            )
+            pool_fill = (
+                int(
+                    rados_obj.get_cephdf_stats(pool_name="db-spillover")["stats"][
+                        "percent_used"
+                    ]
+                )
+                * 100
+            )
+
+            log.info(f"Cluster fill %: {cluster_fill}")
+            log.info(f"Pool db-spillover fill %: {pool_fill}")
+
+            # monitor ceph health for db spillover warning
+            # smart wait for 240 secs to check BlueFS spillover warning
+            timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=240)
+            while datetime.datetime.now() < timeout_time:
+                health_detail, _ = cephadm.shell(args=["ceph health detail"])
+                log.info(f"Health warning: \n {health_detail}")
+                if "experiencing BlueFS spillover" not in health_detail:
+                    log.error("BlueFS spillover yet to be generated")
+                    log.info("sleeping for 30 secs")
+                    time.sleep(30)
+                    continue
+                break
+            else:
+                log.error("Expected BlueFS spillover did not show up within timeout")
+                raise Exception(
+                    "Expected BlueFS spillover did not show up within timeout"
+                )
+
+            log.info("BlueFS spillover warning successfully generated")
         else:
             log.info(
                 "\n\n Execution begins for CBT collocated scenarios ************ \n\n"
@@ -490,8 +702,24 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
+        # fail-safe removal of all OSDs from node13
+        if "node13_osds" in locals() or "node13_osds" in globals():
+            service_obj.remove_osds_from_host(host_obj=node13_obj)
+            # remove lvs, vgs, and pvs
+            for lvm in lvm_list:
+                node13_obj.exec_command(cmd=f"lvremove -y {lvm}", sudo=True)
+            vgname = lvm.split("/")[2]
+            node13_obj.exec_command(cmd=f"vgremove -y {vgname}", sudo=True)
+            node13_obj.exec_command(cmd=f"pvremove -y {empty_devices[0]}", sudo=True)
+
+        # delete all rados pools
+        rados_obj.rados_pool_cleanup()
         # log cluster health
         rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
 
     log.info("Completed verification of Ceph-BlueStore-Tool commands.")
     return 0

@@ -104,6 +104,7 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
             cfg["config"]["pos_args"].append(gw_group)
         return cfg
 
+
 def deploy_nvme_service(ceph_cluster, config):
     """Deploy NVMe Service with apply or with spec
 
@@ -133,7 +134,7 @@ def delete_nvme_service(ceph_cluster, config):
     - gw_nodes
     - gw_group      # optional, as per release
     - mtls          # optional
-    """ 
+    """
     gw_groups = config.get("gw_groups", [{"gw_group": config.get("gw_group", "")}])
 
     for gwgroup_config in gw_groups:

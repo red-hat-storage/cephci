@@ -503,7 +503,6 @@ class HighAvailability:
             client = NVMeInitiator(node, self.gateways[0])
             client.connect_targets(io_client)
             self.clients.append(client)
-        return self.clients
 
     def fetch_namespaces(self, gateway, failed_ana_grp_ids=[]):
         """Fetch all namespaces for failed gateways.
@@ -542,7 +541,7 @@ class HighAvailability:
         )
         return namespaces
 
-    @retry((IOError, TimeoutError, CommandFailed), tries=3, delay=1)
+    @retry((IOError, TimeoutError, CommandFailed), tries=5, delay=2)
     def validate_io(self, namespaces):
         """Validate Continuous IO on namespaces.
 
