@@ -62,13 +62,24 @@ def run(ceph_cluster, **kw):
     1. Deletes all the subvolumes created
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(clients[0], fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(clients[0], fs_name)
         client1 = clients[0]
         available_space = int(get_available_space(client1, default_fs))
         log.info(available_space)
@@ -98,7 +109,7 @@ def run(ceph_cluster, **kw):
                 fs_util.fuse_mount(
                     [clients[0]],
                     fuse_mounting_dir_1,
-                    extra_params=f" -r {subvol_path.strip()}",
+                    extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
                 )
                 clients[0].exec_command(
                     sudo=True,
