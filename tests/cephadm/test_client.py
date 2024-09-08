@@ -50,6 +50,9 @@ def add(cls, config: Dict) -> None:
 
     nodes_ = config.get("nodes", config.get("node"))
     default_version = str(cls.cluster.rhcs_version.version[0])
+    if config.get("rhcs_version"):
+        default_version = config["rhcs_version"].split(".")[0]
+
     use_cdn = cls.cluster.use_cdn
     if nodes_:
         if not isinstance(nodes_, list):

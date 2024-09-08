@@ -1,16 +1,16 @@
 ##############################################################################################
 # Tier-Level: 2
-# Test-Suite: tier-2_nvmeof_b2b_upgrade.yaml
+# Test-Suite: tier-2_nvmeof_b2b_upgrade_with_mtls.yaml
 # Scenario: Build to build Upgrade,
 #       - Any GAed to next development build
-#       - Currently, 8.0 cluster to  8.0(Latest dev) Build
+#       - Currently, 8.0 stable version cluster to  8.0(Latest dev) Build
 #
 # Cluster Configuration: conf/squid/nvmeof/ceph_nvmeof_ha_cluster_4nodes.yaml
 #
 # Test Steps:
 # - Deploy RHCS/IBM 8(GA) cluster in RHEL 9.
-# - Configure NVMeoF gateways and Run IOs in background.
-# - Upgrade cluster from 8.0 to 8.0(Latest dev) with NVMe IO in background.
+# - Configure NVMeoF gateways with mTLS cpnfiguration and Run IOs in background.
+# - Upgrade cluster from 8.0 stable version to 8.0(Latest dev) with NVMe IO in background.
 # - Validate cluster status
 # - Add more namespaces and run IO again.
 # - Perform HA failover and failback.
@@ -90,17 +90,18 @@ tests:
 
   - test:
       name: Upgrade Cluster 8.x stable to latest 8.x ceph version
-      desc: Upgrade cluster to latest version with NVMeoF
+      desc: Upgrade cluster to latest version with NVMeoF-mTLS
       module: test_ceph_nvmeof_upgrade.py
-      polarion-id: CEPH-83576090
+      polarion-id: CEPH-83596760
       config:
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         gw_group: gw_group1
+        mtls: true
         rep_pool_config:
           pool: rbd
-        install: true                           # Run SPDK with all pre-requisites
+        install: true
         cleanup:
           - pool
           - gateway
@@ -152,9 +153,10 @@ tests:
         do_not_create_image: true
         rep-pool-only: true
         gw_group: gw_group1
+        mtls: true
         rep_pool_config:
           pool: rbd
-        install: true                           # Run SPDK with all pre-requisites
+        install: true
         cleanup:
           - pool
           - gateway
@@ -166,7 +168,7 @@ tests:
           - node9
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 3
+            serial: 4
             bdevs:
             - count: 2
               size: 5G
@@ -197,8 +199,8 @@ tests:
             nodes: node7
           - tool: systemctl
             nodes: node9
-      desc: NVMeOF 4GW post upgrade HA test
+      desc: NVMeoF 4GW post upgrade HA Test
       destroy-cluster: false
       module: test_ceph_nvmeof_high_availability.py
-      name: NVMeoF 4-GW HA test Single failure
+      name: NVMeoF-mTLS 4-GW HA test Single failure
       polarion-id: CEPH-83589016
