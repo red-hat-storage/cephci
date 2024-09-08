@@ -20,7 +20,7 @@ class SpecStorage(Cli):
         self.base_cmd = f"python3 {self.install_dest}SPECstorage2020/SM2020"
         self.outputlog = "result"
         self.benchmark_file = "storage2020.yml"
-        self.install_loc = "http://magna006.ceph.redhat.com/cephci-jenkins/"
+        self.install_loc = "http://magna002.ceph.redhat.com/spec_storage/"
 
     def install_spec_storage(self):
         """
@@ -76,7 +76,7 @@ class SpecStorage(Cli):
         """
         try:
             # Add config file "sfc_rc"
-            cmd = f"wget  {self.install_loc}spec_storage/{self.config} -O {self.install_dest}/{self.config}"
+            cmd = f"wget  {self.install_loc}/{self.config} -O {self.install_dest}/{self.config}"
             self.execute(sudo=True, cmd=cmd)
             # Update installer Location
             cmd = (
