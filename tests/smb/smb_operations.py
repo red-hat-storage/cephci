@@ -1,4 +1,5 @@
 import json
+import re
 import tempfile
 from time import sleep
 
@@ -26,6 +27,7 @@ def deploy_smb_service_imperative(
     path,
     domain_realm,
     custom_dns,
+    clustering="default",
 ):
     """Deploy smb services
     Args:
@@ -62,6 +64,7 @@ def deploy_smb_service_imperative(
             smb_user_name,
             smb_user_password,
             custom_dns,
+            clustering,
         )
 
         # Check smb cluster
@@ -190,9 +193,9 @@ def smb_cleanup(installer, smb_shares, smb_cluster_id):
     try:
         # Remove smb shares
         remove_smb_share(installer, smb_shares, smb_cluster_id)
-
         # Remove smb cluster
         remove_smb_cluster(installer, smb_cluster_id)
+        sleep(9)
     except Exception as e:
         raise CephadmOpsExecutionError(
             f"Fail to cleanup smb cluster {smb_cluster_id}, Error {e}"
@@ -253,6 +256,7 @@ def create_smb_cluster(
     smb_user_name,
     smb_user_password,
     custom_dns,
+    clustering,
 ):
     """Create smb cluster
     Args:
@@ -271,6 +275,7 @@ def create_smb_cluster(
                 auth_mode,
                 define_user_pass=f"{smb_user_name}%{smb_user_password}",
                 placement="label:smb",
+                clustering=clustering,
             )
         elif auth_mode == "active-directory":
             CephAdm(installer).ceph.smb.cluster.create(
@@ -280,6 +285,7 @@ def create_smb_cluster(
                 domain_join_user_pass=f"{smb_user_name}%{smb_user_password}",
                 custom_dns=custom_dns,
                 placement="label:smb",
+                clustering=clustering,
             )
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to create smb cluster, Error {e}")
@@ -591,3 +597,63 @@ def clients_cleanup(
                 )
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to cleanup clients, Error {e}")
+
+
+def check_rados_clustermeta(cephadm, smb_cluster_id, smb_nodes):
+    """Check rados clustermeta for samba cluster
+    Args:
+        cephadm (obj): cephadm obj
+        smb_cluster_id (str): samba cluster id
+        smb_nodes (list): samba server nodes obj list
+    """
+    try:
+        # Get rados clustermeta for smb cluster
+        cmd = f"rados --pool=.smb -N {smb_cluster_id} get cluster.meta.json /dev/stdout"
+        out = json.loads(cephadm.shell([cmd])[0])
+
+        # Get samba server nodes ip
+        smb_nodes_ips = [smb_node.ip_address for smb_node in smb_nodes]
+
+        # check rados clustermeta consist of all the sambe server IP
+        smb_clustering = any(
+            node["node"] in smb_nodes_ips and node["state"] == "ready"
+            for node in out["nodes"]
+        )
+        return smb_clustering
+    except Exception as e:
+        raise CephadmOpsExecutionError(
+            f"Fail to get rados clustermeta for samba cluster, Error {e}"
+        )
+
+
+def check_ctdb_health(smb_nodes, smb_cluster_id):
+    """Check rctdb health
+    Args:
+        smb_nodes (list): samba server nodes obj list
+        smb_cluster_id (str): samba cluster id
+    """
+    try:
+        # Get samba service
+        cmd = f"cephadm ls --no-detail | jq -r 'map(select(.name | startswith(\"smb.{smb_cluster_id}\")))[-1].name'"
+        out = smb_nodes[0].exec_command(sudo=True, cmd=cmd)[0].strip()
+
+        # Get ctdb status
+        sleep(30)
+        cmd = f"cephadm enter -n {out} ctdb status"
+        ctdb_status = smb_nodes[0].exec_command(sudo=True, cmd=cmd)[0]
+
+        # Get number of nodes and status
+        nodes = re.search(r"Number of nodes:(\d+)", ctdb_status).group(1)
+        status = all(
+            re.search(r"pnn:\d+ \S+ *OK", line)
+            for line in ctdb_status.splitlines()
+            if line.startswith("pnn")
+        )
+        log.info(f"ctdb status: nodes: {nodes},status: {status}")
+
+        # Validate ctdb health
+        if int(nodes) == len(smb_nodes) and status:
+            return True
+        return False
+    except Exception as e:
+        raise CephadmOpsExecutionError(f"Fail to check ctdb health, Error {e}")

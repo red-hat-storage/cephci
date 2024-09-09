@@ -13,6 +13,7 @@ globals:
           - grafana
           - prometheus
           - crash
+          - smb
         no-of-volumes: 6
         disk-size: 15
       node2:
