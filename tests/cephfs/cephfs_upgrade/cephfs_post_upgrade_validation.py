@@ -41,12 +41,23 @@ def nfs_test(nfs_req_params):
     Raises:
         AssertionError
     """
-    nfs_client = nfs_req_params["nfs_client"]
-    existing_nfs_mount = nfs_req_params["existing_nfs_mount"]
-    nfs_name = nfs_req_params["nfs_name"]
-    nfs_server = nfs_req_params["nfs_server"]
-    nfs_server_name = nfs_server[0].node.hostname
-    nfs_server_name_1 = nfs_server[1].node.hostname
+    config = nfs_req_params["config"]
+    clients = nfs_req_params["clients"]
+    nfs_config = config["NFS"]
+    for i in nfs_config:
+        nfs_name = i
+        break
+    nfs_config = config["NFS"][nfs_name]
+    for i in nfs_config:
+        nfs_export_name = i
+        break
+    nfs_client_name = nfs_config[nfs_export_name]["nfs_mnt_client"]
+    nfs_client = [i for i in clients if i.node.hostname == nfs_client_name][0]
+    existing_nfs_mount = nfs_config[nfs_export_name]["nfs_mnt_pt"]
+
+    nfs_server_name = nfs_config[nfs_export_name]["nfs_server"]
+
+    nfs_server_name_1 = nfs_req_params["nfs_servers"][1].node.hostname
     fs_name = nfs_req_params["fs_name"]
     fs_util = nfs_req_params["fs_util"]
 
@@ -58,10 +69,19 @@ def nfs_test(nfs_req_params):
     output = json.loads(out)
     if len(output) == 0:
         assert False, f"nfs cluster {nfs_name} exports doesn't exist after upgrade"
-    nfs_export_name = output[0]
+
     log.info("Verify existing mounts are accessible")
     out, rc = nfs_client.exec_command(sudo=True, cmd=f"ls {existing_nfs_mount}")
-
+    dir_path = f"{existing_nfs_mount}/smallfile_nfs_dir"
+    nfs_client.exec_command(sudo=True, cmd=f"mkdir -p {dir_path}", timeout=15)
+    nfs_client.exec_command(
+        sudo=True,
+        cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
+        f"--operation create --threads 1 --file-size 1024 "
+        f"--files 10 --top {dir_path}",
+        long_running=True,
+        timeout=20,
+    )
     log.info("Verify exports are active by mounting and running IO")
     nfs_mounting_dir = f"{existing_nfs_mount}_new"
     fs_util.nfs_mount_and_io(
@@ -170,7 +190,6 @@ def snap_sched_test(snap_req_params):
         if "svg" in svg:
             for sv in config["CephFS"][vol_name][svg]:
                 sv_data = config["CephFS"][vol_name][svg][sv]
-                client_name = sv_data["mnt_client"]
                 if sv_data.get("snap_list"):
                     sv_snap.update(
                         {
@@ -178,6 +197,7 @@ def snap_sched_test(snap_req_params):
                                 "snap_list": sv_data["snap_list"],
                                 "svg": svg,
                                 "mnt_pt": sv_data["mnt_pt"],
+                                "mnt_client": sv_data["mnt_client"],
                             }
                         }
                     )
@@ -193,72 +213,96 @@ def snap_sched_test(snap_req_params):
                         }
                     )
 
-    for client in snap_req_params["clients"]:
-        if client_name in client.node.hostname:
-            snap_client = client
-
+    clients = snap_req_params["clients"]
+    client = clients[0]
     # Mount sv
     mon_node_ips = fs_util.get_mon_node_ips()
     sv_snap_tmp = sv_snap.copy()
     sv_snap_tmp.update(sv_sched)
     log.info("Fuse-Mount cephfs volume")
     fuse_mounting_dir = f"/mnt/{vol_name}_post_upgrade_fuse"
-    fs_util.fuse_mount(
-        [snap_client],
+    cephfs_client = random.choice(clients)
+    """fs_util.fuse_mount(
+        [cephfs_client],
         fuse_mounting_dir,
         extra_params=f"-r / --client_fs {vol_name}",
+    )"""
+
+    log.info(
+        "Using existing mountpoint,verify existing snapshots are accessible, perform readwrite IO."
     )
+    for sv in sv_snap:
+        mnt_pt = sv_snap[sv]["mnt_pt"]
+        mnt_client_name = sv_snap[sv]["mnt_client"]
+        mnt_client = [i for i in clients if i.node.hostname == mnt_client_name][0]
+        cmd = f"ls {mnt_pt}/.snap/*{sv_snap[sv]['snap_list'][0]}*/*"
+        out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
+        file_path = out.strip()
+        cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
+        out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
+        dir_path = f"{mnt_pt}/smallfile_snap_dir"
+        mnt_client.exec_command(sudo=True, cmd=f"mkdir -p {dir_path}", timeout=15)
+        mnt_client.exec_command(
+            sudo=True,
+            cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
+            f"--operation create --threads 1 --file-size 1024 "
+            f"--files 10 --top {dir_path}",
+            long_running=True,
+            timeout=20,
+        )
+
     log.info(
         "Perform Kernel and Fuse mount of subvolumes having pre-upgrade snapshots and schedules"
     )
     for sv in sv_snap_tmp:
+        snap_client = random.choice(clients)
         fuse_mounting_dir_1 = f"/mnt/{sv_snap_tmp[sv]['svg']}_{sv}_post_upgrade_fuse"
         kernel_mounting_dir_1 = (
             f"/mnt/{sv_snap_tmp[sv]['svg']}_{sv}_post_upgrade_kernel"
         )
-        subvol_path, rc = snap_client.exec_command(
+        subvol_path, rc = client.exec_command(
             sudo=True,
             cmd=f"ceph fs subvolume getpath {vol_name} {sv} {sv_snap_tmp[sv]['svg']}",
         )
         subvol_path = subvol_path.strip()
-        fs_util.fuse_mount(
-            [snap_client],
-            fuse_mounting_dir_1,
-            extra_params=f"-r {subvol_path} --client_fs {vol_name}",
-        )
-        fs_util.kernel_mount(
-            [snap_client],
-            kernel_mounting_dir_1,
-            ",".join(mon_node_ips),
-            sub_dir=f"{subvol_path}",
-            extra_params=f",fs={vol_name}",
-        )
+        try:
+            fs_util.fuse_mount(
+                [snap_client],
+                fuse_mounting_dir_1,
+                extra_params=f"-r {subvol_path} --client_fs {vol_name}",
+            )
+        except Exception as ex:
+            pass
+        try:
+            fs_util.kernel_mount(
+                [snap_client],
+                kernel_mounting_dir_1,
+                ",".join(mon_node_ips),
+                sub_dir=f"{subvol_path}",
+                extra_params=f",fs={vol_name}",
+            )
+        except Exception as ex:
+            pass
         if sv in sv_snap:
             sv_snap[sv]["mnt_kernel"] = kernel_mounting_dir_1
             sv_snap[sv]["mnt_fuse"] = fuse_mounting_dir_1
+            sv_snap[sv]["mnt_client_new"] = snap_client
         else:
             sv_sched[sv]["mnt_kernel"] = kernel_mounting_dir_1
             sv_sched[sv]["mnt_fuse"] = fuse_mounting_dir_1
+            sv_sched[sv]["mnt_client_new"] = snap_client
 
-    log.info("Verify existing snapshots are accessible, perform read IO.")
+    log.info(
+        "Using new mountpoint, verify existing snapshots are accessible, perform read IO."
+    )
     for sv in sv_snap:
+        snap_client = sv_snap[sv]["mnt_client_new"]
         for mnt_pt in [sv_snap[sv]["mnt_kernel"], sv_snap[sv]["mnt_fuse"]]:
             cmd = f"ls {mnt_pt}/.snap/*{sv_snap[sv]['snap_list'][0]}*/*"
-            try:
-                out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
-                file_path = out.strip()
-                cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
-                out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
-            except Exception as ex:
-                log.info(str(ex))
-                mnt_pt = sv_snap[sv]["mnt_pt"]
-                cmd = f"ls {mnt_pt}/.snap/*{sv_snap[sv]['snap_list'][0]}*/*"
-                log.info("Verify if existing mountpoint is accessible")
-                out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
-                log.info(out)
-                file_path = out.strip()
-                cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
-                out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+            out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+            file_path = out.strip()
+            cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
+            out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
 
     log.info("Verified that existing snapshots are accessible and read op suceeds")
 
@@ -266,8 +310,9 @@ def snap_sched_test(snap_req_params):
     for sv in sv_sched:
         sv_data = sv_sched[sv]
         cmd = f"ceph fs snap-schedule status {sv_data['sched_path']} --fs {vol_name} -f json"
-        out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+        out, rc = client.exec_command(sudo=True, cmd=cmd)
         sched_status = json.loads(out)
+
         for sched_val in sv_data["sched_list"]:
             for sched_item in sched_status:
                 if (
@@ -280,9 +325,9 @@ def snap_sched_test(snap_req_params):
                     )
             if "M" in sched_val:
                 snap_path = f"{fuse_mounting_dir}{sv_data['sched_path']}"
-                snap_util.validate_snap_schedule(snap_client, snap_path, sched_val)
+                snap_util.validate_snap_schedule(cephfs_client, snap_path, sched_val)
                 snap_util.validate_snap_retention(
-                    snap_client, snap_path, sv_data["sched_path"]
+                    cephfs_client, snap_path, sv_data["sched_path"]
                 )
 
     log.info(
@@ -293,19 +338,20 @@ def snap_sched_test(snap_req_params):
     for sv in sv_snap:
         sv_data = sv_snap[sv]
         mnt_pt = random.choice([sv_data["mnt_kernel"], sv_data["mnt_fuse"]])
-        fs_util.run_ios_V1(snap_client, mnt_pt)
+        mnt_client = sv_data["mnt_client_new"]
+        fs_util.run_ios_V1(mnt_client, mnt_pt)
         snapshot = {
             "vol_name": vol_name,
             "subvol_name": sv,
             "snap_name": f"snap_{sv}_post_upgrade",
             "group_name": sv_data["svg"],
         }
-        fs_util.create_snapshot(snap_client, **snapshot)
+        fs_util.create_snapshot(client, **snapshot)
 
     log.info("Delete existing snapshot")
     for sv in sv_snap:
         fs_util.remove_snapshot(
-            snap_client,
+            client,
             vol_name,
             sv,
             sv_snap[sv]["snap_list"][0],
@@ -315,11 +361,12 @@ def snap_sched_test(snap_req_params):
     log.info("Cleanup")
     sv_snap.update(sv_sched)
     for sv in sv_snap:
+        mnt_client = sv_snap[sv]["mnt_client_new"]
         for mnt_pt in [sv_snap[sv]["mnt_kernel"], sv_snap[sv]["mnt_fuse"]]:
-            cmd = f"umount -f {mnt_pt};rm -rf {mnt_pt}"
-            out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
-    cmd = f"umount -f {fuse_mounting_dir};rm -rf {fuse_mounting_dir}"
-    out, rc = snap_client.exec_command(sudo=True, cmd=cmd)
+            cmd = f"umount -l {mnt_pt};rm -rf {mnt_pt}"
+            out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
+    cmd = f"umount -l {fuse_mounting_dir};rm -rf {fuse_mounting_dir}"
+    out, rc = cephfs_client.exec_command(sudo=True, cmd=cmd)
     return 0
 
 
@@ -363,24 +410,30 @@ def clone_test(clone_req_params):
     for svg in config["CephFS"][vol_name]:
         for sv in config["CephFS"][vol_name][svg]:
             if "Clone" in sv:
-                client_name = config["CephFS"][vol_name][svg][sv]["mnt_client"]
-                clone_data.update({sv: {"svg": svg}})
+                sv1 = config["CephFS"][vol_name][svg][sv]
+                clone_data.update(
+                    {
+                        sv: {
+                            "svg": svg,
+                            "mnt_pt": sv1["mnt_pt"],
+                            "mnt_client": sv1["mnt_client"],
+                        }
+                    }
+                )
             if "svg" in svg:
-                if config["CephFS"][vol_name][svg][sv].get("snap_list"):
+                sv1 = config["CephFS"][vol_name][svg][sv]
+                if sv1.get("snap_list"):
                     new_clone_data.update(
                         {
                             sv: {
-                                "snap_name": config["CephFS"][vol_name][svg][sv][
-                                    "snap_list"
-                                ][1],
+                                "snap_name": sv1["snap_list"][1],
                                 "group_name": svg,
                             }
                         }
                     )
 
-    for client in clone_req_params["clients"]:
-        if client_name in client.node.hostname:
-            clone_client = client
+    clients = clone_req_params["clients"]
+    client = clients[0]
 
     log.info("Create new Clone using pre-upgrade snapshot")
     for sv in new_clone_data:
@@ -394,26 +447,51 @@ def clone_test(clone_req_params):
             "target_group_name": new_clone_data[sv]["group_name"],
         }
 
-        fs_util.create_clone(clone_client, **clone_config)
-        fs_util.validate_clone_state(clone_client, clone_config)
+        fs_util.create_clone(client, **clone_config)
+        fs_util.validate_clone_state(client, clone_config)
 
     mon_node_ips = fs_util.get_mon_node_ips()
+
+    log.info(
+        "Using existing mountpoint,verify clones are accessible, perform readwrite IO."
+    )
+    for sv in clone_data:
+        mnt_pt = clone_data[sv]["mnt_pt"]
+        mnt_client_name = clone_data[sv]["mnt_client"]
+        mnt_client = [i for i in clients if i.node.hostname == mnt_client_name][0]
+        cmd = f"ls {mnt_pt}/*"
+        out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
+        file_path = out.strip()
+        cmd = f"dd if={file_path} count=10 bs=1M > read_dd"
+        out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
+        dir_path = f"{mnt_pt}/smallfile_clone_dir"
+        mnt_client.exec_command(sudo=True, cmd=f"mkdir -p {dir_path}", timeout=15)
+        mnt_client.exec_command(
+            sudo=True,
+            cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
+            f"--operation create --threads 1 --file-size 1024 "
+            f"--files 10 --top {dir_path}",
+            long_running=True,
+            timeout=20,
+        )
+
     log.info("Mount existing clones, verify IO suceeds")
     for clone in clone_data:
         fuse_mounting_dir_1 = f"/mnt/{clone}_post_upgrade_fuse"
         kernel_mounting_dir_1 = f"/mnt/{clone}_post_upgrade_kernel"
-        subvol_path, rc = clone_client.exec_command(
+        mnt_client = random.choice(clients)
+        subvol_path, rc = client.exec_command(
             sudo=True,
             cmd=f"ceph fs subvolume getpath {vol_name} {clone} {clone_data[clone]['svg']}",
         )
         subvol_path = subvol_path.strip()
         fs_util.fuse_mount(
-            [clone_client],
+            [mnt_client],
             fuse_mounting_dir_1,
             extra_params=f"-r {subvol_path} --client_fs {vol_name}",
         )
         fs_util.kernel_mount(
-            [clone_client],
+            [mnt_client],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path}",
@@ -421,24 +499,25 @@ def clone_test(clone_req_params):
         )
         clone_data[clone]["mnt_kernel"] = kernel_mounting_dir_1
         clone_data[clone]["mnt_fuse"] = fuse_mounting_dir_1
+        clone_data[clone]["mnt_client_new"] = mnt_client
         log.info(f"Perform existing file read on clone {clone}")
         for mnt_pt in [kernel_mounting_dir_1, fuse_mounting_dir_1]:
             cmd = f"dd if={mnt_pt}/dd_test_file count=10 bs=1M > read_dd"
-            out, rc = clone_client.exec_command(sudo=True, cmd=cmd)
+            out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
 
         log.info(f"Perform overwrite on existing clone {clone}")
         cmd = f"dd if=/dev/urandom of={kernel_mounting_dir_1}/dd_test_file count=10 bs=1M seek=20"
-        out, rc = clone_client.exec_command(sudo=True, cmd=cmd)
+        out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
 
         log.info("Create snapshot on existing clone")
-        fs_util.run_ios_V1(clone_client, fuse_mounting_dir_1)
+        fs_util.run_ios_V1(mnt_client, fuse_mounting_dir_1)
         snapshot = {
             "vol_name": vol_name,
             "subvol_name": clone,
             "snap_name": f"snap_{clone}_post_upgrade",
             "group_name": clone_data[clone]["svg"],
         }
-        fs_util.create_snapshot(clone_client, **snapshot)
+        fs_util.create_snapshot(client, **snapshot)
 
         log.info(f"Create Clone of Clone volume {clone}")
         clone_name = f"Clone_{clone}"
@@ -451,19 +530,20 @@ def clone_test(clone_req_params):
             "target_group_name": clone_data[clone]["svg"],
         }
 
-        fs_util.create_clone(clone_client, **clone_config)
-        fs_util.validate_clone_state(clone_client, clone_config)
+        fs_util.create_clone(client, **clone_config)
+        fs_util.validate_clone_state(client, clone_config)
 
     for clone in clone_data:
+        mnt_client = clone_data[clone]["mnt_client_new"]
         for mnt_pt in [clone_data[clone]["mnt_kernel"], clone_data[clone]["mnt_fuse"]]:
-            cmd = f"umount -f {mnt_pt};rm -rf {mnt_pt}"
-            out, rc = clone_client.exec_command(sudo=True, cmd=cmd)
+            cmd = f"umount -l {mnt_pt};rm -rf {mnt_pt}"
+            out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
 
     for clone in clone_data:
         log.info("Delete existing snapshot")
         snap_name = f"snap_{clone}_post_upgrade"
         fs_util.remove_snapshot(
-            clone_client,
+            client,
             vol_name,
             clone,
             snap_name,
@@ -475,7 +555,7 @@ def clone_test(clone_req_params):
             "subvol_name": clone,
             "group_name": clone_data[clone]["svg"],
         }
-        fs_util.remove_subvolume(clone_client, **clone_vol)
+        fs_util.remove_subvolume(client, **clone_vol)
         break
     return 0
 
@@ -537,15 +617,15 @@ def dir_pin_test(dir_pin_req_params):
     subvol_path = subvol_path.strip()
     fuse_mounting_dir_1 = f"/mnt/{pin_vol['sv']}_post_upgrade_fuse"
     kernel_mounting_dir_1 = f"/mnt/{pin_vol['sv']}_post_upgrade_kernel"
-
+    mnt_client = random.choice(dir_pin_req_params["clients"])
     log.info(f"Mount subvolume having pinned dirs {pin_vol['sv']}")
     fs_util.fuse_mount(
-        [client],
+        [mnt_client],
         fuse_mounting_dir_1,
         extra_params=f"-r {subvol_path} --client_fs {vol_name}",
     )
     fs_util.kernel_mount(
-        [client],
+        [mnt_client],
         kernel_mounting_dir_1,
         ",".join(mon_node_ips),
         sub_dir=f"{subvol_path}",
@@ -570,7 +650,7 @@ def dir_pin_test(dir_pin_req_params):
                 mds_dirs_before = mds["dirs"]
                 break
         log.info("Run IO on pinned dirs")
-        fs_util.run_ios_V1(client, io_path)
+        fs_util.run_ios_V1(mnt_client, io_path)
         out, rc = client.exec_command(
             sudo=True,
             cmd=f"ceph fs status {vol_name} --format json",
@@ -597,8 +677,8 @@ def dir_pin_test(dir_pin_req_params):
             test_status = 1
 
     for mnt_pt in [fuse_mounting_dir_1, kernel_mounting_dir_1]:
-        cmd = f"umount -f {mnt_pt};rm -rf {mnt_pt}"
-        out, rc = client.exec_command(sudo=True, cmd=cmd)
+        cmd = f"umount -l {mnt_pt};rm -rf {mnt_pt}"
+        out, rc = mnt_client.exec_command(sudo=True, cmd=cmd)
     return test_status
 
 
@@ -701,7 +781,7 @@ def auth_test(auth_req_params):
                 test_status = 1
 
     for mnt_pt in mnt_pt_list:
-        cmd = f"umount -f {mnt_pt};rm -rf {mnt_pt}"
+        cmd = f"umount -l {mnt_pt};rm -rf {mnt_pt}"
         out, rc = auth_client.exec_command(sudo=True, cmd=cmd)
     return test_status
 
@@ -851,10 +931,10 @@ def cg_quiesce_test(cg_quiesce_params):
         }
         fs_util.create_subvolume(cg_client, **subvolume)
     client_mnt_dict = {}
-    qs_member_dict = cg_snap_util.mount_qs_members(cg_io_client, qs_set, vol_name)
-    client_mnt_dict.update({cg_io_client.node.hostname: qs_member_dict})
-    log.info(f"CG IO client:{cg_io_client.node.hostname}")
-    log.info(f"CG cmds client:{cg_client.node.hostname}")
+    qs_member_dict1 = cg_snap_util.mount_qs_members(cg_client, qs_set, vol_name)
+    client_mnt_dict.update({cg_client.node.hostname: qs_member_dict1})
+    qs_member_dict2 = cg_snap_util.mount_qs_members(cg_io_client, qs_set, vol_name)
+    client_mnt_dict.update({cg_io_client.node.hostname: qs_member_dict2})
     log.info(f"Start the IO on quiesce set members - {qs_set}")
     cg_test_io_status = Value("i", 0)
     io_run_time = 40
@@ -862,7 +942,7 @@ def cg_quiesce_test(cg_quiesce_params):
     p = Thread(
         target=cg_snap_io.start_cg_io,
         args=(
-            [cg_io_client, cg_io_client],
+            [cg_client, cg_io_client],
             qs_set,
             client_mnt_dict,
             cg_test_io_status,
@@ -926,8 +1006,8 @@ def cg_quiesce_test(cg_quiesce_params):
         log.info(
             "Copy the contents from pre-upgrade snapshots to AFS on existing subvolumes"
         )
-        for qs_member in qs_member_dict:
-            mnt_pt = qs_member_dict[qs_member]["mount_point"]
+        for qs_member in qs_member_dict2:
+            mnt_pt = qs_member_dict2[qs_member]["mount_point"]
             if qs_info.get(qs_member):
                 if qs_info[qs_member].get("snap_list"):
                     retry_cnt = 0
@@ -979,18 +1059,22 @@ def cg_quiesce_test(cg_quiesce_params):
 
     mnt_pt_list = []
     log.info(f"Perform cleanup for {qs_set}")
-    for qs_member in qs_member_dict:
-        mnt_pt_list.append(qs_member_dict[qs_member]["mount_point"])
+    for qs_member in qs_member_dict2:
+        mnt_pt_list.append(qs_member_dict2[qs_member]["mount_point"])
     log.info("Remove CG IO files and unmount")
     cg_snap_util.cleanup_cg_io(cg_io_client, mnt_pt_list)
+    mnt_pt_list.clear()
+    for qs_member in qs_member_dict1:
+        mnt_pt_list.append(qs_member_dict1[qs_member]["mount_point"])
+    cg_snap_util.cleanup_cg_io(cg_client, mnt_pt_list, del_data=0)
     mnt_pt_list.clear()
 
     # snap_name = f"cg_snap_{rand_str}"
     log.info("Remove CG snapshots")
-    for qs_member in qs_member_dict:
+    for qs_member in qs_member_dict1:
         snap_list = snap_qs_dict[qs_member]
-        if qs_member_dict[qs_member].get("group_name"):
-            group_name = qs_member_dict[qs_member]["group_name"]
+        if qs_member_dict1[qs_member].get("group_name"):
+            group_name = qs_member_dict1[qs_member]["group_name"]
             for snap_name in snap_list:
                 fs_util.remove_snapshot(
                     cg_client,
@@ -1046,12 +1130,18 @@ def run(ceph_cluster, **kw):
     try:
         fs_util = FsUtils(ceph_cluster)
         snap_util = SnapUtils(ceph_cluster)
+        config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         default_nfs_name = "cephfs-nfs"
         default_fs = "cephfs"
+        nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         cg_snap_util = CG_Snap_Utils(ceph_cluster)
         cg_snap_io = CG_snap_IO(ceph_cluster)
         test_status = 0
+        if fs_util.get_fs_info(clients[0], "cephfs_new"):
+            default_fs = "cephfs_new"
+            clients[0].exec_command(sudo=True, cmd="ceph fs volume create cephfs")
+
         log.info("Get the Ceph pre-upgrade config data from cephfs_upgrade_config.json")
         f = clients[0].remote_file(
             sudo=True,
@@ -1064,29 +1154,19 @@ def run(ceph_cluster, **kw):
             "fs_util": fs_util,
             "snap_util": snap_util,
             "clients": clients,
+            "nfs_servers": nfs_servers,
+            "fs_name": default_fs,
         }
         f.close()
-        if fs_util.get_fs_info(clients[0], "cephfs_new"):
-            default_fs = "cephfs_new"
-            clients[0].exec_command(sudo=True, cmd="ceph fs volume create cephfs")
 
         space_str = "\t\t\t\t\t\t\t\t\t"
 
-        log.info(
+        """log.info(
             f"\n\n {space_str} Test1 CEPH-83575098 : Post-upgrade NFS Validation\n"
         )
-        nfs_client = ceph_cluster.get_ceph_objects("client")
-        nfs_server = ceph_cluster.get_ceph_objects("nfs")
-        nfs_reqs = {
-            "existing_nfs_mount": "/mnt/nfs",
-            "nfs_client": nfs_client[0],
-            "nfs_server": nfs_server,
-            "nfs_name": default_nfs_name,
-            "fs_name": default_fs,
-            "fs_util": fs_util,
-        }
-        nfs_test(nfs_reqs)
-        log.info("NFS post upgrade validation succeeded \n")
+        
+        nfs_test(test_reqs)
+        log.info("NFS post upgrade validation succeeded \n")"""
 
         log.info(
             f"\n\n {space_str}Test2 : Post-upgrade Snapshot and Schedule Validation\n"

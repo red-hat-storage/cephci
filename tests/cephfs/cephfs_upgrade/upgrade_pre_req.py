@@ -138,6 +138,7 @@ def run(ceph_cluster, **kw):
         )
         mount_points = {"kernel_mounts": [], "fuse_mounts": [], "nfs_mounts": []}
         for sv in subvolume_list[::2]:
+            mnt_client = random.choice(clients)
             subvol_path, rc = clients[0].exec_command(
                 sudo=True,
                 cmd=f"ceph fs subvolume getpath {sv['vol_name']} {sv['subvol_name']} {sv['group_name']}",
@@ -149,7 +150,7 @@ def run(ceph_cluster, **kw):
             )
             if "nautilus" not in ceph_version["version"]:
                 fs_util.kernel_mount(
-                    [clients[0]],
+                    [mnt_client],
                     kernel_mounting_dir_1,
                     ",".join(mon_node_ips),
                     sub_dir=f"{subvol_path.strip()}",
@@ -158,7 +159,7 @@ def run(ceph_cluster, **kw):
                 mount_points["kernel_mounts"].append(kernel_mounting_dir_1)
                 mnt_params = {
                     "mnt_pt": kernel_mounting_dir_1,
-                    "mnt_client": clients[0].node.hostname,
+                    "mnt_client": mnt_client.node.hostname,
                 }
                 ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
                     sv["subvol_name"]
@@ -166,7 +167,7 @@ def run(ceph_cluster, **kw):
             else:
                 if sv["vol_name"] == default_fs:
                     fs_util.kernel_mount(
-                        [clients[0]],
+                        [mnt_client],
                         kernel_mounting_dir_1,
                         ",".join(mon_node_ips),
                         sub_dir=f"{subvol_path.strip()}",
@@ -174,13 +175,14 @@ def run(ceph_cluster, **kw):
                     mount_points["kernel_mounts"].append(kernel_mounting_dir_1)
                     mnt_params = {
                         "mnt_pt": kernel_mounting_dir_1,
-                        "mnt_client": clients[0].node.hostname,
+                        "mnt_client": mnt_client.node.hostname,
                     }
                     ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
                         sv["subvol_name"]
                     ].update(mnt_params)
 
         for sv in subvolume_list[1::2]:
+            mnt_client = random.choice(clients)
             subvol_path, rc = clients[0].exec_command(
                 sudo=True,
                 cmd=f"ceph fs subvolume getpath {sv['vol_name']} {sv['subvol_name']} {sv['group_name']}",
@@ -191,14 +193,14 @@ def run(ceph_cluster, **kw):
             )
             if "nautilus" not in ceph_version["version"]:
                 fs_util.fuse_mount(
-                    [clients[0]],
+                    [mnt_client],
                     fuse_mounting_dir_1,
                     extra_params=f"-r {subvol_path.strip()} --client_fs {sv['vol_name']}",
                 )
                 mount_points["fuse_mounts"].append(fuse_mounting_dir_1)
                 mnt_params = {
                     "mnt_pt": fuse_mounting_dir_1,
-                    "mnt_client": clients[0].node.hostname,
+                    "mnt_client": mnt_client.node.hostname,
                 }
                 ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
                     sv["subvol_name"]
@@ -206,14 +208,14 @@ def run(ceph_cluster, **kw):
             else:
                 if sv["vol_name"] == default_fs:
                     fs_util.fuse_mount(
-                        [clients[0]],
+                        [mnt_client],
                         fuse_mounting_dir_1,
                         extra_params=f"-r {subvol_path.strip()} ",
                     )
                     mount_points["fuse_mounts"].append(fuse_mounting_dir_1)
                     mnt_params = {
                         "mnt_pt": fuse_mounting_dir_1,
-                        "mnt_client": clients[0].node.hostname,
+                        "mnt_client": mnt_client.node.hostname,
                     }
                     ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
                         sv["subvol_name"]
@@ -232,57 +234,63 @@ def run(ceph_cluster, **kw):
                         break
 
         mnt_list = {}
-        for subvol in subvol_snap_clone:
+        for sv in subvol_snap_clone:
             for mount in mount_points["kernel_mounts"]:
                 if (
-                    (subvol["subvol_name"] in mount)
-                    and subvol["vol_name"] in mount
-                    and subvol["group_name"] in mount
+                    (sv["subvol_name"] in mount)
+                    and sv["vol_name"] in mount
+                    and sv["group_name"] in mount
                 ):
                     if "cephfs-ec" not in mount:
-                        mnt_list[subvol["subvol_name"]] = mount
+                        mnt_list[sv["subvol_name"]] = mount
                         file_path = f"{mount}/dd_test_file"
+                        mnt_client = ceph_config["CephFS"][sv["vol_name"]][
+                            sv["group_name"]
+                        ][sv["subvol_name"]]["mnt_client"]
             for mount in mount_points["fuse_mounts"]:
                 if (
-                    subvol["subvol_name"] in mount
-                    and subvol["vol_name"] in mount
-                    and subvol["group_name"] in mount
+                    sv["subvol_name"] in mount
+                    and sv["vol_name"] in mount
+                    and sv["group_name"] in mount
                 ):
                     if "cephfs-ec" not in mount:
-                        mnt_list[subvol["subvol_name"]] = mount
+                        mnt_list[sv["subvol_name"]] = mount
                         file_path = f"{mount}/dd_test_file"
-
-            clients[0].exec_command(
+                        mnt_client = ceph_config["CephFS"][sv["vol_name"]][
+                            sv["group_name"]
+                        ][sv["subvol_name"]]["mnt_client"]
+            client_tmp = [i for i in clients if i.node.hostname == mnt_client][0]
+            client_tmp.exec_command(
                 sudo=True,
                 cmd=f"dd if=/dev/urandom of={file_path} bs=1M " f"count=100",
                 long_running=True,
             )
 
-            log.info(f"Create manual snapshots on subvolume - {subvol['subvol_name']}")
+            log.info(f"Create manual snapshots on subvolume - {sv['subvol_name']}")
             snap_list = []
             for i in range(1, 3):
                 snapshot = {
-                    "vol_name": subvol["vol_name"],
-                    "subvol_name": subvol["subvol_name"],
-                    "snap_name": f"snap{i}_{subvol['subvol_name']}",
-                    "group_name": subvol["group_name"],
+                    "vol_name": sv["vol_name"],
+                    "subvol_name": sv["subvol_name"],
+                    "snap_name": f"snap{i}_{sv['subvol_name']}",
+                    "group_name": sv["group_name"],
                 }
                 fs_util.create_snapshot(clients[0], **snapshot)
-                snap_list.append(f"snap{i}_{subvol['subvol_name']}")
+                snap_list.append(f"snap{i}_{sv['subvol_name']}")
             snap_params = {"snap_list": snap_list}
-            ceph_config["CephFS"][subvol["vol_name"]][subvol["group_name"]][
-                subvol["subvol_name"]
+            ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
+                sv["subvol_name"]
             ].update(snap_params)
 
-            log.info(f"Create clone of snapshot on subvolume - {subvol['subvol_name']}")
-            clone_name = f"Clone_{subvol['subvol_name']}"
+            log.info(f"Create clone of snapshot on subvolume - {sv['subvol_name']}")
+            clone_name = f"Clone_{sv['subvol_name']}"
             clone_config = {
-                "vol_name": subvol["vol_name"],
-                "subvol_name": subvol["subvol_name"],
-                "snap_name": f"snap2_{subvol['subvol_name']}",
+                "vol_name": sv["vol_name"],
+                "subvol_name": sv["subvol_name"],
+                "snap_name": f"snap2_{sv['subvol_name']}",
                 "target_subvol_name": clone_name,
-                "group_name": subvol["group_name"],
-                "target_group_name": subvol["group_name"],
+                "group_name": sv["group_name"],
+                "target_group_name": sv["group_name"],
             }
 
             fs_util.create_clone(clients[0], **clone_config)
@@ -291,33 +299,31 @@ def run(ceph_cluster, **kw):
             clone_params = {
                 "clone": clone_name,
             }
-            ceph_config["CephFS"][subvol["vol_name"]][subvol["group_name"]][
-                subvol["subvol_name"]
+            ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
+                sv["subvol_name"]
             ].update(clone_params)
-            ceph_config["CephFS"][subvol["vol_name"]][subvol["group_name"]][
-                clone_name
-            ] = {}
+            ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][clone_name] = {}
             subvol_path, rc = clients[0].exec_command(
                 sudo=True,
-                cmd=f"ceph fs subvolume getpath {subvol['vol_name']} {clone_name} {subvol['group_name']}",
+                cmd=f"ceph fs subvolume getpath {sv['vol_name']} {clone_name} {sv['group_name']}",
             )
             fuse_mounting_dir_1 = (
-                f"/mnt/cephfs_fuse{mounting_dir}_{subvol['vol_name']}_{subvol['group_name']}_"
+                f"/mnt/cephfs_fuse{mounting_dir}_{sv['vol_name']}_{sv['group_name']}_"
                 f"{clone_name}/"
             )
-
+            mnt_client = random.choice(clients)
             fs_util.fuse_mount(
-                [clients[0]],
+                [mnt_client],
                 fuse_mounting_dir_1,
-                extra_params=f"-r {subvol_path.strip()} --client_fs {subvol['vol_name']}",
+                extra_params=f"-r {subvol_path.strip()} --client_fs {sv['vol_name']}",
             )
             mnt_params = {
                 "mnt_pt": fuse_mounting_dir_1,
-                "mnt_client": clients[0].node.hostname,
+                "mnt_client": mnt_client.node.hostname,
             }
-            ceph_config["CephFS"][subvol["vol_name"]][subvol["group_name"]][
-                clone_name
-            ].update(mnt_params)
+            ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][clone_name].update(
+                mnt_params
+            )
 
         log.info("Create a snapshot-schedule and apply to 2 subvolumes")
 
@@ -335,10 +341,10 @@ def run(ceph_cluster, **kw):
         snap_util.allow_minutely_schedule(clients[0], allow=True)
         fs_util.validate_services(clients[0], service_name="mgr")
         time.sleep(60)
-        for subvol in subvol_sched_snap:
+        for sv in subvol_sched_snap:
             snap_params = {}
             snap_util.enable_snap_schedule(clients[0])
-            snap_params["fs_name"] = subvol["vol_name"]
+            snap_params["fs_name"] = sv["vol_name"]
             snap_params["validate"] = True
             snap_params["client"] = clients[0]
             # sched_list = ["2M", "1h", "7d", "4w"]
@@ -350,8 +356,8 @@ def run(ceph_cluster, **kw):
             )
             snap_params["retention"] = "5M5h5d4w"
 
-            cmd = f"ceph fs subvolume getpath {subvol['vol_name']} {subvol['subvol_name']} "
-            cmd += f"{subvol['group_name']}"
+            cmd = f"ceph fs subvolume getpath {sv['vol_name']} {sv['subvol_name']} "
+            cmd += f"{sv['group_name']}"
             retry_exec = retry(CommandFailed, tries=3, delay=60)(
                 clients[0].exec_command
             )
@@ -370,32 +376,36 @@ def run(ceph_cluster, **kw):
                 "retention": snap_params["retention"],
                 "fs_name": snap_params["fs_name"],
             }
-            ceph_config["CephFS"][subvol["vol_name"]][subvol["group_name"]][
-                subvol["subvol_name"]
+            ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
+                sv["subvol_name"]
             ].update(sched_params)
 
         log.info(f"Ceph upgrade config : {ceph_config}")
 
         log.info("Set Dir pinning")
         dir_name = "upgrade_pin_dir"
-        for subvol in subvol_snap_clone:
-            clients[0].exec_command(
+        for sv in subvol_snap_clone:
+            mnt_client = ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
+                sv["subvol_name"]
+            ]["mnt_client"]
+            client_tmp = [i for i in clients if i.node.hostname == mnt_client][0]
+            client_tmp.exec_command(
                 cmd="sudo mkdir -p %s%s_{1..4}"
-                % (mnt_list[subvol["subvol_name"]], dir_name)
+                % (mnt_list[sv["subvol_name"]], dir_name)
             )
-            mounting_dir = mnt_list[subvol["subvol_name"]]
+            mounting_dir = mnt_list[sv["subvol_name"]]
             log.info(f"mounting_dir:{mounting_dir}")
             for num in range(1, 4):
-                clients[0].exec_command(
+                client_tmp.exec_command(
                     sudo=True,
                     cmd="setfattr -n ceph.dir.pin -v %s %s%s_%d"
                     % (0, mounting_dir, dir_name, num),
                 )
-        pin_dir_list = [f"{dir_name}_{i}" for i in range(1, 4)]
-        pin_params = {"pinned_dir_list": pin_dir_list, "pin_rank": 0}
-        ceph_config["CephFS"][subvol["vol_name"]][subvol["group_name"]][
-            subvol["subvol_name"]
-        ].update(pin_params)
+            pin_dir_list = [f"{dir_name}_{i}" for i in range(1, 4)]
+            pin_params = {"pinned_dir_list": pin_dir_list, "pin_rank": 0}
+            ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
+                sv["subvol_name"]
+            ].update(pin_params)
 
         log.info("Set Client and subvolume authorize")
         client_name = "test_auth"
@@ -484,16 +494,17 @@ def run(ceph_cluster, **kw):
             else:
                 raise CommandFailed("Failed to create nfs export")
             # Mount ceph nfs exports
-            nfs_client[0].exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
+            mnt_client = random.choice(nfs_client)
+            mnt_client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
             assert fs_util.wait_for_cmd_to_succeed(
-                nfs_client[0],
+                mnt_client,
                 cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
             )
-            nfs_client[0].exec_command(
+            mnt_client.exec_command(
                 sudo=True,
                 cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
             )
-            out, rc = nfs_client[0].exec_command(cmd="mount")
+            out, rc = mnt_client.exec_command(cmd="mount")
             mount_output = out.split()
             log.info("Checking if nfs mount is is passed of failed:")
             assert nfs_mounting_dir.rstrip("/") in mount_output
@@ -503,24 +514,25 @@ def run(ceph_cluster, **kw):
                     nfs_export_name: {
                         "export_path": path,
                         "nfs_mnt_pt": nfs_mounting_dir,
-                        "nfs_mnt_client": nfs_client[0].node.hostname,
+                        "nfs_mnt_client": mnt_client.node.hostname,
                         "vol_name": "cephfs",
+                        "nfs_server": nfs_server_name,
                     },
                 }
             )
 
             log.info("Creating Directory")
-            out, rc = nfs_client[0].exec_command(
+            out, rc = mnt_client.exec_command(
                 sudo=True, cmd=f"mkdir {nfs_mounting_dir}{dir_name}"
             )
-            nfs_client[0].exec_command(
+            mnt_client.exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
                 f"{nfs_mounting_dir}{dir_name}",
                 long_running=True,
             )
-            nfs_client[0].exec_command(
+            mnt_client.exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 "
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
@@ -589,15 +601,17 @@ def run(ceph_cluster, **kw):
         f.write("\n")
         f.flush()
 
-        if config.get("client_upgrade", 0) == 1:
-            log.info("Upgrade Clients before Cluster upgrade")
-            for client in clients:
-                rh_ceph_repo_update(client, config)
-                cmd = "yum install -y --nogpgcheck ceph-common ceph-fuse"
-                client.exec_command(sudo=True, cmd=cmd)
-
         for i in mount_points["kernel_mounts"] + mount_points["fuse_mounts"]:
-            fs_util.run_ios(clients[0], i)
+            for vol_name in ceph_config["CephFS"]:
+                for svg in ceph_config["CephFS"][vol_name]:
+                    if "svg" in svg:
+                        for sv in ceph_config["CephFS"][vol_name][svg]:
+                            if i == ceph_config["CephFS"][vol_name][svg][sv]["mnt_pt"]:
+                                mnt_client = ceph_config["CephFS"][vol_name][svg][sv][
+                                    "mnt_client"
+                                ]
+            client_tmp = [i for i in clients if i.node.hostname == mnt_client][0]
+            fs_util.run_ios(client_tmp, i)
 
         return 0
 
@@ -605,34 +619,3 @@ def run(ceph_cluster, **kw):
         log.info(e)
         log.info(traceback.format_exc())
         return 1
-
-
-def rh_ceph_repo_update(client, config):
-    build = config.get("rhbuild")
-    version, platform = build.split("-", 1)
-    recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
-    release = f"RHCEPH-{version}"
-    url = f"{recipe_url}{release}.yaml"
-    data = requests.get(url, verify=False)
-    base_url = yaml.safe_load(data.text)["latest"]["composes"][platform]
-    f = client.remote_file(
-        sudo=True,
-        file_name="/etc/yum.repos.d/rh_ceph.repo",
-        file_mode="r",
-    )
-    base_url_data = config.get("rhs-ceph-repo", base_url)
-    replace_str = f"baseurl={base_url_data}/compose/Tools/x86_64/os/"
-    repo_data = f.readlines()
-    f.close()
-    for i in range(len(repo_data)):
-        line = repo_data[i]
-        if "baseurl" in line:
-            repo_data[i] = f"{replace_str}\n"
-    f = client.remote_file(
-        sudo=True,
-        file_name="/etc/yum.repos.d/rh_ceph.repo",
-        file_mode="w",
-    )
-    for line in repo_data:
-        f.write(line)
-    f.close()
