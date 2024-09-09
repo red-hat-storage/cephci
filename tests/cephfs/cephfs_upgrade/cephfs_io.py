@@ -27,8 +27,7 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
-        recreate_user = config.get("recreate_user", False)
-        fs_util.auth_list(clients, recreate=recreate_user)
+
         timeout = config.get("timeout", 1800)
         log.info("checking Pre-requisites")
         if not clients:
@@ -79,6 +78,22 @@ def run(ceph_cluster, **kw):
             function_called = fs_util.run_ios(client1, f"{total_mounts[0]}/run_ios")
             stats[function_called.__name__] += 1
             stats["total_iterations"] += 1
+
+        if config.get("client_upgrade", 0) == 1:
+            log.info("Upgrade Clients after Cluster upgrade")
+            upgrade_node = config.get("client_upgrade_node", "all")
+            if upgrade_node == "all":
+                for client in clients:
+                    cmd = "yum install -y --nogpgcheck ceph-common ceph-fuse"
+                    client.exec_command(sudo=True, cmd=cmd)
+            else:
+                client = [
+                    i if upgrade_node in i.node.hostname else None for i in clients
+                ][0]
+                if client != None:
+                    cmd = "yum install -y --nogpgcheck ceph-common ceph-fuse"
+                    client.exec_command(sudo=True, cmd=cmd)
+
         return 0
     except KeyboardInterrupt:
         pass
