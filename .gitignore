@@ -12,6 +12,8 @@ config.yaml
 *.bak
 result.html
 result.props
+*.crt
+*.key
 
 # ignore Logs
 *.log

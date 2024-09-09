@@ -1,6 +1,6 @@
 ##############################################################################################
 # Tier-Level: 2
-# Test-Suite: tier-2_nvmeof_b2b_upgrade.yaml
+# Test-Suite: tier-2_nvmeof_7x-to-8x_upgrade_with_mtls.yaml
 # Scenario: Build to build Upgrade,
 #       - Any GAed to next development build
 #       - Currently, 7.x CDN cluster to  8.0(Latest dev) Build
