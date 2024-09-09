@@ -5,16 +5,13 @@ import time
 import traceback
 from distutils.version import LooseVersion
 
-import requests
-import yaml
-
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
 from utility.retry import retry
-from utility.utils import get_ceph_version_from_cluster, get_cephci_config
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 

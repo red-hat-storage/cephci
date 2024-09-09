@@ -90,7 +90,7 @@ def run(ceph_cluster, **kw):
                 client = [
                     i if upgrade_node in i.node.hostname else None for i in clients
                 ][0]
-                if client != None:
+                if client is not None:
                     cmd = "yum install -y --nogpgcheck ceph-common ceph-fuse"
                     client.exec_command(sudo=True, cmd=cmd)
 

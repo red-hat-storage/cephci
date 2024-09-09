@@ -265,24 +265,18 @@ def snap_sched_test(snap_req_params):
             cmd=f"ceph fs subvolume getpath {vol_name} {sv} {sv_snap_tmp[sv]['svg']}",
         )
         subvol_path = subvol_path.strip()
-        try:
-            fs_util.fuse_mount(
-                [snap_client],
-                fuse_mounting_dir_1,
-                extra_params=f"-r {subvol_path} --client_fs {vol_name}",
-            )
-        except Exception as ex:
-            pass
-        try:
-            fs_util.kernel_mount(
-                [snap_client],
-                kernel_mounting_dir_1,
-                ",".join(mon_node_ips),
-                sub_dir=f"{subvol_path}",
-                extra_params=f",fs={vol_name}",
-            )
-        except Exception as ex:
-            pass
+        fs_util.fuse_mount(
+            [snap_client],
+            fuse_mounting_dir_1,
+            extra_params=f"-r {subvol_path} --client_fs {vol_name}",
+        )
+        fs_util.kernel_mount(
+            [snap_client],
+            kernel_mounting_dir_1,
+            ",".join(mon_node_ips),
+            sub_dir=f"{subvol_path}",
+            extra_params=f",fs={vol_name}",
+        )
         if sv in sv_snap:
             sv_snap[sv]["mnt_kernel"] = kernel_mounting_dir_1
             sv_snap[sv]["mnt_fuse"] = fuse_mounting_dir_1
@@ -660,7 +654,7 @@ def dir_pin_test(dir_pin_req_params):
             if int(mds["rank"]) == int(pin_vol["pin_rank"]):
                 mds_dirs_after = mds["dirs"]
                 break
-        if int(mds_dirs_after) > int(mds_dirs_before):
+        if int(mds_dirs_after) != int(mds_dirs_before):
             log.info(
                 f"IO from pinned dirs goes through MDS rank {pin_vol['pin_rank']} as expected"
             )
@@ -1130,9 +1124,7 @@ def run(ceph_cluster, **kw):
     try:
         fs_util = FsUtils(ceph_cluster)
         snap_util = SnapUtils(ceph_cluster)
-        config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
-        default_nfs_name = "cephfs-nfs"
         default_fs = "cephfs"
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         cg_snap_util = CG_Snap_Utils(ceph_cluster)
@@ -1158,16 +1150,12 @@ def run(ceph_cluster, **kw):
             "fs_name": default_fs,
         }
         f.close()
-
         space_str = "\t\t\t\t\t\t\t\t\t"
-
-        """log.info(
+        log.info(
             f"\n\n {space_str} Test1 CEPH-83575098 : Post-upgrade NFS Validation\n"
         )
-        
         nfs_test(test_reqs)
-        log.info("NFS post upgrade validation succeeded \n")"""
-
+        log.info("NFS post upgrade validation succeeded \n")
         log.info(
             f"\n\n {space_str}Test2 : Post-upgrade Snapshot and Schedule Validation\n"
         )
