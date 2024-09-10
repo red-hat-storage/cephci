@@ -29,7 +29,13 @@ def run(ceph_cluster, **kw):
         tc = "83594266"
         log.info(f"Running CephFS tests for ceph tracker - {tc}")
         # Initialize the utility class for CephFS
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         # Get the client nodes
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
@@ -39,9 +45,11 @@ def run(ceph_cluster, **kw):
         # Prepare the clients
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         # Generate random string for directory names
         rand = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
@@ -50,13 +58,20 @@ def run(ceph_cluster, **kw):
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse_{rand}"
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel_{rand}"
         # Mount CephFS using ceph-fuse and kernel
-        fs_util.fuse_mount([client1], fuse_mounting_dir_1)
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_1, extra_params=f" --client_fs {fs_name}"
+        )
         mon_node_ips = fs_util.get_mon_node_ips()
-        fs_util.kernel_mount([client1], kernel_mounting_dir_1, ",".join(mon_node_ips))
+        fs_util.kernel_mount(
+            [client1],
+            kernel_mounting_dir_1,
+            ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
+        )
         # test cephfs-journal-tool header get
         header_out1, ec1 = client1.exec_command(
             sudo=True,
-            cmd="cephfs-journal-tool --rank cephfs:0 header get",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header get",
             check_ec=False,
         )
         header_out1 = json.loads(header_out1)
@@ -71,12 +86,12 @@ def run(ceph_cluster, **kw):
         # Try to change for magic attribute
         header_out2, ec2 = client1.exec_command(
             sudo=True,
-            cmd="cephfs-journal-tool --rank cephfs:0 header set testing",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set testing",
             check_ec=False,
         )
         if ec2 == 0:
             log.error(
-                "cephfs-journal-tool --rank cephfs:0 header set should have failed"
+                f"cephfs-journal-tool --rank {fs_name}:0 header set should have failed"
             )
             return 1
         target_write_pos = 1024
@@ -85,74 +100,78 @@ def run(ceph_cluster, **kw):
         # Try to change for write_pos
         client1.exec_command(
             sudo=True,
-            cmd=f"cephfs-journal-tool --rank cephfs:0 header set write_pos {target_write_pos}",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set write_pos {target_write_pos}",
             check_ec=False,
         )
         client1.exec_command(
             sudo=True,
-            cmd=f"cephfs-journal-tool --rank cephfs:0 header set expire_pos {target_expire_pos}",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set expire_pos {target_expire_pos}",
             check_ec=False,
         )
         client1.exec_command(
             sudo=True,
-            cmd=f"cephfs-journal-tool --rank cephfs:0 header set trimmed_pos {target_trimmed_pos}",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set trimmed_pos {target_trimmed_pos}",
             check_ec=False,
         )
         header_out3, ec3 = client1.exec_command(
             sudo=True,
-            cmd="cephfs-journal-tool --rank cephfs:0 header get",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header get",
             check_ec=False,
         )
         header_out3 = json.loads(header_out3)
         log.info(header_out3)
         if header_out3["write_pos"] != target_write_pos:
-            log.error("cephfs-journal-tool --rank cephfs:0 header set write_pos failed")
+            log.error(
+                f"cephfs-journal-tool --rank {fs_name}:0 header set write_pos failed"
+            )
             return 1
         if header_out3["expire_pos"] != target_expire_pos:
             log.error(
-                "cephfs-journal-tool --rank cephfs:0 header set expire_pos failed"
+                f"cephfs-journal-tool --rank {fs_name}:0 header set expire_pos failed"
             )
             return 1
         if header_out3["trimmed_pos"] != target_trimmed_pos:
             log.error(
-                "cephfs-journal-tool --rank cephfs:0 header set trimmed_pos failed"
+                f"cephfs-journal-tool --rank {fs_name}:0 header set trimmed_pos failed"
             )
             return 1
         log.info("change of attributes is successful")
         log.info("Resetting the values to the original values")
         client1.exec_command(
             sudo=True,
-            cmd=f"cephfs-journal-tool --rank cephfs:0 header set write_pos {original_write_pos}",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set write_pos {original_write_pos}",
             check_ec=False,
         )
         client1.exec_command(
             sudo=True,
-            cmd=f"cephfs-journal-tool --rank cephfs:0 header set expire_pos {original_expire_pos}",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set expire_pos {original_expire_pos}",
             check_ec=False,
         )
         client1.exec_command(
             sudo=True,
-            cmd=f"cephfs-journal-tool --rank cephfs:0 header set trimmed_pos {original_trimmed_pos}",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set trimmed_pos {original_trimmed_pos}",
             check_ec=False,
         )
         header_out4, ec4 = client1.exec_command(
             sudo=True,
-            cmd="cephfs-journal-tool --rank cephfs:0 header get",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header get",
             check_ec=False,
         )
         header_out4 = json.loads(header_out4)
         log.info(header_out4)
         if header_out4["write_pos"] != original_write_pos:
-            log.error("cephfs-journal-tool --rank cephfs:0 header set write_pos failed")
+            log.error(
+                f"cephfs-journal-tool --rank {fs_name}:0 header set write_pos failed"
+            )
             return 1
         if header_out4["expire_pos"] != original_expire_pos:
             log.error(
-                "cephfs-journal-tool --rank cephfs:0 header set expire_pos failed"
+                f"cephfs-journal-tool --rank {fs_name}:0 header set expire_pos failed"
             )
             return 1
         if header_out4["trimmed_pos"] != original_trimmed_pos:
             log.error(
-                "cephfs-journal-tool --rank cephfs:0 header set trimmed_pos failed"
+                f"cephfs-journal-tool --rank {fs_name}:0 header set trimmed_pos failed"
             )
             return 1
 
@@ -166,17 +185,17 @@ def run(ceph_cluster, **kw):
         # Cleanup
         client1.exec_command(
             sudo=True,
-            cmd=f"cephfs-journal-tool --rank cephfs:0 header set write_pos {original_write_pos}",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set write_pos {original_write_pos}",
             check_ec=False,
         )
         client1.exec_command(
             sudo=True,
-            cmd=f"cephfs-journal-tool --rank cephfs:0 header set expire_pos {original_expire_pos}",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set expire_pos {original_expire_pos}",
             check_ec=False,
         )
         client1.exec_command(
             sudo=True,
-            cmd=f"cephfs-journal-tool --rank cephfs:0 header set trimmed_pos {original_trimmed_pos}",
+            cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set trimmed_pos {original_trimmed_pos}",
             check_ec=False,
         )
         fs_util.client_clean_up(
