@@ -1,16 +1,16 @@
 ##############################################################################################
 # Tier-Level: 2
-# Test-Suite: tier-2_nvmeof_b2b_upgrade.yaml
+# Test-Suite: tier-2_nvmeof_7x-to-8x_upgrade_with_mtls.yaml
 # Scenario: Build to build Upgrade,
 #       - Any GAed to next development build
-#       - Currently, 8.0 cluster to  8.0(Latest dev) Build
+#       - Currently, 7.x CDN cluster to  8.0(Latest dev) Build
 #
 # Cluster Configuration: conf/squid/nvmeof/ceph_nvmeof_ha_cluster_4nodes.yaml
 #
 # Test Steps:
-# - Deploy RHCS/IBM 8(GA) cluster in RHEL 9.
+# - Deploy RHCS/IBM 7.x(GA) cluster in RHEL 9.
 # - Configure NVMeoF gateways and Run IOs in background.
-# - Upgrade cluster from 8.0 to 8.0(Latest dev) with NVMe IO in background.
+# - Upgrade cluster from 7.x to 8.0(Latest dev) with NVMe IO in background.
 # - Validate cluster status
 # - Add more namespaces and run IO again.
 # - Perform HA failover and failback.
@@ -23,8 +23,8 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: Bootstrap RHCS 8.x cluster and deploy services with label placements.
-      desc: Bootstrap RHCS 8.x cluster and deploy services with label placements.
+      name: Bootstrap 7.x cluster and deploy services with label placements.
+      desc: Bootstrap 7.x cluster and deploy services with label placements.
       polarion-id: CEPH-83573777
       module: test_cephadm.py
       config:
@@ -34,9 +34,9 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                custom_repo: https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-8.0-202408281222.ci.0/IBM-CEPH-8.0-202408281222.ci.0-rhel9.repo
-                custom_image: cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-25
-                rhcs-version: "8.0"
+                custom_repo: "cdn"
+                custom_image: false
+                rhcs-version: "7.1"
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -64,10 +64,12 @@ tests:
               service: osd
               args:
                 all-available-devices: true
+          # Remove this config step once below BZ is verified,
+          # https://bugzilla.redhat.com/show_bug.cgi?id=2305795
           - config:
               command: shell
               args:
-                - ceph config set mgr mgr/cephadm/container_image_nvmeof cp.stg.icr.io/cp/ibm-ceph/nvmeof-rhel9:1.2.17-19
+                - ceph config set mgr mgr/cephadm/container_image_nvmeof cp.icr.io/cp/ibm-ceph/nvmeof-rhel9:1.2.16-8
       destroy-cluster: false
       abort-on-fail: true
 
@@ -78,6 +80,7 @@ tests:
       polarion-id: CEPH-83573777
       config:
         command: add
+        rhcs_version: "7.1"
         id: client.1
         nodes:
         - node10
@@ -89,15 +92,16 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: Upgrade Cluster 8.x stable to latest 8.x ceph version
-      desc: Upgrade cluster to latest version with NVMeoF
+      name: Upgrade Cluster to latest 8.x ceph version
+      desc: Upgrade cluster to latest version with NVMeoF-mTLS
       module: test_ceph_nvmeof_upgrade.py
-      polarion-id: CEPH-83576090
+      polarion-id: CEPH-83596761
       config:
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         gw_group: gw_group1
+        mtls: true
         rep_pool_config:
           pool: rbd
         install: true                           # Run SPDK with all pre-requisites
@@ -114,18 +118,18 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
-              size: 5G
-              lb_group: node6
-            - count: 2
-              size: 5G
-              lb_group: node7
-            - count: 2
-              size: 5G
-              lb_group: node8
-            - count: 2
-              size: 5G
-              lb_group: node9
+              - count: 2
+                size: 5G
+                lb_group: node6
+              - count: 2
+                size: 5G
+                lb_group: node7
+              - count: 2
+                size: 5G
+                lb_group: node8
+              - count: 2
+                size: 5G
+                lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -152,9 +156,10 @@ tests:
         do_not_create_image: true
         rep-pool-only: true
         gw_group: gw_group1
+        mtls: true
         rep_pool_config:
           pool: rbd
-        install: true                           # Run SPDK with all pre-requisites
+        install: true
         cleanup:
           - pool
           - gateway
@@ -166,20 +171,20 @@ tests:
           - node9
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode2
-            serial: 3
+            serial: 2
             bdevs:
-            - count: 2
-              size: 5G
-              lb_group: node6
-            - count: 2
-              size: 5G
-              lb_group: node7
-            - count: 2
-              size: 5G
-              lb_group: node8
-            - count: 2
-              size: 5G
-              lb_group: node9
+              - count: 2
+                size: 5G
+                lb_group: node6
+              - count: 2
+                size: 5G
+                lb_group: node7
+              - count: 2
+                size: 5G
+                lb_group: node8
+              - count: 2
+                size: 5G
+                lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -197,7 +202,7 @@ tests:
             nodes: node7
           - tool: systemctl
             nodes: node9
-      desc: NVMeOF 4GW post upgrade HA test
+      desc: 4GW HA test post upgrade
       destroy-cluster: false
       module: test_ceph_nvmeof_high_availability.py
       name: NVMeoF 4-GW HA test Single failure
