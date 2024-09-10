@@ -143,6 +143,7 @@ def smbclient_check_shares(
     smb_user_password,
     auth_mode,
     domain_realm,
+    public_addrs=None,
 ):
     """Smb share check using smbclients
     Args:
@@ -155,28 +156,52 @@ def smbclient_check_shares(
         domain_realm (str): Smb AD domain relam
     """
     try:
-        for smb_node in smb_nodes:
-            for smb_share in smb_shares:
-                if auth_mode == "active-directory":
-                    cmd = (
-                        f"smbclient -U '{domain_realm.split('.')[0].upper()}\\"
-                        f"{smb_user_name}%{smb_user_password}' "
-                        f"//{smb_node.ip_address}/{smb_share} -c ls"
-                    )
-                    client.exec_command(
-                        sudo=True,
-                        cmd=cmd,
-                    )
-                elif auth_mode == "user":
-                    cmd = (
-                        f"smbclient -U {smb_user_name}%{smb_user_password}"
-                        f" //{smb_node.ip_address}/{smb_share} -c ls"
-                    )
-                    client.exec_command(
-                        sudo=True,
-                        cmd=cmd,
-                    )
-                sleep(1)
+        if public_addrs:
+            for public_addr in public_addrs:
+                for smb_share in smb_shares:
+                    if auth_mode == "active-directory":
+                        cmd = (
+                            f"smbclient -U '{domain_realm.split('.')[0].upper()}\\"
+                            f"{smb_user_name}%{smb_user_password}' "
+                            f"//{public_addr.split('/')[0]}/{smb_share} -c ls"
+                        )
+                        client.exec_command(
+                            sudo=True,
+                            cmd=cmd,
+                        )
+                    elif auth_mode == "user":
+                        cmd = (
+                            f"smbclient -U {smb_user_name}%{smb_user_password}"
+                            f" //{public_addr.split('/')[0]}/{smb_share} -c ls"
+                        )
+                        client.exec_command(
+                            sudo=True,
+                            cmd=cmd,
+                        )
+                    sleep(1)
+        else:
+            for smb_node in smb_nodes:
+                for smb_share in smb_shares:
+                    if auth_mode == "active-directory":
+                        cmd = (
+                            f"smbclient -U '{domain_realm.split('.')[0].upper()}\\"
+                            f"{smb_user_name}%{smb_user_password}' "
+                            f"//{smb_node.ip_address}/{smb_share} -c ls"
+                        )
+                        client.exec_command(
+                            sudo=True,
+                            cmd=cmd,
+                        )
+                    elif auth_mode == "user":
+                        cmd = (
+                            f"smbclient -U {smb_user_name}%{smb_user_password}"
+                            f" //{smb_node.ip_address}/{smb_share} -c ls"
+                        )
+                        client.exec_command(
+                            sudo=True,
+                            cmd=cmd,
+                        )
+                    sleep(1)
     except Exception as e:
         raise CephadmOpsExecutionError(
             f"Fail to access smb share {smb_share}, Error {e}"
@@ -467,6 +492,7 @@ def smb_cifs_mount(
     auth_mode,
     domain_realm,
     cifs_mount_point,
+    public_addrs=None,
 ):
     """Smb cifs mount
     Args:
@@ -478,6 +504,7 @@ def smb_cifs_mount(
         auth_mode (str): Smb auth mode (user or active-directory)
         domain_realm (str): Smb AD domain relam
         cifs_mount_point (str): Smb cifs mount point
+        public_addrs(str): public addrs ip
     """
     try:
         # Create cifs mount dir
@@ -486,26 +513,49 @@ def smb_cifs_mount(
             sudo=True,
             cmd=cmd,
         )
-        # Mount smb share using cifs
-        if auth_mode == "user":
-            cmd = (
-                f"mount.cifs //{smb_node.ip_address}/{smb_share} {cifs_mount_point}"
-                f" -o username={smb_user_name},password={smb_user_password}"
-            )
-            client.exec_command(
-                sudo=True,
-                cmd=cmd,
-            )
-        elif auth_mode == "active-directory":
-            cmd = (
-                f"mount.cifs //{smb_node.ip_address}/{smb_share} {cifs_mount_point}"
-                f" -o username={smb_user_name},password={smb_user_password}"
-                f",domian={domain_realm.split('.')[0].upper()}"
-            )
-            client.exec_command(
-                sudo=True,
-                cmd=cmd,
-            )
+        if public_addrs:
+            # Mount smb share using cifs
+            if auth_mode == "user":
+                cmd = (
+                    f"mount.cifs //{public_addrs[0]}/{smb_share} {cifs_mount_point}"
+                    f" -o username={smb_user_name},password={smb_user_password}"
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+            elif auth_mode == "active-directory":
+                cmd = (
+                    f"mount.cifs //{public_addrs[0]}/{smb_share} {cifs_mount_point}"
+                    f" -o username={smb_user_name},password={smb_user_password}"
+                    f",domian={domain_realm.split('.')[0].upper()}"
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+
+        else:
+            # Mount smb share using cifs
+            if auth_mode == "user":
+                cmd = (
+                    f"mount.cifs //{smb_node.ip_address}/{smb_share} {cifs_mount_point}"
+                    f" -o username={smb_user_name},password={smb_user_password}"
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+            elif auth_mode == "active-directory":
+                cmd = (
+                    f"mount.cifs //{smb_node.ip_address}/{smb_share} {cifs_mount_point}"
+                    f" -o username={smb_user_name},password={smb_user_password}"
+                    f",domian={domain_realm.split('.')[0].upper()}"
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
     except Exception as e:
         raise CephadmOpsExecutionError(
             f"Fail to mount smb share {smb_share} using cifs, Error {e}"
@@ -535,7 +585,13 @@ def generate_apply_smb_spec(installer, file_type, smb_spec, file_mount):
 
 
 def win_mount(
-    clients, mount_point, samba_server, smb_share, smb_user_name, smb_user_password
+    clients,
+    mount_point,
+    samba_server,
+    smb_share,
+    smb_user_name,
+    smb_user_password,
+    public_addrs=None,
 ):
     """Window mount
     Args:
@@ -545,14 +601,23 @@ def win_mount(
         smb_share (str): Smb share
         smb_user_name (str): Smb username
         smb_user_password (str): Smb password
+        public_addrs(str): public addrs ip
     """
     try:
-        for client in clients:
-            cmd = (
-                f"net use {mount_point} \\\\{samba_server}\\{smb_share}"
-                f" /user:{smb_user_name} {smb_user_password} /persistent:yes"
-            )
-            client.exec_command(cmd=cmd)
+        if public_addrs:
+            for client in clients:
+                cmd = (
+                    f"net use {mount_point} \\\\{public_addrs[0]}\\{smb_share}"
+                    f" /user:{smb_user_name} {smb_user_password} /persistent:yes"
+                )
+                client.exec_command(cmd=cmd)
+        else:
+            for client in clients:
+                cmd = (
+                    f"net use {mount_point} \\\\{samba_server}\\{smb_share}"
+                    f" /user:{smb_user_name} {smb_user_password} /persistent:yes"
+                )
+                client.exec_command(cmd=cmd)
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to mount, Error {e}")
 

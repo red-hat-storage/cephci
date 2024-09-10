@@ -74,6 +74,13 @@ def run(ceph_cluster, **kw):
                 domain_realm = spec["domain_settings"]["realm"]
             else:
                 domain_realm = None
+            if "public_addrs" in spec:
+                public_addrs = [
+                    public_addrs["address"].split("/")[0]
+                    for public_addrs in spec["public_addrs"]
+                ]
+            else:
+                public_addrs = None
         elif spec["resource_type"] == "ceph.smb.usersgroups":
             smb_user_name = spec["values"]["users"][0]["name"]
             smb_user_password = spec["values"]["users"][0]["password"]
@@ -117,6 +124,7 @@ def run(ceph_cluster, **kw):
                 smb_shares[0],
                 smb_user_name,
                 smb_user_password,
+                public_addrs,
             )
         else:
             smb_cifs_mount(
@@ -128,6 +136,7 @@ def run(ceph_cluster, **kw):
                 auth_mode,
                 domain_realm,
                 mount_point,
+                public_addrs,
             )
 
         # Client Operations
