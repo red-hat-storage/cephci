@@ -40,6 +40,7 @@
 # Bugs :
 # https://bugzilla.redhat.com/show_bug.cgi?id=2309363
 
+#.  CEPH-83597462: Validate Client caps update during CG quiesce,MDS failover and Client evict
 #=======================================================================================================================
 tests:
   -
@@ -410,5 +411,9 @@ tests:
       name: Validate selinux relabels
       comments: "BZ-2309363"
       polarion-id: "CEPH-83595737"
-
-
+  - test:
+      abort-on-fail: false
+      desc: "Client Caps Validation during quiesce,mds failover and evict"
+      module: clients.client_caps_update_validation.py
+      name: client_caps_update_validation
+      polarion-id: "CEPH-83597462"

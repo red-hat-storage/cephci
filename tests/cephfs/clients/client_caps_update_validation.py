@@ -183,7 +183,7 @@ def client_caps_mds_failover_test(client, fs_name, fs_util, subvol_path):
                 caps_before_mds_fail = client_ls[i]["num_caps"]
                 client_id = client_ls[i]["id"]
                 break
-    log.info(f"Perform MDS failover")
+    log.info("Perform MDS failover")
     mds_failover(fs_util, client, fs_name)
     log.info("Capture Caps info after mds failover")
     out, _ = client.exec_command(sudo=True, cmd="ceph tell mds.0 client ls --f json")
