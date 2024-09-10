@@ -4204,5 +4204,15 @@ class RadosOrchestrator:
         crash_list = self.do_crash_ls()
         if crash_list:
             log.error("!!!ERROR: Crash exists in the cluster \n\n:" f"{crash_list}")
+            log.info("Logging crash info for each crash")
+            for crash_id in crash_list:
+                crash_info, _ = self.run_ceph_command(
+                    f"ceph crash info {crash_id}", client_exec=True
+                )
+                log.info(crash_info)
+
+            log.info("Archiving all the existing crashes on the cluster")
+            out, _ = self.node.shell(["ceph crash archive-all"])
+            log.info(out)
             return True
         return False
