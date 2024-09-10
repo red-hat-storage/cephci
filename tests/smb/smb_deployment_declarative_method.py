@@ -68,6 +68,13 @@ def run(ceph_cluster, **kw):
                 clustering = spec["clustering"]
             else:
                 clustering = "default"
+            if "public_addrs" in spec:
+                public_addrs = [
+                    public_addrs["address"].split("/")[0]
+                    for public_addrs in spec["public_addrs"]
+                ]
+            else:
+                public_addrs = None
         elif spec["resource_type"] == "ceph.smb.usersgroups":
             smb_user_name = spec["values"]["users"][0]["name"]
             smb_user_password = spec["values"]["users"][0]["password"]
@@ -114,6 +121,7 @@ def run(ceph_cluster, **kw):
             smb_user_password,
             auth_mode,
             domain_realm,
+            public_addrs,
         )
     except Exception as e:
         log.error(f"Failed to deploy samba with auth_mode 'user' : {e}")

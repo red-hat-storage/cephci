@@ -1,0 +1,129 @@
+#========================================================================
+# Test-Case: Tier 1 CTDB with VIP
+#
+# Cluster Configuration: baremetal conf
+#========================================================================
+tests:
+  - test:
+      name: (Clustering - Public Address)Verify Samba deployment using auth_mode=user
+      desc: (Clustering - Public Address)Verify Samba deployment using auth_mode=user
+      module: smb_deployment_declarative_method.py
+      polarion-id: CEPH-83597459
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+            public_addrs:
+              - address: 10.8.131.254/21
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: (Clustering - Public Address)Verify Samba deployment using auth_mode=AD
+      desc: (Clustering - Public Address)Verify Samba deployment using auth_mode=AD
+      module: smb_deployment_declarative_method.py
+      polarion-id: CEPH-83597460
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: active-directory
+            domain_settings:
+              realm: samba.qe
+              join_sources:
+                - source_type: resource
+                  ref: join1-admin
+            custom_dns:
+              - 10.70.44.153
+            placement:
+              label: smb
+            public_addrs:
+              - address: 10.8.131.254/21
+          - resource_type: ceph.smb.join.auth
+            auth_id: join1-admin
+            auth:
+              username: Administrator
+              password: Redhat@123
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: (Clustering - Public Address)Verify IOs from multiple windows clients
+      desc: (Clustering - Public Address)Verify IOs from multiple windows clients
+      module: smb_clients_operations.py
+      polarion-id: CEPH-83597461
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        windows_client: True
+        mount_point: "Z:"
+        file_count: 3
+        operations:
+          client01: create_file
+          client02: perform_lookups
+          client03: remove_files
+        windows_clients:
+          - ip: 10.70.47.106
+            hostname: DESKTOP-FTP9SJ1
+            user: smb-c
+            password: Samba@123
+          - ip: 10.70.45.15
+            hostname: DESKTOP-FTP9SJ1
+            user: smb-c
+            password: Samba@123
+          - ip: 10.70.45.175
+            hostname: DESKTOP-FTP9SJ1
+            user: smb-c
+            password: Samba@123
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+            public_addrs:
+              - address: 10.8.131.254/21
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+              readonly: true
