@@ -1,8 +1,12 @@
+import pdb
+import time
 import traceback
+from threading import Thread
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.mgr_workflows import MgrWorkflows
 from tests.rados.rados_test_util import (
     create_pools,
     get_device_path,
@@ -38,9 +42,18 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     client_node = ceph_cluster.get_nodes(role="client")[0]
+    mgr_obj = MgrWorkflows(node=cephadm)
+    installer = ceph_cluster.get_nodes(role="installer")[0]
+    mgr_daemon = Thread(
+        target=background_mgr_task, kwargs={"mgr_object": mgr_obj}, daemon=True
+    )
 
     log.info("Running osd in progress rebalance tests")
     try:
+        log_lines = [
+            "mgr load Traceback",
+            "TypeError: __init__() got an unexpected keyword argument 'original_weight'",
+        ]
         pool = create_pools(config, rados_obj, client_node)
         should_not_be_empty(pool, "Failed to retrieve pool details")
         pool_name = pool["pool_name"]
@@ -59,7 +72,25 @@ def run(ceph_cluster, **kw):
         utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
         method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
+        pdb.set_trace()
+        init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        mgr_dump = rados_obj.run_ceph_command(cmd="ceph mgr dump", client_exec=True)
+        active_mgr = mgr_dump["active_name"]
+        mgr_daemon.start()
         utils.osd_remove(ceph_cluster, osd_id, zap=True)
+        time.sleep(300)
+        # Check for the logs
+        end_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        if not verify_mgr_traceback_log(
+            rados_obj=rados_obj,
+            start_time=init_time,
+            end_time=end_time,
+            mgr_type=active_mgr,
+            lines=log_lines,
+        ):
+            log.error("The traceback found in the mgr logs")
+            return 1
+
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
         method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
         method_should_succeed(wait_for_device_rados, host, osd_id, action="remove")
@@ -120,3 +151,37 @@ def run(ceph_cluster, **kw):
             log.error("Test failed due to crash at the end of test")
             return 1
     return 0
+
+
+def verify_mgr_traceback_log(
+    rados_obj: RadosOrchestrator, start_time, end_time, mgr_type, lines
+) -> bool:
+    """
+    Retrieve the preempt log using journalctl command
+    Args:
+        rados_obj: Rados object
+        osd: osd id
+        start_time: time to start reading the journalctl logs - format ('2022-07-20 09:40:10')
+        end_time: time to stop reading the journalctl logs - format ('2022-07-20 10:58:49')
+        lines: Log lines to search in the journalctl logs
+    Returns:  True-> if the lines are exist in the journalctl logs
+              False -> if the lines are not exist in the journalctl logs
+    """
+
+    log.info("Checking log lines")
+    log_lines = rados_obj.get_journalctl_log(
+        start_time=start_time, end_time=end_time, daemon_type="mgr", daemon_id=mgr_type
+    )
+    log.debug(f"Journalctl logs are : {log_lines}")
+    for line in lines:
+        if line in log_lines:
+            log.error(f" Found the {line} in the mgr logs")
+            return False
+    return True
+
+
+def background_mgr_task(mgr_object):
+    # run forever
+    for _ in range(6):
+        mgr_object.set_mgr_fail()
+        time.sleep(5)
