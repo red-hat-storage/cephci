@@ -86,6 +86,12 @@ tests:
       name: configure client
 
   - test:
+      name: Verify ceph-mgr crash after a mgr failover
+      desc: Validate Ceph mgr getting crashed after mgr failover
+      polarion-id: CEPH-83597244
+      module: test_cephmgr_crash_after_mgr_fail.py
+
+  - test:
       name: Delete cluster using cephadm rm-cluster command
       desc:  Verify cluster purge via cephamd commands
       polarion-id: CEPH-83573765

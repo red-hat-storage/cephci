@@ -59,3 +59,21 @@ class Host(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def drain(self, host, force=False, zap_osd_devices=False):
+        """
+        Drains a given host
+        Args:
+            host (ceph): Ceph host to be drained
+            force (bool): whether to force the operation or not
+            zap_osd_devices (bool): To zap the osd devices
+        """
+        cmd = f"{self.base_cmd} drain {host}"
+        if force:
+            cmd += " --force"
+        if zap_osd_devices:
+            cmd += " --zap-osd-devices"
+        out = self.execute(cmd=cmd, sudo=True)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
