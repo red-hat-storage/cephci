@@ -1,0 +1,145 @@
+# Suite contains  tier-2 rados bug verification automation
+#===============================================================================================
+#------------------------------------------------------------------------------------------
+#----- Tier-2 - Bug verification  automation   ------
+#------------------------------------------------------------------------------------------
+# Conf: conf/squid/rados/11-node-cluster.yaml
+# Bugs:
+#     1. https://bugzilla.redhat.com/show_bug.cgi?id=2305677
+#===============================================================================================
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 7.1
+                release: z0
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+  - test:
+      name: Reproducing the Ceph mgr crash bug
+      module: test_node_drain_customer_bug.py
+      polarion-id: CEPH-83595932
+      config:
+        replicated_pool:
+          create: true
+          pool_name: mgr_test_pool
+          delete_pool: mgr_test_pool
+      desc: Reproducing the Ceph mgr crashed after a mgr failover
+  - test:
+      name: Upgrade cluster to latest 8.x ceph version
+      desc: Upgrade cluster to latest version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791,CEPH-83573790
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
+  - test:
+      name: Verification of Ceph mgr crash bug
+      module: test_node_drain_customer_bug.py
+      polarion-id: CEPH-83595932
+      config:
+        replicated_pool:
+          create: true
+          pool_name: mgr_test_pool
+          delete_pool: mgr_test_pool
+      desc: Ceph mgr crashed after a mgr failover with the message mgr operator
