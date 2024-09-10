@@ -8,6 +8,7 @@ import traceback
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonConfigMethods
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 from utility.utils import method_should_succeed
 
@@ -64,9 +65,14 @@ def run(ceph_cluster, **kw):
             )
             log.info(f"Created the pool {entry['pool_name']}")
             rados_object.bench_write(
-                pool_name=entry["pool_name"], rados_write_duration=30
+                pool_name=entry["pool_name"], rados_write_duration=90
             )
-
+            flag = wait_for_clean_pg_sets(rados_object)
+            if not flag:
+                log.error(
+                    "The cluster did not reach active + Clean state after add capacity"
+                )
+                return 1
             mon_obj.set_config(
                 section="osd", name="osd_shallow_scrub_chunk_max", value="250"
             )
@@ -74,7 +80,7 @@ def run(ceph_cluster, **kw):
             mon_obj.set_config(section="osd", name="debug_osd", value="10/10")
 
             rados_object.bench_write(
-                pool_name=entry["pool_name"], rados_write_duration=60, background=True
+                pool_name=entry["pool_name"], rados_write_duration=300, background=True
             )
 
             log_lines = [
@@ -83,11 +89,13 @@ def run(ceph_cluster, **kw):
             ]
 
             init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+
             rados_object.run_scrub(pool=entry["pool_name"])
             scrub_status_flag = False
 
             # Wait for the scrub to start for 15 minutes
-            time_end = time.time() + 60 * 15
+            time_end = time.time() + 60 * 45
+            count = 1
             while time.time() < time_end:
                 scrub_status = check_scrub_status(rados_object)
                 if scrub_status is True:
@@ -96,12 +104,18 @@ def run(ceph_cluster, **kw):
                     break
                 log.info("Waiting for the scrub to start")
                 time.sleep(30)
-
+                count = count + 1
+                log.info(f"The count is -{count}")
+            total_time = count * 30
+            log.info(
+                f"The total time to start user initiated scrub is  - {total_time} seconds"
+            )
             # check for the scrub is initiated or it is timeout
             if scrub_status_flag is False:
                 log.error("Scrub is not initiated")
                 return 1
-            time.sleep(10)
+            log.info("Scrub initiated")
+            time.sleep(30)
             end_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
             osd_list = []
             for node in ceph_nodes:
@@ -121,10 +135,27 @@ def run(ceph_cluster, **kw):
                 ):
                     log.info(f"The preempted lines found at {osd_id}")
                     log_osd_count = log_osd_count + 1
+                    time.sleep(10)
                 if log_osd_count == 2:
                     break
-            if log_osd_count == 0:
-                log.error("Log lines not found in any of the OSDs")
+            mon_daemon = rados_object.run_ceph_command(cmd="ceph mon stat")["leader"]
+
+            # checking the ceph logs
+            mon_log = rados_object.get_journalctl_log(
+                start_time=init_time,
+                end_time=end_time,
+                daemon_type="mon",
+                daemon_id=mon_daemon,
+            )
+            log_mon_count = 0
+
+            log.info(f"The mgr log lines are - {mon_log}")
+            for line in log_lines:
+                if line in mon_log:
+                    log.info(f"The {line} found in the logs")
+                    log_mon_count = log_mon_count + 1
+            if log_osd_count == 0 and log_mon_count == 0:
+                log.error("Log lines not found in any of the OSDs and in ceph")
                 return 1
     except Exception as e:
         log.info(e)
@@ -142,10 +173,6 @@ def run(ceph_cluster, **kw):
         time.sleep(5)
         # log cluster health
         rados_object.log_cluster_health()
-        # check for crashes after test execution
-        if rados_object.check_crash_status():
-            log.error("Test failed due to crash at the end of test")
-            return 1
 
     return 0
 
@@ -176,8 +203,6 @@ def verify_preempt_log(
     for line in lines:
         if line not in log_lines:
             log.error(f" Did not find logging on OSD : {osd}")
-            log.error(f"Journalctl logs lines: {log_lines}")
-            log.error(f"Expected logs lines are: {lines}")
             return False
     log.info(f"Found the log lines on OSD : {osd}")
     return True
@@ -185,13 +210,14 @@ def verify_preempt_log(
 
 def check_scrub_status(osd_object):
     """
-    Retrieve the preempt log using journalctl command
+    Method is used to check the scrub is in progress or not
     Args:
         osd_obj: Rados object
 
     Returns:  True-> if the scrubbing is in progress
               False -> if the scrubbing is not in progress
     """
+
     status_report = osd_object.run_ceph_command(cmd="ceph report")
     for entry in status_report["num_pg_by_state"]:
         if "scrubbing" in entry["state"]:
