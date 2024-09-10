@@ -116,26 +116,6 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
-        - hostname: mero007
-          ip: 10.8.129.227
-          root_password: passwd
-          role:
-            - mon
-            - mgr
-            - rgw
-            - osd
-          volumes:
-            - /dev/sda
-            - /dev/sdb
-            - /dev/sdc
-            - /dev/sdd
-            - /dev/sde
-            - /dev/sdf
-            - /dev/sdg
-            - /dev/sdh
-            - /dev/sdi
-            - /dev/sdj
-            - /dev/sdk
         - hostname: mero009
           ip: 10.8.129.229
           root_password: passwd
@@ -159,6 +139,27 @@ globals:
             - /dev/sdl
         - hostname: mero011
           ip: 10.8.129.231
+          root_password: passwd
+          role:
+            - mon
+            - mgr
+            - rgw
+            - osd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdk
+            - /dev/sdl
+            - /dev/sdm
+        - hostname: mero013
+          ip: 10.8.129.233
           root_password: passwd
           role:
             - osd
