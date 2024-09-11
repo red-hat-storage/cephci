@@ -446,7 +446,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test_sse_kms_per_bucket_with_bucket_policy
       polarion-id: CEPH-83586489
-      comments: known issue (bz-2302940)
   - test:
       clusters:
         ceph-pri:
