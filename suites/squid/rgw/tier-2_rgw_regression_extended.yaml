@@ -108,7 +108,6 @@ tests:
       desc: object lock no overwrite
       polarion-id: CEPH-83574059
       module: sanity_rgw.py
-      comments: known issue (bz-2265890) targeted to 8.1
       config:
         script-name: test_object_lock_no_overwrite.py
         config-file-name: test_object_lock_no_overwrite.yaml
