@@ -155,3 +155,22 @@ tests:
           "batch_size": 30
           "filesystem": "cephfs_io_1"
           "mount_dir": ""
+  - test:
+      name: EC pool LC
+      module: rados_prep.py
+      polarion-id: CEPH-83571632
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec86_profile
+          pool_name: ec86_pool
+          pg_num: 64
+          k: 8
+          m: 6
+          create_rule: false
+          app_name: msr #set to avoid rados cleanup
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
+          plugin: jerasure
+          crush-failure-domain: host
+      desc: Create 8+6 MSR EC pools
