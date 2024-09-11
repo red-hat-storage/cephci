@@ -22,7 +22,13 @@ def run(ceph_cluster, **kw):
         tc = "11221"
         log.info("Running cephfs %s test case" % tc)
         fs_util = FsUtils(ceph_cluster)
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsV1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         client_info, rc = fs_util.get_clients(build)
@@ -31,6 +37,8 @@ def run(ceph_cluster, **kw):
         else:
             raise CommandFailed("fetching client info failed")
         c1 = 1
+
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
         client1, client2, client3, client4 = ([] for _ in range(4))
         client1.append(client_info["fuse_clients"][0])
         client2.append(client_info["fuse_clients"][1])
@@ -44,14 +52,30 @@ def run(ceph_cluster, **kw):
             log.info("got auth keys")
         else:
             raise CommandFailed("auth list failed")
-
-        fs_util_v1.fuse_mount(client1, client_info["mounting_dir"])
-        fs_util_v1.fuse_mount(client2, client_info["mounting_dir"])
-        fs_util_v1.kernel_mount(
-            client3, client_info["mounting_dir"], ",".join(client_info["mon_node_ip"])
+        fs_details = fs_util_v1.get_fs_info(client1[0], default_fs)
+        if not fs_details:
+            fs_util_v1.create_fs(client1[0], default_fs)
+        fs_util_v1.fuse_mount(
+            client1,
+            client_info["mounting_dir"],
+            extra_params=f" --client_fs {default_fs}",
+        )
+        fs_util_v1.fuse_mount(
+            client2,
+            client_info["mounting_dir"],
+            extra_params=f" --client_fs {default_fs}",
         )
         fs_util_v1.kernel_mount(
-            client4, client_info["mounting_dir"], ",".join(client_info["mon_node_ip"])
+            client3,
+            client_info["mounting_dir"],
+            ",".join(client_info["mon_node_ip"]),
+            extra_params=f",fs={default_fs}",
+        )
+        fs_util_v1.kernel_mount(
+            client4,
+            client_info["mounting_dir"],
+            ",".join(client_info["mon_node_ip"]),
+            extra_params=f",fs={default_fs}",
         )
 
         while c1:
