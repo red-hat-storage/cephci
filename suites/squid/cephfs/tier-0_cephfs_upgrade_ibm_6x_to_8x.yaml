@@ -149,6 +149,8 @@ tests:
             abort-on-fail: false
             config:
               timeout: 30
+              client_upgrade: 1
+              cleint_upgrade_node: 'node8'
             desc: Runs IOs in parallel with upgrade process
             module: cephfs_upgrade.cephfs_io.py
             name: "creation of Prerequisites for Upgrade"
