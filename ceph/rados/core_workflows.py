@@ -3961,9 +3961,10 @@ class RadosOrchestrator:
             client_node: client object
             pool_name: pool name
             no_of_objects: no of objcts to convert in to inconsistent objects
-        Returns: After converting the object in to inconsistent,method returns the pg id
+        Returns: After converting the object in to inconsistent,method returns the pg id and object count
                  If it fail returns None
         """
+        # Creating more number of objects
         for obj_num in range(no_of_objects):
             object_name = f"object_{obj_num}"
             cmd_create_obj = f"rados -p {pool_name} put {object_name} /etc/group"
@@ -4016,7 +4017,7 @@ class RadosOrchestrator:
         obj_count = len(inconsistent_details["inconsistents"])
         log.info(f"The inconsistent object count is -{obj_count}")
         log.info(f"The inconsistent object is created in the pg{pg_id}")
-        return pg_id
+        return pg_id, obj_count
 
     def set_unmanaged_flag(self, daemon):
         """

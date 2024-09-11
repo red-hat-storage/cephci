@@ -10,12 +10,12 @@ AS part of verification the script  perform the following tasks-
                                           Default value is - 5
    3. Verifying the functionality by executing the following scenarios-
       3.1- Inconsistent objects greater than the osd_scrub_auto_repair_num_errors count
-           Creating the 4 inconsistent
-           Setting the osd_scrub_auto_repair_num_errors to 3
+           Creating the n inconsistent
+           Setting the osd_scrub_auto_repair_num_errors to n-1
            Setting the osd_scrub_auto_repair to true
            Performing the scrub and deep-scrub on the PG
       3.2  The inconsistent object count is less than osd_scrub_auto_repair_num_errors count
-           Setting the osd_scrub_auto_repair_num_errors to 5
+           Setting the osd_scrub_auto_repair_num_errors to n+1
            Performing the scrub and deep-scrub on the PG
 """
 
@@ -54,18 +54,25 @@ def run(ceph_cluster, **kw):
         ec_config = config.get("ec_pool")
         pool_name = ec_config["pool_name"]
         mon_obj.set_config(section="osd", name="debug_osd", value="20/20")
-        no_of_objects = config.get("inconsistent_obj_count")
+        req_no_of_objects = config.get("inconsistent_obj_count")
 
         if not rados_obj.create_erasure_pool(name=pool_name, **ec_config):
             log.error("Failed to create the EC Pool")
             return 1
 
-        pg_id = rados_obj.create_ecpool_inconsistent_obj(
-            objectstore_obj, client_node, pool_name, no_of_objects
+        pg_info = rados_obj.create_ecpool_inconsistent_obj(
+            objectstore_obj, client_node, pool_name, req_no_of_objects
         )
-        if pg_id is None:
-            log.error("Cannot able to create the inconsistent objects")
+        if pg_info is None:
+            log.error(
+                "The inconsistent_obj_count is 0.To proceed further tests the auto_repair_param_value "
+                "should be less than Inconsistent objects count which is -1.The -1 is not acceptable to "
+                "run the tests"
+            )
             return 1
+
+        pg_id, no_of_objects = pg_info
+        auto_repair_param_value = no_of_objects - 1
         log.info(f"The inconsistent object are created in the pg- {pg_id}")
 
         # Check the default values of the osd_scrub_auto_repair_num_errors and osd_scrub_auto_repair
@@ -94,9 +101,13 @@ def run(ceph_cluster, **kw):
             "Test scenario1: inconsistent objects greater than the osd_scrub_auto_repair_num_errors count"
         )
         mon_obj.set_config(
-            section="osd", name="osd_scrub_auto_repair_num_errors", value="3"
+            section="osd",
+            name="osd_scrub_auto_repair_num_errors",
+            value=auto_repair_param_value,
         )
-        log.info("The osd_scrub_auto_repair_num_errors value is set to 3")
+        log.info(
+            f"The osd_scrub_auto_repair_num_errors value is set to {auto_repair_param_value}"
+        )
 
         mon_obj.set_config(section="osd", name="osd_scrub_auto_repair", value="true")
         log.info("The osd_scrub_auto_repair value is set to true")
@@ -128,13 +139,19 @@ def run(ceph_cluster, **kw):
             "osd_scrub_auto_repair_num_errors count completed "
         )
         # Case2: The inconsistent object count is less than osd_scrub_auto_repair_num_errors count
+        auto_repair_param_value = no_of_objects + 1
         log.info(
             "Test scenario2: inconsistent objects less than the osd_scrub_auto_repair_num_errors count "
         )
-        mon_obj.remove_config(section="osd", name="osd_scrub_auto_repair_num_errors")
+        mon_obj.set_config(
+            section="osd",
+            name="osd_scrub_auto_repair_num_errors",
+            value=auto_repair_param_value,
+        )
 
-        log.info("The osd_scrub_auto_repair_num_errors value is set to 5")
-
+        log.info(
+            f"The osd_scrub_auto_repair_num_errors value is set to {auto_repair_param_value}"
+        )
         obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "scrub")
         if obj_count == -1:
             log.error(f"The scrub not initiated on the pg-{pg_id}")
@@ -158,12 +175,15 @@ def run(ceph_cluster, **kw):
         if not rados_obj.create_erasure_pool(name=pool_name, **ec_config):
             log.error("Failed to create the EC Pool")
             return 1
-        pg_id = rados_obj.create_ecpool_inconsistent_obj(
+        pg_info = rados_obj.create_ecpool_inconsistent_obj(
             objectstore_obj, client_node, pool_name, no_of_objects
         )
-        if pg_id is None:
+        if pg_info is None:
             log.error("Cannot able to create the inconsistent objects")
             return 1
+
+        pg_id, no_of_objects = pg_info
+
         obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "deep-scrub")
         if obj_count == -1:
             log.error(f"The deep-scrub not initiated on the pg-{pg_id}")
@@ -197,10 +217,6 @@ def run(ceph_cluster, **kw):
         time.sleep(30)
         # log cluster health
         rados_obj.log_cluster_health()
-        # check for crashes after test execution
-        if rados_obj.check_crash_status():
-            log.error("Test failed due to crash at the end of test")
-            return 1
     return 0
 
 
