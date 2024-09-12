@@ -21,6 +21,7 @@ tests:
                 verbose: true
               args:
                 mon-ip: node1
+                orphan-initial-daemons: true
 
   - test:
       name: Add host
@@ -183,6 +184,15 @@ tests:
           pool_name: test-max-avail
           obj_nums: 5
           delete_pool: true
+
+  - test:
+      name: Verify MAX_AVAIL variance with OSD size change
+      desc: MAX_AVAIL value update correctly when OSD size changes
+      module: test_cephdf.py
+      polarion-id: CEPH-83595780
+      config:
+        cephdf_max_avail_osd_expand: true
+
   - test:
       name: Compression algorithms - modes
       module: rados_prep.py

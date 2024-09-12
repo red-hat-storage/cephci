@@ -48,6 +48,7 @@ class ServiceabilityMethods:
         crush_bucket_name: str = None,
         crush_bucket_type: str = None,
         crush_bucket_val: str = None,
+        deploy_osd: bool = True,
     ):
         """
         Module to add a new host to an existing deployment.
@@ -61,6 +62,7 @@ class ServiceabilityMethods:
             crush_bucket_type(str): Name of the crush bucket to add during host addition.
                                     Eg: datacenter, zone, host etc...
             crush_bucket_val(str): Value of the crush bucket to add during host addition.
+            deploy_osd(bool): Flag to control ODS deployment
         Returns:
             None | Raises exception in case of failure.
 
@@ -95,38 +97,40 @@ class ServiceabilityMethods:
                 log.error("New hosts are not added into the cluster")
                 raise Exception("Execution error")
 
-            log.info(
-                "New hosts added to the cluster successfully, Proceeding to deploy OSDs on the same."
-            )
-            # Deploying OSDs on the new nodes.
-            osd_args = {
-                "steps": [
-                    {
-                        "config": {
-                            "command": "apply_spec",
-                            "service": "orch",
-                            "validate-spec-services": True,
-                            "specs": [
-                                {
-                                    "service_type": "osd",
-                                    "service_id": "new_osds",
-                                    "encrypted": "true",
-                                    "placement": {"label": "osd-bak"},
-                                    "spec": {"data_devices": {"all": "true"}},
-                                }
-                            ],
-                        }
-                    }
-                ]
-            }
-            osd_args.update(self.config)
-            osdcount_pre = self.get_osd_count()
-            test_cephadm.run(ceph_cluster=self.cluster, config=osd_args)
-            if not osdcount_pre < self.get_osd_count():
-                log.error("New OSDs were not added into the cluster")
-                raise Exception("Execution error")
+            log.info("New hosts added to the cluster successfully.")
 
-            log.info("Deployed new hosts and deployed OSDs on them")
+            if deploy_osd:
+                log.info("Proceeding to deploy OSDs on the same.")
+                # Deploying OSDs on the new nodes.
+                osd_args = {
+                    "steps": [
+                        {
+                            "config": {
+                                "command": "apply_spec",
+                                "service": "orch",
+                                "validate-spec-services": True,
+                                "specs": [
+                                    {
+                                        "service_type": "osd",
+                                        "service_id": "new_osds",
+                                        "encrypted": "true",
+                                        "placement": {"label": "osd-bak"},
+                                        "spec": {"data_devices": {"all": "true"}},
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }
+                osd_args.update(self.config)
+                osdcount_pre = self.get_osd_count()
+                test_cephadm.run(ceph_cluster=self.cluster, config=osd_args)
+                if not osdcount_pre < self.get_osd_count():
+                    log.error("New OSDs were not added into the cluster")
+                    raise Exception("Execution error")
+
+                log.info("Deployed OSDs on new hosts")
+            log.info("New hosts added to the cluster")
         except Exception as e:
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)
@@ -231,16 +235,19 @@ class ServiceabilityMethods:
             # get list of osd_id on the host to be removed
             rm_osd_list = self.rados_obj.collect_osd_daemon_ids(osd_node=rm_host)
             dev_path_list = []
-            for osd_id in rm_osd_list:
-                dev_path_list.append(
-                    rados_utils.get_device_path(host=rm_host, osd_id=osd_id)
-                )
-                osd_utils.set_osd_out(self.cluster, osd_id=osd_id)
-                osd_utils.osd_remove(self.cluster, osd_id=osd_id)
-            time.sleep(30)
+            if rm_osd_list:
+                for osd_id in rm_osd_list:
+                    dev_path_list.append(
+                        rados_utils.get_device_path(host=rm_host, osd_id=osd_id)
+                    )
+                    osd_utils.set_osd_out(self.cluster, osd_id=osd_id)
+                    osd_utils.osd_remove(self.cluster, osd_id=osd_id)
+                time.sleep(30)
 
             # Starting to drain the host
-            drain_cmd = f"ceph orch host drain {rm_host.hostname} --force"
+            drain_cmd = (
+                f"ceph orch host drain {rm_host.hostname} --force --zap-osd-devices "
+            )
             self.cephadm.shell([drain_cmd])
 
             # Sleeping for 2 seconds for removal to have started
@@ -277,10 +284,11 @@ class ServiceabilityMethods:
                 f"Completed drain operation on the host. {rm_host.hostname}\n Removing host from the cluster"
             )
 
-            for dev_path in dev_path_list:
-                assert osd_utils.zap_device(
-                    self.cluster, host=rm_host.hostname, device_path=dev_path
-                )
+            if dev_path_list:
+                for dev_path in dev_path_list:
+                    assert osd_utils.zap_device(
+                        self.cluster, host=rm_host.hostname, device_path=dev_path
+                    )
 
             time.sleep(5)
             rm_cmd = f"ceph orch host rm {rm_host.hostname} --force"
