@@ -740,7 +740,7 @@ class PoolFunctions:
         Returns: None
         """
         cmd = f"ceph osd pool set threshold {threshold}"
-        self.rados_obj.run_ceph_command(cmd=cmd)
+        self.node.shell([cmd])
 
     def run_autoscaler_bulk_test(self, pool: str, **kwargs) -> tuple:
         """

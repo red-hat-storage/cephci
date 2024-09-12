@@ -541,10 +541,6 @@ class RadosOrchestrator:
             )
             self.node.shell([enable_app_cmd])
 
-        if kwargs.get("app_name") == "rbd":
-            pool_init = f"rbd pool init -p {pool_name}"
-            self.node.shell([pool_init])
-
         cmd_map = {
             "min_size": f"ceph osd pool set {pool_name} min_size {kwargs.get('min_size')}",
             "size": f"ceph osd pool set {pool_name} size {kwargs.get('size')}",
@@ -563,6 +559,15 @@ class RadosOrchestrator:
                     )
                     log.error(err)
                     return False
+
+        if kwargs.get("app_name") == "rbd":
+            pool_init = f"rbd pool init -p {pool_name}"
+            try:
+                self.node.shell([pool_init])
+            except Exception as err:
+                log.error(f"failed to initialize the RBD pool. Error: {err}")
+                return False
+
         time.sleep(5)
         log.info(f"Created pool {pool_name} successfully")
         return True
@@ -650,6 +655,9 @@ class RadosOrchestrator:
         log.debug(f"Collecting the acting set for the PG : {pg_num}")
         cmd = f"ceph pg map {pg_num}"
         out = self.run_ceph_command(cmd=cmd)
+        log.debug(
+            f"collected the acting set for the PG : {pg_num}. details of PG map : {out}"
+        )
         return out["up"]
 
     def run_scrub(self, **kwargs):
@@ -1112,8 +1120,33 @@ class RadosOrchestrator:
             log.error(f"Pool:{pool} does not exist on cluster, cannot delete")
             return True
 
+        pool_details = self.get_pool_details(pool=pool)
         cmd = f"ceph osd pool delete {pool} {pool} --yes-i-really-really-mean-it"
         self.client.exec_command(cmd=cmd, sudo=True)
+
+        time.sleep(2)
+        # Improving cleanup for EC pools
+        if pool_details["type"] == 3:
+            try:
+                log.info("deleting the profile created for the EC pool")
+                profile_list = self.get_ec_profiles()
+                if pool_details["erasure_code_profile"] in profile_list:
+                    if not self.delete_ec_profile(
+                        profile=pool_details["erasure_code_profile"]
+                    ):
+                        log.error("Could not delete the EC profile created")
+                        return False
+
+                log.info("Deleting the crush rule used for the EC pool")
+                rule_list = self.get_crush_rule_names()
+                if pool in rule_list:
+                    cmd = f"ceph osd crush rule rm {pool}"
+                    self.client.exec_command(cmd=cmd, sudo=True)
+            except Exception as err:
+                log.error(
+                    f"hit issue while deleting crush rule and profile for the EC pool"
+                    f"Error : {err}"
+                )
 
         existing_pools = self.run_ceph_command(cmd="ceph df", client_exec=True)
         if pool not in [ele["name"] for ele in existing_pools["pools"]]:
@@ -1144,7 +1177,38 @@ class RadosOrchestrator:
             list of ec profiles present on the cluster
         """
         profile_ls = "ceph osd erasure-code-profile ls"
-        return self.run_ceph_command(cmd=profile_ls)
+        return self.run_ceph_command(cmd=profile_ls, client_exec=True)
+
+    def get_ec_profile_detail(self, profile: str) -> dict:
+        """
+        Fetches he EC profile details present on the cluster
+        returns:
+            list of ec profiles present on the cluster
+        """
+        if profile in self.get_ec_profiles():
+            profile_get = f"ceph osd erasure-code-profile get {profile}"
+            return self.run_ceph_command(cmd=profile_get, client_exec=True)
+        else:
+            log.error(f"EC Profile : {profile} not present on the cluster")
+
+    def delete_ec_profile(self, profile) -> bool:
+        """
+        Deletes the EC profile name given
+        returns:
+            Profile deleted -> True
+            profile not deleted -> False
+        """
+        profile_del = f"ceph osd erasure-code-profile rm {profile}"
+        try:
+            self.run_ceph_command(cmd=profile_del, client_exec=True)
+        except Exception as err:
+            log.debug(f"Hit exception during profile delete. Error: {err}")
+
+        if profile in self.get_ec_profiles():
+            log.info(f"Profile : {profile} not deleted")
+            return False
+        log.info(f"Profile : {profile}  deleted")
+        return True
 
     def get_crush_rule_names(self) -> list:
         """
@@ -1157,12 +1221,11 @@ class RadosOrchestrator:
         cmd = "ceph osd crush rule ls"
         return self.run_ceph_command(cmd=cmd)
 
-    def create_erasure_pool(self, name: str, **kwargs) -> bool:
+    def create_erasure_pool(self, **kwargs) -> bool:
         """
         Creates an erasure code profile and then creates a pool with the same
         References: https://docs.ceph.com/en/latest/rados/operations/erasure-code/
         Args:
-            name: Name of the profile to create
             **kwargs: Any other param that needs to be set in the EC profile
                 1. k -> the number of data chunks (int)
                 2. m -> the number of coding chunks (int)
@@ -1181,6 +1244,8 @@ class RadosOrchestrator:
                 9. crush-num-failure-domains -> Number of failure domains present on the cluster
                 10. create_rule -> Arg to specify if the CRUSH rule should be created or not
                 11. profile_name -> Name of the profile to be created
+                12. yes_i_mean_it -> Needed to be passed for profile modification along with --force from 8.0
+                13. name: Name of the profile/rule to create if none is provided
         Returns: True -> pass, False -> fail
         """
         failure_domain = kwargs.get("crush-failure-domain", "osd")
@@ -1194,10 +1259,15 @@ class RadosOrchestrator:
         crush_num_failure_domains = kwargs.get("crush-num-failure-domains", None)
         create_rule = kwargs.get("create_rule", False)
         plugin = kwargs.get("plugin", "jerasure")
-        pool_name = kwargs.get("pool_name")
-        force = kwargs.get("force")
-        profile_name = kwargs.get("profile_name", f"ecp_{name}")
-        rule_name = f"rule_{name}"
+        pool_name = kwargs.get("pool_name", "name")
+        if not pool_name:
+            log.error("No name provided. Exiting")
+            return False
+        force = kwargs.get("force", False)
+        create_ecpool = kwargs.get("create_ecpool", True)
+        yes_i_mean_it = kwargs.get("yes_i_mean_it", False)
+        profile_name = kwargs.get("profile_name", f"ecp_{pool_name}")
+        rule_name = f"rule_{pool_name}"
 
         # Creating an erasure coded profile with the options provided
         cmd = (
@@ -1223,6 +1293,8 @@ class RadosOrchestrator:
             cmd = cmd + f" d={d}"
         if force:
             cmd = cmd + " --force"
+        if yes_i_mean_it:
+            cmd = cmd + " --yes-i-really-mean-it "
 
         log.debug(f"Final command to create EC pool : {cmd}")
         try:
@@ -1254,22 +1326,30 @@ class RadosOrchestrator:
                     f"unable to create rule: {rule_name}. list obtained from cluster: {rule_list}"
                 )
                 return False
-            if not self.create_pool(
-                ec_profile_name=profile_name,
-                crush_rule=rule_name,
-                **kwargs,
-            ):
-                log.error(f"Failed to create Pool {pool_name}")
-                return False
+            if create_ecpool:
+                if not self.create_pool(
+                    ec_profile_name=profile_name,
+                    crush_rule=rule_name,
+                    **kwargs,
+                ):
+                    log.error(f"Failed to create Pool {pool_name}")
+                    return False
         else:
-            if not self.create_pool(
-                ec_profile_name=profile_name,
-                **kwargs,
-            ):
-                log.error(f"Failed to create Pool {pool_name}")
-                return False
-
-        log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
+            if create_ecpool:
+                if not self.create_pool(
+                    ec_profile_name=profile_name,
+                    **kwargs,
+                ):
+                    log.error(f"Failed to create Pool {pool_name}")
+                    return False
+        try:
+            log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
+            cmd = f"ceph osd crush rule dump {pool_name}"
+            log.debug(
+                f"Printing the crush rule used : \n{self.run_ceph_command(cmd=cmd)}\n"
+            )
+        except Exception as err:
+            log.error(f"Exception hit while listing the EC Crush rule used: {err}")
         return True
 
     def change_osd_state(self, action: str, target: int, timeout: int = 180) -> bool:
@@ -1413,21 +1493,29 @@ class RadosOrchestrator:
         pool_name = kwargs["pool_name"]
         image_name = kwargs.get("image_name", "image_ec_pool")
         image_size = kwargs.get("image_size", "40M")
-        image_create = f"rbd create --size {image_size} --data-pool {pool_name} {metadata_pool}/{image_name}"
-        self.node.shell([image_create])
-        # tbd: create filesystem on image and mount it. Part of tire 3
-
         try:
+            image_create = f"rbd create --size {image_size} --data-pool {pool_name} {metadata_pool}/{image_name}"
+            self.client.exec_command(cmd=image_create, sudo=True)
             cmd = f"rbd --image {image_name} info --pool {metadata_pool}"
-            out, err = self.node.shell([cmd])
+            out, err = self.client.exec_command(cmd=cmd, sudo=True)
             log.info(f"The image details are : {out}")
-        except Exception:
-            log.error("Hit error during image creation")
+
+            # mapping the image on to the cluster
+            map_cmd = f"rbd device map {metadata_pool}/{image_name} --id admin"
+            out, err = self.client.exec_command(cmd=map_cmd, sudo=True)
+            log.debug(f"Device created : {out}")
+
+            # Printing the devices mapped on the cluster
+            out, err = self.client.exec_command(cmd="rbd device list", sudo=True)
+            log.debug(f"Device created : {out}")
+            # tbd: create filesystem on image and mount it. Part next PR.
+        except Exception as error:
+            log.error(
+                f"Hit error with testing EC pools with overwrites enabled for RBD. Error : {error}"
+            )
             return False
 
-        # running rbd bench on the image created
-        cmd = f"rbd bench-write {image_name} --pool={metadata_pool}"
-        self.node.shell([cmd], check_status=False)
+        # Tbd: Add rbd map and mount commands here.
         return True
 
     def check_compression_size(self, pool_name: str, **kwargs) -> bool:
@@ -1692,7 +1780,7 @@ class RadosOrchestrator:
         """
         cmd = f"ceph pg {pg_id} query"
         try:
-            pg_query = self.run_ceph_command(cmd=cmd)
+            pg_query = self.run_ceph_command(cmd=cmd, client_exec=True)
             log.debug(f"The status of pg : {pg_id} is {pg_query['state']}")
             return pg_query["state"]
         except Exception as err:
@@ -2117,7 +2205,7 @@ class RadosOrchestrator:
         if states:
             cmd = f"{cmd} {states}"
 
-        pgid_dict = self.run_ceph_command(cmd=cmd)
+        pgid_dict = self.run_ceph_command(cmd=cmd, client_exec=True)
 
         if not pgid_dict["pg_stats"]:
             return []
@@ -3829,6 +3917,7 @@ class RadosOrchestrator:
             metadata (Dict) -> If daemon_id is provided
             None if metadata is not found
         """
+        log.debug(f"Passed daemon type : {daemon_type}, Deamon ID : {daemon_id}")
         base_cmd = f"ceph {daemon_type} metadata"
         if not daemon_id:
             return self.run_ceph_command(cmd=base_cmd, client_exec=True)
@@ -3940,8 +4029,12 @@ class RadosOrchestrator:
         Returns:
             Output of ceph health detail
         """
+        log.debug("Printing cluster health and status")
         health_detail, _ = self.node.shell(args=["ceph health detail"])
         log.info(f"\n****\n Cluster health detail: \n {health_detail} \n ****")
+        log.info(
+            f"\n****\n Cluster status: \n {self.run_ceph_command(cmd='ceph -s', client_exec=True)} \n ****"
+        )
         return health_detail
 
     def create_ecpool_inconsistent_obj(

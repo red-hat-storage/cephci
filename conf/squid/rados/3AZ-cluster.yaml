@@ -1,0 +1,82 @@
+# Test Suite that deploys 3 AZs in different subnets
+# Deployment for all the ceph daemons , with 9 mon's, 6 mgr's, 28 OSD daemons
+
+globals:
+  - ceph-cluster:
+      name: ceph
+      node1:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - installer
+          - alertmanager
+          - grafana
+          - prometheus
+          - osd
+        no-of-volumes: 4
+        disk-size: 25
+      node2:
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 25
+      node3:
+        role:
+          - osd
+          - mon
+          - mds
+        no-of-volumes: 4
+        disk-size: 25
+      node4:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - osd
+        no-of-volumes: 4
+        disk-size: 25
+      node5:
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 25
+      node6:
+        role:
+          - osd
+          - mon
+          - mds
+        no-of-volumes: 4
+        disk-size: 25
+      node7:
+        role:
+          - _admin
+          - mon
+          - mgr
+          - osd
+        no-of-volumes: 4
+        disk-size: 25
+      node8:
+        role:
+          - mon
+          - mgr
+          - rgw
+          - osd
+        no-of-volumes: 4
+        disk-size: 25
+      node9:
+        role:
+          - osd
+          - mon
+          - mds
+        no-of-volumes: 4
+        disk-size: 25
+      node10:
+        role:
+          - client

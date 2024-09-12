@@ -20,6 +20,12 @@ log = Log(__name__)
 def run(ceph_cluster, **kw):
     """
     Module to test Reads balancer functionality on RHCS 7.0 and above clusters
+
+    Bugs Verified here :
+    1. https://bugzilla.redhat.com/show_bug.cgi?id=2241104
+    2. https://bugzilla.redhat.com/show_bug.cgi?id=2237352
+    3. https://bugzilla.redhat.com/show_bug.cgi?id=2237574
+
     Returns:
         1 -> Fail, 0 -> Pass
     """
@@ -31,6 +37,7 @@ def run(ceph_cluster, **kw):
     osdtool_obj = OsdToolWorkflows(node=cephadm)
     rhbuild = config.get("rhbuild")
     client_node = ceph_cluster.get_nodes(role="client")[0]
+    negative_scenario = config.get("negative_scenarios", False)
 
     regex = r"\s*(\d.\d)-rhel-\d"
     build = (re.search(regex, config.get("build", config.get("rhbuild")))).groups()[0]
@@ -61,87 +68,44 @@ def run(ceph_cluster, **kw):
 
         existing_pools = rados_obj.list_pools()
 
-        log.debug(
-            "Checking the scores on each pool on the cluster, if the pool is replicated pool"
-        )
-        for pool_name in existing_pools:
-            pool_details = rados_obj.get_pool_details(pool=pool_name)
-            log.debug(f"Selected pool name : {pool_name}")
-            if not pool_details["erasure_code_profile"]:
-                log.debug(
-                    f"Selected pool is a replicated pool. Checking read balancer scores.\n"
-                    f" Fetched from pool {pool_details['read_balance']}"
-                )
-                read_scores = pool_details["read_balance"]
-                if read_scores["score_acting"] > pool_details["size"]:
-                    log.error(
-                        f"The balance score on the pool is more than the size of the pool."
-                        f"Balance score : {read_scores['score_acting']}, Size of poool : {pool_details['size']}"
-                    )
-                    log.error(
-                        "This failure will be ignored because of the bug "
-                        ": https://bugzilla.redhat.com/show_bug.cgi?id=2237352 and the failure will be added post fix"
-                    )
-
-                    # todo: uncomment the below exception once the bug is fixed
-                    # raise Exception("Scores out of bound failure")
-
-                log.debug("Checking if the scores are calculated properly")
-                # Balance_score = raw_score / Optimal_score
-                expected_score = (
-                    read_scores["raw_score_acting"] / read_scores["optimal_score"]
-                )
-                if round(read_scores["score_acting"], 1) != round(expected_score, 1):
-                    log.error(
-                        f"The scores for the pool is not calculated properly. "
-                        f"acting score {round(read_scores['score_acting'], 2)}"
-                        f"Expected : {round(read_scores['raw_score_acting'] / read_scores['optimal_score'], 2)}"
-                    )
-                    raise Exception("Scores out of bound failure")
-                log.info(
-                    "Completed checking the balance scores for the pool. No errors"
-                )
-            else:
-                log.info(
-                    f"Selected pool {pool_name} is a EC pool, skipping check of balance scores."
-                )
-            log.info("Completed verification of balance scores for all the pools")
-
-        # Trying to change the primary without setting the set-require-min-compat-client to reef. -ve test
-        log.info(
-            "Trying to change the primary without setting the set-require-min-compat-client to reef. -ve test"
-        )
-        test_pool = existing_pools[0]
-        # Getting a sample PG from the pool
-        pool_id = pool_obj.get_pool_id(pool_name=test_pool)
-        pgid = f"{pool_id}.0"
-        acting_set = rados_obj.get_pg_acting_set(pg_num=pgid)
-
-        log.debug(f"Acting set for PG-id {pgid} in pool {test_pool} is {acting_set}")
-
-        new_osd = acting_set[1]
-        change_cmd = f"ceph osd pg-upmap-primary {pgid} {new_osd}"
-        """
-        Error String seen on the cluster:
-        Error EPERM: min_compat_client luminous < reef, which is required for pg-upmap-primary.
-        Try 'ceph osd set-require-min-compat-client reef' before using the new interface
-        """
-        error_str = r"Error EPERM: min_compat_client \w+ < reef, which is required for pg-upmap-primary."
-
-        try:
-            out, err = client_node.exec_command(sudo=True, cmd=change_cmd)
-        except Exception as e:
-            error_message = str(e).strip()
-            if not re.search(error_str, error_message):
-                log.error(
-                    "Correct error string not seen in stderr stream"
-                    f"Expected : {error_str} \n Got : {e}"
-                )
-                raise Exception("Wrong error string obtained")
-            log.debug(
-                "Could not change the primary before setting the set-require-min-compat-client to reef. Pass"
+        if negative_scenario:
+            # Trying to change the primary without setting the set-require-min-compat-client to reef. -ve test
+            log.info(
+                "Trying to change the primary without setting the set-require-min-compat-client to reef. -ve test"
             )
-            log.error(f"An error occurred but was expected: {e}")
+            test_pool = existing_pools[0]
+            # Getting a sample PG from the pool
+            pool_id = pool_obj.get_pool_id(pool_name=test_pool)
+            pgid = f"{pool_id}.0"
+            acting_set = rados_obj.get_pg_acting_set(pg_num=pgid)
+
+            log.debug(
+                f"Acting set for PG-id {pgid} in pool {test_pool} is {acting_set}"
+            )
+
+            new_osd = acting_set[1]
+            change_cmd = f"ceph osd pg-upmap-primary {pgid} {new_osd}"
+            """
+            Error String seen on the cluster:
+            Error EPERM: min_compat_client luminous < reef, which is required for pg-upmap-primary.
+            Try 'ceph osd set-require-min-compat-client reef' before using the new interface
+            """
+            error_str = r"Error EPERM: min_compat_client \w+ < reef, which is required for pg-upmap-primary."
+
+            try:
+                out, err = client_node.exec_command(sudo=True, cmd=change_cmd)
+            except Exception as e:
+                error_message = str(e).strip()
+                if not re.search(error_str, error_message):
+                    log.error(
+                        "Correct error string not seen in stderr stream"
+                        f"Expected : {error_str} \n Got : {e}"
+                    )
+                    raise Exception("Wrong error string obtained")
+                log.debug(
+                    "Could not change the primary before setting the set-require-min-compat-client to reef. Pass"
+                )
+                log.error(f"An error occurred but was expected: {e}")
 
         log.debug(
             "Setting config to allow clients to perform read balancing on the clusters."
@@ -154,6 +118,55 @@ def run(ceph_cluster, **kw):
             log.info(
                 "Verifying the usage of online commands to change the acting set of the pool"
             )
+            log.debug(
+                "Checking the scores on each pool on the cluster, if the pool is replicated pool"
+            )
+            for pool_name in existing_pools:
+                pool_details = rados_obj.get_pool_details(pool=pool_name)
+                log.debug(f"Selected pool name : {pool_name}")
+                if not pool_details["erasure_code_profile"]:
+                    log.debug(
+                        f"Selected pool is a replicated pool. Checking read balancer scores.\n"
+                        f" Fetched from pool {pool_details['read_balance']}"
+                    )
+                    read_scores = pool_details["read_balance"]
+                    if read_scores["score_acting"] > pool_details["size"]:
+                        log.error(
+                            f"The balance score on the pool is more than the size of the pool."
+                            f"Balance score : {read_scores['score_acting']}, Size of poool : {pool_details['size']}"
+                        )
+                        log.error(
+                            "This failure will be ignored because of the bug "
+                            ": https://bugzilla.redhat.com/show_bug.cgi?id=2237352 "
+                            "and the failure will be added post fix"
+                        )
+
+                        # todo: uncomment the below exception once the bug is fixed
+                        # raise Exception("Scores out of bound failure")
+
+                    log.debug("Checking if the scores are calculated properly")
+                    # Balance_score = raw_score / Optimal_score
+                    expected_score = (
+                        read_scores["raw_score_acting"] / read_scores["optimal_score"]
+                    )
+                    if round(read_scores["score_acting"], 1) != round(
+                        expected_score, 1
+                    ):
+                        log.error(
+                            f"The scores for the pool is not calculated properly. "
+                            f"acting score {round(read_scores['score_acting'], 2)} "
+                            f"Expected : {round(read_scores['raw_score_acting'] / read_scores['optimal_score'], 2)} "
+                        )
+                        raise Exception("Scores out of bound failure")
+                    log.info(
+                        "Completed checking the balance scores for the pool. No errors"
+                    )
+                else:
+                    log.info(
+                        f"Selected pool {pool_name} is a EC pool, skipping check of balance scores."
+                    )
+                log.info("Completed verification of balance scores for all the pools")
+
             for pool_name in existing_pools:
                 pool_details = rados_obj.get_pool_details(pool=pool_name)
                 log.debug(f"Selected pool name : {pool_name}")
@@ -394,6 +407,14 @@ def run(ceph_cluster, **kw):
                     # Sleeping for 20 seconds for the upmap recommendations to take effect
                     time.sleep(20)
 
+                    status, osd_map_loc = osdtool_obj.generate_osdmap()
+                    if not status:
+                        log.error(
+                            f"failed to generate new osdmap file at loc : {osd_map_loc}"
+                        )
+                        raise Exception("New osdmap file not generated")
+                    log.debug(f"osdmap file generated at loc : {osd_map_loc}")
+
                     # Executing the read operation on the osdmap generated
                     status, read_file_loc = osdtool_obj.apply_osdmap_read(
                         source_loc=osd_map_loc, pool_name=pool_name
@@ -445,22 +466,38 @@ def run(ceph_cluster, **kw):
                         )
                         log.debug(f"Read file generated : {out}")
                         regx = r"ceph\sosd\spg-upmap-primary\s(\w*\.\w*)\s(\d*)"
-                        items = re.findall(regx, out)
-                        if items:
-                            for item in items:
+                        pg_primary_items = re.findall(regx, out)
+                        if pg_primary_items:
+                            for item in pg_primary_items:
                                 pg_set = rados_obj.get_pg_acting_set(pg_num=item[0])
                                 log.debug(
                                     f"Read suggestion on PG:{item[0]} - New Suggested primary {item[1]} "
                                     f"Existing primary : {pg_set[0]}"
                                 )
 
-                                if pg_set[0] == item[1]:
+                                if pg_set[0] == int(item[1]):
                                     log.error(
                                         f"Suggested change is not valid"
                                         f"PG:{item[0]} - New Suggested primary {item[1]} "
                                         f"Existing primary : {pg_set[0]}"
                                     )
                                     valid_change = False
+                                else:
+                                    log.debug(
+                                        "Suggested primary different from existing primary"
+                                    )
+                                if int(item[1]) not in pg_set:
+                                    log.error(
+                                        f"Suggested change is not valid"
+                                        f"PG:{item[0]} - New Suggested primary {item[1]} is not "
+                                        f"present in the Acting set "
+                                        f"PG set : {pg_set}"
+                                    )
+                                    valid_change = False
+                                else:
+                                    log.debug(
+                                        "Suggested primary present in the Acting Set"
+                                    )
                         if not valid_change:
                             log.error("Changes suggested which are invalid.")
                             if float(rhbuild.split("-")[0]) >= 7.1:
@@ -500,7 +537,7 @@ def run(ceph_cluster, **kw):
                     log.info(
                         f"Successfully set the read recommendations on the pool : {pool_name}"
                     )
-                    time.sleep(5)
+                    time.sleep(10)
                     # There should be no data movement b/w the PGs when read balancing was performed.
                     # Checking the same if we had clean pgs to start with
                     if clean_pgs:
@@ -516,6 +553,60 @@ def run(ceph_cluster, **kw):
 
                     log.debug("Sleeping for 20 seconds for scores to be updated")
                     time.sleep(20)
+                    log.debug(
+                        "Checking if the suggested changes are applied in the"
+                        " cluster and changes stored in the osdmap"
+                    )
+                    valid_change = True
+                    out, error = client_node.exec_command(
+                        sudo=True, cmd=f"cat {read_file_loc}"
+                    )
+                    regx = r"ceph\sosd\spg-upmap-primary\s(\w*\.\w*)\s(\d*)"
+                    pg_primary_items = re.findall(regx, out)
+                    if pg_primary_items:
+                        for item in pg_primary_items:
+                            pg_set = rados_obj.get_pg_acting_set(pg_num=item[0])
+                            log.debug(
+                                f"Checking if Read suggestion on PG:{item[0]} - OSD {item[1]} is set!"
+                                f"PG set present on cluster : {pg_set}"
+                            )
+
+                            if pg_set[0] != int(item[1]):
+                                log.error(
+                                    f"Suggested change is not applied on the PG. OSD not updated"
+                                    f"PG:{item[0]} - New Suggested primary {item[1]} "
+                                    f"Existing primary : {pg_set[0]}"
+                                )
+                                valid_change = False
+
+                            pg_found = False
+                            osd_dump = rados_obj.run_ceph_command(cmd="ceph osd dump")
+                            for entry in osd_dump["pg_upmap_primaries"]:
+                                if entry["pgid"] == item[0]:
+                                    pg_found = True
+                                    if int(entry["primary_osd"]) != int(item[1]):
+                                        log.error(
+                                            f" pg_upmap_primaries for PG : {item[0]} stored, but saved with wrong OSD "
+                                            f" PG:{item[0]} - Suggested primary {item[1]} "
+                                            f" primary stored in pg_upmap_primaries: {entry['primary_osd']} "
+                                        )
+                                        valid_change = False
+                                    break
+                            if not pg_found:
+                                log.error(
+                                    f"pg_upmap_primaries not present in OSDMAP for PG : {item[0]} "
+                                )
+                                valid_change = False
+
+                    if not valid_change:
+                        log.error("Changes suggested which are invalid.")
+                        if float(rhbuild.split("-")[0]) >= 7.1:
+                            log.error(
+                                "Still hitting the bug :  https://bugzilla.redhat.com/show_bug.cgi?id=2237574"
+                                "which was fixed in 7.1."
+                            )
+                            raise Exception("Invalid recommendations given")
+
                     pool_details = rados_obj.get_pool_details(pool=pool_name)
                     final_read_scores = pool_details["read_balance"]
                     final_score = final_read_scores["score_acting"]

@@ -11,7 +11,7 @@ tests:
       name: cluster deployment
       desc: Execute the cluster deployment workflow.
       module: test_cephadm.py
-      polarion-id: CEPH-83574887
+      abort-on-fail: true
       config:
         verify_cluster_health: true
         steps:
@@ -21,17 +21,34 @@ tests:
               base_cmd_args:
                 verbose: true
               args:
-                # using 7.0 rc candidate
-                custom_image: "registry-proxy.engineering.redhat.com/rh-osbs/rhceph:7-190"
-                custom_repo: "https://s3.upshift.redhat.com/ceph-composes/RHCEPH-7.0-RHEL-9-20240220.0/RHCEPH-7.0-RHEL-9-20240220.0.repo"
-                mon-ip: mero006
-                allow-fqdn-hostname: true
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
+                mon-ip: node1
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
           - config:
               command: apply
               service: mgr
@@ -44,13 +61,29 @@ tests:
               args:
                 placement:
                   label: mon
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-      destroy-cluster: false
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
       abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true"                     # boolean as string
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
 
   - test:
       name: MDS Service deployment with spec
@@ -101,7 +134,7 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: magna010                     # client node
+        node: node6                     # client node
         install_packages:
           - ceph-common
         copy_admin_keyring: true          # Copy admin keyring to node
@@ -110,6 +143,7 @@ tests:
           osd: "allow *"
           mds: "allow *"
           mgr: "allow *"
+
 
   - test:
       name: Configure email alerts
@@ -171,7 +205,7 @@ tests:
           force: true
           plugin: jerasure
           crush-failure-domain: host
-        remove_host: false
+        remove_host: true
         delete_pools:
           - test_ec_pool
       desc: 2+2@4 EC pool life cycle with serviceability scenarios
@@ -250,6 +284,7 @@ tests:
           - re_pool_overwrite
       desc: EC pool with Overwrites & create RBD pool
 
+
   - test:
       name: Inconsistent objects in  EC pool functionality check
       desc: Scub and deep-scrub on  inconsistent objects in EC pool
@@ -278,7 +313,6 @@ tests:
         Compression_tests:
           pool_type: erasure
           pool_config:
-            profile_name: ec86_5
             pool-1: ec86_pool5
             pool-2: ec86_pool6
             rados_write_duration: 300
@@ -383,7 +417,7 @@ tests:
       config:
         pool_configs:
             - type: erasure
-              conf: sample-pool-4
+              conf: sample-pool-5
         pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
       desc: Verify that scrub & deep-scrub logs are captured in OSD logs
 
@@ -458,7 +492,7 @@ tests:
         pool-1-type: replicated
         pool-2-type: erasure
         pool-1-conf: sample-pool-1
-        pool-2-conf: sample-pool-4
+        pool-2-conf: sample-pool-5
         pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-2. RE -> EC
 
@@ -469,7 +503,7 @@ tests:
       config:
         pool-1-type: erasure
         pool-2-type: replicated
-        pool-1-conf: sample-pool-4
+        pool-1-conf: sample-pool-5
         pool-2-conf: sample-pool-3
         pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-3. EC -> RE
@@ -481,7 +515,7 @@ tests:
       config:
         pool-1-type: erasure
         pool-2-type: erasure
-        pool-1-conf: sample-pool-4
+        pool-1-conf: sample-pool-6
         pool-2-conf: sample-pool-5
         pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-4. Ec -> EC
@@ -495,7 +529,7 @@ tests:
         verify_pool_warnings:
           pool_configs:
             - type: erasure
-              conf: sample-pool-4
+              conf: sample-pool-5
           pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
       desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
 

@@ -7,7 +7,6 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
-from ceph.rados.crushtool_workflows import CrushToolWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
@@ -26,35 +25,14 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
-    crush_obj = CrushToolWorkflows(node=cephadm)
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     pool_obj = PoolFunctions(node=cephadm)
 
     crush_rule = config.get("crush_rule", "rule-86-msr")
     modify_threshold = config.get("modify_threshold", False)
-    crush_rules = {
-        "rule-86-msr": """id 86
-type msr_indep
-step take default
-step choosemsr 4 type host
-step choosemsr 4 type osd
-step emit
-""",
-    }
+
     try:
-        # setting the crush rule on the cluster
-        if config.get("pre_create_rule"):
-            log.debug("Creating new crush rules on the cluster")
-            if not crush_obj.add_crush_rule(
-                rule_name=crush_rule, rules=crush_rules[crush_rule]
-            ):
-                log.error(
-                    f"Failed to add the crush rule : {crush_rule} into the cluster"
-                )
-                raise Exception(
-                    f"Failed to add the crush rule : {crush_rule} into the cluster"
-                )
 
         pool_name = config.get("pool_name")
         log.debug("Creating new EC pool on the cluster")
@@ -65,11 +43,17 @@ step emit
         if config.get("change_subtree_limit"):
             bucket = config["change_subtree_limit"]
             log.info(f"Changing subtree limit to {bucket}")
-            if not mon_obj.set_config(
-                section="mon", name="mon_osd_down_out_subtree_limit", value=bucket
-            ):
-                log.error(f"Failed to set mon_osd_down_out_subtree_limit to {bucket} ")
-                return 1
+            limit = mon_obj.get_config(
+                section="mon", param="mon_osd_down_out_subtree_limit"
+            )
+            if limit != bucket:
+                if not mon_obj.set_config(
+                    section="mon", name="mon_osd_down_out_subtree_limit", value=bucket
+                ):
+                    log.error(
+                        f"Failed to set mon_osd_down_out_subtree_limit to {bucket} "
+                    )
+                    return 1
 
         time.sleep(5)
         log.info(
@@ -271,10 +255,8 @@ step emit
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         # removal of rados pool
-        if config.get("delete_pool"):
-            if not rados_obj.delete_pool(pool=config["pool_name"]):
-                log.error("Failed to delete EC Pool")
-                return 1
+        rados_obj.rados_pool_cleanup()
+        time.sleep(30)
 
         # log cluster health
         rados_obj.log_cluster_health()

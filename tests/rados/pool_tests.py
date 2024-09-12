@@ -81,35 +81,12 @@ def run(ceph_cluster, **kw):
             time.sleep(25)
 
             # Waiting for up to 2.5 hours for the recovery to complete and PG's to enter active + Clean state
-            end_time = datetime.datetime.now() + datetime.timedelta(seconds=15000)
-            while end_time > datetime.datetime.now():
-                flag = True
-                status_report = rados_obj.run_ceph_command(cmd="ceph report")
-
-                # Proceeding to check if all PG's are in active + clean
-                for entry in status_report["num_pg_by_state"]:
-                    rec = (
-                        "backfilling",
-                        "degraded",
-                        "incomplete",
-                        "recovering",
-                        "recovery_wait",
-                        "backfilling_wait",
-                        "peered",
-                        "undersized",
-                    )
-                    if any(key in rec for key in entry["state"].split("+")):
-                        flag = False
-
-                if flag:
-                    log.info("The recovery and back-filling of the OSD is completed")
-                    break
-                log.info(
-                    f"Waiting for active + clean. Active aletrs: {status_report['health']['checks'].keys()},"
-                    f"PG States : {status_report['num_pg_by_state']}"
-                    f" checking status again in 1 minute"
+            res = wait_for_clean_pg_sets(rados_obj, test_pool=ec_config["pool_name"])
+            if not res:
+                log.error(
+                    "PG's in cluster are not active + Clean after stopping M osds"
                 )
-                time.sleep(60)
+                return 1
 
             # getting the acting set for the created pool after recovery
             acting_pg_set = rados_obj.get_pg_acting_set(
@@ -132,10 +109,6 @@ def run(ceph_cluster, **kw):
 
             # Sleep for 5 seconds for OSD's to join the cluster
             time.sleep(5)
-
-            if not flag:
-                log.error("The pool did not reach active + Clean state after recovery")
-                return 1
 
             # Deleting the pool created
             if not rados_obj.delete_pool(pool=ec_config["pool_name"]):
@@ -256,10 +229,6 @@ def run(ceph_cluster, **kw):
                     return 1
 
             log.info("Pool size is less when compression is enabled, Pass!")
-            if config["Compression_tests"].get("delete_pools"):
-                log.debug("Deleting pools created for compression tests")
-                for pool in config["Compression_tests"]["delete_pools"]:
-                    rados_obj.delete_pool(pool=pool)
         except Exception as e:
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)
@@ -1438,6 +1407,132 @@ def run(ceph_cluster, **kw):
 
         log.info(" Verification of pg_min_num complete")
         return 0
+
+    if config.get("Verify_ec_profile"):
+        log.info(
+            "\nTest to verify the behavior of EC profiles when attempting to modify and delete them."
+            f" \nTests running on RHCS version : {rhbuild}\n"
+        )
+        profile_configs = config["Verify_ec_profile"]
+        test_pass = True
+
+        try:
+            log.debug("Creating test pool and profile to verify functionality")
+            if not rados_obj.create_erasure_pool(**profile_configs):
+                log.error("Failed to create the EC Pool")
+                return 1
+
+            rados_obj.bench_write(**profile_configs)
+            rados_obj.bench_read(**profile_configs)
+            log.info("Created the EC Pool and finished writing data into the pool.")
+
+            old_value = profile_configs["k"]
+            profile_configs["k"] += 1  # Increment the 'k' value
+            profile_configs["create_ecpool"] = False
+
+            # Modify profile without --force flag
+            log.info("Attempt 1: Modifying the profile without the --force flag")
+            try:
+                rados_obj.create_erasure_pool(**profile_configs)
+            except Exception as err:
+                log.info(
+                    f"Expected exception. Cannot modify the profile without --force flag.\n"
+                    f"Expected Error: {err}"
+                )
+
+            out = rados_obj.get_ec_profile_detail(
+                profile=profile_configs["profile_name"]
+            )
+
+            if out and int(out["k"]) != old_value:
+                log.error(
+                    f"Profile updated. Error! Current Value : {out['k']} , Expected : {old_value}"
+                )
+                test_pass = False
+
+            # Modify profile with --force flag
+            log.info("Attempt 2: Modifying the profile with the --force flag")
+            try:
+                rados_obj.create_erasure_pool(**profile_configs, force=True)
+            except Exception as err:
+                log.warning(f"Modification failed with --force flag. Exception: {err}")
+
+            # Check profile modification based on Ceph release
+            out = rados_obj.get_ec_profile_detail(
+                profile=profile_configs["profile_name"]
+            )
+            if out:
+                ceph_version = float(rhbuild.split("-")[0])
+                if ceph_version < 8.0 and int(out["k"]) != profile_configs["k"]:
+                    log.error(
+                        f"Profile updated with --force on build < 8.0. Build: {rhbuild}. Error!"
+                        f" Current Value : {out['k']} , Expected : {profile_configs['k']}"
+                    )
+                    test_pass = False
+                elif ceph_version >= 8.0:
+                    log.info(
+                        f"Retrying with --force and --yes-i-really-mean-it flags, build: {rhbuild}"
+                    )
+                    try:
+                        rados_obj.create_erasure_pool(
+                            **profile_configs, force=True, yes_i_mean_it=True
+                        )
+                    except Exception as err:
+                        log.info(
+                            f"Failed to modify profile with --force and --yes-i-really-mean-it flags. Error: {err}"
+                        )
+
+                    out = rados_obj.get_ec_profile_detail(
+                        profile=profile_configs["profile_name"]
+                    )
+                    if int(out["k"]) != profile_configs["k"]:
+                        log.error(
+                            f"Profile not updated with --force and --yes-i-really-mean-it flag. Build: {rhbuild}"
+                            f" Current Value : {out['k']} , Expected : {profile_configs['k']}"
+                        )
+                        test_pass = False
+                    else:
+                        log.info(
+                            "Profile could be updated successfully with --force & --yes-i-mean-it flags. Pass"
+                        )
+
+            # Attempt to delete the profile in use by the pool
+            log.info(
+                "Attempt 3: Trying to delete the profile that is in use by the pool"
+            )
+            try:
+                rados_obj.delete_ec_profile(profile=profile_configs["profile_name"])
+            except Exception as err:
+                log.info(
+                    f"Expected exception. Cannot delete a profile in use by a pool. Error: {err}"
+                )
+
+            profiles = rados_obj.get_ec_profiles()
+            if profile_configs["profile_name"] not in profiles:
+                log.error(
+                    f"Profile {profile_configs['profile_name']} not present on the cluster."
+                )
+                test_pass = False
+            else:
+                log.info("Profile could not be deleted when in use by pools")
+
+        except Exception as e:
+            log.error(f"Test failed with exception: {e}")
+            log.exception(e)
+            return 1
+
+        finally:
+            log.info("************** Execution of finally block begins ***************")
+            rados_obj.rados_pool_cleanup()
+            time.sleep(30)
+            rados_obj.log_cluster_health()
+
+        if test_pass:
+            log.info("All tests related to EC profiles passed successfully.")
+            return 0
+        else:
+            log.error("Tests related to EC profiles failed.")
+            return 1
 
 
 def stop_osd_check_warn(rados_obj, osd_pick, pool_name, pgid):

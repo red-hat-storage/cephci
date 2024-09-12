@@ -107,11 +107,13 @@ def run(ceph_cluster, **kw):
 
             # Getting random OSDs and checking their alloc size
             pg_set = rados_obj.get_pg_acting_set()
+            log.info(f"Acting set collected for PG 1.0 is {pg_set}")
             for osd_id in pg_set:
+                log.info(f"Collecting metadata details for OSD : {osd_id}")
                 osd_meta = rados_obj.get_daemon_metadata(
                     daemon_type="osd", daemon_id=osd_id
                 )
-
+                log.debug(f"metadata details for OSD : {osd_id} is \n{osd_meta}\n")
                 if (
                     not min_alloc_size_hdd
                     == min_alloc_size_ssd
