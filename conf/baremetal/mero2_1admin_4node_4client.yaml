@@ -109,27 +109,27 @@ globals:
             - /dev/sdk
             - /dev/nvme0n1
             - /dev/sdl
-        - hostname: mero013
+        - hostname: clara012
           id: node5
-          ip: 10.8.129.233
+          ip: 10.8.129.12
           role:
             - client
           root_password: passwd
-        - hostname: mero014
+        - hostname: clara013
           id: node6
-          ip: 10.8.129.234
+          ip: 10.8.129.13
           role:
             - client
           root_password: passwd
-        - hostname: mero015
+        - hostname: clara014
           id: node7
-          ip: 10.8.129.235
+          ip: 10.8.129.14
           role:
             - client
           root_password: passwd
-        - hostname: mero016
+        - hostname: clara015
           id: node8
-          ip: 10.8.129.236
+          ip: 10.8.129.15
           role:
             - client
           root_password: passwd
