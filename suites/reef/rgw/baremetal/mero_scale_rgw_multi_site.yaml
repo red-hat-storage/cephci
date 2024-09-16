@@ -272,10 +272,10 @@ tests:
               ceph-sec:
                 config:
                   controllers:
-                    - mero009
-                  drivers:
-                    - mero009
                     - mero011
+                  drivers:
+                    - mero011
+                    - mero013
                   fill_percent: 35
                   workload_type: symmetrical
                   record_sync_on_site: ceph-pri
@@ -345,10 +345,10 @@ tests:
               ceph-sec:
                 config:
                   controllers:
-                    - mero009
-                  drivers:
-                    - mero009
                     - mero011
+                  drivers:
+                    - mero011
+                    - mero013
                   workload_type: cleanup
                   record_sync_on_site: ceph-pri
                   bucket_prefix: cosbench01-bkt-
