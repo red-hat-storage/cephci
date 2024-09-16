@@ -1,13 +1,22 @@
 import json
 import re
 import tempfile
+from threading import Thread
 from time import sleep
 
 import yaml
 
 from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
-from cli.exceptions import CephadmOpsExecutionError
+from cli.exceptions import CephadmOpsExecutionError, OperationFailedError
+from cli.ops.host import host_maintenance_enter, host_maintenance_exit
+from cli.utilities.utils import (
+    get_ip_from_node,
+    get_service_id,
+    kill_process,
+    reboot_node,
+    set_service_state,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -722,3 +731,147 @@ def check_ctdb_health(smb_nodes, smb_cluster_id):
         return False
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to check ctdb health, Error {e}")
+
+
+def smb_failover(smb_nodes, public_addr, failover_type="reboot"):
+    """Perform failover
+    Args:
+        smb_nodes (list): samba server nodes obj list
+        public_addrs (str): public addrs ip
+        failover_type (str): failover type
+    """
+    try:
+        # Get failover node
+        for smb_node in smb_nodes:
+            assigned_ips = get_ip_from_node(smb_node)
+            if any(ip in assigned_ips for ip in public_addr):
+                failover_node = smb_node
+                log.info(f"Failover node {failover_node.hostname}")
+                break
+
+        # Perfrom failover
+        if failover_type == "reboot":
+            failover = Thread(target=reboot_node, args=(failover_node,))
+        elif failover_type == "restart_service":
+            service_id = get_service_id(failover_node, "ctdbd")[0].strip()
+            failover = Thread(
+                target=set_service_state, args=(failover_node, service_id, "restart")
+            )
+        elif failover_type == "stop_service":
+            service_id = get_service_id(failover_node, "ctdbd")[0].strip()
+            failover = Thread(
+                target=set_service_state, args=(failover_node, service_id, "stop")
+            )
+        elif failover_type == "kill_service":
+            pid = failover_node.exec_command(sudo=True, cmd="pgrep -o ctdbd")[0].strip()
+            failover = Thread(target=kill_process, args=(failover_node, pid))
+        elif failover_type == "maintenance_mode":
+            timeout = 300
+            interval = 10
+            force = True
+            yes_i_really_mean_it = True
+            failover = Thread(
+                target=host_maintenance_enter,
+                args=(
+                    failover_node,
+                    failover_node.hostname,
+                    timeout,
+                    interval,
+                    force,
+                    yes_i_really_mean_it,
+                ),
+            )
+
+        # Start failover
+        failover.start()
+
+        # Check public adress assigned to other samba server
+        flag = False
+        for w in WaitUntil(timeout=120, interval=5):
+            for smb_node in smb_nodes:
+                if smb_node != failover_node:
+                    assigned_ips = get_ip_from_node(smb_node)
+                    if any(ip in assigned_ips for ip in public_addr):
+                        flag = True
+                        log.info(
+                            f"Failover success, public_addr reassigned to {smb_node.hostname}"
+                        )
+            if flag:
+                break
+        if w.expired:
+            raise OperationFailedError(
+                "The failover process failed and public address is not assigned to the available samba servers"
+            )
+
+        # Exit from maintenance_mode after failover type is maintenance_mode
+        if failover_type == "maintenance_mode":
+            host_maintenance_exit(failover_node, failover_node.hostname)
+
+        # Wait for the failover to completed
+        failover.join()
+    except Exception as e:
+        raise CephadmOpsExecutionError(f"Fail to perfrom samba failover, Error {e}")
+
+
+def reconnect_share(
+    clients,
+    mount_point,
+    samba_server,
+    smb_share,
+    smb_user_name,
+    smb_user_password,
+    auth_mode,
+    domain_realm,
+    public_addrs=False,
+    windows_client=False,
+):
+    """Reconnect samba share
+    Args:
+        clients (list): List of client object
+        mount_point (str): mount point
+        samba_server (obj): Smb server node obj
+        smb_share (str): Smb share
+        smb_user_name (str): Smb username
+        smb_user_password (str): Smb password
+        auth_mode (str): Smb auth mode (user or active-directory)
+        domain_realm (str): Smb AD domain relam
+        public_addrs(str): public addrs ip
+        windows_client(bool): True|False
+    """
+    try:
+        # cleanup
+        clients_cleanup(
+            clients,
+            mount_point,
+            samba_server,
+            smb_share,
+            smb_user_name,
+            smb_user_password,
+            windows_client,
+        )
+        # Mount samba share
+        if windows_client:
+            win_mount(
+                clients,
+                mount_point,
+                samba_server.ip_address,
+                smb_share,
+                smb_user_name,
+                smb_user_password,
+                public_addrs,
+            )
+        else:
+            for client in clients:
+                smb_cifs_mount(
+                    samba_server,
+                    client,
+                    smb_share,
+                    smb_user_name,
+                    smb_user_password,
+                    auth_mode,
+                    domain_realm,
+                    mount_point,
+                    public_addrs,
+                )
+    except Exception as e:
+        raise CephadmOpsExecutionError(f"Fail to reconnect samba server, Error {e}")
