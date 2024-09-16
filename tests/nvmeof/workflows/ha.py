@@ -541,7 +541,7 @@ class HighAvailability:
         )
         return namespaces
 
-    @retry((IOError, TimeoutError, CommandFailed), tries=3, delay=1)
+    @retry((IOError, TimeoutError, CommandFailed), tries=5, delay=2)
     def validate_io(self, namespaces):
         """Validate Continuous IO on namespaces.
 
