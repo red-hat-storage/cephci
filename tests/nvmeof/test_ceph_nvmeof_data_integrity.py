@@ -28,7 +28,7 @@ def configure_subsystems(rbd, pool, nvmegwcli, config):
         "trsvcid": config["listener_port"],
     }
     nvmegwcli.listener.add(**{"args": {**listener_cfg, **sub_args}})
-    nvmegwcli.host.add(**{"args": {**sub_args, **{"host": config["allow_host"]}}})
+    nvmegwcli.host.add(**{"args": {**sub_args, **{"host": repr(config["allow_host"])}}})
 
     if config.get("bdevs"):
         name = generate_unique_id(length=4)
