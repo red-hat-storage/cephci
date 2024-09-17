@@ -73,21 +73,23 @@ def configure_subsystems(config, _cls, command):
         )
         subsystem_func = fetch_method(_cls, command)
         subsystem_func(**config)
-        config["args"].clear()
+    config["args"].clear()
 
 
 def configure_listeners(config, _cls, command, ceph_cluster):
     port = config["args"].pop("port")
     subsystems = config["args"].pop("subsystems")
     nodes = config["args"].pop("nodes")
+    group = config["args"].pop("group", None)
     LOG.info(nodes)
     for node in nodes:
         LOG.info(node)
         listener_node = get_node_by_id(ceph_cluster, node)
         for num in range(1, subsystems + 1):
+            subnqn = f"nqn.2016-06.io.spdk:cnode{num}{f'.{group}' if group is not None else ''}"
             config["args"].update(
                 {
-                    "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
+                    "subsystem": subnqn,
                     "host-name": listener_node.hostname,
                     "traddr": listener_node.ip_address,
                     "trsvcid": port,
@@ -101,10 +103,14 @@ def configure_listeners(config, _cls, command, ceph_cluster):
 
 def configure_hosts(config, _cls, command):
     hostnqn = config["args"].pop("hostnqn", None) or "'*'"
+    group = config["args"].pop("group", None)
     for num in range(1, config["args"].pop("subsystems") + 1):
+        subnqn = (
+            f"nqn.2016-06.io.spdk:cnode{num}{f'.{group}' if group is not None else ''}"
+        )
         config["args"].update(
             {
-                "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
+                "subsystem": subnqn,
                 "host": hostnqn,
             }
         )
@@ -119,11 +125,16 @@ def configure_namespaces(
     subsystems = config["args"].pop("subsystems")
     namespaces = config["args"].pop("namespaces")
     image_size = config["args"].pop("image_size")
+    group = config["args"].pop("group", None)
     pool = config["args"].pop("pool")
     namespaces_sub = int(namespaces / subsystems)
 
     for sub_num in range(1, subsystems + 1):
-        init_config.update({"subnqn": f"nqn.2016-06.io.spdk:cnode{sub_num}"})
+        init_config.update(
+            {
+                "subnqn": f"nqn.2016-06.io.spdk:cnode{sub_num}{f'.{group}' if group is not None else ''}"
+            }
+        )
         initiators(ceph_cluster, node, init_config)
         name = generate_unique_id(length=4)
         LOG.info(sub_num)
@@ -134,12 +145,13 @@ def configure_namespaces(
             LOG.info(num)
             LOG.info(namespaces)
             config["args"].clear()
+            subnqn = f"nqn.2016-06.io.spdk:cnode{sub_num}{f'.{group}' if group is not None else ''}"
             config = {
                 "base_cmd_args": {"format": "json"},
                 "args": {
                     "rbd-image": f"{name}-image{num}",
                     "rbd-pool": pool,
-                    "subsystem": f"nqn.2016-06.io.spdk:cnode{sub_num}",
+                    "subsystem": subnqn,
                 },
             }
 
@@ -151,7 +163,7 @@ def configure_namespaces(
                 "base_cmd_args": {"format": "json"},
                 "args": {
                     "nsid": nsid,
-                    "subsystem": f"nqn.2016-06.io.spdk:cnode{sub_num}",
+                    "subsystem": subnqn,
                 },
             }
             namespace_list = fetch_method(_cls, "list")
@@ -170,12 +182,13 @@ def configure_namespaces(
             LOG.info(top_usage)
 
 
-def execute_and_log_results(node):
+def execute_and_log_results(node, rbd_pool):
     commands = [
         "cephadm shell -- ceph df",
-        "cephadm shell -- rbd du",
+        f"cephadm shell -- rbd du -p {rbd_pool}",
         "cephadm shell -- ceph -s",
         "cephadm shell -- ceph health detail",
+        "cephadm shell -- ceph orch ls | grep nvmeof",
         "cat /proc/meminfo | grep -iE 'hugepage|^mem|swap'",
         "cat /proc/cpuinfo | grep -iE 'cpu'",
         "ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
@@ -238,12 +251,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 func(**cfg["args"])
 
         instance = CephAdmin(cluster=ceph_cluster, **config)
-        execute_and_log_results(instance)
+        execute_and_log_results(instance, rbd_pool)
 
     except BaseException as be:
         LOG.error(be, exc_info=True)
         instance = CephAdmin(cluster=ceph_cluster, **config)
-        execute_and_log_results(instance)
+        execute_and_log_results(instance, rbd_pool)
         mem_usage, _ = node.exec_command(
             cmd="ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
             sudo=True,
