@@ -73,7 +73,7 @@ node ("rhel-9-medium || ceph-qe-ci") {
 
         majorVersion = ciMap.rhbuild.substring(0,1)
         clusterName = ciMap["cluster_name"]
-        def buildType = "${ciMap.build}" ?: "tier-0"
+        def buildType = "${ciMap.build}" ?: "latest"
 
         // Prepare the CLI arguments
         cliArgs += "--rhbuild ${ciMap.rhbuild}"
@@ -121,8 +121,8 @@ node ("rhel-9-medium || ceph-qe-ci") {
                 "email": "cephci@redhat.com",
             ],
             "system": [
-                "os": "centos-7",
-                "label": "centos-7",
+                "os": "rhel-9",
+                "label": "rhel-9-medium",
                 "provider": "openstack",
             ],
             "pipeline": [
