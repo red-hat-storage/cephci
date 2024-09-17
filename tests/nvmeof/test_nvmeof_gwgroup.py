@@ -39,6 +39,9 @@ def configure_subsystems(pool, ha, config):
     ceph_cluster = config["ceph_cluster"]
 
     nvmegwcli = ha.gateways[0]
+    # Uncomment these for debugging purpose
+    nvmegwcli.gateway.set_log_level(**{"args": {"level": "ERROR"}})
+    nvmegwcli.loglevel.set(**{"args": {"level": "ERROR"}})
 
     # Add Subsystem
     nvmegwcli.subsystem.add(
@@ -90,6 +93,37 @@ def configure_subsystems(pool, ha, config):
                     p.spawn(nvmegwcli.namespace.add, **ns_args)
 
 
+def run_gateway_group_operations(ceph_cluster, gwgroup_config, config):
+    try:
+        # Deploy NVMeOf services
+        if config.get("install"):
+            deploy_nvme_service(ceph_cluster, gwgroup_config)
+
+        ha = HighAvailability(
+            ceph_cluster, gwgroup_config["gw_nodes"], **gwgroup_config
+        )
+
+        # Configure subsystems in GWgroups
+        if gwgroup_config.get("subsystems"):
+            for subsys_args in gwgroup_config["subsystems"]:
+                subsys_args["ceph_cluster"] = ceph_cluster
+                configure_subsystems(gwgroup_config["rbd_pool"], ha, subsys_args)
+
+        # HA failover and failback
+        if gwgroup_config.get("fault-injection-methods") or config.get(
+            "fault-injection-methods"
+        ):
+            ha.run()
+
+        if "initiators" in config["cleanup"]:
+            for initiator_cfg in gwgroup_config["initiators"]:
+                disconnect_initiator(ceph_cluster, initiator_cfg["node"])
+
+    except Exception as err:
+        LOG.error(f"Error in gateway group {gwgroup_config['gw_nodes']}: {err}")
+        raise err
+
+
 def disconnect_initiator(ceph_cluster, node):
     """Disconnect Initiator."""
     node = get_node_by_id(ceph_cluster, node)
@@ -105,11 +139,11 @@ def teardown(ceph_cluster, rbd_obj, config):
         rbd_obj: RBD object
         config: test config
     """
-
     # Delete the gateway
     if "gateway" in config["cleanup"]:
         delete_nvme_service(ceph_cluster, config)
 
+    # Disconnect Initiators
     for gwgroup_config in config["gw_groups"]:
         if "initiators" in config["cleanup"]:
             for initiator_cfg in gwgroup_config["initiators"]:
@@ -134,39 +168,26 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             break
 
     try:
-        for gwgroup_config in config["gw_groups"]:
-            gwgroup_config["rbd_pool"] = rbd_pool
-
-            # Deploy NVMeOf services
-            if config.get("install"):
-                deploy_nvme_service(ceph_cluster, gwgroup_config)
-
-            ha = HighAvailability(
-                ceph_cluster, gwgroup_config["gw_nodes"], **gwgroup_config
-            )
-
-            # Configure subsystems in GWgroups
-            if gwgroup_config.get("subsystems"):
-                with parallel() as p:
-                    for subsys_args in gwgroup_config["subsystems"]:
-                        subsys_args["ceph_cluster"] = ceph_cluster
-                        p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
-
-            # HA failover and failback
-            if gwgroup_config.get("fault-injection-methods") or config.get(
-                "fault-injection-methods"
-            ):
-                ha.run()
-
-            if "initiators" in config["cleanup"]:
-                for initiator_cfg in gwgroup_config["initiators"]:
-                    disconnect_initiator(ceph_cluster, initiator_cfg["node"])
+        if config.get("parallel"):
+            with parallel() as p:
+                for gwgroup_config in config["gw_groups"]:
+                    gwgroup_config["rbd_pool"] = rbd_pool
+                    p.spawn(
+                        run_gateway_group_operations,
+                        ceph_cluster,
+                        gwgroup_config,
+                        config,
+                    )
+        else:
+            for gwgroup_config in config["gw_groups"]:
+                gwgroup_config["rbd_pool"] = rbd_pool
+                run_gateway_group_operations(ceph_cluster, gwgroup_config, config)
 
         return 0
+
     except Exception as err:
         LOG.error(err)
+        return 1
     finally:
         if config.get("cleanup"):
             teardown(ceph_cluster, rbd_obj, config)
-
-    return 1
