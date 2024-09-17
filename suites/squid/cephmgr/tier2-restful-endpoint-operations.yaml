@@ -54,6 +54,10 @@
 #    "/crush/rule":
 #       "GET":
 #            "Show crush rules"
+#   - Test all supported methods for /perf endpoint
+#    "/perf":
+#       "GET":
+#            "List all the available performance counters"
 #===============================================================================================
 
 tests:
@@ -316,3 +320,13 @@ tests:
         username: test_user
         status_code: 200
       desc: Use the GET method to view crush rules
+
+  - test:
+      name: ceph-mgr RESTful module GET method on perf endpoint
+      polarion-id: CEPH-83597509
+      module: test_restful_operations_perf_endpoint.py
+      config:
+        endpoint: /perf
+        username: test_user
+        status_code: 200
+      desc: Use the GET method to list all the available performance counters
