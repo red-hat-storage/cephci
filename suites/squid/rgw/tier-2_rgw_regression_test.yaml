@@ -265,7 +265,6 @@ tests:
       desc: Test ListBucketVersions bucket policy for users in same tenant
       polarion-id: CEPH-11574
       module: sanity_rgw.py
-      comments: known issue (bz-2302940)
       config:
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_listbucketversion_with_bucketpolicy_for_tenant_user.yaml
@@ -275,7 +274,6 @@ tests:
       desc: test get object and its version from same and different tenant users
       polarion-id: CEPH-11516
       module: sanity_rgw.py
-      comments: known issue (bz-2302940)
       config:
         test-version: v2
         script-name: test_bucket_policy_with_tenant_user.py
@@ -286,7 +284,6 @@ tests:
       desc: test bucket policy with multiple statements
       polarion-id: CEPH-11216
       module: sanity_rgw.py
-      comments: known issue (bz-2302940)
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_multiple_statements.yaml
@@ -305,7 +302,6 @@ tests:
       desc: test bucket policy with condition blocks
       polarion-id: CEPH-11589
       module: sanity_rgw.py
-      comments: known issue (bz-2302940)
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_condition.yaml
@@ -315,7 +311,6 @@ tests:
       desc: test bucket policy condition block with explicit deny
       polarion-id: CEPH-11590
       module: sanity_rgw.py
-      comments: known issue (bz-2302940)
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_condition_explicit_deny.yaml

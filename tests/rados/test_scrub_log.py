@@ -155,15 +155,15 @@ def check_scrub_workflow(installer, rados_obj, acting_sets, task) -> bool:
             if not rados_obj.start_check_scrub_complete(pg_id=pgid):
                 log.error(f"Could not complete scrub on pg : {pgid}")
                 return False
-            log_lines = [rf"{pgid}\S* scrub starts", rf"{pgid}\S* scrub ok"]
+            log_lines = [rf"{pgid}[\S\s]*scrub starts", rf"{pgid}[\S\s]*scrub ok"]
 
         elif task == "deep-scrub":
             if not rados_obj.start_check_deep_scrub_complete(pg_id=pgid):
                 log.error(f"Could not complete deep-scrub on pg : {pgid}")
                 return False
             log_lines = [
-                rf"{pgid}\S* deep-scrub starts",
-                rf"{pgid}\S* deep-scrub ok",
+                rf"{pgid}[\S\s]*deep-scrub starts",
+                rf"{pgid}[\S\s]*deep-scrub ok",
             ]
 
         time.sleep(10)

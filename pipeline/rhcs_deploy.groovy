@@ -20,13 +20,6 @@ def argsMap = [
         "suite": "suites/quincy/integrations/ocs.yaml",
         "platform": "rhel-9",
         "rgwSecure": "suites/quincy/integrations/ocs_rgw_ssl.yaml",
-        "overrides": [
-            "grafana_image": "registry-proxy.engineering.redhat.com/rh-osbs/grafana:ceph-6.0-rhel-9-containers-candidate-99494-20221026123006",
-            "promtail_image": "registry-proxy.engineering.redhat.com/rh-osbs/promtail:ceph-6.0-rhel-9-containers-candidate-10191-20221026120801",
-            "haproxy_image": "registry-proxy.engineering.redhat.com/rh-osbs/haproxy:ceph-6.0-rhel-9-containers-candidate-53939-20221026121907",
-            "keepalived_image": "registry-proxy.engineering.redhat.com/rh-osbs/keepalived:ceph-6.0-rhel-9-containers-candidate-18945-20221026120854",
-            "snmp_gateway_image": "registry-proxy.engineering.redhat.com/rh-osbs/snmp-notifier:ceph-6.0-rhel-9-containers-candidate-15559-20221026120853"
-        ]
     ],
     "7": [
         "inventory": "conf/inventory/rhel-9.4-server-x86_64-xlarge.yaml",
@@ -34,13 +27,6 @@ def argsMap = [
         "suite": "suites/reef/integrations/ocs.yaml",
         "platform": "rhel-9",
         "rgwSecure": "suites/reef/integrations/ocs_rgw_ssl.yaml",
-        "overrides": [
-            "grafana_image": "registry-proxy.engineering.redhat.com/rh-osbs/grafana:10.4.0-15",
-            "haproxy_image": "registry-proxy.engineering.redhat.com/rh-osbs/haproxy:2.4.22-27",
-            "keepalived_image": "registry-proxy.engineering.redhat.com/rh-osbs/keepalived:2.2.8-26",
-            "snmp_gateway_image": "registry-proxy.engineering.redhat.com/rh-osbs/snmp-notifier:1.2.1-76",
-            "promtail_image": "registry-proxy.engineering.redhat.com/rh-osbs/promtail:v2.4.0-34"
-        ]
     ]
 ]
 def ciMap = [:]
@@ -87,7 +73,7 @@ node ("rhel-9-medium || ceph-qe-ci") {
 
         majorVersion = ciMap.rhbuild.substring(0,1)
         clusterName = ciMap["cluster_name"]
-        def buildType = "${ciMap.build}" ?: "tier-0"
+        def buildType = "${ciMap.build}" ?: "latest"
 
         // Prepare the CLI arguments
         cliArgs += "--rhbuild ${ciMap.rhbuild}"
@@ -135,8 +121,8 @@ node ("rhel-9-medium || ceph-qe-ci") {
                 "email": "cephci@redhat.com",
             ],
             "system": [
-                "os": "centos-7",
-                "label": "centos-7",
+                "os": "rhel-9",
+                "label": "rhel-9-medium",
                 "provider": "openstack",
             ],
             "pipeline": [

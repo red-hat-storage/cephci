@@ -196,3 +196,15 @@ tests:
       polarion-id: CEPH-83575020
       desc: cephfs-top negative testing
       abort-on-fail: false
+  - test:
+      name: cephfs-top metrcis testing
+      module: cephfs_top.cephfs_top_dump.py
+      polarion-id: CEPH-83573848
+      desc: cephfs-top metrcis verification using --dump
+      abort-on-fail: false
+  - test:
+      name: cephfs-top validate top stats
+      module: cephfs_top.validate_fs_top_stats.py
+      polarion-id: CEPH-83573838
+      desc: cephfs-top validate top stats
+      abort-on-fail: false

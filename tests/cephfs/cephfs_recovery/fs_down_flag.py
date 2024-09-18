@@ -36,7 +36,15 @@ def run(ceph_cluster, **kw):
     3. Del SubvolumeGroups
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        if erasure:
+            log.info("Suite has been triggered in Erasure mode")
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))

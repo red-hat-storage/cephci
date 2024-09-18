@@ -1,12 +1,22 @@
 import json
+import re
 import tempfile
+from threading import Thread
 from time import sleep
 
 import yaml
 
 from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
-from cli.exceptions import CephadmOpsExecutionError
+from cli.exceptions import CephadmOpsExecutionError, OperationFailedError
+from cli.ops.host import host_maintenance_enter, host_maintenance_exit
+from cli.utilities.utils import (
+    get_ip_from_node,
+    get_service_id,
+    kill_process,
+    reboot_node,
+    set_service_state,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -26,6 +36,7 @@ def deploy_smb_service_imperative(
     path,
     domain_realm,
     custom_dns,
+    clustering="default",
 ):
     """Deploy smb services
     Args:
@@ -62,6 +73,7 @@ def deploy_smb_service_imperative(
             smb_user_name,
             smb_user_password,
             custom_dns,
+            clustering,
         )
 
         # Check smb cluster
@@ -140,6 +152,7 @@ def smbclient_check_shares(
     smb_user_password,
     auth_mode,
     domain_realm,
+    public_addrs=None,
 ):
     """Smb share check using smbclients
     Args:
@@ -152,28 +165,52 @@ def smbclient_check_shares(
         domain_realm (str): Smb AD domain relam
     """
     try:
-        for smb_node in smb_nodes:
-            for smb_share in smb_shares:
-                if auth_mode == "active-directory":
-                    cmd = (
-                        f"smbclient -U '{domain_realm.split('.')[0].upper()}\\"
-                        f"{smb_user_name}%{smb_user_password}' "
-                        f"//{smb_node.ip_address}/{smb_share} -c ls"
-                    )
-                    client.exec_command(
-                        sudo=True,
-                        cmd=cmd,
-                    )
-                elif auth_mode == "user":
-                    cmd = (
-                        f"smbclient -U {smb_user_name}%{smb_user_password}"
-                        f" //{smb_node.ip_address}/{smb_share} -c ls"
-                    )
-                    client.exec_command(
-                        sudo=True,
-                        cmd=cmd,
-                    )
-                sleep(1)
+        if public_addrs:
+            for public_addr in public_addrs:
+                for smb_share in smb_shares:
+                    if auth_mode == "active-directory":
+                        cmd = (
+                            f"smbclient -U '{domain_realm.split('.')[0].upper()}\\"
+                            f"{smb_user_name}%{smb_user_password}' "
+                            f"//{public_addr.split('/')[0]}/{smb_share} -c ls"
+                        )
+                        client.exec_command(
+                            sudo=True,
+                            cmd=cmd,
+                        )
+                    elif auth_mode == "user":
+                        cmd = (
+                            f"smbclient -U {smb_user_name}%{smb_user_password}"
+                            f" //{public_addr.split('/')[0]}/{smb_share} -c ls"
+                        )
+                        client.exec_command(
+                            sudo=True,
+                            cmd=cmd,
+                        )
+                    sleep(1)
+        else:
+            for smb_node in smb_nodes:
+                for smb_share in smb_shares:
+                    if auth_mode == "active-directory":
+                        cmd = (
+                            f"smbclient -U '{domain_realm.split('.')[0].upper()}\\"
+                            f"{smb_user_name}%{smb_user_password}' "
+                            f"//{smb_node.ip_address}/{smb_share} -c ls"
+                        )
+                        client.exec_command(
+                            sudo=True,
+                            cmd=cmd,
+                        )
+                    elif auth_mode == "user":
+                        cmd = (
+                            f"smbclient -U {smb_user_name}%{smb_user_password}"
+                            f" //{smb_node.ip_address}/{smb_share} -c ls"
+                        )
+                        client.exec_command(
+                            sudo=True,
+                            cmd=cmd,
+                        )
+                    sleep(1)
     except Exception as e:
         raise CephadmOpsExecutionError(
             f"Fail to access smb share {smb_share}, Error {e}"
@@ -190,9 +227,9 @@ def smb_cleanup(installer, smb_shares, smb_cluster_id):
     try:
         # Remove smb shares
         remove_smb_share(installer, smb_shares, smb_cluster_id)
-
         # Remove smb cluster
         remove_smb_cluster(installer, smb_cluster_id)
+        sleep(9)
     except Exception as e:
         raise CephadmOpsExecutionError(
             f"Fail to cleanup smb cluster {smb_cluster_id}, Error {e}"
@@ -253,6 +290,7 @@ def create_smb_cluster(
     smb_user_name,
     smb_user_password,
     custom_dns,
+    clustering,
 ):
     """Create smb cluster
     Args:
@@ -271,6 +309,7 @@ def create_smb_cluster(
                 auth_mode,
                 define_user_pass=f"{smb_user_name}%{smb_user_password}",
                 placement="label:smb",
+                clustering=clustering,
             )
         elif auth_mode == "active-directory":
             CephAdm(installer).ceph.smb.cluster.create(
@@ -280,6 +319,7 @@ def create_smb_cluster(
                 domain_join_user_pass=f"{smb_user_name}%{smb_user_password}",
                 custom_dns=custom_dns,
                 placement="label:smb",
+                clustering=clustering,
             )
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to create smb cluster, Error {e}")
@@ -461,6 +501,7 @@ def smb_cifs_mount(
     auth_mode,
     domain_realm,
     cifs_mount_point,
+    public_addrs=None,
 ):
     """Smb cifs mount
     Args:
@@ -472,6 +513,7 @@ def smb_cifs_mount(
         auth_mode (str): Smb auth mode (user or active-directory)
         domain_realm (str): Smb AD domain relam
         cifs_mount_point (str): Smb cifs mount point
+        public_addrs(str): public addrs ip
     """
     try:
         # Create cifs mount dir
@@ -480,26 +522,49 @@ def smb_cifs_mount(
             sudo=True,
             cmd=cmd,
         )
-        # Mount smb share using cifs
-        if auth_mode == "user":
-            cmd = (
-                f"mount.cifs //{smb_node.ip_address}/{smb_share} {cifs_mount_point}"
-                f" -o username={smb_user_name},password={smb_user_password}"
-            )
-            client.exec_command(
-                sudo=True,
-                cmd=cmd,
-            )
-        elif auth_mode == "active-directory":
-            cmd = (
-                f"mount.cifs //{smb_node.ip_address}/{smb_share} {cifs_mount_point}"
-                f" -o username={smb_user_name},password={smb_user_password}"
-                f",domian={domain_realm.split('.')[0].upper()}"
-            )
-            client.exec_command(
-                sudo=True,
-                cmd=cmd,
-            )
+        if public_addrs:
+            # Mount smb share using cifs
+            if auth_mode == "user":
+                cmd = (
+                    f"mount.cifs //{public_addrs[0]}/{smb_share} {cifs_mount_point}"
+                    f" -o username={smb_user_name},password={smb_user_password}"
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+            elif auth_mode == "active-directory":
+                cmd = (
+                    f"mount.cifs //{public_addrs[0]}/{smb_share} {cifs_mount_point}"
+                    f" -o username={smb_user_name},password={smb_user_password}"
+                    f",domian={domain_realm.split('.')[0].upper()}"
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+
+        else:
+            # Mount smb share using cifs
+            if auth_mode == "user":
+                cmd = (
+                    f"mount.cifs //{smb_node.ip_address}/{smb_share} {cifs_mount_point}"
+                    f" -o username={smb_user_name},password={smb_user_password}"
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+            elif auth_mode == "active-directory":
+                cmd = (
+                    f"mount.cifs //{smb_node.ip_address}/{smb_share} {cifs_mount_point}"
+                    f" -o username={smb_user_name},password={smb_user_password}"
+                    f",domian={domain_realm.split('.')[0].upper()}"
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
     except Exception as e:
         raise CephadmOpsExecutionError(
             f"Fail to mount smb share {smb_share} using cifs, Error {e}"
@@ -529,7 +594,13 @@ def generate_apply_smb_spec(installer, file_type, smb_spec, file_mount):
 
 
 def win_mount(
-    clients, mount_point, samba_server, smb_share, smb_user_name, smb_user_password
+    clients,
+    mount_point,
+    samba_server,
+    smb_share,
+    smb_user_name,
+    smb_user_password,
+    public_addrs=None,
 ):
     """Window mount
     Args:
@@ -539,14 +610,23 @@ def win_mount(
         smb_share (str): Smb share
         smb_user_name (str): Smb username
         smb_user_password (str): Smb password
+        public_addrs(str): public addrs ip
     """
     try:
-        for client in clients:
-            cmd = (
-                f"net use {mount_point} \\\\{samba_server}\\{smb_share}"
-                f" /user:{smb_user_name} {smb_user_password} /persistent:yes"
-            )
-            client.exec_command(cmd=cmd)
+        if public_addrs:
+            for client in clients:
+                cmd = (
+                    f"net use {mount_point} \\\\{public_addrs[0]}\\{smb_share}"
+                    f" /user:{smb_user_name} {smb_user_password} /persistent:yes"
+                )
+                client.exec_command(cmd=cmd)
+        else:
+            for client in clients:
+                cmd = (
+                    f"net use {mount_point} \\\\{samba_server}\\{smb_share}"
+                    f" /user:{smb_user_name} {smb_user_password} /persistent:yes"
+                )
+                client.exec_command(cmd=cmd)
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to mount, Error {e}")
 
@@ -591,3 +671,207 @@ def clients_cleanup(
                 )
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to cleanup clients, Error {e}")
+
+
+def check_rados_clustermeta(cephadm, smb_cluster_id, smb_nodes):
+    """Check rados clustermeta for samba cluster
+    Args:
+        cephadm (obj): cephadm obj
+        smb_cluster_id (str): samba cluster id
+        smb_nodes (list): samba server nodes obj list
+    """
+    try:
+        # Get rados clustermeta for smb cluster
+        cmd = f"rados --pool=.smb -N {smb_cluster_id} get cluster.meta.json /dev/stdout"
+        out = json.loads(cephadm.shell([cmd])[0])
+
+        # Get samba server nodes ip
+        smb_nodes_ips = [smb_node.ip_address for smb_node in smb_nodes]
+
+        # check rados clustermeta consist of all the sambe server IP
+        smb_clustering = any(
+            node["node"] in smb_nodes_ips and node["state"] == "ready"
+            for node in out["nodes"]
+        )
+        return smb_clustering
+    except Exception as e:
+        raise CephadmOpsExecutionError(
+            f"Fail to get rados clustermeta for samba cluster, Error {e}"
+        )
+
+
+def check_ctdb_health(smb_nodes, smb_cluster_id):
+    """Check rctdb health
+    Args:
+        smb_nodes (list): samba server nodes obj list
+        smb_cluster_id (str): samba cluster id
+    """
+    try:
+        # Get samba service
+        cmd = f"cephadm ls --no-detail | jq -r 'map(select(.name | startswith(\"smb.{smb_cluster_id}\")))[-1].name'"
+        out = smb_nodes[0].exec_command(sudo=True, cmd=cmd)[0].strip()
+
+        # Get ctdb status
+        sleep(30)
+        cmd = f"cephadm enter -n {out} ctdb status"
+        ctdb_status = smb_nodes[0].exec_command(sudo=True, cmd=cmd)[0]
+
+        # Get number of nodes and status
+        nodes = re.search(r"Number of nodes:(\d+)", ctdb_status).group(1)
+        status = all(
+            re.search(r"pnn:\d+ \S+ *OK", line)
+            for line in ctdb_status.splitlines()
+            if line.startswith("pnn")
+        )
+        log.info(f"ctdb status: nodes: {nodes},status: {status}")
+
+        # Validate ctdb health
+        if int(nodes) == len(smb_nodes) and status:
+            return True
+        return False
+    except Exception as e:
+        raise CephadmOpsExecutionError(f"Fail to check ctdb health, Error {e}")
+
+
+def smb_failover(smb_nodes, public_addr, failover_type="reboot"):
+    """Perform failover
+    Args:
+        smb_nodes (list): samba server nodes obj list
+        public_addrs (str): public addrs ip
+        failover_type (str): failover type
+    """
+    try:
+        # Get failover node
+        for smb_node in smb_nodes:
+            assigned_ips = get_ip_from_node(smb_node)
+            if any(ip in assigned_ips for ip in public_addr):
+                failover_node = smb_node
+                log.info(f"Failover node {failover_node.hostname}")
+                break
+
+        # Perfrom failover
+        if failover_type == "reboot":
+            failover = Thread(target=reboot_node, args=(failover_node,))
+        elif failover_type == "restart_service":
+            service_id = get_service_id(failover_node, "ctdbd")[0].strip()
+            failover = Thread(
+                target=set_service_state, args=(failover_node, service_id, "restart")
+            )
+        elif failover_type == "stop_service":
+            service_id = get_service_id(failover_node, "ctdbd")[0].strip()
+            failover = Thread(
+                target=set_service_state, args=(failover_node, service_id, "stop")
+            )
+        elif failover_type == "kill_service":
+            pid = failover_node.exec_command(sudo=True, cmd="pgrep -o ctdbd")[0].strip()
+            failover = Thread(target=kill_process, args=(failover_node, pid))
+        elif failover_type == "maintenance_mode":
+            timeout = 300
+            interval = 10
+            force = True
+            yes_i_really_mean_it = True
+            failover = Thread(
+                target=host_maintenance_enter,
+                args=(
+                    failover_node,
+                    failover_node.hostname,
+                    timeout,
+                    interval,
+                    force,
+                    yes_i_really_mean_it,
+                ),
+            )
+
+        # Start failover
+        failover.start()
+
+        # Check public adress assigned to other samba server
+        flag = False
+        for w in WaitUntil(timeout=120, interval=5):
+            for smb_node in smb_nodes:
+                if smb_node != failover_node:
+                    assigned_ips = get_ip_from_node(smb_node)
+                    if any(ip in assigned_ips for ip in public_addr):
+                        flag = True
+                        log.info(
+                            f"Failover success, public_addr reassigned to {smb_node.hostname}"
+                        )
+            if flag:
+                break
+        if w.expired:
+            raise OperationFailedError(
+                "The failover process failed and public address is not assigned to the available samba servers"
+            )
+
+        # Exit from maintenance_mode after failover type is maintenance_mode
+        if failover_type == "maintenance_mode":
+            host_maintenance_exit(failover_node, failover_node.hostname)
+
+        # Wait for the failover to completed
+        failover.join()
+    except Exception as e:
+        raise CephadmOpsExecutionError(f"Fail to perfrom samba failover, Error {e}")
+
+
+def reconnect_share(
+    clients,
+    mount_point,
+    samba_server,
+    smb_share,
+    smb_user_name,
+    smb_user_password,
+    auth_mode,
+    domain_realm,
+    public_addrs=False,
+    windows_client=False,
+):
+    """Reconnect samba share
+    Args:
+        clients (list): List of client object
+        mount_point (str): mount point
+        samba_server (obj): Smb server node obj
+        smb_share (str): Smb share
+        smb_user_name (str): Smb username
+        smb_user_password (str): Smb password
+        auth_mode (str): Smb auth mode (user or active-directory)
+        domain_realm (str): Smb AD domain relam
+        public_addrs(str): public addrs ip
+        windows_client(bool): True|False
+    """
+    try:
+        # cleanup
+        clients_cleanup(
+            clients,
+            mount_point,
+            samba_server,
+            smb_share,
+            smb_user_name,
+            smb_user_password,
+            windows_client,
+        )
+        # Mount samba share
+        if windows_client:
+            win_mount(
+                clients,
+                mount_point,
+                samba_server.ip_address,
+                smb_share,
+                smb_user_name,
+                smb_user_password,
+                public_addrs,
+            )
+        else:
+            for client in clients:
+                smb_cifs_mount(
+                    samba_server,
+                    client,
+                    smb_share,
+                    smb_user_name,
+                    smb_user_password,
+                    auth_mode,
+                    domain_realm,
+                    mount_point,
+                    public_addrs,
+                )
+    except Exception as e:
+        raise CephadmOpsExecutionError(f"Fail to reconnect samba server, Error {e}")

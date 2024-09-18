@@ -157,6 +157,10 @@ def run(ceph_cluster, **kw):
         if not fs_details:
             fs_util_v1.create_fs(client1, default_fs)
 
+        out, rc = client1.exec_command(
+            sudo=True, cmd="ceph config set mds debug_mds_quiesce 20"
+        )
+
         test_case_name = config.get("test_name", "all_tests")
         test_functional = [
             "cg_snap_func_workflow_1",
@@ -2861,6 +2865,7 @@ def wait_for_healthy_ceph(client1, fs_util, wait_time_secs):
                 f"Wait for sometime to check if Cluster health can be OK, current state : {ex}"
             )
             time.sleep(5)
+
     if ceph_healthy == 0:
         return 0
     return 1

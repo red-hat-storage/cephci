@@ -1,0 +1,173 @@
+#Objective: Testing single site upgrade from RHCS 8.0 sanity latest to 8.x latest build
+#platform : RHEL-9
+#conf: conf/squid/rgw/tier-0_rgw.yaml
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 8.0
+                release: sanity
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap and deployment services with label placements.
+      polarion-id: CEPH-83573777
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy RHCS cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      name: Mbuckets_with_Nobjects with etag verification pre upgrade
+      desc: test etag verification
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574871
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+
+  - test:
+      desc: test to create "M" no of buckets and "N" no of objects with download
+      module: sanity_rgw.py
+      name: Test download with M buckets with N objects
+      polarion-id: CEPH-14237
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+
+  # upgrade cluster
+  - test:
+      name: Parallel run
+      desc: RGW upgarde and IO parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            name: S3CMD small and multipart object download
+            desc: S3CMD small and multipart object download or GET
+            polarion-id: CEPH-83575477
+            module: sanity_rgw.py
+            config:
+              script-name: ../s3cmd/test_s3cmd.py
+              config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        - test:
+            name: Upgrade cluster to latest 8.x ceph version
+            desc: Upgrade cluster to latest version
+            module: test_cephadm_upgrade.py
+            polarion-id: CEPH-83573791
+            abort-on-fail: true
+            verify_cluster_health: true
+            config:
+              command: start
+              service: upgrade
+              base_cmd_args:
+                verbose: true
+
+  # Post Upgrade tests
+  - test:
+      name: Test rgw through CURL
+      desc: Test rgw through CURL
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
+  - test:
+      desc: Retrieve the versions of the cluster
+      module: exec.py
+      name: post upgrade gather version
+      polarion-id: CEPH-83575200
+      config:
+        cephadm: true
+        commands:
+          - "ceph versions"
+
+# Post upgrade tests
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+      desc: test_sse_s3_per_bucket_encryption_normal_object_upload
+      module: sanity_rgw.py
+      name: sse-s3 per bucket encryption test
+      polarion-id: CEPH-83574617 #CEPH-83574615 , CEPH-83575151
+
+  - test:
+      name: Bucket Lifecycle Object_transition_tests multiple rules and different storage class
+      desc: Test Object_transition_tests multiple rules and different storage class
+      polarion-id: CEPH-83574052 # also CEPH-83573372
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_multiple_rules.yaml

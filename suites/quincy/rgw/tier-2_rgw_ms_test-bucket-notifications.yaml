@@ -286,7 +286,7 @@ tests:
       module: sanity_rgw_multisite.py
       name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard
       polarion-id: CEPH-83586489
-      comment: Known issue Bug-2298084 targeted tp 6.1z7
+      comments: Known issue Bug-2298084 targeted tp 6.1z7
 
   - test:
       name: notify put,delete events with kafka_broker_persistent

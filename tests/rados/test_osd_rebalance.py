@@ -106,6 +106,11 @@ def run(ceph_cluster, **kw):
         method_should_succeed(
             wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
         )
+        # ensure ceph df max avail has updated correctly after OSDs are out
+        if not rados_obj.verify_max_avail():
+            log.error("ceph df max avail is not accurate")
+            raise Exception("ceph df max avail is not accurate")
+
         utils.osd_remove(ceph_cluster, osd_id)
         if cr_pool.get("rados_put", False):
             do_rados_get(client_node, pool["pool_name"], 1)

@@ -72,7 +72,17 @@ def configure_subsystems(pool, ha, config):
     lb_groups = configure_listeners(ha, listeners, config)
 
     # Add Host access
-    nvmegwcli.host.add(**{"args": {**sub_args, **{"host": repr(config["allow_host"])}}})
+    if config.get("allow_host"):
+        nvmegwcli.host.add(
+            **{"args": {**sub_args, **{"host": repr(config["allow_host"])}}}
+        )
+
+    if config.get("hosts"):
+        for host in config["hosts"]:
+            initiator_node = get_node_by_id(ceph_cluster, host)
+            initiator = Initiator(initiator_node)
+            host_nqn = initiator.nqn()
+            nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
 
     # Add Namespaces
     if config.get("bdevs"):

@@ -1,9 +1,12 @@
 from smb_operations import (
+    check_ctdb_health,
+    check_rados_clustermeta,
     deploy_smb_service_imperative,
     smb_cleanup,
     smbclient_check_shares,
 )
 
+from ceph.ceph_admin import CephAdmin
 from utility.log import Log
 
 log = Log(__name__)
@@ -16,6 +19,9 @@ def run(ceph_cluster, **kw):
     """
     # Get config
     config = kw.get("config")
+
+    # Get cephadm obj
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
 
     # Get cephfs volume
     cephfs_vol = config.get("cephfs_volume", "cephfs")
@@ -62,6 +68,9 @@ def run(ceph_cluster, **kw):
     # get client node
     client = ceph_cluster.get_nodes(role="client")[0]
 
+    # Check ctdb clustering
+    clustering = config.get("clustering", "default")
+
     try:
         # deploy smb services
         deploy_smb_service_imperative(
@@ -78,7 +87,19 @@ def run(ceph_cluster, **kw):
             path,
             domain_realm,
             custom_dns,
+            clustering,
         )
+
+        # Verify ctdb clustering
+        if clustering != "never":
+            # check samba clustermeta in rados
+            if not check_rados_clustermeta(cephadm, smb_cluster_id, smb_nodes):
+                log.error("rados clustermeta for samba not found")
+                return 1
+            # Verify CTDB health
+            if not check_ctdb_health(smb_nodes, smb_cluster_id):
+                log.error("ctdb health error")
+                return 1
 
         # Check smb share using smbclient
         smbclient_check_shares(

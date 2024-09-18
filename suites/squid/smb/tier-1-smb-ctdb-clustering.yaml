@@ -1,0 +1,353 @@
+#========================================================================
+# Test-Case: Tier 1 CTDB
+#
+# Cluster Configuration:
+#    conf/squid/smb/1admin-4node-1client-cluster.yaml
+#========================================================================
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+      copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: (Imperative Style - Single Share) Verify Samba deployment using auth_mode=user with clustering
+      desc: (Imperative Style - Single Share) Verify Samba deployment using auth_mode=user with clustering
+      module: smb_deployment_imperative_method.py
+      polarion-id: CEPH-83597232
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+
+  - test:
+      name: (Imperative Style - Multiple Shares) Verify Samba deployment using auth_mode=user with clustering
+      desc: (Imperative Style - Multiple Shares) Verify Samba deployment using auth_mode=user with clustering
+      module: smb_deployment_imperative_method.py
+      polarion-id: CEPH-83597234
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1,sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1, share2]
+        path: "/"
+
+  - test:
+      name: (Imperative Style - Single Share) Verify Samba deployment using auth_mode=AD with clustering
+      desc: (Imperative Style - Single Share) Verify Samba deployment using auth_mode=AD with clustering
+      module: smb_deployment_imperative_method.py
+      polarion-id: CEPH-83597235
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: active-directory
+        domain_realm: samba.qe
+        custom_dns: "10.70.44.153"
+        smb_user_name: Administrator
+        smb_user_password: Redhat@123
+        smb_shares: [share1]
+        path: "/"
+
+  - test:
+      name: (Imperative Style - Multiple Share) Verify Samba deployment using auth_mode=AD with clustering
+      desc: (Imperative Style - Multiple Share) Verify Samba deployment using auth_mode=AD with clustering
+      module: smb_deployment_imperative_method.py
+      polarion-id: CEPH-83597236
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1,sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: active-directory
+        domain_realm: samba.qe
+        custom_dns: "10.70.44.153"
+        smb_user_name: Administrator
+        smb_user_password: Redhat@123
+        smb_shares: [share1,share2]
+        path: "/"
+
+  - test:
+      name: (Declarative Style - Single Share) Verify Samba deployment using auth_mode=user with clustering
+      desc: (Declarative Style - Single Share) Verify Samba deployment using auth_mode=user with clustering
+      module: smb_deployment_declarative_method.py
+      polarion-id: CEPH-83597237
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: (Declarative Style - Multiple Share) Verify Samba deployment using auth_mode=user with clustering
+      desc: (Declarative Style - Multiple Share) Verify Samba deployment using auth_mode=user with clustering
+      module: smb_deployment_declarative_method.py
+      polarion-id: CEPH-83597238
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv2
+              path: /
+
+  - test:
+      name: (Declarative Style - Single Share) Verify Samba deployment using auth_mode=AD with clustering
+      desc: (Declarative Style - Single Share) Verify Samba deployment using auth_mode=AD with clustering
+      module: smb_deployment_declarative_method.py
+      polarion-id: CEPH-83597239
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: active-directory
+            domain_settings:
+              realm: samba.qe
+              join_sources:
+                - source_type: resource
+                  ref: join1-admin
+            custom_dns:
+              - 10.70.44.153
+            placement:
+              label: smb
+          - resource_type: ceph.smb.join.auth
+            auth_id: join1-admin
+            auth:
+              username: Administrator
+              password: Redhat@123
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: (Declarative Style - Multiple Share) Verify Samba deployment using auth_mode=AD with clustering
+      desc: (Declarative Style - Multiple Share) Verify Samba deployment using auth_mode=AD with clustering
+      module: smb_deployment_declarative_method.py
+      polarion-id: CEPH-83597240
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: active-directory
+            domain_settings:
+              realm: samba.qe
+              join_sources:
+                - source_type: resource
+                  ref: join1-admin
+            custom_dns:
+              - 10.70.44.153
+            placement:
+              label: smb
+          - resource_type: ceph.smb.join.auth
+            auth_id: join1-admin
+            auth:
+              username: Administrator
+              password: Redhat@123
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv2
+              path: /
+
+  - test:
+      name: (Imperative Style) Verify Samba deployment with clustering=never
+      desc: (Imperative Style) Verify Samba deployment with clustering=never
+      module: smb_deployment_imperative_method.py
+      polarion-id: CEPH-83597241
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        clustering: never
+
+  - test:
+      name: (Declarative Style) Verify Samba deployment with clustering=never
+      desc: (Declarative Style) Verify Samba deployment with clustering=never
+      module: smb_deployment_declarative_method.py
+      polarion-id: CEPH-83597242
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+            clustering: never
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /

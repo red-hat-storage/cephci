@@ -1,9 +1,12 @@
 from smb_operations import (
+    check_ctdb_health,
+    check_rados_clustermeta,
     deploy_smb_service_declarative,
     smb_cleanup,
     smbclient_check_shares,
 )
 
+from ceph.ceph_admin import CephAdmin
 from cli.exceptions import ConfigError
 from utility.log import Log
 
@@ -17,6 +20,9 @@ def run(ceph_cluster, **kw):
     """
     # Get config
     config = kw.get("config")
+
+    # Get cephadm obj
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
 
     # Check mandatory parameter file_type
     if not config.get("file_type"):
@@ -58,6 +64,17 @@ def run(ceph_cluster, **kw):
                 domain_realm = spec["domain_settings"]["realm"]
             else:
                 domain_realm = None
+            if "clustering" in spec:
+                clustering = spec["clustering"]
+            else:
+                clustering = "default"
+            if "public_addrs" in spec:
+                public_addrs = [
+                    public_addrs["address"].split("/")[0]
+                    for public_addrs in spec["public_addrs"]
+                ]
+            else:
+                public_addrs = None
         elif spec["resource_type"] == "ceph.smb.usersgroups":
             smb_user_name = spec["values"]["users"][0]["name"]
             smb_user_password = spec["values"]["users"][0]["password"]
@@ -84,6 +101,17 @@ def run(ceph_cluster, **kw):
             file_mount,
         )
 
+        # Verify ctdb clustering
+        if clustering != "never":
+            # check samba clustermeta in rados
+            if not check_rados_clustermeta(cephadm, smb_cluster_id, smb_nodes):
+                log.error("rados clustermeta for samba not found")
+                return 1
+            # Verify CTDB health
+            if not check_ctdb_health(smb_nodes, smb_cluster_id):
+                log.error("ctdb health error")
+                return 1
+
         # Check smb share using smbclient
         smbclient_check_shares(
             smb_nodes,
@@ -93,6 +121,7 @@ def run(ceph_cluster, **kw):
             smb_user_password,
             auth_mode,
             domain_realm,
+            public_addrs,
         )
     except Exception as e:
         log.error(f"Failed to deploy samba with auth_mode 'user' : {e}")

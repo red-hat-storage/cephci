@@ -101,7 +101,7 @@ tests:
         id: client.1
         install_packages:
           - ceph-common
-        node: node9
+        node: node7
       desc: "Configure the Cephfs client system 1"
       destroy-cluster: false
       module: test_client.py
@@ -115,36 +115,8 @@ tests:
         id: client.2
         install_packages:
           - ceph-common
-        node: node10
+        node: node8
       desc: "Configure the Cephfs client system 2"
-      destroy-cluster: false
-      module: test_client.py
-      name: "configure client"
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        copy_admin_keyring: true
-        id: client.3
-        install_packages:
-          - ceph-common
-        node: node11
-      desc: "Configure the Cephfs client system 3"
-      destroy-cluster: false
-      module: test_client.py
-      name: "configure client"
-
-  - test:
-      abort-on-fail: true
-      config:
-        command: add
-        copy_admin_keyring: true
-        id: client.4
-        install_packages:
-          - ceph-common
-        node: node12
-      desc: "Configure the Cephfs client system 4"
       destroy-cluster: false
       module: test_client.py
       name: "configure client"

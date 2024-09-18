@@ -991,7 +991,7 @@ class FsUtils(object):
             )
 
             kernel_cmd = (
-                f"mount -t ceph {mon_node_ip}:{kwargs.get('sub_dir','/')} {mount_point} "
+                f"mount -t ceph {mon_node_ip}:{kwargs.get('sub_dir', '/')} {mount_point} "
                 f"-o name={kwargs.get('new_client_hostname', client.node.hostname)},"
                 f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
             )
@@ -3083,7 +3083,7 @@ os.system('sudo systemctl start  network')
         :param nfs_mount_dir:
         """
         client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mount_dir}")
-        command = f"mount -t nfs -o port={kwargs.get('port','2049')} {nfs_server}:{nfs_export} {nfs_mount_dir}"
+        command = f"mount -t nfs -o port={kwargs.get('port', '2049')} {nfs_server}:{nfs_export} {nfs_mount_dir}"
         if kwargs.get("fstab"):
             try:
                 client.exec_command(sudo=True, cmd="ls -lrt /etc/fstab.backup")
@@ -3094,7 +3094,7 @@ os.system('sudo systemctl start  network')
             )
             fstab_entry = (
                 f"{nfs_server}:{nfs_export}    {nfs_mount_dir}    nfs4    "
-                f"port={kwargs.get('port','2049')},"
+                f"port={kwargs.get('port', '2049')},"
                 f"defaults,seclabel,vers=4.2,proto=tcp"
             )
             if kwargs.get("extra_params"):
@@ -5000,3 +5000,83 @@ os.system('sudo systemctl start  network')
                         )
         log.info(f"MDS Standby Replay pair info : {mds_pair_info}")
         return mds_pair_info
+
+    def open_files(self, client, mount_dir, file_list):
+        """
+        Open files in the specified directory on the client node.
+
+        Parameters:
+        client: object
+            The client object used to execute commands on the Ceph cluster.
+        files_list: list
+            List of files to be opened on the client node.
+        Returns: List
+            List of open file PIDs
+        """
+        for file in file_list:
+            client.exec_command(sudo=True, cmd=f"touch {mount_dir}/{file}")
+        log.info("It will leave files remain open using tail -f")
+        for file in file_list:
+            open_cmd = f"nohup tail -f {mount_dir}/{file} > /dev/null 2>&1 &"
+            client.exec_command(sudo=True, cmd=open_cmd)
+        pid_list = []
+        for file in file_list:
+            pid_cmd = f"ps aux | grep 'tail -f {mount_dir}/{file}' | grep -v grep | awk '{{print $2}}'"
+            pid = client.exec_command(sudo=True, cmd=pid_cmd)[0].strip()
+            if pid:
+                pid_list.append(pid)
+        log.info(f"PID list of open files: {pid_list}")
+        return pid_list
+
+    def close_files(self, client, pid_list):
+        """
+        Close the files on the client node.
+
+        Parameters:
+        client: object
+            The client object used to execute commands on the Ceph cluster.
+        pid_list: list
+            List of PIDs to close the files on the client node.
+        """
+        try:
+            for pid in pid_list:
+                client.exec_command(sudo=True, cmd=f"kill {pid}")
+            log.info("all the PIDs are killed and files are closed")
+        except Exception as e:
+            log.error(f"Failed to close the files: {e}")
+            raise e
+
+    @retry(CommandFailed, tries=10, delay=5)
+    def get_cephfs_top_dump(self, client):
+        """
+        Get the cephfs-top dump for the Ceph file system.
+        """
+        try:
+            dump_out, _ = client.exec_command(sudo=True, cmd="cephfs-top --dump")
+            log.info(f"cephfs-top dump: {dump_out}")
+            if "chit" not in dump_out:
+                raise CommandFailed("Failed to get cephfs-top dump")
+            dump = json.loads(dump_out)
+            return dump
+
+        except CommandFailed as e:
+            log.error(f"Failed to get cephfs-top dump: {e}")
+            raise e
+
+    def get_client_id(self, client, fs_name, mounted_dir):
+        """
+        Get the client ID for the mounted directory on the Ceph file system.
+        """
+        ranked_mds, _ = client.exec_command(
+            sudo=True,
+            cmd=f"ceph fs status {fs_name} -f json | jq '.mdsmap[] | select(.rank == 0) | .name'",
+        )
+        ranked_mds = ranked_mds.replace('"', "").replace("\n", "")
+        client_id_cmd = (
+            f"ceph tell mds.{ranked_mds} session ls | jq '.[] | select(.client_metadata.mount_point"
+            f' != null and (.client_metadata.mount_point | contains("{mounted_dir}"))) | .id\''
+        )
+        client_id, _ = client.exec_command(sudo=True, cmd=client_id_cmd)
+        client_id = client_id.replace('"', "").replace("\n", "")
+        log.info(f"Client ID : {client_id} for Mounted Directory : {mounted_dir}")
+        return client_id

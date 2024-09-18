@@ -91,7 +91,9 @@ tests:
               service: nvmeof
               args:
                 placement:
-                  label: nvmeof-gw
+                  nodes:
+                    - node5
+                    - node6
               pos_args:
                 - rbd
       desc: NVMeoF Gateway deployment using cephadm
@@ -215,6 +217,28 @@ tests:
                 size: 10G
           - config:
               service: namespace
+              command: add              # Namespace add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                rbd-image: image3
+                rbd-pool: rbd
+                nsid: 3
+                load-balancing-group: 1
+                rbd-create-image: true
+                size: 1G
+          - config:
+              service: namespace
+              command: add              # Namespace add
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                rbd-image: image4
+                rbd-pool: rbd
+                nsid: 4
+                load-balancing-group: 2
+                rbd-create-image: true
+                size: 1G
+          - config:
+              service: namespace
               command: list             # namespace list
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
@@ -244,6 +268,20 @@ tests:
               command: list             # namespace list
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: namespace
+              command: change_load_balancing_group              # Namespace change_load_balancing_group
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 3
+                load-balancing-group: 2
+          - config:
+              service: namespace
+              command: change_load_balancing_group              # Namespace change_load_balancing_group
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 4
+                load-balancing-group: 1
           - config:
               service: namespace
               command: get_io_stats             # namespace get_io_stats

@@ -125,8 +125,8 @@ tests:
                     port: 8080
                     placement:
                       nodes:
-                        - mero009
                         - mero011
+                        - mero013
               - config:
                   command: apply
                   service: rgw
@@ -137,7 +137,7 @@ tests:
                     placement:
                       nodes:
                         - mero005
-                        - mero007
+                        - mero009
       desc: Bootstrap clusters using cephadm.
       polarion-id: CEPH-83573386
       destroy-cluster: false
@@ -224,7 +224,7 @@ tests:
             id: client.sec
             node:
               - mero005
-              - mero011
+              - mero013
             install_packages:
               - ceph-common
             copy_admin_keyring: true
@@ -242,8 +242,8 @@ tests:
             cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:mero001}:8080,http://{node_ip:mero002}:8080 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:mero001}:8080,http://{node_ip:mero002}:8080 --master --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://10.8.129.221:8080,http://10.8.129.222:8080 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://10.8.129.221:8080,http://10.8.129.222:8080 --master --default"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key test123 --secret test123 --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key test123 --secret test123"
@@ -256,7 +256,6 @@ tests:
               - "ceph config set client.rgw.shared.pri.io rgw_zone primary"
               - "ceph config set client.rgw.shared.pri.io rgw_run_sync_thread false"
               - "ceph config set global cluster_network 172.20.20.0/24"
-              - "ceph orch redeploy osd"
               - "ceph orch restart {service_name:shared.pri.io}"
               - "ceph orch restart {service_name:shared.pri.sync}"
         ceph-sec:
@@ -264,9 +263,9 @@ tests:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:mero001}:8080 --access-key test123 --secret test123 --default"
-              - "radosgw-admin period pull --url http://{node_ip:mero001}:8080 --access-key test123 --secret test123"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:mero005}:8080,http://{node_ip:mero007}:8080 --access-key test123 --secret test123"
+              - "radosgw-admin realm pull --rgw-realm india --url http://10.8.129.221:8080 --access-key test123 --secret test123 --default"
+              - "radosgw-admin period pull --url http://10.8.129.221:8080 --access-key test123 --secret test123"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://10.8.129.225:8080,http://10.8.129.229:8080 --access-key test123 --secret test123"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.shared.sec.sync rgw_realm india"
               - "ceph config set client.rgw.shared.sec.sync rgw_zonegroup shared"
@@ -276,7 +275,6 @@ tests:
               - "ceph config set client.rgw.shared.sec.io rgw_zone secondary"
               - "ceph config set client.rgw.shared.sec.io rgw_run_sync_thread false"
               - "ceph config set global cluster_network 172.20.20.0/24"
-              - "ceph orch redeploy osd"
               - "ceph orch restart {service_name:shared.sec.io}"
               - "ceph orch restart {service_name:shared.sec.sync}"
       desc: Setting up RGW multisite replication environment
@@ -300,7 +298,7 @@ tests:
               - mero005
             rgw_endpoints:
               - "mero005:8080"
-              - "mero007:8080"
+              - "mero009:8080"
       desc: Configure HAproxy for sync rgw
       module: haproxy.py
       name: Configure HAproxy for sync rgw
@@ -313,15 +311,15 @@ tests:
           config:
             cephadm: true
             commands:
-              - "radosgw-admin zonegroup modify --endpoints=http://{node_ip:mero001}:5000 --rgw-zonegroup shared --rgw-realm india --access-key test123 --secret-key test123"
-              - "radosgw-admin zone modify --endpoints=http://{node_ip:mero001}:5000 --rgw-zonegroup shared --rgw-realm india --rgw-zone primary --access-key test123 --secret-key test123"
+              - "radosgw-admin zonegroup modify --endpoints=http://10.8.129.221:8080:5000 --rgw-zonegroup shared --rgw-realm india --access-key test123 --secret-key test123"
+              - "radosgw-admin zone modify --endpoints=http://10.8.129.221:5000 --rgw-zonegroup shared --rgw-realm india --rgw-zone primary --access-key test123 --secret-key test123"
               - "radosgw-admin period update --commit"
         ceph-sec:
           config:
             cephadm: true
             commands:
               - "sleep 120"
-              - "radosgw-admin zone modify --rgw-zone secondary --endpoints=http://{node_ip:mero005}:5000 --access-key test123 --secret-key test123"
+              - "radosgw-admin zone modify --rgw-zone secondary --endpoints=http://10.8.129.225:5000 --access-key test123 --secret-key test123"
               - "radosgw-admin period update --commit"
       desc: Setting up RGW multisite replication environment
       module: exec.py
@@ -371,11 +369,11 @@ tests:
         ceph-sec:
           config:
             haproxy_clients:
-              - mero009
               - mero011
+              - mero013
             rgw_endpoints:
-              - "mero009:8080"
               - "mero011:8080"
+              - "mero013:8080"
       desc: Configure HAproxy for io rgw
       module: haproxy.py
       name: Configure HAproxy for io rgw
@@ -396,12 +394,12 @@ tests:
         ceph-sec:
           config:
             controllers:
-              - mero009
+              - mero011
             drivers:
               count: 2
               hosts:
-                - mero009
                 - mero011
+                - mero013
       desc: Start COS Bench controller and driver
       module: cosbench.py
       name: deploy cosbench

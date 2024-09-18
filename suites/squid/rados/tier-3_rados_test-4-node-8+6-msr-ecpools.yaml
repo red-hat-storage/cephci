@@ -11,7 +11,7 @@ tests:
       name: cluster deployment
       desc: Execute the cluster deployment workflow.
       module: test_cephadm.py
-      polarion-id: CEPH-83574887
+      abort-on-fail: true
       config:
         verify_cluster_health: true
         steps:
@@ -21,14 +21,34 @@ tests:
               base_cmd_args:
                 verbose: true
               args:
-                mon-ip: mero006
-                allow-fqdn-hostname: true
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
+                mon-ip: node1
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
           - config:
               command: apply
               service: mgr
@@ -41,13 +61,28 @@ tests:
               args:
                 placement:
                   label: mon
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-      destroy-cluster: false
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
       abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true"                     # boolean as string
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
 
   - test:
       name: MDS Service deployment with spec
@@ -98,7 +133,7 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: magna010                     # client node
+        node: node6                     # client node
         install_packages:
           - ceph-common
         copy_admin_keyring: true          # Copy admin keyring to node
@@ -157,16 +192,17 @@ tests:
         m: 6
         force: true
         plugin: jerasure
-        create_rule: true
+        create_rule: false
         modify_threshold: true
         pre_create_rule: false
         crush-failure-domain: host
-        change_subtree_limit: true
+        change_subtree_limit: host
         crush-osds-per-failure-domain: 4
         crush-num-failure-domains: 4
         delete_pools:
           - ec86_pool0
       desc: 8+6@4 MSR EC pool life cycle with serviceability scenarios
+      comments: "Bug with OSD down scenario 2305520"
 
   - test:
       name: Upgrade cluster to latest 8.x ceph version
@@ -180,7 +216,6 @@ tests:
           verbose: true
         verify_cluster_health: true
       destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: EC Pool Recovery Improvement
@@ -195,7 +230,7 @@ tests:
           m: 6
           pg_num: 32
           plugin: jerasure
-          create_rule: true
+          create_rule: false
           crush-osds-per-failure-domain: 4
           crush-num-failure-domains: 4
           crush-failure-domain: host
@@ -205,6 +240,7 @@ tests:
           osd_recovery_max_active: 16
           delete_pool: true
       desc: Verify Recovery of EC pool with only "k" shards available
+      comments: "Bug with OSD down scenario 2305520"
 
   - test:
       name: EC pool LC
@@ -218,7 +254,7 @@ tests:
           pg_num: 64
           k: 8
           m: 6
-          create_rule: true
+          create_rule: false
           crush-osds-per-failure-domain: 4
           crush-num-failure-domains: 4
           plugin: jerasure
@@ -227,7 +263,7 @@ tests:
           rados_write_duration: 50
           rados_read_duration: 30
         set_pool_configs:
-          pool_name: test_ec_pool
+          pool_name: ec86_pool2
           configurations:
             pg_num: 32
             pgp_num: 32
@@ -252,7 +288,7 @@ tests:
           erasure_code_use_overwrites: "true"
           k: 8
           m: 6
-          create_rule: true
+          create_rule: false
           crush-osds-per-failure-domain: 4
           crush-num-failure-domains: 4
           plugin: jerasure
@@ -266,6 +302,7 @@ tests:
         delete_pools:
           - ec86_pool3
           - re_pool_overwrite
+      comments: "RBD support RFE : 2305966"
       desc: EC pool with Overwrites & create RBD pool
 
   - test:
@@ -281,7 +318,8 @@ tests:
           pg_num: 1
           k: 8
           m: 6
-          create_rule: true
+          create_rule: false
+          crush-failure-domain: host
           crush-osds-per-failure-domain: 4
           crush-num-failure-domains: 4
           plugin: jerasure
@@ -298,7 +336,6 @@ tests:
         Compression_tests:
           pool_type: erasure
           pool_config:
-            profile_name: ec86_5
             pool-1: ec86_pool5
             pool-2: ec86_pool6
             rados_write_duration: 300
@@ -306,7 +343,7 @@ tests:
             pg_num: 32
             k: 8
             m: 6
-            create_rule: true
+            create_rule: false
             crush-osds-per-failure-domain: 4
             crush-num-failure-domains: 4
             plugin: jerasure
@@ -333,11 +370,11 @@ tests:
               pg_num: 32
               k: 8
               m: 6
-              create_rule: true
+              create_rule: false
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4
               plugin: jerasure
-              crush-failure-domain: osd
+              crush-failure-domain: host
               target_size_ratio: 0.8
               rados_write_duration: 50
               rados_read_duration: 50
@@ -374,7 +411,8 @@ tests:
               pool_type: erasure
               k: 8
               m: 6
-              create_rule: true
+              create_rule: false
+              crush-failure-domain: host
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4
               plugin: jerasure
@@ -398,7 +436,8 @@ tests:
               pool_type: erasure
               k: 8
               m: 6
-              create_rule: true
+              create_rule: false
+              crush-failure-domain: host
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4
               plugin: jerasure
@@ -431,7 +470,7 @@ tests:
               pg_num: 32
               k: 8
               m: 6
-              create_rule: true
+              create_rule: false
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4
               plugin: jerasure
@@ -455,7 +494,7 @@ tests:
               pool_type: erasure
               k: 8
               m: 6
-              create_rule: true
+              create_rule: false
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4
               plugin: jerasure
@@ -480,7 +519,7 @@ tests:
               pool_type: erasure
               k: 8
               m: 6
-              create_rule: true
+              create_rule: false
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4
               plugin: jerasure
@@ -552,7 +591,7 @@ tests:
               pool_type: erasure
               k: 8
               m: 6
-              create_rule: true
+              create_rule: false
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4
               plugin: jerasure
@@ -573,7 +612,7 @@ tests:
               pool_type: erasure
               k: 8
               m: 6
-              create_rule: true
+              create_rule: false
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4
               plugin: jerasure
@@ -586,6 +625,8 @@ tests:
         delete_pools:
           - ec86_pool14
 
+# to be run only where OSDs are directly created on top of disks.
+# user created LVM based OSDs cannot run the below test
   - test:
       name: Robust rebalancing - in progress osd replacement
       module: test_osd_inprogress_rebalance.py
@@ -601,7 +642,7 @@ tests:
               pool_type: erasure
               k: 8
               m: 6
-              create_rule: true
+              create_rule: false
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4
               plugin: jerasure
@@ -614,7 +655,7 @@ tests:
               pool_type: erasure
               k: 8
               m: 6
-              create_rule: true
+              create_rule: false
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4
               plugin: jerasure

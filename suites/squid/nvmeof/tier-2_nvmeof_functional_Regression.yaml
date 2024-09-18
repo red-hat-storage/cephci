@@ -53,6 +53,7 @@ tests:
         id: client.1
         nodes:
           - node10
+          - node11
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -206,9 +207,9 @@ tests:
           - subnqn: nqn.2016-06.io.spdk:cnode3
             listener_port: 5003
             node: node10
-          # - subnqn: nqn.2016-06.io.spdk:cnode4
-          #   listener_port: 5004
-          #   node: node11
+          - subnqn: nqn.2016-06.io.spdk:cnode4
+            listener_port: 5004
+            node: node11
       desc: Perform IOs on multi-subsystems with Multiple-Initiators
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway.py

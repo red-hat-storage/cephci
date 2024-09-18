@@ -38,6 +38,26 @@
 #            "Show the implementated commands for the OSD id"
 #       "POST":
 #              "Run the implemented command for the OSD id"
+#   - Test all supported methods for /config endpoint
+#    "/config/cluster":
+#       "GET":
+#             "Show all cluster configuration options"
+#    "/config/cluster/<arg>":
+#        "GET":
+#             "Show specific configuration option"
+#    "/config/osd":
+#       "GET":
+#            "Show OSD configuration options"
+#       "PATCH":
+#              "Modify OSD configuration options"
+#   - Test all supported methods for /crush/rule endpoint
+#    "/crush/rule":
+#       "GET":
+#            "Show crush rules"
+#   - Test all supported methods for /perf endpoint
+#    "/perf":
+#       "GET":
+#            "List all the available performance counters"
 #===============================================================================================
 
 tests:
@@ -243,3 +263,70 @@ tests:
         data:
           command: repair
       desc: Use the POST method to run implemented command for the OSD id
+
+  - test:
+      name: ceph-mgr RESTful module GET method on config_cluster endpoint
+      polarion-id: CEPH-83596616
+      module: test_restful_operations_config_endpoint.py
+      config:
+        endpoint: /config/cluster
+        method: GET
+        username: test_user
+        status_code: 200
+      desc: Use the GET method to view cluster config information
+
+  - test:
+      name: ceph-mgr RESTful module GET method on config_cluster_<args> endpoint
+      polarion-id: CEPH-83596616
+      module: test_restful_operations_config_endpoint.py
+      config:
+        endpoint: /config/cluster
+        method: GET
+        username: test_user
+        status_code: 200
+        args: admin_socket
+      desc: Use the GET method to view specific cluster config information
+
+  - test:
+      name: ceph-mgr RESTful module GET method on config_osd endpoint
+      polarion-id: CEPH-83596616
+      module: test_restful_operations_config_endpoint.py
+      config:
+        endpoint: /config/osd
+        method: GET
+        username: test_user
+        status_code: 200
+      desc: Use the GET method to view osd config options
+
+  - test:
+      name: ceph-mgr RESTful module PATCH method on  config_osd endpoint
+      polarion-id: CEPH-83596616
+      module: test_restful_operations_config_endpoint.py
+      config:
+        endpoint: /config/osd
+        method: PATCH
+        username: test_user
+        status_code: 200
+        data:
+          noset: True
+      desc: Use the PATCH method to modify the config of OSD
+
+  - test:
+      name: ceph-mgr RESTful module GET method on crush_rule endpoint
+      polarion-id: CEPH-83597507
+      module: test_restful_operations_crush_endpoint.py
+      config:
+        endpoint: /crush/rule
+        username: test_user
+        status_code: 200
+      desc: Use the GET method to view crush rules
+
+  - test:
+      name: ceph-mgr RESTful module GET method on perf endpoint
+      polarion-id: CEPH-83597509
+      module: test_restful_operations_perf_endpoint.py
+      config:
+        endpoint: /perf
+        username: test_user
+        status_code: 200
+      desc: Use the GET method to list all the available performance counters

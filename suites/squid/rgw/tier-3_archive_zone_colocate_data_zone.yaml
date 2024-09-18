@@ -281,6 +281,7 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_multipart_archive_colocated.yaml
+            run-on-haproxy: true
       desc: Perform IOs and test bucket versioned at the colocated archive zone
       module: sanity_rgw_multisite.py
       name: Perform IOs and test bucket versioned at the colocated archive zone

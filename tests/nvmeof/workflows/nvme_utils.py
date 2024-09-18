@@ -135,18 +135,21 @@ def delete_nvme_service(ceph_cluster, config):
     - gw_group      # optional, as per release
     - mtls          # optional
     """
-    gw_group = config.get("gw_group", "")
-    service_name = f"nvmeof.{config['rbd_pool']}"
-    service_name = f"{service_name}.{gw_group}" if gw_group else service_name
-    cfg = {
-        "no_cluster_state": False,
-        "config": {
-            "command": "remove",
-            "service": "nvmeof",
-            "args": {
-                "service_name": service_name,
-                "verify": True,
+    gw_groups = config.get("gw_groups", [{"gw_group": config.get("gw_group", "")}])
+
+    for gwgroup_config in gw_groups:
+        gw_group = gwgroup_config["gw_group"]
+        service_name = f"nvmeof.{config['rbd_pool']}"
+        service_name = f"{service_name}.{gw_group}" if gw_group else service_name
+        cfg = {
+            "no_cluster_state": False,
+            "config": {
+                "command": "remove",
+                "service": "nvmeof",
+                "args": {
+                    "service_name": service_name,
+                    "verify": True,
+                },
             },
-        },
-    }
-    test_nvmeof.run(ceph_cluster, **cfg)
+        }
+        test_nvmeof.run(ceph_cluster, **cfg)

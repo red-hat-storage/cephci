@@ -377,6 +377,9 @@ def wait_for_clean_pg_sets(
                         f" PG States: {status_report['num_pg_by_state']}."
                         f" Checking status again in {sleep_interval} seconds"
                     )
+                    log.info(
+                        f"\nceph status : {rados_obj.run_ceph_command(cmd='ceph -s', client_exec=True)}\n"
+                    )
             except Exception as e:
                 log.error(f"Error occurred while fetching status report: {e}")
 

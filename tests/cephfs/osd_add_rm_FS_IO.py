@@ -93,7 +93,13 @@ def run(ceph_cluster, **kw):
         2. Remove all the mounts
         """
         config = kw["config"]
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         cephadm = CephAdmin(cluster=ceph_cluster, **config)
         rados_obj = RadosOrchestrator(node=cephadm)
         clients = ceph_cluster.get_ceph_objects("client")
@@ -101,6 +107,11 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client1, fs_name)
         mount_dir = "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
@@ -108,8 +119,15 @@ def run(ceph_cluster, **kw):
         fuse_mount_dir = f"/mnt/fuse_{mount_dir}"
         mon_node_ip = fs_util.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
-        fs_util.kernel_mount([client1], kernel_mount_dir, mon_node_ip)
-        fs_util.fuse_mount([client1], fuse_mount_dir)
+        fs_util.kernel_mount(
+            [client1],
+            kernel_mount_dir,
+            mon_node_ip,
+            extra_params=f",fs={fs_name}",
+        )
+        fs_util.fuse_mount(
+            [client1], fuse_mount_dir, extra_params=f" --client_fs {fs_name}"
+        )
         client1.exec_command(sudo=True, cmd=f"mkdir {kernel_mount_dir}/kernel_{{1..8}}")
         client1.exec_command(sudo=True, cmd=f"mkdir {fuse_mount_dir}/fuse_{{1..8}}")
         dev_paths = []
