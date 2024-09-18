@@ -1925,7 +1925,7 @@ class FsUtils(object):
                 f"MDS count {active_count} is not matching the expected {expected_active_count}"
             )
 
-    def mds_cleanup(self, nodes, dir_fragmentation):
+    def mds_cleanup(self, nodes, dir_fragmentation, **kwargs):
         """
         Deactivating multiple mds activated, by setting it to single mds server
         Args:
@@ -1934,7 +1934,8 @@ class FsUtils(object):
         """
         log.info("Deactivating Multiple MDSs")
         for node in nodes:
-            fs_info = self.get_fs_info(node)
+            fs_name = kwargs.get("fs_name", "cephfs")
+            fs_info = self.get_fs_info(node, fs_name)
             fs_name = fs_info.get("fs_name")
             log.info("Deactivating Multiple MDSs")
             log.info("Setting Max mds to 1:")
