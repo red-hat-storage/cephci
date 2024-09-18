@@ -122,16 +122,6 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "Verify quiesce release with if-version, repeat with exclude and include prior to release"
-      destroy-cluster: false
-      module: snapshot_clone.cg_snap_test.py
-      name: "cg_snap_func_workflow_2"
-      polarion-id: CEPH-83581470
-      config:
-       test_name: cg_snap_func_workflow_2
-  -
-    test:
-      abort-on-fail: false
       desc: "Verify restore suceeds from snapshot taken when subvolume was quiesced"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
@@ -169,6 +159,26 @@ tests:
       polarion-id: CEPH-83591508
       config:
        test_name: cg_snap_interop_workflow_2
+  -
+    test:
+      abort-on-fail: false
+      desc: "Enable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-enable-logs
+      config:
+       ENABLE_LOGS : 1
+       daemon_list : ['mds','client']
+       daemon_dbg_level : {'mds':20,'client':20}
+  -
+    test:
+      abort-on-fail: false
+      desc: "Verify quiesce release with if-version, repeat with exclude and include prior to release"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_func_workflow_2"
+      polarion-id: CEPH-83581470
+      config:
+       test_name: cg_snap_func_workflow_2
   -
     test:
       abort-on-fail: false
@@ -210,3 +220,12 @@ tests:
       config:
        test_name: cg_snap_interop_workflow_1
       comments: product bug bz-2273569
+  -
+    test:
+      abort-on-fail: false
+      desc: "Disable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-disable-logs
+      config:
+       DISABLE_LOGS : 1
+       daemon_list : ['mds','client']
