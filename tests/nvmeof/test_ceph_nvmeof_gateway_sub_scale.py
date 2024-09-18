@@ -69,6 +69,7 @@ def configure_subsystems(config, _cls, command):
                 "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
                 "s": f"{num}",
                 "m": max_ns,
+                "no-group-append": True,
             }
         )
         subsystem_func = fetch_method(_cls, command)
