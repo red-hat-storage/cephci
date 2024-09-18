@@ -44,6 +44,7 @@ class CG_snap_IO(object):
         cg_test_io_status,
         io_run_time,
         ephemeral_pin,
+        **kwargs,
     ):
         """
         Start IO on quiesce-set members and validate IO progress based on quiesce state
@@ -85,6 +86,7 @@ class CG_snap_IO(object):
         read_client = clients[1]
         qs_member_dict2 = client_mnt_dict[read_client.node.hostname]
         cg_write_io_status = Value("i", 0)
+        fs_name = kwargs.get("fs_name", "cephfs")
         p = Thread(
             target=self.cg_write_io,
             args=(
@@ -95,6 +97,7 @@ class CG_snap_IO(object):
                 qs_members,
                 qs_member_dict1,
             ),
+            kwargs={"fs_name": fs_name},
         )
         p.start()
         log.info(f"started process {p.name}")
@@ -109,6 +112,7 @@ class CG_snap_IO(object):
                 qs_members,
                 qs_member_dict2,
             ),
+            kwargs={"fs_name": fs_name},
         )
         p.start()
         log.info(f"started process {p.name}")
@@ -133,7 +137,13 @@ class CG_snap_IO(object):
     ##########################
 
     def cg_read_io(
-        self, cg_read_io_status, read_client, io_run_time, qs_members, qs_member_dict
+        self,
+        cg_read_io_status,
+        read_client,
+        io_run_time,
+        qs_members,
+        qs_member_dict,
+        **kwargs,
     ):
         """
         This is called by cg_start_io using Thread to run READ IO on quiesce set members
@@ -164,6 +174,7 @@ class CG_snap_IO(object):
         read_fail = 0
         log.info("In cg_read_io function")
         proc_status_list = []
+        fs_name = kwargs.get("fs_name", "cephfs")
         while datetime.datetime.now() < end_time:
             for qs_member in qs_member_dict:
                 qs_mnt_pt = qs_member_dict[qs_member]["mount_point"]
@@ -178,6 +189,7 @@ class CG_snap_IO(object):
                         qs_mnt_pt,
                         qs_members,
                     ),
+                    kwargs={"fs_name": fs_name},
                 )
                 p.start()
                 read_procs.append(p)
@@ -210,6 +222,7 @@ class CG_snap_IO(object):
         ephemeral_pin,
         qs_members,
         qs_member_dict,
+        **kwargs,
     ):
         """
         This is called by cg_start_io using Thread to run WRITE IO on quiesce set members
@@ -233,7 +246,7 @@ class CG_snap_IO(object):
            Write IO passed, cg_write_io_status.value = 0, return 0
 
         """
-
+        fs_name = kwargs.get("fs_name", "cephfs")
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=io_run_time)
         write_procs = []
         write_fail = 0
@@ -265,6 +278,7 @@ class CG_snap_IO(object):
                         qs_mnt_pt,
                         qs_members,
                     ),
+                    kwargs={"fs_name": fs_name},
                 )
                 p.start()
                 write_procs.append(p)
@@ -291,7 +305,13 @@ class CG_snap_IO(object):
         return 0
 
     def cg_read_io_subvol(
-        self, read_proc_check_status, write_client, qs_member, mnt_pt, qs_members
+        self,
+        read_proc_check_status,
+        write_client,
+        qs_member,
+        mnt_pt,
+        qs_members,
+        **kwargs,
     ):
         """
         This is called by cg_read_io using Thread to run READ IO on given quiesce member
@@ -311,14 +331,20 @@ class CG_snap_IO(object):
         """
         log.info("In cg_read_io_subvol function")
         io_modules = {}
-
+        fs_name = kwargs.get("fs_name", "cephfs")
         read_status, end_time = self.cg_linux_cmds_read(write_client, mnt_pt)
 
         log.info(f"linux_cmds read end_time:{end_time}")
         io_modules.update({"cg_linux_cmds_read": read_status})
         log.info(f"io_modules:{io_modules}")
         lc_status = self.validate_exit_status(
-            write_client, qs_member, io_modules, "read", end_time, qs_members
+            write_client,
+            qs_member,
+            io_modules,
+            "read",
+            end_time,
+            qs_members,
+            fs_name=fs_name,
         )
         log.info(
             f"cg_linux_cmds_read, read_status:{read_status},read_io_validate_status : {lc_status}"
@@ -351,7 +377,13 @@ class CG_snap_IO(object):
             io_modules.update({"cg_smallfile_io_read": read_status})
             log.info(f"io_modules:{io_modules}")
             sf_status = self.validate_exit_status(
-                write_client, qs_member, io_modules, "read", end_time, qs_members
+                write_client,
+                qs_member,
+                io_modules,
+                "read",
+                end_time,
+                qs_members,
+                fs_name=fs_name,
             )
             log.info(
                 f"cg_smallfile_io_read, read_status:{read_status},read_io_validate_status : {sf_status}"
@@ -372,7 +404,7 @@ class CG_snap_IO(object):
         return read_proc_check_status.value
 
     def cg_write_io_subvol(
-        self, write_proc_check_status, client, qs_member, mnt_pt, qs_members
+        self, write_proc_check_status, client, qs_member, mnt_pt, qs_members, **kwargs
     ):
         """
         This is called by cg_write_io using Thread to run Write IO on given quiesce member
@@ -393,14 +425,20 @@ class CG_snap_IO(object):
 
         log.info("In cg_write_io_subvol function")
         io_modules = {}
-
+        fs_name = kwargs.get("fs_name", "cephfs")
         write_status, end_time = self.cg_dd_io_write(client, mnt_pt)
 
         log.info(f"dd write end_time:{end_time}")
         io_modules.update({"cg_dd_io_write": write_status})
         log.info(f"io_modules:{io_modules}")
         dd_status = self.validate_exit_status(
-            client, qs_member, io_modules, "write", end_time, qs_members
+            client,
+            qs_member,
+            io_modules,
+            "write",
+            end_time,
+            qs_members,
+            fs_name=fs_name,
         )
         log.info(
             f"cg_dd_io_write, write_status:{write_status},write_io_validate_status : {dd_status}"
@@ -414,7 +452,13 @@ class CG_snap_IO(object):
             io_modules.update({"cg_fio_io_write": write_status})
             log.info(f"io_modules:{io_modules}")
             fio_status = self.validate_exit_status(
-                client, qs_member, io_modules, "write", end_time, qs_members
+                client,
+                qs_member,
+                io_modules,
+                "write",
+                end_time,
+                qs_members,
+                fs_name=fs_name,
             )
             log.info(
                 f"cg_fio_io_write, write_status:{write_status},write_io_validate_status : {fio_status}"
@@ -433,6 +477,7 @@ class CG_snap_IO(object):
                 "write",
                 end_time,
                 qs_members,
+                fs_name=fs_name,
             )
             log.info(
                 f"cg_smallfile_io_write, write_status:{write_status},write_io_validate_status : {sf_status}"
@@ -445,7 +490,13 @@ class CG_snap_IO(object):
             io_modules.update({"cg_linux_cmds_write": write_status})
             log.info(f"io_modules:{io_modules}")
             lc_status = self.validate_exit_status(
-                client, qs_member, io_modules, "write", end_time, qs_members
+                client,
+                qs_member,
+                io_modules,
+                "write",
+                end_time,
+                qs_members,
+                fs_name=fs_name,
             )
             log.info(
                 f"cg_linux_cmds_write, write_status:{write_status},write_io_validate_status : {lc_status}"
@@ -458,7 +509,13 @@ class CG_snap_IO(object):
             io_modules.update({"cg_crefi_io": write_status})
             log.info(f"io_modules:{io_modules}")
             crefi_status = self.validate_exit_status(
-                client, qs_member, io_modules, "write", end_time, qs_members
+                client,
+                qs_member,
+                io_modules,
+                "write",
+                end_time,
+                qs_members,
+                fs_name=fs_name,
             )
             log.info(
                 f"cg_crefi_io, write_status:{write_status},write_io_validate_status : {crefi_status}"
@@ -484,7 +541,7 @@ class CG_snap_IO(object):
         return write_proc_check_status.value
 
     def validate_exit_status(
-        self, client, qs_member, io_modules, io_type, end_time, qs_members
+        self, client, qs_member, io_modules, io_type, end_time, qs_members, **kwargs
     ):
         """
         This is called by cg_write_io_subvol and cg_read_io_subvol to validate exit status of IO tools.
@@ -502,14 +559,18 @@ class CG_snap_IO(object):
         """
         log.info(f"In validate_exit_status function - {io_type} , {io_modules}")
         cg_status = 0
-
+        fs_name = kwargs.get("fs_name", "cephfs")
         for io_mod in io_modules:
             if io_type == "read":
                 if io_modules[io_mod] == 1:
-                    qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
+                    qs_id = self.cg_snap_util.get_qs_id(
+                        client, qs_members, fs_name=fs_name
+                    )
                     log.info(f"qs_id:{qs_id}")
                     if qs_id != 1:
-                        qs_query = self.cg_snap_util.get_qs_query(client, qs_id=qs_id)
+                        qs_query = self.cg_snap_util.get_qs_query(
+                            client, qs_id=qs_id, fs_name=fs_name
+                        )
                         log.info(f"qs_query:{qs_query}")
                         state = qs_query["sets"][qs_id]["state"]["name"]
                         log.info(f"io_modules:{io_modules}")
@@ -573,10 +634,14 @@ class CG_snap_IO(object):
                         cg_status = 1
             elif io_type == "write":
                 if io_modules[io_mod] == 1:
-                    qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
+                    qs_id = self.cg_snap_util.get_qs_id(
+                        client, qs_members, fs_name=fs_name
+                    )
                     log.info(f"qs_id:{qs_id}")
                     if qs_id != 1:
-                        qs_query = self.cg_snap_util.get_qs_query(client, qs_id=qs_id)
+                        qs_query = self.cg_snap_util.get_qs_query(
+                            client, qs_id=qs_id, fs_name=fs_name
+                        )
                         log.info(f"qs_query:{qs_query}")
                         state = qs_query["sets"][qs_id]["state"]["name"]
                         age_ref = qs_query["sets"][qs_id]["age_ref"]
@@ -672,10 +737,14 @@ class CG_snap_IO(object):
                         )
                         cg_status = 1
                 elif io_modules[io_mod] == 0:
-                    qs_id = self.cg_snap_util.get_qs_id(client, qs_members)
+                    qs_id = self.cg_snap_util.get_qs_id(
+                        client, qs_members, fs_name=fs_name
+                    )
                     log.info(f"qs_id:{qs_id}")
                     if qs_id != 1:
-                        qs_query = self.cg_snap_util.get_qs_query(client, qs_id=qs_id)
+                        qs_query = self.cg_snap_util.get_qs_query(
+                            client, qs_id=qs_id, fs_name=fs_name
+                        )
                         log.info(f"qs_query:{qs_query}")
                         state = qs_query["sets"][qs_id]["state"]["name"]
                         curr_time = time.time()
