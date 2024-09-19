@@ -28,7 +28,13 @@ Test steps for 83573489
 
 def run(ceph_cluster, **kw):
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -60,15 +66,19 @@ def run(ceph_cluster, **kw):
         # get last 4 nodes
         hosts = mds_names[-4:]
         mds_hosts = " ".join(hosts) + " "
-        client1.exec_command(
-            sudo=True, cmd=f'ceph fs volume create cephfs --placement="4 {mds_hosts}"'
-        )
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client1, fs_name)
         # getting all the MDS info to fail one of the MDS
-        client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 2")
+        client1.exec_command(sudo=True, cmd=f"ceph fs set {fs_name} max_mds 2")
         # # set standby count to 2
-        client1.exec_command(sudo=True, cmd="ceph fs set cephfs standby_count_wanted 2")
-        fs_util.wait_for_mds_process(client1, "cephfs")
-        wait_for_two_active_mds(client1, fs_name="cephfs")
+        client1.exec_command(
+            sudo=True, cmd=f"ceph fs set {fs_name} standby_count_wanted 2"
+        )
+        fs_util.wait_for_mds_process(client1, f"{fs_name}")
+        wait_for_two_active_mds(client1, fs_name=fs_name)
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -78,7 +88,7 @@ def run(ceph_cluster, **kw):
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
         fuse_mounting_dir_2 = f"/mnt/cephfs_fuse{mounting_dir}_2/"
         mon_node_ips = fs_util.get_mon_node_ips()
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
         for mount_dir in [fuse_mounting_dir_1, fuse_mounting_dir_2]:
             fs_util.fuse_mount(
                 [client1],

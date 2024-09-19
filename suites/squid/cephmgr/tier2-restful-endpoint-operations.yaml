@@ -50,6 +50,14 @@
 #            "Show OSD configuration options"
 #       "PATCH":
 #              "Modify OSD configuration options"
+#   - Test all supported methods for /crush/rule endpoint
+#    "/crush/rule":
+#       "GET":
+#            "Show crush rules"
+#   - Test all supported methods for /perf endpoint
+#    "/perf":
+#       "GET":
+#            "List all the available performance counters"
 #===============================================================================================
 
 tests:
@@ -302,3 +310,23 @@ tests:
         data:
           noset: True
       desc: Use the PATCH method to modify the config of OSD
+
+  - test:
+      name: ceph-mgr RESTful module GET method on crush_rule endpoint
+      polarion-id: CEPH-83597507
+      module: test_restful_operations_crush_endpoint.py
+      config:
+        endpoint: /crush/rule
+        username: test_user
+        status_code: 200
+      desc: Use the GET method to view crush rules
+
+  - test:
+      name: ceph-mgr RESTful module GET method on perf endpoint
+      polarion-id: CEPH-83597509
+      module: test_restful_operations_perf_endpoint.py
+      config:
+        endpoint: /perf
+        username: test_user
+        status_code: 200
+      desc: Use the GET method to list all the available performance counters

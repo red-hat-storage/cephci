@@ -22,7 +22,13 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83573868"
         log.info("Running cephfs %s test case" % (tc))
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
@@ -34,11 +40,13 @@ def run(ceph_cluster, **kw):
         log.info(
             "Create Test configuration - Additional CephFS and one subvolume in each CephFS"
         )
-        fs_details = fs_util.get_fs_info(client)
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(clients[0], default_fs)
+
         if not fs_details:
-            fs_util.create_fs(client, "cephfs")
+            fs_util.create_fs(clients[0], default_fs)
         fs_util.create_fs(client, "cephfs_1")
-        fs_list = ["cephfs", "cephfs_1"]
+        fs_list = [default_fs, "cephfs_1"]
         for fs in fs_list:
             subvolume = {"vol_name": fs, "subvol_name": "subvolume1"}
             fs_util.create_subvolume(client, **subvolume)
@@ -77,7 +85,7 @@ def run(ceph_cluster, **kw):
         mds_cap_fs1 = f"'allow rw fsname={fs_list[0]} root_squash, allow rw fsname={fs_list[0]} path=/volumes"
         mds_cap_fs2 = f",allow rw fsname={fs_list[1]} root_squash, allow rw fsname={fs_list[1]} path=/volumes'"
         mon_cap_fs = f"'allow r fsname={fs_list[0]},allow r fsname={fs_list[1]}'"
-        osd_cap_fs = f"'allow rw tag {fs_list[0]} data={fs_list[0]},allow rw tag {fs_list[1]} data={fs_list[1]}'"
+        osd_cap_fs = f"'allow rw tag cephfs data={fs_list[0]},allow rw tag cephfs data={fs_list[1]}'"
         caps = f"mds {mds_cap_fs1}{mds_cap_fs2} mon {mon_cap_fs} osd {osd_cap_fs}"
         create_cmd = f"ceph auth get-or-create {client_name} {caps}"
         log.info(f"Set client user {client_name} with caps for root squash")

@@ -15,7 +15,7 @@ from utility.utils import generate_unique_id
 LOG = Log(__name__)
 
 
-def configure_subsystems(rbd, pool, nvmegwcli, config):
+def configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, config):
     """Configure Ceph-NVMEoF Subsystems."""
     sub_args = {"subsystem": config["nqn"]}
     nvmegwcli.subsystem.add(
@@ -28,7 +28,19 @@ def configure_subsystems(rbd, pool, nvmegwcli, config):
         "trsvcid": config["listener_port"],
     }
     nvmegwcli.listener.add(**{"args": {**listener_cfg, **sub_args}})
-    nvmegwcli.host.add(**{"args": {**sub_args, **{"host": repr(config["allow_host"])}}})
+
+    # All host to subsystem
+    if config.get("allow_host"):
+        nvmegwcli.host.add(
+            **{"args": {**sub_args, **{"host": repr(config["allow_host"])}}}
+        )
+
+    if config.get("hosts"):
+        for host in config["hosts"]:
+            initiator_node = get_node_by_id(ceph_cluster, host)
+            initiator = Initiator(initiator_node)
+            host_nqn = initiator.nqn()
+            nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
 
     if config.get("bdevs"):
         name = generate_unique_id(length=4)
@@ -203,7 +215,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             with parallel() as p:
                 for subsys_args in config["subsystems"]:
                     p.spawn(
-                        configure_subsystems, rbd_obj, rbd_pool, nvmegwcli, subsys_args
+                        configure_subsystems,
+                        ceph_cluster,
+                        rbd_obj,
+                        rbd_pool,
+                        nvmegwcli,
+                        subsys_args,
                     )
 
         if config.get("initiators"):

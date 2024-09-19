@@ -185,7 +185,13 @@ def run(ceph_cluster, **kw):
       polarion-id: "CEPH-83575629"
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -198,7 +204,6 @@ def run(ceph_cluster, **kw):
             )
             return 1
 
-        default_fs = "cephfs"
         default_subvol_size = config.get("subvol_size", 5368706371)
         expected_pool_used = config.get("expected_pool_usage", 98)
         subvol_data_fill = config.get("subvol_data_fill", 2)
@@ -227,10 +232,12 @@ def run(ceph_cluster, **kw):
             for _ in list(range(10))
         )
         client1 = clients[0]
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, default_fs)
 
-        fs_details = fs_util.get_fs_info(client1)
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, default_fs)
+
         subvolumegroup = {"vol_name": default_fs, "group_name": group_name}
 
         log.info("Create Subvolumegroup")
@@ -262,12 +269,13 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",fs={default_fs}",
         )
         log.info("Ceph-Fuse mount on Subvolume")
         fs_util.fuse_mount(
             [client1],
             fuse_mounting_dir,
-            extra_params=f" -r {subvol_path.strip()}",
+            extra_params=f" -r {subvol_path.strip()}  --client_fs {default_fs}",
         )
         log.info(f"Add data to Subvolume to fill {subvol_data_fill}% \n")
         data_fill_params.update(

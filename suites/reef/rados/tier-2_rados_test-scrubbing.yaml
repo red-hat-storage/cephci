@@ -175,6 +175,7 @@ tests:
         scenario: "beginTime and endTime gt currentTime"
       delete_pools:
         - scrub_pool
+      comments: Active Bug#2312538
   - test:
       name: Decrease scrub time
       polarion-id: CEPH-9371

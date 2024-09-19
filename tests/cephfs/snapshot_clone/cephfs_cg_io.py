@@ -1211,6 +1211,7 @@ class CG_snap_IO(object):
                     log.info(f"linux_cmds {io_type} cmd op : {out}")
                     out = out.strip()
                     files = out.split()
+                    file_name = random.choice(files)
                     cmd_pass = 1
                 except BaseException as ex:
                     log.info(ex)
