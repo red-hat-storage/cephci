@@ -76,30 +76,49 @@ def run(ceph_cluster, **kw):
         build = config.get("build", config.get("rhbuild"))
         mdss = ceph_cluster.get_ceph_objects("mds")
 
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        default_fs = "cephfs-pool-size" if not erasure else "cephfs-pool-size-ec"
         clients = ceph_cluster.get_ceph_objects("client")
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        fs_name = "cephfs-pool-size" if not erasure else "cephfs-pool-size-ec"
+        fs_details = fs_util.get_fs_info(clients[0], fs_name)
+        if not fs_details:
+            fs_util.create_fs(clients[0], fs_name)
+        fs_pool_details = fs_util.get_fs_info(clients[0], fs_name)
         mon_node_ip = fs_util.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
         mount_points = []
+
         kernel_mount_dir = "/mnt/" + "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
         fs_util.kernel_mount(
-            clients, kernel_mount_dir, mon_node_ip, new_client_hostname="admin"
+            clients,
+            kernel_mount_dir,
+            mon_node_ip,
+            new_client_hostname="admin",
+            extra_params=f",fs={default_fs}",
         )
         fuse_mount_dir = "/mnt/" + "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
-        fs_util.fuse_mount(clients, fuse_mount_dir, new_client_hostname="admin")
+        fs_util.fuse_mount(
+            clients,
+            fuse_mount_dir,
+            new_client_hostname="admin",
+            extra_params=f" --client_fs {default_fs}",
+        )
         mount_points.extend([kernel_mount_dir, fuse_mount_dir])
-        if "4." in rhbuild:
-            data_pool = "cephfs_data"
-            metadata_pool = "cephfs_metadata"
-        else:
-            data_pool = "cephfs.cephfs.data"
-            metadata_pool = "cephfs.cephfs.meta"
+        data_pool = fs_pool_details["data_pool_name"]
+        metadata_pool = fs_pool_details["metadata_pool_name"]
+
         commands = [
             f"ceph osd pool set {data_pool} pg_autoscale_mode off",
             f"ceph osd pool set {metadata_pool} pg_autoscale_mode off",

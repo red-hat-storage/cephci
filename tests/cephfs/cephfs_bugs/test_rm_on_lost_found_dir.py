@@ -38,7 +38,13 @@ def run(ceph_cluster, **kw):
         """
         tc = "CEPH-83575781"
         log.info("Running cephfs %s test case" % (tc))
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -67,7 +73,12 @@ def run(ceph_cluster, **kw):
         fs_details = fs_util.get_fs_info(client1, fs_name=fs_name)
 
         out, rc = client1.exec_command(
-            sudo=True, cmd=f"rados ls -p cephfs.{fs_name}.data -f json"
+            sudo=True,
+            cmd=(
+                f"rados ls -p cephfs.{fs_name}.data -f json"
+                if not erasure
+                else f"rados ls -p cephfs.{fs_name}.data-ec -f json"
+            ),
         )
         rados_obj_ls = json.loads(out)
         log.info("Delete one of the rados object")
@@ -77,7 +88,11 @@ def run(ceph_cluster, **kw):
             )
         client1.exec_command(
             sudo=True,
-            cmd=f"rados rm {rados_obj_ls[0]['name']} -p cephfs.{fs_name}.data",
+            cmd=(
+                f"rados rm {rados_obj_ls[0]['name']} -p cephfs.{fs_name}.data"
+                if not erasure
+                else f"rados rm {rados_obj_ls[0]['name']} -p cephfs.{fs_name}.data-ec"
+            ),
         )
         client1.exec_command(
             sudo=True, cmd=f"cephfs-table-tool {fs_name}:0 reset session"

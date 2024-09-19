@@ -33,7 +33,8 @@ def run(ceph_cluster, **kw):
         """
         tc = "CEPH-83575781"
         log.info("Running cephfs %s test case" % (tc))
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))

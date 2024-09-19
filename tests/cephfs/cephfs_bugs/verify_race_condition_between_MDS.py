@@ -13,20 +13,28 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83572726"
         log.info(f"Running CephFS tests for BZ-{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
         client2 = clients[1]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         fs_util.auth_list([client1])
         fs_util.auth_list([client2])
 
         client1.exec_command(sudo=True, cmd="yum install -y --nogpgcheck ceph-fuse")
         client2.exec_command(sudo=True, cmd="yum install -y --nogpgcheck ceph-fuse")
         log.info("Setting the max mds to 2")
-        client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 2")
+        client1.exec_command(sudo=True, cmd=f"ceph fs set {fs_name} max_mds 2")
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(5))
@@ -36,7 +44,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [clients[0]],
             fuse_mounting_dir_1,
-            extra_params=" --client_fs cephfs",
+            extra_params=f" --client_fs {fs_name}",
         )
 
         fuse_mounting_dir_2 = f"/mnt/cephfs_fuse{mounting_dir}_2/"
@@ -45,7 +53,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [client2],
             fuse_mounting_dir_2,
-            extra_params=" --client_fs cephfs",
+            extra_params=f" --client_fs {fs_name}",
         )
         for _ in range(3):
             dir_name1 = "".join(

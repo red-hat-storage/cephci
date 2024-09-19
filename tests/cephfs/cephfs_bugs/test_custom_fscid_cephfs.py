@@ -27,7 +27,13 @@ def run(ceph_cluster, **kw):
         """
         tc = "CEPH-83574632"
         log.info("Running cephfs %s test case" % (tc))
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -35,13 +41,31 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client1, fs_name)
         fscid = "300"
         fs_name = "fs2"
         if "4." in rhbuild:
             client1.exec_command(sudo=True, cmd="ceph fs flag set enable_multiple true")
         commands = [
-            "ceph osd pool create fs_data 64 64",
+            # Create fs_data pool with or without erasure coding
+            (
+                "ceph osd pool create fs_data 64 64"
+                if not erasure
+                else "ceph osd pool create fs_data 64 64 erasure"
+            ),
+            # Create fs_metadata pool
             "ceph osd pool create fs_metadata 8 8",
+            # If erasure is enabled, set allow_ec_overwrites on the fs_data pool
+            (
+                ""
+                if not erasure
+                else "ceph osd pool set fs_data allow_ec_overwrites true"
+            ),
+            # Create the filesystem with metadata and data pools
             f"ceph fs new {fs_name} fs_metadata fs_data --fscid {fscid} --force",
         ]
         for command in commands:
