@@ -497,10 +497,22 @@ def cg_snap_func_1(cg_test_params):
                             "subvol_name": subvol_name,
                         }
                     )
-                fs_util.create_snapshot(client, **snapshot)
-                log.info(f"Created snapshot {snap_name} on {subvol_name}")
-                snap_list.append(snap_name)
-                snap_qs_dict.update({subvol_name: snap_list})
+                snap_create = 0
+                retry_cnt = 0
+                while (retry_cnt < 10) and (snap_create == 0):
+                    try:
+                        fs_util.create_snapshot(client, **snapshot)
+                        snap_create = 1
+                    except BaseException as ex:
+                        log.info(ex)
+                        time.sleep(3)
+                        retry_cnt += 1
+                if snap_create == 0:
+                    test_fail += 1
+                else:
+                    log.info(f"Created snapshot {snap_name} on {subvol_name}")
+                    snap_list.append(snap_name)
+                    snap_qs_dict.update({subvol_name: snap_list})
             log.info(f"Release quiesce set {qs_id_val}")
             cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
             i += 1
@@ -684,11 +696,22 @@ def cg_snap_func_1(cg_test_params):
                             "subvol_name": subvol_name,
                         }
                     )
-
-                fs_util.create_snapshot(client, **snapshot)
-                log.info(f"Created snapshot cg_snap_{rand_str} on {subvol_name}")
-                snap_list.append(snap_name)
-                snap_qs_dict.update({subvol_name: snap_list})
+                snap_create = 0
+                retry_cnt = 0
+                while (retry_cnt < 10) and (snap_create == 0):
+                    try:
+                        fs_util.create_snapshot(client, **snapshot)
+                        snap_create = 1
+                    except BaseException as ex:
+                        log.info(ex)
+                        time.sleep(3)
+                        retry_cnt += 1
+                if snap_create == 0:
+                    test_fail += 1
+                else:
+                    log.info(f"Created snapshot cg_snap_{rand_str} on {subvol_name}")
+                    snap_list.append(snap_name)
+                    snap_qs_dict.update({subvol_name: snap_list})
 
             log.info(f"Release quiesce set {qs_id_val}")
             qs_output = cg_snap_util.cg_quiesce_release(
@@ -1238,10 +1261,22 @@ def cg_snap_func_3(cg_test_params):
                             "subvol_name": subvol_name,
                         }
                     )
-                fs_util.create_snapshot(client, **snapshot)
-                log.info(f"Created snapshot {snap_name} on {subvol_name}")
-                snap_list.append(snap_name)
-                snap_qs_dict.update({subvol_name: snap_list})
+                snap_create = 0
+                retry_cnt = 0
+                while (retry_cnt < 10) and (snap_create == 0):
+                    try:
+                        fs_util.create_snapshot(client, **snapshot)
+                        snap_create = 1
+                    except BaseException as ex:
+                        log.info(ex)
+                        time.sleep(3)
+                        retry_cnt += 1
+                if snap_create == 0:
+                    test_fail += 1
+                else:
+                    log.info(f"Created snapshot {snap_name} on {subvol_name}")
+                    snap_list.append(snap_name)
+                    snap_qs_dict.update({subvol_name: snap_list})
 
             log.info(f"Release the subset {qs_subset}")
             out = cg_snap_util.cg_quiesce_release(client, qs_id_val_sub, if_await=True)
@@ -2629,10 +2664,22 @@ def cg_snap_neg_1(cg_test_params):
                             "subvol_name": subvol_name,
                         }
                     )
-                fs_util.create_snapshot(client, **snapshot)
-                log.info(f"Created snapshot {snap_name} on {subvol_name}")
-                snap_list.append(snap_name)
-                snap_qs_dict.update({subvol_name: snap_list})
+                snap_create = 0
+                retry_cnt = 0
+                while (retry_cnt < 10) and (snap_create == 0):
+                    try:
+                        fs_util.create_snapshot(client, **snapshot)
+                        snap_create = 1
+                    except BaseException as ex:
+                        log.info(ex)
+                        time.sleep(3)
+                        retry_cnt += 1
+                if snap_create == 0:
+                    test_fail += 1
+                else:
+                    log.info(f"Created snapshot {snap_name} on {subvol_name}")
+                    snap_list.append(snap_name)
+                    snap_qs_dict.update({subvol_name: snap_list})
 
             for qs_id in qs_id_list:
                 log.info(f"Release the qs_set with id {qs_id}")
