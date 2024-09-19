@@ -23,7 +23,13 @@ def run(ceph_cluster, **kw):
         tc = "11224"
         dir_name = "dir"
         log.info("Running cephfs %s test case" % (tc))
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsV1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         fs_util = FsUtils(ceph_cluster)
         build = config.get("build", config.get("rhbuild"))
         num_of_osds = config.get("num_of_osds")
@@ -54,21 +60,36 @@ def run(ceph_cluster, **kw):
             log.info("got auth keys")
         else:
             raise CommandFailed("auth list failed")
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util_v1.get_fs_info(client1[0], default_fs)
 
-        fs_util_v1.fuse_mount(client1, client_info["mounting_dir"])
-        fs_util_v1.fuse_mount(client2, client_info["mounting_dir"])
-        fs_util_v1.kernel_mount(
-            client3, client_info["mounting_dir"], ",".join(client_info["mon_node_ip"])
+        if not fs_details:
+            fs_util_v1.create_fs(client1, default_fs)
+
+        fs_util_v1.fuse_mount(
+            client1,
+            client_info["mounting_dir"],
+            extra_params=f" --client_fs {default_fs}",
+        )
+        fs_util_v1.fuse_mount(
+            client2,
+            client_info["mounting_dir"],
+            extra_params=f" --client_fs {default_fs}",
         )
         fs_util_v1.kernel_mount(
-            client4, client_info["mounting_dir"], ",".join(client_info["mon_node_ip"])
+            client3,
+            client_info["mounting_dir"],
+            ",".join(client_info["mon_node_ip"]),
+            extra_params=f",fs={default_fs}",
+        )
+        fs_util_v1.kernel_mount(
+            client4,
+            client_info["mounting_dir"],
+            ",".join(client_info["mon_node_ip"]),
+            extra_params=f",fs={default_fs}",
         )
 
-        rc = fs_util_v1.activate_multiple_mdss(client_info["clients"][0:])
-        if rc == 0:
-            log.info("Activate multiple mdss successfully")
-        else:
-            raise CommandFailed("Activate multiple mdss failed")
+        client1[0].exec_command(sudo=True, cmd=f"ceph fs set {default_fs} max_mds 2")
         client1[0].exec_command(
             sudo=True, cmd="mkdir %s%s" % (client_info["mounting_dir"], dir_name)
         )

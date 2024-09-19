@@ -70,7 +70,15 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83591419"
         log.info("Running cephfs %s test case" % (tc))
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        if erasure:
+            log.info("Suite has been triggered with Erasure")
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
