@@ -62,7 +62,13 @@ def run(ceph_cluster, **kw):
     2. Deletes snapshot and subvolume created.
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -75,15 +81,17 @@ def run(ceph_cluster, **kw):
                 f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
             )
             return 1
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(clients[0], fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(clients[0], fs_name)
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
         )
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
-        if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
         count_size = get_data_to_fill_for_each_iteration(client1, "cephfs.cephfs.data")
         subvolume = {
             "vol_name": default_fs,
@@ -112,6 +120,7 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",fs={default_fs}",
         )
 
         snapshot_list = [

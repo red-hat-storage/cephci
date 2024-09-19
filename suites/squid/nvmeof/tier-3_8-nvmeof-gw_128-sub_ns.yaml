@@ -134,7 +134,6 @@ tests:
               args:
                 subsystems: 128
                 max-namespaces: 2048
-                no-group-append: True
           - config:
               service: listener
               command: add

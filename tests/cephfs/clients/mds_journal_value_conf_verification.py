@@ -19,16 +19,24 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-11331"
         log.info(f"Running CephFS tests for -{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         fs_util.auth_list([client1])
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -43,9 +51,11 @@ def run(ceph_cluster, **kw):
             [client1],
             kernel_mounting_dir_1,
             mon_node_ip,
-            extra_params=",fs=cephfs",
+            extra_params=f",fs={fs_name}",
         )
-        fs_util.fuse_mount([client1], fuse_mounting_dir_1)
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_1, extra_params=f" --client_fs {fs_name}"
+        )
         log.info("Setting the client config values")
         conf_set = "ceph config set mds"
         conf_get = "ceph config get mds"

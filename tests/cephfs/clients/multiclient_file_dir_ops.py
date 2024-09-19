@@ -32,7 +32,13 @@ def run(ceph_cluster, **kw):
     """
     try:
         log.info(f"MetaData Information {log.metadata} in {__name__}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
 
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
@@ -51,13 +57,25 @@ def run(ceph_cluster, **kw):
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
         )
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(clients[0], fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(clients[0], fs_name)
         fuse_mounting_dir = f"/mnt/cephfs_fuse{mounting_dir}/"
-        fs_util.fuse_mount([clients[0], clients[1]], fuse_mounting_dir)
+        fs_util.fuse_mount(
+            [clients[0], clients[1]],
+            fuse_mounting_dir,
+            extra_params=f" --client_fs {fs_name}",
+        )
 
         kernel_mounting_dir = f"/mnt/cephfs_kernel{mounting_dir}/"
         mon_node_ips = fs_util.get_mon_node_ips()
         fs_util.kernel_mount(
-            [clients[0], clients[1]], kernel_mounting_dir, ",".join(mon_node_ips)
+            [clients[0], clients[1]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
         )
         dir_operations(
             client1=clients[0], client2=clients[1], fuse_mounting_dir=fuse_mounting_dir
