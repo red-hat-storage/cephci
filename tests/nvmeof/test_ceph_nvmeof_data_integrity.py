@@ -19,7 +19,15 @@ def configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, config):
     """Configure Ceph-NVMEoF Subsystems."""
     sub_args = {"subsystem": config["nqn"]}
     nvmegwcli.subsystem.add(
-        **{"args": {**sub_args, **{"max-namespaces": config.get("max_ns", 32)}}}
+        **{
+            "args": {
+                **sub_args,
+                **{
+                    "max-namespaces": config.get("max_ns", 32),
+                    "no-group-append": config.get("no-group-append", True),
+                },
+            }
+        }
     )
 
     listener_cfg = {
