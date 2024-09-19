@@ -185,7 +185,7 @@ tests:
               command: add              # add Host access
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
-                host: "*"
+                host: '"*"'
           - config:
               service: host
               command: list             # List access hosts
@@ -196,7 +196,7 @@ tests:
               command: delete           # access host del
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
-                host: "*"
+                host: '"*"'
           - config:
               service: namespace
               command: add              # Namespace add
@@ -301,10 +301,25 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode1
                 nsid: 2
           - config:
+              service: namespace
+              command: delete           # namespace delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 3
+          - config:
+              service: namespace
+              command: delete           # namespace delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1
+                nsid: 4
+          - config:
               service: subsystem
               command: delete           # subsystem delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
+          - config:
+              service: gateway          # https://bugzilla.redhat.com/show_bug.cgi?id=2308160
+              command: info             # gateway info
           - config:
               service: version          # CLI Version
               command: version
