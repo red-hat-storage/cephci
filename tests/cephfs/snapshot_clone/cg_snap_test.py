@@ -110,7 +110,13 @@ def run(ceph_cluster, **kw):
 
     """
     try:
-        fs_util_v1 = FsUtilsv1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsv1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsv1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         cg_snap_util = CG_Snap_Utils(ceph_cluster)
         cg_snap_io = CG_snap_IO(ceph_cluster)
         config = kw.get("config")
@@ -126,6 +132,7 @@ def run(ceph_cluster, **kw):
         build = config.get("build", config.get("rhbuild"))
         fs_util_v1.prepare_clients(qs_clients, build)
         default_fs = config.get("fs_name", "cephfs")
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
         qs_cnt_def = random.randrange(5, 11)
         qs_cnt = config.get("qs_cnt", qs_cnt_def)
         nfs_exists = 0
@@ -433,6 +440,7 @@ def cg_snap_func_1(cg_test_params):
             io_run_time,
             ephemeral_pin,
         ),
+        kwargs={"fs_name": fs_name},
     )
 
     p.start()
@@ -467,7 +475,12 @@ def cg_snap_func_1(cg_test_params):
             log.info(f"Quiesce the set {qs_set}")
             log.info(f"client:{client.node.hostname}")
             cg_snap_util.cg_quiesce(
-                client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+                client,
+                qs_set,
+                qs_id=qs_id_val,
+                timeout=300,
+                expiration=300,
+                fs_name=fs_name,
             )
             time.sleep(30)
             log.info("Perform snapshot creation on all members")
@@ -514,7 +527,9 @@ def cg_snap_func_1(cg_test_params):
                     snap_list.append(snap_name)
                     snap_qs_dict.update({subvol_name: snap_list})
             log.info(f"Release quiesce set {qs_id_val}")
-            cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+            cg_snap_util.cg_quiesce_release(
+                client, qs_id_val, if_await=True, fs_name=fs_name
+            )
             i += 1
             time.sleep(30)
         else:
@@ -535,7 +550,10 @@ def cg_snap_func_1(cg_test_params):
             log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
     mnt_pt_list = []
     if ephemeral_pin == 1:
-        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+        if (
+            cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes, fs_name=fs_name)
+            == 0
+        ):
             log.error(
                 "Ephemeral random pinning feature was NOT exercised during the test"
             )
@@ -609,6 +627,7 @@ def cg_snap_func_1(cg_test_params):
             io_run_time,
             ephemeral_pin,
         ),
+        kwargs={"fs_name": fs_name},
     )
     p.start()
     time.sleep(30)
@@ -646,6 +665,7 @@ def cg_snap_func_1(cg_test_params):
                 if_await=False,
                 timeout=300,
                 expiration=300,
+                fs_name=fs_name,
             )
             log.info("Verify quiesce cmd response has status as quiescing")
 
@@ -657,7 +677,9 @@ def cg_snap_func_1(cg_test_params):
             end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
             qs_state_verified = 0
             while (datetime.datetime.now() < end_time) and (qs_state_verified == 0):
-                qs_query = cg_snap_util.get_qs_query(client, qs_id=qs_id_val)
+                qs_query = cg_snap_util.get_qs_query(
+                    client, qs_id=qs_id_val, fs_name=fs_name
+                )
                 log.info(f"qs_query output : {qs_query}")
                 if qs_query["sets"][qs_id_val]["state"]["name"] == "QUIESCED":
                     log.info("Verified quiesce state is QUIESCED without await option")
@@ -715,7 +737,7 @@ def cg_snap_func_1(cg_test_params):
 
             log.info(f"Release quiesce set {qs_id_val}")
             qs_output = cg_snap_util.cg_quiesce_release(
-                client, qs_id_val, if_await=False
+                client, qs_id_val, if_await=False, fs_name=fs_name
             )
             log.info("Verify quiesce release cmd response has status as releasing")
             if qs_output["sets"][qs_id_val]["state"]["name"] == "RELEASING":
@@ -725,7 +747,9 @@ def cg_snap_func_1(cg_test_params):
             end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
             qs_state_verified = 0
             while (datetime.datetime.now() < end_time) and (qs_state_verified == 0):
-                qs_query = cg_snap_util.get_qs_query(client, qs_id=qs_id_val)
+                qs_query = cg_snap_util.get_qs_query(
+                    client, qs_id=qs_id_val, fs_name=fs_name
+                )
                 if qs_query["sets"][qs_id_val]["state"]["name"] == "RELEASED":
                     log.info("Verified quiesce state is RELEASED without await option")
                     qs_state_verified = 1
@@ -755,7 +779,10 @@ def cg_snap_func_1(cg_test_params):
             log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
 
     if ephemeral_pin == 1:
-        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+        if (
+            cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes, fs_name=fs_name)
+            == 0
+        ):
             log.error(
                 "Ephemeral random pinning feature was NOT exercised during the test"
             )
@@ -853,6 +880,7 @@ def cg_snap_func_2(cg_test_params):
             io_run_time,
             ephemeral_pin,
         ),
+        kwargs={"fs_name": fs_name},
     )
     p.start()
     time.sleep(30)
@@ -885,7 +913,12 @@ def cg_snap_func_2(cg_test_params):
             log.info(f"Quiesce the set {qs_set}")
             log.info(f"client:{client.node.hostname}")
             qs_op_out = cg_snap_util.cg_quiesce(
-                client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+                client,
+                qs_set,
+                qs_id=qs_id_val,
+                timeout=300,
+                expiration=300,
+                fs_name=fs_name,
             )
             db_version = qs_op_out["sets"][qs_id_val]["version"]
             time.sleep(30)
@@ -923,7 +956,7 @@ def cg_snap_func_2(cg_test_params):
 
             log.info(f"Verify Release quiesce set {qs_id_val} with if-version")
             out = cg_snap_util.cg_quiesce_release(
-                client, qs_id_val, if_await=True, if_version=db_version
+                client, qs_id_val, if_await=True, if_version=db_version, fs_name=fs_name
             )
             time.sleep(10)
             if out == 1:
@@ -933,7 +966,12 @@ def cg_snap_func_2(cg_test_params):
                 )
 
             log.info(f"Reset the quiesce set {qs_id_val} {qs_set}")
-            if cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set) == 1:
+            if (
+                cg_snap_util.cg_quiesce_reset(
+                    client, qs_id_val, qs_set, fs_name=fs_name
+                )
+                == 1
+            ):
                 log.error("Reset failed")
                 test_fail = 1
                 rand_str = "".join(
@@ -943,7 +981,12 @@ def cg_snap_func_2(cg_test_params):
                 qs_id_val = f"cg_test1_{rand_str}"
                 log.info("fCreate new quiesce set {qs_id_val} to continue test")
                 qs_op_out = cg_snap_util.cg_quiesce(
-                    client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+                    client,
+                    qs_set,
+                    qs_id=qs_id_val,
+                    timeout=300,
+                    expiration=300,
+                    fs_name=fs_name,
                 )
 
             log.info(
@@ -951,17 +994,17 @@ def cg_snap_func_2(cg_test_params):
             )
 
             log.info(f"Exclude a subvolume from quiesce set {qs_id_val}")
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
             ver_before_exclude = qs_query_out["sets"][qs_id_val]["version"]
             exclude_sv_name = random.choice(qs_set)
             qs_exclude_status = cg_snap_util.cg_quiesce_exclude(
-                client, qs_id_val, [exclude_sv_name], if_await=True
+                client, qs_id_val, [exclude_sv_name], if_await=True, fs_name=fs_name
             )
             if qs_exclude_status == 1:
                 test_fail += 1
                 log.error(f"Exclude of {exclude_sv_name} in qs set {qs_id_val} failed")
             log.info(f"Verify quiesce set {qs_id_val} state after exclude")
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
             state = qs_query_out["sets"][qs_id_val]["state"]["name"]
             ver_after_exclude = qs_query_out["sets"][qs_id_val]["version"]
             if state == "QUIESCED":
@@ -982,7 +1025,7 @@ def cg_snap_func_2(cg_test_params):
                 test_fail += 1
             else:
                 out = cg_snap_util.cg_quiesce_release(
-                    client, qs_id_val, if_version=ver_after_exclude
+                    client, qs_id_val, if_version=ver_after_exclude, fs_name=fs_name
                 )
                 if out == 1:
                     test_fail += 1
@@ -1001,6 +1044,7 @@ def cg_snap_func_2(cg_test_params):
                     qs_id=qs_id_val_new,
                     timeout=300,
                     expiration=300,
+                    fs_name=fs_name,
                 )
                 == 1
             ):
@@ -1017,6 +1061,7 @@ def cg_snap_func_2(cg_test_params):
                     qs_id=qs_id_val_new,
                     timeout=300,
                     expiration=300,
+                    fs_name=fs_name,
                 )
 
             log.info(
@@ -1026,7 +1071,9 @@ def cg_snap_func_2(cg_test_params):
             log.info(
                 f"Include a subvolume {include_sv_name} in quiesce set {qs_id_val_new}"
             )
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val_new)
+            qs_query_out = cg_snap_util.get_qs_query(
+                client, qs_id_val_new, fs_name=fs_name
+            )
             ver_before_include = qs_query_out["sets"][qs_id_val_new]["version"]
             for qs_member in qs_query_out["sets"][qs_id_val_new]["members"]:
                 if exclude_sv_name in qs_member:
@@ -1037,7 +1084,7 @@ def cg_snap_func_2(cg_test_params):
                         f"excluded value of {exclude_sv_name} before include : {exclude_state}"
                     )
             qs_include_status = cg_snap_util.cg_quiesce_include(
-                client, qs_id_val_new, [include_sv_name], if_await=True
+                client, qs_id_val_new, [include_sv_name], if_await=True, fs_name=fs_name
             )
             if qs_include_status == 1:
                 test_fail += 1
@@ -1045,7 +1092,9 @@ def cg_snap_func_2(cg_test_params):
                     f"Include of {include_sv_name} in qs set {qs_id_val_new} failed"
                 )
             log.info(f"Verify quiesce set {qs_id_val_new} state after include")
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val_new)
+            qs_query_out = cg_snap_util.get_qs_query(
+                client, qs_id_val_new, fs_name=fs_name
+            )
             state = qs_query_out["sets"][qs_id_val_new]["state"]["name"]
             ver_after_include = qs_query_out["sets"][qs_id_val_new]["version"]
             if state == "QUIESCED":
@@ -1066,7 +1115,10 @@ def cg_snap_func_2(cg_test_params):
                     test_fail += 1
                 else:
                     out = cg_snap_util.cg_quiesce_release(
-                        client, qs_id_val_new, if_version=ver_after_include
+                        client,
+                        qs_id_val_new,
+                        if_version=ver_after_include,
+                        fs_name=fs_name,
                     )
                     if out == 1:
                         test_fail += 1
@@ -1098,7 +1150,10 @@ def cg_snap_func_2(cg_test_params):
             log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
     mnt_pt_list = []
     if ephemeral_pin == 1:
-        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+        if (
+            cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes, fs_name=fs_name)
+            == 0
+        ):
             log.error(
                 "Ephemeral random pinning feature was NOT exercised during the test"
             )
@@ -1190,6 +1245,7 @@ def cg_snap_func_3(cg_test_params):
             io_run_time,
             ephemeral_pin,
         ),
+        kwargs={"fs_name": fs_name},
     )
     p.start()
     time.sleep(30)
@@ -1224,13 +1280,23 @@ def cg_snap_func_3(cg_test_params):
             log.info(f"Quiesce the subset {qs_subset}")
 
             qs_op_out = cg_snap_util.cg_quiesce(
-                client, qs_subset, qs_id=qs_id_val_sub, timeout=300, expiration=300
+                client,
+                qs_subset,
+                qs_id=qs_id_val_sub,
+                timeout=300,
+                expiration=300,
+                fs_name=fs_name,
             )
             log.info(f"quiesce cmd response : {qs_op_out}")
             log.info(f"Run quiesce on original quiesce set {qs_set}")
             qs_id_val = f"cg_test1_{rand_str}"
             qs_op_out = cg_snap_util.cg_quiesce(
-                client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+                client,
+                qs_set,
+                qs_id=qs_id_val,
+                timeout=300,
+                expiration=300,
+                fs_name=fs_name,
             )
             log.info(f"quiesce cmd response : {qs_op_out}")
             time.sleep(30)
@@ -1279,12 +1345,16 @@ def cg_snap_func_3(cg_test_params):
                     snap_qs_dict.update({subvol_name: snap_list})
 
             log.info(f"Release the subset {qs_subset}")
-            out = cg_snap_util.cg_quiesce_release(client, qs_id_val_sub, if_await=True)
+            out = cg_snap_util.cg_quiesce_release(
+                client, qs_id_val_sub, if_await=True, fs_name=fs_name
+            )
             if out == 1:
                 test_fail += 1
                 log.error(f"FAIL : Quiesce subset release failed on {qs_id_val_sub}")
             log.info(f"Release quiesce set with id {qs_id_val}")
-            out = cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+            out = cg_snap_util.cg_quiesce_release(
+                client, qs_id_val, if_await=True, fs_name=fs_name
+            )
             if out == 1:
                 test_fail += 1
                 log.error(f"FAIL : Quiesce set release failed on {qs_id_val}")
@@ -1313,7 +1383,10 @@ def cg_snap_func_3(cg_test_params):
 
     mnt_pt_list = []
     if ephemeral_pin == 1:
-        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+        if (
+            cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes, fs_name=fs_name)
+            == 0
+        ):
             log.error(
                 "Ephemeral random pinning feature was NOT exercised during the test"
             )
@@ -1403,6 +1476,7 @@ def cg_snap_func_4(cg_test_params):
             io_run_time,
             ephemeral_pin,
         ),
+        kwargs={"fs_name": fs_name},
     )
     p.start()
     time.sleep(30)
@@ -1426,7 +1500,12 @@ def cg_snap_func_4(cg_test_params):
     log.info(f"Run quiesce on quiesce set {qs_set}")
     qs_id_val = f"cg_test1_{rand_str}"
     qs_op_out = cg_snap_util.cg_quiesce(
-        client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+        client,
+        qs_set,
+        qs_id=qs_id_val,
+        timeout=300,
+        expiration=300,
+        fs_name=fs_name,
     )
     log.info(f"quiesce cmd response : {qs_op_out}")
     time.sleep(30)
@@ -1462,7 +1541,9 @@ def cg_snap_func_4(cg_test_params):
         snap_qs_dict.update({subvol_name: snap_list})
 
     log.info(f"Release quiesce set with id {qs_id_val}")
-    out = cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+    out = cg_snap_util.cg_quiesce_release(
+        client, qs_id_val, if_await=True, fs_name=fs_name
+    )
     if out == 1:
         test_fail += 1
         log.error(f"FAIL : Quiesce set release failed on {qs_id_val}")
@@ -1498,7 +1579,10 @@ def cg_snap_func_4(cg_test_params):
             log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
     mnt_pt_list = []
     if ephemeral_pin == 1:
-        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+        if (
+            cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes, fs_name=fs_name)
+            == 0
+        ):
             log.error(
                 "Ephemeral random pinning feature was NOT exercised during the test"
             )
@@ -1592,6 +1676,7 @@ def cg_snap_func_5(cg_test_params):
             io_run_time,
             ephemeral_pin,
         ),
+        kwargs={"fs_name": fs_name},
     )
     p.start()
     time.sleep(30)
@@ -1636,7 +1721,12 @@ def cg_snap_func_5(cg_test_params):
     log.info("Perform quiesce with shorter expiration")
     qs_id_val = f"cg_test2_{rand_str}"
     qs_op_out = cg_snap_util.cg_quiesce(
-        client, qs_set, qs_id=qs_id_val, timeout=300, expiration=5
+        client,
+        qs_set,
+        qs_id=qs_id_val,
+        timeout=300,
+        expiration=5,
+        fs_name=fs_name,
     )
     log.info(f"quiesce cmd response : {qs_op_out}")
     log.info("Wait for quiesce set to expire")
@@ -1654,7 +1744,7 @@ def cg_snap_func_5(cg_test_params):
         if "EPERM" in str(ex):
             log.info("Quiesce release fails as expected when expired")
     log.info("Verify Quiesce state is EXPIRED")
-    qs_query = cg_snap_util.get_qs_query(client, qs_id=qs_id_val)
+    qs_query = cg_snap_util.get_qs_query(client, qs_id=qs_id_val, fs_name=fs_name)
     log.info(f"qs_query:{qs_query}")
     state = qs_query["sets"][qs_id_val]["state"]["name"]
     if state != "EXPIRED":
@@ -1678,7 +1768,10 @@ def cg_snap_func_5(cg_test_params):
 
     mnt_pt_list = []
     if ephemeral_pin == 1:
-        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+        if (
+            cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes, fs_name=fs_name)
+            == 0
+        ):
             log.error(
                 "Ephemeral random pinning feature was NOT exercised during the test"
             )
@@ -1743,6 +1836,7 @@ def cg_snap_func_6(cg_test_params):
             io_run_time,
             ephemeral_pin,
         ),
+        kwargs={"fs_name": fs_name},
     )
     p.start()
     time.sleep(30)
@@ -1792,8 +1886,9 @@ def cg_snap_func_6(cg_test_params):
                 if_await=False,
                 timeout=300,
                 expiration=100,
+                fs_name=fs_name,
             )
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
             state = qs_query_out["sets"][qs_id_val]["state"]["name"]
             log.info(f"State of set-id {qs_id_val} before include:{state}")
             if state != "QUIESCING":
@@ -1802,9 +1897,9 @@ def cg_snap_func_6(cg_test_params):
                 )
             log.info(f"Include {include_sv_name} to set-id {qs_id_val}")
             qs_include_status = cg_snap_util.cg_quiesce_include(
-                client, qs_id_val, [include_sv_name], if_await=False
+                client, qs_id_val, [include_sv_name], if_await=False, fs_name=fs_name
             )
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
             state = qs_query_out["sets"][qs_id_val]["state"]["name"]
             log.info(f"State of set-id {qs_id_val} after include:{state}")
             log.info(f"State of set-id {qs_id_val} before exclude:{state}")
@@ -1816,9 +1911,9 @@ def cg_snap_func_6(cg_test_params):
             exclude_sv_name = random.choice(qs_set_copy)
             log.info(f"Exclude {exclude_sv_name} from set-id {qs_id_val}")
             qs_exclude_status = cg_snap_util.cg_quiesce_exclude(
-                client, qs_id_val, [exclude_sv_name], if_await=False
+                client, qs_id_val, [exclude_sv_name], if_await=False, fs_name=fs_name
             )
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
             log.info(f"qs_query output:{qs_query_out}")
             state = qs_query_out["sets"][qs_id_val]["state"]["name"]
             log.info(f"State of set-id {qs_id_val} after exclude:{state}")
@@ -1831,13 +1926,15 @@ def cg_snap_func_6(cg_test_params):
                 test_fail += 1
                 log.error(f"Include of {include_sv_name} in qs set {qs_id_val} failed")
             log.info(f"Wait for QUIESCED state in set-id {qs_id_val}")
-            wait_status = wait_for_cg_state(client, cg_snap_util, qs_id_val, "QUIESCED")
+            wait_status = wait_for_cg_state(
+                client, cg_snap_util, qs_id_val, "QUIESCED", fs_name
+            )
             log.info(f"wait_status:{wait_status}")
             if wait_status:
                 test_fail += 1
                 log.error(f"qs set {qs_id_val} not reached QUIESCED state")
 
-            cg_snap_util.cg_quiesce_release(client, qs_id_val)
+            cg_snap_util.cg_quiesce_release(client, qs_id_val, fs_name=fs_name)
             log.info("Reset delay in quiescing")
             cmd = "ceph config set mds mds_cache_quiesce_delay 0"
             client.exec_command(
@@ -1856,9 +1953,14 @@ def cg_snap_func_6(cg_test_params):
             )
             qs_id_val = f"cg_test1_{rand_str}"
             cg_snap_util.cg_quiesce(
-                client, qs_set_copy, qs_id=qs_id_val, timeout=300, expiration=300
+                client,
+                qs_set_copy,
+                qs_id=qs_id_val,
+                timeout=300,
+                expiration=300,
+                fs_name=fs_name,
             )
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
             state = qs_query_out["sets"][qs_id_val]["state"]["name"]
             log.info(f"State of set-id {qs_id_val} before include:{state}")
             if state != "QUIESCED":
@@ -1867,9 +1969,9 @@ def cg_snap_func_6(cg_test_params):
                 )
             log.info(f"Include {include_sv_name} to set-id {qs_id_val}")
             qs_include_status = cg_snap_util.cg_quiesce_include(
-                client, qs_id_val, [include_sv_name], if_await=False
+                client, qs_id_val, [include_sv_name], if_await=False, fs_name=fs_name
             )
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
             state = qs_query_out["sets"][qs_id_val]["state"]["name"]
             log.info(f"State of set-id {qs_id_val} after include:{state}")
             if state != "QUIESCED":
@@ -1884,9 +1986,9 @@ def cg_snap_func_6(cg_test_params):
             log.info(f"Exclude {exclude_sv_name} from set-id {qs_id_val}")
             exclude_sv_name = random.choice(qs_set_copy)
             qs_exclude_status = cg_snap_util.cg_quiesce_exclude(
-                client, qs_id_val, [exclude_sv_name], if_await=False
+                client, qs_id_val, [exclude_sv_name], if_await=False, fs_name=fs_name
             )
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
             state = qs_query_out["sets"][qs_id_val]["state"]["name"]
             log.info(f"State of set-id {qs_id_val} after exclude:{state}")
             if state != "QUIESCED":
@@ -1900,10 +2002,10 @@ def cg_snap_func_6(cg_test_params):
                 test_fail += 1
                 log.error(f"Include of {include_sv_name} in qs set {qs_id_val} failed")
             log.info(f"Wait for QUIESCED state in set-id {qs_id_val}")
-            if wait_for_cg_state(client, cg_snap_util, qs_id_val, "QUIESCED"):
+            if wait_for_cg_state(client, cg_snap_util, qs_id_val, "QUIESCED", fs_name):
                 test_fail += 1
                 log.error(f"qs set {qs_id_val} not reached QUIESCED state")
-            cg_snap_util.cg_quiesce_release(client, qs_id_val)
+            cg_snap_util.cg_quiesce_release(client, qs_id_val, fs_name=fs_name)
 
             log.info(
                 " 3.State - Releasing:Release without --await, when in Releasing perform exclude"
@@ -1917,10 +2019,15 @@ def cg_snap_func_6(cg_test_params):
             exclude_sv_name = random.choice(qs_set_copy)
             log.info(f"Quiesce the set {qs_set_copy} with --await")
             cg_snap_util.cg_quiesce(
-                client, qs_set_copy, qs_id=qs_id_val, timeout=300, expiration=100
+                client,
+                qs_set_copy,
+                qs_id=qs_id_val,
+                timeout=300,
+                expiration=100,
+                fs_name=fs_name,
             )
             time.sleep(10)
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
             state = qs_query_out["sets"][qs_id_val]["state"]["name"]
             log.info(f"State of set-id {qs_id_val} before exclude:{state}")
             if state != "QUIESCED":
@@ -1930,14 +2037,20 @@ def cg_snap_func_6(cg_test_params):
                 test_fail += 1
             else:
                 log.info(f"Verify exclude while Releasing quiesce set {qs_id_val}")
-                out = cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=False)
+                out = cg_snap_util.cg_quiesce_release(
+                    client, qs_id_val, if_await=False, fs_name=fs_name
+                )
                 if out == 1:
                     test_fail += 1
                     log.error(f"FAIL : Quiesce set release failed on {qs_id_val}")
                 else:
                     try:
                         qs_exclude_status = cg_snap_util.cg_quiesce_exclude(
-                            client, qs_id_val, [exclude_sv_name], if_await=False
+                            client,
+                            qs_id_val,
+                            [exclude_sv_name],
+                            if_await=False,
+                            fs_name=fs_name,
                         )
                     except Exception as ex:
                         log.info(ex)
@@ -1950,7 +2063,9 @@ def cg_snap_func_6(cg_test_params):
                             log.error(
                                 f"Exclude passed during Releasing state on qs set {qs_id_val}"
                             )
-                    qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+                    qs_query_out = cg_snap_util.get_qs_query(
+                        client, qs_id_val, fs_name=fs_name
+                    )
                     log.info(f"qs_query_out:{qs_query_out}")
                     state = qs_query_out["sets"][qs_id_val]["state"]["name"]
                     log.info(f"State of set-id {qs_id_val} after exclude:{state}")
@@ -1978,7 +2093,10 @@ def cg_snap_func_6(cg_test_params):
             log.info(f"SUBVOL_INFO AFTER TEST:{subvol_info}")
     mnt_pt_list = []
     if ephemeral_pin == 1:
-        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+        if (
+            cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes, fs_name=fs_name)
+            == 0
+        ):
             log.error(
                 "Ephemeral random pinning feature was NOT exercised during the test"
             )
@@ -2072,6 +2190,7 @@ def cg_snap_interop_1(cg_test_params):
             io_run_time,
             ephemeral_pin,
         ),
+        kwargs={"fs_name": fs_name},
     )
     p.start()
     time.sleep(30)
@@ -2107,6 +2226,7 @@ def cg_snap_interop_1(cg_test_params):
                 if_await=False,
                 timeout=300,
                 expiration=100,
+                fs_name=fs_name,
             )
 
             log.info("Perform MDS failover")
@@ -2114,7 +2234,9 @@ def cg_snap_interop_1(cg_test_params):
                 test_fail += 1
 
             log.info(f"Wait for CANCELED state in set-id {qs_id_val}")
-            wait_status = wait_for_cg_state(client, cg_snap_util, qs_id_val, "CANCELED")
+            wait_status = wait_for_cg_state(
+                client, cg_snap_util, qs_id_val, "CANCELED", fs_name
+            )
             log.info(f"wait_status:{wait_status}")
             if wait_status:
                 test_fail += 1
@@ -2133,7 +2255,7 @@ def cg_snap_interop_1(cg_test_params):
                 log.error("Ceph cluster is not healthy after MDS failover")
                 return 1
             log.info("Verify quiesce lifecycle can suceed after mds failover")
-            if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+            if cg_quiesce_lifecycle(client, cg_snap_util, qs_set, fs_name):
                 test_fail += 1
 
             log.info(
@@ -2147,9 +2269,14 @@ def cg_snap_interop_1(cg_test_params):
             )
             qs_id_val = f"cg_int1_{rand_str}"
             cg_snap_util.cg_quiesce(
-                client, qs_set, qs_id=qs_id_val, timeout=300, expiration=300
+                client,
+                qs_set,
+                qs_id=qs_id_val,
+                timeout=300,
+                expiration=300,
+                fs_name=fs_name,
             )
-            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+            qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
             state = qs_query_out["sets"][qs_id_val]["state"]["name"]
             log.info(f"State of set-id {qs_id_val} before MDS failover:{state}")
             if state != "QUIESCED":
@@ -2160,7 +2287,9 @@ def cg_snap_interop_1(cg_test_params):
             if cg_mds_failover(fs_util, client, fs_name):
                 test_fail += 1
             log.info(f"Wait for CANCELED state in set-id {qs_id_val}")
-            wait_status = wait_for_cg_state(client, cg_snap_util, qs_id_val, "CANCELED")
+            wait_status = wait_for_cg_state(
+                client, cg_snap_util, qs_id_val, "CANCELED", fs_name
+            )
             log.info(f"wait_status:{wait_status}")
             if wait_status:
                 test_fail += 1
@@ -2172,7 +2301,7 @@ def cg_snap_interop_1(cg_test_params):
                 log.error("Ceph cluster is not healthy after MDS failover")
                 return 1
             log.info("Verify quiesce lifecycle can suceed after mds failover")
-            if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+            if cg_quiesce_lifecycle(client, cg_snap_util, qs_set, fs_name):
                 test_fail += 1
 
             log.info(
@@ -2186,16 +2315,25 @@ def cg_snap_interop_1(cg_test_params):
             qs_id_val = f"cg_int1_{rand_str}"
             log.info(f"Quiesce the set {qs_set} with --await")
             cg_snap_util.cg_quiesce(
-                client, qs_set, qs_id=qs_id_val, timeout=300, expiration=100
+                client,
+                qs_set,
+                qs_id=qs_id_val,
+                timeout=300,
+                expiration=100,
+                fs_name=fs_name,
             )
             time.sleep(10)
-            cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=False)
+            cg_snap_util.cg_quiesce_release(
+                client, qs_id_val, if_await=False, fs_name=fs_name
+            )
 
             log.info(f"Verify mds failover while Releasing quiesce set {qs_id_val}")
             if cg_mds_failover(fs_util, client, fs_name):
                 test_fail += 1
             log.info(f"Wait for RELEASED state in set-id {qs_id_val}")
-            wait_status = wait_for_cg_state(client, cg_snap_util, qs_id_val, "RELEASED")
+            wait_status = wait_for_cg_state(
+                client, cg_snap_util, qs_id_val, "RELEASED", fs_name
+            )
             log.info(f"wait_status:{wait_status}")
             if wait_status:
                 test_fail += 1
@@ -2206,7 +2344,7 @@ def cg_snap_interop_1(cg_test_params):
                 log.error("Ceph cluster is not healthy after MDS failover")
                 return 1
             log.info("Verify quiesce lifecycle can suceed after mds failover")
-            if cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+            if cg_quiesce_lifecycle(client, cg_snap_util, qs_set, fs_name):
                 test_fail += 1
 
             log.info("MDS failover during Releasing: Quiesce state is RELEASED")
@@ -2224,7 +2362,10 @@ def cg_snap_interop_1(cg_test_params):
 
     mnt_pt_list = []
     if ephemeral_pin == 1:
-        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+        if (
+            cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes, fs_name=fs_name)
+            == 0
+        ):
             log.error(
                 "Ephemeral random pinning feature was NOT exercised during the test"
             )
@@ -2340,6 +2481,7 @@ def cg_snap_interop_2(cg_test_params):
             io_run_time,
             ephemeral_pin,
         ),
+        kwargs={"fs_name": fs_name},
     )
     p.start()
 
@@ -2355,11 +2497,16 @@ def cg_snap_interop_2(cg_test_params):
 
     log.info(f"Quiesce the set {qs_set} with id {qs_id_val}")
     cg_snap_util.cg_quiesce(
-        client, qs_set, qs_id=qs_id_val, timeout=600, expiration=600
+        client,
+        qs_set,
+        qs_id=qs_id_val,
+        timeout=600,
+        expiration=600,
+        fs_name=fs_name,
     )
 
     log.info(f"Query quiesce set {qs_id_val}")
-    out = cg_snap_util.get_qs_query(client, qs_id_val)
+    out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
     log.info(out)
     time.sleep(5)
     log.info("Perform snapshot creation on all members")
@@ -2397,10 +2544,10 @@ def cg_snap_interop_2(cg_test_params):
         snap_qs_dict.update({subvol_name: snap_list})
 
     log.info(f"Release quiesce set {qs_id_val}")
-    cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+    cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True, fs_name=fs_name)
 
     log.info(f"Reset the quiesce set - {qs_set}")
-    cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
+    cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set, fs_name=fs_name)
     time.sleep(5)
     log.info("Perform snapshot creation on all members")
     rand_str = "".join(
@@ -2442,23 +2589,23 @@ def cg_snap_interop_2(cg_test_params):
     except Exception as ex:
         log.info(ex)
     log.info(f"Query quiesce set {qs_id_val}")
-    out = cg_snap_util.get_qs_query(client, qs_id_val)
+    out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
     log.info(out)
 
     log.info(f"Reset the quiesce set - {qs_set} with id {qs_id_val}")
-    cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
+    cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set, fs_name=fs_name)
 
     log.info(f"Exclude a subvolume from quiesce set {qs_id_val}")
 
     exclude_sv_name = random.choice(qs_set)
     qs_exclude_status = cg_snap_util.cg_quiesce_exclude(
-        client, qs_id_val, [exclude_sv_name], if_await=True
+        client, qs_id_val, [exclude_sv_name], if_await=True, fs_name=fs_name
     )
     if qs_exclude_status == 1:
         test_fail = 1
         log.error(f"Exclude of {exclude_sv_name} in qs set {qs_id_val} failed")
     log.info(f"Verify quiesce set {qs_id_val} state after exclude")
-    qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+    qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
     log.info(qs_query_out)
     state = qs_query_out["sets"][qs_id_val]["state"]["name"]
     if state == "QUIESCED":
@@ -2470,7 +2617,7 @@ def cg_snap_interop_2(cg_test_params):
         test_fail = 1
     include_sv_name = exclude_sv_name
     log.info(f"Include a subvolume {include_sv_name} in quiesce set {qs_id_val}")
-    qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+    qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
     for qs_member in qs_query_out["sets"][qs_id_val]["members"]:
         if exclude_sv_name in qs_member:
             exclude_state = qs_query_out["sets"][qs_id_val]["members"][qs_member][
@@ -2480,14 +2627,14 @@ def cg_snap_interop_2(cg_test_params):
                 f"excluded value of {exclude_sv_name} before include : {exclude_state}"
             )
     qs_include_status = cg_snap_util.cg_quiesce_include(
-        client, qs_id_val, [include_sv_name], if_await=True
+        client, qs_id_val, [include_sv_name], if_await=True, fs_name=fs_name
     )
     if qs_include_status == 1:
         test_fail = 1
         log.error(f"Include of {include_sv_name} in qs set {qs_id_val} failed")
 
     log.info(f"Release quiesce set {qs_id_val}")
-    cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True)
+    cg_snap_util.cg_quiesce_release(client, qs_id_val, if_await=True, fs_name=fs_name)
 
     log.info(f"cg_test_io_status : {cg_test_io_status.value}")
 
@@ -2495,7 +2642,10 @@ def cg_snap_interop_2(cg_test_params):
 
     mnt_pt_list = []
     if ephemeral_pin == 1:
-        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+        if (
+            cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes, fs_name=fs_name)
+            == 0
+        ):
             log.error(
                 "Ephemeral random pinning feature was NOT exercised during the test"
             )
@@ -2583,6 +2733,7 @@ def cg_snap_neg_1(cg_test_params):
             io_run_time,
             ephemeral_pin,
         ),
+        kwargs={"fs_name": fs_name},
     )
     p.start()
     time.sleep(10)
@@ -2631,7 +2782,7 @@ def cg_snap_neg_1(cg_test_params):
             time.sleep(30)
 
             for qs_id in qs_id_list:
-                qs_query_out = cg_snap_util.get_qs_query(client, qs_id)
+                qs_query_out = cg_snap_util.get_qs_query(client, qs_id, fs_name=fs_name)
                 state = qs_query_out["sets"][qs_id]["state"]["name"]
                 if "QUIESCED" not in state:
                     test_fail += 1
@@ -2684,10 +2835,14 @@ def cg_snap_neg_1(cg_test_params):
             for qs_id in qs_id_list:
                 log.info(f"Release the qs_set with id {qs_id}")
                 try:
-                    cg_snap_util.cg_quiesce_release(client, qs_id, if_await=True)
+                    cg_snap_util.cg_quiesce_release(
+                        client, qs_id, if_await=True, fs_name=fs_name
+                    )
                 except Exception as ex:
                     log.info(ex)
-                    qs_query_out = cg_snap_util.get_qs_query(client, qs_id)
+                    qs_query_out = cg_snap_util.get_qs_query(
+                        client, qs_id, fs_name=fs_name
+                    )
                     state = qs_query_out["sets"][qs_id]["state"]["name"]
                     if "RELEASED" not in state:
                         test_fail += 1
@@ -2706,7 +2861,10 @@ def cg_snap_neg_1(cg_test_params):
 
     mnt_pt_list = []
     if ephemeral_pin == 1:
-        if cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes) == 0:
+        if (
+            cg_snap_util.validate_pin_stats(client, fs_util, mds_nodes, fs_name=fs_name)
+            == 0
+        ):
             log.error(
                 "Ephemeral random pinning feature was NOT exercised during the test"
             )
@@ -2782,12 +2940,12 @@ def wait_for_cg_io(p, qs_id_val):
         )
 
 
-def wait_for_cg_state(client, cg_snap_util, qs_id_val, exp_state):
+def wait_for_cg_state(client, cg_snap_util, qs_id_val, exp_state, fs_name="cephfs"):
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
-    qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+    qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
     actual_state = qs_query_out["sets"][qs_id_val]["state"]["name"]
     while (datetime.datetime.now() < end_time) and (actual_state != exp_state):
-        qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val)
+        qs_query_out = cg_snap_util.get_qs_query(client, qs_id_val, fs_name=fs_name)
         actual_state = qs_query_out["sets"][qs_id_val]["state"]["name"]
         if actual_state == exp_state:
             log.info(f"State of qs set {qs_id_val} is {exp_state}")
@@ -2802,7 +2960,7 @@ def wait_for_cg_state(client, cg_snap_util, qs_id_val, exp_state):
         return 1
 
 
-def cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
+def cg_quiesce_lifecycle(client, cg_snap_util, qs_set, fs_name="cephfs"):
     try:
         rand_str = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -2811,10 +2969,15 @@ def cg_quiesce_lifecycle(client, cg_snap_util, qs_set):
         qs_id_val = f"cg_test1_{rand_str}"
         log.info(f"Quiesce the set {qs_set} with --await")
         cg_snap_util.cg_quiesce(
-            client, qs_set, qs_id=qs_id_val, timeout=300, expiration=100
+            client,
+            qs_set,
+            qs_id=qs_id_val,
+            timeout=300,
+            expiration=100,
+            fs_name=fs_name,
         )
         time.sleep(10)
-        cg_snap_util.cg_quiesce_release(client, qs_id_val)
+        cg_snap_util.cg_quiesce_release(client, qs_id_val, fs_name=fs_name)
     except Exception as ex:
         log.info(ex)
         return 1
