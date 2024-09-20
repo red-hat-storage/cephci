@@ -27,13 +27,27 @@ def run(ceph_cluster, **kw):
     2. Remove mount of cephfs
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
+
         fs_util.auth_list(clients)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
+        if not fs_details:
+            fs_util.create_fs(client1, fs_name)
         mon_node_ips = fs_util.get_mon_node_ips()
         kernel_mounting_dir = "/mnt/cephfs_kernel" + "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -43,6 +57,7 @@ def run(ceph_cluster, **kw):
             clients,
             kernel_mounting_dir,
             ",".join(mon_node_ips),
+            extra_params=f",fs={default_fs}",
         )
         client1.exec_command(sudo=True, cmd="mkdir -p /tmp/test")
         client1.exec_command(
