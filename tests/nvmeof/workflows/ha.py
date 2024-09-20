@@ -311,7 +311,7 @@ class HighAvailability:
             "is-active": self.nvmeof_daemon_state,
         }
         daemon = gateway.daemon_name
-        gateway_node = daemon.split('.')[-2]
+        gateway_node = daemon.split(".")[-2]
 
         action_args = {"command": action, "args": {"node": gateway_node}}
 
@@ -361,10 +361,13 @@ class HighAvailability:
             "stop": driver.ex_stop_node,
             "is-active": self.is_node_active,
         }
-        nodename = gateway.node.hostname.lower()
-
+        nodename = gateway.node.hostname.lower().replace("-", "_")
         driver_node = next(
-            (node for node in driver.list_nodes() if node.name.lower() == nodename),
+            (
+                node
+                for node in driver.list_nodes()
+                if node.name.lower().replace("-", "_") == nodename
+            ),
             None,
         )
 

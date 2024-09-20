@@ -386,6 +386,7 @@ def run(ceph_cluster, **kw):
                     log.error(err)
                     raise Exception(f"OSD addition on {node_obj.hostname} failed")
 
+            time.sleep(30)
             post_osd_list = rados_obj.get_active_osd_list()
             log.info(f"Active OSD list after OSD addition: {post_osd_list}")
             post_osd_count = len(post_osd_list)
@@ -448,7 +449,7 @@ def run(ceph_cluster, **kw):
             log.info("MAX_AVAIL on the cluster are as per expectation")
 
             # write data to the pool and expand OSD LVMs on backup node13
-            assert rados_obj.bench_write(pool_name=pool_name, rados_write_duration=300)
+            assert rados_obj.bench_write(pool_name=pool_name, rados_write_duration=60)
 
             _pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
             log.info(f"{pool_name} pool stat: {_pool_stat}")
