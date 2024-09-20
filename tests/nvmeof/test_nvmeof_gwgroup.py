@@ -39,9 +39,10 @@ def configure_subsystems(pool, ha, config):
     ceph_cluster = config["ceph_cluster"]
 
     nvmegwcli = ha.gateways[0]
+
     # Uncomment these for debugging purpose
-    nvmegwcli.gateway.set_log_level(**{"args": {"level": "ERROR"}})
-    nvmegwcli.loglevel.set(**{"args": {"level": "ERROR"}})
+    # nvmegwcli.gateway.set_log_level(**{"args": {"level": "DEBUG"}})
+    # nvmegwcli.loglevel.set(**{"args": {"level": "DEBUG"}})
 
     # Add Subsystem
     nvmegwcli.subsystem.add(

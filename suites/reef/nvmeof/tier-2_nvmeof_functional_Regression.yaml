@@ -65,7 +65,7 @@ tests:
 
 #  Perform Data Integrity tests
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         cleanup:
           - subsystems
@@ -99,7 +99,7 @@ tests:
 
 #  Run IO on NVMe Targets
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node6
         rbd_pool: rbd
@@ -134,7 +134,7 @@ tests:
 
 # Perform QoS while IO is running between Targets
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node6
         rbd_pool: rbd
@@ -175,7 +175,7 @@ tests:
 
 #  GW deployment collocation with Mon_MGR nodes
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node2
         rbd_pool: rbd
@@ -210,7 +210,7 @@ tests:
 
 # Run IOs using multiple-initiators against multi-subsystems based NVMe-OF targets using fio tool
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node6
         rbd_pool: rbd
@@ -255,7 +255,7 @@ tests:
 
 #  Multiple gateways deployment in the cluster
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node6                       # Deploying multiple gateways on the cluster
         rbd_pool: rbd
@@ -289,7 +289,7 @@ tests:
       polarion-id: CEPH-83576112
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node6
         rbd_pool: rbd
@@ -306,7 +306,7 @@ tests:
       polarion-id: CEPH-83575812
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node6
         rbd_pool: rbd
@@ -340,7 +340,7 @@ tests:
       polarion-id: CEPH-83575813
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node6
         rbd_pool: rbd

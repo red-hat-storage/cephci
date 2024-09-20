@@ -326,8 +326,8 @@ tests:
               - nqn: connect-all
                 listener_port: 4420
                 node: node17
-      desc: NVMeoF 4-GWgroups with 2 gateways HA failover-failback
+      desc: NVMeoF 4-GWgroups with 2 gateways HA failover-failback in parallel
       destroy-cluster: false
       module: test_nvmeof_gwgroup.py
       name: Configure NVMeoF 4-GWgroups with 2 gateways HA failover-failback in parallel
-      polarion-id: CEPH-
+      polarion-id: CEPH-83598254

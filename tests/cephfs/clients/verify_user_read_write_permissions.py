@@ -19,13 +19,24 @@ def run(ceph_cluster, **kw):
     """
 
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
         log.info("checking Pre-requisites")
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(clients[0], default_fs)
+
+        if not fs_details:
+            fs_util.create_fs(clients[0], default_fs)
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(5))
@@ -48,10 +59,12 @@ def run(ceph_cluster, **kw):
             [client1],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
+            extra_params=f",fs={default_fs}",
         )
         client1.exec_command(sudo=True, cmd=f"mkdir -p {fuse_mounting_dir_1}")
         client1.exec_command(
-            sudo=True, cmd=f"ceph-fuse -n client.{user_name} {fuse_mounting_dir_1}"
+            sudo=True,
+            cmd=f"ceph-fuse -n client.{user_name} {fuse_mounting_dir_1} --client_fs {default_fs}",
         )
         log.info("checking if the client has the permission to write")
         client1.exec_command(

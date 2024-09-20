@@ -59,6 +59,7 @@ def configure_subsystems(pool, ha, config):
                 **{
                     "max-namespaces": config.get("max_ns", 32),
                     "enable-ha": config.get("enable_ha", False),
+                    "no-group-append": config.get("no-group-append", True),
                 },
             }
         }

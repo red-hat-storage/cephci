@@ -28,7 +28,13 @@ def run(ceph_cluster, **kw):
     3. Remove subvolumes, subvolume groups.
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
@@ -41,7 +47,11 @@ def run(ceph_cluster, **kw):
             return 1
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
-        default_fs = "cephfs"
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(clients[0], default_fs)
+
+        if not fs_details:
+            fs_util.create_fs(clients[0], default_fs)
         if build.startswith("4"):
             # create EC pool
             list_cmds = [

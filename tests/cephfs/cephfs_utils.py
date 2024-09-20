@@ -2164,19 +2164,20 @@ mds standby for rank = 1
 
     @staticmethod
     def manual_evict(active_mds_node, rank):
-        grep_cmd = """ sudo ceph tell mds.%d client ls | grep '"id":'"""
-        out, rc = active_mds_node.exec_command(cmd=grep_cmd % rank)
+        grep_cmd = f""" sudo ceph tell mds.{rank} client ls | grep '"id":'"""
+        out, rc = active_mds_node.exec_command(cmd=grep_cmd)
         client_ids = re.findall(r"\d+", out)
-        grep_cmd = """ sudo ceph tell mds.%d client ls | grep '"inst":'"""
+        grep_cmd = f""" sudo ceph tell mds.{rank} client ls | grep '"inst":'"""
         log.info("Getting IP address of Evicted client")
-        out, rc = active_mds_node.exec_command(cmd=grep_cmd % rank)
+        out, rc = active_mds_node.exec_command(cmd=grep_cmd)
         op = re.findall(r"\d+.+\d+.", out)
         ip_add = op[0]
         ip_add = ip_add.split(" ")
         ip_add = ip_add[1].strip('",')
-        id_cmd = "sudo ceph tell mds.%d client evict id=%s"
         for client_id in client_ids:
-            active_mds_node.exec_command(cmd=id_cmd % (rank, client_id))
+            active_mds_node.exec_command(
+                cmd=f"sudo ceph tell mds.{rank} client evict id={client_id}"
+            )
             break
 
         return ip_add

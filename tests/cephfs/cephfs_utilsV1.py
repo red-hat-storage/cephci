@@ -479,8 +479,8 @@ class FsUtils(object):
         Returns:
 
         """
-        grep_pid_cmd = """sudo ceph tell mds.%d client ls | grep '"pid":'"""
-        out, rc = client_node.exec_command(cmd=grep_pid_cmd % rank)
+        grep_pid_cmd = f"""sudo ceph tell mds.{rank} client ls | grep '"pid":'"""
+        out, rc = client_node.exec_command(cmd=grep_pid_cmd)
         client_pid = re.findall(r"\d+", out)
         successful_clients = 0
         while True:
@@ -511,19 +511,20 @@ class FsUtils(object):
         Returns:
 
         """
-        grep_cmd = """ sudo ceph tell mds.%d client ls | grep '"id":'"""
-        out, rc = client_node.exec_command(cmd=grep_cmd % rank)
+        grep_cmd = f""" sudo ceph tell mds.{rank} client ls | grep '"id":'"""
+        out, rc = client_node.exec_command(cmd=grep_cmd)
         client_ids = re.findall(r"\d+", out)
-        grep_cmd = """ sudo ceph tell mds.%d client ls | grep '"inst":'"""
+        grep_cmd = f""" sudo ceph tell mds.{rank} client ls | grep '"inst":'"""
         log.info("Getting IP address of Evicted client")
-        out, rc = client_node.exec_command(cmd=grep_cmd % rank)
+        out, rc = client_node.exec_command(cmd=grep_cmd)
         op = re.findall(r"\d+.+\d+.", out)
         ip_add = op[0]
         ip_add = ip_add.split(" ")
         ip_add = ip_add[1].strip('",')
-        id_cmd = "sudo ceph tell mds.%d client evict id=%s"
         for client_id in client_ids:
-            client_node.exec_command(cmd=id_cmd % (rank, client_id))
+            client_node.exec_command(
+                cmd=f"sudo ceph tell mds.{rank} client evict id={client_id}"
+            )
             break
 
         return ip_add
@@ -593,15 +594,15 @@ class FsUtils(object):
         if kwargs:
             active_mds.exec_command(
                 sudo=True,
-                cmd="cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.%s.asok"
-                " config set mds_session_blacklist_on_evict true" % service_name,
+                cmd=f"cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.{service_name}.asok"
+                " config set mds_session_blacklist_on_evict true",
             )
             return 0
         else:
             active_mds.exec_command(
                 sudo=True,
-                cmd="cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.%s.asok "
-                "config set mds_session_blacklist_on_evict false" % service_name,
+                cmd=f"cephadm shell -- ceph --admin-daemon /var/run/ceph/ceph-mds.{service_name}.asok "
+                "config set mds_session_blacklist_on_evict false",
             )
             clients = self.ceph_cluster.get_ceph_objects("client")
             ip_add = self.manual_evict(clients[0], rank)
@@ -661,7 +662,7 @@ class FsUtils(object):
         Returns:
 
         """
-        fs_info = self.get_fs_info(clients[0])
+        fs_info = self.get_fs_info(clients[0], fs_name=kwargs.get("fs_name", "cephfs"))
         for client in clients:
             log.info("Giving required permissions for clients:")
             out, rc = client.exec_command(
@@ -1887,20 +1888,42 @@ class FsUtils(object):
         out, rc = client.exec_command(sudo=True, cmd=command)
         return 0
 
-    def activate_multiple_mdss(self, clients):
+    def activate_multiple_mdss(self, clients, fs_name="cephfs"):
         """
         Activate Multiple MDS for ceph filesystem
         Args:
             clients: Client_nodes
         """
         for client in clients:
-            fs_info = self.get_fs_info(client)
+            fs_info = self.get_fs_info(client, fs_name)
             fs_name = fs_info.get("fs_name")
             log.info("Activating Multiple MDSs:")
             client.exec_command(cmd="ceph -v | awk {'print $3'}")
             command = f"ceph fs set {fs_name} max_mds 2"
             client.exec_command(sudo=True, cmd=command)
+            self.check_active_mds_count(client, fs_name, 2)
             return 0
+
+    @retry(CommandFailed, tries=3, delay=60)
+    def check_active_mds_count(self, client, fs_name, expected_active_count):
+        # Parse the JSON string
+
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph fs status {fs_name} --format json"
+        )
+        # Extract the MDS map
+        data = json.loads(out)
+        mdsmap = data.get("mdsmap", [])
+
+        # Count the number of active MDS entries
+        active_count = sum(1 for mds in mdsmap if mds.get("state") == "active")
+        # Check if the count matches the expected value
+        if active_count == expected_active_count:
+            return True
+        else:
+            raise CommandFailed(
+                f"MDS count {active_count} is not matching the expected {expected_active_count}"
+            )
 
     def mds_cleanup(self, nodes, dir_fragmentation):
         """
