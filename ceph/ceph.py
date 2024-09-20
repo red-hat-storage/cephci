@@ -12,7 +12,6 @@ from time import sleep, time
 import paramiko
 import requests
 import yaml
-from paramiko.ssh_exception import SSHException
 
 from ceph.parallel import parallel
 from cli.ceph.ceph import Ceph as CephCli
@@ -1157,6 +1156,36 @@ def check_timeout(end_time, timeout):
         raise TimeoutException("Command exceed the allocated execution time.")
 
 
+def read_stream(channel, end_time, stderr=False):
+    """Reads the data from the given channel.
+
+    Args:
+      channel: the paramiko.Channel object to be used for reading.
+      end_time: maximum allocated time for reading from the channel.
+      stderr: read from the stderr stream. Default is False.
+
+    Returns:
+      a string with the data read from the channel.
+
+    Raises:
+      TimeoutException: if reading from the channel exceeds the allocated time.
+    """
+    _output = ""
+    _stream = channel.recv_stderr if stderr else channel.recv
+    _data = _stream(2048)
+
+    while _data:
+        _output += _data.decode("utf-8")
+        for _ln in _data.splitlines():
+            _log = logger.error if stderr else logger.debug
+            _log(_ln.decode("utf-8"))
+
+        check_timeout(end_time, timeout=True)
+        _data = _stream(2048)
+
+    return _output
+
+
 class RolesContainer(object):
     """
     Container for single or multiple node roles.
@@ -1525,17 +1554,12 @@ class CephNode(object):
         timeout = None if kw.get("timeout") == "notimeout" else kw.get("timeout", 3600)
         _end_time = None
 
-        logger.info(
-            f"long running command on {self.ip_address} -- {cmd} with {timeout} seconds"
-        )
-
         try:
-            channel = ssh().get_transport().open_session()
+            channel = ssh().get_transport().open_session(timeout=timeout)
             channel.settimeout(timeout)
 
-            # A mismatch between stdout and stderr streams have been observed hence
-            # combining the streams and logging is set to debug level.
-            channel.set_combine_stderr(True)
+            logger.info(f"Execute {cmd} on {self.ip_address}")
+            _exec_start_time = datetime.datetime.now()
             channel.exec_command(cmd)
 
             if timeout:
@@ -1543,23 +1567,33 @@ class CephNode(object):
                     seconds=timeout
                 )
 
+            _out = ""
+            _err = ""
             while not channel.exit_status_ready():
                 # Prevent high resource consumption
                 sleep(1)
                 if channel.recv_ready():
-                    data = channel.recv(1024)
-                    while data:
-                        for line in data.splitlines():
-                            logger.debug(line)
+                    _out += read_stream(channel, _end_time)
 
-                        check_timeout(_end_time, timeout)
-                        data = channel.recv(1024)
+                if channel.recv_stderr_ready():
+                    _err += read_stream(channel, _end_time, stderr=True)
 
                 check_timeout(_end_time, timeout)
 
-            logger.info(f"Command completed on {datetime.datetime.now()}")
-            return channel.recv_exit_status()
+            _time = (datetime.datetime.now() - _exec_start_time).total_seconds()
+            logger.info(
+                f"Execution of {cmd} on {self.ip_address} took {_time} seconds."
+            )
 
+            # Check for data residues in the channel streams. This is required for the following reasons
+            #   - exit_ready and first line is blank causing data to be None
+            #   - race condition between data read and exit ready
+            _new_timeout = datetime.datetime.now() + datetime.timedelta(seconds=10)
+            _out += read_stream(channel, _new_timeout)
+            _err += read_stream(channel, _new_timeout, stderr=True)
+
+            _exit = channel.recv_exit_status()
+            return _out, _err, _exit, _time
         except socket.timeout as terr:
             logger.error(f"Command failed to execute within {timeout} seconds.")
             raise SocketTimeoutException(terr)
@@ -1572,70 +1606,65 @@ class CephNode(object):
             raise CommandFailed(be)
 
     def exec_command(self, **kw):
-        """execute a command.
+        """Execute the given command on the remote host.
 
-        Attributes:
-            kw (Dict): execute command configuration
-            check_ec: False will run the command and not wait for exit code
+        Args:
+          cmd: The command that needs to be executed on the remote host.
+          long_running: Bool flag to indicate if the command is long running.
+          check_ec: Bool flag to indicate if the command should check for error code.
+          timeout: Max time to wait for command to complete. Default is 600 seconds.
 
-        Example::
+        Returns:
+          Exit code when long_running is used
+          Tuple having stdout, stderr data output when long_running is not used
 
-            eg: self.exec_cmd(cmd='uptime')
-            or
+        Raises:
+          CommandFailed: when the exit code is non-zero and check_ec is enabled.
+          TimeoutError: when the command times out.
+
+        Examples:
+            self.exec_cmd(cmd='uptime')
+          or
             self.exec_cmd(cmd='background_cmd', check_ec=False)
-
-            kw:
-                check_ec: False will run the command and not wait for exit code
         """
-        if kw.get("long_running"):
-            return self.long_running(**kw)
-
-        timeout = kw["timeout"] if kw.get("timeout") else 600
-        ssh = self.rssh() if kw.get("sudo") else self.ssh()
-
-        logger.info(
-            f"Running command {kw['cmd']} on {self.ip_address} timeout {timeout}"
-        )
-
         if self.run_once:
             self.ssh_transport().set_keepalive(15)
             self.rssh_transport().set_keepalive(15)
 
-        stdout = str()
-        stderr = str()
-        _stdout = None
-        _stderr = None
-        try:
-            _, _stdout, _stderr = ssh.exec_command(kw["cmd"], timeout=timeout)
-            for line in _stdout:
-                if line:
-                    stdout += line
-            for line in _stderr:
-                if line:
-                    stderr += line
-        except socket.timeout as sock_err:
-            logger.error("socket.timeout doesn't give an error message")
-            ssh.close()
-            raise SocketTimeoutException(sock_err)
-        except SSHException as e:
-            logger.error("SSHException during cmd: %s", str(e))
+        cmd = kw["cmd"]
+        _out, _err, _exit, _time = self.long_running(**kw)
+        self.exit_status = _exit
 
-        exit_status = None
-        if _stdout is not None:
-            exit_status = _stdout.channel.recv_exit_status()
+        if kw.get("pretty_print"):
+            msg = f"\nCommand:    {cmd}"
+            msg += f"\nDuration:   {_time} seconds"
+            msg += f"\nExit Code:  {_exit}"
 
-        self.exit_status = exit_status
+            if _out:
+                msg += f"\nStdout:     {_out}"
+
+            if _err:
+                msg += f"\nStderr:      {_err}"
+
+            logger.info(msg)
+
+        # Historically, we are only providing command exit code for long
+        # running commands.
+        # Fixme: Ensure the method returns a tuple of
+        #        (stdout, stderr, exit_code, time_taken)
+        if kw.get("long_running", False):
+            return _exit
+
         if kw.get("check_ec", True):
-            if exit_status == 0:
-                logger.info("Command completed successfully")
-            else:
-                logger.error(f"Error {exit_status} during cmd, timeout {timeout}")
-                logger.error(stderr)
-                raise CommandFailed(
-                    f"{kw['cmd']} Error:  {str(stderr)} {str(self.ip_address)}"
-                )
+            if _exit != 0:
+                raise CommandFailed(f"{cmd} returned {_exit} on {self.ip_address}")
 
-        return stdout, stderr
+            # Fixme: cephadm when enabled for verbose logging writes the
+            #        verbose output to stderr. This behavior causes issues in
+            #        the new method of gathering stderr. Hence, err is made
+            return _out, None
+
+        return _out, _err
 
     def remote_file(self, **kw):
         """Return contents of the remote file."""
