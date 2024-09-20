@@ -168,7 +168,7 @@ class RadosBench:
         base_cmd.append(config_dict_to_string(config))
         base_cmd = " ".join(base_cmd)
 
-        client.exec_command(cmd=base_cmd, sudo=True)
+        client.exec_command(cmd=base_cmd, sudo=True, long_running=True)
         return run_name if run_name else None
 
     @staticmethod
