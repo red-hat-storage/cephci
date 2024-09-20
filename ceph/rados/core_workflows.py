@@ -3917,12 +3917,12 @@ class RadosOrchestrator:
             metadata (Dict) -> If daemon_id is provided
             None if metadata is not found
         """
-        log.debug(f"Passed daemon type : {daemon_type}, Deamon ID : {daemon_id}")
+        log.debug(f"Passed daemon type : {daemon_type}, Daemon ID : {daemon_id}")
         base_cmd = f"ceph {daemon_type} metadata"
-        if not daemon_id:
+        if daemon_id is None:
             return self.run_ceph_command(cmd=base_cmd, client_exec=True)
 
-        if daemon_type == "osd" and daemon_id:
+        if daemon_type == "osd" and daemon_id is not None:
             return self.run_ceph_command(
                 cmd=f"{base_cmd} {daemon_type}.{daemon_id}", client_exec=True
             )

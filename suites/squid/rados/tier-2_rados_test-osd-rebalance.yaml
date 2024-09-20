@@ -91,6 +91,13 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
       name: osd_memory_target param set at OSD level
       module: test_osd_memory_target.py
       desc: Verification of osd_memory_target parameter set at OSD level

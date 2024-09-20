@@ -77,7 +77,10 @@ def run(ceph_cluster, **kw):
         # getting list of omap objects present in the pool
         out, _ = cephadm.shell([f"rados ls -p {pool_name} | grep 'omap_obj'"])
         omap_obj_list = out.split()
-        log.info(f"List of Objects having large omaps in {pool_name}: {omap_obj_list}")
+        log.info(
+            f"List of Objects having large omaps in {pool_name},"
+            f"listing first 100: {omap_obj_list[:100]}"
+        )
 
         # performing various operations on large omap objects
         # 1. List omap key entries for an object

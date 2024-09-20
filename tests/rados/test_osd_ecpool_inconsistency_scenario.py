@@ -50,6 +50,8 @@ def run(ceph_cluster, **kw):
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     client_node = ceph_cluster.get_nodes(role="client")[0]
     try:
+        # set global autoscaler to off
+        rados_obj.configure_pg_autoscaler(**{"default_mode": "off"})
         # Creating ec pool
         ec_config = config.get("ec_pool")
         pool_name = ec_config["pool_name"]
@@ -210,6 +212,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n\n================ Execution of finally block =======================\n\n"
         )
+        rados_obj.configure_pg_autoscaler(**{"default_mode": "on"})
         if config.get("delete_pool"):
             method_should_succeed(rados_obj.delete_pool, pool_name)
             log.info("deleted the pool successfully")
@@ -325,4 +328,5 @@ def set_default_param_value(mon_obj):
     mon_obj.remove_config(section="osd", name="osd_scrub_max_interval")
     mon_obj.remove_config(section="osd", name="osd_deep_scrub_interval")
     mon_obj.remove_config(section="osd", name="debug_osd")
+    mon_obj.remove_config(section="global", name="osd_pool_default_pg_autoscale_mode")
     time.sleep(10)

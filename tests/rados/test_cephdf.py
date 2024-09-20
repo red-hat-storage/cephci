@@ -324,11 +324,6 @@ def run(ceph_cluster, **kw):
             return round(val / (1 << 30), 1)
 
         try:
-            # pass without execution for Squid
-            if not rhbuild.startswith("7"):
-                log.info("Test is currently valid only for RHCS 7.x")
-                return 0
-
             # create default pool with given name
             rados_obj.create_pool(pool_name=pool_name)
 
@@ -355,7 +350,7 @@ def run(ceph_cluster, **kw):
                 )
                 if len(empty_devices) < 1:
                     log.error(
-                        f"Need at least 1 spare disks available on host {node_obj.hostname}"
+                        f"Need at least 1 spare disk available on host {node_obj.hostname}"
                     )
                     raise Exception(
                         f"One spare disk not available on host {node_obj.hostname}"
