@@ -229,7 +229,7 @@ def run(ceph_cluster, **kw):
             )
 
             # addition of small device as wal/db fails with CBT
-            # BZ -
+            # BZ - https://bugzilla.redhat.com/show_bug.cgi?id=2309610
             if False:
                 osd_id = random.choice(osd_list)
 
