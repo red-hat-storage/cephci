@@ -1646,6 +1646,11 @@ class CephNode(object):
             if _exit != 0:
                 raise CommandFailed(f"{cmd} returned {_exit} on {self.ip_address}")
 
+            # Fixme: cephadm when enabled for verbose logging writes the
+            #        verbose output to stderr. This behavior causes issues in
+            #        the new method of gathering stderr. Hence, err is made
+            return _out, None
+
         return _out, _err
 
     def remote_file(self, **kw):
