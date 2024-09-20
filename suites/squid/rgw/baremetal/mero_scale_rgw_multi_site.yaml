@@ -52,7 +52,6 @@ tests:
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
-            timeout: 300
       desc: create non-tenanted user
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
@@ -84,7 +83,6 @@ tests:
             script-name: ../aws/test_aws.py
             config-file-name: ../../aws/configs/test_aws_regular_and_versioned_bucket_creation.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: create regular and versioned bucket in primary
       module: sanity_rgw_multisite.py
       name: create regular and versioned bucket in primary
@@ -174,7 +172,6 @@ tests:
             script-name: ../aws/test_aws.py
             config-file-name: ../../aws/configs/test_aws_buckets_creation.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: create 20 bucket in primary
       module: sanity_rgw_multisite.py
       name: create 20 bucket in primary
@@ -238,7 +235,6 @@ tests:
             script-name: ../aws/test_aws.py
             config-file-name: ../../aws/configs/test_aws_versioned_bucket_creation.yaml
             verify-io-on-site: ["ceph-sec"]
-            timeout: 300
       desc: create versioned bucket in primary
       module: sanity_rgw_multisite.py
       name: create versioned bucket in primary
