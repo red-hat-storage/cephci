@@ -1156,13 +1156,14 @@ def check_timeout(end_time, timeout):
         raise TimeoutException("Command exceed the allocated execution time.")
 
 
-def read_stream(channel, end_time, stderr=False):
+def read_stream(channel, end_time, stderr=False, log=True):
     """Reads the data from the given channel.
 
     Args:
       channel: the paramiko.Channel object to be used for reading.
       end_time: maximum allocated time for reading from the channel.
       stderr: read from the stderr stream. Default is False.
+      log: log the output. Default is True.
 
     Returns:
       a string with the data read from the channel.
@@ -1176,9 +1177,10 @@ def read_stream(channel, end_time, stderr=False):
 
     while _data:
         _output += _data.decode("utf-8")
-        for _ln in _data.splitlines():
-            _log = logger.error if stderr else logger.debug
-            _log(_ln.decode("utf-8"))
+        if log:
+            for _ln in _data.splitlines():
+                _log = logger.error if stderr else logger.debug
+                _log(_ln.decode("utf-8"))
 
         check_timeout(end_time, timeout=True)
         _data = _stream(2048)
@@ -1549,10 +1551,16 @@ class CephNode(object):
         Returns:
             ec: exit status
         """
-        ssh = self.rssh if kw.get("sudo") else self.ssh
         cmd = kw["cmd"]
-        timeout = None if kw.get("timeout") == "notimeout" else kw.get("timeout", 3600)
         _end_time = None
+        _verbose = kw.get("verbose", False)
+        ssh = self.rssh if kw.get("sudo") else self.ssh
+        long_running = kw.get("long_running", False)
+        if "timeout" in kw:
+            timeout = None if kw["timeout"] == "notimeout" else kw["timeout"]
+        else:
+            # Set defaults if long_running then 1h else 5m
+            timeout = 3600 if kw.get("long_running", False) in kw else 300
 
         try:
             channel = ssh().get_transport().open_session(timeout=timeout)
@@ -1572,11 +1580,16 @@ class CephNode(object):
             while not channel.exit_status_ready():
                 # Prevent high resource consumption
                 sleep(1)
+
+                # Check the streams for data and log in debug mode only if it
+                # is a long running command else don't log.
+                # Fixme: logging must happen in debug irrespective of type.
+                _verbose = True if long_running else _verbose
                 if channel.recv_ready():
-                    _out += read_stream(channel, _end_time)
+                    _out += read_stream(channel, _end_time, log=_verbose)
 
                 if channel.recv_stderr_ready():
-                    _err += read_stream(channel, _end_time, stderr=True)
+                    _err += read_stream(channel, _end_time, stderr=True, log=_verbose)
 
                 check_timeout(_end_time, timeout)
 
@@ -1613,10 +1626,13 @@ class CephNode(object):
           long_running: Bool flag to indicate if the command is long running.
           check_ec: Bool flag to indicate if the command should check for error code.
           timeout: Max time to wait for command to complete. Default is 600 seconds.
+          pretty_print: Bool flag to indicate if the output should be pretty printed.
+          verbose: Bool flag to indicate if the command output should be printed.
 
         Returns:
           Exit code when long_running is used
           Tuple having stdout, stderr data output when long_running is not used
+          Tupe having stdout, stderr, exit code, duration when verbose is enabled
 
         Raises:
           CommandFailed: when the exit code is non-zero and check_ec is enabled.
@@ -1647,6 +1663,9 @@ class CephNode(object):
                 msg += f"\nStderr:      {_err}"
 
             logger.info(msg)
+
+        if "verbose" in kw:
+            return _out, _err, _exit, _time
 
         # Historically, we are only providing command exit code for long
         # running commands.
