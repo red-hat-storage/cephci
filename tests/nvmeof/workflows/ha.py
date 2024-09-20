@@ -113,15 +113,22 @@ class HighAvailability:
             args=["ceph", "nvme-gw", "show", self.nvme_pool, repr(self.gateway_group)]
         )
         states = {}
-        for data in out.split("}"):
-            data = data.strip()
-            if not data:
-                continue
-            data = json.loads(f"{data}}}")
-            if data.get("ana states"):
-                gw = data["gw-id"]
-                states[gw] = data
-                states[gw].update(self.string_to_dict(data["ana states"]))
+        if self.cluster.rhcs_version == "8.0":
+            out = json.loads(out)
+            for gateway in out.get("Created Gateways:"):
+                gw = gateway["gw-id"]
+                states[gw] = gateway
+                states[gw].update(self.string_to_dict(gateway["ana states"]))
+        else:
+            for data in out.split("}"):
+                data = data.strip()
+                if not data:
+                    continue
+                data = json.loads(f"{data}}}")
+                if data.get("ana states"):
+                    gw = data["gw-id"]
+                    states[gw] = data
+                    states[gw].update(self.string_to_dict(data["ana states"]))
 
         return states
 
