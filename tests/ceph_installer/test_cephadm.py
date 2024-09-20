@@ -187,8 +187,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     except BaseException as be:  # noqa
         LOG.error(be, exc_info=True)
-        return 1
-    finally:
         LOG.debug("Gathering cluster state after running test_cephadm")
         get_cluster_state(cephadm)
+        return 1
+
     return 0
