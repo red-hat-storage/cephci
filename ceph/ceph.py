@@ -1632,8 +1632,21 @@ class CephNode(object):
             self.rssh_transport().set_keepalive(15)
 
         cmd = kw["cmd"]
-        _out, _err, _exit, _ = self.long_running(**kw)
+        _out, _err, _exit, _time = self.long_running(**kw)
         self.exit_status = _exit
+
+        if kw.get("pretty_print"):
+            msg = f"\nCommand:    {cmd}"
+            msg += f"\nDuration:   {_time} seconds"
+            msg += f"\nExit Code:  {_exit}"
+
+            if _out:
+                msg += f"\nStdout:     {_out}"
+
+            if _err:
+                msg += f"\nStderr:      {_err}"
+
+            logger.info(msg)
 
         # Historically, we are only providing command exit code for long
         # running commands.
