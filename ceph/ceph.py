@@ -1674,14 +1674,8 @@ class CephNode(object):
         if kw.get("long_running", False):
             return _exit
 
-        if kw.get("check_ec", True):
-            if _exit != 0:
-                raise CommandFailed(f"{cmd} returned {_exit} on {self.ip_address}")
-
-            # Fixme: cephadm when enabled for verbose logging writes the
-            #        verbose output to stderr. This behavior causes issues in
-            #        the new method of gathering stderr. Hence, err is made
-            return _out, None
+        if kw.get("check_ec", True) and _exit != 0:
+            raise CommandFailed(f"{cmd} returned {_exit} on {self.ip_address}")
 
         return _out, _err
 
