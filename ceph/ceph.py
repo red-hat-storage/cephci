@@ -1156,12 +1156,13 @@ def check_timeout(end_time, timeout):
         raise TimeoutException("Command exceed the allocated execution time.")
 
 
-def read_stream(channel, end_time, stderr=False, log=True):
+def read_stream(channel, end_time, timeout, stderr=False, log=True):
     """Reads the data from the given channel.
 
     Args:
       channel: the paramiko.Channel object to be used for reading.
       end_time: maximum allocated time for reading from the channel.
+      timeout: Flag to check if timeout must be enforced.
       stderr: read from the stderr stream. Default is False.
       log: log the output. Default is True.
 
@@ -1182,7 +1183,7 @@ def read_stream(channel, end_time, stderr=False, log=True):
                 _log = logger.error if stderr else logger.debug
                 _log(_ln.decode("utf-8"))
 
-        check_timeout(end_time, timeout=True)
+        check_timeout(end_time, timeout)
         _data = _stream(2048)
 
     return _output
@@ -1586,10 +1587,12 @@ class CephNode(object):
                 # Fixme: logging must happen in debug irrespective of type.
                 _verbose = True if long_running else _verbose
                 if channel.recv_ready():
-                    _out += read_stream(channel, _end_time, log=_verbose)
+                    _out += read_stream(channel, _end_time, timeout, log=_verbose)
 
                 if channel.recv_stderr_ready():
-                    _err += read_stream(channel, _end_time, stderr=True, log=_verbose)
+                    _err += read_stream(
+                        channel, _end_time, timeout, stderr=True, log=_verbose
+                    )
 
                 check_timeout(_end_time, timeout)
 
@@ -1602,8 +1605,8 @@ class CephNode(object):
             #   - exit_ready and first line is blank causing data to be None
             #   - race condition between data read and exit ready
             _new_timeout = datetime.datetime.now() + datetime.timedelta(seconds=10)
-            _out += read_stream(channel, _new_timeout)
-            _err += read_stream(channel, _new_timeout, stderr=True)
+            _out += read_stream(channel, _new_timeout, timeout=True)
+            _err += read_stream(channel, _new_timeout, timeout=True, stderr=True)
 
             _exit = channel.recv_exit_status()
             return _out, _err, _exit, _time
