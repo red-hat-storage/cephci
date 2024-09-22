@@ -150,3 +150,89 @@ tests:
       module: test_ceph_nvmeof_high_availability.py
       name: Test NVMeoF 8-GW 1GWgroup HA 4-sub n-1 node fail parallel
       polarion-id: CEPH-83595555
+
+# 8GW HA 4-subsystems multinode(7/8) Failover and failback parallely using power_onoff and maintanence_mode
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd2
+        gw_group: gw_group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd2
+        install: true                           # Run SPDK with all pre-requisites
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+        gw_nodes:
+          - node6
+          - node7
+          - node8
+          - node9
+          - node10
+          - node11
+          - node12
+          - node13
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 8G
+            listener_port: 4420
+            listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 8G
+            listener_port: 4420
+            listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode3
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 8G
+            listener_port: 4420
+            listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode4
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 8G
+            listener_port: 4420
+            listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
+            allow_host: "*"
+        initiators:                             # Configure Initiators with all pre-req
+          - nqn: connect-all
+            listener_port: 4420
+            node: node14
+        fault-injection-methods:                # Failure induction
+          - tool: maintanence_mode
+            nodes:
+              - node6
+              - node7
+              - node8
+              - node9
+              - node10
+              - node11
+              - node12
+          - tool: power_on_off
+            nodes:
+              - node6
+              - node7
+              - node8
+              - node9
+              - node10
+              - node11
+              - node12
+      desc: 8GW 1GWgroup HA 4-subsystems multinode 7/8 Failover and failback using poweronoff
+      destroy-cluster: false
+      module: test_ceph_nvmeof_high_availability.py
+      name: Test NVMeoF 8-GW 1GWgroup HA 4-sub n-1 node fail parallel using poweronoff
+      polarion-id: CEPH-83595555

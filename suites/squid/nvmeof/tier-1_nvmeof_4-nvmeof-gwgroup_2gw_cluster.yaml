@@ -67,7 +67,7 @@ tests:
       polarion-id: CEPH-23573752
 
 
-# Non-mtls HA tests with GWgroup
+# Non-mtls HA tests with different NQNs in GWgroup
   - test:
       abort-on-fail: true
       config:
@@ -88,20 +88,22 @@ tests:
               - node7
             subsystems:                       # Configure subsystems with all sub-entities
               - nqn: nqn.2016-06.io.spdk:cnode1
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node6, node7]
                 allow_host: "*"
                 bdevs:
                   - count: 2
-                    size: 5G
+                    size: 4G
                     lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode2
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node6, node7]
                 allow_host: "*"
                 bdevs:
                   - count: 2
-                    size: 5G
+                    size: 4G
                     lb_group: node7
             fault-injection-methods:                # Failure induction
               - tool: systemctl
@@ -118,20 +120,22 @@ tests:
               - node9
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode3
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node8, node9]
                 allow_host: "*"
                 bdevs:
                   - count: 2
-                    size: 5G
+                    size: 4G
                     lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode4
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node8, node9]
                 allow_host: "*"
                 bdevs:
                   - count: 2
-                    size: 5G
+                    size: 4G
                     lb_group: node9
             fault-injection-methods:                # Failure induction
               - tool: systemctl
@@ -148,20 +152,22 @@ tests:
               - node11
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode5
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node10, node11]
                 allow_host: "*"
                 bdevs:
                   - count: 2
-                    size: 5G
+                    size: 4G
                     lb_group: node10
               - nqn: nqn.2016-06.io.spdk:cnode6
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node10, node11]
                 allow_host: "*"
                 bdevs:
                   - count: 2
-                    size: 5G
+                    size: 4G
                     lb_group: node11
             fault-injection-methods:                # Failure induction
               - tool: systemctl
@@ -178,12 +184,13 @@ tests:
               - node13
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode7
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node12, node13]
                 allow_host: "*"
                 bdevs:
                   - count: 2
-                    size: 5G
+                    size: 4G
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node12
@@ -193,8 +200,259 @@ tests:
               - nqn: connect-all
                 listener_port: 4420
                 node: node14
-      desc: NVMeoF 4-GWgroups with 2 gateways HA failover-failback
+      desc: NVMeoF 4-GWgroups with 2 gateways HA failover-failback with different NQN's in all GWgrps
       destroy-cluster: false
       module: test_nvmeof_gwgroup.py
-      name: Configure NVMeoF 4-GWgroups with 2 gateways HA failover-failback
+      name: Configure NVMeoF 4-GWgroups with 2 gateways HA failover-failback with different NQN's in all GWgrps
       polarion-id: CEPH-83595701
+
+# mtls HA tests with same NQNs in GWgroup
+  - test:
+      abort-on-fail: true
+      config:
+        install: true                           # Run SPDK with all pre-requisites
+        rbd_pool: rbd1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd1
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+        gw_groups:                             # Configure gatewayGroups
+          - gw_group: group1
+            mtls: true
+            gw_nodes:
+              - node6
+              - node7
+            subsystems:                       # Configure subsystems with all sub-entities
+              - nqn: nqn.2016-06.io.spdk:cnode16
+                listener_port: 4420
+                listeners: [node6, node7]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+                    lb_group: node6
+              - nqn: nqn.2016-06.io.spdk:cnode17
+                listener_port: 4420
+                listeners: [node6, node7]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+                    lb_group: node7
+            fault-injection-methods:                # Failure induction
+              - tool: systemctl
+                nodes: node6
+              - tool: daemon
+                nodes: node7
+            initiators:                                # Configure Initiators with all pre-req
+              - nqn: connect-all
+                listener_port: 4420
+                node: node14
+          - gw_group: group2
+            mtls: true
+            gw_nodes:
+              - node8
+              - node9
+            subsystems:
+              - nqn: nqn.2016-06.io.spdk:cnode16
+                listener_port: 4420
+                listeners: [node8, node9]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+                    lb_group: node8
+              - nqn: nqn.2016-06.io.spdk:cnode17
+                listener_port: 4420
+                listeners: [node8, node9]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+                    lb_group: node9
+            fault-injection-methods:                # Failure induction
+              - tool: systemctl
+                nodes: node8
+              - tool: daemon
+                nodes: node9
+            initiators:                                # Configure Initiators with all pre-req
+              - nqn: connect-all
+                listener_port: 4420
+                node: node14
+          - gw_group: group3
+            mtls: true
+            gw_nodes:
+              - node10
+              - node11
+            subsystems:
+              - nqn: nqn.2016-06.io.spdk:cnode16
+                listener_port: 4420
+                listeners: [node10, node11]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+            fault-injection-methods:                # Failure induction
+              - tool: systemctl
+                nodes: node10
+              - tool: daemon
+                nodes: node11
+            initiators:                                # Configure Initiators with all pre-req
+              - nqn: connect-all
+                listener_port: 4420
+                node: node14
+          - gw_group: group4
+            mtls: true
+            gw_nodes:
+              - node12
+              - node13
+            subsystems:
+              - nqn: nqn.2016-06.io.spdk:cnode16
+                listener_port: 4420
+                listeners: [node12, node13]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+            fault-injection-methods:                # Failure induction
+              - tool: systemctl
+                nodes: node12
+              - tool: daemon
+                nodes: node13
+            initiators:                                # Configure Initiators with all pre-req
+              - nqn: connect-all
+                listener_port: 4420
+                node: node14
+      desc: NVMeoF 4-GWgroups with 2 gateways HA failover-failback with mtls and same NQN's in all GWgrps
+      destroy-cluster: false
+      module: test_nvmeof_gwgroup.py
+      name: Configure NVMeoF 4-GWgroups with 2 gateways HA failover-failback with mtls and same NQN's in all GWgrps
+      polarion-id: CEPH-83598264
+
+  - test:
+      abort-on-fail: true
+      config:
+        install: true                           # Run SPDK with all pre-requisites
+        rbd_pool: rbd2
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd2
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+        gw_groups:                             # Configure gatewayGroups
+          - gw_group: group1
+            mtls: true
+            gw_nodes:
+              - node6
+              - node7
+            subsystems:                       # Configure subsystems with all sub-entities
+              - nqn: nqn.2016-06.io.spdk:cnode16
+                listener_port: 4420
+                listeners: [node6, node7]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+                    lb_group: node6
+              - nqn: nqn.2016-06.io.spdk:cnode17
+                listener_port: 4420
+                listeners: [node6, node7]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+                    lb_group: node7
+            fault-injection-methods:                # Failure induction
+              - tool: systemctl
+                nodes: node6
+              - tool: daemon
+                nodes: node7
+            initiators:                                # Configure Initiators with all pre-req
+              - nqn: connect-all
+                listener_port: 4420
+                node: node14
+          - gw_group: group2
+            mtls: true
+            gw_nodes:
+              - node8
+              - node9
+            subsystems:
+              - nqn: nqn.2016-06.io.spdk:cnode16
+                listener_port: 4420
+                listeners: [node8, node9]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+                    lb_group: node8
+              - nqn: nqn.2016-06.io.spdk:cnode17
+                listener_port: 4420
+                listeners: [node8, node9]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+                    lb_group: node9
+            fault-injection-methods:                # Failure induction
+              - tool: systemctl
+                nodes: node8
+              - tool: daemon
+                nodes: node9
+            initiators:                                # Configure Initiators with all pre-req
+              - nqn: connect-all
+                listener_port: 4420
+                node: node14
+          - gw_group: group3
+            gw_nodes:
+              - node10
+              - node11
+            subsystems:
+              - nqn: nqn.2016-06.io.spdk:cnode16
+                listener_port: 4420
+                listeners: [node10, node11]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+            fault-injection-methods:                # Failure induction
+              - tool: systemctl
+                nodes: node10
+              - tool: daemon
+                nodes: node11
+            initiators:                                # Configure Initiators with all pre-req
+              - nqn: connect-all
+                listener_port: 4420
+                node: node14
+          - gw_group: group4
+            gw_nodes:
+              - node12
+              - node13
+            subsystems:
+              - nqn: nqn.2016-06.io.spdk:cnode16
+                listener_port: 4420
+                listeners: [node12, node13]
+                allow_host: "*"
+                bdevs:
+                  - count: 2
+                    size: 4G
+            fault-injection-methods:                # Failure induction
+              - tool: systemctl
+                nodes: node12
+              - tool: daemon
+                nodes: node13
+            initiators:                                # Configure Initiators with all pre-req
+              - nqn: connect-all
+                listener_port: 4420
+                node: node14
+      desc: NVMeoF 4-GWgroups with 2 gateways HA failover-failback with and without mtls
+      destroy-cluster: false
+      module: test_nvmeof_gwgroup.py
+      name: Configure NVMeoF 4-GWgroups with 2 gateways HA failover-failback with and without mtls
+      polarion-id: CEPH-83598266
