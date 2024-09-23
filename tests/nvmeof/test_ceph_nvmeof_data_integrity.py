@@ -24,7 +24,11 @@ def configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, config):
                 **sub_args,
                 **{
                     "max-namespaces": config.get("max_ns", 32),
-                    "no-group-append": config.get("no-group-append", True),
+                    **(
+                        {"no-group-append": config.get("no-group-append", True)}
+                        if ceph_cluster.rhcs_version >= "8.0"
+                        else {}
+                    ),
                 },
             }
         }

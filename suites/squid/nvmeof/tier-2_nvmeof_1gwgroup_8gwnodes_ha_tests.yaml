@@ -151,7 +151,7 @@ tests:
       name: Test NVMeoF 8-GW 1GWgroup HA 4-sub n-1 node fail parallel
       polarion-id: CEPH-83595555
 
-# 8GW HA 4-subsystems multinode(7/8) Failover and failback parallely using power_onoff and maintanence_mode
+# 8GW HA 4-subsystems multinode(7/8) Failover and failback parallely using power off|on and maintanence_mode
   - test:
       abort-on-fail: true
       config:
