@@ -8,6 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from ceph.ceph import CommandFailed
 from ceph.ceph_admin.daemon import Daemon
+from ceph.ceph_admin.host import Host
 from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id, get_openstack_driver
@@ -41,6 +42,7 @@ class HighAvailability:
         self.gateway_group = config.get("gw_group", "")
         self.orch = Orch(cluster=self.cluster, **{})
         self.daemon = Daemon(cluster=self.cluster, **{})
+        self.host = Host(cluster=self.cluster, **{})
         self.nvme_pool = config["rbd_pool"]
         self.clients = []
 
@@ -53,6 +55,7 @@ class HighAvailability:
             "systemctl": self.system_control,
             "daemon": self.ceph_daemon,
             "power_on_off": self.power_on_off,
+            "maintanence_mode": self.maintanence_mode,
         }
 
     def check_gateway(self, node_id):
@@ -113,15 +116,22 @@ class HighAvailability:
             args=["ceph", "nvme-gw", "show", self.nvme_pool, repr(self.gateway_group)]
         )
         states = {}
-        for data in out.split("}"):
-            data = data.strip()
-            if not data:
-                continue
-            data = json.loads(f"{data}}}")
-            if data.get("ana states"):
-                gw = data["gw-id"]
-                states[gw] = data
-                states[gw].update(self.string_to_dict(data["ana states"]))
+        if self.cluster.rhcs_version == "8.0":
+            out = json.loads(out)
+            for gateway in out.get("Created Gateways:"):
+                gw = gateway["gw-id"]
+                states[gw] = gateway
+                states[gw].update(self.string_to_dict(gateway["ana states"]))
+        else:
+            for data in out.split("}"):
+                data = data.strip()
+                if not data:
+                    continue
+                data = json.loads(f"{data}}}")
+                if data.get("ana states"):
+                    gw = data["gw-id"]
+                    states[gw] = data
+                    states[gw].update(self.string_to_dict(data["ana states"]))
 
         return states
 
@@ -294,6 +304,40 @@ class HighAvailability:
         elif op.state == "stopped":
             return False
 
+    def maintanence_mode(self, gateway, action, wait_for_active_state=None):
+        ops = {
+            "start": self.host.exit,
+            "stop": self.host.enter,
+            "is-active": self.nvmeof_daemon_state,
+        }
+        daemon = gateway.daemon_name
+        gateway_node = daemon.split(".")[-2]
+
+        action_args = {"command": action, "args": {"node": gateway_node}}
+
+        op = ops[action]
+        op(action_args)
+
+        if wait_for_active_state is None:
+            return
+
+        is_active = ops["is-active"]
+        for w in WaitUntil(timeout=300):
+            _active = is_active(daemon)
+            if _active == wait_for_active_state:
+                LOG.info(f"[ {daemon} ] {action}ing NVMeofGW Daemon is successfull.")
+                return True
+            LOG.warning(
+                f"[ {daemon} ] {action}ing NVMeofGW Daemon is still not successfull. check again"
+            )
+
+        if w.expired:
+            LOG.error(
+                f"[ {daemon} ] {action}ing NVMeofGW Daemon failed even after 300s timeout.."
+            )
+
+        return False
+
     def power_on_off(self, gateway, action, wait_for_active_state=None):
         """Power on and off nvme daemon nodes.
 
@@ -317,10 +361,13 @@ class HighAvailability:
             "stop": driver.ex_stop_node,
             "is-active": self.is_node_active,
         }
-        nodename = gateway.node.hostname.lower()
-
+        nodename = gateway.node.hostname.lower().replace("-", "_")
         driver_node = next(
-            (node for node in driver.list_nodes() if node.name.lower() == nodename),
+            (
+                node
+                for node in driver.list_nodes()
+                if node.name.lower().replace("-", "_") == nodename
+            ),
             None,
         )
 
