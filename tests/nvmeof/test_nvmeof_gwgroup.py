@@ -168,14 +168,15 @@ def teardown(ceph_cluster, rbd_obj, config):
 
     # Delete the pool
     if "pool" in config["cleanup"]:
-        rbd_obj.clean_up(pools=[config["rbd_pool"]])
+        for gwgroup_config in config["gw_groups"]:
+            gwgroup_config["rbd_pool"] = gwgroup_config.get("rbd_pool", config["rbd_pool"])
+            rbd_obj.clean_up(pools=[gwgroup_config["rbd_pool"]])
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     LOG.info("Starting Ceph NVMEoF deployment.")
     config = kwargs["config"]
     rbd_pool = config["rbd_pool"]
-    rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
