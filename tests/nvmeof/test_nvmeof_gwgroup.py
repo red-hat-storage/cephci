@@ -114,9 +114,17 @@ def run_gateway_group_operations(ceph_cluster, gwgroup_config, config):
 
         # Configure subsystems in GWgroups
         if gwgroup_config.get("subsystems"):
-            for subsys_args in gwgroup_config["subsystems"]:
-                subsys_args["ceph_cluster"] = ceph_cluster
-                configure_subsystems(gwgroup_config["rbd_pool"], ha, subsys_args)
+            with parallel() as p:
+                for subsys_args in gwgroup_config["subsystems"]:
+                    gw_group = gwgroup_config.get("gw_group", None)
+                    subsys_args["ceph_cluster"] = ceph_cluster
+                    p.spawn(
+                        configure_subsystems,
+                        gwgroup_config["rbd_pool"],
+                        ha,
+                        gw_group,
+                        subsys_args,
+                    )
 
         # HA failover and failback
         if gwgroup_config.get("fault-injection-methods") or config.get(
@@ -164,7 +172,6 @@ def teardown(ceph_cluster, rbd_obj, config):
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
-
     LOG.info("Starting Ceph NVMEoF deployment.")
     config = kwargs["config"]
     rbd_pool = config["rbd_pool"]
