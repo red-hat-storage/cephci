@@ -1,0 +1,506 @@
+##############################################################################################
+# Tier-Level: 3
+# Cluster Configuration: conf/squid/nvmeof/ceph_nvmeof_4-group_8-gws_scale.yaml
+################################################################################################
+
+tests:
+# Set up the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: shell
+              args:
+                - ceph config set mon public_network 10.8.128.0/21,10.0.64.1/21
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node37
+          - node38
+          - node39
+          - node40
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create nvmeof_pool
+          - config:
+              command: shell
+              args:
+                - rbd pool init nvmeof_pool
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
+                    - node6
+                    - node7
+                    - node8
+                    - node9
+                    - node10
+              pos_args:
+                - nvmeof_pool
+                - group1
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd1
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd1
+      desc: deploy NVMeoF service for GW group 1
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy NVMeoF service for GW group 1
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  nodes:
+                    - node11
+                    - node12
+                    - node13
+                    - node14
+                    - node15
+                    - node16
+                    - node17
+                    - node18
+              pos_args:
+                - nvmeof_pool
+                - group2
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd2
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd2
+      desc: deploy NVMeoF service for GW group 2
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy NVMeoF service for GW group 2
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  nodes:
+                  - node19
+                  - node20
+                  - node21
+                  - node22
+                  - node23
+                  - node24
+                  - node25
+                  - node26
+              pos_args:
+                - nvmeof_pool
+                - group3
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd3
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd3
+      desc: deploy NVMeoF service for GW group 3
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy NVMeoF service for GW group 3
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  nodes:
+                  - node27
+                  - node28
+                  - node29
+                  - node30
+                  - node31
+                  - node32
+                  - node33
+                  - node34
+              pos_args:
+                - nvmeof_pool
+                - group4
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd4
+          - config:
+              command: shell
+              args:
+                - rbd pool init rbd4
+      desc: deploy NVMeoF service for GW group 4
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy NVMeoF service for GW group 4
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node3
+        rbd_pool: rbd1
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: subsystem
+              command: add
+              args:
+                subsystems: 128
+                max-namespaces: 1024
+          - config:
+              service: listener
+              command: add
+              args:
+                subsystems: 128
+                port: 4420
+                group: group1
+                nodes:
+                  - node3
+                  - node4
+                  - node5
+                  - node6
+                  - node7
+                  - node8
+                  - node9
+                  - node10
+          - config:
+              service: host
+              command: add
+              args:
+                subsystems: 128
+                group: group1
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystems: 128
+                group: group1
+                namespaces: 1024
+                image_size: 1T
+                pool: rbd1
+        initiators:
+            listener_port: 4420
+            node: node37
+        run_io:
+          - node: node37
+            io_type: write
+      desc: Scale to 1024 namespaces with IO on group1
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: Scale to 1024 namespaces with IO on 4GW and 128 subsystems
+      polarion-id: CEPH-83595699
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node11
+        rbd_pool: rbd2
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: subsystem
+              command: add
+              args:
+                subsystems: 128
+                max-namespaces: 2048
+          - config:
+              service: listener
+              command: add
+              args:
+                subsystems: 128
+                port: 4420
+                group: group2
+                nodes:
+                  - node11
+                  - node12
+                  - node13
+                  - node14
+                  - node15
+                  - node16
+                  - node17
+                  - node18
+          - config:
+              service: host
+              command: add
+              args:
+                subsystems: 128
+                group: group2
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystems: 128
+                namespaces: 1024
+                image_size: 1T
+                group: group2
+                pool: rbd2
+        initiators:
+            listener_port: 4420
+            node: node38
+        run_io:
+          - node: node38
+            io_type: write
+      desc: Scale to 1024 namespaces with IO on group2
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: Scale to 1024 namespaces with IO on 4GW and 128 subsystems
+      polarion-id: CEPH-83595699
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node19
+        rbd_pool: rbd3
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: subsystem
+              command: add
+              args:
+                subsystems: 128
+                max-namespaces: 2048
+          - config:
+              service: listener
+              command: add
+              args:
+                subsystems: 128
+                port: 4420
+                group: group3
+                nodes:
+                  - node19
+                  - node20
+                  - node21
+                  - node22
+                  - node23
+                  - node24
+                  - node25
+                  - node26
+          - config:
+              service: host
+              command: add
+              args:
+                subsystems: 128
+                group: group3
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystems: 128
+                namespaces: 1024
+                image_size: 1T
+                group: group3
+                pool: rbd3
+        initiators:
+            listener_port: 4420
+            node: node39
+        run_io:
+          - node: node39
+            io_type: write
+      desc: Scale to 1024 namespaces with IO on group3
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: Scale to 1024 namespaces with IO on 8GW and 128 subsystems
+      polarion-id: CEPH-83595699
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node27
+        rbd_pool: rbd4
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: subsystem
+              command: add
+              args:
+                subsystems: 128
+                max-namespaces: 2048
+          - config:
+              service: listener
+              command: add
+              args:
+                subsystems: 128
+                port: 4420
+                group: group4
+                nodes:
+                  - node27
+                  - node28
+                  - node29
+                  - node30
+                  - node31
+                  - node32
+                  - node33
+                  - node34
+          - config:
+              service: host
+              command: add
+              args:
+                subsystems: 128
+                group: group4
+          - config:
+              service: namespace
+              command: add
+              args:
+                subsystems: 128
+                namespaces: 1024
+                image_size: 1T
+                group: group4
+                pool: rbd4
+        initiators:
+            listener_port: 4420
+            node: node40
+        run_io:
+          - node: node40
+            io_type: write
+      desc: Scale to 1024 namespaces with IO on group4
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: Scale to 1024 namespaces with IO on 8GW and 128 subsystems
+      polarion-id: CEPH-83595699
+
+  - test:
+      abort-on-fail: false
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph orch rm nvmeof.nvmeof_pool.group1
+          - config:
+              command: shell
+              args:
+                - ceph orch rm nvmeof.nvmeof_pool.group2
+          - config:
+              command: shell
+              args:
+                - ceph orch rm nvmeof.nvmeof_pool.group3
+          - config:
+              command: shell
+              args:
+                - ceph orch rm nvmeof.nvmeof_pool.group4
+          - config:
+              command: shell
+              args:
+                - ceph config set mon mon_allow_pool_delete true
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm nvmeof_pool nvmeof_pool --yes-i-really-really-mean-it
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd1 rbd1 --yes-i-really-really-mean-it
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd2 rbd2 --yes-i-really-really-mean-it
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd3 rbd3 --yes-i-really-really-mean-it
+          - config:
+              command: shell
+              args:
+                - ceph osd pool rm rbd4 rbd4 --yes-i-really-really-mean-it
+      desc: Remove nvmeof service and all pools from ceph cluster
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: Remove nvmeof service on all GW nodes
