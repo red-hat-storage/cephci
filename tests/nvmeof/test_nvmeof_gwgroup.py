@@ -14,15 +14,18 @@ from utility.utils import generate_unique_id
 LOG = Log(__name__)
 
 
-def configure_listeners(ha, nodes, config):
+def configure_listeners(ha, nodes, gw_group, config):
     """Configure Listeners on subsystem."""
     lb_group_ids = {}
+    nqn = config["nqn"]
+    if gw_group is not None and config.get("no-group-append", False) is False:
+        nqn = f"{config['nqn']}.{gw_group}"
     for node in nodes:
         nvmegwcli = ha.check_gateway(node)
         hostname = nvmegwcli.fetch_gateway_hostname()
         listener_config = {
             "args": {
-                "subsystem": config["nqn"],
+                "subsystem": nqn,
                 "traddr": nvmegwcli.node.ip_address,
                 "trsvcid": config["listener_port"],
                 "host-name": hostname,
@@ -33,8 +36,11 @@ def configure_listeners(ha, nodes, config):
     return lb_group_ids
 
 
-def configure_subsystems(pool, ha, config):
+def configure_subsystems(pool, ha, gw_group, config):
     """Configure Ceph-NVMEoF Subsystems."""
+    nqn = config["nqn"]
+    if gw_group is not None and config.get("no-group-append", False) is False:
+        nqn = f"{config['nqn']}.{gw_group}"
     sub_args = {"subsystem": config["nqn"]}
     ceph_cluster = config["ceph_cluster"]
 
@@ -52,16 +58,18 @@ def configure_subsystems(pool, ha, config):
                 **{
                     "max-namespaces": config.get("max_ns", 32),
                     "enable-ha": config.get("enable_ha", False),
+                    "no-group-append": config.get("no-group-append", False),
                 },
             }
         }
     )
 
+    sub_args["subsystem"] = nqn
     # Add Listeners
     listeners = [nvmegwcli.node.hostname]
     if config.get("listeners"):
         listeners = config["listeners"]
-    lb_groups = configure_listeners(ha, listeners, config)
+    lb_groups = configure_listeners(ha, listeners, gw_group, config)
 
     # Add Host access
     nvmegwcli.host.add(**{"args": {**sub_args, **{"host": repr(config["allow_host"])}}})
