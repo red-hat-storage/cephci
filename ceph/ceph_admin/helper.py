@@ -861,9 +861,7 @@ def get_cluster_state(cls, commands=None):
     __CLUSTER_STATE_COMMANDS.extend(commands)
 
     for cmd in __CLUSTER_STATE_COMMANDS:
-        out, err = cls.shell(args=[cmd])
-        LOG.info("STDOUT:\n %s" % out)
-        LOG.error("STDERR:\n %s" % err)
+        cls.shell(args=[cmd], pretty_print=True)
 
 
 def get_host_osd_map(cls):

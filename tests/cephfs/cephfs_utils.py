@@ -976,13 +976,12 @@ finally:
                 )
                 return 0
 
-    def allow_dir_fragmentation(self, mds_nodes):
+    def allow_dir_fragmentation(self, mds_nodes, fs_name="cephfs"):
         log.info("Allowing directorty fragmenation for splitting and merging")
         for node in mds_nodes:
-            fs_info = self.get_fs_info(node)
             node.exec_command(
                 sudo=True,
-                cmd="ceph fs set %s allow_dirfrags 1" % fs_info.get("fs_name"),
+                cmd=f"ceph fs set {fs_name} allow_dirfrags 1",
             )
             break
         return 0

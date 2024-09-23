@@ -29,12 +29,20 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83574329"
         log.info(f"Running CephFS tests for -{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         config = kw["config"]
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
@@ -49,20 +57,20 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd="yum install -y --nogpgcheck jq")
         client1.exec_command(sudo=True, cmd="yum install -y --nogpgcheck ceph-fuse")
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse_{mounting_dir}/"
-        client1.exec_command(sudo=True, cmd="ceph fs set cephfs max_mds 2")
+        client1.exec_command(sudo=True, cmd=f"ceph fs set {fs_name} max_mds 2")
         log.info("waiting for 30 seconds for mds to come up")
         time.sleep(30)
         name1 = f"name_{rand}"
         client1.exec_command(
             sudo=True,
             cmd=f"ceph auth get-or-create client.{name1} "
-            f"mds 'allow *,allow * path=/{pin_dir}' mon 'allow r' osd 'allow rw tag cephfs data=cephfs' "
+            f"mds 'allow *,allow * path=/{pin_dir}' mon 'allow r' osd 'allow rw tag cephfs data={fs_name}' "
             f"-o /etc/ceph/ceph.client.{name1}.keyring",
         )
         client1.exec_command(sudo=True, cmd=f"mkdir -p {fuse_mounting_dir_1}")
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph-fuse -n client.{name1} {fuse_mounting_dir_1} --client_fs cephfs",
+            cmd=f"ceph-fuse -n client.{name1} {fuse_mounting_dir_1} --client_fs {fs_name}",
         )
         client1.exec_command(sudo=True, cmd=f"mkdir -p {fuse_mounting_dir_1}{pin_dir}")
         client1.exec_command(
@@ -72,13 +80,13 @@ def run(ceph_cluster, **kw):
         # checking is the dir is pinned
         rank_0_mds = client1.exec_command(
             sudo=True,
-            cmd="ceph fs status -f json-pretty | jq -r '.mdsmap[] | select(.rank == 0) | .name' ",
+            cmd=f"ceph fs status {fs_name} -f json-pretty | jq -r '.mdsmap[] | select(.rank == 0) | .name' ",
         )
         rank_0_mdss = rank_0_mds[0].split()
         log.info(rank_0_mdss)
         rank_1_mds = client1.exec_command(
             sudo=True,
-            cmd="ceph fs status -f json-pretty | jq -r '.mdsmap[] | select(.rank == 1) | .name' ",
+            cmd=f"ceph fs status {fs_name} -f json-pretty | jq -r '.mdsmap[] | select(.rank == 1) | .name' ",
         )
         rank_1_mdss = rank_1_mds[0].split()
         log.info(rank_1_mdss)

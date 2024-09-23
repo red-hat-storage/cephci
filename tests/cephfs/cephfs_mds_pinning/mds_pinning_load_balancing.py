@@ -27,7 +27,14 @@ def run(ceph_cluster, **kw):
         tc = "11227"
         dir_name = "dir"
         log.info("Running cephfs %s test case" % (tc))
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsV1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
         fs_util = FsUtils(ceph_cluster)
         build = config.get("build", config.get("rhbuild"))
         client_info, rc = fs_util.get_clients(build)
@@ -41,6 +48,11 @@ def run(ceph_cluster, **kw):
         client3.append(client_info["kernel_clients"][0])
         client4.append(client_info["kernel_clients"][1])
 
+        fs_details = fs_util_v1.get_fs_info(client1[0], default_fs)
+
+        if not fs_details:
+            fs_util_v1.create_fs(client1[0], default_fs)
+
         rc1 = fs_util_v1.auth_list(client1)
         rc2 = fs_util_v1.auth_list(client2)
         rc3 = fs_util_v1.auth_list(client3)
@@ -50,21 +62,31 @@ def run(ceph_cluster, **kw):
         else:
             raise CommandFailed("auth list failed")
 
-        fs_util_v1.fuse_mount(client1, client_info["mounting_dir"])
-        fs_util_v1.fuse_mount(client2, client_info["mounting_dir"])
+        fs_util_v1.fuse_mount(
+            client1,
+            client_info["mounting_dir"],
+            extra_params=f" --client_fs {default_fs}",
+        )
+        fs_util_v1.fuse_mount(
+            client2,
+            client_info["mounting_dir"],
+            extra_params=f" --client_fs {default_fs}",
+        )
 
         fs_util_v1.kernel_mount(
-            client3, client_info["mounting_dir"], ",".join(client_info["mon_node_ip"])
+            client3,
+            client_info["mounting_dir"],
+            ",".join(client_info["mon_node_ip"]),
+            extra_params=f",fs={default_fs}",
         )
         fs_util_v1.kernel_mount(
-            client4, client_info["mounting_dir"], ",".join(client_info["mon_node_ip"])
+            client4,
+            client_info["mounting_dir"],
+            ",".join(client_info["mon_node_ip"]),
+            extra_params=f",fs={default_fs}",
         )
 
-        rc = fs_util_v1.activate_multiple_mdss(client_info["clients"][0:])
-        if rc == 0:
-            log.info("Activate multiple mdss successfully")
-        else:
-            raise CommandFailed("Activate multiple mdss failed")
+        client1[0].exec_command(sudo=True, cmd=f"ceph fs set {default_fs} max_mds 2")
         client1[0].exec_command(
             sudo=True, cmd="mkdir %s%s" % (client_info["mounting_dir"], dir_name)
         )
@@ -116,7 +138,9 @@ def run(ceph_cluster, **kw):
 
         if result == "Data validation success":
             print("Data validation success")
-            fs_util_v1.activate_multiple_mdss(client_info["clients"][0:])
+            client1[0].exec_command(
+                sudo=True, cmd=f"ceph fs set {default_fs} max_mds 2"
+            )
             log.info("Execution of Test case CEPH-%s started:" % (tc))
             num_of_dirs = int(num_of_dirs / 5)
             with parallel() as p:
@@ -334,7 +358,9 @@ def run(ceph_cluster, **kw):
                     client_info["mounting_dir"],
                     "umount",
                 )
-                rc_mds = fs_util.mds_cleanup(client_info["clients"][0:], None)
+                rc_mds = fs_util_v1.mds_cleanup(
+                    client_info["clients"][0:], None, fs_name=default_fs
+                )
 
             else:
                 rc_client = fs_util.client_clean_up(
@@ -343,7 +369,9 @@ def run(ceph_cluster, **kw):
                     client_info["mounting_dir"],
                     "umount",
                 )
-                rc_mds = fs_util.mds_cleanup(client_info["clients"][0:], None)
+                rc_mds = fs_util_v1.mds_cleanup(
+                    client_info["clients"][0:], None, fs_name=default_fs
+                )
 
             if rc_client == 0 and rc_mds == 0:
                 log.info("Cleaning up successfull")
