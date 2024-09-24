@@ -296,6 +296,60 @@ class HighAvailability:
 
         return False
 
+    def daemon_redeploy(self, gateway):
+        """Ceph daemon commands to control nvme daemon states.
+
+        Args:
+            gateway: NVMe gateway object.
+            action: daemon orch "stop"|"start"
+            wait_for_active_state: wait for the active using bool value.
+
+        - wait_for_active_state:
+            True: wait for the daemon becomes active.
+            False: wait for the daemon becomes inactive.
+            None: do not wait, return
+
+        Returns:
+            Boolean
+        """
+        daemon = gateway.daemon_name
+
+        action_args = {"command": "redeploy", "pos_args": [daemon]}
+        out = self.daemon.redeploy(action_args)
+        if "Scheduled" not in out[0]:
+            raise Exception(f"[ {daemon} ]: Error in redeploying NVMe Service ")
+
+        # Wait for the daemon to become active
+        for w in WaitUntil(timeout=300):
+            _active = self.nvmeof_daemon_state(daemon)
+            if _active:
+                LOG.info(f"[ {daemon} ] redeploying NVMeofGW Daemon is successfull.")
+                break
+            else:
+                LOG.warning(
+                    f"[ {daemon} ] redeploying NVMeofGW Daemon is still not successfull. check again"
+                )
+
+        # If the loop times out, log an error and return False
+        if w.expired:
+            LOG.error(
+                f"[ {daemon} ] redeploying NVMeofGW Daemon failed even after 300s timeout.."
+            )
+            return False
+
+        # Only check the ANA states if the daemon is active
+        states = self.ana_states()
+
+        # Validate the service state for each host
+        for host, state in states.items():
+            daemon_host = f"client.{daemon}"
+            if host == daemon_host:
+                if state["Availability"] == "AVAILABLE":
+                    LOG.info(f"[ {daemon} ] NVMeofGW service is AVAILABLE.")
+                    return True
+                else:
+                    raise Exception(f"[ {daemon} ] NVMeofGW service is UNAVAILABLE.")
+
     def is_node_active(self, driver, node):
         """Return true if the given node is powered on and false if powered off"""
         op = driver.ex_get_node_details(node)
@@ -430,7 +484,7 @@ class HighAvailability:
                 active = self.get_optimized_state(gateway.ana_group_id)
 
                 # Find optimized path
-                # Condidtion to fail if multiple Active path exists for a gateway.
+                # Condition to fail if multiple Active path exists for a gateway.
                 if active and 1 <= len(active) < 2:
                     end_counter, end_time = get_current_timestamp()
                     LOG.info(
@@ -684,20 +738,24 @@ class HighAvailability:
                     # Fail Over
                     with parallel() as p:
                         for gw in fail_gws:
-                            p.spawn(self.failover, gw, fail_tool)
+                            if fail_tool == "daemon_redeploy":
+                                p.spawn(self.daemon_redeploy, gw)
+                            else:
+                                p.spawn(self.failover, gw, fail_tool)
                         for result in p:
                             LOG.info(log_json_dump(result))
                         self.validate_io(namespaces)
 
                     # Fail Back
-                    with parallel() as p:
-                        for gw in fail_gws:
-                            p.spawn(self.failback, gw, fail_tool)
-                        for result in p:
-                            LOG.info(log_json_dump(result))
-                        self.validate_io(namespaces)
+                    if fail_tool != "daemon_redeploy":
+                        with parallel() as p:
+                            for gw in fail_gws:
+                                p.spawn(self.failback, gw, fail_tool)
+                            for result in p:
+                                LOG.info(log_json_dump(result))
+                            self.validate_io(namespaces)
 
-                    time.sleep(20)
+                        time.sleep(20)
 
         except BaseException as err:  # noqa
             raise Exception(err)
