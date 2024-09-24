@@ -301,18 +301,6 @@ tests:
             config-file-name: test_multisite_syncpolicy_prefix_tag.yaml
             verify-io-on-site: ["ceph-sec"]
 
-  # - test:
-  #     name: Delete object version with id null
-  #     desc: test_delete_object_version_id_null
-  #     polarion-id: CEPH-83576431
-  #     comments: Known issue BZ-1967576 targeted to 8.0
-  #     module: sanity_rgw_multisite.py
-  #     clusters:
-  #       ceph-pri:
-  #         config:
-  #           script-name: ../aws/test_delete_version_id_null.py
-  #           config-file-name: ../../aws/configs/test_delete_version_id_null.yaml
-
   # Performing cluster upgrade
   - test:
       clusters:
