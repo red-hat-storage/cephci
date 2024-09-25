@@ -50,7 +50,8 @@ def run(ceph_cluster, **kw):
     3. ceph fs subvolumegroup rm <vol_name> <group_name>
     """
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
