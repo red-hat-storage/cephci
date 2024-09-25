@@ -443,7 +443,7 @@ class MgrWorkflows:
         mgr_stats = self.rados_obj.run_ceph_command(cmd)
         return mgr_stats
 
-    def set_mgr_fail(self, host: str = None):
+    def set_mgr_fail(self, host):
         """
         Method to fail the mgr host
         Args:
@@ -451,9 +451,7 @@ class MgrWorkflows:
         Return:
              Return the output of the execution of the command
         """
-        cmd = "ceph mgr fail"
-        if host:
-            cmd += " " + host
+        cmd = f"ceph mgr fail {host}"
         out_put = self.rados_obj.run_ceph_command(cmd)
         time.sleep(10)
         return out_put
