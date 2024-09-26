@@ -105,7 +105,7 @@ class SnapUtils(object):
             return 1
         return 0
 
-    def get_snap_schedule_list(self, client, path):
+    def get_snap_schedule_list(self, client, path, fs_name):
         """
         To get snap-schedule list for path on ceph FS .
         Args:
@@ -113,7 +113,7 @@ class SnapUtils(object):
             path : path set for snap-schedule, type - str
         Returns: a list, each item referring to a specfic snap-schedule on a path
         """
-        cmd = f"ceph fs snap-schedule list {path} --recursive=true"
+        cmd = f"ceph fs snap-schedule list {path} --recursive=true --fs {fs_name}"
         cmd_out, rc = client.exec_command(sudo=True, cmd=cmd)
         log.info(cmd_out)
         sched_list = cmd_out.split()
