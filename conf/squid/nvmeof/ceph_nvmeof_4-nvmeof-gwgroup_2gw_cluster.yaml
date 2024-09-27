@@ -70,3 +70,15 @@ globals:
         id: node14
         role:
           - client
+      node15:
+        id: node15
+        role:
+          - client
+      node16:
+        id: node16
+        role:
+          - client
+      node17:
+        id: node17
+        role:
+          - client
