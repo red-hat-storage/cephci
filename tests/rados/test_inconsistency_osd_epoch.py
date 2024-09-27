@@ -10,6 +10,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.bluestoretool_workflows import BluestoreToolWorkflows
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 from utility.utils import method_should_succeed
 
@@ -100,7 +101,9 @@ def run(ceph_cluster, **kw):
         )
         rados_obj.change_osd_state(action="stop", target=primary_osd)
         rados_obj.run_ceph_command(cmd=f"ceph osd out {primary_osd}")
-
+        if not wait_for_clean_pg_sets(rados_obj, timeout=600):
+            log.error("Cluster cloud not reach active+clean state within 600 secs")
+            raise Exception("Cluster cloud not reach active+clean state")
         # Checking for the inconsistent pg's
         inconsistent_pg_list = rados_obj.get_inconsistent_pg_list(pool_name)
         if any(pg_id in search for search in inconsistent_pg_list):
