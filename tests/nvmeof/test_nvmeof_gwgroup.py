@@ -47,6 +47,10 @@ def configure_subsystems(pool, ha, gw_group, config):
 
     nvmegwcli = ha.gateways[0]
 
+    # Uncomment these for debugging purpose
+    # nvmegwcli.gateway.set_log_level(**{"args": {"level": "DEBUG"}})
+    # nvmegwcli.loglevel.set(**{"args": {"level": "DEBUG"}})
+
     # Add Subsystem
     nvmegwcli.subsystem.add(
         **{
@@ -99,12 +103,61 @@ def configure_subsystems(pool, ha, gw_group, config):
                     p.spawn(nvmegwcli.namespace.add, **ns_args)
 
 
+def run_gateway_group_operations(ceph_cluster, gwgroup_config, config):
+    try:
+        gwgroup_config["osp_cred"] = config["osp_cred"]
+        gwgroup_config["rbd_pool"] = config["rbd_pool"]
+        # if we have different RBD pools per GWgroup
+        config["rbd_pool"] = gwgroup_config.get("rbd_pool", config["rbd_pool"])
+        config["rep_pool_config"]["pool"] = gwgroup_config.get(
+            "rbd_pool", config["rbd_pool"]
+        )
+
+        # Deploy NVMeOf services
+        if config.get("install"):
+            gwgroup_config["rbd_pool"] = gwgroup_config.get(
+                "rbd_pool", config["rbd_pool"]
+            )
+            deploy_nvme_service(ceph_cluster, gwgroup_config)
+
+        ha = HighAvailability(
+            ceph_cluster, gwgroup_config["gw_nodes"], **gwgroup_config
+        )
+        # Configure subsystems in GWgroups
+        if gwgroup_config.get("subsystems"):
+            with parallel() as p:
+                for subsys_args in gwgroup_config["subsystems"]:
+                    gw_group = gwgroup_config.get("gw_group", None)
+                    subsys_args["ceph_cluster"] = ceph_cluster
+                    p.spawn(
+                        configure_subsystems,
+                        config["rbd_pool"],
+                        ha,
+                        gw_group,
+                        subsys_args,
+                    )
+
+        # HA failover and failback
+        if gwgroup_config.get("fault-injection-methods") or config.get(
+            "fault-injection-methods"
+        ):
+            ha.run()
+        if "initiators" in config["cleanup"]:
+            if gwgroup_config.get("initiators"):
+                for initiator_cfg in gwgroup_config["initiators"]:
+                    disconnect_initiator(ceph_cluster, initiator_cfg["node"])
+
+    except Exception as err:
+        LOG.error(f"Error in gateway group {gwgroup_config['gw_nodes']}: {err}")
+        raise err
+
+
 def disconnect_initiator(ceph_cluster, node):
     """Disconnect Initiator."""
     node = get_node_by_id(ceph_cluster, node)
     initiator = Initiator(node)
     initiator.disconnect_all()
-    
+
 
 def delete_nvme_service(ceph_cluster, config):
     """Delete the NVMe gateway service.
@@ -123,7 +176,7 @@ def delete_nvme_service(ceph_cluster, config):
 
     for gwgroup_config in gw_groups:
         gw_group = gwgroup_config["gw_group"]
-        config["rbd_pool"] = gwgroup_config.get("rbd_pool", config['rbd_pool'])
+        config["rbd_pool"] = gwgroup_config.get("rbd_pool", config["rbd_pool"])
         service_name = f"nvmeof.{config['rbd_pool']}"
         service_name = f"{service_name}.{gw_group}" if gw_group else service_name
         cfg = {
@@ -148,11 +201,11 @@ def teardown(ceph_cluster, rbd_obj, config):
         rbd_obj: RBD object
         config: test config
     """
-
     # Delete the gateway
     if "gateway" in config["cleanup"]:
         delete_nvme_service(ceph_cluster, config)
 
+    # Disconnect Initiators
     for gwgroup_config in config["gw_groups"]:
         if "initiators" in config["cleanup"]:
             for initiator_cfg in gwgroup_config["initiators"]:
@@ -161,14 +214,15 @@ def teardown(ceph_cluster, rbd_obj, config):
     # Delete the pool
     if "pool" in config["cleanup"]:
         for gwgroup_config in config["gw_groups"]:
-            gwgroup_config["rbd_pool"] = gwgroup_config.get("rbd_pool", config["rbd_pool"])
+            gwgroup_config["rbd_pool"] = gwgroup_config.get(
+                "rbd_pool", config["rbd_pool"]
+            )
             rbd_obj.clean_up(pools=[gwgroup_config["rbd_pool"]])
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     LOG.info("Starting Ceph NVMEoF deployment.")
     config = kwargs["config"]
-    rbd_pool = config["rbd_pool"]
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
@@ -177,38 +231,23 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             break
 
     try:
-        for gwgroup_config in config["gw_groups"]:            
-            # if we have different RBD pools per GWgroup
-            config["rbd_pool"] = gwgroup_config.get("rbd_pool", rbd_pool)
-            config["rep_pool_config"]["pool"] = gwgroup_config.get("rbd_pool", rbd_pool)
-            rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
-            
-            # Deploy NVMeOf services
-            if config.get("install"):
-                gwgroup_config["rbd_pool"] = gwgroup_config.get("rbd_pool", rbd_pool)
-                deploy_nvme_service(ceph_cluster, gwgroup_config)
-
-            ha = HighAvailability(
-                ceph_cluster, gwgroup_config["gw_nodes"], **gwgroup_config
-            )
-            # Configure subsystems in GWgroups
-            if gwgroup_config.get("subsystems"):
-                for subsys_args in gwgroup_config["subsystems"]:
-                    gw_group = gwgroup_config.get("gw_group", None)
-                    subsys_args["ceph_cluster"] = ceph_cluster
-                    configure_subsystems(config["rbd_pool"], ha, gw_group, subsys_args)
-
-            # HA failover and failback
-            if gwgroup_config.get("fault-injection-methods") or config.get(
-                "fault-injection-methods"
-            ):
-                ha.run()
-            if "initiators" in config["cleanup"]:
-                if gwgroup_config.get("initiators"):
-                    for initiator_cfg in gwgroup_config["initiators"]:
-                        disconnect_initiator(ceph_cluster, initiator_cfg["node"])
+        if config.get("parallel"):
+            with parallel() as p:
+                for gwgroup_config in config["gw_groups"]:
+                    rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+                    p.spawn(
+                        run_gateway_group_operations,
+                        ceph_cluster,
+                        gwgroup_config,
+                        config,
+                    )
+        else:
+            for gwgroup_config in config["gw_groups"]:
+                rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+                run_gateway_group_operations(ceph_cluster, gwgroup_config, config)
 
         return 0
+
     except Exception as err:
         LOG.error(err)
         return 1

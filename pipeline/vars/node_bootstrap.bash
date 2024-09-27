@@ -47,7 +47,8 @@ if [ ${1:-0} -eq 2 ]; then
     if [ ${postfix_rpm} -eq 0 ]; then
         sudo yum install -y postfix
     fi
-    systemctl is-active --quiet postfix || sudo systemctl restart postfix
+    sudo sed -i '/^::1/d' /etc/hosts #https://access.redhat.com/solutions/1591423
+    systemctl is-active --quiet postfix || sudo systemctl enable --now postfix
 fi
 
 # Post results workflow requires to sync from COS
