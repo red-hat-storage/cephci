@@ -35,6 +35,7 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
+        ceph_version = get_ceph_version_from_cluster(clients[0])
         fs_name = "cephfs" if not erasure else "cephfs-ec"
         fs_details = fs_util.get_fs_info(client1, fs_name)
 
@@ -128,7 +129,11 @@ def run(ceph_cluster, **kw):
             ["mds_kill_link_at", ""],
             ["mds_kill_rename_at", ""],
             ["mds_inject_skip_replaying_inotable", ""],
-            ["mds_kill_skip_replaying_inotable", ""],
+            (
+                ["mds_kill_skip_replaying_inotable", ""]
+                if LooseVersion(ceph_version) <= LooseVersion("19.1.1")
+                else ["mds_kill_after_journal_logs_flushed", ""]
+            ),
             ["mds_wipe_sessions", ""],
             ["mds_wipe_ino_prealloc", ""],
             ["mds_skip_ino", ""],
@@ -194,12 +199,17 @@ def run(ceph_cluster, **kw):
             ("mds_kill_link_at", "1"),
             ("mds_kill_rename_at", "1"),
             ("mds_inject_skip_replaying_inotable", "true"),
-            ("mds_kill_skip_replaying_inotable", "true"),
+            (
+                ("mds_kill_skip_replaying_inotable", "true")
+                if LooseVersion(ceph_version) <= LooseVersion("19.1.1")
+                else ("mds_kill_after_journal_logs_flushed", "true")
+            ),
             ("mds_wipe_sessions", "true"),
             ("mds_wipe_ino_prealloc", "true"),
             ("mds_skip_ino", "1"),
             ("mds_min_caps_per_client", "101"),
         ]
+
         for target in conf_target:
             client_conf = target[0]
             value = target[1]
