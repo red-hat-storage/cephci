@@ -1,7 +1,10 @@
-import io
+import uuid
 
-from smb import base, smb_structs
-from smb.SMBConnection import SMBConnection
+import smbclient
+from smbprotocol.connection import Connection
+from smbprotocol.exceptions import SMBException
+
+rw_chunk_size = 1 << 21  # 2MB
 
 
 class SMBClient:
@@ -14,97 +17,115 @@ class SMBClient:
         self.password = passwd
         self.port = port
         self.connected = False
+        self.connection_cache: dict = {}
+        self.client_params = {
+            "username": self.username,
+            "password": self.password,
+            "connection_cache": self.connection_cache,
+        }
+        self.prepath = f"\\\\{self.server}\\{self.share}\\"
         self.connect()
+
+    def path(self, path: str = "/") -> str:
+        path.replace("/", "\\")
+        return self.prepath + path
 
     def connect(self):
         try:
-            self.ctx = SMBConnection(
-                self.username,
-                self.password,
-                "smbclient",
-                self.server,
-                use_ntlm_v2=True,
+            connection_key = f"{self.server.lower()}:{self.port}"
+            connection = Connection(uuid.uuid4(), self.server, self.port)
+            connection.connect()
+            self.connection_cache[connection_key] = connection
+            smbclient.register_session(
+                self.server, port=self.port, **self.client_params
             )
-            self.ctx.connect(self.server, self.port)
             self.connected = True
-        except base.SMBTimeout as error:
+        except SMBException as error:
             raise IOError(f"failed to connect: {error}")
 
     def disconnect(self):
         self.connected = False
-        try:
-            self.ctx.close()
-        except base.SMBTimeout as error:
-            raise TimeoutError(f"disconnect: {error}")
+        smbclient.reset_connection_cache(connection_cache=self.connection_cache)
+
+    def check_connected(self, action):
+        if not self.connected:
+            raise ConnectionError(f"{action}: server not connected")
 
     def listdir(self, path="/"):
+        self.check_connected("listdir")
         try:
-            dentries = self.ctx.listPath(self.share, path)
-        except smb_structs.OperationFailure as error:
-            raise IOError(f"failed to readdir: {error}")
-        except base.SMBTimeout as error:
-            raise TimeoutError(f"listdir: {error}")
-        except base.NotConnectedError as error:
-            raise ConnectionError(f"listdir: {error}")
-
-        return [dent.filename for dent in dentries]
+            filenames = smbclient.listdir(self.path(path), **self.client_params)
+        except SMBException as error:
+            raise IOError(f"listdir: {error}")
+        return filenames
 
     def mkdir(self, dpath):
+        self.check_connected("mkdir")
+        if not self.connected:
+            raise ConnectionError("listdir: server not connected")
         try:
-            self.ctx.createDirectory(self.share, dpath)
-        except smb_structs.OperationFailure as error:
-            raise IOError(f"failed to mkdir: {error}")
-        except base.SMBTimeout as error:
-            raise TimeoutError(f"mkdir: {error}")
-        except base.NotConnectedError as error:
-            raise ConnectionError(f"mkdir: {error}")
+            smbclient.mkdir(self.path(dpath), **self.client_params)
+        except SMBException as error:
+            raise IOError(f"mkdir: {error}")
 
     def rmdir(self, dpath):
+        self.check_connected("rmdir")
         try:
-            self.ctx.deleteDirectory(self.share, dpath)
-        except smb_structs.OperationFailure as error:
-            raise IOError(f"failed to rmdir: {error}")
-        except base.SMBTimeout as error:
-            raise TimeoutError(f"rmdir: {error}")
-        except base.NotConnectedError as error:
-            raise ConnectionError(f"rmdir: {error}")
+            smbclient.rmdir(self.path(dpath), **self.client_params)
+        except SMBException as error:
+            raise IOError(f"rmdir: {error}")
 
     def unlink(self, fpath):
+        self.check_connected("unlink")
         try:
-            self.ctx.deleteFiles(self.share, fpath)
-        except smb_structs.OperationFailure as error:
-            raise IOError(f"failed to unlink: {error}")
-        except base.SMBTimeout as error:
-            raise TimeoutError(f"unlink: {error}")
-        except base.NotConnectedError as error:
-            raise ConnectionError(f"unlink: {error}")
+            smbclient.remove(self.path(fpath), **self.client_params)
+        except SMBException as error:
+            raise IOError(f"unlink: {error}")
+
+    def _read_write_fd(self, fd_from, fd_to):
+        while True:
+            data = fd_from.read(rw_chunk_size)
+            if not data:
+                break
+            n = 0
+            while n < len(data):
+                n += fd_to.write(data[n:])
 
     def write(self, fpath, writeobj):
+        self.check_connected("write")
         try:
-            self.ctx.storeFile(self.share, fpath, writeobj)
-        except smb_structs.OperationFailure as error:
-            raise IOError(f"failed in write_text: {error}")
-        except base.SMBTimeout as error:
-            raise TimeoutError(f"write_text: {error}")
-        except base.NotConnectedError as error:
-            raise ConnectionError(f"write: {error}")
+            with smbclient.open_file(
+                self.path(fpath), mode="wb", **self.client_params
+            ) as fd:
+                self._read_write_fd(writeobj, fd)
+        except SMBException as error:
+            raise IOError(f"write: {error}")
 
     def read(self, fpath, readobj):
+        self.check_connected("read")
         try:
-            self.ctx.retrieveFile(self.share, fpath, readobj)
-        except smb_structs.OperationFailure as error:
-            raise IOError(f"failed in read_text: {error}")
-        except base.SMBTimeout as error:
-            raise TimeoutError(f"read_text: {error}")
-        except base.NotConnectedError as error:
-            raise ConnectionError(f"read: {error}")
+            with smbclient.open_file(
+                self.path(fpath), mode="rb", **self.client_params
+            ) as fd:
+                self._read_write_fd(fd, readobj)
+        except SMBException as error:
+            raise IOError(f"write: {error}")
 
     def write_text(self, fpath, teststr):
-        with io.BytesIO(teststr.encode()) as writeobj:
-            self.write(fpath, writeobj)
+        self.check_connected("write_text")
+        try:
+            with smbclient.open_file(
+                self.path(fpath), mode="w", **self.client_params
+            ) as fd:
+                fd.write(teststr)
+        except SMBException as error:
+            raise IOError(f"write: {error}")
 
     def read_text(self, fpath):
-        with io.BytesIO() as readobj:
-            self.read(fpath, readobj)
-            ret = readobj.getvalue().decode("utf8")
+        self.check_connected("read_text")
+        try:
+            with smbclient.open_file(self.path(fpath), **self.client_params) as fd:
+                ret = fd.read()
+        except SMBException as error:
+            raise IOError(f"write: {error}")
         return ret
