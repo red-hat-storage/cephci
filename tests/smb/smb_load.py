@@ -36,10 +36,6 @@ def smb_load(
         smb_user_password (str): Smb password
         load_test_config (list): Smb load test parameter
     """
-
-    # workaround: set server min protocol to SMB2_02 to use pysmb
-    set_smb2_02(smb_server)
-
     # make client connection and create load directory
     make_load_dir(
         smb_server, smb_share, smb_user_name, smb_user_password, load_test_config
@@ -85,26 +81,6 @@ def smb_load(
         smb_user_password,
         load_test_config,
     )
-
-
-def set_smb2_02(smb_server):
-    """workaround to use pysmb
-    Args:
-        smb_server (obj): Smb server
-    """
-    try:
-        cmd = (
-            "podman ps --format '{{.Names}}' | grep smb-smb1 | xargs -I{} podman exec {} sh -c "
-            '\'net conf setparm global "server min protocol" "SMB2_02"\''
-        )
-        smb_server.exec_command(
-            sudo=True,
-            cmd=cmd,
-        )
-        time.sleep(9)
-
-    except Exception as e:
-        raise OperationFailedError(f"Fail to apply workaround for pysmb, Error {e}")
 
 
 def make_load_dir(
