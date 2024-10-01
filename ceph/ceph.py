@@ -1675,10 +1675,17 @@ class CephNode(object):
         # Fixme: Ensure the method returns a tuple of
         #        (stdout, stderr, exit_code, time_taken)
         if kw.get("long_running", False):
+            if kw.get("check_ec", False) and _exit != 0:
+                raise CommandFailed(
+                    f"{cmd} returned {_err} and code {_exit} on {self.ip_address}"
+                )
+
             return _exit
 
         if kw.get("check_ec", True) and _exit != 0:
-            raise CommandFailed(f"{cmd} returned {_exit} on {self.ip_address}")
+            raise CommandFailed(
+                f"{cmd} returned {_err} and code {_exit} on {self.ip_address}"
+            )
 
         return _out, _err
 
