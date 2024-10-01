@@ -33,7 +33,13 @@ def run(ceph_cluster, **kw):
         tc = "CEPH-83573848"
         log.info(f"Running CephFS tests for ceph {tc}")
         # Initialize the utility class for CephFS
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         # Get the client nodes
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
@@ -43,9 +49,11 @@ def run(ceph_cluster, **kw):
         # Prepare the clients
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         log.info("Install cephfs-top by dnf install cephfs-top")
         client1.exec_command(
             sudo=True,
@@ -86,13 +94,22 @@ def run(ceph_cluster, **kw):
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse_{rand}"
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel_{rand}"
         # Mount CephFS using ceph-fuse and kernel
-        fs_util.fuse_mount([client1], fuse_mounting_dir_1)
+        fs_util.fuse_mount(
+            [client1],
+            fuse_mounting_dir_1,
+            extra_params=f",fs={fs_name}",
+        )
         mon_node_ips = fs_util.get_mon_node_ips()
-        fs_util.kernel_mount([client1], kernel_mounting_dir_1, ",".join(mon_node_ips))
+        fs_util.kernel_mount(
+            [client1],
+            kernel_mounting_dir_1,
+            ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
+        )
         output = fs_util.get_cephfs_top_dump(client1)
         log.info(f"Output of cephfs top dump: {output}")
         # get client ID using mounted directory
-        client_id = fs_util.get_client_id(client1, "cephfs", fuse_mounting_dir_1)
+        client_id = fs_util.get_client_id(client1, fs_name, fuse_mounting_dir_1)
         # open files
         rand = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
@@ -104,10 +121,10 @@ def run(ceph_cluster, **kw):
             file_list.append(file_name)
         pids = fs_util.open_files(client1, fuse_mounting_dir_1, file_list)
         time.sleep(60)
-        out_open = fs_util.get_cephfs_top_dump(client1)["filesystems"]["cephfs"][
+        out_open = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][
             client_id
         ]["ofiles"]
-        log.info(f"Output of cephfs top dump after opening files: {out_open}")
+        log.info(f"Output of {fs_name} top dump after opening files: {out_open}")
         if int(out_open) != opened_files:
             log.error(f"Open files did not match with {opened_files}")
             return 1
@@ -115,7 +132,7 @@ def run(ceph_cluster, **kw):
             log.info("Open files count matched")
         fs_util.close_files(client1, pids)
         time.sleep(60)
-        out_closed = fs_util.get_cephfs_top_dump(client1)["filesystems"]["cephfs"][
+        out_closed = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][
             client_id
         ]["ofiles"]
         if int(out_closed) != 0:
@@ -171,10 +188,19 @@ def run(ceph_cluster, **kw):
             "total_clients"
         ]
         log.info("mounting clients")
-        fs_util.fuse_mount([client1], fuse_mounting_dir_2)
-        fs_util.fuse_mount([client1], fuse_mounting_dir_3)
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_2, extra_params=f" --client_fs {fs_name}"
+        )
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_3, extra_params=f" --client_fs {fs_name}"
+        )
         mon_node_ips = fs_util.get_mon_node_ips()
-        fs_util.kernel_mount([client1], kernel_mounting_dir_2, ",".join(mon_node_ips))
+        fs_util.kernel_mount(
+            [client1],
+            kernel_mounting_dir_2,
+            ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
+        )
         time.sleep(120)
         new_fuse_count = fs_util.get_cephfs_top_dump(client1)["client_count"]["fuse"]
         new_kernel_count = fs_util.get_cephfs_top_dump(client1)["client_count"][
@@ -211,8 +237,9 @@ def run(ceph_cluster, **kw):
         log.info("Create multiple filesystems and verify client metrics")
         cephfs_name1 = f"cephfs_top_name_{rand}_1"
         cephfs_name2 = f"cephfs_top_name_{rand}_2"
-        client1.exec_command(sudo=True, cmd=f"ceph fs volume create {cephfs_name1}")
-        client1.exec_command(sudo=True, cmd=f"ceph fs volume create {cephfs_name2}")
+        fs_util.create_fs(client1, cephfs_name1)
+        fs_util.create_fs(client1, cephfs_name2)
+
         fs_name_dump = fs_util.get_cephfs_top_dump(client1)["filesystems"]
         if cephfs_name1 not in fs_name_dump:
             log.error(f"{cephfs_name1} not found in filesystems dump")
@@ -228,10 +255,10 @@ def run(ceph_cluster, **kw):
         log.info("create a file 4GB file with dd")
         file_name = f"file_{rand}"
         before_total_read = fs_util.get_cephfs_top_dump(client1)["filesystems"][
-            "cephfs"
+            fs_name
         ][client_id]["rtio"]
         before_total_write = fs_util.get_cephfs_top_dump(client1)["filesystems"][
-            "cephfs"
+            fs_name
         ][client_id]["wtio"]
         client1.exec_command(
             sudo=True,
@@ -242,11 +269,11 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"cp {fuse_mounting_dir_1}/{file_name} {fuse_mounting_dir_1}/{file_name}_copy",
         )
-        after_total_read = fs_util.get_cephfs_top_dump(client1)["filesystems"][
-            "cephfs"
-        ][client_id]["rtio"]
+        after_total_read = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][
+            client_id
+        ]["rtio"]
         after_total_write = fs_util.get_cephfs_top_dump(client1)["filesystems"][
-            "cephfs"
+            fs_name
         ][client_id]["wtio"]
         if int(after_total_read) < int(before_total_read):
             log.error("Total read IO mismatch")

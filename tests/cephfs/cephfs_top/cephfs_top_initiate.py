@@ -26,7 +26,13 @@ def run(ceph_cluster, **kw):
         tc = "CEPH-83573829"
         log.info(f"Running CephFS tests for ceph {tc}")
         # Initialize the utility class for CephFS
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         # Get the client nodes
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
@@ -36,9 +42,11 @@ def run(ceph_cluster, **kw):
         # Prepare the clients
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         rand = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
         )
@@ -46,9 +54,16 @@ def run(ceph_cluster, **kw):
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse_{rand}"
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel_{rand}"
         # Mount CephFS using ceph-fuse and kernel
-        fs_util.fuse_mount([client1], fuse_mounting_dir_1)
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_1, extra_params=f" --client_fs {fs_name}"
+        )
         mon_node_ips = fs_util.get_mon_node_ips()
-        fs_util.kernel_mount([client1], kernel_mounting_dir_1, ",".join(mon_node_ips))
+        fs_util.kernel_mount(
+            [client1],
+            kernel_mounting_dir_1,
+            ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
+        )
         # install "cephfs-top" by "dnf install cephfs-top"
         log.info("Install cephfs-top by dnf install cephfs-top")
         client1.exec_command(
