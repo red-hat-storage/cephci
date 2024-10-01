@@ -37,6 +37,7 @@ def deploy_smb_service_imperative(
     domain_realm,
     custom_dns,
     clustering="default",
+    earmark=None,
 ):
     """Deploy smb services
     Args:
@@ -57,7 +58,12 @@ def deploy_smb_service_imperative(
     try:
         # Create volume and smb subvolume
         create_vol_smb_subvol(
-            installer, cephfs_vol, smb_subvol_group, smb_subvols, smb_subvolume_mode
+            installer,
+            cephfs_vol,
+            smb_subvol_group,
+            smb_subvols,
+            smb_subvolume_mode,
+            earmark,
         )
 
         # Enable smb module
@@ -108,6 +114,7 @@ def deploy_smb_service_declarative(
     file_type,
     smb_spec,
     file_mount,
+    earmark=None,
 ):
     """Deploy smb services using spec file
     Args:
@@ -123,7 +130,12 @@ def deploy_smb_service_declarative(
     try:
         # Create volume and smb subvolume
         create_vol_smb_subvol(
-            installer, cephfs_vol, smb_subvol_group, smb_subvols, smb_subvolume_mode
+            installer,
+            cephfs_vol,
+            smb_subvol_group,
+            smb_subvols,
+            smb_subvolume_mode,
+            earmark,
         )
 
         # Enable smb module
@@ -237,7 +249,12 @@ def smb_cleanup(installer, smb_shares, smb_cluster_id):
 
 
 def create_vol_smb_subvol(
-    installer, cephfs_vol, smb_subvol_group, smb_subvols, smb_subvolume_mode
+    installer,
+    cephfs_vol,
+    smb_subvol_group,
+    smb_subvols,
+    smb_subvolume_mode,
+    earmark=None,
 ):
     """Create cephfs volume and smb sub volume
     Args:
@@ -248,12 +265,31 @@ def create_vol_smb_subvol(
         smb_subvolume_mode (str): Smb subvolume mode
     """
     try:
-        CephAdm(installer).ceph.fs.volume.create(cephfs_vol)
-        CephAdm(installer).ceph.fs.sub_volume_group.create(cephfs_vol, smb_subvol_group)
-        for subvol in smb_subvols:
-            CephAdm(installer).ceph.fs.sub_volume.create(
-                cephfs_vol, subvol, group_name=smb_subvol_group, mode=smb_subvolume_mode
+        if earmark:
+            CephAdm(installer).ceph.fs.volume.create(cephfs_vol)
+            CephAdm(installer).ceph.fs.sub_volume_group.create(
+                cephfs_vol, smb_subvol_group
             )
+            for subvol in smb_subvols:
+                CephAdm(installer).ceph.fs.sub_volume.create(
+                    cephfs_vol,
+                    subvol,
+                    group_name=smb_subvol_group,
+                    mode=smb_subvolume_mode,
+                    earmark=earmark,
+                )
+        else:
+            CephAdm(installer).ceph.fs.volume.create(cephfs_vol)
+            CephAdm(installer).ceph.fs.sub_volume_group.create(
+                cephfs_vol, smb_subvol_group
+            )
+            for subvol in smb_subvols:
+                CephAdm(installer).ceph.fs.sub_volume.create(
+                    cephfs_vol,
+                    subvol,
+                    group_name=smb_subvol_group,
+                    mode=smb_subvolume_mode,
+                )
     except Exception as e:
         raise CephadmOpsExecutionError(
             f"Fail to create volume and smb subvolume, Error {e}"
@@ -368,6 +404,10 @@ def create_smb_share(
                 path,
                 subvolume=f"{smb_subvol_group}/{smb_subvols[i]}",
             )
+        # Check share count
+        out = json.loads(CephAdm(installer).ceph.smb.share.ls(smb_cluster_id))
+        if len(smb_shares) != len(out):
+            log.error("Samba shares list count not matching")
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to create smb shares, Error {e}")
 
@@ -875,3 +915,25 @@ def reconnect_share(
                 )
     except Exception as e:
         raise CephadmOpsExecutionError(f"Fail to reconnect samba server, Error {e}")
+
+
+def remove_sub_vol_group(installer, cephfs_vol, smb_subvol_group, smb_subvols):
+    """Remove sub volume and sub volume group
+    Args:
+        installer (obj): Installer node obj
+        cephfs_vol (str): CephFS volume
+        smb_subvol_group (str): Subvloume group
+        smb_subvols [list]: Subvloumes
+    """
+    try:
+        # Remove subvloumes
+        for smb_subvol in smb_subvols:
+            CephAdm(installer).ceph.fs.sub_volume.rm(
+                cephfs_vol, smb_subvol, smb_subvol_group
+            )
+        # Remove sub volume group
+        CephAdm(installer).ceph.fs.sub_volume_group.rm(cephfs_vol, smb_subvol_group)
+    except Exception as e:
+        raise CephadmOpsExecutionError(
+            f"Fail to remove sub volume and sub volume group, Error {e}"
+        )
