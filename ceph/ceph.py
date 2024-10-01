@@ -1678,7 +1678,9 @@ class CephNode(object):
             return _exit
 
         if kw.get("check_ec", True) and _exit != 0:
-            raise CommandFailed(f"{cmd} returned {_exit} on {self.ip_address}")
+            raise CommandFailed(
+                f"{cmd} returned {_err} and code {_exit} on {self.ip_address}"
+            )
 
         return _out, _err
 
