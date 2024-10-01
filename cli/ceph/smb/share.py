@@ -38,3 +38,16 @@ class Share(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def ls(self, cluster_id, **kw):
+        """List smb share
+
+        Args:
+            cluster_id (str): A short string uniquely identifying the cluster
+            format (str): the type to be formatted(json or yaml)
+        """
+        cmd = f"{self.base_cmd} ls {cluster_id} {build_cmd_from_args(**kw)}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
