@@ -253,6 +253,8 @@ tests:
               command: list             # namespace list
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
+              base_cmd_args:
+                format: json
           - config:
               service: namespace
               command: set_qos             # namespace set_qos
@@ -293,6 +295,8 @@ tests:
               command: list             # namespace list
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
+              base_cmd_args:
+                format: json
           - config:
               service: namespace
               command: get_io_stats             # namespace get_io_stats
@@ -423,6 +427,8 @@ tests:
               command: list             # namespace list
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+              base_cmd_args:
+                format: json
           - config:
               service: namespace
               command: set_qos             # namespace set_qos
@@ -463,6 +469,8 @@ tests:
               command: list             # namespace list
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+              base_cmd_args:
+                format: json
           - config:
               service: namespace
               command: get_io_stats             # namespace get_io_stats
