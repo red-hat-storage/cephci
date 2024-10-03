@@ -34,8 +34,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                custom_repo: https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-8.0-202408281222.ci.0/IBM-CEPH-8.0-202408281222.ci.0-rhel9.repo
-                custom_image: cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-25
+                custom_repo: https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-8.0-202409180241.ci.0/IBM-CEPH-8.0-202409180241.ci.0-rhel9.repo
+                custom_image: cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-30
                 rhcs-version: "8.0"
                 mon-ip: node1
                 orphan-initial-daemons: true
@@ -67,7 +67,7 @@ tests:
           - config:
               command: shell
               args:
-                - ceph config set mgr mgr/cephadm/container_image_nvmeof cp.stg.icr.io/cp/ibm-ceph/nvmeof-rhel9:1.2.17-19
+                - ceph config set mgr mgr/cephadm/container_image_nvmeof cp.stg.icr.io/cp/ibm-ceph/nvmeof-rhel9:1.3.2-1
       destroy-cluster: false
       abort-on-fail: true
 

@@ -58,6 +58,13 @@
 #    "/perf":
 #       "GET":
 #            "List all the available performance counters"
+#    - Test supported methods for /mon and /mon/<arg> endpoint
+#    "/mon":
+#        "GET":
+#             "Show the information for all the monitors"
+#    "/mon/<arg>":
+#        "GET":
+#             "Show the information for the monitor name"
 #===============================================================================================
 
 tests:
@@ -330,3 +337,24 @@ tests:
         username: test_user
         status_code: 200
       desc: Use the GET method to list all the available performance counters
+
+  - test:
+      name: ceph-mgr RESTful module GET method on mon endpoint
+      polarion-id: CEPH-83597508
+      module: test_restful_operations_mon_endpoint.py
+      config:
+        endpoint: /mon
+        username: test_user
+        status_code: 200
+      desc: Use the GET method to view information for all the monitors
+
+  - test:
+      name: ceph-mgr RESTful module GET method on mon_arg endpoint
+      polarion-id: CEPH-83597508
+      module: test_restful_operations_mon_endpoint.py
+      config:
+        endpoint: /mon
+        username: test_user
+        status_code: 200
+        args: node1
+      desc: Use the GET method to view information for monitor name

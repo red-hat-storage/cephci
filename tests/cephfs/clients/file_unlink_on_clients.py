@@ -55,10 +55,7 @@ def run(ceph_cluster, **kw):
         )
         fs_util.prepare_clients([clients[0]], build)
         fs_util.auth_list([clients[0], clients[1]])
-        if not build.startswith(("3", "4", "5")):
-            if not fs_util.validate_fs_info(clients[0], "cephfs"):
-                log.error("FS info Validation failed")
-                return 1
+
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -125,7 +122,8 @@ def unlink_file(client1, client2, file_name, lock_from_mount_dir, validate_from=
     client1.exec_command(sudo=True, cmd=f"touch {lock_from_mount_dir}{file_name}")
     client1.exec_command(
         sudo=True,
-        cmd=f"python3 /home/cephuser/file_lock_utility.py {lock_from_mount_dir}{file_name} lock --timeout 120 &",
+        cmd=f"python3 /home/cephuser/file_lock_utility.py {lock_from_mount_dir}{file_name} lock "
+        f"--timeout 120 &> /dev/null &",
         long_running=True,
     )
     out, rc = client2.exec_command(

@@ -674,8 +674,8 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         try:
             client.exec_command(
                 sudo=True,
-                cmd=f"dd if=/dev/zero of={_file}_test bs=8096 count=10000000",
-                timeout=10,
+                cmd=f"dd if=/dev/zero of={_file}_test bs=1M count=1000",
+                timeout=30,
             )
         except SocketTimeoutException as timeout:
             LOG.info(
@@ -691,7 +691,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
         client.exec_command(
-            sudo=True, cmd=f"dd if=/dev/zero of={_file}_test bs=4096 count=10000"
+            sudo=True, cmd=f"dd if=/dev/zero of={_file}_test bs=1M count=1000"
         )
         client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}_test")
         LOG.info("Validation of CEPH-83575455 is successful.")

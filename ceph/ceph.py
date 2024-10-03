@@ -1604,14 +1604,21 @@ class CephNode(object):
             # Check for data residues in the channel streams. This is required for the following reasons
             #   - exit_ready and first line is blank causing data to be None
             #   - race condition between data read and exit ready
-            _new_timeout = datetime.datetime.now() + datetime.timedelta(seconds=10)
-            _out += read_stream(channel, _new_timeout, timeout=True)
-            _err += read_stream(channel, _new_timeout, timeout=True, stderr=True)
+            try:
+                _new_timeout = datetime.datetime.now() + datetime.timedelta(seconds=10)
+                _out += read_stream(channel, _new_timeout, timeout=True)
+                _err += read_stream(channel, _new_timeout, timeout=True, stderr=True)
+            except CommandFailed:
+                logger.debug("Encountered a timeout during read post execution.")
+            except BaseException as be:
+                logger.debug(
+                    f"Encountered an unknown exception during last read.\n {be}"
+                )
 
             _exit = channel.recv_exit_status()
             return _out, _err, _exit, _time
         except socket.timeout as terr:
-            logger.error(f"Command failed to execute within {timeout} seconds.")
+            logger.error(f"{cmd} failed to execute within {timeout} seconds.")
             raise SocketTimeoutException(terr)
         except TimeoutException as tex:
             channel.close()
@@ -1675,10 +1682,17 @@ class CephNode(object):
         # Fixme: Ensure the method returns a tuple of
         #        (stdout, stderr, exit_code, time_taken)
         if kw.get("long_running", False):
+            if kw.get("check_ec", False) and _exit != 0:
+                raise CommandFailed(
+                    f"{cmd} returned {_err} and code {_exit} on {self.ip_address}"
+                )
+
             return _exit
 
         if kw.get("check_ec", True) and _exit != 0:
-            raise CommandFailed(f"{cmd} returned {_exit} on {self.ip_address}")
+            raise CommandFailed(
+                f"{cmd} returned {_err} and code {_exit} on {self.ip_address}"
+            )
 
         return _out, _err
 

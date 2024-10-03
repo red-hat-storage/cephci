@@ -88,13 +88,24 @@ def map_userto_instances(os_nodes, os_cred):
             state = os_node_detail_json["status"]
             flavor = os_node_detail_json["flavor"]
             if not user_detail.get(os_node_detail_json["user_id"]):
-                user_json = execute(
-                    cmd=openstack_basecmd(**os_cred)
-                    + f" user show {os_node_detail_json['user_id']} -f json"
-                )
-                if not user_json:
-                    continue
-                user_detail[os_node_detail_json["user_id"]] = user_json["name"]
+                try:
+                    user_json = execute(
+                        cmd=openstack_basecmd(**os_cred)
+                        + f" user show {os_node_detail_json['user_id']} -f json"
+                    )
+                    user_detail[os_node_detail_json["user_id"]] = user_json["name"]
+                except CommandFailed:
+                    # If user_json can't be fetched, use a trimmed version of the user_id
+                    trimmed_user_id = os_node_detail_json[
+                        "user_id"
+                    ]  # Trimmed version of user_id
+                    print(
+                        f"Unable to fetch user details for {os_node_detail_json['user_id']}. "
+                        f"Using trimmed version: {trimmed_user_id}"
+                    )
+                    user_detail[os_node_detail_json["user_id"]] = os_node_detail_json[
+                        "user_id"
+                    ]
             if state == "ACTIVE":
                 os_instance_usage_detail_json = execute(
                     cmd=openstack_basecmd(**os_cred)

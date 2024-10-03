@@ -336,3 +336,92 @@ tests:
           user1: "batman"
           user2: "superman"
         file_name: "testfile"
+
+  - test:
+      name: Verify samba share creation with "nfs" earmark subvolume should failed
+      desc: Verify samba share creation with "nfs" earmark subvolume should failed
+      module: smb_deployment_earmark.py
+      polarion-id: CEPH-83599223
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: nfs
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        earmark: nfs
+
+  - test:
+      name: Verify samba multiple share creation with "nfs" earmark subvolume should failed
+      desc: Verify samba multiple share creation with "nfs" earmark subvolume should failed
+      module: smb_deployment_earmark.py
+      polarion-id: CEPH-83599224
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: nfs
+        smb_subvolumes: [sv1, sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1, share2]
+        path: "/"
+        earmark: nfs
+
+  - test:
+      name: Verify samba share creation without any earmark subvolumes should pass
+      desc: Verify samba share creation without any earmark subvolumes should pass
+      module: smb_deployment_earmark.py
+      polarion-id: CEPH-83599225
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+
+  - test:
+      name: Verify samba share creation with "smb" earmark subvolumes should pass
+      desc: Verify samba share creation with "smb" earmark subvolumes should pass
+      module: smb_deployment_earmark.py
+      polarion-id: CEPH-83599226
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        earmark: smb
+
+  - test:
+      name: Verify samba multiple share creation with "smb" earmark subvolumes should pass
+      desc: Verify samba multiple share creation with "smb" earmark subvolumes should pass
+      module: smb_deployment_earmark.py
+      polarion-id: CEPH-83599227
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1, sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1, share2]
+        path: "/"
+        earmark: smb

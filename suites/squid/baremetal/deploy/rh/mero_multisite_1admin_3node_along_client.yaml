@@ -311,7 +311,7 @@ tests:
           config:
             cephadm: true
             commands:
-              - "radosgw-admin zonegroup modify --endpoints=http://10.8.129.221:8080:5000 --rgw-zonegroup shared --rgw-realm india --access-key test123 --secret-key test123"
+              - "radosgw-admin zonegroup modify --endpoints=http://10.8.129.221:5000 --rgw-zonegroup shared --rgw-realm india --access-key test123 --secret-key test123"
               - "radosgw-admin zone modify --endpoints=http://10.8.129.221:5000 --rgw-zonegroup shared --rgw-realm india --rgw-zone primary --access-key test123 --secret-key test123"
               - "radosgw-admin period update --commit"
         ceph-sec:
