@@ -391,6 +391,53 @@ class HighAvailability:
             LOG.error(f"[ {nodename} ] {action} failed even after 300s timeout..")
 
         return False
+       
+    def scale_down(self, gateway):
+        start_counter = float()
+        start_time = str()
+        end_counter = float()
+        end_time = str()
+        LOG.info(f"[ {gateway} ]: Scaling down NVMe Service")
+        action_args = {"args": {"placement": [gateway]}, "pos_args": [self.nvme_pool, self.gateway_group]}
+        res = self.orch.op("apply", action_args)
+        if not res:
+            raise Exception(
+                f"[ {gateway} ]: Error in scaling down NVMe Service "
+            )
+        hostname = gateway.hostname
+        # Wait until 60 seconds
+        for w in WaitUntil():
+            # Check for gateway unavailability
+            if self.check_gateway_availability(
+                gateway.ana_group_id, state="DELETING"
+            ):
+                LOG.info(f"[ {gateway} ] NVMeofGW service is UNAVAILABLE.")
+                active = self.get_optimized_state(gateway.ana_group_id)
+
+                # Find optimized path
+                if active:
+                    end_counter, end_time = get_current_timestamp()
+                    LOG.info(
+                        f"{list(active[0])} is new and only Active GW for failed {hostname}"
+                    )
+                    break
+
+            LOG.warning(f"[ {hostname} ] is still in AVAILABLE state..")
+
+        if w.expired:
+            raise TimeoutError(
+                f"[ {hostname} ] Scale down of NVMeofGW service failed after 60s timeout.."
+            )
+
+        LOG.info(
+            f"[ {hostname} ] Total time taken to Scale down - {end_counter - start_counter} seconds"
+        )
+        return {
+            "scale-down-start-time": start_time,
+            "scale-down-end-time": end_time,
+            "scale-down-start-counter-time": start_counter,
+            "scale-down-end-counter-time": end_counter,
+        }
 
     def failover(self, gateway, fail_tool):
         """HA Failover on the NVMeoF Gateways.
@@ -637,6 +684,54 @@ class HighAvailability:
                 LOG.info(f"IO validation for {subsys}|{pool_img} is successful.")
 
         LOG.info("IO Validation is Successfull on all RBD images..")
+
+    def run_scaledown(self, gateway_nodes):
+        """Execute the Scale down with IO validation."""
+        initiators = self.config["initiators"]
+        executor = ThreadPoolExecutor()
+        io_tasks = []
+
+        try:
+            # Prepare FIO Execution
+            namespaces = self.fetch_namespaces(self.gateways[0])
+            self.prepare_io_execution(initiators)
+
+            # Check for targets at clients
+            self.compare_client_namespace([i["uuid"] for i in namespaces])
+
+            # Start IO Execution
+            for initiator in self.clients:
+                io_tasks.append(executor.submit(initiator.start_fio))
+            time.sleep(20)  # time sleep for IO to Kick-in
+
+            # Scale down
+            if not isinstance(gateway_nodes, list):
+                gateway_nodes = [gateway_nodes]
+
+            LOG.info(f"Scale down execution on {gateway_nodes}")
+
+            fail_gws, operational_gws = self.catogorize(gateway_nodes)
+            fail_gw_ana_ids = [gw.ana_group_id for gw in fail_gws]
+            gateway = operational_gws[0]
+
+            # Primary check - validate IO continuation
+            namespaces = self.fetch_namespaces(gateway, fail_gw_ana_ids)
+            self.validate_io(namespaces)
+
+            # Scale down
+            with parallel() as p:
+                for gw in fail_gws:
+                    p.spawn(self.scale_down, gw)
+                for result in p:
+                    LOG.info(log_json_dump(result))
+                self.validate_io(namespaces)
+
+        except BaseException as err:  # noqa
+            raise Exception(err)
+        finally:
+            if io_tasks:
+                LOG.info("Waiting for completion of IOs.")
+                executor.shutdown(wait=True, cancel_futures=True)
 
     def run(self):
         """Execute the HA failover and failback with IO validation."""
