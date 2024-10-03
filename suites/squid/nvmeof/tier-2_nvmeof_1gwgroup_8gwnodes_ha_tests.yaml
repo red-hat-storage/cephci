@@ -5,11 +5,11 @@
 tests:
 # Set up the cluster
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       module: install_prereq.py
       name: install ceph pre-requisites
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         verify_cluster_health: true
         steps:
@@ -50,7 +50,7 @@ tests:
       name: deploy cluster
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         command: add
         id: client.1
@@ -67,7 +67,7 @@ tests:
 
 # 8GW HA 4-subsystems multinode(7/8) Failover and failback parallely using systemctl and daemon
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         rbd_pool: rbd
         gw_group: gw_group1
@@ -153,7 +153,7 @@ tests:
 
 # 8GW HA 4-subsystems multinode(7/8) Failover and failback parallely using power off|on and maintanence_mode
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         rbd_pool: rbd2
         gw_group: gw_group1
@@ -239,7 +239,7 @@ tests:
 
 # 8GW HA 4-subsystems multinode(7/8) Failover and failback parallely using redeploy
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         rbd_pool: rbd3
         gw_group: gw_group1
