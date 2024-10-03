@@ -580,29 +580,36 @@ class CG_snap_IO(object):
                             # Get time when state is achieved
                             time_before_state = float(curr_time) - float(age_ref)
                             ceph_health, _ = client.exec_command("ceph health detail")
+                            exp_str1 = "FS_DEGRADED"
+                            exp_str2 = "MDS_SLOW_REQUEST"
                             if "Slow OSD" in ceph_health:
                                 log.info(
                                     f"Ceph had {ceph_health} when {io_mod} {io_type} failed in {state}.Ignoring.."
                                 )
-                            elif "MDS_SLOW_REQUEST" in ceph_health:
+                            elif (exp_str1 in ceph_health) or (exp_str2 in ceph_health):
                                 log.info(
-                                    "Wait for 30secs to check if MDS Slowness issue resolves"
+                                    f"Wait for 30secs to check if {ceph_health} issue resolves"
                                 )
                                 retry_cnt = 0
                                 while retry_cnt < 31:
                                     ceph_health, _ = client.exec_command(
                                         "ceph health detail"
                                     )
-                                    if "MDS_SLOW_REQUEST" in ceph_health:
+                                    if (exp_str1 in ceph_health) or (
+                                        exp_str2 in ceph_health
+                                    ):
                                         time.sleep(5)
                                         retry_cnt += 5
                                     else:
                                         log.info(
-                                            f"MDS_SLOW_REQUEST issue is resolved in {retry_cnt}secs"
+                                            f"{ceph_health} issue is resolved in {retry_cnt}secs"
                                         )
                                         retry_cnt = 31
                                 cg_status = (
-                                    1 if ("MDS_SLOW_REQUEST" in ceph_health) else 0
+                                    1
+                                    if (exp_str1 in ceph_health)
+                                    or (exp_str2 in ceph_health)
+                                    else 0
                                 )
                             elif (float(end_time) - float(time_before_state)) < 10:
                                 log.info(
@@ -665,29 +672,36 @@ class CG_snap_IO(object):
                             log.info(f"age_ref:{age_ref},curr_time:{curr_time}")
                             ceph_health, _ = client.exec_command("ceph health detail")
                             log.info(ceph_health)
+                            exp_str1 = "FS_DEGRADED"
+                            exp_str2 = "MDS_SLOW_REQUEST"
                             if "Slow OSD" in ceph_health:
                                 log.info(
                                     f"Ceph had {ceph_health} when {io_mod} {io_type} failed in {state}.Ignoring.."
                                 )
-                            elif "MDS_SLOW_REQUEST" in ceph_health:
+                            elif (exp_str1 in ceph_health) or (exp_str2 in ceph_health):
                                 log.info(
-                                    "Wait for 30secs to check if MDS Slowness issue resolves"
+                                    f"Wait for 30secs to check if {ceph_health} issue resolves"
                                 )
                                 retry_cnt = 0
                                 while retry_cnt < 31:
                                     ceph_health, _ = client.exec_command(
                                         "ceph health detail"
                                     )
-                                    if "MDS_SLOW_REQUEST" in ceph_health:
+                                    if (exp_str1 in ceph_health) or (
+                                        exp_str2 in ceph_health
+                                    ):
                                         time.sleep(5)
                                         retry_cnt += 5
                                     else:
                                         log.info(
-                                            f"MDS_SLOW_REQUEST issue is resolved in {retry_cnt}secs"
+                                            f"{ceph_health} issue is resolved in {retry_cnt}secs"
                                         )
                                         retry_cnt = 31
                                 cg_status = (
-                                    1 if ("MDS_SLOW_REQUEST" in ceph_health) else 0
+                                    1
+                                    if (exp_str1 in ceph_health)
+                                    or (exp_str2 in ceph_health)
+                                    else 0
                                 )
 
                             elif float(time_before_state) > float(end_time):

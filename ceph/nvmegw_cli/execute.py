@@ -53,7 +53,7 @@ class ExecuteCommandMixin:
                 config_dict_to_string(cmd_args),
             ]
         )
-        err, out = self.node.exec_command(cmd=command, sudo=True)
+        err, out = self.node.exec_command(cmd=command, sudo=True, pretty_print=True)
         LOG.info(f"ERROR - {err or None},\nOUTPUT - {out}")
 
         if DISCARD_OUTPUT_STR in out:

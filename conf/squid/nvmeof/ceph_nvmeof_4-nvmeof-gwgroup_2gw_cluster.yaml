@@ -13,26 +13,26 @@ globals:
           - mon
           - mgr
           - osd
-        no-of-volumes: 4
+        no-of-volumes: 5
         disk-size: 30
       node3:
         role:
           - mon
           - osd
-        no-of-volumes: 4
+        no-of-volumes: 5
         disk-size: 30
       node4:
         role:
           - mds
           - osd
-        no-of-volumes: 4
+        no-of-volumes: 5
         disk-size: 30
       node5:
         role:
           - mds
           - osd
           - rgw
-        no-of-volumes: 4
+        no-of-volumes: 5
         disk-size: 30
       node6:
         id: node6

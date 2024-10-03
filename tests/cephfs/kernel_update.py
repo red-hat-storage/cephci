@@ -30,6 +30,7 @@ def run(ceph_cluster, **kw):
         custom_config = test_data.get("custom-config")[0].split("=")
         pre_or_post = custom_config[0]
         url = custom_config[1]
+        url = url.rstrip("/")
         log.info("Given Kernel Information is " + str(url))
         verification_type = []
         if "pre" in pre_or_post:
@@ -61,6 +62,9 @@ def run(ceph_cluster, **kw):
                 )
                 kernel_version, _ = cnode.exec_command(sudo=True, cmd="uname -r")
                 log.info(f"Current kernel version is {kernel_version}")
+                if kernel_package in kernel_version:
+                    log.info("Kernel is already updated")
+                    continue
                 kernel_version = kernel_version.rstrip()
                 kernel_version = kernel_version.rstrip(".x86_64")
                 kernel_package = kernel_package.rstrip()
@@ -124,6 +128,9 @@ def run(ceph_cluster, **kw):
             kernel_update_cmd = " ".join(kernel_cmds).replace("\n", "")
             for cnode in ceph_nodes:
                 kernel_version, _ = cnode.exec_command(sudo=True, cmd="uname -r")
+                if kernel_package in kernel_version:
+                    log.info("Kernel is already updated")
+                    continue
                 log.info(f"Current kernel version is {kernel_version}")
                 log.info("Updating kernel using below packages")
                 log.info(kernel_update_cmd)

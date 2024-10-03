@@ -262,4 +262,13 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirroring_snap_status_using_asok.py
       name: Validate the Synchronisation Status using asok file
       polarion-id: "CEPH-83593134"
-
+  - test:
+      abort-on-fail: false
+      desc: "Validate snapshot synchronisation using SnapSchedule"
+      clusters:
+        ceph1:
+          config:
+            name: Validate snapshot synchronisation using SnapSchedul
+      module: cephfs_mirroring.test_cephfs_mirroring_with_snap_schedule.py
+      name: Validate snapshot synchronisation using SnapSchedul
+      polarion-id: "CEPH-83598968"

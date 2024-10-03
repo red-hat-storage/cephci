@@ -4,11 +4,9 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway HA
 
 """
 
-
 from copy import deepcopy
 
 from ceph.ceph import Ceph
-from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
@@ -17,11 +15,9 @@ from tests.nvmeof.workflows.ha import HighAvailability
 from tests.nvmeof.workflows.nvme_utils import (
     delete_nvme_service,
     deploy_nvme_service,
-    get_nvme_service_name,
 )
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
-from utility.retry import retry
 from utility.utils import generate_unique_id
 
 LOG = Log(__name__)
@@ -206,7 +202,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             break
 
     try:
-
+        # Deploy NVMe services
         if config.get("install"):
             deploy_nvme_service(ceph_cluster, config)
 
@@ -218,12 +214,15 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 for subsys_args in config["subsystems"]:
                     subsys_args["ceph_cluster"] = ceph_cluster
                     p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
-        
-        ha.run_scaledown(config["scale_down"]["nodes"])
+
+        # Initiate scale-down and scale-up
+        ha.run_ns_autoloadbalancing_operations()
         return 0
+
     except Exception as err:
         LOG.error(err)
         return 1
+
     finally:
         if config.get("cleanup"):
             teardown(ceph_cluster, rbd_obj, config)
