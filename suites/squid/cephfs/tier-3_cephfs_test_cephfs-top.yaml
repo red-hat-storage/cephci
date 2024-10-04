@@ -191,6 +191,11 @@ tests:
       desc: Verify enable and disble mgr module for stats works
       abort-on-fail: false
   - test:
+      name: cephfs-top initiate testing
+      module: cephfs_top.cephfs_top_initiate.py
+      polarion-id: CEPH-83573829
+      desc: Testing basic cephfs-top initiate conditions
+  - test:
       name: cephfs-top negative testing
       module: cephfs_top.cephfs_top_negative_tests.py
       polarion-id: CEPH-83575020
@@ -208,8 +213,4 @@ tests:
       polarion-id: CEPH-83573838
       desc: cephfs-top validate top stats
       abort-on-fail: false
-  - test:
-      name: cephfs-top initiate testing
-      module: cephfs_top.cephfs_top_initiate.py
-      polarion-id: CEPH-83573829
-      desc: Testing basic cephfs-top initiate conditions
+

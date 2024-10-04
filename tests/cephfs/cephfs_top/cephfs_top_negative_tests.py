@@ -397,7 +397,15 @@ def run(ceph_cluster, **kw):
         config = kw["config"]
         build = config.get("build", config.get("rhbuild"))
 
-        fs_util_v1 = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        if erasure:
+            log.info("Test case has been triggered with Erasure")
         clients = ceph_cluster.get_ceph_objects("client")
         client = clients[0]
         fs_util_v1.prepare_clients(clients, build)
