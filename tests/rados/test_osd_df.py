@@ -322,9 +322,8 @@ def verify_deviation(
         status: status of host/node or osd | new or old or ignored
     Returns: True -> pass | False - fail
     """
-    acting_total_size = acting_total_raw_use = acting_total_data = (
-        acting_total_avail
-    ) = 0
+    acting_total_size = 0
+    acting_total_raw_use = acting_total_data = acting_total_avail = 0
     stored_data_kb = config["WI"] * 4 * 1024
     pre_osd_df_stats = config["pre_osd_df_stats"]
     post_osd_df_stats = config["post_osd_df_stats"]
@@ -679,8 +678,8 @@ def verify_deviation(
                     f" ~= {post_osd_df_stats['summary']['total_kb_avail']}"
                 )
                 assert int(
-                    pre_osd_df_stats["summary"]["total_kb_avail"] / 1048576
-                ) == int(post_osd_df_stats["summary"]["total_kb_avail"] / 1048576)
+                    pre_osd_df_stats["summary"]["total_kb_avail"] / (1 < 30)
+                ) == int(post_osd_df_stats["summary"]["total_kb_avail"] / (1 < 30))
                 log.info("Summary Stats verification post I/Os: PASSED")
             elif stage == "out":
                 log.info("Summary Stats verification after OSDs are OUT")

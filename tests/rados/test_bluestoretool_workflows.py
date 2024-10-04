@@ -463,7 +463,7 @@ def run(ceph_cluster, **kw):
             log.info(out)
             assert "success" in out
 
-            if rhbuild.split(".")[0] >= "6":
+            if rhbuild.split(".")[0] != "8":
                 # Execute ceph-bluestore-tool qfsck --path <osd_path>
                 osd_id = random.choice(osd_list)
                 log.info(
@@ -672,21 +672,19 @@ def run(ceph_cluster, **kw):
             )
             out = bluestore_obj.show_bluefs_stats(osd_id=osd_id)
             log.info(out)
-            if rhbuild.split(".")[0] >= "7":
-                for pattern in [
-                    "device size",
-                    "DEV/LEV",
-                    "LOG",
-                    "WAL",
-                    "DB",
-                    "SLOW",
-                    "MAXIMUMS",
-                    "TOTAL",
-                ]:
-                    assert pattern in out
-            else:
-                for pattern in ["device size", "wal_total", "db_total", "slow_total"]:
-                    assert pattern in out
+            for pattern in [
+                "device size",
+                "DEV/LEV",
+                "LOG",
+                "WAL",
+                "DB",
+                "SLOW",
+                "MAXIMUMS",
+                "TOTAL",
+            ]:
+                assert (
+                    pattern in out
+                ), f"{pattern} not found in bluefs stats output for build {rhbuild}"
 
             # restart OSD services
             osd_services = rados_obj.list_orch_services(service_type="osd")

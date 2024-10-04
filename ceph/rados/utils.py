@@ -24,6 +24,7 @@ def set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged):
         osd_id: OSD id
         unmanaged: true/false
     """
+    out = err = None
     config = {
         "command": "apply",
         "service": "osd",
@@ -53,8 +54,9 @@ def set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged):
     )
 
     # return if no services found
-    if "No services reported" in out + err:
-        log.warning(out)
+    if "No services reported" in out or "No services reported" in err:
+        log.debug(out)
+        log.debug(err)
         return
     svc = loads(out)[0]
 
@@ -145,11 +147,14 @@ def set_osd_out(ceph_cluster, osd_id):
     Returns:
         Pass->true, Fail->false
     """
+    out = err = None
     config = {"command": "out", "service": "osd", "pos_args": [osd_id]}
     log.info(f"Executing OSD {config.pop('command')} service")
     osd = OSD(cluster=ceph_cluster, **config)
     out, err = osd.out(config)
-    if f"marked out osd.{osd_id}" in err:
+    log.debug(out)
+    log.debug(err)
+    if f"marked out osd.{osd_id}" in err or f"marked out osd.{osd_id}" in out:
         return True
     return False
 

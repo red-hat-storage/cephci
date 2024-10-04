@@ -78,6 +78,9 @@ def run(ceph_cluster, **kw):
                     host_level = True
                     break
 
+            # fetching the default value of osd_memory_target at host level for the cluster
+            osd_org_omt = mon_obj.get_config(section="osd", param="osd_memory_target")
+            cust_omt_get = int(osd_org_omt) + 200000000
             # set a value for osd_memory_target at OSD level
             log.info("Setting a value for osd_memory_target at OSD level")
             # assert mon_obj.set_config(
@@ -89,7 +92,7 @@ def run(ceph_cluster, **kw):
             As a workaround, the value is set and verified through cephadm shell command
             until a resolution for the edge case is found."""
             out, _ = cephadm.shell(
-                args=["ceph config set osd osd_memory_target 6000000000"]
+                args=[f"ceph config set osd osd_memory_target {cust_omt_get}"]
             )
             time.sleep(5)
 
@@ -98,7 +101,7 @@ def run(ceph_cluster, **kw):
             log.info(
                 f"OSD osd_memory_target set at OSD level from ceph config get: {osd_get_omt}"
             )
-            assert int(osd_get_omt) == 6000000000
+            assert int(osd_get_omt) == cust_omt_get
             # the config show verification should be skipped if osd_memory_target is defined at
             # host level as it holds higher precedence than OSD level declaration
             if not host_level:
@@ -108,20 +111,21 @@ def run(ceph_cluster, **kw):
                 log.info(
                     f"OSD osd_memory_target set at OSD level from ceph config show: {osd_show_omt}"
                 )
-                assert int(osd_show_omt) == 6000000000
+                assert int(osd_show_omt) == cust_omt_get
             log.info("OSD config parameter osd_memory_target set successfully")
 
             # pick an OSD at random to change the osd_memory_target at individual OSD level
             osd_id = random.choice(osd_list)
             log.debug(f"Chosen OSD: osd.{osd_id}")
             log.info(f"Setting a value for osd_memory_target at osd.{osd_id} level")
+            cust_omt = int(osd_org_omt) + 100000000
             # assert mon_obj.set_config(
             #     section=f"osd.{osd_id}", name="osd_memory_target", value="5000000000"
             # )
             out, _ = cephadm.shell(
-                args=[f"ceph config set osd.{osd_id} osd_memory_target 5000000000"]
+                args=[f"ceph config set osd.{osd_id} osd_memory_target {cust_omt}"]
             )
-            time.sleep(5)
+            time.sleep(7)
 
             # verify the value set using ceph config get and ceph config show
             osdid_get_omt, osdid_show_omt = fetch_osd_config_value(osd_id)
@@ -132,7 +136,7 @@ def run(ceph_cluster, **kw):
                 f"OSD osd_memory_target set for osd.{osd_id} from ceph config show: {osdid_show_omt}"
             )
 
-            if not int(osdid_get_omt) == int(osdid_show_omt) == 5000000000:
+            if not int(osdid_get_omt) == int(osdid_show_omt) == cust_omt:
                 log.error(
                     f"Value of osd_memory_target for osd.{osd_id} not set as per expectation"
                 )
@@ -207,9 +211,10 @@ def run(ceph_cluster, **kw):
                 f"OSD {osd_ran} osd_memory_target from ceph config show: {osd_ran_show_omt}"
             )
             # set a custom value of osd_memory_target for the OSD
+            cust_osd_omt = int(osd_ran_get_omt) + 30000000
             log.info(f"Setting a value for osd_memory_target at osd.{osd_ran} level")
             assert mon_obj.set_config(
-                section=f"osd.{osd_ran}", name="osd_memory_target", value="4500000000"
+                section=f"osd.{osd_ran}", name="osd_memory_target", value=cust_osd_omt
             )
             log.info("OSD config parameter osd_memory_target set successfully")
 
@@ -220,7 +225,7 @@ def run(ceph_cluster, **kw):
             log.info(
                 f"OSD osd_memory_target set for osd.{osd_ran} from ceph config show: {osdran_show_omt}"
             )
-            if not int(osdran_get_omt) == int(osdran_show_omt) == 4500000000:
+            if not int(osdran_get_omt) == int(osdran_show_omt) == cust_osd_omt:
                 log.error(
                     f"Value of osd_memory_target for osd.{osd_ran} not set as per expectation"
                 )
@@ -232,6 +237,7 @@ def run(ceph_cluster, **kw):
                 f"has taken effect and verified successfully"
             )
 
+            cust_osd_omt_host = int(osd_ran_get_omt) + 40000000
             # set the osd_memory_target value at host level
             log.info("Setting a value for osd_memory_target at Host level")
             assert mon_obj.set_config(
@@ -239,7 +245,7 @@ def run(ceph_cluster, **kw):
                 location_type="host",
                 location_value=osd_node.hostname,
                 name="osd_memory_target",
-                value="5500000000",
+                value=cust_osd_omt_host,
                 custom_delay=5,
             )
             log.info(
@@ -257,7 +263,7 @@ def run(ceph_cluster, **kw):
                 f"OSD osd_memory_target set for osd.{osd_ran2} from ceph config show: {osdran2_show_omt}"
             )
 
-            if not int(osdran2_get_omt) == int(osdran2_show_omt) == 5500000000:
+            if not int(osdran2_get_omt) == int(osdran2_show_omt) == cust_osd_omt_host:
                 log.error(
                     f"Value of osd_memory_target for osd.{osd_ran2} is not same as host"
                 )
@@ -265,7 +271,7 @@ def run(ceph_cluster, **kw):
                     f"Value of osd_memory_target for osd.{osd_ran2} is not same as host"
                 )
             log.info(
-                f"Value of osd_memory_target for osd.{osd_ran2} is same as Host: 5500000000"
+                f"Value of osd_memory_target for osd.{osd_ran2} is same as Host: {cust_osd_omt_host}"
             )
             # check the value osd_memory_target of first random osd, should be unchanged
             osd_ran_get_omt, osd_ran_show_omt = fetch_osd_config_value(osd_ran)
@@ -275,19 +281,20 @@ def run(ceph_cluster, **kw):
             log.info(
                 f"OSD.{osd_ran} osd_memory_target from ceph config show: {osd_ran_show_omt}"
             )
-            assert int(osdran_get_omt) == int(osdran_show_omt) == 4500000000
+            assert int(osdran_get_omt) == int(osdran_show_omt) == cust_osd_omt
             log.info(
                 f"Value of osd_memory_target for osd.{osd_ran} is unchanged as expected."
             )
 
             # Changing the value of osd_memory_target for the second random OSD
+            cust_osd2_omt = int(osd_ran_get_omt) + 37000000
             log.info(f"Setting a value for osd_memory_target at osd.{osd_ran2} level")
             assert mon_obj.set_config(
-                section=f"osd.{osd_ran2}", name="osd_memory_target", value="5800000000"
+                section=f"osd.{osd_ran2}", name="osd_memory_target", value=cust_osd2_omt
             )
             log.info("OSD config parameter osd_memory_target set successfully")
 
-            # check the value osd_memory_target of 2nd random osd, should now be 5800000000
+            # check the value osd_memory_target of 2nd random osd, should now be cust_osd2_omt
             osdran2_get_omt, osdran2_show_omt = fetch_osd_config_value(osd_ran2)
             log.info(
                 f"OSD osd_memory_target set for osd.{osd_ran2} from ceph config get: {osdran2_get_omt}"
@@ -295,7 +302,7 @@ def run(ceph_cluster, **kw):
             log.info(
                 f"OSD osd_memory_target set for osd.{osd_ran2} from ceph config show: {osdran2_show_omt}"
             )
-            if not int(osdran2_get_omt) == int(osdran2_show_omt) == 5800000000:
+            if not int(osdran2_get_omt) == int(osdran2_show_omt) == cust_osd2_omt:
                 log.error(
                     f"Value of osd_memory_target for osd.{osd_ran2} not set as per expectation"
                 )
@@ -304,7 +311,7 @@ def run(ceph_cluster, **kw):
                 )
             log.info(
                 f"value of osd_memory_target for osd.{osd_ran2} changed "
-                f"from host value of 5500000000 to 5800000000 as per expectation"
+                f"from host value of {cust_osd_omt_host} to {cust_osd2_omt} as per expectation"
             )
             log.info(
                 "Test successfully verifies the propagation of osd_memory_target"
