@@ -222,11 +222,11 @@ def snap_sched_test(snap_req_params):
     log.info("Fuse-Mount cephfs volume")
     fuse_mounting_dir = f"/mnt/{vol_name}_post_upgrade_fuse"
     cephfs_client = random.choice(clients)
-    """fs_util.fuse_mount(
+    fs_util.fuse_mount(
         [cephfs_client],
         fuse_mounting_dir,
         extra_params=f"-r / --client_fs {vol_name}",
-    )"""
+    )
 
     log.info(
         "Using existing mountpoint,verify existing snapshots are accessible, perform readwrite IO."
