@@ -57,7 +57,13 @@ def run(ceph_cluster, **kw):
 
     """
     try:
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsV1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
@@ -65,9 +71,20 @@ def run(ceph_cluster, **kw):
         num_of_osds = config.get("num_of_osds")
         build = config.get("build", config.get("rhbuild"))
         print(osp_cred)
-        fs_name = "cephfs"
+
         fs_util_v1.prepare_clients(clients, build)
         fs_util_v1.auth_list(clients)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util_v1.get_fs_info(clients[0], fs_name)
+
+        if not fs_details:
+            fs_util_v1.create_fs(clients[0], fs_name)
+        host_list = [mdsnode.node.hostname for mdsnode in mds_nodes]
+        hosts = " ".join(host_list)
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"ceph orch apply mds {fs_name} --placement='3 {hosts}'",
+        )
         mon_node_ip = fs_util_v1.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
         kernel_mount_dir = "/mnt/kernel_" + "".join(

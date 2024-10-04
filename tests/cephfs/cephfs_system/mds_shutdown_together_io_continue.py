@@ -25,7 +25,13 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-11240"
         log.info(f"Running CephFS tests for -{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
 
         clients = ceph_cluster.get_ceph_objects("client")
@@ -35,9 +41,17 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
+        host_list = [mdsnode.node.hostname for mdsnode in mds_nodes]
+        hosts = " ".join(host_list)
+        client1.exec_command(
+            sudo=True,
+            cmd=f"ceph orch apply mds {fs_name} --placement='3 {hosts}'",
+        )
         osp_cred = config.get("osp_cred")
         if config.get("cloud-type") == "openstack":
             os_cred = osp_cred.get("globals").get("openstack-credentials")
@@ -69,9 +83,12 @@ def run(ceph_cluster, **kw):
             [client1],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
         )
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
-        fs_util.fuse_mount([client1], fuse_mounting_dir_1)
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_1, extra_params=f" --client_fs {fs_name}"
+        )
         cephfs = {
             "fill_data": 20,
             "io_tool": "smallfile",

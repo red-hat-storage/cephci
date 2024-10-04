@@ -27,7 +27,13 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83572891"
         log.info(f"Running CephFS tests for -{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
@@ -35,9 +41,11 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -52,9 +60,12 @@ def run(ceph_cluster, **kw):
             [client1],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
         )
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
-        fs_util.fuse_mount([client1], fuse_mounting_dir_1)
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_1, extra_params=f" --client_fs {fs_name}"
+        )
         cephfs = {
             "fill_data": 50,
             "io_tool": "smallfile",
@@ -79,7 +90,9 @@ def run(ceph_cluster, **kw):
             "perf dump",
             "perf histogram dump",
         ]
-        out1, ec = client1.exec_command(sudo=True, cmd="ceph fs status -f json-pretty")
+        out1, ec = client1.exec_command(
+            sudo=True, cmd=f"ceph fs status {fs_name} -f json-pretty"
+        )
         output1 = json.loads(out1)
         mdsmap = output1["mdsmap"]
         mds_1 = ""

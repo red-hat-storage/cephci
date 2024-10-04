@@ -24,7 +24,13 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-11241"
         log.info(f"Running CephFS tests for -{tc}")
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
@@ -33,9 +39,18 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
-        fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(client1, fs_name)
+
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
+
+        host_list = [mdsnode.node.hostname for mdsnode in mds_nodes]
+        hosts = " ".join(host_list)
+        client1.exec_command(
+            sudo=True,
+            cmd=f"ceph orch apply mds {fs_name} --placement='3 {hosts}'",
+        )
         osp_cred = config.get("osp_cred")
         if config.get("cloud-type") == "openstack":
             os_cred = osp_cred.get("globals").get("openstack-credentials")
@@ -67,9 +82,12 @@ def run(ceph_cluster, **kw):
             [client1],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
         )
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
-        fs_util.fuse_mount([client1], fuse_mounting_dir_1)
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_1, extra_params=f" --client_fs {fs_name}"
+        )
         cephfs = {
             "fill_data": 20,
             "io_tool": "smallfile",
@@ -92,7 +110,7 @@ def run(ceph_cluster, **kw):
         # Creating 5k dirs and files in parallel
         with parallel() as p:
             p.spawn(create_io_dir)
-        find_mdsmap = "ceph fs status cephfs -f json"
+        find_mdsmap = f"ceph fs status {fs_name} -f json"
         out1 = client1.exec_command(sudo=True, cmd=find_mdsmap)
         output1 = json.loads(out1[0])
         mdsmap = output1["mdsmap"]
@@ -103,9 +121,9 @@ def run(ceph_cluster, **kw):
         up_mds = []
         standby_mds = []
         for mds in mdsmap:
-            if mds["state"] == "active" and mds["name"].startswith("cephfs."):
+            if mds["state"] == "active" and mds["name"].startswith(f"{fs_name}."):
                 up_mds.append(mds["name"])
-            if mds["state"] == "standby" and mds["name"].startswith("cephfs."):
+            if mds["state"] == "standby" and mds["name"].startswith(f"{fs_name}."):
                 standby_mds.append(mds["name"])
         first_shut = up_mds[0].split(".")[1]
         log.info(f"first_shut_node={first_shut}")
@@ -148,13 +166,14 @@ def run(ceph_cluster, **kw):
                     log.info(mdss.node.hostname)
                     if mds["name"].split(".")[1] == mdss.node.hostname:
                         log.info(f'shutting down {mds["name"]}')
+                        bringup_mds.append(mdss)
                         fs_util.node_power_off(node=mdss.node, sleep_time=150, **params)
                         break
         out4 = client1.exec_command(sudo=True, cmd=find_mdsmap)
         output4 = json.loads(out4[0])
         mdsmap4 = output4["mdsmap"]
         log.info(f"mdsmap4={mdsmap4}")
-        for bring in mds_nodes:
+        for bring in bringup_mds:
             fs_util.node_power_on(node=bring.node, sleep_time=150, **params)
         # check if the mds is restarted
         out5 = client1.exec_command(sudo=True, cmd=find_mdsmap)

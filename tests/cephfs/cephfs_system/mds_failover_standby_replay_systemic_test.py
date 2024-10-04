@@ -19,8 +19,8 @@ def test_setup(fs_util, ceph_cluster, client):
     This method is Setup to create test configuration - subvolumegroup,subvolumes,nfs servers
     """
     log.info("Create fs volume if doesn't exist")
-    default_fs = "cephfs"
-    fs_details = fs_util.get_fs_info(client)
+    default_fs = "cephfs-standbyreplay"
+    fs_details = fs_util.get_fs_info(client, default_fs)
     mds_nodes = ceph_cluster.get_ceph_objects("mds")
     if not fs_details:
         fs_util.create_fs(client, default_fs)
@@ -180,7 +180,15 @@ def run(ceph_cluster, **kw):
 
     """
     try:
-        fs_util_v1 = FsUtilsV1(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtilsV1.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        if erasure:
+            log.info("Script was triggered with Erasure")
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
@@ -203,7 +211,11 @@ def run(ceph_cluster, **kw):
             pass
         else:
             pass
-        fs_name = "cephfs"
+        # fs_name = "cephfs" if not erasure else "cephfs-ec"
+        # fs_details = fs_util_v1.get_fs_info(clients[0], fs_name)
+        #
+        # if not fs_details:
+        #     fs_util_v1.create_fs(clients[0], fs_name)
         fs_util_v1.prepare_clients(clients, build)
         fs_util_v1.auth_list(clients)
         client = clients[0]
@@ -240,7 +252,7 @@ def run(ceph_cluster, **kw):
             mnt_type = random.choice(["fuse", "kernel", "nfs"])
             if mnt_type == "nfs":
                 mnt_params.update(nfs_params)
-            cmd = f"ceph fs subvolume getpath cephfs {sv['subvol_name']}"
+            cmd = f"ceph fs subvolume getpath {setup_params['default_fs']} {sv['subvol_name']}"
             if sv.get("group_name"):
                 cmd += f" {sv['group_name']}"
             out, rc = client.exec_command(
@@ -254,14 +266,16 @@ def run(ceph_cluster, **kw):
 
             mnt_info.update({sv["subvol_name"]: {"path": path, "client": mnt_client}})
         out, rc = client.exec_command(
-            cmd=f"ceph fs status {fs_name} -f json", client_exec=True
+            cmd=f"ceph fs status {setup_params['default_fs']} -f json", client_exec=True
         )
         log.info(out)
         parsed_data = json.loads(out)
         for mds in parsed_data.get("mdsmap"):
             if mds.get("rank") == 0 and mds.get("state") == "active":
                 active_mds = mds["name"]
-        out, rc = client.exec_command(cmd=f"ceph fs status {fs_name}", client_exec=True)
+        out, rc = client.exec_command(
+            cmd=f"ceph fs status {setup_params['default_fs']}", client_exec=True
+        )
         out_list = out.split("\n")
         for out_iter in out_list:
             if "0-s" in out_iter:
@@ -285,7 +299,7 @@ def run(ceph_cluster, **kw):
             "Perform Active MDS failover, and Verify Standby-Replay daemon takesover"
         )
         out, rc = client.exec_command(
-            cmd=f"ceph fs status {fs_name} -f json", client_exec=True
+            cmd=f"ceph fs status {setup_params['default_fs']} -f json", client_exec=True
         )
         out, rc = client.exec_command(
             cmd=f"ceph mds fail {active_mds}", client_exec=True
@@ -295,7 +309,7 @@ def run(ceph_cluster, **kw):
         if wait_for_healthy_ceph(client, fs_util_v1, 300) == 0:
             return 1
         out, rc = client.exec_command(
-            cmd=f"ceph fs status {fs_name} -f json", client_exec=True
+            cmd=f"ceph fs status {setup_params['default_fs']} -f json", client_exec=True
         )
         log.info(out)
         parsed_data = json.loads(out)

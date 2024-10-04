@@ -38,7 +38,13 @@ def check_nodes(admin, target_node, check_node_cmd):
 
 def run(ceph_cluster, **kw):
     try:
-        fs_util = FsUtils(ceph_cluster)
+        test_data = kw.get("test_data")
+        fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -62,7 +68,19 @@ def run(ceph_cluster, **kw):
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}/"
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}/"
         mon_node_ips = fs_util.get_mon_node_ips()
-        default_fs = "cephfs"
+        mds_nodes = ceph_cluster.get_ceph_objects("mds")
+        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_details = fs_util.get_fs_info(clients[0], default_fs)
+
+        if not fs_details:
+            fs_util.create_fs(clients[0], default_fs)
+
+        host_list = [mdsnode.node.hostname for mdsnode in mds_nodes]
+        hosts = " ".join(host_list)
+        client1.exec_command(
+            sudo=True,
+            cmd=f"ceph orch apply mds {default_fs} --placement='3 {hosts}'",
+        )
         fs_util.kernel_mount(
             [clients[0]],
             kernel_mounting_dir_1,
