@@ -401,10 +401,26 @@ class BootstrapMixin:
             public_nws = ",".join(filter(lambda x: x, list(set(public_nws.split(",")))))
 
         if public_nws:
-            self.shell(args=["ceph", "config", "set", "mon public_network", public_nws])
+            # Refer:
+            # - https://bugzilla.redhat.com/show_bug.cgi?id=2314438
+            # - https://bugzilla.redhat.com/show_bug.cgi?id=2156919
+            # - https://access.redhat.com/solutions/7088483
+            # Todo: update public network config level to global for 6.x and 7.x when changes are in
+            # 6.x tracker: https://bugzilla.redhat.com/show_bug.cgi?id=2314604
+            # 7.x tracker: https://bugzilla.redhat.com/show_bug.cgi?id=2314606
+            config_level = "global" if rhbuild.split(".")[0] >= "8" else "mon"
+            self.shell(
+                args=[
+                    "ceph",
+                    "config",
+                    "set",
+                    f"{config_level} public_network",
+                    public_nws,
+                ]
+            )
         if cluster_nws:
             self.shell(
-                args=["ceph", "config", "set", "mon cluster_network", cluster_nws]
+                args=["ceph", "config", "set", "global cluster_network", cluster_nws]
             )
 
         # validate spec file
