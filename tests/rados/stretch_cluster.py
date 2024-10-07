@@ -310,6 +310,7 @@ def wait_for_clean_pg_sets(
     timeout: Any = 10000,
     sleep_interval: Any = 120,
     test_pool: str = None,
+    recovery_thread: bool = True,
 ) -> bool:
     """
     Waiting for up to 2.5 hours for the PG's to enter active + Clean state.
@@ -320,9 +321,13 @@ def wait_for_clean_pg_sets(
         timeout: timeout in seconds or "unlimited"
         sleep_interval: sleep timeout in seconds (default: 120)
         test_pool: name of the test pool, whose PG states need to be monitored.
-
+        recovery_thread: flag to control if recovery threads are to be modified
     Returns:  True -> pass, False -> fail
     """
+    if recovery_thread:
+        log.debug("Updating recovery thread and osd_op_queue to assist faster recovery")
+        rados_obj.change_recovery_threads(config={}, action="set")
+
     end_time = None
     if timeout == "unlimited":
         condition = lambda: True
@@ -384,10 +389,16 @@ def wait_for_clean_pg_sets(
                 log.error(f"Error occurred while fetching status report: {e}")
 
         if all_pg_active_clean:
+            if recovery_thread:
+                log.debug("Removing recovery thread settings")
+                rados_obj.change_recovery_threads(config={}, action="rm")
             log.info("The recovery and back-filling of the OSDs/Pool is completed")
             return True
         time.sleep(sleep_interval)
 
+    if recovery_thread:
+        log.debug("Removing recovery thread settings")
+        rados_obj.change_recovery_threads(config={}, action="rm")
     log.error(
         "The cluster/Pool did not reach active + Clean state within the specified timeout"
     )

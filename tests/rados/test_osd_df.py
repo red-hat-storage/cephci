@@ -677,9 +677,14 @@ def verify_deviation(
                     f"TOTAL AVAIL: {pre_osd_df_stats['summary']['total_kb_avail']}"
                     f" ~= {post_osd_df_stats['summary']['total_kb_avail']}"
                 )
-                assert int(
-                    pre_osd_df_stats["summary"]["total_kb_avail"] / (1 < 30)
-                ) == int(post_osd_df_stats["summary"]["total_kb_avail"] / (1 < 30))
+                pre_avail_gb = int(
+                    pre_osd_df_stats["summary"]["total_kb_avail"] / 1048576
+                )
+                post_avail_gb = int(
+                    post_osd_df_stats["summary"]["total_kb_avail"] / 1048576
+                )
+                log.info(f"TOTAL AVAIL: {pre_avail_gb}G ~= {post_avail_gb}G")
+                assert pre_avail_gb == post_avail_gb, "Total avail value does not match"
                 log.info("Summary Stats verification post I/Os: PASSED")
             elif stage == "out":
                 log.info("Summary Stats verification after OSDs are OUT")
