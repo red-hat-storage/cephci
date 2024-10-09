@@ -5,7 +5,9 @@ Also, validates IO failure by checking current quiesce state on quiesce set.
 """
 
 import datetime
+import json
 import random
+import re
 import string
 import time
 import traceback
@@ -345,6 +347,7 @@ class CG_snap_IO(object):
             end_time,
             qs_members,
             fs_name=fs_name,
+            client_name=write_client.node.hostname,
         )
         log.info(
             f"cg_linux_cmds_read, read_status:{read_status},read_io_validate_status : {lc_status}"
@@ -384,6 +387,7 @@ class CG_snap_IO(object):
                 end_time,
                 qs_members,
                 fs_name=fs_name,
+                client_name=write_client.node.hostname,
             )
             log.info(
                 f"cg_smallfile_io_read, read_status:{read_status},read_io_validate_status : {sf_status}"
@@ -439,6 +443,7 @@ class CG_snap_IO(object):
             end_time,
             qs_members,
             fs_name=fs_name,
+            client_name=client.node.hostname,
         )
         log.info(
             f"cg_dd_io_write, write_status:{write_status},write_io_validate_status : {dd_status}"
@@ -459,6 +464,7 @@ class CG_snap_IO(object):
                 end_time,
                 qs_members,
                 fs_name=fs_name,
+                client_name=client.node.hostname,
             )
             log.info(
                 f"cg_fio_io_write, write_status:{write_status},write_io_validate_status : {fio_status}"
@@ -478,6 +484,7 @@ class CG_snap_IO(object):
                 end_time,
                 qs_members,
                 fs_name=fs_name,
+                client_name=client.node.hostname,
             )
             log.info(
                 f"cg_smallfile_io_write, write_status:{write_status},write_io_validate_status : {sf_status}"
@@ -497,6 +504,7 @@ class CG_snap_IO(object):
                 end_time,
                 qs_members,
                 fs_name=fs_name,
+                client_name=client.node.hostname,
             )
             log.info(
                 f"cg_linux_cmds_write, write_status:{write_status},write_io_validate_status : {lc_status}"
@@ -516,6 +524,7 @@ class CG_snap_IO(object):
                 end_time,
                 qs_members,
                 fs_name=fs_name,
+                client_name=client.node.hostname,
             )
             log.info(
                 f"cg_crefi_io, write_status:{write_status},write_io_validate_status : {crefi_status}"
@@ -560,6 +569,10 @@ class CG_snap_IO(object):
         log.info(f"In validate_exit_status function - {io_type} , {io_modules}")
         cg_status = 0
         fs_name = kwargs.get("fs_name", "cephfs")
+
+        client_name = kwargs.get("client_name")
+        sv_path = self.get_sv_path(client, fs_name, qs_member, qs_members)
+
         for io_mod in io_modules:
             if io_type == "read":
                 if io_modules[io_mod] == 1:
@@ -623,6 +636,13 @@ class CG_snap_IO(object):
                                     f"Read exits in {time_diff}secs after {state},a false positive error:{read_str}"
                                 )
                                 cg_status = 0
+                            elif (
+                                self.is_io_active(client, fs_name, client_name, sv_path)
+                                == 1
+                            ):
+                                log.info(
+                                    f"IO makes progress in {state},a false positive error"
+                                )
                             else:
                                 log.error(
                                     f"FAIL:{io_mod} io on {qs_member} failed when {qs_id} was in {state}"
@@ -713,6 +733,13 @@ class CG_snap_IO(object):
                                 )
                                 log.info(
                                     f"{state} is achieved in {time_diff}secs after end_time,could be false positive"
+                                )
+                            elif (
+                                self.io_active(client, fs_name, client_name, sv_path)
+                                == 1
+                            ):
+                                log.info(
+                                    f"IO makes progress in {state},a false positive error"
                                 )
                             else:
                                 log.error(
@@ -1406,3 +1433,66 @@ class CG_snap_IO(object):
                 )
 
             return (1, end_time)
+
+    def get_sv_path(self, client, fs_name, qs_member, qs_members):
+        """
+        This routine is to fetch subvol_path for given subvol by referring to qs members for group_name
+        """
+        for qs_iter in qs_members:
+            if qs_member in qs_iter:
+                if "/" in qs_iter:
+                    group_name, subvol_name = re.split("/", qs_iter)
+                    cmd = f"ceph fs subvolume getpath {fs_name} {subvol_name} {group_name}"
+
+                else:
+                    subvol_name = qs_iter
+                    cmd = f"ceph fs subvolume getpath {fs_name} {subvol_name}"
+                out, _ = client.exec_command(sudo=True, cmd=cmd)
+                sv_path = out.strip()
+                return sv_path
+        return 1
+
+    def is_io_active(self, client, fs_name, io_client, sv_path):
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph fs status {fs_name} --format json"
+        )
+        output = json.loads(out)
+        active_mds = [
+            mds["name"] for mds in output["mdsmap"] if mds["state"] == "active"
+        ]
+        mds_cnt = len(active_mds)
+        io_active = 0
+        for mds_iter in range(0, mds_cnt):
+            out, _ = client.exec_command(
+                sudo=True, cmd=f"ceph tell mds.{mds_iter} client ls --f json"
+            )
+            output = json.loads(out)
+            for iter in output:
+                io_client_test = iter["client_metadata"]["hostname"]
+                sv_path_test = iter["client_metadata"]["root"]
+                if (io_client_test == io_client) and (sv_path_test == sv_path):
+                    client_id = iter["id"]
+                    requests_before = iter["request_load_avg"]
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=120)
+
+            while datetime.datetime.now() < end_time and io_active == 0:
+                out, _ = client.exec_command(
+                    sudo=True, cmd=f"ceph tell mds.{mds_iter} client ls --f json"
+                )
+                output = json.loads(out)
+                log.info(f"client_id:{client_id},requests_before:{requests_before}")
+                for iter in output:
+                    id_test = iter["id"]
+                    if int(client_id) == int(id_test):
+                        requests_after = iter["request_load_avg"]
+                        log.info(
+                            f"requests_before:{requests_before},requests_after:{requests_after}"
+                        )
+                        if int(requests_after) != int(requests_before):
+                            io_active = 1
+                        else:
+                            time.sleep(5)
+                        break
+            if io_active == 1:
+                return 1
+        return io_active
