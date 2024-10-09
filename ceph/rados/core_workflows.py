@@ -11,8 +11,10 @@ More operations to be added as needed
 
 import datetime
 import json
+import math
 import re
 import time
+from collections import namedtuple
 
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
@@ -2281,6 +2283,245 @@ class RadosOrchestrator:
 
         log.info("Completed check on the cluster. Pass!")
         return True
+
+    def create_n_az_stretch_pool(
+        self,
+        pool_name: str,
+        rule_name: str,
+        rule_id: int,
+        peer_bucket_barrier: str = "datacenter",
+        num_sites: int = 3,
+        num_copies_per_site: int = 2,
+        total_buckets: int = 3,
+        req_peering_buckets: int = 2,
+    ) -> bool:
+        """Method to create a replicated pool and enable stretch mode on the pool
+
+        Note: Most of the params have a default value. when created with defaults, pool is crated for 3AZ cluster,
+         with 2 copies per site.
+        Args:
+             pool_name: name of the pool
+             rule_id: rule ID
+             rule_name: rule name
+             peer_bucket_barrier: Crush level at which failures are accepted
+             num_sites: number of "peer_bucket_barrier"s the data should be stored.
+                eg : data has to be stored acorss 3 DCs. num_sites is 3
+            num_copies_per_site: number of copies of data to be stored in each site
+            total_buckets: total no of "peer_bucket_barrier" present on cluster.
+                note: In most cases, total_buckets = num_sites. this changes when CU does not want each site to
+                        hold data copy
+            req_peering_buckets: number of "peer_bucket_barrier" buckets to perform successful peering process
+        Returns:
+            bool. Pass -> True, Fail -> False
+        """
+
+        # Creating test pool to check the effect of Netsplit scenarios on the Pool IO
+        if not self.create_pool(pool_name=pool_name):
+            log.error(f"Failed to create pool : {pool_name}")
+            return False
+
+        rules = f"""id {rule_id}
+type replicated
+step take default
+step choose firstn {num_sites} type {peer_bucket_barrier}
+step chooseleaf firstn {num_copies_per_site} type host
+step emit"""
+        log.debug(f"Rule to be added :\n {rules}\n")
+
+        if not self.add_custom_crush_rules(rule_name=rule_name, rules=rules):
+            log.error("Failed to add the new crush rule")
+            return False
+
+        size = num_sites * num_copies_per_site
+        min_size = math.ceil(size / 2)
+
+        # Enabling stretch mode on the pool
+        if not self.enable_nsite_stretch_pool(
+            pool_name=pool_name,
+            peering_crush_bucket_count=req_peering_buckets,
+            peering_crush_bucket_target=total_buckets,
+            peering_crush_bucket_barrier=peer_bucket_barrier,
+            crush_rule=rule_name,
+            size=size,
+            min_size=min_size,
+        ):
+            log.error(f"Unable to enable stretch mode on the pool : {pool_name}")
+            return False
+        log.info(
+            f"Successfully created pool : {pool_name} and enabled stretch mode on the pool"
+        )
+        return True
+
+    def get_multi_az_stretch_site_hosts(
+        self, num_data_sites, stretch_bucket: str = "datacenter"
+    ) -> tuple:
+        """
+        Method to get the site hosts from the stretch cluster
+        Uses osd tree and mon dump commands to prepare a set of all the hosts from each DC.
+        Args:
+            num_data_sites: number of data sites in the cluster
+            stretch_bucket: bucket level at which the stretch rules are set
+        Returns:
+            Hosts: A named tuple containing information about the hosts.
+                - {site_name} (list): A list of hosts in the respective data center.
+        """
+
+        # Getting the CRUSH buckets added into the cluster via osd tree
+        osd_tree_cmd = "ceph osd tree"
+        buckets = self.run_ceph_command(cmd=osd_tree_cmd)
+        dc_buckets = [d for d in buckets["nodes"] if d.get("type") == stretch_bucket]
+        dc_names = [name["name"] for name in dc_buckets]
+        log.debug(
+            f"DC names obtained from OSD tree : {dc_names}, count : {len(dc_names)}"
+        )
+
+        # Dynamically create named tuple fields based on data center names (site names)
+        fields = [dc["name"] for dc in dc_buckets[:num_data_sites]]
+
+        # Create a namedtuple class dynamically based on the site names
+        Hosts = namedtuple("Hosts", fields)
+
+        # Initialize all fields with empty lists
+        hosts = Hosts(**{field: [] for field in fields})
+
+        # Fetching the Mon daemon placement in each CRUSH location
+        def get_mon_from_dc(site_name) -> list:
+            """
+            Returns the list of dictionaries that are part of the site_name passed.
+            Args:
+                site_name: Name of the site, whose mons have to be fetched.
+            Return:
+                List of dictionaries that are present in a particular site.
+            """
+            mon_dump = "ceph mon dump"
+            mons = self.run_ceph_command(cmd=mon_dump)
+            site_mons = [
+                d
+                for d in mons["mons"]
+                if d.get("crush_location")
+                == "{" + stretch_bucket + "=" + site_name + "}"
+            ]
+            return site_mons
+
+        for i in range(num_data_sites):
+            dc = dc_buckets.pop()
+            dc_name = dc["name"]  # Use the actual data center name (site name)
+            osd_hosts = []
+
+            # Fetching the OSD hosts of the DCs
+            for crush_id in dc["children"]:
+                for entry in buckets["nodes"]:
+                    if entry.get("id") == crush_id:
+                        osd_hosts.append(entry.get("name"))
+
+            # Fetch MON hosts for the site
+            dc_mons = [
+                entry.get("name") for entry in get_mon_from_dc(site_name=dc_name)
+            ]
+
+            # Combine each DC's OSD & MON hosts and update the respective field in the namedtuple
+            combined_hosts = list(set(osd_hosts + dc_mons))
+            field_name = dc_name  # Use the site name as the field name
+
+            # Using _replace to update the field
+            hosts = hosts._replace(**{field_name: combined_hosts})
+
+            log.debug(f"Hosts present in Datacenter : {dc_name} : {combined_hosts}")
+
+        log.info(f"Hosts present in Cluster : {hosts}")
+        return hosts
+
+    def enable_nsite_stretch_pool(
+        self,
+        pool_name,
+        peering_crush_bucket_count,
+        peering_crush_bucket_target,
+        peering_crush_bucket_barrier,
+        crush_rule,
+        size,
+        min_size,
+    ) -> bool:
+        """
+        Module to enable stretch mode on the pools in a multi AZ setup
+        Args:
+            pool_name: name of the pool
+            peering_crush_bucket_count: number of buckets for peering to happen
+            peering_crush_bucket_target: number of peering buckets
+            peering_crush_bucket_barrier: CRUSH object used for various AZs
+            crush_rule: name of the crush rule. Make sure the crush rule already exists on the cluster
+            size: size for the pool
+            min_size: min_size for the pool
+        """
+        cmd = (
+            f"ceph osd pool stretch set {pool_name} {peering_crush_bucket_count} {peering_crush_bucket_target} "
+            f"{peering_crush_bucket_barrier} {crush_rule} {size} {min_size}"
+        )
+
+        try:
+            self.run_ceph_command(cmd=cmd)
+            time.sleep(5)
+            log.debug(f"Checking if the stretch mode op the pool : {pool_name}")
+            cmd = f"ceph osd pool stretch show {pool_name}"
+            out = self.run_ceph_command(cmd=cmd)
+            log.debug(out)
+            return True
+        except Exception as err:
+            log.error(
+                f"hit exception while enabling/ checking stretch pool details. Error : {err}"
+            )
+            return False
+
+    def add_custom_crush_rules(self, rule_name: str, rules: str) -> bool:
+        """
+        Adds the given crush rules into the crush map
+        Args:
+            rule_name: Name of the crush rule to add
+            rules: The rules for crush
+        Returns: True -> pass, False -> fail
+        """
+        try:
+            # Getting the crush map
+            cmd = "ceph osd getcrushmap > /tmp/crush.map.bin"
+            self.client.exec_command(cmd=cmd, sudo=True)
+
+            # changing it to text for editing
+            cmd = "crushtool -d /tmp/crush.map.bin -o /tmp/crush.map.txt"
+            self.client.exec_command(cmd=cmd, sudo=True)
+
+            # Adding the crush rules into the file
+            cmd = f"""cat <<EOF >> /tmp/crush.map.txt
+rule {rule_name} {"{"}
+{rules}
+{"}"}
+EOF"""
+            log.debug(f"Command to add crush rules : \n {cmd} \n")
+            self.client.exec_command(cmd=cmd, sudo=True)
+
+            # Changing back the text file into bin
+            cmd = "crushtool -c /tmp/crush.map.txt -o /tmp/crush2.map.bin"
+            self.client.exec_command(cmd=cmd, sudo=True)
+
+            # Setting the new crush map
+            cmd = "ceph osd setcrushmap -i /tmp/crush2.map.bin"
+            self.client.exec_command(cmd=cmd, sudo=True)
+
+            time.sleep(5)
+
+            out = self.run_ceph_command(cmd="ceph osd crush rule ls", client_exec=True)
+            if rule_name not in out:
+                log.error(
+                    f"New rule added in the cluster is not listed in the cluster."
+                    f"rule added : {rule_name}, \n"
+                    f"rules present on cluster : {out}"
+                )
+                return False
+
+            log.info(f"Crush rule: {rule_name} added successfully")
+            return True
+        except Exception as err:
+            log.error("Failed to set the crush rules")
+            log.error(err)
+            return False
 
     def check_inactive_pgs_on_pool(self, pool_name) -> bool:
         """

@@ -5,6 +5,8 @@ globals:
   - ceph-cluster:
       name: ceph
       node1:
+        networks:
+          - shared_net_15
         role:
           - _admin
           - mon
@@ -15,68 +17,90 @@ globals:
           - prometheus
           - osd
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node2:
+        networks:
+          - shared_net_15
         role:
           - mon
           - mgr
           - rgw
           - osd
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node3:
+        networks:
+          - shared_net_15
         role:
           - osd
           - mon
           - mds
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node4:
+        networks:
+          - shared_net_2
         role:
           - _admin
           - mon
           - mgr
           - osd
+          - alertmanager
+          - grafana
+          - prometheus
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node5:
+        networks:
+          - shared_net_2
         role:
           - mon
           - mgr
           - rgw
           - osd
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node6:
+        networks:
+          - shared_net_2
         role:
           - osd
           - mon
           - mds
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node7:
+        networks:
+          - shared_net_5
         role:
           - _admin
           - mon
           - mgr
           - osd
+          - alertmanager
+          - grafana
+          - prometheus
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node8:
+        networks:
+          - shared_net_5
         role:
           - mon
           - mgr
           - rgw
           - osd
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node9:
+        networks:
+          - shared_net_5
         role:
           - osd
           - mon
           - mds
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node10:
         role:
           - client
