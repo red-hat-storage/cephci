@@ -275,7 +275,7 @@ def run(ceph_cluster, **kw):
                 f"Pool {pool_name} has {pool_stat['stats']['objects']} objs"
             )
         log.info(
-            f"Successfully wrote {pool_stat['stats']['objects']} on pool {pool_name} in degraded mode\n"
+            f"Successfully wrote {int(final_objects) - int(init_objects)} on pool {pool_name} in degraded mode\n"
             f"Proceeding to remove the IPtable rules and recover the cluster from degraded mode"
         )
 
