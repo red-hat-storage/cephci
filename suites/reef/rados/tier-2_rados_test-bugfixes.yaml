@@ -141,7 +141,6 @@ tests:
       desc: Scub and deep-scrub on  inconsistent objects in EC pool
       module: test_osd_ecpool_inconsistency_scenario.py
       polarion-id: CEPH-83586175
-      comments: active Bugs 2275285, 2277111
       config:
         ec_pool:
           create: true
@@ -152,12 +151,10 @@ tests:
           plugin: jerasure
           disable_pg_autoscale: true
         inconsistent_obj_count: 4
-        replicated_pool:
-          create: true
-          pool_name: replicated_pool
-          pg_num: 1
         delete_pool:
           - ecpool
+      comments: Active bug 2277111
+
   - test:
       name: Inconsistent objects in replicated pool functionality check
       desc: Scub and deep-scrub on  inconsistent objects in Replicated pool
@@ -172,6 +169,8 @@ tests:
         inconsistent_obj_count: 4
         delete_pool:
           - replicated_pool
+      comments: Active bug 2316244
+
   - test:
       name: Verification of ceph config show & get
       module: test_bug_fixes.py

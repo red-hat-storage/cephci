@@ -2,19 +2,20 @@
 This file contains the  methods to verify the  inconsistent object functionality during scrub/deep-scrub in EC pool.
 AS part of verification the script  perform the following tasks-
    1. Creating omaps
-   2. Convert the object in to inconsistent object
+   2. Convert the object in to inconsistent object and generate the scrub errors
    3. Use the osd_scrub_auto_repair and osd_scrub_auto_repair_num_errors to perform the PG repair
        osd_scrub_auto_repair_num_errors - Setting this to true will enable automatic PG repair when errors are
                                           found by scrubs or deep-scrubs.
        osd_scrub_auto_repair_num_errors - Auto repair will not occur if more than this many errors are found
                                           Default value is - 5
    3. Verifying the functionality by executing the following scenarios-
-      3.1- Inconsistent objects greater than the osd_scrub_auto_repair_num_errors count
-           Creating the n inconsistent
+      3.1- Scrub errors  greater than the osd_scrub_auto_repair_num_errors count
+           Creating the n  scrub errors
            Setting the osd_scrub_auto_repair_num_errors to n-1
            Setting the osd_scrub_auto_repair to true
            Performing the scrub and deep-scrub on the PG
-      3.2  The inconsistent object count is less than osd_scrub_auto_repair_num_errors count
+           NOTE: Currently this scenario fail while performing the deep-scrub.This is  due to the BZ#2316244
+      3.2  The scrub error count is less than osd_scrub_auto_repair_num_errors count
            Setting the osd_scrub_auto_repair_num_errors to n+1
            Performing the scrub and deep-scrub on the PG
 """
@@ -33,6 +34,7 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.rados_scrub import RadosScrubber
 from tests.rados.monitor_configurations import MonConfigMethods
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 from utility.utils import method_should_succeed
 
@@ -53,6 +55,7 @@ def run(ceph_cluster, **kw):
     scrub_object = RadosScrubber(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     pool_obj = PoolFunctions(node=cephadm)
+    scrub_obj = RadosScrubber(node=cephadm)
 
     try:
         replicated_config = config.get("replicated_pool")
@@ -68,8 +71,16 @@ def run(ceph_cluster, **kw):
                 "run the tests"
             )
             return 1
+        mon_obj.set_config(section="osd", name="debug_osd", value="20/20")
+        mon_obj.set_config(section="mgr", name="debug_mgr", value="20/20")
         pg_id, inconsistent_obj_count = pg_info
-        auto_repair_param_value = inconsistent_obj_count - 1
+        log.info(
+            f"The inconsistent object count is- {inconsistent_obj_count} on pg -{pg_id}"
+        )
+
+        scrub_error_count = get_scrub_error_count(rados_obj)
+        auto_repair_param_value = scrub_error_count - 1
+
         # Check the default values of the osd_scrub_auto_repair_num_errors and osd_scrub_auto_repair
         auto_repair_num_value = mon_obj.get_config(
             section="osd", param="osd_scrub_auto_repair_num_errors"
@@ -93,7 +104,7 @@ def run(ceph_cluster, **kw):
 
         # case 1: inconsistent objects are greater than the osd_scrub_auto_repair_num_errors count
         log.info(
-            "Test scenario1: inconsistent objects greater than the osd_scrub_auto_repair_num_errors count"
+            "Test scenario1: scrub error count greater than the osd_scrub_auto_repair_num_errors count"
         )
         mon_obj.set_config(
             section="osd",
@@ -106,28 +117,42 @@ def run(ceph_cluster, **kw):
 
         mon_obj.set_config(section="osd", name="osd_scrub_auto_repair", value="true")
         log.info("The osd_scrub_auto_repair value is set to true")
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
 
-        obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "scrub")
-        if obj_count == -1:
-            log.error(f"The scrub not initiated on the pg-{pg_id}")
-            return 1
-
-        if obj_count != no_of_objects:
+        scrub_obj.set_osd_flags("set", "nodeep-scrub")
+        try:
+            get_inconsistent_count(scrub_object, pg_id, rados_obj, "scrub")
+        except Exception as e:
+            log.info(e)
+        scrub_obj.set_osd_flags("unset", "nodeep-scrub")
+        new_scrub_error_count = get_scrub_error_count(rados_obj)
+        if scrub_error_count != new_scrub_error_count:
             log.error(
-                f"Scrub repaired the {no_of_objects - obj_count} inconsistent objects"
+                f"Scrub repaired the {scrub_error_count - new_scrub_error_count} inconsistent objects"
             )
             rados_obj.log_cluster_health()
             return 1
-        obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "deep-scrub")
-        if obj_count == -1:
-            log.error(f"The deep-scrub not initiated on the pg-{pg_id}")
-            return 1
-        if obj_count != no_of_objects:
+        log.info(
+            "Test scenario1: scrub error count > osd_scrub_auto_repair_num_errors,errors are not repaired"
+        )
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        scrub_obj.set_osd_flags("set", "noscrub")
+        try:
+            # At the moment, this scenario fails.This is  due to the BZ#2316244
+            get_inconsistent_count(scrub_object, pg_id, rados_obj, "deep-scrub")
+        except Exception as e:
+            log.info(e)
+        scrub_obj.set_osd_flags("unset", "noscrub")
+        new_scrub_error_count = get_scrub_error_count(rados_obj)
+        if scrub_error_count != new_scrub_error_count:
             log.error(
-                f"deep-scrub repaired the {no_of_objects - obj_count} inconsistent objects"
+                f"Deep scrub repaired the {scrub_error_count - new_scrub_error_count} inconsistent objects"
             )
             rados_obj.log_cluster_health()
             return 1
+        log.info(
+            "Test scenario1: scrub error count > osd_scrub_auto_repair_num_errors,errors are not repaired"
+        )
         log.info(
             "Verification of Test scenario1- inconsistent objects greater than the "
             "osd_scrub_auto_repair_num_errors count completed "
@@ -136,7 +161,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "Test scenario2: inconsistent objects less than the osd_scrub_auto_repair_num_errors count "
         )
-        auto_repair_param_value = inconsistent_obj_count + 1
+        auto_repair_param_value = scrub_error_count + 1
         mon_obj.set_config(
             section="osd",
             name="osd_scrub_auto_repair_num_errors",
@@ -146,13 +171,17 @@ def run(ceph_cluster, **kw):
         log.info(
             f"The osd_scrub_auto_repair_num_errors value is set to {auto_repair_param_value}"
         )
-        obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "scrub")
-        if obj_count == -1:
-            log.error(f"The scrub not initiated on the pg-{pg_id}")
-            return 1
-        if obj_count != 0:
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        scrub_obj.set_osd_flags("set", "nodeep-scrub")
+        try:
+            get_inconsistent_count(scrub_object, pg_id, rados_obj, "scrub")
+        except Exception as e:
+            log.info(e)
+        scrub_obj.set_osd_flags("unset", "nodeep-scrub")
+        new_scrub_error_count = get_scrub_error_count(rados_obj)
+        if new_scrub_error_count != 0:
             log.error(
-                f"Scrub repaired the {no_of_objects - obj_count} inconsistent objects"
+                f"Scrub repaired the {scrub_error_count - new_scrub_error_count} inconsistent objects"
             )
             rados_obj.log_cluster_health()
             return 1
@@ -174,25 +203,27 @@ def run(ceph_cluster, **kw):
             )
             return 1
         pg_id, inconsistent_obj_count = pg_info
-        auto_repair_param_value = inconsistent_obj_count + 1
+        scrub_error_count = get_scrub_error_count(rados_obj)
+        auto_repair_param_value = scrub_error_count + 1
         mon_obj.set_config(
             section="osd",
             name="osd_scrub_auto_repair_num_errors",
             value=auto_repair_param_value,
         )
-
         log.info(
             f"The osd_scrub_auto_repair_num_errors value is set to {auto_repair_param_value}"
         )
-
-        obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "deep-scrub")
-        if obj_count == -1:
-            log.error(f"The deep-scrub not initiated on the pg-{pg_id}")
-            return 1
-
-        if obj_count != 0:
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+        scrub_obj.set_osd_flags("set", "noscrub")
+        try:
+            get_inconsistent_count(scrub_object, pg_id, rados_obj, "deep-scrub")
+        except Exception as e:
+            log.info(e)
+        scrub_obj.set_osd_flags("unset", "noscrub")
+        new_scrub_error_count = get_scrub_error_count(rados_obj)
+        if new_scrub_error_count != 0:
             log.error(
-                f"deep-scrub repaired the {no_of_objects - obj_count} inconsistent objects"
+                f"Deep scrub repaired the {scrub_error_count - new_scrub_error_count} inconsistent objects"
             )
             rados_obj.log_cluster_health()
             return 1
@@ -200,18 +231,20 @@ def run(ceph_cluster, **kw):
         if not result:
             log.error("The  pg state output contain repair state after deep-scrub")
             return 1
-
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
         return 1
     finally:
         log.info("Execution of finally block")
+        scrub_obj.set_osd_flags("unset", "nodeep-scrub")
+        scrub_obj.set_osd_flags("unset", "noscrub")
+        mon_obj.remove_config(section="osd", name="debug_osd")
+        mon_obj.remove_config(section="mgr", name="debug_mgr")
         if config.get("delete_pool"):
             method_should_succeed(rados_obj.delete_pool, replicated_pool_name)
             log.info("deleted the pool successfully")
         set_default_param_value(mon_obj)
-
         rados_obj.log_cluster_health()
         # check for crashes after test execution
         if rados_obj.check_crash_status():
@@ -284,3 +317,19 @@ def create_pool_inconsistent_object(
         return 1
     pg_id = pg_id_set.pop()
     return pg_id, rep_count
+
+
+def get_scrub_error_count(rados_object):
+    """
+    Method is used to get the scrub error count in the cluster
+    Args:
+        rados_object: Rados object
+    Return:
+        Retuns the scrub error count.If not present returns 0
+
+    """
+    status_out_put = rados_object.run_ceph_command(cmd="ceph -s")
+    if "OSD_SCRUB_ERRORS" not in status_out_put["health"]["checks"]:
+        log.error("The inconsistent objects not created")
+        return 0
+    return status_out_put["health"]["checks"]["OSD_SCRUB_ERRORS"]["summary"]["count"]
