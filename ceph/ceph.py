@@ -1557,11 +1557,12 @@ class CephNode(object):
         _verbose = kw.get("verbose", False)
         ssh = self.rssh if kw.get("sudo") else self.ssh
         long_running = kw.get("long_running", False)
+        timeout = 300
         if "timeout" in kw:
             timeout = None if kw["timeout"] == "notimeout" else kw["timeout"]
-        else:
-            # Set defaults if long_running then 1h else 5m
-            timeout = 3600 if kw.get("long_running", False) in kw else 300
+        if long_running:
+            # Set timeout to 1h if long_running is enabled
+            timeout = 3600
 
         try:
             channel = ssh().get_transport().open_session(timeout=timeout)
