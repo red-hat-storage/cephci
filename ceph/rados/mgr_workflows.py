@@ -494,3 +494,12 @@ class MgrWorkflows:
             mgr_list.append(standby_mgr["name"])
         log.info(f"The mgr daemon list is -{mgr_list}")
         return mgr_list
+
+    def get_active_mgr(self):
+        """
+        Method is used to return the active manager in the cluster
+        Returns:
+            Returns the active manager in the cluster
+        """
+        stats_out_put = self.get_mgr_stats()
+        return stats_out_put["active_name"]

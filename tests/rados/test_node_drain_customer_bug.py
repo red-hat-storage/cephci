@@ -3,6 +3,8 @@ The file contain the method to check the customer issue-
  CEPH-83593996 - Check that the Ceph cluster logs are being generated appropriately according to the log level
 """
 
+import datetime
+import pdb
 import random
 import re
 import time
@@ -12,7 +14,6 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.mgr_workflows import MgrWorkflows
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
-from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 
 log = Log(__name__)
@@ -29,7 +30,8 @@ def run(ceph_cluster, **kw):
     5. Perform the following workaround  steps-
           5.1 ceph config-key rm mgr/cephadm/osd_remove_queue
           5.2 ceph mgr fail
-    6. If exception not occured then check for the Traceback logs
+    6. If exception occured then check for the Traceback logs and perform the workaround
+    7. After the verification add the drained node back to the cluster
     """
     log.info(run.__doc__)
     config = kw["config"]
@@ -39,33 +41,36 @@ def run(ceph_cluster, **kw):
     installer = ceph_cluster.get_nodes(role="installer")[0]
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
     ceph_nodes = kw.get("ceph_nodes")
+    config = kw["config"]
 
+    replicated_config = config.get("replicated_pool")
+    pool_name = replicated_config["pool_name"]
+
+    if not rados_obj.create_pool(pool_name=pool_name):
+        log.error("Failed to create the  Pool")
+        return 1
+
+    rados_obj.bench_write(pool_name=pool_name, byte_size="5M", rados_write_duration=60)
     mgr_daemon = Thread(
         target=background_mgr_task, kwargs={"mgr_object": mgr_obj}, daemon=True
     )
-    osd_list = []
+    # Printing the hosts in cluster
+    cmd_host_ls = "ceph orch host ls"
+    out = rados_obj.run_ceph_command(cmd=cmd_host_ls)
+    log.info(f"The hosts in the cluster before starting the test are - {out}")
 
+    mgr_host_object_list = []
     for node in ceph_nodes:
-        cmd_host_chk = f"ceph orch host ls --host_pattern {node.hostname}"
-        out = rados_obj.run_ceph_command(cmd=cmd_host_chk)
-        if not out:
-            log.info(f"The {node.hostname} is not in the cluster")
-            continue
-        if node.role == "osd":
-            node_osds = rados_obj.collect_osd_daemon_ids(node)
-            osd_list = osd_list + node_osds
-    osd_weight_chk = check_set_reweight(rados_obj, osd_list)
-    if not osd_weight_chk:
-        log.error(
-            "The osd weights are zero for ew nodes and weights of the OSD are not unique.Set the weights "
-            "manually and re-run the tests"
-        )
-        return 1
+        if node.role == "mgr":
+            mgr_host_object_list.append(node)
+
+    mgr_daemon_list = mgr_obj.get_mgr_daemon_list()
 
     log_lines = [
         "mgr load Traceback",
         "TypeError: __init__() got an unexpected keyword argument 'original_weight'",
     ]
+
     ceph_version = rados_obj.run_ceph_command(cmd="ceph version")
     log.info(f"Current version on the cluster : {ceph_version}")
     match_str = re.match(
@@ -80,29 +85,64 @@ def run(ceph_cluster, **kw):
         bug_exists = True
     elif int(major) == 18 and int(minor) == 2 and int(patch) < 1:
         bug_exists = True
-    elif int(major) == 18 and int(minor) == 2 and int(patch) == 1 and int(build) <= 194:
+    elif int(major) == 18 and int(minor) == 2 and int(patch) == 1 and int(build) <= 234:
         bug_exists = True
 
-    osd_hosts = rados_obj.get_osd_hosts()
-    log.info(f"The osd node slist are-{osd_hosts}")
-    drain_host = random.choice(osd_hosts)
+    # Check the labels
+    cmd_host_ls = "ceph orch host ls"
+    out = rados_obj.run_ceph_command(cmd=cmd_host_ls)
+    drain_host = None
+    for node in out:
+        if "_no_schedule" in node["labels"]:
+            drain_host = node["hostname"]
+    if drain_host is None:
+        osd_hosts = rados_obj.get_osd_hosts()
+        log.info(f"The osd nodes list are-{osd_hosts}")
+        drain_host = random.choice(osd_hosts)
+
     init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
-    mgr_dump = rados_obj.run_ceph_command(cmd="ceph mgr dump", client_exec=True)
-    active_mgr = mgr_dump["active_name"]
+    log.info(f"The test execution  started at - {init_time} ")
+    osd_count_before_test = ""
     try:
+        osd_count_before_test = get_node_osd_list(rados_obj, ceph_nodes, drain_host)
+        log.info(
+            f"The OSDs in the drain node before starting the test - {osd_count_before_test} "
+        )
         mgr_daemon.start()
         service_obj.remove_custom_host(host_node_name=drain_host)
+        time.sleep(300)
+        end_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        log.info(f"The test execution  ends at - {end_time}")
+        if not verify_mgr_traceback_log(
+            rados_obj=rados_obj,
+            start_time=init_time,
+            end_time=end_time,
+            mgr_daemon_list=mgr_daemon_list,
+            mgr_host_object_list=mgr_host_object_list,
+            lines=log_lines,
+        ):
+            log.error("Traceback messages are noticed in logs")
+            return 1
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
         exceptional_flag = True
-    finally:
-        log.info("=======In the bug reproduce finally block===========")
+        pdb.set_trace()
         time.sleep(300)
         if bug_exists:
             log.info("Performing the workaround on the cluster")
+            cmd_get_key = "ceph config-key get mgr/cephadm/osd_remove_queue"
+            key_output = rados_obj.run_ceph_command(cmd=cmd_get_key, client_exec=True)
+            log.info(f"The config key output is- {key_output}")
             cmd_remove_key = "ceph config-key rm mgr/cephadm/osd_remove_queue"
-            rados_obj.run_ceph_command(cmd=cmd_remove_key, client_exec=True)
+            key_output = rados_obj.run_ceph_command(
+                cmd=cmd_remove_key, client_exec=True
+            )
+            if key_output:
+                log.error(
+                    f"The config key is not removed.The existing config key is- {key_output}."
+                )
+                return 1
             mgr_obj.set_mgr_fail()
             log.info(
                 f"This is an existing issue.The current version of ceph is {ceph_version}.The bug exists at "
@@ -116,22 +156,51 @@ def run(ceph_cluster, **kw):
                 f"The bug fixed ceph-18.2.1-235.Find more details at-Bug#2305677 "
             )
             return 1
-        end_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
-        if not verify_mgr_traceback_log(
-            rados_obj=rados_obj,
-            start_time=init_time,
-            end_time=end_time,
-            mgr_type=active_mgr,
-            lines=log_lines,
-        ):
-            log.error("Traceback messages are noticed in logs")
+    try:
+        service_obj.add_new_hosts(add_nodes=[drain_host], deploy_osd=False)
+        end_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
+        osd_add_chk_flag = False
+        while datetime.datetime.now() <= end_time:
+            osd_count_after_test = get_node_osd_list(rados_obj, ceph_nodes, drain_host)
+            log.info(
+                f"The OSDs after adding the drain node are- {osd_count_after_test} "
+            )
+            if len(osd_count_after_test) == len(osd_count_before_test):
+                log.info("All the OSDs are added to the node")
+                osd_add_chk_flag = True
+                break
+            time.sleep(30)
+        if not osd_add_chk_flag:
+            log.error("All the OSDs are not added to the node")
             return 1
-        log.info("Verification completed and not noticed any traceback messages")
-        return 0
+    except Exception as err:
+        log.error(
+            f"Could not add host : {drain_host} into the cluster and deploy OSDs. Error : {err}"
+        )
+        raise Exception("Host not added error")
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
+        )
+        if config.get("delete_pool"):
+            rados_obj.delete_pool(pool=pool_name)
+        time.sleep(5)
+        # log cluster health
+        rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
+    return 0
 
 
 def verify_mgr_traceback_log(
-    rados_obj: RadosOrchestrator, start_time, end_time, mgr_type, lines
+    rados_obj: RadosOrchestrator,
+    start_time,
+    end_time,
+    mgr_daemon_list,
+    mgr_host_object_list,
+    lines,
 ) -> bool:
     """
     Retrieve the preempt log using journalctl command
@@ -145,15 +214,24 @@ def verify_mgr_traceback_log(
               False -> if the lines are  exist in the journalctl logs
     """
 
+    host = None
     log.info("Checking log lines")
-    log_lines = rados_obj.get_journalctl_log(
-        start_time=start_time, end_time=end_time, daemon_type="mgr", daemon_id=mgr_type
-    )
-    log.debug(f"Journalctl logs are : {log_lines}")
-    for line in lines:
-        if line in log_lines:
-            log.error(f" Found the {line} in the mgr logs")
-            return False
+    fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
+    for mgr_daemon in mgr_daemon_list:
+        systemctl_name = f"ceph-{fsid}@mgr.{mgr_daemon}.service"
+        host_name = mgr_daemon.split(".")[0]
+        for mgr_obj in mgr_host_object_list:
+            if mgr_obj.hostname == host_name:
+                host = mgr_obj
+                break
+        log_lines, err = host.exec_command(
+            cmd=f"sudo journalctl -u {systemctl_name} --since '{start_time.strip()}' --until '{end_time.strip()}'"
+        )
+        log.info(f"Journalctl logs are : {log_lines}")
+        for line in lines:
+            if line in log_lines:
+                log.error(f" Found the {line} in the mgr logs")
+                return False
     return True
 
 
@@ -165,42 +243,29 @@ def background_mgr_task(mgr_object):
     Returns: None
     """
     for _ in range(10):
+        active_mgr_before_fail = mgr_object.get_active_mgr()
         mgr_object.set_mgr_fail()
-        time.sleep(2)
+        end_time = datetime.datetime.now() + datetime.timedelta(minutes=3)
+        while datetime.datetime.now() <= end_time:
+            active_mgr_after_fail = mgr_object.get_active_mgr()
+            if active_mgr_before_fail != active_mgr_after_fail:
+                break
+            time.sleep(1)
 
 
-def check_set_reweight(rados_obj, osd_list):
+def get_node_osd_list(rados_object, ceph_nodes, drain_host):
     """
-    Method is used to check the OSD weights and assigned weight if the OSD weight value is 0
+    Method is used to return the osd of a node
     Args:
-        rados_obj: Rados object
-        osd_list: osd lists. For example [0,1,2,3,4,5]
+        rados_object: Rados object
+        ceph_nodes: ceph node object
+        drain_host: The host name
 
-    Returns:
-        True-> If none of the OSD weights are 0 or weights are reassigned
-        False-> The cluster has more than one weight value in the cluster
+    Returns: the list of OSDs that are available in the node
 
     """
-    osd_zero_weight_list = []
-    osd_weights = []
-    for osd_id in osd_list:
-        selected_osd_details = rados_obj.get_osd_details(osd_id=osd_id)
-        if selected_osd_details["crush_weight"] == 0:
-            osd_zero_weight_list = osd_zero_weight_list + [osd_id]
-        osd_weights = osd_weights + [selected_osd_details["crush_weight"]]
-    if osd_zero_weight_list is None:
-        return True
-    unique_weight_list = list(set(osd_weights) - {0})
-    if len(unique_weight_list) == 1:
-        osd_weight = unique_weight_list[0]
-    else:
-        log.info(
-            f"The osd weights are assigned more than 1 value in the cluster. The weights are-{osd_weights}"
-        )
-        return False
-    if len(osd_zero_weight_list) != 0:
-        for osd_id in osd_zero_weight_list:
-            rados_obj.reweight_crush_items(name=f"osd.{osd_id}", weight=osd_weight)
-    time.sleep(30)  # blind sleep to let stats get updated crush re-weight
-    assert wait_for_clean_pg_sets(rados_obj, timeout=900)
-    return True
+    for node in ceph_nodes:
+        if node.role == "osd":
+            if node.hostname == drain_host:
+                node_osds = rados_object.collect_osd_daemon_ids(node)
+                return node_osds
