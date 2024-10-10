@@ -364,10 +364,10 @@ def run(ceph_cluster, **kw):
             )
 
         snap_util.remove_snap_schedule(
-            source_clients[0], subvol1_path, fs_name={source_fs}
+            source_clients[0], subvol1_path, fs_name=source_fs
         ),
         snap_util.remove_snap_schedule(
-            source_clients[0], subvol2_path, fs_name={source_fs}
+            source_clients[0], subvol2_path, fs_name=source_fs
         ),
 
         log.info("Unmount the paths")
