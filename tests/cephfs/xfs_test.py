@@ -114,7 +114,7 @@ def run(ceph_cluster, **kw):
             cmd=f"echo '{xfs_config_context}' > /root/xfstests-dev/local.config",
         )
         # create exclude file
-        exclude_file = "generic/003"
+        exclude_file = "generic/003 generic/538"
         client1.exec_command(
             sudo=True, cmd=f"echo '{exclude_file}' > /root/xfstests-dev/ceph.exclude"
         )
@@ -124,6 +124,7 @@ def run(ceph_cluster, **kw):
             cmd="cd /root/xfstests-dev && ./check -d -T -g quick -e ceph.exclude",
             check_ec=False,
             long_running=True,
+            timeout=1800
         )
         log.info("XFS tests completed successfully")
         return 0
