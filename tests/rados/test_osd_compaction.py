@@ -247,7 +247,8 @@ def run(ceph_cluster, **kw):
         )
         rados_obj.delete_pool(pool=pool_name)
         rados_obj.delete_pool(pool=bench_pool_name)
-        rados_obj.change_osd_state(action="start", target=osd_id)
+        if "osd_id" in locals() or "osd_id" in globals():
+            rados_obj.change_osd_state(action="start", target=osd_id)
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
