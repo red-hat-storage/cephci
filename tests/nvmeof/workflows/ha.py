@@ -15,6 +15,7 @@ from ceph.utils import get_node_by_id, get_openstack_driver
 from ceph.waiter import WaitUntil
 from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
+from tests.nvmeof.workflows.nvme_utils import deploy_nvme_service
 from utility.log import Log
 from utility.retry import retry
 from utility.utils import log_json_dump
@@ -74,7 +75,7 @@ class HighAvailability:
         """Categorize to-be failed and running GWs.
 
         Args:
-            gws: gateways to be failed/stopped
+            gws: gateways to be failed/stopped/scaled-down
 
         Returns:
             list of,
@@ -297,12 +298,10 @@ class HighAvailability:
         return False
 
     def daemon_redeploy(self, gateway):
-        """Ceph daemon commands to control nvme daemon states.
+        """Ceph daemon redeploy commands to control nvme daemon states.
 
         Args:
             gateway: NVMe gateway object.
-            action: daemon orch "stop"|"start"
-            wait_for_active_state: wait for the active using bool value.
 
         - wait_for_active_state:
             True: wait for the daemon becomes active.
@@ -359,6 +358,21 @@ class HighAvailability:
             return False
 
     def maintanence_mode(self, gateway, action, wait_for_active_state=None):
+        """Ceph daemon commands to control nvme daemon states.
+
+        Args:
+            gateway: NVMe gateway object.
+            action: "stop" | "start"
+            wait_for_active_state: wait for the active using bool value.
+
+        - wait_for_active_state:
+            True: wait for the node to power on.
+            False: wait for the node to power off.
+            None: do not wait, return
+
+        Returns:
+            Boolean
+        """
         ops = {
             "start": self.host.exit,
             "stop": self.host.enter,
@@ -445,6 +459,125 @@ class HighAvailability:
             LOG.error(f"[ {nodename} ] {action} failed even after 300s timeout..")
 
         return False
+
+    def scale_down(self, gateway_nodes):
+        """Scaling down of the NVMeoF Gateways.
+
+        Initiate scale-down
+        - List the gateways which has to be scaled down.
+        - Validate the ANA states of scaled down GWs are optimized in one of the other working GWs.
+
+        Post scale-down Validation
+        - List out namespaces associated with the scaled down Gateways using ANA group ids.
+        - Check for 5 Consecutive times for the increments in write/read to validate IO continuation.
+        """
+        fail_gws, _ = self.catogorize(gateway_nodes)
+        start_counter = float()
+        start_time = str()
+        end_counter = float()
+        end_time = str()
+        gwnodes_to_be_deployed = list(set(self.config["gw_nodes"]) - set(gateway_nodes))
+        self.config["gw_nodes"] = gwnodes_to_be_deployed
+        LOG.info(f"{gateway_nodes}: Scaling down NVMe Service")
+
+        # Scale down
+        deploy_nvme_service(self.cluster, self.config)
+
+        for gateway in fail_gws:
+            hostname = gateway.hostname
+            # Wait until 60 seconds
+            for w in WaitUntil():
+                # Check for gateway unavailability
+                if self.check_gateway_availability(
+                    gateway.ana_group_id, state="DELETING"
+                ):
+                    LOG.info(f"[ {gateway} ] NVMeofGW service is UNAVAILABLE.")
+                    active = self.get_optimized_state(gateway.ana_group_id)
+
+                    # Find optimized path
+                    if active:
+                        end_counter, end_time = get_current_timestamp()
+                        LOG.info(
+                            f"{list(active[0])} is new and only Active GW for failed {hostname}"
+                        )
+                        break
+
+                LOG.warning(f"[ {hostname} ] is still in AVAILABLE state..")
+
+            if w.expired:
+                raise TimeoutError(
+                    f"[ {hostname} ] Scale down of NVMeofGW service failed after 60s timeout.."
+                )
+
+            LOG.info(
+                f"[ {hostname} ] Total time taken to scale down - {end_counter - start_counter} seconds"
+            )
+            return {
+                "scale-down-start-time": start_time,
+                "scale-down-end-time": end_time,
+                "scale-down-start-counter-time": start_counter,
+                "scale-down-end-counter-time": end_counter,
+            }
+
+    def scale_up(self, gateway_nodes):
+        """Scaling up of the NVMeoF Gateways.
+
+        Initiate scale-up
+        - Spin up the new gateways.
+        - Validate the ANA states of new GWs are optimized.
+
+        Post scale-up Validation
+        - List out namespaces associated with the new Gateways using ANA group ids.
+        - Check for 5 Consecutive times for the increments in write/read to validate IO continuation.
+        """
+        new_gws = []
+        start_counter = float()
+        start_time = str()
+        end_counter = float()
+        end_time = str()
+        gwnodes_to_be_deployed = list(self.config["gw_nodes"] + gateway_nodes)
+        self.config["gw_nodes"] = list(set(gwnodes_to_be_deployed))
+        LOG.info(f"{gateway_nodes}: Scaling up NVMe Service")
+
+        # Scale up
+        deploy_nvme_service(self.cluster, self.config)
+        for gw_id in gateway_nodes:
+            new_gws.append(self.check_gateway(gw_id))
+
+        for gateway in new_gws:
+            hostname = gateway.hostname
+
+            # Wait until 60 seconds
+            for w in WaitUntil():
+                # Check for gateway unavailability
+                if self.check_gateway_availability(gateway.ana_group_id):
+                    LOG.info(f"[ {gateway} ] NVMeofGW service is AVAILABLE.")
+                    state = self.get_optimized_state(gateway.ana_group_id)
+
+                    # check gateway for its own original path.
+                    if gateway.ana_group["name"] in state:
+                        end_counter, end_time = get_current_timestamp()
+                        LOG.info(
+                            f"{hostname} restored to original path - {log_json_dump(state)}"
+                        )
+                        break
+
+                LOG.warning(f"[ {hostname} ] is still not in AVAILABLE state..")
+
+            if w.expired:
+                raise TimeoutError(
+                    f"[ {hostname} ] Scale up of NVMeofGW service failed after 60s timeout.."
+                )
+
+            LOG.info(
+                f"[ {hostname} ] Total time taken to scale up - {end_counter - start_counter} seconds"
+            )
+            return {
+                "scale-up-start-time": start_time,
+                "scale-up-end-time": end_time,
+                "scale-up-start-counter-time": start_counter,
+                "scale-up-end-counter-time": end_counter,
+            }
 
     def failover(self, gateway, fail_tool):
         """HA Failover on the NVMeoF Gateways.
@@ -691,6 +824,95 @@ class HighAvailability:
                 LOG.info(f"IO validation for {subsys}|{pool_img} is successful.")
 
         LOG.info("IO Validation is Successfull on all RBD images..")
+
+    def run_scaledown(self, gateway_nodes):
+        """Execute the Scale down with IO validation."""
+        initiators = self.config["initiators"]
+        executor = ThreadPoolExecutor()
+        io_tasks = []
+
+        try:
+            # Prepare FIO Execution
+            namespaces = self.fetch_namespaces(self.gateways[0])
+            self.prepare_io_execution(initiators)
+
+            # Check for targets at clients
+            self.compare_client_namespace([i["uuid"] for i in namespaces])
+
+            # Start IO Execution
+            for initiator in self.clients:
+                io_tasks.append(executor.submit(initiator.start_fio))
+            time.sleep(20)  # time sleep for IO to Kick-in
+
+            if not isinstance(gateway_nodes, list):
+                gateway_nodes = [gateway_nodes]
+
+            LOG.info(f"Scale down execution on {gateway_nodes}")
+
+            fail_gws, operational_gws = self.catogorize(gateway_nodes)
+            fail_gw_ana_ids = [gw.ana_group_id for gw in fail_gws]
+            gateway = operational_gws[0]
+
+            # Primary check - validate IO continuation
+            namespaces = self.fetch_namespaces(gateway, fail_gw_ana_ids)
+            self.validate_io(namespaces)
+
+            # Scale down
+            result = self.scale_down(gateway_nodes)
+            LOG.info(log_json_dump(result))
+            self.validate_io(namespaces)
+
+        except BaseException as err:  # noqa
+            raise Exception(err)
+        finally:
+            if io_tasks:
+                LOG.info("Waiting for completion of IOs.")
+                executor.shutdown(wait=True, cancel_futures=True)
+
+    def run_scaleup(self, gateway_nodes):
+        """Execute the Scale up with IO validation."""
+        initiators = self.config["initiators"]
+        executor = ThreadPoolExecutor()
+        io_tasks = []
+        old_gws = []
+
+        try:
+            # Prepare FIO Execution
+            namespaces = self.fetch_namespaces(self.gateways[0])
+            self.prepare_io_execution(initiators)
+
+            # Check for targets at clients
+            self.compare_client_namespace([i["uuid"] for i in namespaces])
+
+            # Start IO Execution
+            for initiator in self.clients:
+                io_tasks.append(executor.submit(initiator.start_fio))
+            time.sleep(20)  # time sleep for IO to Kick-in
+
+            if not isinstance(gateway_nodes, list):
+                gateway_nodes = [gateway_nodes]
+
+            LOG.info(f"Scale up execution on {gateway_nodes}")
+            for gw_id in self.config["gw_nodes"]:
+                old_gws.append(self.check_gateway(gw_id))
+            old_gw_ana_ids = [gw.ana_group_id for gw in old_gws]
+            gateway = old_gws[0]
+
+            # Primary check - validate IO continuation
+            namespaces = self.fetch_namespaces(gateway, old_gw_ana_ids)
+            self.validate_io(namespaces)
+
+            # Scale up
+            result = self.scale_up(gateway_nodes)
+            LOG.info(log_json_dump(result))
+            self.validate_io(namespaces)
+
+        except BaseException as err:  # noqa
+            raise Exception(err)
+        finally:
+            if io_tasks:
+                LOG.info("Waiting for completion of IOs.")
+                executor.shutdown(wait=True, cancel_futures=True)
 
     def run(self):
         """Execute the HA failover and failback with IO validation."""
