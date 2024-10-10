@@ -4,12 +4,12 @@ The file contain the method to check the customer issue-
 """
 
 import datetime
-import pdb
 import random
 import re
 import time
 from threading import Thread
 
+from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.mgr_workflows import MgrWorkflows
@@ -50,21 +50,23 @@ def run(ceph_cluster, **kw):
         log.error("Failed to create the  Pool")
         return 1
 
-    rados_obj.bench_write(pool_name=pool_name, byte_size="5M", rados_write_duration=60)
+    rados_obj.bench_write(pool_name=pool_name, byte_size="5M", rados_write_duration=90)
     mgr_daemon = Thread(
         target=background_mgr_task, kwargs={"mgr_object": mgr_obj}, daemon=True
     )
     # Printing the hosts in cluster
     cmd_host_ls = "ceph orch host ls"
     out = rados_obj.run_ceph_command(cmd=cmd_host_ls)
-    log.info(f"The hosts in the cluster before starting the test are - {out}")
+    log.debug(f"The hosts in the cluster before starting the test are - {out}")
 
     mgr_host_object_list = []
     for node in ceph_nodes:
         if node.role == "mgr":
             mgr_host_object_list.append(node)
+            log.debug(f"The mgr host node is{node.hostname}")
 
     mgr_daemon_list = mgr_obj.get_mgr_daemon_list()
+    log.debug(f"The MGR daemons list are -{mgr_daemon_list}")
 
     log_lines = [
         "mgr load Traceback",
@@ -85,8 +87,13 @@ def run(ceph_cluster, **kw):
         bug_exists = True
     elif int(major) == 18 and int(minor) == 2 and int(patch) < 1:
         bug_exists = True
-    elif int(major) == 18 and int(minor) == 2 and int(patch) == 1 and int(build) <= 234:
+    elif int(major) == 18 and int(minor) == 2 and int(patch) == 1 and int(build) < 234:
         bug_exists = True
+
+    if bug_exists:
+        log.info(f"The bug exists and  the ceph version is - {ceph_version}")
+    else:
+        log.info(f"The bug not exists and the ceph version is - {ceph_version}")
 
     # Check the labels
     cmd_host_ls = "ceph orch host ls"
@@ -95,6 +102,7 @@ def run(ceph_cluster, **kw):
     for node in out:
         if "_no_schedule" in node["labels"]:
             drain_host = node["hostname"]
+            break
     if drain_host is None:
         osd_hosts = rados_obj.get_osd_hosts()
         log.info(f"The osd nodes list are-{osd_hosts}")
@@ -102,7 +110,6 @@ def run(ceph_cluster, **kw):
 
     init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
     log.info(f"The test execution  started at - {init_time} ")
-    osd_count_before_test = ""
     try:
         osd_count_before_test = get_node_osd_list(rados_obj, ceph_nodes, drain_host)
         log.info(
@@ -123,12 +130,43 @@ def run(ceph_cluster, **kw):
         ):
             log.error("Traceback messages are noticed in logs")
             return 1
-    except Exception as e:
-        log.error(f"Failed with exception: {e.__doc__}")
-        log.exception(e)
+        log.info(
+            "Adding the node by providing the deploy_osd as False, because the script is not setting the "
+            "--unmanaged=true.Once the node is added back to the cluster the OSDs get configured automatically"
+        )
+        service_obj.add_new_hosts(add_nodes=[drain_host], deploy_osd=False)
+        end_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
+        osd_add_chk_flag = False
+        while datetime.datetime.now() <= end_time:
+            osd_count_after_test = get_node_osd_list(rados_obj, ceph_nodes, drain_host)
+            log.info(
+                f"The OSDs after adding the drain node are- {osd_count_after_test} "
+            )
+            if len(osd_count_after_test) == len(osd_count_before_test):
+                log.info("All the OSDs are added to the node")
+                osd_add_chk_flag = True
+                break
+            time.sleep(30)
+        if not osd_add_chk_flag:
+            log.error("All the OSDs are not added to the node")
+            return 1
+    except CommandFailed as err:
+        log.error(f"Failed with exception: {err.__doc__}")
+        log.exception(err)
         exceptional_flag = True
-        pdb.set_trace()
-        time.sleep(300)
+
+        time.sleep(400)
+        end_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        if verify_mgr_traceback_log(
+            rados_obj=rados_obj,
+            start_time=init_time,
+            end_time=end_time,
+            mgr_daemon_list=mgr_daemon_list,
+            mgr_host_object_list=mgr_host_object_list,
+            lines=log_lines,
+        ):
+            log.error("Traceback messages are not noticed in logs")
+            return 1
         if bug_exists:
             log.info("Performing the workaround on the cluster")
             cmd_get_key = "ceph config-key get mgr/cephadm/osd_remove_queue"
@@ -156,23 +194,6 @@ def run(ceph_cluster, **kw):
                 f"The bug fixed ceph-18.2.1-235.Find more details at-Bug#2305677 "
             )
             return 1
-    try:
-        service_obj.add_new_hosts(add_nodes=[drain_host], deploy_osd=False)
-        end_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
-        osd_add_chk_flag = False
-        while datetime.datetime.now() <= end_time:
-            osd_count_after_test = get_node_osd_list(rados_obj, ceph_nodes, drain_host)
-            log.info(
-                f"The OSDs after adding the drain node are- {osd_count_after_test} "
-            )
-            if len(osd_count_after_test) == len(osd_count_before_test):
-                log.info("All the OSDs are added to the node")
-                osd_add_chk_flag = True
-                break
-            time.sleep(30)
-        if not osd_add_chk_flag:
-            log.error("All the OSDs are not added to the node")
-            return 1
     except Exception as err:
         log.error(
             f"Could not add host : {drain_host} into the cluster and deploy OSDs. Error : {err}"
@@ -182,7 +203,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
-        if config.get("delete_pool"):
+        if replicated_config.get("delete_pool"):
             rados_obj.delete_pool(pool=pool_name)
         time.sleep(5)
         # log cluster health
@@ -227,7 +248,7 @@ def verify_mgr_traceback_log(
         log_lines, err = host.exec_command(
             cmd=f"sudo journalctl -u {systemctl_name} --since '{start_time.strip()}' --until '{end_time.strip()}'"
         )
-        log.info(f"Journalctl logs are : {log_lines}")
+        log.debug(f"Journalctl logs are : {log_lines}")
         for line in lines:
             if line in log_lines:
                 log.error(f" Found the {line} in the mgr logs")

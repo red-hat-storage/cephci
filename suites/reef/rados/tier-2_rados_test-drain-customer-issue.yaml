@@ -112,15 +112,14 @@ tests:
         log_to_file: true
       desc: Change config options to enable logging to file
   - test:
-      name: Reproucing the Ceph mgr crash bug
+      name: Reproducing the Ceph mgr crash bug
       module: test_node_drain_customer_bug.py
       polarion-id: CEPH-83595932
       config:
         replicated_pool:
           create: true
           pool_name: mgr_test_pool
-      delete_pool:
-        - mgr_test_pool
+          delete_pool: mgr_test_pool
       desc: Reproducing the Ceph mgr crashed after a mgr failover
   - test:
       name: Upgrade cluster to latest 7.x ceph version
@@ -143,6 +142,5 @@ tests:
         replicated_pool:
           create: true
           pool_name: mgr_test_pool
-      delete_pool:
-        - mgr_test_pool
+          delete_pool: mgr_test_pool
       desc: Ceph mgr crashed after a mgr failover with the message mgr operator
