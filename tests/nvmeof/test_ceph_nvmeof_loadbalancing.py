@@ -4,6 +4,8 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway HA
 
 """
 
+import time
+from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 from ceph.ceph import Ceph
@@ -12,10 +14,8 @@ from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.ha import HighAvailability
-from tests.nvmeof.workflows.nvme_utils import (
-    delete_nvme_service,
-    deploy_nvme_service,
-)
+from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
+from tests.nvmeof.workflows.nvme_utils import delete_nvme_service, deploy_nvme_service
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id
@@ -40,6 +40,34 @@ def configure_listeners(ha_obj, nodes, config):
         nvmegwcli.listener.add(**listener_config)
         lb_group_ids.update({hostname: nvmegwcli.ana_group_id})
     return lb_group_ids
+
+
+def configure_namespaces(nvmegwcli, config, lb_groups, sub_args, pool, ceph_cluster):
+    bdev_configs = config["bdevs"]
+    if isinstance(config["bdevs"], dict):
+        bdev_configs = [config["bdevs"]]
+    for bdev_cfg in bdev_configs:
+        name = generate_unique_id(length=4)
+        namespace_args = {
+            **sub_args,
+            **{
+                "rbd-pool": pool,
+                "rbd-create-image": True,
+                "size": bdev_cfg["size"],
+            },
+        }
+        with parallel() as p:
+            # Create namespace in gateway
+            for num in range(bdev_cfg["count"]):
+                ns_args = deepcopy(namespace_args)
+                ns_args["rbd-image"] = f"{name}-image{num}"
+                if bdev_cfg.get("lb_group"):
+                    lbgid = lb_groups[
+                        get_node_by_id(ceph_cluster, bdev_cfg["lb_group"]).hostname
+                    ]
+                    ns_args["load-balancing-group"] = lbgid
+                ns_args = {"args": ns_args}
+                p.spawn(nvmegwcli.namespace.add, **ns_args)
 
 
 def configure_subsystems(pool, ha, config):
@@ -73,10 +101,9 @@ def configure_subsystems(pool, ha, config):
     lb_groups = configure_listeners(ha, listeners, config)
 
     # Add Host access
-    if config.get("allow_host"):
-        nvmegwcli.host.add(
-            **{"args": {**sub_args, **{"host": repr(config["allow_host"])}}}
-        )
+    nvmegwcli.host.add(
+        **{"args": {**sub_args, **{"host": repr(config.get("allow_host", "*"))}}}
+    )
 
     if config.get("hosts"):
         for host in config["hosts"]:
@@ -87,31 +114,7 @@ def configure_subsystems(pool, ha, config):
 
     # Add Namespaces
     if config.get("bdevs"):
-        bdev_configs = config["bdevs"]
-        if isinstance(config["bdevs"], dict):
-            bdev_configs = [config["bdevs"]]
-        for bdev_cfg in bdev_configs:
-            name = generate_unique_id(length=4)
-            namespace_args = {
-                **sub_args,
-                **{
-                    "rbd-pool": pool,
-                    "rbd-create-image": True,
-                    "size": bdev_cfg["size"],
-                },
-            }
-            with parallel() as p:
-                # Create namespace in gateway
-                for num in range(bdev_cfg["count"]):
-                    ns_args = deepcopy(namespace_args)
-                    ns_args["rbd-image"] = f"{name}-image{num}"
-                    if bdev_cfg.get("lb_group"):
-                        lbgid = lb_groups[
-                            get_node_by_id(ceph_cluster, bdev_cfg["lb_group"]).hostname
-                        ]
-                        ns_args["load-balancing-group"] = lbgid
-                    ns_args = {"args": ns_args}
-                    p.spawn(nvmegwcli.namespace.add, **ns_args)
+        configure_namespaces(nvmegwcli, config, lb_groups, sub_args, pool, ceph_cluster)
 
 
 def disconnect_initiator(ceph_cluster, node):
@@ -195,6 +198,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     config = kwargs["config"]
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+    initiators = config["initiators"]
+    io_tasks = []
+    executor = ThreadPoolExecutor()
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
@@ -217,7 +223,61 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
 
         # Initiate scale-down and scale-up
-        ha.run_ns_autoloadbalancing_operations()
+        if config.get("load_balancing"):
+            for lb_config in config.get("load_balancing"):
+                # Scale down
+                if lb_config.get("scale_down"):
+                    gateway_nodes = lb_config["scale_down"]
+                    # Prepare FIO Execution
+                    namespaces = ha.fetch_namespaces(ha.gateways[0])
+                    ha.prepare_io_execution(initiators)
+
+                    # Check for targets at clients
+                    ha.compare_client_namespace([i["uuid"] for i in namespaces])
+
+                    # Start IO Execution
+                    LOG.info("Initiating IO before scaling operations")
+                    for initiator in ha.clients:
+                        io_tasks.append(executor.submit(initiator.start_fio))
+                    time.sleep(20)  # time sleep for IO to Kick-in
+
+                    ha.scale_down(gateway_nodes)
+
+                # Scale up
+                if lb_config.get("scale_up"):
+                    scaleup_nodes = lb_config["scale_up"]
+                    gateway_nodes = config["gw_nodes"]
+
+                    # Prepare FIO Execution
+                    gw_node = get_node_by_id(ceph_cluster, config["gw_nodes"][-1])
+                    gateways = NVMeGateway(gw_node, ha.mtls)
+                    namespaces = ha.fetch_namespaces(gateways)
+                    ha.prepare_io_execution(initiators)
+
+                    # Check for targets at clients
+                    ha.compare_client_namespace([i["uuid"] for i in namespaces])
+
+                    # Start IO Execution
+                    LOG.info("Initiating IO before scale up")
+                    for initiator in ha.clients:
+                        io_tasks.append(executor.submit(initiator.start_fio))
+                    time.sleep(20)  # time sleep for IO to Kick-in
+
+                    # Perform scale-up of new nodes
+                    if not all(
+                        [node in set(config["gw_nodes"]) for node in scaleup_nodes]
+                    ):
+                        # Perform scale up
+                        namespaces = ha.scale_up(scaleup_nodes)
+                        for scaleup_node in scaleup_nodes:
+                            gw_node = get_node_by_id(ceph_cluster, scaleup_node)
+                            ha.gateways.append(NVMeGateway(gw_node))
+                            for subsys_args in config["subsystems"]:
+                                configure_listeners(ha, [scaleup_node], subsys_args)
+                        ha.validate_scaleup(scaleup_nodes, namespaces)
+                    else:
+                        namespaces = ha.scale_up(scaleup_nodes)
+                        ha.validate_scaleup(scaleup_nodes, namespaces)
         return 0
 
     except Exception as err:
@@ -227,3 +287,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     finally:
         if config.get("cleanup"):
             teardown(ceph_cluster, rbd_obj, config)
+            if io_tasks:
+                LOG.info("Waiting for completion of IOs.")
+                executor.shutdown(wait=True, cancel_futures=True)
