@@ -3,6 +3,7 @@ import os
 import threading
 import traceback
 
+import tests.cephfs.cephfs_scale.cleanup as cleanup
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_scale.cephfs_scale_utils import CephfsScaleUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
@@ -18,14 +19,26 @@ stop_event = threading.Event()
 
 def run(ceph_cluster, **kw):
     """
-    Main function to execute the test workflow.
+        Main function to execute the test workflow.
 
-    This function sets up the clients, prepares the CephFS environment, creates subvolumes,
-    mounts them, runs IO operations, and collects logs and status information.
+        This function sets up the clients, prepares the CephFS environment, creates subvolumes,
+        mounts them, runs IO operations, and collects logs and status information.
 
-    :param ceph_cluster: Ceph cluster object
-    :param kw: Additional keyword arguments for configuration
-    :return: 0 if successful, 1 if an error occurs
+        :param ceph_cluster: Ceph cluster object
+        :param kw: Additional keyword arguments for configuration
+        :return: 0 if successful, 1 if an error occurs
+
+    ## To enable standby_replay - include standby_replay as true or false in the config as below :
+      - test:
+            name: large_file_writes
+            module: cephfs_scale.large_file_writes.py
+            config:
+              num_of_subvolumes: 50
+              num_of_clients: 50
+              mount_type : fuse
+              enable_standby_replay : true
+            desc: Write Large IOs
+            abort-on-fail: false
     """
     try:
         fs_util_v1 = FsUtilsV1(ceph_cluster)
@@ -35,8 +48,48 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         fs_util_v1.prepare_clients(clients, build)
         fs_util_v1.auth_list(clients)
-
+        mds_nodes = ceph_cluster.get_ceph_objects("mds")
         default_fs = "cephfs"
+
+        mds_names_hostname = []
+        for mds in mds_nodes:
+            mds_names_hostname.append(mds.node.hostname)
+        log.info(f"MDS List : {mds_names_hostname}")
+
+        mds_names = []
+        for mds in mds_nodes:
+            mds_names.append(mds.node.hostname)
+        mds_hosts_list1 = mds_names[:3]
+        mds_hosts_1 = " ".join(mds_hosts_list1) + " "
+        mds_host_list1_length = len(mds_hosts_list1)
+
+        enable_standby_replay = config.get("enable_standby_replay", False)
+        max_mds_default_fs = 2 if enable_standby_replay else 1
+        log.info(
+            f"Create Filesystems with {'standby-replay' if enable_standby_replay else 'active MDS'}"
+        )
+        fs_details = [
+            (default_fs, mds_host_list1_length, mds_hosts_1, max_mds_default_fs),
+        ]
+        for fs_name, mds_host_list_length, mds_hosts, max_mds in fs_details:
+            clients[0].exec_command(
+                sudo=True,
+                cmd=f'ceph fs volume create {fs_name} --placement="{mds_host_list_length} {mds_hosts}"',
+            )
+            clients[0].exec_command(
+                sudo=True, cmd=f"ceph fs set {fs_name} max_mds {max_mds}"
+            )
+            fs_util_v1.wait_for_mds_process(clients[0], fs_name)
+
+        if enable_standby_replay:
+            for fs_name in [default_fs]:
+                result = fs_util_v1.set_and_validate_mds_standby_replay(
+                    clients[0],
+                    fs_name,
+                    1,
+                )
+                log.info(f"Ceph fs status after enabling standby-replay : {result}")
+
         subvolume_group_name = "subvolgroup1"
         subvolume_name = "subvol"
         subvolume_count = config.get("num_of_subvolumes")
@@ -197,3 +250,14 @@ def run(ceph_cluster, **kw):
         log.info("Stop logging the Ceph Cluster Cluster status to a log dir")
         fs_scale_utils.stop_logging()
         fs_scale_utils.stop_mds_logging()
+        if config.get("cleanup", True):
+            try:
+                log.info("Starting cleanup process.")
+                cleanup_exit_code = cleanup.run(ceph_cluster, **kw)
+                if cleanup_exit_code == 0:
+                    log.info("Cleanup completed successfully.")
+                else:
+                    log.error("Cleanup failed.")
+            except Exception as e:
+                log.error(f"Cleanup process encountered an error: {e}")
+                log.error(traceback.format_exc())

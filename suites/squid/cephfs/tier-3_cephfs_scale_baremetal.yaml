@@ -47,15 +47,6 @@ tests:
           -
             config:
               args:
-                - ceph
-                - fs
-                - volume
-                - create
-                - cephfs
-              command: shell
-          -
-            config:
-              args:
                 placement:
                   label: mds
               base_cmd_args:
@@ -64,15 +55,6 @@ tests:
               pos_args:
                 - cephfs
               service: mds
-          - config:
-              args:
-                - ceph
-                - fs
-                - set
-                - cephfs
-                - max_mds
-                - "2"
-              command: shell
       desc: "Execute the cluster deployment workflow with label placement."
       destroy-cluster: false
       module: test_cephadm.py
@@ -1518,33 +1500,27 @@ tests:
 
 #LargeFile Configs:
   - test:
-        name: large_file_writes
-        module: cephfs_scale.large_file_writes.py
+        name: Write 100GB of large file on 50 Subvol with 50 Client
+        module: cephfs_scale.run_scale_io.py
         config:
           num_of_subvolumes: 50
           num_of_clients: 50
+          io_type: largefile
           mount_type : fuse
-        desc: Write Large IOs
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
+          cleanup: true
+        desc: Write 100GB of large file on 50 Subvol with 50 Client
         abort-on-fail: false
 
   - test:
-        name: large_file_writes
-        module: cephfs_scale.large_file_writes.py
+        name: Write 100GB of large file on 100 Subvol with 100 Client
+        module: cephfs_scale.run_scale_io.py
         config:
           num_of_subvolumes: 100
           num_of_clients: 100
+          io_type: largefile
           mount_type : fuse
-        desc: Write Large IOs
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
+          cleanup: true
+        desc: Write 100GB of large file on 100 Subvol with 100 Client
         abort-on-fail: false
 
   - test:
@@ -1555,12 +1531,8 @@ tests:
           num_of_clients: 100
           io_type: largefile
           mount_type : fuse
+          cleanup: true
         desc: Write 100GB of large file on 200 Subvol with 100 Client
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1571,12 +1543,8 @@ tests:
           num_of_clients: 100
           io_type: largefile
           mount_type : fuse
+          cleanup: true
         desc: Write 100GB of large file on 500 Subvol with 100 Client
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1587,41 +1555,32 @@ tests:
           num_of_clients: 100
           io_type: largefile
           mount_type : fuse
+          cleanup: true
         desc: Write 100GB of large file on 1000 Subvol with 100 Client
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
-        name: large_file_writes
-        module: cephfs_scale.large_file_writes.py
+        name: Write 100GB of large file on 50 Subvol with 50 Client
+        module: cephfs_scale.run_scale_io.py
         config:
           num_of_subvolumes: 50
           num_of_clients: 50
+          io_type: largefile
           mount_type : kernel
-        desc: Write Large IOs
+          cleanup: true
+        desc: Write 100GB of large file on 50 Subvol with 50 Client
         abort-on-fail: false
+
   - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
-        abort-on-fail: false
-  - test:
-        name: large_file_writes
-        module: cephfs_scale.large_file_writes.py
+        name: Write 100GB of large file on 100 Subvol with 100 Client
+        module: cephfs_scale.run_scale_io.py
         config:
           num_of_subvolumes: 100
           num_of_clients: 100
+          io_type: largefile
           mount_type : kernel
-        desc: Write Large IOs
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
+          cleanup: true
+        desc: Write 100GB of large file on 200 Subvol with 100 Client
         abort-on-fail: false
 
   - test:
@@ -1632,12 +1591,8 @@ tests:
           num_of_clients: 100
           io_type: largefile
           mount_type : kernel
+          cleanup: true
         desc: Write 100GB of large file on 200 Subvol with 100 Client
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1648,12 +1603,8 @@ tests:
           num_of_clients: 100
           io_type: largefile
           mount_type : kernel
+          cleanup: true
         desc: Write 100GB of large file on 500 Subvol with 100 Client
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1664,14 +1615,9 @@ tests:
           num_of_clients: 100
           io_type: largefile
           mount_type : kernel
+          cleanup: true
         desc: Write 100GB of large file on 1000 Subvol with 100 Client
         abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
-        abort-on-fail: false
-
 
 #SmallFile Configs:
   - test:
@@ -1686,12 +1632,8 @@ tests:
           smallfile_threads : 1
           smallfile_file_size : 1024
           smallfile_files : 100000
+          cleanup: true
         desc: Write 100GB of small files on 50 Subvol with 50 Fuse Clients and 1 thread
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1706,12 +1648,8 @@ tests:
           smallfile_threads : 1
           smallfile_file_size : 1024
           smallfile_files : 100000
+          cleanup: true
         desc: Write 100GB of small files on 100 Subvol with 100 Fuse Clients and 1 thread
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1726,19 +1664,15 @@ tests:
           smallfile_threads : 1
           smallfile_file_size : 1024
           smallfile_files : 100000
+          cleanup: true
         desc: Write 100GB of small files on 200 Subvol with 100 Fuse Clients and 1 thread
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
         name: Write 100GB of small files on 500 Subvol with 100 Fuse Clients and 1 thread
         module: cephfs_scale.run_scale_io.py
         config:
-          num_of_subvolumes: 200
+          num_of_subvolumes: 500
           num_of_clients: 100
           io_type: smallfile
           mount_type : fuse
@@ -1746,12 +1680,8 @@ tests:
           smallfile_threads : 1
           smallfile_file_size : 1024
           smallfile_files : 100000
+          cleanup: true
         desc: Write 100GB of small files on 500 Subvol with 100 Fuse Clients and 1 thread
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1766,12 +1696,8 @@ tests:
           smallfile_threads : 1
           smallfile_file_size : 1024
           smallfile_files : 100000
+          cleanup: true
         desc: Write 100GB of small files on 1000 Subvol with 100 Fuse Clients and 1 thread
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1786,12 +1712,8 @@ tests:
           smallfile_threads : 1
           smallfile_file_size : 1024
           smallfile_files : 100000
+          cleanup: true
         desc: Write 100GB of small files on 50 Subvol with 50 kernel Clients and 1 thread
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1806,12 +1728,8 @@ tests:
           smallfile_threads : 1
           smallfile_file_size : 1024
           smallfile_files : 100000
+          cleanup: true
         desc: Write 100GB of small files on 100 Subvol with 100 kernel Clients and 1 thread
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1826,19 +1744,15 @@ tests:
           smallfile_threads : 1
           smallfile_file_size : 1024
           smallfile_files : 100000
+          cleanup: true
         desc: Write 100GB of small files on 200 Subvol with 100 kernel Clients and 1 thread
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
         name: Write 100GB of small files on 500 Subvol with 100 kernel Clients and 1 thread
         module: cephfs_scale.run_scale_io.py
         config:
-          num_of_subvolumes: 200
+          num_of_subvolumes: 500
           num_of_clients: 100
           io_type: smallfile
           mount_type : kernel
@@ -1846,12 +1760,8 @@ tests:
           smallfile_threads : 1
           smallfile_file_size : 1024
           smallfile_files : 100000
+          cleanup: true
         desc: Write 100GB of small files on 500 Subvol with 100 kernel Clients and 1 thread
-        abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
         abort-on-fail: false
 
   - test:
@@ -1866,16 +1776,12 @@ tests:
           smallfile_threads : 1
           smallfile_file_size : 1024
           smallfile_files : 100000
+          cleanup: true
         desc: Write 100GB of small files on 1000 Subvol with 100 kernel Clients and 1 thread
         abort-on-fail: false
-  - test:
-        name: Cleanup Clients
-        module: cephfs_scale.cleanup.py
-        desc: Cleanup Clients
-        abort-on-fail: false
 
-#FIO Configs:
 
+# FIO Configs:
   - test:
       abort-on-fail: false
       config:
@@ -1889,14 +1795,10 @@ tests:
         mount_type: kernel
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 kernel clients with 4k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 kernel clients with 4k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -1911,14 +1813,10 @@ tests:
         mount_type: kernel
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 kernel clients with 4k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 kernel clients with 4k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -1933,14 +1831,10 @@ tests:
         mount_type: kernel
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 kernel clients with 8k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 kernel clients with 8k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -1955,14 +1849,10 @@ tests:
         mount_type: kernel
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 kernel clients with 8k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 kernel clients with 8k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -1977,14 +1867,10 @@ tests:
         mount_type: kernel
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 kernel clients with 16k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 kernel clients with 16k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -1999,14 +1885,10 @@ tests:
         mount_type: kernel
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 kernel clients with 16k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 kernel clients with 16k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2021,14 +1903,10 @@ tests:
         mount_type: kernel
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 kernel clients with 32k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 kernel clients with 32k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2043,14 +1921,10 @@ tests:
         mount_type: kernel
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 kernel clients with 32k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 kernel clients with 32k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
 #####
 
@@ -2067,14 +1941,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 kernel clients with 4k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 kernel clients with 4k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2089,14 +1959,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 kernel clients with 4k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 kernel clients with 4k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2111,14 +1977,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 kernel clients with 8k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 kernel clients with 8k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2133,14 +1995,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 kernel clients with 8k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 kernel clients with 8k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2155,14 +2013,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 kernel clients with 16k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 kernel clients with 16k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2177,14 +2031,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 kernel clients with 16k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 kernel clients with 16k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2199,14 +2049,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 kernel clients with 32k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 kernel clients with 32k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2221,14 +2067,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 kernel clients with 32k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 kernel clients with 32k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
 #####
 
@@ -2245,14 +2087,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 kernel clients with 4k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 kernel clients with 4k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2267,14 +2105,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 kernel clients with 4k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 kernel clients with 4k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2289,14 +2123,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 kernel clients with 8k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 kernel clients with 8k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2311,14 +2141,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 kernel clients with 8k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 kernel clients with 8k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2333,14 +2159,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 kernel clients with 16k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 kernel clients with 16k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2355,14 +2177,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 kernel clients with 16k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 kernel clients with 16k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2377,14 +2195,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 kernel clients with 32k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 kernel clients with 32k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2399,14 +2213,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 kernel clients with 32k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 kernel clients with 32k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
 #####
 
@@ -2423,14 +2233,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 kernel clients with 4k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 kernel clients with 4k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2445,14 +2251,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 kernel clients with 4k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 kernel clients with 4k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2467,14 +2269,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 kernel clients with 8k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 kernel clients with 8k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2489,14 +2287,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 kernel clients with 8k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 kernel clients with 8k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2511,14 +2305,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 kernel clients with 16k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 kernel clients with 16k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2533,14 +2323,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 kernel clients with 16k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 kernel clients with 16k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2555,14 +2341,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 kernel clients with 32k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 kernel clients with 32k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2577,14 +2359,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 kernel clients with 32k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 kernel clients with 32k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
 #####
 
@@ -2601,14 +2379,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 4k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 4k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2623,14 +2397,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 4k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 4k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2645,14 +2415,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 8k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 8k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2667,14 +2433,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 8k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 8k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2689,14 +2451,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 16k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 16k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2711,14 +2469,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 16k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 16k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2733,14 +2487,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 32k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 32k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2755,14 +2505,10 @@ tests:
         mount_type: kernel
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 32k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 kernel clients with 32k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
 #####
 
@@ -2779,14 +2525,10 @@ tests:
         mount_type: fuse
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 fuse clients with 4k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 fuse clients with 4k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2801,14 +2543,10 @@ tests:
         mount_type: fuse
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 fuse clients with 4k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 fuse clients with 4k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2823,14 +2561,10 @@ tests:
         mount_type: fuse
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 fuse clients with 8k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 fuse clients with 8k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2845,14 +2579,10 @@ tests:
         mount_type: fuse
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 fuse clients with 8k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 fuse clients with 8k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2867,14 +2597,10 @@ tests:
         mount_type: fuse
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 fuse clients with 16k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 fuse clients with 16k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2889,14 +2615,10 @@ tests:
         mount_type: fuse
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 fuse clients with 16k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 fuse clients with 16k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2911,14 +2633,10 @@ tests:
         mount_type: fuse
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 fuse clients with 32k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 fuse clients with 32k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2933,14 +2651,10 @@ tests:
         mount_type: fuse
         num_of_clients: 50
         num_of_subvolumes: 50
+        cleanup: true
       desc: Write 100GB with fio on 50 Subvols with 50 fuse clients with 32k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 50 Subvols with 50 fuse clients with 32k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
 #####
 
@@ -2957,14 +2671,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 fuse clients with 4k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 fuse clients with 4k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -2979,14 +2689,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 fuse clients with 4k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 fuse clients with 4k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3001,14 +2707,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 fuse clients with 8k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 fuse clients with 8k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3023,14 +2725,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 fuse clients with 8k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 fuse clients with 8k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3045,14 +2743,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 fuse clients with 16k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 fuse clients with 16k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3067,14 +2761,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 fuse clients with 16k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 fuse clients with 16k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3089,14 +2779,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 fuse clients with 32k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 fuse clients with 32k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3111,14 +2797,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 100
+        cleanup: true
       desc: Write 100GB with fio on 100 Subvols with 100 fuse clients with 32k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 100 Subvols with 100 fuse clients with 32k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
 #####
 
@@ -3135,14 +2817,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 fuse clients with 4k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 fuse clients with 4k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3157,14 +2835,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 fuse clients with 4k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 fuse clients with 4k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3179,14 +2853,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 fuse clients with 8k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 fuse clients with 8k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3201,14 +2871,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 fuse clients with 8k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 fuse clients with 8k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3223,14 +2889,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 fuse clients with 16k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 fuse clients with 16k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3245,14 +2907,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 fuse clients with 16k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 fuse clients with 16k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3267,14 +2925,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 fuse clients with 32k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 fuse clients with 32k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3289,14 +2943,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 200
+        cleanup: true
       desc: Write 100GB with fio on 200 Subvols with 100 fuse clients with 32k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 200 Subvols with 100 fuse clients with 32k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
 #####
 
@@ -3313,14 +2963,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 fuse clients with 4k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 fuse clients with 4k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3335,14 +2981,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 fuse clients with 4k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 fuse clients with 4k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3357,14 +2999,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 fuse clients with 8k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 fuse clients with 8k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3379,14 +3017,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 fuse clients with 8k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 fuse clients with 8k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3401,14 +3035,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 fuse clients with 16k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 fuse clients with 16k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3423,14 +3053,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 fuse clients with 16k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 fuse clients with 16k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3445,14 +3071,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 fuse clients with 32k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 fuse clients with 32k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3467,14 +3089,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 500
+        cleanup: true
       desc: Write 100GB with fio on 500 Subvols with 100 fuse clients with 32k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 500 Subvols with 100 fuse clients with 32k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
 #####
 
@@ -3491,14 +3109,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 4k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 4k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3513,14 +3127,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 4k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 4k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3535,14 +3145,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 8k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 8k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3557,14 +3163,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 8k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 8k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3579,14 +3181,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 16k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 16k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3601,14 +3199,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 16k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 16k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3623,14 +3217,10 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 32k bs 8 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 32k bs 8 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
   - test:
       abort-on-fail: false
@@ -3645,13 +3235,9 @@ tests:
         mount_type: fuse
         num_of_clients: 100
         num_of_subvolumes: 1000
+        cleanup: true
       desc: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 32k bs 16 iodepth
       module: cephfs_scale.run_scale_io.py
       name: Write 100GB with fio on 1000 Subvols with 100 fuse clients with 32k bs 16 iodepth
-  - test:
-      name: Cleanup Clients
-      module: cephfs_scale.cleanup.py
-      desc: Cleanup Clients
-      abort-on-fail: false
 
 #####
