@@ -358,3 +358,51 @@ tests:
         status_code: 200
         args: node1
       desc: Use the GET method to view information for monitor name
+
+  - test:
+      name: ceph-mgr RESTful module POST method on request endpoint
+      polarion-id: CEPH-83600239
+      module: test_restful_operations_request_endpoint.py
+      config:
+        endpoint: /request
+        method: POST
+        username: test_user
+        status_code: 200
+        data:
+          prefix: osd tree
+      desc: Use the POST method to execute an administrative command
+
+  - test:
+      name: ceph-mgr RESTful module POST method on request endpoint
+      polarion-id: CEPH-83600239
+      module: test_restful_operations_request_endpoint.py
+      config:
+        endpoint: /request
+        method: POST
+        username: test_user
+        status_code: 200
+        data:
+          prefix: crash ls
+      desc: Use the POST method to execute an administrative command
+
+  - test:
+      name: ceph-mgr RESTful module GET method on request endpoint
+      polarion-id: CEPH-83600239
+      module: test_restful_operations_request_endpoint.py
+      config:
+        endpoint: /request
+        method: GET
+        username: test_user
+        status_code: 200
+      desc: Use the GET method to list all the available requests
+
+  - test:
+      name: ceph-mgr RESTful module DELETE method on request endpoint
+      polarion-id: CEPH-83600239
+      module: test_restful_operations_request_endpoint.py
+      config:
+        endpoint: /request
+        method: DELETE
+        username: test_user
+        status_code: 200
+      desc: Use the DELETE method to remove all the finished requests
