@@ -420,6 +420,7 @@ class RadosOrchestrator:
                 - check_ec (bool) -> boolean to control exit code check
                 - background (bool) -> run rados bench as background process and continue with test execution
                 - nocleanup (bool) -> if false, the nocleanup flag will not be added and the objects would be deleted
+                - timeout (int) -> user defined timeout for rados bench process
         Returns: True -> pass, False -> fail
         """
         duration = kwargs.get("rados_write_duration", 200)
@@ -428,6 +429,7 @@ class RadosOrchestrator:
         verify_stats = kwargs.get("verify_stats", True)
         check_ec = kwargs.get("check_ec", True)
         nocleanup = kwargs.get("nocleanup", True)
+        _timeout = kwargs.get("timeout", duration + 100)
         cmd = f"sudo rados --no-log-to-stderr -b {byte_size} -p {pool_name} bench {duration} write"
         if nocleanup:
             cmd = f"{cmd} --no-cleanup"
@@ -440,7 +442,7 @@ class RadosOrchestrator:
         log.info(f"check_ec: {check_ec}")
 
         try:
-            self.node.shell([cmd], check_status=check_ec, long_running=True)
+            self.node.shell([cmd], check_status=check_ec, timeout=_timeout)
             if max_objs and verify_stats:
                 time.sleep(90)
                 new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
@@ -478,14 +480,23 @@ class RadosOrchestrator:
             pool_name: pool on which the operation will be performed
             kwargs: Any other param that needs to passed
                 1. rados_read_duration -> duration of read operation (int)
+                2. timeout (int) -> user defined timeout for rados bench process
+                3. check_ec (bool) -> boolean to control exit code check
         Returns: True -> pass, False -> fail
         """
         duration = kwargs.get("rados_read_duration", 80)
+        _timeout = kwargs.get("timeout", duration + 100)
+        check_ec = kwargs.get("check_ec", True)
+
         try:
-            cmd = f"rados --no-log-to-stderr -p {pool_name} bench {duration} seq"
-            self.node.shell([cmd])
-            cmd = f"rados --no-log-to-stderr -p {pool_name} bench {duration} rand"
-            self.node.shell([cmd])
+            base_cmd = f"rados --no-log-to-stderr -p {pool_name} bench {duration} "
+            for opt in ["seq", "rand"]:
+                cmd = base_cmd + opt
+                if kwargs.get("background"):
+                    check_ec = False
+                    cmd = f"{cmd} &> /dev/null &"
+                log.info(f"check_ec: {check_ec}")
+                self.node.shell([cmd], check_status=check_ec, timeout=_timeout)
             return True
         except Exception as err:
             log.error(f"Error running rados bench write on pool : {pool_name}")

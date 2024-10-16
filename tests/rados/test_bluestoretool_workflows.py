@@ -672,7 +672,8 @@ def run(ceph_cluster, **kw):
             )
             out = bluestore_obj.show_bluefs_stats(osd_id=osd_id)
             log.info(out)
-            for pattern in [
+
+            pattern_list = [
                 "device size",
                 "DEV/LEV",
                 "LOG",
@@ -681,7 +682,10 @@ def run(ceph_cluster, **kw):
                 "SLOW",
                 "MAXIMUMS",
                 "TOTAL",
-            ]:
+            ]
+            if rhbuild.split(".")[0] < "6":
+                pattern_list = ["device size", "wal_total", "db_total", "slow_total"]
+            for pattern in pattern_list:
                 assert (
                     pattern in out
                 ), f"{pattern} not found in bluefs stats output for build {rhbuild}"

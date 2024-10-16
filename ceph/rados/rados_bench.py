@@ -158,6 +158,7 @@ class RadosBench:
         """
         base_cmd = ["rados", "bench"]
         seconds = str(config.pop("seconds"))
+        _timeout = config.get("timeout", int(seconds) + 100)
         base_cmd.extend(["-p", pool_name, seconds, "write"])
 
         run_name = config.pop("run-name", False)
@@ -168,7 +169,7 @@ class RadosBench:
         base_cmd.append(config_dict_to_string(config))
         base_cmd = " ".join(base_cmd)
 
-        client.exec_command(cmd=base_cmd, sudo=True, long_running=True)
+        client.exec_command(cmd=base_cmd, sudo=True, timeout=_timeout)
         return run_name if run_name else None
 
     @staticmethod
