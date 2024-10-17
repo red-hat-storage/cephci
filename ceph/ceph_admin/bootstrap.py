@@ -231,7 +231,9 @@ class BootstrapMixin:
             #       used in the CI test modules.
             #       The `set_cdn_tool_repo` should be taken out, once
             #       we have upstream build with all necessary pkg sources.
-            self.set_cdn_tool_repo(_rhcs_version)
+            #       [Oct-2024]: Fixed by adding EPEL public repo, cdn repo should no
+            #                   longer be needed
+            # self.set_cdn_tool_repo(_rhcs_version)
         elif build_type == "released" or custom_repo.lower() == "cdn":
             custom_image = False
             self.set_cdn_tool_repo(_rhcs_version)
