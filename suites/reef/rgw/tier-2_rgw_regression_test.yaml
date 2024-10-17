@@ -341,7 +341,6 @@ tests:
       config:
         script-name: test_policy_torrent.py
         config-file-name: test_policy_torrent.yaml
-      comments: known issue BZ 2299815
 
   # Bucket Lifecycle Tests
   - test:
