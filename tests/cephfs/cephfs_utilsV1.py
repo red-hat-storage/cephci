@@ -3802,6 +3802,7 @@ os.system('sudo systemctl start  network')
         crash_info = json.loads(out)
         return crash_info
 
+    @retry(JSONDecodeError, tries=3, delay=30)
     def get_mds_metrics(self, client, rank=0, mounted_dir="", fs_name="cephfs"):
         """
         returns the metrics for the MDS rank and the client mounted directory
