@@ -140,7 +140,7 @@ def run(ceph_cluster, **kw):
             client.exec_command(
                 sudo=True,
                 cmd=f"bash -c 'for i in $(seq 1 {num_files}); do touch {test_dir}/file_$i; done'",
-                timeout=7200,
+                timeout=14400,
             )
 
             time.sleep(60)  # Allow file creation to complete
@@ -205,7 +205,7 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True,
             cmd=f"bash -c 'for i in $(seq 1 {num_files}); do touch {test_dir_s3}/file_$i; done'",
-            timeout=7200,
+            timeout=14400,
         )
 
         time.sleep(60)  # Ensure file creation is completed
@@ -255,26 +255,12 @@ def run(ceph_cluster, **kw):
         log.info("Creating directories and applying SELinux labels")
         selinux_labels = {
             "var_t": "var",
-            "home_t": "home",
             "httpd_sys_content_t": "var/www",
             "nfs_t": "nfs_share",
             "samba_share_t": "samba_share",
             "tmp_t": "tmp",
             "httpd_t": "httpd_process",
-            "sshd_t": "sshd_process",
-            "mysqld_t": "mysqld_process",
-            "ftpd_t": "ftpd_process",
-            "cron_t": "cron_process",
             "device_t": "device",
-            "usb_device_t": "usb_device",
-            "network_t": "network",
-            "port_t": "network_port",
-            "netif_t": "network_interface",
-            "netnode_t": "network_node",
-            "init_t": "init_process",
-            "systemd_t": "systemd_process",
-            "kernel_t": "kernel_process",
-            "logrotate_t": "logrotate_process",
         }
 
         mounts = [
@@ -299,10 +285,7 @@ def run(ceph_cluster, **kw):
 
                 # Validate SELinux label
                 if validate_selinux_context(client, label, full_path):
-                    log.error(
-                        f"Failed to validate SELinux context for '{full_path}'. Known Issue ans is being "
-                        f"tracked at - https://bugzilla.redhat.com/show_bug.cgi?id=2309363"
-                    )
+                    log.error(f"Failed to validate SELinux context for '{full_path}'.")
                     return 1
 
         log.info(

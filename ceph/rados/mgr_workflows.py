@@ -443,7 +443,7 @@ class MgrWorkflows:
         mgr_stats = self.rados_obj.run_ceph_command(cmd)
         return mgr_stats
 
-    def set_mgr_fail(self, host):
+    def set_mgr_fail(self, host: str = None):
         """
         Method to fail the mgr host
         Args:
@@ -451,7 +451,9 @@ class MgrWorkflows:
         Return:
              Return the output of the execution of the command
         """
-        cmd = f"ceph mgr fail {host}"
+        cmd = "ceph mgr fail"
+        if host:
+            cmd += " " + host
         out_put = self.rados_obj.run_ceph_command(cmd)
         time.sleep(10)
         return out_put
@@ -492,3 +494,12 @@ class MgrWorkflows:
             mgr_list.append(standby_mgr["name"])
         log.info(f"The mgr daemon list is -{mgr_list}")
         return mgr_list
+
+    def get_active_mgr(self):
+        """
+        Method is used to return the active manager in the cluster
+        Returns:
+            Returns the active manager in the cluster
+        """
+        stats_out_put = self.get_mgr_stats()
+        return stats_out_put["active_name"]
