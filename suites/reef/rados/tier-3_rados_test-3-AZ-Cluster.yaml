@@ -1,4 +1,4 @@
-# Use cluster-conf file: conf/reef/rados/3AZ-cluster.yaml
+# Use cluster-conf file: conf/reef/rados/3AZ-cluster-rhos-1.yaml
 # 3 AZ cluster deployment tests
 
 tests:
