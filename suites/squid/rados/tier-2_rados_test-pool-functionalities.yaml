@@ -375,6 +375,7 @@ tests:
         Verify_osd_in_out_behaviour: true
       desc: Verify OSD behaviour when it is marked in and out of cluster
 
+# Pool scale down tests commented until fix for 2302230
   - test:
       name: Test Online Reads Balancer Upmap-read
       module: test_online_reads_balancer.py
@@ -382,6 +383,9 @@ tests:
       polarion-id: CEPH-83590731
       config:
         balancer_mode: upmap-read
+        negative_scenarios: true
+        scale_up: true
+        scale_down: false
         create_pools:
           - create_pool:
               pool_name: rpool_1
