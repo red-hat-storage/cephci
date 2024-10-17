@@ -5,12 +5,12 @@
 tests:
 # Set up the cluster
   - test:
-      abort-on-fail: false
+      abort-on-fail: true
       module: install_prereq.py
       name: install ceph pre-requisites
 
   - test:
-      abort-on-fail: false
+      abort-on-fail: true
       config:
         verify_cluster_health: true
         steps:
@@ -51,7 +51,7 @@ tests:
       name: deploy cluster
 
   - test:
-      abort-on-fail: false
+      abort-on-fail: true
       config:
         command: add
         id: client.1
