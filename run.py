@@ -744,10 +744,9 @@ def run(args):
 
             if test.get("clusters"):
                 config = test.get("clusters").get(cluster_name).get("config", {})
-                parallel = test.get("clusters").get(cluster_name).get("parallel")
             else:
                 config = test.get("config", {})
-                parallel = test.get("parallel")
+            parallel = test.get("parallel", [])
 
             if not config.get("base_url"):
                 config["base_url"] = base_url
