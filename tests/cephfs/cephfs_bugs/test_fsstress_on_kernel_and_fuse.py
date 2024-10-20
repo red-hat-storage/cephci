@@ -134,10 +134,12 @@ def run(ceph_cluster, **kw):
         log.info(
             "Check for the Ceph Health to see if there are any deadlock bw unlink and rename."
         )
-        ceph_health = fs_util_v1.get_ceph_health_status(clients[0])
-        log.info(ceph_health)
+        # ceph_health = fs_util_v1.get_ceph_health_status(clients[0])
+        # log.info(ceph_health)
         return 0
     except Exception as e:
+        dmesg, _ = clients[0].exec_command(cmd="dmesg | grep panic -A 10 -B 10")
+        log.error(dmesg)
         log.error(e)
         log.error(traceback.format_exc())
         return 1

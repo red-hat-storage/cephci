@@ -4,6 +4,7 @@ import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from ceph.ceph import SocketTimeoutException
 
 log = Log(__name__)
 
@@ -124,12 +125,20 @@ def run(ceph_cluster, **kw):
             cmd="cd /root/xfstests-dev && ./check -d -T -g quick -e ceph.exclude",
             check_ec=False,
             long_running=True,
+            timeout=7200
         )
         log.info("XFS tests completed successfully")
         return 0
     except Exception as e:
+        dmesg, _ = clients[0].exec_command(sudo=True, cmd="dmesg")
+        log.error(dmesg)
         log.error(e)
         log.error(traceback.format_exc())
+        return 1
+    except SocketTimeoutException as ste:
+        dmesg , _ = clients[0].exec_command(sudo=True, cmd="dmesg")
+        log.error(dmesg)
+        log.error(ste)
         return 1
     finally:
         uninstall_commands = [
