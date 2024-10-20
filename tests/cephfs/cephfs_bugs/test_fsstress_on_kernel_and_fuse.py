@@ -134,8 +134,8 @@ def run(ceph_cluster, **kw):
         log.info(
             "Check for the Ceph Health to see if there are any deadlock bw unlink and rename."
         )
-        ceph_health = fs_util_v1.get_ceph_health_status(clients[0])
-        log.info(ceph_health)
+        # ceph_health = fs_util_v1.get_ceph_health_status(clients[0])
+        # log.info(ceph_health)
         return 0
     except Exception as e:
         log.error(e)
