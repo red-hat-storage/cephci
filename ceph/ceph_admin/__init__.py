@@ -215,6 +215,18 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
                 check_ec=False,
             )
 
+            # public repo: needed to compensate for dependencies required during
+            # installation of ceph-common and other pkg RPMs
+            public_repo_url = (
+                f"https://dl.fedoraproject.org/pub/epel/"
+                f"{node.distro_info['VERSION_ID'][0]}/Everything/x86_64/"
+            )
+            node.exec_command(
+                sudo=True,
+                cmd=f"yum-config-manager --add-repo {public_repo_url}",
+                check_ec=False,
+            )
+
     def install(self, **kwargs: Dict) -> None:
         """Install the cephadm package in all node(s).
 
