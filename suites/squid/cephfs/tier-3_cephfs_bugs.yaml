@@ -280,5 +280,9 @@ tests:
       polarion-id: CEPH-83594160
       desc: mds_cache_oversized_warning_counter
       abort-on-fail: false
-
-
+  - test:
+      name: mds_dir_max_commit_size
+      module: cephfs_bugs.test_mds_dir_max_commit_size.py
+      polarion-id: CEPH-83600107
+      desc: mds_dir_max_commit_size
+      abort-on-fail: false

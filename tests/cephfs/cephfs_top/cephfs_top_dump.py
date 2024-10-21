@@ -97,7 +97,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [client1],
             fuse_mounting_dir_1,
-            extra_params=f",fs={fs_name}",
+            extra_params=f" --client_fs {fs_name}",
         )
         mon_node_ips = fs_util.get_mon_node_ips()
         fs_util.kernel_mount(
