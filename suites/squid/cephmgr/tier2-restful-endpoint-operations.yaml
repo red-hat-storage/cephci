@@ -65,6 +65,26 @@
 #    "/mon/<arg>":
 #        "GET":
 #             "Show the information for the monitor name"
+#    - Test supported methods for /request and /request/<arg> endpoint
+#    "/request":
+#        "DELETE":
+#             "Remove all the finished requests"
+#        "GET":
+#             "List all the available requests"
+#        "POST":
+#             "Pass through method to create any request"
+#    "/request/<arg>":
+#        "DELETE":
+#             ""Remove the request id from the database"
+#        "GET":
+#             "Show the information for the request id"
+#     - Test supported methods for /server and /server/<arg> endpoint
+#    "/server":
+#        "GET":
+#             "Show the information for all the servers"
+#    "/server/<arg>":
+#        "GET":
+#             "Show the information for the server fqdn"
 #===============================================================================================
 
 tests:
@@ -406,3 +426,24 @@ tests:
         username: test_user
         status_code: 200
       desc: Use the DELETE method to remove all the finished requests
+
+  - test:
+      name: ceph-mgr RESTful module GET method on server endpoint
+      polarion-id: CEPH-83600327
+      module: test_restful_operations_server_endpoint.py
+      config:
+        endpoint: /server
+        username: test_user
+        status_code: 200
+      desc: Use the GET method to view information for all the servers
+
+  - test:
+      name: ceph-mgr RESTful module GET method on server_arg endpoint
+      polarion-id: CEPH-83600327
+      module: test_restful_operations_server_endpoint.py
+      config:
+        endpoint: /server
+        username: test_user
+        status_code: 200
+        args: node1
+      desc: Use the GET method to view information for the server fqdn
