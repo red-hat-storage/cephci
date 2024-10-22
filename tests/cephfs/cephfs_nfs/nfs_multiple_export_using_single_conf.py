@@ -1,8 +1,10 @@
 import random
 import string
 import traceback
+from distutils.version import LooseVersion
 
 from ceph.ceph import CommandFailed
+from cephci.utility.utils import get_ceph_version_from_cluster
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
@@ -39,6 +41,7 @@ def run(ceph_cluster, **kw):
         nfs_name = "cephfs-nfs"
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
+        ceph_version = get_ceph_version_from_cluster(clients[0])
         client1.exec_command(
             sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
         )
@@ -61,7 +64,7 @@ def run(ceph_cluster, **kw):
 
         if not fs_details:
             fs_util.create_fs(client1, fs_name)
-        data = [
+        data_1 = [
             {
                 '"export_id"': export_id1,
                 '"path"': '"/"',
@@ -97,6 +100,43 @@ def run(ceph_cluster, **kw):
                 '"clients"': "[]",
             },
         ]
+        data_2 = [
+            {
+                '"export_id"': export_id1,
+                '"path"': '"/"',
+                '"cluster_id"': f'"{nfs_name}"',
+                '"pseudo"': f'"{psuedo1}"',
+                '"access_type"': '"RW"',
+                '"squash"': '"none"',
+                '"security_label"': "true",
+                '"protocols"': "[4]",
+                '"transports"': '["TCP"]',
+                '"fsal"': {
+                    '"name"': '"CEPH"',
+                    '"fs_name"': f'"{fs_name}"',
+                },
+                '"clients"': "[]",
+            },
+            {
+                '"export_id"': export_id2,
+                '"path"': '"/"',
+                '"cluster_id"': f'"{nfs_name}"',
+                '"pseudo"': f'"{psuedo2}"',
+                '"access_type"': '"RW"',
+                '"squash"': '"none"',
+                '"security_label"': "true",
+                '"protocols"': "[4]",
+                '"transports"': '["TCP"]',
+                '"fsal"': {
+                    '"name"': '"CEPH"',
+                    '"fs_name"': f'"{fs_name}"',
+                },
+                '"clients"': "[]",
+            },
+        ]
+        data = (
+            data_1 if LooseVersion(ceph_version) <= LooseVersion("19.1.1") else data_2
+        )
         client1.exec_command(sudo=True, cmd=f"echo {data} > export.json")
         client1.exec_command(
             sudo=True, cmd=f"ceph nfs export apply {nfs_name} -i export.json"

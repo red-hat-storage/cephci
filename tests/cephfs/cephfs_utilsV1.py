@@ -70,6 +70,8 @@ class FsUtils(object):
         self.mdss = ceph_cluster.get_ceph_objects("mds")
         self.clients = ceph_cluster.get_ceph_objects("client")
         self.test_data = kwargs.get("test_data")
+        if kwargs.get("config", {}).get("enable_mds_logs", False):
+            self.enable_mds_log_v1(self.clients[0])
 
     def prepare_clients(self, clients, build):
         """
@@ -251,6 +253,27 @@ class FsUtils(object):
                     if v not in out:
                         log.error("Unable to set the debug logs")
                         raise CommandFailed(f"Unable to set the debug logs : {out}")
+
+    def enable_mds_log_v1(self, client, validate=True, **kwargs):
+        set_log_dict = {
+            "log_to_file": "true",
+            "debug_mds": kwargs.get("debug_mds", "5"),
+            "debug_ms": kwargs.get("debug_ms", "1"),
+        }
+        for k, v in set_log_dict.items():
+            client.exec_command(
+                sudo=True,
+                cmd=f"ceph config set mds {k} {v}",
+            )
+        if validate:
+            for k, v in set_log_dict.items():
+                out, rc = client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph config get mds {k}",
+                )
+                if v not in out:
+                    log.error("Unable to set the debug logs")
+                    raise CommandFailed(f"Unable to set the debug logs : {out}")
 
     def disable_mds_logs(self, client, fs_name="cephfs", validate=True):
         """
