@@ -23,6 +23,7 @@ CONTAINER_IMAGES = [
     "loki",
     "nvmeof",
     "samba",
+    "samba_metrics",
 ]
 
 
@@ -101,6 +102,7 @@ def set_container_image_config(node, configs):
                 loki: loki image URL
                 nvmeof: nvmeof image URL
                 samba: samba image URL
+                samba_metrics: samba metrics image URL
     """
     # Set CephAdm object
     cephadm = CephAdm(node)
