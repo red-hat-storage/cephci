@@ -2,12 +2,14 @@ import json
 import secrets
 import string
 import traceback
+from distutils.version import LooseVersion
 from json import JSONDecodeError
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -62,6 +64,7 @@ def run(ceph_cluster, **kw):
         )
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
+        ceph_version = get_ceph_version_from_cluster(clients[0])
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
@@ -99,21 +102,39 @@ def run(ceph_cluster, **kw):
             cmd=f"ceph auth get-key client.{clients[0].node.hostname}", sudo=True
         )
         log.info("Output : %s" % out)
-        export_fstr = f"""EXPORT {{
-          Export_Id = {export_id};
-          Transports = TCP;
-          Path = /;
-          Pseudo = {nfs_export_name};
-          Protocols = 4;
-          Access_Type = RW;
-          Attr_Expiration_Time = 0;
-          Squash = None;
-          FSAL {{
-            Name = CEPH;
-            Filesystem = {fs_name};
-            User_Id = nfs.cephfs-nfs.{export_id};
-          }}
-        }}"""
+        export_fstr = (
+            f"""EXPORT {{
+                  Export_Id = {export_id};
+                  Transports = TCP;
+                  Path = /;
+                  Pseudo = {nfs_export_name};
+                  Protocols = 4;
+                  Access_Type = RW;
+                  Attr_Expiration_Time = 0;
+                  Squash = None;
+                  FSAL {{
+                    Name = CEPH;
+                    Filesystem = {fs_name};
+                    User_Id = nfs.cephfs-nfs.{export_id};
+                  }}
+                }}"""
+            if LooseVersion(ceph_version) <= LooseVersion("19.1.1")
+            else f"""EXPORT {{
+                  Export_Id = {export_id};
+                  Transports = TCP;
+                  Path = /;
+                  Pseudo = {nfs_export_name};
+                  Protocols = 4;
+                  Access_Type = RW;
+                  Attr_Expiration_Time = 0;
+                  Squash = None;
+                  FSAL {{
+                    Name = CEPH;
+                    Filesystem = {fs_name};
+                    #User_Id = nfs.cephfs-nfs.{export_id};
+                  }}
+                }}"""
+        )
 
         # Push the export_fstr to a file
         filename = "export_file.conf"
