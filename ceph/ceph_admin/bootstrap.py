@@ -376,6 +376,7 @@ class BootstrapMixin:
             if self.cluster.rhcs_version >= LooseVersion("8.0"):
                 supported_overrides += [
                     "samba",
+                    "samba_metrics",
                 ]
 
             for image in supported_overrides:
