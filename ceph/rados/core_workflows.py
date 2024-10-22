@@ -1259,6 +1259,8 @@ class RadosOrchestrator:
                 11. profile_name -> Name of the profile to be created
                 12. yes_i_mean_it -> Needed to be passed for profile modification along with --force from 8.0
                 13. name: Name of the profile/rule to create if none is provided
+                14. negative_test: pass true if performing -ve tests. min_compact_client won't be updated for pool
+                creation when this param is set to true. Required for MSR EC pool tests with min_compact_client
         Returns: True -> pass, False -> fail
         """
         failure_domain = kwargs.get("crush-failure-domain", "osd")
@@ -1278,6 +1280,7 @@ class RadosOrchestrator:
             return False
         force = kwargs.get("force", False)
         create_ecpool = kwargs.get("create_ecpool", True)
+        negative_test = kwargs.get("negative_test", False)
         yes_i_mean_it = kwargs.get("yes_i_mean_it", False)
         profile_name = kwargs.get("profile_name", f"ecp_{pool_name}")
         rule_name = f"rule_{pool_name}"
@@ -1289,6 +1292,23 @@ class RadosOrchestrator:
         )
         if crush_osds_per_failure_domain:
             if self.rhbuild and self.rhbuild.split(".")[0] >= "8":
+                min_client_version = self.run_ceph_command(cmd="ceph osd dump")[
+                    "require_min_compat_client"
+                ]
+                log.debug(
+                    f"require_min_compat_client before starting the tests is {min_client_version}"
+                )
+                if not negative_test:
+                    if min_client_version not in ["squid"]:
+                        log.debug(
+                            "Setting config to allow clients to create EC MSR rule based pool on the cluster"
+                        )
+                        config_cmd = "ceph osd set-require-min-compat-client squid --yes-i-really-mean-it"
+                        self.client.exec_command(cmd=config_cmd, sudo=True)
+                        time.sleep(5)
+                        log.debug(
+                            "Set the min_compact client on the cluster to Squid on the cluster"
+                        )
                 cmd = (
                     cmd
                     + f" crush-osds-per-failure-domain={crush_osds_per_failure_domain} "

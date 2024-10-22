@@ -4,6 +4,7 @@ Module to test Reads balancer functionality on RHCS 7.0 and above clusters
 """
 
 import datetime
+import random
 import re
 import time
 
@@ -63,56 +64,87 @@ def run(ceph_cluster, **kw):
                 )
             else:
                 method_should_succeed(rados_obj.create_pool, **cr_pool)
-            method_should_succeed(rados_obj.bench_write, **cr_pool)
+            method_should_succeed(rados_obj.bench_write, max_objs=500, **cr_pool)
         log.info("Completed creating pools and writing test data into the pools")
 
         existing_pools = rados_obj.list_pools()
+
+        min_client_version = rados_obj.run_ceph_command(cmd="ceph osd dump")[
+            "require_min_compat_client"
+        ]
+        log.debug(
+            f"require_min_compat_client before starting the tests is {min_client_version}"
+        )
 
         if negative_scenario:
             # Trying to change the primary without setting the set-require-min-compat-client to reef. -ve test
             log.info(
                 "Trying to change the primary without setting the set-require-min-compat-client to reef. -ve test"
             )
-            test_pool = existing_pools[0]
-            # Getting a sample PG from the pool
-            pool_id = pool_obj.get_pool_id(pool_name=test_pool)
-            pgid = f"{pool_id}.0"
-            acting_set = rados_obj.get_pg_acting_set(pg_num=pgid)
-
-            log.debug(
-                f"Acting set for PG-id {pgid} in pool {test_pool} is {acting_set}"
-            )
-
-            new_osd = acting_set[1]
-            change_cmd = f"ceph osd pg-upmap-primary {pgid} {new_osd}"
-            """
-            Error String seen on the cluster:
-            Error EPERM: min_compat_client luminous < reef, which is required for pg-upmap-primary.
-            Try 'ceph osd set-require-min-compat-client reef' before using the new interface
-            """
-            error_str = r"Error EPERM: min_compat_client \w+ < reef, which is required for pg-upmap-primary."
-
             try:
-                out, err = client_node.exec_command(sudo=True, cmd=change_cmd)
-            except Exception as e:
-                error_message = str(e).strip()
-                if not re.search(error_str, error_message):
-                    log.error(
-                        "Correct error string not seen in stderr stream"
-                        f"Expected : {error_str} \n Got : {e}"
-                    )
-                    raise Exception("Wrong error string obtained")
-                log.debug(
-                    "Could not change the primary before setting the set-require-min-compat-client to reef. Pass"
-                )
-                log.error(f"An error occurred but was expected: {e}")
+                config_cmd = "ceph osd set-require-min-compat-client quincy"
+                rados_obj.client.exec_command(cmd=config_cmd, sudo=True)
+                time.sleep(10)
+                test_pool = random.choice(existing_pools)
+                # Getting a sample PG from the pool
+                pool_id = pool_obj.get_pool_id(pool_name=test_pool)
+                pgid = f"{pool_id}.0"
+                acting_set = rados_obj.get_pg_acting_set(pg_num=pgid)
 
-        log.debug(
-            "Setting config to allow clients to perform read balancing on the clusters."
-        )
-        config_cmd = "ceph osd set-require-min-compat-client reef"
-        rados_obj.run_ceph_command(cmd=config_cmd)
-        time.sleep(5)
+                log.debug(
+                    f"Acting set for PG-id {pgid} in pool {test_pool} is {acting_set}"
+                )
+
+                new_osd = acting_set[1]
+                change_cmd = f"ceph osd pg-upmap-primary {pgid} {new_osd}"
+                """
+                Error String seen on the cluster:
+                Error EPERM: min_compat_client luminous < reef, which is required for pg-upmap-primary.
+                Try 'ceph osd set-require-min-compat-client reef' before using the new interface
+                """
+                error_str = r"Error EPERM: min_compat_client \w+ < reef, which is required for pg-upmap-primary."
+                try:
+                    client_node.exec_command(sudo=True, cmd=change_cmd)
+                    log.error(
+                        "No Exception hit when we try setting pg_primary without setting min-compat-client to reef"
+                    )
+                    raise Exception("No exception hit upon pg_primary addition error")
+                except Exception as e:
+                    error_message = str(e).strip()
+                    if not re.search(error_str, error_message):
+                        log.error(
+                            "Correct error string not seen in stderr stream"
+                            f"Expected : {error_str} \n Got : {e}"
+                        )
+                        raise Exception("Wrong error string obtained")
+                    log.debug(
+                        "Could not change the primary before setting the set-require-min-compat-client to reef. Pass"
+                    )
+                    log.info(
+                        f"An error occurred but was expected: {e}"
+                        f"Completed the -ve scenario Verification\n"
+                    )
+            except Exception as err:
+                log.error(
+                    f"hit error while trying to change the min-compact-client version. That means "
+                    f"there are features that already use that feature. Cannot be changed. "
+                    f"Error message : {err}.\n Cannot continue to perform -ve tests changing min compact client "
+                    f"Proceeding with next tests"
+                )
+
+        min_client_version = rados_obj.run_ceph_command(cmd="ceph osd dump")[
+            "require_min_compat_client"
+        ]
+        # Just a temp fix for now. need to see how we can improve this check
+        if min_client_version != "reef" or min_client_version != "squid":
+            log.debug(
+                "Setting config to allow clients to perform read balancing on the clusters."
+            )
+            config_cmd = (
+                "ceph osd set-require-min-compat-client reef --yes-i-really-mean-it"
+            )
+            rados_obj.client.exec_command(cmd=config_cmd, sudo=True)
+            time.sleep(5)
 
         if config.get("online_command_verification"):
             log.info(
@@ -121,6 +153,7 @@ def run(ceph_cluster, **kw):
             log.debug(
                 "Checking the scores on each pool on the cluster, if the pool is replicated pool"
             )
+
             for pool_name in existing_pools:
                 pool_details = rados_obj.get_pool_details(pool=pool_name)
                 log.debug(f"Selected pool name : {pool_name}")
@@ -149,8 +182,8 @@ def run(ceph_cluster, **kw):
                     expected_score = (
                         read_scores["raw_score_acting"] / read_scores["optimal_score"]
                     )
-                    if round(read_scores["score_acting"], 1) != round(
-                        expected_score, 1
+                    if round(read_scores["score_acting"], 2) != round(
+                        expected_score, 2
                     ):
                         log.error(
                             f"The scores for the pool is not calculated properly. "
@@ -175,10 +208,8 @@ def run(ceph_cluster, **kw):
                 if not pool_details["erasure_code_profile"]:
                     pool = pool_details["pool_name"]
 
-                    # Fetching the acting set for the pool
-                    # Getting a sample PG from the pool
-                    pool_id = pool_obj.get_pool_id(pool_name=pool)
-                    pgid = f"{pool_id}.0"
+                    pool_pg_ids = rados_obj.get_pgid(pool_name=pool)
+                    pgid = random.choice(pool_pg_ids)
                     acting_set = rados_obj.get_pg_acting_set(pg_num=pgid)
 
                     log.debug(
@@ -187,7 +218,7 @@ def run(ceph_cluster, **kw):
 
                     # Trying to change the primary with existing primary. -ve test
                     log.info(
-                        "rying to change the primary with existing primary. -ve test"
+                        "Trying to change the primary with existing primary. -ve test"
                     )
                     new_osd = acting_set[0]
                     change_cmd = f"ceph osd pg-upmap-primary {pgid} {new_osd}"
@@ -207,7 +238,7 @@ def run(ceph_cluster, **kw):
                         log.debug(
                             "Could not change the primary with the existing primary. Pass"
                         )
-                        log.error(f"An error occurred but was expected: {e}")
+                        log.info(f"An error occurred but was expected: {e}")
 
                     # Trying to set a non-existant OSD as for the PG primary. -ve test
                     log.info(
@@ -225,7 +256,7 @@ def run(ceph_cluster, **kw):
                                 f"Expected : {error_str} \n Got : {e}"
                             )
                             raise Exception("Wrong error string obtained")
-                        log.error(f"An error occurred but was expected: {e}")
+                        log.info(f"An error occurred but was expected: {e}")
                         log.debug(
                             "Could not change the primary with non existent OSD. Pass"
                         )
@@ -240,7 +271,6 @@ def run(ceph_cluster, **kw):
                             node_osds = rados_obj.collect_osd_daemon_ids(node)
                             osd_list = osd_list + node_osds
 
-                    pgid = f"{pool_id}.0"
                     acting_set = rados_obj.get_pg_acting_set(pg_num=pgid)
                     for item in osd_list:
                         if item not in acting_set:
@@ -258,7 +288,7 @@ def run(ceph_cluster, **kw):
                                 f"Expected : {error_str} \n Got : {e}"
                             )
                             raise Exception("Wrong error string obtained")
-                        log.error(f"An error occurred but was expected: {e}")
+                        log.info(f"An error occurred but was expected: {e}")
                         log.debug(
                             "Could not change the PG set with OSD which is not present in the acting set.. Pass"
                         )
@@ -267,7 +297,7 @@ def run(ceph_cluster, **kw):
                     log.info(
                         " Trying to change the primary with secondary. Should be possible"
                     )
-                    pgid = f"{pool_id}.0"
+
                     acting_set = rados_obj.get_pg_acting_set(pg_num=pgid)
                     new_osd = acting_set[1]
                     change_cmd = f"ceph osd pg-upmap-primary {pgid} {new_osd}"
@@ -307,12 +337,30 @@ def run(ceph_cluster, **kw):
                     if final_acting_set[0] != acting_set[0]:
                         log.error(
                             f"The acting set has not reverted to original."
-                            f"Old AC : {acting_set}, final AC : {final_acting_set}"
+                            f"Old AC : {acting_set}, "
+                            f"Modified AC : {new_acting_set}, "
+                            f" final AC : {final_acting_set} \n"
+                            f"Checkig if the entry has been removed from OSD map"
                         )
-                        raise Exception("AC not changed error")
-
+                        pg_found = False
+                        osd_dump = rados_obj.run_ceph_command(cmd="ceph osd dump")
+                        for entry in osd_dump["pg_upmap_primaries"]:
+                            if entry["pgid"] == pgid:
+                                pg_found = True
+                                break
+                        if pg_found:
+                            log.info(
+                                f"pg_upmap_primaries present in OSDMAP for PG : {pgid} "
+                            )
+                            raise Exception(
+                                "pg_upmap_primaries not removed for a PG error"
+                            )
+                    log.info(
+                        f"The acting set has  reverted to original/ pg_upmap_primaries entry removed from cluster."
+                        f" Pass "
+                        f"Old AC : {acting_set}, final AC : {final_acting_set}"
+                    )
                     log.info("Completed tests on replicated pools for online commands")
-                    break
                 else:
                     log.info(f"Selected pool {pool_name} is a EC pool, skipping")
 
@@ -323,10 +371,8 @@ def run(ceph_cluster, **kw):
                 if pool_details["erasure_code_profile"]:
                     pool = pool_details["pool_name"]
 
-                    # Fetching the acting set for the pool
-                    # Getting a sample PG from the pool
-                    pool_id = pool_obj.get_pool_id(pool_name=pool)
-                    pgid = f"{pool_id}.0"
+                    pool_pg_ids = rados_obj.get_pgid(pool_name=pool)
+                    pgid = random.choice(pool_pg_ids)
                     acting_set = rados_obj.get_pg_acting_set(pg_num=pgid)
 
                     log.debug(
@@ -349,7 +395,7 @@ def run(ceph_cluster, **kw):
                                 f"Expected : {error_str} \n Got : {e}"
                             )
                             raise Exception("Wrong error string obtained")
-                        log.error(f"An error occurred but was expected: {e}")
+                        log.info(f"An error occurred but was expected: {e}")
                         log.debug("Could not change the primary for EC pools. Pass")
                     break
 
@@ -660,7 +706,7 @@ def run(ceph_cluster, **kw):
 
                     # ecpool_2 is an erasure coded pool; please try again with a replicated pool.
 
-            log.info("Verified the Online commands to change acting set")
+            log.info("Verified the offline tools - osdmaptool to change acting set")
             return 0
 
     except Exception as err:

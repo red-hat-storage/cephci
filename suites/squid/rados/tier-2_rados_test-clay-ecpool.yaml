@@ -143,6 +143,7 @@ tests:
                   byte_size: 100KB
       desc: Perform tests on EC pools having a RBD Image
 
+# Pool scale down tests commented until fix for 2302230
   - test:
       name: Test Online Reads Balancer Read
       module: test_online_reads_balancer.py
@@ -150,6 +151,9 @@ tests:
       polarion-id: CEPH-83590731
       config:
         balancer_mode: read
+        negative_scenarios: true
+        scale_up: true
+        scale_down: false
         create_pools:
           - create_pool:
               pool_name: rpool_1

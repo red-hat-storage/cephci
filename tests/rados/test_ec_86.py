@@ -30,11 +30,88 @@ def run(ceph_cluster, **kw):
     pool_obj = PoolFunctions(node=cephadm)
 
     crush_rule = config.get("crush_rule", "rule-86-msr")
+    negative_scenarios = config.get("negative_scenarios", False)
     modify_threshold = config.get("modify_threshold", False)
 
     try:
-
+        min_client_version = rados_obj.run_ceph_command(cmd="ceph osd dump")[
+            "require_min_compat_client"
+        ]
+        log.debug(
+            f"require_min_compat_client before starting the tests is {min_client_version}"
+        )
         pool_name = config.get("pool_name")
+        # todo: add -ve scenarios for testing the min_compact_client version on the cluster
+        if negative_scenarios:
+            # -ve scenario . We should not be able to create MSR rule or MSR pool on the cluster
+            # read profiles without setting min-compat-client to squid
+            log.debug("Starting with -ve scenario with setting of min-compat-client")
+            failed = False
+            try:
+                config_cmd = (
+                    "ceph osd set-require-min-compat-client reef --yes-i-really-mean-it"
+                )
+                rados_obj.client.exec_command(cmd=config_cmd, sudo=True)
+                new_version = rados_obj.run_ceph_command(cmd="ceph osd dump")[
+                    "require_min_compat_client"
+                ]
+                log.debug(
+                    f"require_min_compat_client changed during -ve test the tests is {new_version}"
+                    f"No exception hit. that means no MSR pools existing on cluster"
+                    f"proceeding to create a new MSR rule based pool"
+                )
+                if rados_obj.create_erasure_pool(
+                    name=crush_rule, negative_test=True, **config
+                ):
+                    log.error("Could create the Pool without min_compact_client")
+                    raise Exception("Pool created error")
+            except Exception as err:
+                log.info(
+                    f"Hit expected exception on the cluster. Error : {err}"
+                    f"Checking pools and rules on cluster"
+                )
+                new_version = rados_obj.run_ceph_command(cmd="ceph osd dump")[
+                    "require_min_compat_client"
+                ]
+                log.debug(
+                    f"require_min_compat_client changed during -ve test the tests is {new_version}"
+                )
+                failed = True
+                pool_exists = True if pool_name in rados_obj.list_pools() else False
+
+                # This check is added now as if the cluster already has MSR pools
+                # min compact client cannot be modified. and we would hit the exception in the code earlier.
+                # if the mode was already upmap-read, the min_compact client could not have been changed.
+                if pool_exists and new_version == "reef":
+                    log.error(
+                        "MSR pool created without setting min-compat-client on the cluster."
+                    )
+                    rados_obj.delete_pool(pool_name)
+                    raise Exception("MSR pool should not be created Error")
+                log.info(
+                    "Verified that MSR pool could not be created without require-min-compat-client. "
+                )
+
+            if not failed:
+                log.error(
+                    "MSR pool created without setting min-compat-client on the cluster."
+                )
+                rados_obj.delete_pool(pool_name)
+                raise Exception("MSR pool should not be created Error")
+
+        if min_client_version != "squid":
+            log.debug(
+                "Setting config to allow clients to create EC MSR rule based pool on the cluster"
+            )
+            config_cmd = (
+                "ceph osd set-require-min-compat-client squid --yes-i-really-mean-it"
+            )
+            rados_obj.client.exec_command(cmd=config_cmd, sudo=True)
+            time.sleep(5)
+            log.debug(
+                "Set the min_compact client on the cluster to Squid on the cluster"
+            )
+
         log.debug("Creating new EC pool on the cluster")
         if not rados_obj.create_erasure_pool(name=crush_rule, **config):
             log.error(f"Failed to create the EC Pool : {pool_name}")
@@ -182,10 +259,21 @@ def run(ceph_cluster, **kw):
             log.error(f"Inactive PGs found on pool : {pool_name} post scenario 2.2")
             inactive_pgs += 1
 
-        # Waiting for recovery to post OSD stop
-        method_should_succeed(
-            wait_for_clean_pg_sets, rados_obj, timeout=12000, test_pool=pool_name
-        )
+        # # Waiting for recovery to post OSD stop
+        # method_should_succeed(
+        #     wait_for_clean_pg_sets, rados_obj, timeout=12000, test_pool=pool_name
+        # )
+
+        # Recovery is not possible here, since there are only 4 Hosts & size is 4,
+        # but we can confirm if there was no IO stop issues
+        if not rados_obj.bench_write(
+            pool_name=pool_name, max_objs=500, verify_stats=True
+        ):
+            log.error(
+                "Could not perform IO operations with all OSDs of 1 host OSDs down"
+            )
+            raise Exception("IO stop post OSD shutdown error. scenario 2.2")
+
         if inactive_pgs > 5:
             log.error(
                 "Found inactive PGs on the cluster post OSd shutdown. scenario 2.2"
