@@ -33,8 +33,8 @@ instance:
 
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
-      - curl -k -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem https://10.245.4.89/.ceph-qe-ca.pem
-      - curl -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://10.245.4.89/.RH-IT-Root-CA.crt
-      - update-ca-trust
-      - yum-config-manager --add-repo https://10.245.4.89/repos/7/lab-extras.repo
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - systemctl restart sshd
+      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
+      - timedatectl set-timezone Etc/UTC
       - touch /ceph-qa-ready
