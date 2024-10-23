@@ -37,5 +37,6 @@ instance:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
       - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
       - systemctl restart sshd
-      - update-ca-trust
+      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
+      - timedatectl set-timezone Etc/UTC
       - touch /ceph-qa-ready

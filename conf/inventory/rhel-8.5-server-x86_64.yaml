@@ -32,11 +32,15 @@ instance:
 
     runcmd:
       - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
-      - subscription-manager clean
-      - hostnamectl set-hostname $(hostname -s)
       - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
-      - yum clean metadata
-      - yum clean all
+      - subscription-manager clean
+      - timedatectl set-timezone Etc/UTC
+      - hostnamectl set-hostname $(hostname -s)
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - systemctl restart sshd
+      - curl -m 120 -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem
+      - curl -m 120 -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://certs.corp.redhat.com/certs/2015-IT-Root-CA.pem
+      - update-ca-trust
       - touch /ceph-qa-ready
 
     final_message: "Ready for ceph qa testing"
