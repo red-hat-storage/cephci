@@ -162,6 +162,19 @@ tests:
       name: Validate the Synchronisation is successful upon enabling fs mirroring.
       polarion-id: CEPH-83574099
   - test:
+      abort-on-fail: false
+      desc: "Validate snapshot synchronisation perf improvements"
+      clusters:
+        ceph1:
+          config:
+            name: Validate snapshot synchronisation perf improvements
+            source_fs: "cephfs_snapdiff_pre"
+            target_fs: "cephfs_rem_snapdiff_pre"
+            result_file: "snapshot_sync_info_v7.csv"
+      module: cephfs_mirroring.snapdiff_perf_improvements_across_releases.py
+      name: Validate snapshot synchronisation perf improvements
+      polarion-id: "CEPH-83595260"
+  - test:
       name: Upgrade along with IOs
       module: test_parallel.py
       parallel:
@@ -206,3 +219,28 @@ tests:
       module: cephfs_mirror_upgrade.post_upgrade_validate.py
       name: Validate the Synchronisation is successful upon upgrade.
       polarion-id: CEPH-83575336
+  - test:
+      abort-on-fail: false
+      desc: "Validate snapshot synchronisation perf improvements"
+      clusters:
+        ceph1:
+          config:
+            name: Validate snapshot synchronisation perf improvements
+            source_fs: "cephfs_snapdiff_post"
+            target_fs: "cephfs_rem_snapdiff_post"
+            result_file: "snapshot_sync_info_v8.csv"
+      module: cephfs_mirroring.snapdiff_perf_improvements_across_releases.py
+      name: Validate snapshot synchronisation perf improvements
+      polarion-id: "CEPH-83595260"
+  - test:
+      abort-on-fail: false
+      desc: "Validate sync duration results by comparing between 2 releases"
+      clusters:
+        ceph1:
+          config:
+            name: Validate sync duration results by comparing between 2 releases
+            result_filev7: "snapshot_sync_info_v7.csv"
+            result_filev8: "snapshot_sync_info_v8.csv"
+      module: cephfs_mirroring.validate_snapdiff_perf_results.py
+      name: Validate sync duration results by comparing between 2 releases
+      polarion-id: "CEPH-83595260"
