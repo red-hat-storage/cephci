@@ -415,6 +415,8 @@ tests:
       module: test_scrub_log.py
       polarion-id: CEPH-83575403
       config:
+        # After the implementation of BZ#2320860 set the verify_log to true
+        verify_log: false
         pool_configs:
             - type: erasure
               conf: sample-pool-5
