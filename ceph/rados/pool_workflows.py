@@ -90,6 +90,7 @@ class PoolFunctions:
                 1. obj_start: start count for object creation
                 2. obj_end : end count for object creation
                 3. num_keys_obj: Number of KW pairs to be added to each object
+                4. retain_script: flag to control deletion of omap script
 
         Returns: True -> pass, False -> fail
         """
@@ -138,7 +139,8 @@ class PoolFunctions:
         client_node.exec_command(sudo=True, cmd=cmd, long_running=True)
 
         # removing the py file copied
-        client_node.exec_command(sudo=True, cmd="rm -rf generate_omap_entries.py")
+        if not kwargs.get("retain_script", False):
+            client_node.exec_command(sudo=True, cmd="rm -rf generate_omap_entries.py")
 
         # Triggering deep scrub on the pool
         self.rados_obj.run_deep_scrub(pool=pool_name)

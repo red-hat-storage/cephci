@@ -166,7 +166,7 @@ class RadosOrchestrator:
             if client_exec:
                 out, err = self.client.exec_command(cmd=cmd, sudo=True, timeout=timeout)
             else:
-                out, err = self.node.shell([cmd], timeout=timeout)
+                out, err = self.node.shell([cmd], timeout=timeout, print_output=False)
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
             return None
@@ -647,13 +647,8 @@ class RadosOrchestrator:
         """
         if kwargs.get("pool_name"):
             pool_name = kwargs["pool_name"]
-            # Collecting details about the cluster
-            cmd = "ceph osd dump"
-            out = self.run_ceph_command(cmd=cmd)
-            for val in out["pools"]:
-                if val["pool_name"] == pool_name:
-                    pool_id = val["pool"]
-                    break
+            # get pool pg id
+            pool_id = self.get_pool_id(pool_name=pool_name)
             # Collecting the details of the 1st PG in the pool <ID>.0
             pg_num = f"{pool_id}.0"
 
@@ -1122,11 +1117,9 @@ class RadosOrchestrator:
             pool: name of the pool to be deleted
         Returns: True -> pass, False -> fail
         """
-        # Checking if config is set to allow pool deletion
-        config_dump = self.run_ceph_command(cmd="ceph config dump", client_exec=True)
-        if "mon_allow_pool_delete" not in [conf["name"] for conf in config_dump]:
-            cmd = "ceph config set mon mon_allow_pool_delete true"
-            self.client.exec_command(cmd=cmd, sudo=True)
+        # setting config is set to allow pool deletion
+        cmd = "ceph config set mon mon_allow_pool_delete true"
+        self.client.exec_command(cmd=cmd, sudo=True)
 
         existing_pools = self.run_ceph_command(cmd="ceph df", client_exec=True)
         if pool not in [ele["name"] for ele in existing_pools["pools"]]:
@@ -4198,16 +4191,23 @@ EOF"""
         base_cmd = f"ceph tell osd.{osd_id} status"
         return self.run_ceph_command(cmd=base_cmd)
 
-    def get_osd_perf_dump(self, osd_id):
+    def get_osd_perf_dump(self, osd_id, filter=None):
         """
         method to get the perf dump of osd-
         ceph tell osd.N perf dump command
         Args:
             osd_id: ID of desired osd daemon
+            filter: perf dump filter
         Returns:
             dict output of ceph tell osd.N perf dump command
+        e.g:
+            ceph tell osd.# perf dump
+            ceph tell osd.# perf dump bluefs
+            ceph tell osd.# perf dump bluestore
         """
-        base_cmd = f"ceph tell osd.{osd_id} perf dump"
+        base_cmd = f"ceph tell osd.{osd_id} perf dump "
+        if filter:
+            base_cmd += filter
         return self.run_ceph_command(cmd=base_cmd)
 
     def get_available_devices(self, node_name: str, device_type: str):
@@ -4255,9 +4255,6 @@ EOF"""
         pool_json = self.run_ceph_command(cmd=_cmd, client_exec=True)
 
         # filter out pools which have rados application enable
-        # rados_pools = [
-        #     pool for pool in pool_json if pool["application_metadata"].get("rados") is not None
-        # ]
         rados_pools = [
             pool for pool in pool_json if "rados" in pool["application_metadata"].keys()
         ]
