@@ -579,7 +579,7 @@ tests:
         config-file-name: test_rgw_mfa.yaml
         extra-pkgs:
           9:
-            - https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.7-2.el9.x86_64.rpm
+            - https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
         timeout: 500
 
   - test:
@@ -591,9 +591,6 @@ tests:
         test-version: v2
         script-name: test_rgw_mfa.py
         config-file-name: test_rgw_mfa_multipart.yaml
-        extra-pkgs:
-          9:
-            - https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.7-2.el9.x86_64.rpm
         timeout: 500
 
   - test:
@@ -605,9 +602,6 @@ tests:
         test-version: v2
         script-name: test_rgw_mfa.py
         config-file-name: test_rgw_mfa_incorrect_syntax.yaml
-        extra-pkgs:
-          9:
-            - https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.7-2.el9.x86_64.rpm
         timeout: 500
 
   - test:
