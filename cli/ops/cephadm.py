@@ -24,6 +24,8 @@ CONTAINER_IMAGES = [
     "nvmeof",
     "samba",
     "samba_metrics",
+    "nginx",
+    "oauth2_proxy",
 ]
 
 
@@ -103,6 +105,8 @@ def set_container_image_config(node, configs):
                 nvmeof: nvmeof image URL
                 samba: samba image URL
                 samba_metrics: samba metrics image URL
+                nginx: nginx image URL
+                oauth2_proxy: oauth2_proxy image URL
     """
     # Set CephAdm object
     cephadm = CephAdm(node)

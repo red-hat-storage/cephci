@@ -371,6 +371,8 @@ class BootstrapMixin:
                 supported_overrides += [
                     "samba",
                     "samba_metrics",
+                    "nginx",
+                    "oauth2_proxy",
                 ]
 
             for image in supported_overrides:
