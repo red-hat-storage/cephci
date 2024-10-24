@@ -4218,16 +4218,19 @@ EOF"""
         base_cmd = f"ceph tell osd.{osd_id} status"
         return self.run_ceph_command(cmd=base_cmd)
 
-    def get_osd_perf_dump(self, osd_id):
+    def get_osd_perf_dump(self, osd_id, filter=None):
         """
         method to get the perf dump of osd-
         ceph tell osd.N perf dump command
         Args:
             osd_id: ID of desired osd daemon
+            filter: perf dump filter
         Returns:
             dict output of ceph tell osd.N perf dump command
         """
         base_cmd = f"ceph tell osd.{osd_id} perf dump"
+        if filter:
+            base_cmd += " filter"
         return self.run_ceph_command(cmd=base_cmd)
 
     def get_available_devices(self, node_name: str, device_type: str):

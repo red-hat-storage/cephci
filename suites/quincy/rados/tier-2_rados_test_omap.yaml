@@ -186,6 +186,7 @@ tests:
             normal_objs: 400
             num_keys_obj: 200001
       desc: Large number of omap creation on objects and OSD resiliency
+
   - test:
       name: Verification of dump scrub parameters
       desc: Verification of forced and scheduled time flags
