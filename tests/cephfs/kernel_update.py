@@ -31,6 +31,8 @@ def run(ceph_cluster, **kw):
         pre_or_post = custom_config[0]
         url = custom_config[1]
         url = url.rstrip("/")
+        # removing space from the url
+        url = url.replace(" ", "")
         log.info("Given Kernel Information is " + str(url))
         verification_type = []
         if "pre" in pre_or_post:
