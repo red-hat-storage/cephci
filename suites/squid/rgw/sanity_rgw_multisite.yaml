@@ -498,7 +498,7 @@ tests:
             commands:
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_require_ssl false"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_s3_kms_backend kmip"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_addr 10.0.208.240:5696"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_addr 10.0.64.87:5696"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_cert /usr/local/gklm/rgwselfsigned.cert"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_key /usr/local/gklm/rgwselfsigned.key"
               - "ceph orch restart {service_name:shared.pri}"
@@ -508,7 +508,7 @@ tests:
             commands:
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_require_ssl false"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_s3_kms_backend kmip"
-              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_kmip_addr 10.0.208.240:5696"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_kmip_addr 10.0.64.87:5696"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_cert /usr/local/gklm/rgwselfsigned.cert"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_key /usr/local/gklm/rgwselfsigned.key"
               - "ceph orch restart {service_name:shared.sec}"

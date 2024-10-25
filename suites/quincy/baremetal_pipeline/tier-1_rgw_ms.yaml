@@ -11,513 +11,499 @@
 # tested with conf file: conf/quincy/baremetal_pipeline/folio_conf.yaml
 
 tests:
+#  - test:
+#      abort-on-fail: true
+#      desc: Install software pre-requisites for cluster deployment.
+#      module: install_prereq.py
+#      name: setup pre-requisites
+#  - test:
+#      abort-on-fail: true
+#      clusters:
+#        ceph-pri:
+#          config:
+#            verify_cluster_health: true
+#            steps:
+#              - config:
+#                  command: bootstrap
+#                  service: cephadm
+#                  args:
+#                    registry-url: registry.redhat.io
+#                    mon-ip: folio01
+#                    allow-fqdn-hostname: true
+#                    orphan-initial-daemons: true
+#                    initial-dashboard-password: admin@123
+#                    dashboard-password-noupdate: true
+#              - config:
+#                  command: add_hosts
+#                  service: host
+#                  args:
+#                    attach_ip_address: true
+#                    labels: apply-all-labels
+#              - config:
+#                  command: apply
+#                  service: mgr
+#                  args:
+#                    placement:
+#                      label: mgr
+#              - config:
+#                  command: apply
+#                  service: mon
+#                  args:
+#                    placement:
+#                      label: mon
+#              - config:
+#                  command: apply
+#                  service: osd
+#                  args:
+#                    all-available-devices: true
+#              - config:
+#                  command: apply
+#                  service: rgw
+#                  pos_args:
+#                    - shared.pri.8080
+#                  args:
+#                    port: 8080
+#                    placement:
+#                      nodes:
+#                        - folio15
+#                        - folio16
+#                        - folio17
+#                        - folio18
+#                        - folio19
+#        ceph-sec:
+#          config:
+#            verify_cluster_health: true
+#            steps:
+#              - config:
+#                  command: bootstrap
+#                  service: cephadm
+#                  args:
+#                    registry-url: registry.redhat.io
+#                    mon-ip: folio04
+#                    allow-fqdn-hostname: true
+#                    orphan-initial-daemons: true
+#                    initial-dashboard-password: admin@123
+#                    dashboard-password-noupdate: true
+#              - config:
+#                  command: add_hosts
+#                  service: host
+#                  args:
+#                    attach_ip_address: true
+#                    labels: apply-all-labels
+#              - config:
+#                  command: apply
+#                  service: mgr
+#                  args:
+#                    placement:
+#                      label: mgr
+#              - config:
+#                  command: apply
+#                  service: mon
+#                  args:
+#                    placement:
+#                      label: mon
+#              - config:
+#                  command: apply
+#                  service: osd
+#                  args:
+#                    all-available-devices: true
+#              - config:
+#                  command: apply
+#                  service: rgw
+#                  pos_args:
+#                    - shared.sec.8080
+#                  args:
+#                    port: 8080
+#                    placement:
+#                      nodes:
+#                        - folio20
+#                        - folio21
+#                        - folio22
+#                        - folio23
+#                        - folio24
+#      desc: RHCS cluster deployment using cephadm.
+#      polarion-id: CEPH-83575222
+#      destroy-cluster: false
+#      module: test_cephadm.py
+#      name: deploy cluster
+#
+#  - test:
+#      clusters:
+#        ceph-pri:
+#          config:
+#            verify_cluster_health: true
+#            steps:
+#              - config:
+#                  command: apply_spec
+#                  service: orch
+#                  validate-spec-services: true
+#                  specs:
+#                    - service_type: prometheus
+#                      placement:
+#                        count: 1
+#                        nodes:
+#                          - folio01
+#                    - service_type: grafana
+#                      placement:
+#                        nodes:
+#                          - folio01
+#                    - service_type: alertmanager
+#                      placement:
+#                        count: 1
+#                    - service_type: node-exporter
+#                      placement:
+#                        host_pattern: "*"
+#                    - service_type: crash
+#                      placement:
+#                        host_pattern: "*"
+#        ceph-sec:
+#          config:
+#            verify_cluster_health: true
+#            steps:
+#              - config:
+#                  command: apply_spec
+#                  service: orch
+#                  validate-spec-services: true
+#                  specs:
+#                    - service_type: prometheus
+#                      placement:
+#                        count: 1
+#                        nodes:
+#                          - folio04
+#                    - service_type: grafana
+#                      placement:
+#                        nodes:
+#                          - folio04
+#                    - service_type: alertmanager
+#                      placement:
+#                        count: 1
+#                    - service_type: node-exporter
+#                      placement:
+#                        host_pattern: "*"
+#                    - service_type: crash
+#                      placement:
+#                        host_pattern: "*"
+#      name: Monitoring Services deployment
+#      desc: Add monitoring services using spec file.
+#      module: test_cephadm.py
+#      polarion-id: CEPH-83574727
+#
+#  - test:
+#      abort-on-fail: true
+#      clusters:
+#        ceph-pri:
+#          config:
+#            command: add
+#            id: client.pri
+#            node:
+#              - folio01
+#              - folio10
+#            install_packages:
+#              - ceph-common
+#            copy_admin_keyring: true
+#        ceph-sec:
+#          config:
+#            command: add
+#            id: client.sec
+#            node:
+#              - folio04
+#              - folio14
+#            install_packages:
+#              - ceph-common
+#            copy_admin_keyring: true
+#      desc: Configure the RGW client system
+#      polarion-id: CEPH-83573758
+#      destroy-cluster: false
+#      module: test_client.py
+#      name: configure client
+#
+#  - test:
+#      abort-on-fail: true
+#      clusters:
+#        ceph-pri:
+#          config:
+#            cephadm: true
+#            commands:
+#              - "radosgw-admin realm create --rgw-realm india --default"
+#              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:folio15}:8080,http://{node_ip:folio16}:8080,http://{node_ip:folio17}:8080,http://{node_ip:folio18}:8080,http://{node_ip:folio19}:8080 --master --default"
+#              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:folio15}:8080,http://{node_ip:folio16}:8080,http://{node_ip:folio17}:8080,http://{node_ip:folio18}:8080,http://{node_ip:folio19}:8080 --master --default"
+#              - "radosgw-admin period update --rgw-realm india --commit"
+#              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key test123 --secret test123 --rgw-realm india --system"
+#              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key test123 --secret test123"
+#              - "radosgw-admin period update --rgw-realm india --commit"
+#              - "ceph config set client.rgw.* rgw_realm india"
+#              - "ceph config set client.rgw.* rgw_zonegroup shared"
+#              - "ceph config set client.rgw.* rgw_zone primary"
+#              - "ceph orch restart rgw.shared.pri.8080"
+#        ceph-sec:
+#          config:
+#            cephadm: true
+#            commands:
+#              - "sleep 120"
+#              - "radosgw-admin realm pull --rgw-realm india --url http://folio15:8080 --access-key test123 --secret test123 --default"
+#              - "radosgw-admin period pull --url http://folio15:8080 --access-key test123 --secret test123"
+#              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:folio20}:8080,http://{node_ip:folio21}:8080,http://{node_ip:folio22}:8080,http://{node_ip:folio23}:8080,http://{node_ip:folio24}:8080 --access-key test123 --secret test123"
+#              - "radosgw-admin period update --rgw-realm india --commit"
+#              - "ceph config set client.rgw.* rgw_realm india"
+#              - "ceph config set client.rgw.* rgw_zonegroup shared"
+#              - "ceph config set client.rgw.* rgw_zone secondary"
+#              - "ceph orch restart rgw.shared.sec.8080"
+#      desc: Setting up RGW multisite replication environment
+#      module: exec.py
+#      name: setup multisite
+#      polarion-id: CEPH-10362
+#
+#  - test:
+#      clusters:
+#        ceph-pri:
+#          config:
+#            cephadm: true
+#            commands:
+#              - "ceph versions"
+#              - "radosgw-admin sync status"
+#              - "ceph -s"
+#              - "radosgw-admin realm list"
+#              - "radosgw-admin zonegroup list"
+#              - "radosgw-admin zone list"
+#              - "radosgw-admin user list"
+#        ceph-sec:
+#          config:
+#            cephadm: true
+#            commands:
+#              - "ceph versions"
+#              - "radosgw-admin sync status"
+#              - "ceph -s"
+#              - "radosgw-admin realm list"
+#              - "radosgw-admin zonegroup list"
+#              - "radosgw-admin zone list"
+#              - "radosgw-admin user list"
+#      desc: Retrieve the configured environment details
+#      polarion-id: CEPH-83575227
+#      module: exec.py
+#      name: get shared realm info
+#
+#  - test:
+#      abort-on-fail: true
+#      clusters:
+#        ceph-pri:
+#          config:
+#            haproxy_clients:
+#              - node5
+#            rgw_endpoints:
+#              - "node5:80"
+#        ceph-sec:
+#          config:
+#            haproxy_clients:
+#              - node5
+#            rgw_endpoints:
+#              - "node5:80"
+#      desc: "Configure HAproxy"
+#      module: haproxy.py
+#      name: "Configure HAproxy"
+#      polarion-id: CEPH-83572703
+#
+#  - test:
+#      abort-on-fail: true
+#      clusters:
+#        ceph-pri:
+#          config:
+#            controllers:
+#              - node6
+#            drivers:
+#              count: 2
+#              hosts:
+#                - node5
+#        ceph-sec:
+#          config:
+#            controllers:
+#              - node6
+#            drivers:
+#              count: 2
+#              hosts:
+#                - node5
+#      desc: Start COS Bench controller and driver
+#      module: cosbench.py
+#      name: deploy cosbench
+#
   - test:
-      abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
-      module: install_prereq.py
-      name: setup pre-requisites
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: bootstrap
-                  service: cephadm
-                  args:
-                    registry-url: registry.redhat.io
-                    mon-ip: folio01
-                    allow-fqdn-hostname: true
-                    orphan-initial-daemons: true
-                    initial-dashboard-password: admin@123
-                    dashboard-password-noupdate: true
-              - config:
-                  command: add_hosts
-                  service: host
-                  args:
-                    attach_ip_address: true
-                    labels: apply-all-labels
-              - config:
-                  command: apply
-                  service: mgr
-                  args:
-                    placement:
-                      label: mgr
-              - config:
-                  command: apply
-                  service: mon
-                  args:
-                    placement:
-                      label: mon
-              - config:
-                  command: apply
-                  service: osd
-                  args:
-                    all-available-devices: true
-              - config:
-                  command: apply
-                  service: rgw
-                  pos_args:
-                    - shared.pri.8080
-                  args:
-                    port: 8080
-                    placement:
-                      nodes:
-                        - folio15
-                        - folio16
-                        - folio17
-                        - folio18
-                        - folio19
-        ceph-sec:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: bootstrap
-                  service: cephadm
-                  args:
-                    registry-url: registry.redhat.io
-                    mon-ip: folio04
-                    allow-fqdn-hostname: true
-                    orphan-initial-daemons: true
-                    initial-dashboard-password: admin@123
-                    dashboard-password-noupdate: true
-              - config:
-                  command: add_hosts
-                  service: host
-                  args:
-                    attach_ip_address: true
-                    labels: apply-all-labels
-              - config:
-                  command: apply
-                  service: mgr
-                  args:
-                    placement:
-                      label: mgr
-              - config:
-                  command: apply
-                  service: mon
-                  args:
-                    placement:
-                      label: mon
-              - config:
-                  command: apply
-                  service: osd
-                  args:
-                    all-available-devices: true
-              - config:
-                  command: apply
-                  service: rgw
-                  pos_args:
-                    - shared.sec.8080
-                  args:
-                    port: 8080
-                    placement:
-                      nodes:
-                        - folio20
-                        - folio21
-                        - folio22
-                        - folio23
-                        - folio24
-      desc: RHCS cluster deployment using cephadm.
-      polarion-id: CEPH-83575222
-      destroy-cluster: false
-      module: test_cephadm.py
-      name: deploy cluster
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply_spec
-                  service: orch
-                  validate-spec-services: true
-                  specs:
-                    - service_type: prometheus
-                      placement:
-                        count: 1
-                        nodes:
-                          - folio01
-                    - service_type: grafana
-                      placement:
-                        nodes:
-                          - folio01
-                    - service_type: alertmanager
-                      placement:
-                        count: 1
-                    - service_type: node-exporter
-                      placement:
-                        host_pattern: "*"
-                    - service_type: crash
-                      placement:
-                        host_pattern: "*"
-        ceph-sec:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply_spec
-                  service: orch
-                  validate-spec-services: true
-                  specs:
-                    - service_type: prometheus
-                      placement:
-                        count: 1
-                        nodes:
-                          - folio04
-                    - service_type: grafana
-                      placement:
-                        nodes:
-                          - folio04
-                    - service_type: alertmanager
-                      placement:
-                        count: 1
-                    - service_type: node-exporter
-                      placement:
-                        host_pattern: "*"
-                    - service_type: crash
-                      placement:
-                        host_pattern: "*"
-      name: Monitoring Services deployment
-      desc: Add monitoring services using spec file.
-      module: test_cephadm.py
-      polarion-id: CEPH-83574727
-
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            command: add
-            id: client.pri
-            node:
-              - folio01
-              - folio10
-            install_packages:
-              - ceph-common
-            copy_admin_keyring: true
-        ceph-sec:
-          config:
-            command: add
-            id: client.sec
-            node:
-              - folio04
-              - folio14
-            install_packages:
-              - ceph-common
-            copy_admin_keyring: true
-      desc: Configure the RGW client system
-      polarion-id: CEPH-83573758
-      destroy-cluster: false
-      module: test_client.py
-      name: configure client
-
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "radosgw-admin realm create --rgw-realm india --default"
-              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:folio15}:8080,http://{node_ip:folio16}:8080,http://{node_ip:folio17}:8080,http://{node_ip:folio18}:8080,http://{node_ip:folio19}:8080 --master --default"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:folio15}:8080,http://{node_ip:folio16}:8080,http://{node_ip:folio17}:8080,http://{node_ip:folio18}:8080,http://{node_ip:folio19}:8080 --master --default"
-              - "radosgw-admin period update --rgw-realm india --commit"
-              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key test123 --secret test123 --rgw-realm india --system"
-              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key test123 --secret test123"
-              - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.* rgw_realm india"
-              - "ceph config set client.rgw.* rgw_zonegroup shared"
-              - "ceph config set client.rgw.* rgw_zone primary"
-              - "ceph orch restart rgw.shared.pri.8080"
-        ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "sleep 120"
-              - "radosgw-admin realm pull --rgw-realm india --url http://folio15:8080 --access-key test123 --secret test123 --default"
-              - "radosgw-admin period pull --url http://folio15:8080 --access-key test123 --secret test123"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:folio20}:8080,http://{node_ip:folio21}:8080,http://{node_ip:folio22}:8080,http://{node_ip:folio23}:8080,http://{node_ip:folio24}:8080 --access-key test123 --secret test123"
-              - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.* rgw_realm india"
-              - "ceph config set client.rgw.* rgw_zonegroup shared"
-              - "ceph config set client.rgw.* rgw_zone secondary"
-              - "ceph orch restart rgw.shared.sec.8080"
-      desc: Setting up RGW multisite replication environment
-      module: exec.py
-      name: setup multisite
-      polarion-id: CEPH-10362
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "ceph versions"
-              - "radosgw-admin sync status"
-              - "ceph -s"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-              - "radosgw-admin user list"
-        ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "ceph versions"
-              - "radosgw-admin sync status"
-              - "ceph -s"
-              - "radosgw-admin realm list"
-              - "radosgw-admin zonegroup list"
-              - "radosgw-admin zone list"
-              - "radosgw-admin user list"
-      desc: Retrieve the configured environment details
-      polarion-id: CEPH-83575227
-      module: exec.py
-      name: get shared realm info
-
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            haproxy_clients:
-              - folio01
-              - folio02
-              - folio03
-            rgw_endpoints:
-              - "folio15:8080"
-              - "folio16:8080"
-              - "folio17:8080"
-              - "folio18:8080"
-              - "folio19:8080"
-        ceph-sec:
-          config:
-            haproxy_clients:
-              - folio04
-              - folio05
-              - folio06
-            rgw_endpoints:
-              - "folio20:8080"
-              - "folio21:8080"
-              - "folio22:8080"
-              - "folio23:8080"
-              - "folio24:8080"
-      desc: "Configure HAproxy"
-      module: haproxy.py
-      name: "Configure HAproxy"
-      polarion-id: CEPH-83572703
-
-  - test:
-      abort-on-fail: true
       clusters:
         ceph-pri:
           config:
             controllers:
-              - folio01
+              - node6
             drivers:
-              count: 3
+              count: 2
               hosts:
-                - folio01
-                - folio02
-                - folio03
-        ceph-sec:
-          config:
-            controllers:
-              - folio04
-            drivers:
-              count: 3
-              hosts:
-                - folio04
-                - folio05
-                - folio06
-      desc: Start COS Bench controller and driver
-      module: cosbench.py
-      name: deploy cosbench
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            controllers:
-              - folio01
-            drivers: # if drivers are not specified will use one of the rgw node
-              - folio01
-              - folio02
-              - folio03
-            fill_percent: 30
+                - node5
+            bucket_prefix: 500m-test-bkt-3
+            number_of_buckets: 1
+            number_of_objects: 20000
       desc: prepare and push cosbench fill workload
       module: push_cosbench_workload.py
       name: push cosbench fill workload
       polarion-id: CEPH-83574428
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            controllers:
-              - folio01
-            drivers: # if drivers are not specified will use one of the rgw node
-              - folio01
-              - folio02
-              - folio03
-            fill_percent: 30
-            workload_type: hybrid
-            run_time: 3600 # value in seconds
-      desc: initiate cosbench hybrid workload
-      module: push_cosbench_workload.py
-      name: push cosbench hybrid workload
-      polarion-id: CEPH-83575831
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            set-env: true
-            script-name: user_create.py
-            config-file-name: non_tenanted_user.yaml
-            copy-user-info-to-site: ceph-sec
-            timeout: 300
-      desc: create non-tenanted user
-      module: sanity_rgw_multisite.py
-      name: create non-tenanted user
-      polarion-id: CEPH-83575199
-
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
-            script-name: ../aws/test_aws.py
-            config-file-name: ../../aws/configs/test_aws_versioned_bucket_creation.yaml
-            verify-io-on-site: ["ceph-sec"]
-            timeout: 300
-      desc: create versioned bucket in primary
-      module: sanity_rgw_multisite.py
-      name: create versioned bucket in primary
-      polarion-id: CEPH-83575073
-
-  - test:
-      name: Parallel upload of objects to versioned bucket
-      desc: Parallel upload of objects to versioned bucket
-      module: test_parallel.py
-      parallel:
-        - test:
-            clusters:
-              ceph-pri:
-                config:
-                  controllers:
-                    - folio01
-                  drivers: # if drivers are not specified will use one of the rgw node
-                    - folio01
-                    - folio02
-                    - folio03
-                  fill_percent: 35
-                  workload_type: symmetrical
-                  record_sync_on_site: ceph-sec
-                  bucket_prefix: cosbench01-bkt-
-                  number_of_buckets: 1
-            desc: initiate cosbench push workload from primary
-            module: push_cosbench_workload.py
-            name: push cosbench push workload from primary
-            polarion-id: CEPH-83575073
-        - test:
-            clusters:
-              ceph-sec:
-                config:
-                  controllers:
-                    - folio04
-                  drivers: # if drivers are not specified will use one of the rgw node
-                    - folio04
-                    - folio05
-                    - folio06
-                  fill_percent: 35
-                  workload_type: symmetrical
-                  record_sync_on_site: ceph-pri
-                  bucket_prefix: cosbench01-bkt-
-                  number_of_buckets: 1
-            desc: initiate cosbench push workload from secondary
-            module: push_cosbench_workload.py
-            name: push cosbench push workload from secondary
-            polarion-id: CEPH-83575073
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            controllers:
-              - folio01
-            drivers:
-              - folio01
-              - folio02
-              - folio03
-            workload_type: fill_runtime
-            run_time: 7200
-            record_sync_on_site: ceph-sec
-            bucket_prefix: cosbench01-bkt-
-            number_of_buckets: 1
-            number_of_objects: 2000000
-      desc: initiate cosbench fill workload for versioned bucket
-      name: push cosbench fill workload for versioned bucket
-      module: push_cosbench_workload.py
-      polarion-id: CEPH-83575077
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - radosgw-admin bucket sync markers --bucket cosbench01-bkt-1 --source-zone secondary
-      desc: Run radosgw-admin bucket sync markers from primary
-      name: Run radosgw-admin bucket sync markers from primary
-      polarion-id: CEPH-83575077
-      module: exec.py
-
-  - test:
-      name: Parallel delete of objects from bucket
-      desc: Parallel delete of objects from bucket
-      module: test_parallel.py
-      parallel:
-        - test:
-            clusters:
-              ceph-pri:
-                config:
-                  controllers:
-                    - folio01
-                  drivers:
-                    - folio01
-                    - folio02
-                    - folio03
-                  workload_type: cleanup
-                  record_sync_on_site: ceph-sec
-                  bucket_prefix: cosbench01-bkt-
-                  number_of_buckets: 1
-            desc: initiate cosbench cleanup workload from primary
-            module: push_cosbench_workload.py
-            name: push cosbench cleanup workload from primary
-            polarion-id: CEPH-83575074
-        - test:
-            clusters:
-              ceph-sec:
-                config:
-                  controllers:
-                    - folio04
-                  drivers:
-                    - folio04
-                    - folio05
-                    - folio06
-                  workload_type: cleanup
-                  record_sync_on_site: ceph-pri
-                  bucket_prefix: cosbench01-bkt-
-                  number_of_buckets: 1
-            desc: initiate cosbench cleanup workload from secondary
-            module: push_cosbench_workload.py
-            name: push cosbench cleanup workload from secondary
-            polarion-id: CEPH-83575074
+#
+#  - test:
+#      clusters:
+#        ceph-pri:
+#          config:
+#            controllers:
+#              - folio01
+#            drivers: # if drivers are not specified will use one of the rgw node
+#              - folio01
+#              - folio02
+#              - folio03
+#            fill_percent: 30
+#            workload_type: hybrid
+#            run_time: 3600 # value in seconds
+#      desc: initiate cosbench hybrid workload
+#      module: push_cosbench_workload.py
+#      name: push cosbench hybrid workload
+#      polarion-id: CEPH-83575831
+#
+#  - test:
+#      clusters:
+#        ceph-pri:
+#          config:
+#            set-env: true
+#            script-name: user_create.py
+#            config-file-name: non_tenanted_user.yaml
+#            copy-user-info-to-site: ceph-sec
+#            timeout: 300
+#      desc: create non-tenanted user
+#      module: sanity_rgw_multisite.py
+#      name: create non-tenanted user
+#      polarion-id: CEPH-83575199
+#
+#  - test:
+#      abort-on-fail: true
+#      clusters:
+#        ceph-pri:
+#          config:
+#            script-name: ../aws/test_aws.py
+#            config-file-name: ../../aws/configs/test_aws_versioned_bucket_creation.yaml
+#            verify-io-on-site: ["ceph-sec"]
+#            timeout: 300
+#      desc: create versioned bucket in primary
+#      module: sanity_rgw_multisite.py
+#      name: create versioned bucket in primary
+#      polarion-id: CEPH-83575073
+#
+#  - test:
+#      name: Parallel upload of objects to versioned bucket
+#      desc: Parallel upload of objects to versioned bucket
+#      module: test_parallel.py
+#      parallel:
+#        - test:
+#            clusters:
+#              ceph-pri:
+#                config:
+#                  controllers:
+#                    - folio01
+#                  drivers: # if drivers are not specified will use one of the rgw node
+#                    - folio01
+#                    - folio02
+#                    - folio03
+#                  fill_percent: 35
+#                  workload_type: symmetrical
+#                  record_sync_on_site: ceph-sec
+#                  bucket_prefix: cosbench01-bkt-
+#                  number_of_buckets: 1
+#            desc: initiate cosbench push workload from primary
+#            module: push_cosbench_workload.py
+#            name: push cosbench push workload from primary
+#            polarion-id: CEPH-83575073
+#        - test:
+#            clusters:
+#              ceph-sec:
+#                config:
+#                  controllers:
+#                    - folio04
+#                  drivers: # if drivers are not specified will use one of the rgw node
+#                    - folio04
+#                    - folio05
+#                    - folio06
+#                  fill_percent: 35
+#                  workload_type: symmetrical
+#                  record_sync_on_site: ceph-pri
+#                  bucket_prefix: cosbench01-bkt-
+#                  number_of_buckets: 1
+#            desc: initiate cosbench push workload from secondary
+#            module: push_cosbench_workload.py
+#            name: push cosbench push workload from secondary
+#            polarion-id: CEPH-83575073
+#
+#  - test:
+#      clusters:
+#        ceph-pri:
+#          config:
+#            controllers:
+#              - folio01
+#            drivers:
+#              - folio01
+#              - folio02
+#              - folio03
+#            workload_type: fill_runtime
+#            run_time: 7200
+#            record_sync_on_site: ceph-sec
+#            bucket_prefix: cosbench01-bkt-
+#            number_of_buckets: 1
+#            number_of_objects: 2000000
+#      desc: initiate cosbench fill workload for versioned bucket
+#      name: push cosbench fill workload for versioned bucket
+#      module: push_cosbench_workload.py
+#      polarion-id: CEPH-83575077
+#
+#  - test:
+#      clusters:
+#        ceph-pri:
+#          config:
+#            cephadm: true
+#            commands:
+#              - radosgw-admin bucket sync markers --bucket cosbench01-bkt-1 --source-zone secondary
+#      desc: Run radosgw-admin bucket sync markers from primary
+#      name: Run radosgw-admin bucket sync markers from primary
+#      polarion-id: CEPH-83575077
+#      module: exec.py
+#
+#  - test:
+#      name: Parallel delete of objects from bucket
+#      desc: Parallel delete of objects from bucket
+#      module: test_parallel.py
+#      parallel:
+#        - test:
+#            clusters:
+#              ceph-pri:
+#                config:
+#                  controllers:
+#                    - folio01
+#                  drivers:
+#                    - folio01
+#                    - folio02
+#                    - folio03
+#                  workload_type: cleanup
+#                  record_sync_on_site: ceph-sec
+#                  bucket_prefix: cosbench01-bkt-
+#                  number_of_buckets: 1
+#            desc: initiate cosbench cleanup workload from primary
+#            module: push_cosbench_workload.py
+#            name: push cosbench cleanup workload from primary
+#            polarion-id: CEPH-83575074
+#        - test:
+#            clusters:
+#              ceph-sec:
+#                config:
+#                  controllers:
+#                    - folio04
+#                  drivers:
+#                    - folio04
+#                    - folio05
+#                    - folio06
+#                  workload_type: cleanup
+#                  record_sync_on_site: ceph-pri
+#                  bucket_prefix: cosbench01-bkt-
+#                  number_of_buckets: 1
+#            desc: initiate cosbench cleanup workload from secondary
+#            module: push_cosbench_workload.py
+#            name: push cosbench cleanup workload from secondary
+#            polarion-id: CEPH-83575074

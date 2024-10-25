@@ -594,6 +594,7 @@ def set_config_param(node):
     # restart osd service
     node.exec_command(cmd=f"ceph orch restart {osd_process_name}")
     node.exec_command(cmd="ceph config dump")
+    time.sleep(20)
 
 
 def kernel_mount(mounting_dir, mon_node_ip, kernel_clients):
