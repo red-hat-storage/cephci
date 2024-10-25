@@ -82,7 +82,7 @@ def run(ceph_cluster, **kw):
                 "Trying to change the primary without setting the set-require-min-compat-client to reef. -ve test"
             )
             try:
-                config_cmd = "ceph osd set-require-min-compat-client quincy"
+                config_cmd = "ceph osd set-require-min-compat-client quincy --yes-i-really-mean-it"
                 rados_obj.client.exec_command(cmd=config_cmd, sudo=True)
                 time.sleep(10)
                 test_pool = random.choice(existing_pools)
