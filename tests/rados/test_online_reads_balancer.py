@@ -88,7 +88,7 @@ def run(ceph_cluster, **kw):
             log.debug("Starting with -ve scenario in online reads balancer tests")
             failed = False
             try:
-                config_cmd = "ceph osd set-require-min-compat-client quincy"
+                config_cmd = "ceph osd set-require-min-compat-client quincy --yes-i-really-mean-it"
                 rados_obj.client.exec_command(cmd=config_cmd, sudo=True)
                 # Verify the updated min compat client version
                 new_version = rados_obj.run_ceph_command(cmd="ceph osd dump")[
@@ -160,7 +160,9 @@ def run(ceph_cluster, **kw):
             log.debug(
                 "Setting config to allow clients to perform read balancing on the clusters."
             )
-            config_cmd = "ceph osd set-require-min-compat-client reef"
+            config_cmd = (
+                "ceph osd set-require-min-compat-client reef --yes-i-really-mean-it"
+            )
             rados_obj.client.exec_command(cmd=config_cmd, sudo=True)
             time.sleep(5)
 
