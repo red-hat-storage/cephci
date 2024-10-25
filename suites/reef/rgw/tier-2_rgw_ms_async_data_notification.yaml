@@ -424,6 +424,80 @@ tests:
       module: sanity_rgw_multisite.py
       name: test_sse_kms_per_object
       polarion-id: CEPH-83574040
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+      desc: test_sse_s3_per_bucket_encryption_normal_object_upload
+      module: sanity_rgw_multisite.py
+      name: sse-s3 per bucket encryption test
+      polarion-id: CEPH-83574622
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_bucket_encryption_version_enabled.yaml
+      desc: test_sse_s3_per_bucket_encryption_version_enabled
+      module: sanity_rgw.py
+      name: sse-s3 per bucket encryption test on a versiond bucket
+      polarion-id: CEPH-83574619 # CEPH-83575150
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_object.yaml
+      desc: test_sse_s3_per_object
+      module: sanity_rgw.py
+      name: sse-s3 per object encryption test
+      polarion-id: CEPH-83575153
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            run-on-rgw: true
+            extra-pkgs:
+              - wget https://download.oracle.com/java/23/latest/jdk-23_linux-x64_bin.rpm
+            install_start_kafka: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard.yaml
+      desc: test_sse_s3_per_bucket_with_notifications_dynamic_reshard
+      module: sanity_rgw_multisite.py
+      name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard
+      polarion-id: CEPH-83586489
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_object.yaml
+      desc: test_sse_s3_per_object
+      module: sanity_rgw.py
+      name: sse-s3 per object encryption test
+      polarion-id: CEPH-83575153
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_policy_ops.py
+            config-file-name: test_sse_kms_per_bucket_with_bucket_policy.yaml
+      desc: test_sse_kms_per_bucket_with_bucket_policy
+      module: sanity_rgw_multisite.py
+      name: test_sse_kms_per_bucket_with_bucket_policy
+      polarion-id: CEPH-83586489
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sts_using_boto.py
+            config-file-name: test_sse_s3_per_object_with_sts.yaml
+      desc: test_sse_s3_per_object_with_sts
+      module: sanity_rgw_multisite.py
+      name: test_sse_s3_per_object_with_sts
+      polarion-id: CEPH-83586489
 
 # please include test cases before below rename testcase as the process is disruptive currently
   # - test:
