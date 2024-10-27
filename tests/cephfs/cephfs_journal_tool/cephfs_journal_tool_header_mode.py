@@ -1,6 +1,7 @@
 import json
 import random
 import string
+import time
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -74,6 +75,19 @@ def run(ceph_cluster, **kw):
             cmd=f"cephfs-journal-tool --rank {fs_name}:0 header get",
             check_ec=False,
         )
+        mdss = ceph_cluster.get_ceph_objects("mds")
+        mds_list = []
+        for mds in mdss:
+            daemon_name = fs_util.deamon_op(mds, "mds", "stop")
+            fs_util.check_deamon_status(mds, "mds", "inactive")
+            mds_list.append((mds, daemon_name))
+        log.info("All the mds nodes are down")
+        log.info(mds_list)
+        time.sleep(10)
+        health_output = client1.exec_command(sudo=True, cmd="ceph -s")
+        log.info(health_output[0])
+        if "offline" not in health_output[0]:
+            return 1
         header_out1 = json.loads(header_out1)
         log.info(header_out1)
         log.info(type(header_out1))
@@ -183,6 +197,14 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         # Cleanup
+        # start mds
+        for mds in mds_list:
+            fs_util.deamon_op(mds[0], "mds", "reset-failed", service_name=mds[1])
+            fs_util.deamon_op(mds[0], "mds", "start", service_name=mds[1])
+            fs_util.check_deamon_status(mds[0], "mds", "active")
+        time.sleep(10)
+        health_output = client1.exec_command(sudo=True, cmd="ceph -s")
+        log.info(health_output[0])
         client1.exec_command(
             sudo=True,
             cmd=f"cephfs-journal-tool --rank {fs_name}:0 header set write_pos {original_write_pos}",

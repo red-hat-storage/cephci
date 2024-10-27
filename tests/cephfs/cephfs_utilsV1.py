@@ -338,9 +338,11 @@ class FsUtils(object):
             node.exec_command(
                 sudo=True, cmd=f"systemctl {op} {kwargs.get('service_name')}"
             )
+            return kwargs.get("service_name")
         else:
             service_deamon = FsUtils.deamon_name(node, service)
             node.exec_command(sudo=True, cmd=f"systemctl {op} {service_deamon}")
+        return service_deamon
 
     @staticmethod
     def deamon_name(node, service):
