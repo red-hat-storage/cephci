@@ -50,6 +50,7 @@ from utility.utils import (  # ReportPortal,
     fetch_build_artifacts,
     generate_unique_id,
     magna_url,
+    setup_cluster_access,
     validate_conf,
     validate_image,
 )
@@ -1012,8 +1013,12 @@ def run(args):
             "\n\nGenerating sosreports for all the nodes due to failures in testcase"
         )
         for cluster in ceph_cluster_dict.keys():
+            log.info(f"Installing Ceph-common on {cluster} nodes to gather Sos report")
+            for node in ceph_cluster_dict[cluster].get_nodes():
+                setup_cluster_access(ceph_cluster_dict[cluster], node)
             installer = ceph_cluster_dict[cluster].get_nodes(role="installer")[0]
             sosreport.run(installer.ip_address, "cephuser", "cephuser", run_dir)
+            # This can be Removed as sos report will have this details as well
             get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
 
