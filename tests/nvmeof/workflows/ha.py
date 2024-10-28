@@ -460,7 +460,7 @@ class HighAvailability:
 
         return False
 
-    def scale_down(self, gateway_nodes):
+    def scale_down(self, gateway_nodes_to_be_scaleddown):
         """Scaling down of the NVMeoF Gateways.
 
         Initiate scale-down
@@ -475,13 +475,15 @@ class HighAvailability:
         start_time = str()
         end_counter = float()
         end_time = str()
-        LOG.info(f"{gateway_nodes}: Scaling down NVMe Service")
+        LOG.info(f"{gateway_nodes_to_be_scaleddown}: Scaling down NVMe Service")
 
-        if not isinstance(gateway_nodes, list):
-            gateway_nodes = [gateway_nodes]
+        if not isinstance(gateway_nodes_to_be_scaleddown, list):
+            gateway_nodes_to_be_scaleddown = [gateway_nodes_to_be_scaleddown]
 
-        scaledown_gws, operational_gws = self.catogorize(gateway_nodes)
-        ana_ids = [gw.ana_group_id for gw in scaledown_gws]
+        to_be_scaledown_gws, operational_gws = self.catogorize(
+            gateway_nodes_to_be_scaleddown
+        )
+        ana_ids = [gw.ana_group_id for gw in to_be_scaledown_gws]
         gateway = operational_gws[0]
 
         # Validate IO and scale operation
@@ -489,12 +491,19 @@ class HighAvailability:
         self.validate_io(old_namespaces)
 
         # Scale down
-        gwnodes_to_be_deployed = list(set(self.config["gw_nodes"]) - set(gateway_nodes))
+        gwnodes_to_be_deployed = list(
+            set(self.config["gw_nodes"]) - set(gateway_nodes_to_be_scaleddown)
+        )
         self.config["gw_nodes"] = gwnodes_to_be_deployed
         deploy_nvme_service(self.cluster, self.config)
-        start_counter, start_time = get_current_timestamp()
 
-        for gateway in scaledown_gws:
+        self.gateways = []
+        for gateway in self.config["gw_nodes"]:
+            gw_node = get_node_by_id(self.cluster, gateway)
+            self.gateways.append(NVMeGateway(gw_node, self.mtls))
+
+        start_counter, start_time = get_current_timestamp()
+        for gateway in to_be_scaledown_gws:
             hostname = gateway.hostname
 
             # Wait until 60 seconds
@@ -532,7 +541,9 @@ class HighAvailability:
                 "scale-down-end-counter-time": end_counter,
             }
             LOG.info(log_json_dump(result))
-            self.validate_io(old_namespaces)
+
+            # Validate IO post scale down
+            self.validate_io(set(list(old_namespaces)))
             return result
 
     def validate_scaleup(self, scaleup_nodes, namespaces):
@@ -590,42 +601,52 @@ class HighAvailability:
                 "scale-up-end-counter-time": end_counter,
             }
             LOG.info(log_json_dump(result))
-            self.validate_io(namespaces)
-            result["new_gws"] = new_gws
-            result["scaleup_nodes"] = scaleup_nodes
+            self.validate_io(set(list(namespaces)))
             return result
 
-    def scale_up(self, scaleup_nodes):
+    def scale_up(self, scaleup_nodes, gw_nodes, existing_namespaces):
         """Scaling up of the NVMeoF Gateways.
 
         Initiate scale-up
         - Spin up the new gateways.
         - Validate the ANA states of new GWs are optimized.
 
-        Post scale-up Validation
+        Pre scale-up Validation
         - List out namespaces associated with the new Gateways using ANA group ids.
         - Check for 5 Consecutive times for the increments in write/read to validate IO continuation.
-        """
 
+        Post scale-up Validation
+        - Check if Ana group ids of replaced GWs took over the original ANA group ids
+        """
+        existing_namespaces = []
         LOG.info(f"{scaleup_nodes}: Scaling up NVMe Service")
 
         if not isinstance(scaleup_nodes, list):
             scaleup_nodes = [scaleup_nodes]
 
-        old_gws = [self.check_gateway(gw_id) for gw_id in self.config["gw_nodes"]]
-        ana_ids = [gw.ana_group_id for gw in old_gws]
-        gateway = old_gws[0]
-
         # Validate IO before scale up operation
-        old_namespaces = self.fetch_namespaces(gateway, ana_ids)
-        self.validate_io(old_namespaces)
+        self.validate_io(set(list(existing_namespaces)))
 
         # Scale up
         gwnodes_to_be_deployed = list(set(self.config["gw_nodes"] + scaleup_nodes))
         self.config["gw_nodes"] = gwnodes_to_be_deployed
         deploy_nvme_service(self.cluster, self.config)
 
-        return old_namespaces
+        self.gateways = []
+        for gateway in gwnodes_to_be_deployed:
+            gw_node = get_node_by_id(self.cluster, gateway)
+            self.gateways.append(NVMeGateway(gw_node, self.mtls))
+
+        # Validate ana_grp_ids post scale up
+        for scaleup_node in scaleup_nodes:
+            for gw_node in gw_nodes:
+                if gw_node.node.id == scaleup_node:
+                    gw = self.check_gateway(gw_node.node.id)
+                    scaleup_gw = self.check_gateway(scaleup_node)
+                    if gw.ana_group_id == scaleup_gw.ana_group_id:
+                        LOG.info("Scaleup nodes took over the previous anagrpids")
+                    else:
+                        raise Exception("anagrpids are not matching after scaleup")
 
     def failover(self, gateway, fail_tool):
         """HA Failover on the NVMeoF Gateways.
@@ -766,7 +787,9 @@ class HighAvailability:
         for client in self.clients:
             lsblk_devs.extend(client.fetch_lsblk_nvme_devices())
 
-        LOG.info(f"Expcted NVMe Targets : {uuids} Vs LSBLK devices: {lsblk_devs}")
+        LOG.info(
+            f"Expcted NVMe Targets : {set(list(uuids))} Vs LSBLK devices: {set(list(lsblk_devs))}"
+        )
         if sorted(uuids) != sorted(set(lsblk_devs)):
             raise IOError("Few Namespaces are missing!!!")
         LOG.info("All namespaces are listed at Client(s)")

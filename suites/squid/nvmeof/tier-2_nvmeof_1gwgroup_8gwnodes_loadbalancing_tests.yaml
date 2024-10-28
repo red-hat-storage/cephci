@@ -90,7 +90,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 5G
+              size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
             allow_host: "*"
@@ -98,7 +98,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 5G
+              size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
             allow_host: "*"
@@ -106,7 +106,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 5G
+              size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
             allow_host: "*"
@@ -114,7 +114,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 5G
+              size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
             allow_host: "*"
@@ -161,7 +161,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 5G
+              size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
@@ -169,7 +169,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 5G
+              size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
@@ -177,7 +177,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 5G
+              size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
@@ -185,7 +185,7 @@ tests:
             serial: 1
             bdevs:
             - count: 2
-              size: 5G
+              size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"

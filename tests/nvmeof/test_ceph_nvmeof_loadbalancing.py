@@ -14,7 +14,6 @@ from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.ha import HighAvailability
-from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
 from tests.nvmeof.workflows.nvme_utils import delete_nvme_service, deploy_nvme_service
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -146,13 +145,24 @@ def teardown(ceph_cluster, rbd_obj, config):
         rbd_obj.clean_up(pools=[config["rbd_pool"]])
 
 
+def parse_namespaces(config, namespaces):
+    all_namespaces = []
+    for subsystem in config["subsystems"]:
+        sub_name = subsystem["nqn"]
+        for ns in namespaces:
+            # <subsystem>|<nsid>|<pool_name>|<image>
+            ns_info = f"nsid-{ns['nsid']}|{ns['rbd_pool_name']}|{ns['rbd_image_name']}"
+            all_namespaces.append(f"{sub_name}|{ns_info}")
+    return all_namespaces
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof Load balancing test execution.
 
     - Configure Gateways
     - Configures Initiators and Run FIO on NVMe targets.
     - Perform scaleup and scaledown.
-    - Validate the IO continuation prior and after to failover and failback
+    - Validate the IO continuation prior and after to scaleup and scaledown
 
     Args:
         ceph_cluster: Ceph cluster object
@@ -214,6 +224,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             deploy_nvme_service(ceph_cluster, config)
 
         ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+        gw_nodes = ha.gateways
 
         # Configure Subsystem
         if config.get("subsystems"):
@@ -227,7 +238,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             for lb_config in config.get("load_balancing"):
                 # Scale down
                 if lb_config.get("scale_down"):
-                    gateway_nodes = lb_config["scale_down"]
+                    gateway_nodes_to_be_deployed = lb_config["scale_down"]
+                    LOG.info(f"Started scaling down {gateway_nodes_to_be_deployed}")
+
                     # Prepare FIO Execution
                     namespaces = ha.fetch_namespaces(ha.gateways[0])
                     ha.prepare_io_execution(initiators)
@@ -236,48 +249,83 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     ha.compare_client_namespace([i["uuid"] for i in namespaces])
 
                     # Start IO Execution
-                    LOG.info("Initiating IO before scaling operations")
+                    LOG.info("Initiating IO before scale down")
                     for initiator in ha.clients:
                         io_tasks.append(executor.submit(initiator.start_fio))
                     time.sleep(20)  # time sleep for IO to Kick-in
 
-                    ha.scale_down(gateway_nodes)
+                    ha.scale_down(gateway_nodes_to_be_deployed)
 
                 # Scale up
                 if lb_config.get("scale_up"):
                     scaleup_nodes = lb_config["scale_up"]
                     gateway_nodes = config["gw_nodes"]
+                    LOG.info(f"Started scaling up {scaleup_nodes}")
 
-                    # Prepare FIO Execution
-                    gw_node = get_node_by_id(ceph_cluster, config["gw_nodes"][-1])
-                    gateways = NVMeGateway(gw_node, ha.mtls)
-                    namespaces = ha.fetch_namespaces(gateways)
+                    # Prepare FIO execution for existing namespaces
+                    old_namespaces = ha.fetch_namespaces(ha.gateways[0])
                     ha.prepare_io_execution(initiators)
 
-                    # Check for targets at clients
-                    ha.compare_client_namespace([i["uuid"] for i in namespaces])
-
-                    # Start IO Execution
-                    LOG.info("Initiating IO before scale up")
+                    # Start IO Execution into already existing namespaces/nodes
+                    LOG.info("Initiating IO before scale up ")
                     for initiator in ha.clients:
                         io_tasks.append(executor.submit(initiator.start_fio))
                     time.sleep(20)  # time sleep for IO to Kick-in
 
                     # Perform scale-up of new nodes
-                    if not all(
-                        [node in set(config["gw_nodes"]) for node in scaleup_nodes]
-                    ):
+                    if not all([node in set(gateway_nodes) for node in scaleup_nodes]):
+
                         # Perform scale up
-                        namespaces = ha.scale_up(scaleup_nodes)
-                        for scaleup_node in scaleup_nodes:
-                            gw_node = get_node_by_id(ceph_cluster, scaleup_node)
-                            ha.gateways.append(NVMeGateway(gw_node))
-                            for subsys_args in config["subsystems"]:
-                                configure_listeners(ha, [scaleup_node], subsys_args)
+                        old_namespaces = parse_namespaces(config, old_namespaces)
+                        ha.scale_up(scaleup_nodes, gw_nodes, old_namespaces)
+
+                        # Add listeners and namespaces to newly added GWs
+                        LOG.info(f"Adding listeners for {scaleup_nodes}")
+                        for subsys_args in config["subsystems"]:
+                            sub_args = {"subsystem": subsys_args["nqn"]}
+                            lb_groups = configure_listeners(
+                                ha, scaleup_nodes, subsys_args
+                            )
+
+                        # Create new namespaces to newly added GWs that will take ANA_GRP of new GWs
+                        LOG.info(f"Adding namespaces for {scaleup_nodes}")
+                        for subsys_args in config["subsystems"]:
+                            sub_args = {"subsystem": subsys_args["nqn"]}
+                            configure_namespaces(
+                                ha.gateways[-1],
+                                subsys_args,
+                                lb_groups,
+                                sub_args,
+                                rbd_pool,
+                                ceph_cluster,
+                            )
+
+                        # Prepare FIO Execution for new namespaces
+                        ha.prepare_io_execution(initiators)
+                        new_namespaces = ha.fetch_namespaces(ha.gateways[-1])
+
+                        # Check for targets at clients for new namespaces
+                        ha.compare_client_namespace([i["uuid"] for i in new_namespaces])
+
+                        # Start IO Execution for new namespaces
+                        for initiator in ha.clients:
+                            io_tasks.append(executor.submit(initiator.start_fio))
+                        time.sleep(20)
+
+                        # Validate IO for old namespaces
+                        LOG.info("Validating IO for old namespaces post scaleup")
+                        ha.validate_scaleup(scaleup_nodes, old_namespaces)
+
+                        # Validate IO for new namespaces
+                        LOG.info("Validating IO for new namespaces post scaleup")
+                        namespaces = parse_namespaces(config, new_namespaces)
                         ha.validate_scaleup(scaleup_nodes, namespaces)
+
+                    # Perform scale-up of old GW nodes(replacement)
                     else:
-                        namespaces = ha.scale_up(scaleup_nodes)
-                        ha.validate_scaleup(scaleup_nodes, namespaces)
+                        old_namespaces = parse_namespaces(config, old_namespaces)
+                        ha.scale_up(scaleup_nodes, gw_nodes, old_namespaces)
+                        ha.validate_scaleup(scaleup_nodes, old_namespaces)
         return 0
 
     except Exception as err:
