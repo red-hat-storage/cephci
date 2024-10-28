@@ -47,9 +47,9 @@ def run(ceph_cluster, **kw):
     try:
         # check the default value of new config parameters
         new_configs = {
-            "bluestore_bdev_label_multi": True,
-            "bluestore_bdev_label_require_all": True,
-            "bluestore_bdev_label_multi_upgrade": False,
+            "bluestore_bdev_label_multi": "true",
+            "bluestore_bdev_label_require_all": "true",
+            "bluestore_bdev_label_multi_upgrade": "false",
         }
 
         for config in new_configs.keys():
@@ -58,7 +58,8 @@ def run(ceph_cluster, **kw):
                 log.error(f"Value of {config} is not as expected")
                 log.error(f"Expected value: {new_configs[config]}")
                 log.error(f"Actual value: {out}")
-            log.info(f"Value of {config} is {out}")
+                raise AssertionError(f"Value of {config} is not as expected")
+            log.info(f"Value of {config} is {out} | Expected: {new_configs[config]}")
 
         log.info("New config parameter verification is complete")
 
@@ -86,12 +87,10 @@ def run(ceph_cluster, **kw):
 
         # corrupting the superblock at offset 0
         # determine the OSD node for chosen osd
-        osd_node = rados_obj.fetch_host_node(
-            daemon_type="osd", daemon_id=f"osd.{osd_id}"
-        )
+        osd_node = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
 
         # determine osd's block device path
-        _cmd = f"cephadm shell -- ceph-volume lvm list {osd_id} --format json"
+        _cmd = f"cephadm ceph-volume lvm list {osd_id} --format json"
         out, _ = osd_node.exec_command(cmd=_cmd, sudo=True)
         lvm_out = json.loads(out)
         for entry in lvm_out[f"{osd_id}"]:
@@ -105,11 +104,25 @@ def run(ceph_cluster, **kw):
 
         log.info(f"OSD block device path for chosen OSD.{osd_id}: {block_device}")
 
+        # check existence of bdev label replicas
+        # the standard offsets at which bluestore bdev label
+        # is supposed to be present are 0, 1G, 10G, 100G, 1000G
+        # 1G = 1073741824 bytes
+        for loc in replicas[:replica_count]:
+            _offset = 1073741824 * loc
+            hex_cmd = f"hexdump -C -s {_offset} -n 22 {block_device}"
+            out, _ = osd_node.exec_command(cmd=hex_cmd, sudo=True)
+            log.info("\n" + out)
+            assert (
+                "bluestore block" in out
+            ), f"Bluestore bdev label not found at {_offset}"
+
         # corrupting the block device by running dd command
         # intention if to corrupt first 4KB of the block device at offset 0
         _cmd = f"dd if=/dev/zero of={block_device} bs=512 count=8"
         out, err = osd_node.exec_command(cmd=_cmd, sudo=True)
-        if "4096 bytes" not in out or "4096 bytes" not in err:
+        log.info(out + "\n" + err)
+        if "4096 bytes" not in out + err:
             log.error("block device corruption failed, try manual execution")
             raise Exception("block device corruption failed, try manual execution")
 
@@ -117,7 +130,7 @@ def run(ceph_cluster, **kw):
         # expected to fail because superblock at offset 0 has been deleted
 
         # stopping the osd, should be successful
-        if not rados_obj.change_osd_state(action="stop"):
+        if not rados_obj.change_osd_state(action="stop", target=osd_id):
             log.error(
                 f"Failed to stop the desired OSD - osd.{osd_id} on {osd_node.hostname}"
             )
@@ -126,29 +139,27 @@ def run(ceph_cluster, **kw):
             )
 
         # starting the osd, should fail
-        if rados_obj.change_osd_state(action="start", timeout=100):
+        if rados_obj.change_osd_state(action="start", target=osd_id, timeout=100):
             log.error(
                 f"OSD restart should not have been possible for"
                 f" osd.{osd_id} on {osd_node.hostname}"
             )
             raise Exception(
-                f"OSD restart expected to fail for osd.{osd_id} on {osd_node.hostname}"
+                f"OSD restart expected to fail for osd.{osd_id} on {osd_node.hostname} but passed"
             )
 
         # now that OSD has been corrupted, fix the superblock by running
         # fsck repair using ceph-bluestore-tool
+        out = bluestore_obj.repair(osd_id=osd_id)
+        log.info(f"Output of CBT repair: {out}")
+
         out = bluestore_obj.run_consistency_check(osd_id=osd_id, deep=True)
         log.info(f"Output of fsck execution: {out}")
 
-        out = bluestore_obj.repair(osd_id=osd_id)
-        log.info(f"Output of repair command execution: {out}")
-
         # once bluestore superblock has been repaired, start the failed OSD again
-        if not rados_obj.change_osd_state(action="start"):
+        if not rados_obj.change_osd_state(action="start", target=osd_id):
             log.error(f"osd.{osd_id} should have started on {osd_node.hostname}")
             raise Exception(f"osd.{osd_id} should have started on {osd_node.hostname}")
-
-        # to-do: include the crash detection module in finally block
 
         log.info(
             "Bluestore superblock corruption and recovery has been verified"
