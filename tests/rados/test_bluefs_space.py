@@ -80,20 +80,23 @@ def run(ceph_cluster, **kw):
             f"Log ceph df detail: \n {rados_obj.get_cephdf_stats(pool_name=pool_name, detail=True)}"
         )
 
-        # Write 1500 large OMAP objects on the pool, 150 at a time to
+        # Write about 1500 large OMAP objects on the pool, 150 at a time to
         # not overwhelm VM cluster
-        for _ in range(10):
-            cmd_options = f"--pool {pool_name} --start 0 --end 150 --key-count 200001"
-            cmd = f"python3 generate_omap_entries.py {cmd_options} &> /dev/null &"
-            rados_obj.client.exec_command(
-                sudo=True, cmd=cmd, timeout=600, check_ec=False
-            )
-            time.sleep(10)
+        for _ in range(2):
+            for _ in range(5):
+                cmd_options = (
+                    f"--pool {pool_name} --start 0 --end 150 --key-count 200001"
+                )
+                cmd = f"python3 generate_omap_entries.py {cmd_options} &> /dev/null &"
+                rados_obj.client.exec_command(
+                    sudo=True, cmd=cmd, timeout=600, check_ec=False
+                )
+                time.sleep(10)
 
-        cmd_options = f"--pool {pool_name} --start 0 --end 150 --key-count 200001"
-        cmd = f"python3 generate_omap_entries.py {cmd_options}"
-        rados_obj.client.exec_command(sudo=True, cmd=cmd, timeout=900)
-        time.sleep(10)
+            cmd_options = f"--pool {pool_name} --start 0 --end 150 --key-count 200001"
+            cmd = f"python3 generate_omap_entries.py {cmd_options}"
+            rados_obj.client.exec_command(sudo=True, cmd=cmd, timeout=900)
+            time.sleep(10)
 
         log.info(
             f"Log ceph df detail: \n {rados_obj.get_cephdf_stats(pool_name=pool_name, detail=True)}"
