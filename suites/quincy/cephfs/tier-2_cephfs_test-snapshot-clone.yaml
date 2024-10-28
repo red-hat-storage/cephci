@@ -246,3 +246,9 @@ tests:
       abort-on-fail: false
       config:
         test_name : systemic
+  - test:
+      name: snap_schedule_with_mds_restart
+      module: snapshot_clone.snap_schedule_with_mds_restart.py
+      polarion-id: CEPH-83600860
+      desc: Validate Verify Kernel and FUSE Mount Behavior with Snapshot Scheduling and MDS Restarts
+      abort-on-fail: false
