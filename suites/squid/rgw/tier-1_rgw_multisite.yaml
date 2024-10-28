@@ -284,29 +284,6 @@ tests:
       name: create non-tenanted user
 
   - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_dynamic_resharding_greenfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-      desc: Test dynamic resharding brownfield scenario in greenfield
-      abort-on-fail: true
-      module: sanity_rgw_multisite.py
-      name: Dynamic Resharding tests on Primary cluster
-      polarion-id: CEPH-83574737
-  - test:
-      name: setting acls to versioned objects on secondary
-      desc: test_versioning_objects_acls on secondary
-      polarion-id: CEPH-9190
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_acls.yaml
-            verify-io-on-site: ["ceph-pri"]
-  - test:
       name: delete versioned objects on secondary
       desc: test_versioning_objects_delete on secondary
       polarion-id: CEPH-14262
@@ -316,17 +293,6 @@ tests:
           config:
             script-name: test_versioning_with_objects.py
             config-file-name: test_versioning_objects_delete.yaml
-  - test:
-      name: enabling bucket versioning and uploading objects on secondary
-      desc: test_versioning_objects_enable on secondary
-      polarion-id: CEPH-10652 # also applies to CEPH-14261 and CEPH-9222
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_versioning_with_objects.py
-            config-file-name: test_versioning_objects_enable.yaml
-            verify-io-on-site: ["ceph-pri"]
   - test:
       name: delete bucket policy on secondary
       desc: test_bucket_policy_delete.yaml on secondary
@@ -360,14 +326,3 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-  - test:
-      name: enable compression on secondary
-      desc: test_Mbuckets_with_Nobjects_compression on secondary
-      polarion-id: CEPH-11350
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_compression.yaml

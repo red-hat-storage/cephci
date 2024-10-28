@@ -324,7 +324,7 @@ tests:
             config-file-name: test_versioning_objects_enable.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec", "ceph-arc"]
       name: enabling bucket versioning and uploading objects on secondary
-      polarion-id: CEPH-14261 # also applies to CEPH-9222 and CEPH-10652
+      polarion-id: CEPH-10652 # also applies to CEPH-14261 and CEPH-9222
       desc: test_versioning_objects_enable on secondary
       module: sanity_rgw_multisite.py
 
