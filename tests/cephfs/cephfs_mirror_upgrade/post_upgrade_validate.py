@@ -31,17 +31,25 @@ def run(ceph_cluster, **kw):
     """
 
     try:
+
+        test_data = kw.get("test_data")
+        log.info(test_data)
         ceph_cluster_dict = kw.get("ceph_cluster_dict")
         fs_mirroring_utils = CephfsMirroringUtils(
             ceph_cluster_dict.get("ceph1"), ceph_cluster_dict.get("ceph2")
         )
         source_clients = ceph_cluster_dict.get("ceph1").get_ceph_objects("client")
         target_clients = ceph_cluster_dict.get("ceph2").get_ceph_objects("client")
-        fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"))
-        fs_util_ceph2 = FsUtils(ceph_cluster_dict.get("ceph2"))
+        fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"), test_data=test_data)
+        fs_util_ceph2 = FsUtils(ceph_cluster_dict.get("ceph2"), test_data=test_data)
         cephfs_mirror_node = ceph_cluster_dict.get("ceph1").get_ceph_objects(
             "cephfs-mirror"
         )
+        file_name = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        config = kw.get("config")
         with open("variables.pkl", "rb") as file:
             (
                 source_fs,
@@ -76,7 +84,7 @@ def run(ceph_cluster, **kw):
             subvol2_path,
             cephfs_mirror_node,
             source_fs,
-            "single_upgrade",
+            f"single_upgrade_{file_name}",
             snap_count=2,
         )
 
@@ -181,12 +189,28 @@ def run(ceph_cluster, **kw):
         )
 
         log.info("Add subvolumes for mirroring to remote location")
-        fs_mirroring_utils.add_path_for_mirroring(
-            source_clients[0], source_fs, subvol1_path_upgrade
-        )
-        fs_mirroring_utils.add_path_for_mirroring(
-            source_clients[0], source_fs, subvol2_path_upgrade
-        )
+        try:
+            out, rc = source_clients[0].exec_command(
+                sudo=True,
+                cmd=f"ceph fs snapshot mirror add {source_fs} {subvol1_path_upgrade}",
+            )
+        except CommandFailed as e:
+            log.info(e)
+            err = str(e)
+            err = err.split()
+            if "EEXIST:" not in err:
+                raise CommandFailed(f"Adding path failed with {rc}")
+        try:
+            out, rc = source_clients[0].exec_command(
+                sudo=True,
+                cmd=f"ceph fs snapshot mirror add {source_fs} {subvol2_path_upgrade}",
+            )
+        except CommandFailed as e:
+            log.info(e)
+            err = str(e)
+            err = err.split()
+            if "EEXIST:" not in err:
+                raise CommandFailed(f"Adding path failed with {rc}")
 
         log.info("Add files into the path and create snapshot on each path")
         fs_mirroring_utils.add_files_and_validate(
@@ -197,7 +221,7 @@ def run(ceph_cluster, **kw):
             subvol2_path_upgrade,
             cephfs_mirror_node,
             source_fs,
-            "single_upgrade_new_path",
+            f"single_upgrade_new_path_{file_name}",
             snap_count=4,
         )
 
@@ -256,7 +280,7 @@ def run(ceph_cluster, **kw):
             subvol2_path,
             cephfs_mirror_node,
             source_fs,
-            "ha_service_upgrade",
+            f"ha_service_upgrade_{file_name}",
             snap_count=2,
         )
 
@@ -280,6 +304,19 @@ def run(ceph_cluster, **kw):
         )
         if not out:
             raise CommandFailed(f"{rc}")
+        log.info("Revert back to single mirror cluster")
+        cephfs_mirror_node = ceph_cluster_dict.get("ceph1").get_ceph_objects(
+            "cephfs-mirror"
+        )
+        log.info(f"MDS host list 1 {cephfs_mirror_node}")
+
+        source_clients[0].exec_command(
+            sudo=True,
+            cmd=f"ceph orch apply cephfs-mirror --placement='1 {cephfs_mirror_node[0].node.hostname}'",
+        )
+        fs_util_ceph1.validate_services_placements(
+            source_clients[0], "cephfs-mirror", [cephfs_mirror_node[0].node.hostname]
+        )
         return 0
     except Exception as e:
         log.error(e)
@@ -287,68 +324,70 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Clean up the system")
-        log.info("Delete the snapshots")
-        snapshots_to_delete = [
-            f"{kernel_mounting_dir_1}{subvol1_path}.snap/snap_k1*",
-            f"{fuse_mounting_dir_1}{subvol2_path}.snap/snap_f1*",
-            f"{kernel_mounting_dir_2}{subvol1_path_upgrade}.snap/snap_k1*",
-            f"{fuse_mounting_dir_2}{subvol2_path_upgrade}.snap/snap_f1*",
-        ]
-        for snapshot_path in snapshots_to_delete:
-            source_clients[0].exec_command(
-                sudo=True, cmd=f"rmdir {snapshot_path}", check_ec=False
+        log.info(f"clenaup has the following value {config.get('clean_up')}")
+        if config.get("clean_up", True):
+            log.info("Delete the snapshots")
+            snapshots_to_delete = [
+                f"{kernel_mounting_dir_1}{subvol1_path}.snap/snap_k1*",
+                f"{fuse_mounting_dir_1}{subvol2_path}.snap/snap_f1*",
+                f"{kernel_mounting_dir_2}{subvol1_path_upgrade}.snap/snap_k1*",
+                f"{fuse_mounting_dir_2}{subvol2_path_upgrade}.snap/snap_f1*",
+            ]
+            for snapshot_path in snapshots_to_delete:
+                source_clients[0].exec_command(
+                    sudo=True, cmd=f"rmdir {snapshot_path}", check_ec=False
+                )
+
+            log.info("Unmount the paths")
+
+            paths_to_unmount = [
+                kernel_mounting_dir_1,
+                kernel_mounting_dir_2,
+                fuse_mounting_dir_1,
+                fuse_mounting_dir_2,
+            ]
+            for path in paths_to_unmount:
+                source_clients[0].exec_command(
+                    sudo=True, cmd=f"umount -l {path}", check_ec=False
+                )
+
+            log.info("Remove paths used for mirroring")
+            paths_to_remove = [
+                subvol1_path,
+                subvol2_path,
+                subvol2_path_upgrade,
+                subvol1_path_upgrade,
+            ]
+            for path in paths_to_remove:
+                fs_mirroring_utils.remove_path_from_mirroring(
+                    source_clients[0], source_fs, path
+                )
+
+            log.info("Destroy CephFS Mirroring setup.")
+            fs_mirroring_utils.destroy_cephfs_mirroring(
+                source_fs,
+                source_clients[0],
+                target_fs,
+                target_clients[0],
+                target_user,
+                peer_uuid,
             )
 
-        log.info("Unmount the paths")
+            log.info("Remove Subvolumes")
+            for subvolume in subvolume_list_upgrade + subvolume_list:
+                fs_util_ceph1.remove_subvolume(
+                    source_clients[0], **subvolume, check_ec=False
+                )
 
-        paths_to_unmount = [
-            kernel_mounting_dir_1,
-            kernel_mounting_dir_2,
-            fuse_mounting_dir_1,
-            fuse_mounting_dir_2,
-        ]
-        for path in paths_to_unmount:
-            source_clients[0].exec_command(
-                sudo=True, cmd=f"umount -l {path}", check_ec=False
-            )
+            log.info("Remove Subvolume Group")
+            for subvolumegroup in subvolumegroup_list_upgrade + subvolumegroup_list:
+                fs_util_ceph1.remove_subvolumegroup(
+                    source_clients[0], **subvolumegroup, check_ec=False
+                )
 
-        log.info("Remove paths used for mirroring")
-        paths_to_remove = [
-            subvol1_path,
-            subvol2_path,
-            subvol2_path_upgrade,
-            subvol1_path_upgrade,
-        ]
-        for path in paths_to_remove:
-            fs_mirroring_utils.remove_path_from_mirroring(
-                source_clients[0], source_fs, path
-            )
+            log.info("Delete the mounted paths")
 
-        log.info("Destroy CephFS Mirroring setup.")
-        fs_mirroring_utils.destroy_cephfs_mirroring(
-            source_fs,
-            source_clients[0],
-            target_fs,
-            target_clients[0],
-            target_user,
-            peer_uuid,
-        )
-
-        log.info("Remove Subvolumes")
-        for subvolume in subvolume_list_upgrade + subvolume_list:
-            fs_util_ceph1.remove_subvolume(
-                source_clients[0], **subvolume, check_ec=False
-            )
-
-        log.info("Remove Subvolume Group")
-        for subvolumegroup in subvolumegroup_list_upgrade + subvolumegroup_list:
-            fs_util_ceph1.remove_subvolumegroup(
-                source_clients[0], **subvolumegroup, check_ec=False
-            )
-
-        log.info("Delete the mounted paths")
-
-        for path in paths_to_unmount:
-            source_clients[0].exec_command(
-                sudo=True, cmd=f"rm -rf {path}", timeout=180, check_ec=False
-            )
+            for path in paths_to_unmount:
+                source_clients[0].exec_command(
+                    sudo=True, cmd=f"rm -rf {path}", timeout=180, check_ec=False
+                )
