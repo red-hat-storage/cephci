@@ -3502,6 +3502,24 @@ os.system('sudo systemctl start  network')
                 raise CommandFailed(f"All Services are not down.. {out}")
         return True
 
+    @retry(CommandFailed, tries=3, delay=60)
+    def validate_services_placements(self, client, service_name, placement_list):
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph orch ls --service_name={service_name} --format json"
+        )
+        try:
+            service_ls = json.loads(out)
+        except JSONDecodeError:
+            raise CommandFailed("No services are UP")
+        log.info(service_ls)
+        if service_ls[0]["status"]["running"] != service_ls[0]["status"]["size"]:
+            raise CommandFailed(f"All {service_name} are Not UP")
+        if service_ls[0]["placement"]["hosts"] != placement_list:
+            raise CommandFailed(
+                f"Services did not come up on the hosts: {placement_list} which "
+                f"has been specifed but came up on {service_ls[0]['placement']['hosts']}"
+            )
+
     def validate_ports(self, client, service_name, port):
         json_data, rc = client.exec_command(
             sudo=True, cmd=f"ceph orch ls --service_name={service_name} --format json"
