@@ -1,0 +1,15 @@
+{
+    "cephfs": {
+        "group": {
+            "default": {
+                "shared": {"sv_prefix": "cephfs_1_systest_def_shared", "sv_cnt": "10"},
+                "unique": {"sv_prefix": "cephfs_1_systest_def", "sv_cnt": "5"}
+            },
+            "svg1": {
+                "shared": {"sv_prefix": "cephfs_1_systest_def_shared", "sv_cnt": "10"},
+                "unique": {"sv_prefix": "cephfs_1_systest_def", "sv_cnt": "5"}
+            }
+        },
+        "mds": {"active": 3, "standby_replay": "true"}
+    }
+}
