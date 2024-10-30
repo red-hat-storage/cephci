@@ -54,7 +54,7 @@ def generate_sosreport_in_node(
         ssh_d.connect(nodeip, username=uname, password=pword)
         ssh_d.exec_command("sudo yum -y install sos")
         stdin, stdout, stderr = ssh_d.exec_command(
-            "sudo sosreport -a --all-logs -e ceph --batch"
+            "sudo sos report -a --all-logs --batch"
         )
         rc = stdout.channel.recv_exit_status()
         sosreport = re.search(r"sosreport-.*.tar.xz", stdout.read().decode())
