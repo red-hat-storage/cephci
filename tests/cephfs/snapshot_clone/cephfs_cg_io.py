@@ -1364,6 +1364,11 @@ class CG_snap_IO(object):
                 log.error(
                     f"linux_cmds {io_type} timedout after 30secs on {mnt_pt},end_time - {end_time} : {ex}"
                 )
+            elif "Timeout opening channel" in str(ex):
+                log.error(
+                    f"linux_cmds {io_type} returns error on {mnt_pt},end_time - {end_time} : {ex}"
+                )
+                return (0, end_time)
             else:
                 log.error(
                     f"linux_cmds {io_type} returns error on {mnt_pt},end_time - {end_time} : {ex}"
