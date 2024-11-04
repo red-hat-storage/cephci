@@ -151,6 +151,10 @@ class CG_Snap_Utils(object):
             sudo=True,
             cmd=cmd,
         )
+        if kw_args.get("qs_id"):
+            log.info(f"Quiesce cmd response for qs_id {kw_args['qs_id']} : {out}")
+        else:
+            log.info(f"Quiesce cmd response : {out}")
         qs_output = json.loads(out)
         if kw_args.get("task_validate", True):
             for qs_id in qs_output["sets"]:

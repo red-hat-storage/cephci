@@ -306,6 +306,10 @@ def run(ceph_cluster, **kw):
         log.info("Clean Up in progess")
         wait_time_secs = 300
         if wait_for_healthy_ceph(client1, fs_util_v1, wait_time_secs) == 0:
+            client1.exec_command(
+                sudo=True,
+                cmd="ceph fs status;ceph status -s;ceph health detail",
+            )
             assert (
                 False
             ), f"Cluster health is not OK even after waiting for {wait_time_secs}secs"
@@ -2160,11 +2164,12 @@ def cg_snap_interop_1(cg_test_params):
         cmd += '"'
         log.info("Adding 7 MDS to cluster")
         out, rc = client.exec_command(sudo=True, cmd=cmd)
+    if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+        return 1
     client.exec_command(
         sudo=True,
         cmd=f"ceph fs set {fs_name} max_mds 4",
     )
-
     if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
         return 1
     test_fail = 0
@@ -2387,6 +2392,10 @@ def cg_snap_interop_1(cg_test_params):
     if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
         log.error("Ceph cluster is not healthy after max_mds set to 2")
         test_fail += 1
+        client.exec_command(
+            sudo=True,
+            cmd=f"ceph fs status {fs_name};ceph status -s;ceph health detail",
+        )
     if cg_test_io_status.value == 1:
         log.error(
             f"CG IO test exits with failure during quiesce test on qs_set-{qs_id_val}"
@@ -2991,6 +3000,7 @@ def cg_mds_failover(fs_util, client, fs_name, repeat_cnt=1):
         out, rc = client.exec_command(
             sudo=True, cmd=f"ceph fs status {fs_name} --format json"
         )
+        log.info(out)
         output = json.loads(out)
         standby_mds = [
             mds["name"] for mds in output["mdsmap"] if mds["state"] == "standby"
