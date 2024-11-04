@@ -393,6 +393,7 @@ tests:
       desc: "Verify root_squash cap works in multiFS"
       module: clients.verify_root_squash_in_caps.py
       name: verify root_squash cap works in multiFS
+      comments: BZ-2293943
       polarion-id: "CEPH-83573868"
   - test:
       abort-on-fail: false
@@ -411,6 +412,7 @@ tests:
       desc: "Validate Root Sqaush operations on Cephfs"
       module: clients.validate_root_squash.py
       name: Validate Root Sqaush operations on Cephfs
+      comments: "BZ-2293943"
       polarion-id: "CEPH-83591419"
   - test:
       abort-on-fail: false

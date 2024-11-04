@@ -83,7 +83,7 @@ def run(ceph_cluster, **kw):
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
 
-        default_fs = "cephfs_snap_1" if not erasure else "cephfs_snap_1_ec"
+        default_fs = "cephfs_snap_3" if not erasure else "cephfs_snap_3_ec"
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -169,7 +169,7 @@ def run(ceph_cluster, **kw):
         snap_util.validate_snap_schedule(
             client1,
             f"{fuse_mounting_dir_1}dir_fuse/",
-            schedule=f"1{m_granularity}",
+            sched_val=f"1{m_granularity}",
         )
         verify_snap_schedule(
             client1,
@@ -180,7 +180,7 @@ def run(ceph_cluster, **kw):
         snap_util.validate_snap_schedule(
             client1,
             f"{kernel_mounting_dir_1}dir_kernel/",
-            schedule=f"1{m_granularity}",
+            sched_val=f"1{m_granularity}",
         )
         for i in range(1, 5):
             client1.exec_command(
