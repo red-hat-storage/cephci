@@ -134,12 +134,11 @@ tests:
         bluestore_cache: true
       desc: Verify tuning of BlueStore cache size for HDDs and SSDs
 
-# commented until the fix has been merged in Squid
-#  - test:
-#      name: BlueStore Superblock redundancy
-#      module: test_bluestore_superblock.py
-#      polarion-id: CEPH-83590892
-#      desc: Verify OSD recovery when Bluestore superblock is corrupted
+  - test:
+      name: BlueStore Superblock redundancy
+      module: test_bluestore_superblock.py
+      polarion-id: CEPH-83590892
+      desc: Verify OSD recovery when Bluestore superblock is corrupted
 
   - test:
       name: OSD Superblock redundancy

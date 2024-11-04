@@ -716,7 +716,7 @@ class PoolFunctions:
             return
 
         log.info(f"Executing command: {_cmd}")
-        return self.node.shell([_cmd])
+        return self.rados_obj.client.exec_command(cmd=_cmd, sudo=True)
 
     def fetch_pool_stats(self, pool: str) -> dict:
         """

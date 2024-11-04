@@ -238,7 +238,7 @@ class MonConfigMethods:
         cmd = f"ceph config get {section} {param}"
         if daemon_name:
             cmd = f"ceph config get {daemon_name}"
-        return self.rados_obj.node.shell([cmd])[0]
+        return str(self.rados_obj.node.shell([cmd])[0]).strip()
 
     def remove_config(self, **kwargs):
         """
