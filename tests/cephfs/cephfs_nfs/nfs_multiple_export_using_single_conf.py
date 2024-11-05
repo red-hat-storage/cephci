@@ -4,10 +4,10 @@ import traceback
 from distutils.version import LooseVersion
 
 from ceph.ceph import CommandFailed
-from cephci.utility.utils import get_ceph_version_from_cluster
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
