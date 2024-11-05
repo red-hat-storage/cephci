@@ -7,6 +7,7 @@ from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -69,9 +70,9 @@ def run(ceph_cluster, **kw):
         export_path = "/"
         fs_name = "cephfs" if not erasure else "cephfs-ec"
         fs_details = fs_util.get_fs_info(client1, fs_name)
-
+        retry_fs_create = retry(CommandFailed, tries=3, delay=60)(fs_util.create_fs)
         if not fs_details:
-            fs_util.create_fs(client1, fs_name)
+            retry_fs_create(client1, fs_name)
         if "5.0" in rhbuild:
             client1.exec_command(
                 sudo=True,
