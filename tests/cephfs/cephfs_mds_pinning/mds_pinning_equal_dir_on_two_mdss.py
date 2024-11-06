@@ -110,7 +110,7 @@ def run(ceph_cluster, **kw):
                 fs_util.stress_io,
                 client3,
                 client_info["mounting_dir"],
-                dir_name,
+                "",
                 0,
                 1,
                 iotype="smallfile",
@@ -121,14 +121,15 @@ def run(ceph_cluster, **kw):
                 client_info["mounting_dir"],
                 "g",
                 "readwrite",
-                iotype="smallfile",
             )
             p.spawn(fs_util.read_write_IO, client3, client_info["mounting_dir"])
             for op in p:
                 return_counts, rc = op
+
         result = fs_util.rc_verify("", return_counts)
+        log.info(result)
         if result == "Data validation success":
-            print("Data validation success")
+            log.info("Data validation success")
             client1[0].exec_command(
                 sudo=True, cmd=f"ceph fs set {default_fs} max_mds 2"
             )
@@ -183,34 +184,32 @@ def run(ceph_cluster, **kw):
 
             with parallel() as p:
                 p.spawn(
-                    fs_util.pinned_dir_io_mdsfailover,
+                    fs_util_v1.pinned_dir_io_mdsfailover,
                     client1,
                     client_info["mounting_dir"],
                     dir_name,
                     1,
                     25,
                     10,
-                    fs_util.mds_fail_over,
-                    client_info["clients"][0:],
+                    fs_util_v1.mds_fail_over,
                 )
                 for op in p:
                     return_counts, rc = op
             with parallel() as p:
                 p.spawn(
-                    fs_util.pinned_dir_io_mdsfailover,
+                    fs_util_v1.pinned_dir_io_mdsfailover,
                     client4,
                     client_info["mounting_dir"],
                     dir_name,
                     26,
                     50,
                     20,
-                    fs_util.mds_fail_over,
-                    client_info["clients"][0:],
+                    fs_util_v1.mds_fail_over,
                 )
                 for op in p:
                     return_counts, rc = op
             log.info("Execution of Test case CEPH-%s ended:" % (tc))
-            print("Results:")
+            log.info("Results:")
             result = fs_util.rc_verify(tc, return_counts)
             log.error(result)
             log.info("Cleaning up!-----")
@@ -235,12 +234,12 @@ def run(ceph_cluster, **kw):
                 log.info("Cleaning up successfull")
             else:
                 return 1
-            print("Script execution time:------")
+            log.info("Script execution time:------")
             stop = timeit.default_timer()
             total_time = stop - start
             mins, secs = divmod(total_time, 60)
             hours, mins = divmod(mins, 60)
-            print("Hours:%d Minutes:%d Seconds:%f" % (hours, mins, secs))
+            log.info("Hours:%d Minutes:%d Seconds:%f" % (hours, mins, secs))
             return 0
 
     except CommandFailed as e:
