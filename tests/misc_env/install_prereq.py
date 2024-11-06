@@ -170,7 +170,7 @@ def install_prereq(
         if repo:
             setup_addition_repo(ceph, repo)
 
-        ceph.exec_command(cmd="sudo yum -y upgrade", check_ec=False)
+        ceph.exec_command(cmd="sudo yum -y upgrade", timeout=600, check_ec=False)
 
         rpm_all_packages = " ".join(rpm_packages.get("all"))
         if distro_ver.startswith("7"):
