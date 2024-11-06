@@ -20,6 +20,7 @@ def run(ceph_cluster, **kw):
     config = kw.get("config")
     installer = ceph_cluster.get_nodes(role="installer")[0]
     mon_node = ceph_cluster.get_nodes(role="mon")[0]
+    bootstrap_node = config.get("bootstrap_node")
     nodes = ceph_cluster.get_nodes()
 
     rhbuild = config.get("rhbuild")
@@ -80,11 +81,10 @@ def run(ceph_cluster, **kw):
     )
 
     # Perform bootstrap using the private registry created
-    mon_ip = mon_node.ip_address
     registry_url = f"{mon_node.hostname}:{PORT}"
     image = f"{installer.hostname}:{PORT}/{bootstrap_image}"
     kw = {
-        "mon-ip": mon_ip,
+        "mon-ip": bootstrap_node,
         "registry-url": registry_url,
         "registry-username": PRIVATE_REG_USER,
         "registry-password": PRIVATE_REG_PASS,
