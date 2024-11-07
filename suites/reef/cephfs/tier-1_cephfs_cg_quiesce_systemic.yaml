@@ -258,16 +258,6 @@ tests:
       polarion-id: CEPH-83581468
   -
     test:
-      abort-on-fail: false
-      desc: "Enable ceph debug logs"
-      module: cephfs_logs_util.py
-      name: cephfs-enable-logs
-      config:
-       ENABLE_LOGS : 1
-       daemon_list : ['mds','osd','client']
-       daemon_dbg_level : {'mds':10,'osd':5,'client':10}
-  -
-    test:
       abort-on-fail: true
       desc: "CG snap systemic test"
       config:
@@ -277,12 +267,3 @@ tests:
       module: snapshot_clone.cg_snap_system_test.py
       name: "cg_snap_system_test"
       polarion-id: CEPH-83590340
-  -
-    test:
-      abort-on-fail: false
-      desc: "Disable ceph debug logs"
-      module: cephfs_logs_util.py
-      name: cephfs-disable-logs
-      config:
-       DISABLE_LOGS : 1
-       daemon_list : ['mds','osd','client']
