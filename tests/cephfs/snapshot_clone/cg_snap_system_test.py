@@ -354,11 +354,7 @@ def cg_scale(cg_test_params):
             check_ec=False,
         )
         log.info(f"Ceph fs status and fs dump output : {out}")
-        client.exec_command(
-            sudo=True,
-            cmd="ceph config set mds log_to_file true;ceph config set mds debug_mds 10",
-            check_ec=False,
-        )
+
         rand_str = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(4))
@@ -368,11 +364,7 @@ def cg_scale(cg_test_params):
         cg_snap_util.cg_quiesce(
             client, qs_set, qs_id=qs_id_val, timeout=600, expiration=600
         )
-        client.exec_command(
-            sudo=True,
-            cmd="ceph config set mds log_to_file false;ceph config set mds debug_mds 1/5",
-            check_ec=False,
-        )
+
         time.sleep(30)
         log.info("Perform snapshot creation on all members")
         rand_str = "".join(
@@ -624,24 +616,12 @@ def cg_stress(cg_test_params):
                 check_ec=False,
             )
             log.info(f"Ceph fs status and fs dump output : {out}")
-            cmd = (
-                "ceph config set mds log_to_file true;ceph config set mds debug_mds 10;"
-            )
-            cmd += "ceph config set mds debug_mds_quiesce 10"
-            client.exec_command(
-                sudo=True,
-                cmd=cmd,
-                check_ec=False,
-            )
+
             log.info(f"Quiesce the set {qs_set}")
             cg_snap_util.cg_quiesce(
                 client, qs_set, qs_id=qs_id_val, timeout=600, expiration=600
             )
-            client.exec_command(
-                sudo=True,
-                cmd="ceph config set mds log_to_file false;",
-                check_ec=False,
-            )
+
             time.sleep(30)
             log.info(f"Query quiesce set {qs_id_val}")
             cg_snap_util.get_qs_query(client, qs_id_val)
