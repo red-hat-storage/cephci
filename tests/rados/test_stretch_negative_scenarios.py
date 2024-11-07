@@ -43,7 +43,7 @@ def run(ceph_cluster, **kw):
     pool_name = config.get("pool_name", "test_stretch_io")
     mon_obj = MonitorWorkflows(node=cephadm)
     stretch_bucket = config.get("stretch_bucket", "datacenter")
-    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
 
     try:
         if not stretch_enabled_checks(rados_obj=rados_obj):

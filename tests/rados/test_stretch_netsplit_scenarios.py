@@ -3,7 +3,7 @@ This test module is used to test net-split scenarios with recovery in the stretc
 includes:
 CEPH-83574979 - Netsplit b/w Zone-A and Zone-B is resolved. Zone-C Connected to both sites. Fail...
 1. Netsplit b/w data sites
-2. Netsplit b/w data site and arbiter site
+2. Netsplit b/w data site and tiebreaker site
 
 """
 
@@ -40,7 +40,7 @@ def run(ceph_cluster, **kw):
     client_node = ceph_cluster.get_nodes(role="client")[0]
     pool_name = config.get("pool_name", "test_stretch_io")
     netsplit_site = config.get("netsplit_site", "DC1")
-    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
     cluster_nodes = ceph_cluster.get_nodes()
     installer = ceph_cluster.get_nodes(role="installer")[0]
     init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
@@ -51,7 +51,8 @@ def run(ceph_cluster, **kw):
         for host in cluster_nodes:
             log.debug(f"Proceeding to flush iptable rules on host : {host.hostname}")
             host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
-        time.sleep(20)
+            host.exec_command(sudo=True, cmd="reboot")
+            time.sleep(20)
 
         if not stretch_enabled_checks(rados_obj=rados_obj):
             log.error(
@@ -105,9 +106,9 @@ def run(ceph_cluster, **kw):
             f"initial number of objects on the pool : {pool_name} is {init_objects}"
         )
 
-        # Checking where netsplit scenario needs to be induced. It would be either b/w data sites or Arbiter site
+        # Checking where netsplit scenario needs to be induced. It would be either b/w data sites or tiebreaker site
 
-        # Starting test to induce netsplit b/w Arbiter site and 1 data site
+        # Starting test to induce netsplit b/w tiebreaker site and 1 data site
         if netsplit_site in [dc_1_name, dc_2_name]:
             log.debug(
                 f"Proceeding to induce netsplit scenario b/w the two data sites. Adding IPs of {netsplit_site}"
@@ -186,9 +187,9 @@ def run(ceph_cluster, **kw):
                 f"Proceeding to try writes into cluster"
             )
 
-        # Starting test to induce netsplit b/w Arbiter site and 1 data site
+        # Starting test to induce netsplit b/w tiebreaker site and 1 data site
         else:
-            log.info("Proceeding to induce newtsplit b/w data site and Arbiter site")
+            log.info("Proceeding to induce newtsplit b/w data site and tiebreaker site")
             for host1 in tiebreaker_hosts:
                 target_host_obj = rados_obj.get_host_object(hostname=host1)
                 if not target_host_obj:
@@ -217,7 +218,7 @@ def run(ceph_cluster, **kw):
                         raise Exception("Test execution Failed")
 
             log.info(
-                "Completed adding IPtable rules into all hosts of Arbiter site to DC2 site"
+                "Completed adding IPtable rules into all hosts of tiebreaker site to DC2 site"
             )
 
             # sleeping for 120 seconds for the DC to be identified as down and proceeding to next checks
@@ -285,6 +286,9 @@ def run(ceph_cluster, **kw):
         for host in cluster_nodes:
             log.debug(f"Proceeding to flush iptable rules on host : {host.hostname}")
             host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
+            host.exec_command(sudo=True, cmd="reboot")
+            time.sleep(20)
+
         log.debug("Sleeping for 30 seconds...")
         time.sleep(30)
 
@@ -310,6 +314,8 @@ def run(ceph_cluster, **kw):
         for host in cluster_nodes:
             log.debug(f"Proceeding to flush iptable rules on host : {host.hostname}")
             host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
+            host.exec_command(sudo=True, cmd="reboot")
+            time.sleep(20)
 
         if config.get("delete_pool"):
             rados_obj.delete_pool(pool=pool_name)

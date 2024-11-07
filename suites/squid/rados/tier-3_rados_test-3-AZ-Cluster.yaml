@@ -158,4 +158,4 @@ tests:
         netsplit_site_1: DC1
         netsplit_site_2: DC3
         delete_pool: true
-      desc: Test stretch Cluster netsplit scenario between data site and arbiter site
+      desc: Test stretch Cluster netsplit scenario between data site and tiebreaker site
