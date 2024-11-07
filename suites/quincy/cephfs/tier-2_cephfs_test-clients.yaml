@@ -403,6 +403,7 @@ tests:
       desc: "Validate Root Sqaush operations on Cephfs"
       module: clients.validate_root_squash.py
       name: Validate Root Sqaush operations on Cephfs
+      comments: "BZ-2293943"
       polarion-id: "CEPH-83591419"
   - test:
       abort-on-fail: false
