@@ -1,9 +1,9 @@
 """
 This test module is used to test site down scenarios with recovery in the stretch environment
 includes:
-CEPH-83574976 - Data Site and Arbiter site Nodes enter maintenance mode.
+CEPH-83574976 - Data Site and tiebreaker site Nodes enter maintenance mode.
 1. Data Sites are shut down
-2. Arbiter Site hosts are shut down
+2. tiebreaker Site hosts are shut down
 
 """
 
@@ -38,7 +38,7 @@ def run(ceph_cluster, **kw):
     pool_name = config.get("pool_name", "test_stretch_io")
     osp_cred = config.get("osp_cred")
     shutdown_site = config.get("shutdown_site", "DC1")
-    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
     add_network_delay = config.get("add_network_delay", False)
 
     try:
@@ -106,7 +106,7 @@ def run(ceph_cluster, **kw):
         pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
         init_objects = pool_stat["stats"]["objects"]
 
-        # Checking which DC to be turned off, It would be either data site or Arbiter site
+        # Checking which DC to be turned off, It would be either data site or tiebreaker site
         # Proceeding to Shut down either one of the Data DCs if crush name sent is either DC1 or DC2.
         if shutdown_site in [dc_1_name, dc_2_name]:
             log.debug(f"Proceeding to shutdown one of the data site {dc_1_name}")
@@ -161,7 +161,7 @@ def run(ceph_cluster, **kw):
             )
 
         else:
-            log.info("Shutting down arbiter mon site")
+            log.info("Shutting down tiebreaker mon site")
             for host in tiebreaker_hosts:
                 log.debug(f"Proceeding to shutdown host {host}")
                 if not host_shutdown(gyaml=osp_cred, name=host):
@@ -226,7 +226,7 @@ def run(ceph_cluster, **kw):
             )
 
         else:
-            log.info("Restarting arbiter mon site")
+            log.info("Restarting tiebreaker mon site")
             for host in tiebreaker_hosts:
                 log.debug(f"Proceeding to Restart host {host}")
                 if not host_restart(gyaml=osp_cred, name=host):

@@ -202,7 +202,7 @@ class CrushToolWorkflows:
             status, file_loc = obj.add_new_bucket_into_bin(
                 source_loc="/tmp/crush.map.bin",
                 target_loc="/tmp/crush_modified.map.bin",
-                bucket_name="arbiter",
+                bucket_name="tiebreaker",
                 bucket_type="datacenter",
             )
 
@@ -251,7 +251,7 @@ class CrushToolWorkflows:
         Examples::
             status, file_loc = obj.verify_add_new_bucket_into_bin(
                 loc="/tmp/crush_modified.map.bin",
-                bucket_name="arbiter",
+                bucket_name="tiebreaker",
                 bucket_type="datacenter",
             )
 
@@ -354,7 +354,7 @@ class CrushToolWorkflows:
         Examples::
             status = obj.verify_add_new_bucket_into_bin(
                 loc="/tmp/crush_modified.map.bin",
-                bucket_name="arbiter",
+                bucket_name="tiebreaker",
                 reweight_val="0.020"
             )
         Returns::

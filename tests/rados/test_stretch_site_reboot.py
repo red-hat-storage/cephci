@@ -3,7 +3,7 @@ This test module is used to test site reboot scenarios with recovery in the stre
 includes:
 CEPH-83574977 - Reboot all the nodes of Site.
 1. Perform Data Site reboots
-2. Perform Arbiter Site hosts reboots
+2. Perform tiebreaker Site hosts reboots
 """
 
 import re
@@ -37,7 +37,7 @@ def run(ceph_cluster, **kw):
     client_node = ceph_cluster.get_nodes(role="client")[0]
     pool_name = config.get("pool_name", "test_stretch_io")
     affected_site = config.get("affected_site", "DC1")
-    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
 
     try:
         if not stretch_enabled_checks(rados_obj=rados_obj):
@@ -135,7 +135,7 @@ def run(ceph_cluster, **kw):
             log.info("Proceeding to try writes into cluster post reboots")
 
         else:
-            log.info("Rebooting host of arbiter mon site")
+            log.info("Rebooting host of tiebreaker mon site")
             for host in tiebreaker_hosts:
                 log.debug(f"Proceeding to reboot host : {host}")
                 host_obj = get_host_obj_from_hostname(

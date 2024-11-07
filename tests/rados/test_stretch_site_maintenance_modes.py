@@ -1,9 +1,9 @@
 """
 This test module is used to test site maintenance mode scenarios with recovery in the stretch environment.
 includes:
-CEPH-83574976 - Data Site and Arbiter site Nodes enter maintenance mode.
+CEPH-83574976 - Data Site and tiebreaker site Nodes enter maintenance mode.
 1. Data Sites enter maintenance mode
-2. Arbiter Site hosts enter maintenance mode
+2. tiebreaker Site hosts enter maintenance mode
 """
 
 import time
@@ -36,7 +36,7 @@ def run(ceph_cluster, **kw):
     client_node = ceph_cluster.get_nodes(role="client")[0]
     pool_name = config.get("pool_name", "test_stretch_io")
     affected_site = config.get("affected_site", "DC1")
-    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
 
     try:
         if not stretch_enabled_checks(rados_obj=rados_obj):
@@ -93,7 +93,7 @@ def run(ceph_cluster, **kw):
         init_objects = pool_stat["stats"]["objects"]
         log.debug(f"pool stats before site down : {pool_stat}")
 
-        # Checking which DC to be added to maintenance mode is It data site or Arbiter site
+        # Checking which DC to be added to maintenance mode is It data site or tiebreaker site
         if affected_site in [dc_1_name, dc_2_name]:
             log.debug(
                 f"Proceeding to add hosts of the data site {dc_2_name} into maintenance mode"
@@ -175,7 +175,7 @@ def run(ceph_cluster, **kw):
             )
 
         else:
-            log.info("Moving host of arbiter mon site into maintenance mode")
+            log.info("Moving host of tiebreaker mon site into maintenance mode")
             for host in tiebreaker_hosts:
                 mgr_dump = "ceph mgr dump"
                 active_mgr = rados_obj.run_ceph_command(cmd=mgr_dump, client_exec=True)
@@ -259,7 +259,7 @@ def run(ceph_cluster, **kw):
             )
 
         else:
-            log.info("removing arbiter mon site host from maintenance mode")
+            log.info("removing tiebreaker mon site host from maintenance mode")
             for host in tiebreaker_hosts:
                 if not rados_obj.host_maintenance_exit(hostname=host, retry=15):
                     log.error(f"Failed to remove host : {host} from maintenance mode")

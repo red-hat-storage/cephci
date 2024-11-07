@@ -160,10 +160,10 @@ tests:
       config:
         no_affinity: false
         stretch_rule_name: stretch_rule
-        tiebreaker_mon_site_name: arbiter
+        tiebreaker_mon_site_name: tiebreaker
         negative_scenarios: False
       comments: -ve scenarios bug - 2293147
-      desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
+      desc: Enables connectivity mode and deploys cluster with Stretch rule with tiebreaker node
       abort-on-fail: true
 
 
@@ -221,7 +221,7 @@ tests:
       config:
         pool_name: test_stretch_pool6
         shutdown_site: DC1
-        tiebreaker_mon_site_name: arbiter
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
       desc: Test the cluster when we have only 1 of 2 DC's surviving
       abort-on-fail: true
@@ -233,34 +233,34 @@ tests:
       config:
         pool_name: test_stretch_pool9
         shutdown_site: DC1
-        tiebreaker_mon_site_name: arbiter
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
         add_network_delay: true
       desc: Test the cluster when we have only 1 of 2 DC's surviving with network delay
       abort-on-fail: true
 
   - test:
-      name: test stretch Cluster site down - Arbiter site
+      name: test stretch Cluster site down - tiebreaker site
       module: test_stretch_site_down.py
       polarion-id: CEPH-83574974
       config:
         pool_name: test_stretch_pool5
-        shutdown_site: arbiter
-        tiebreaker_mon_site_name: arbiter
+        shutdown_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
-      desc: Test the cluster when the arbiter site is shut down
+      desc: Test the cluster when the tiebreaker site is shut down
       abort-on-fail: true
 
   - test:
-      name: test stretch Cluster maintenance mode - arbiter site
+      name: test stretch Cluster maintenance mode - tiebreaker site
       module: test_stretch_site_maintenance_modes.py
       polarion-id: CEPH-83574976
       config:
         pool_name: test_stretch_pool2
-        affected_site: arbiter
-        tiebreaker_mon_site_name: arbiter
+        affected_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
-      desc: Test the cluster when the arbiter site is moved to maintenance mode
+      desc: Test the cluster when the tiebreaker site is moved to maintenance mode
       abort-on-fail: true
 
   - test:
@@ -270,20 +270,20 @@ tests:
       config:
         pool_name: test_stretch_pool3
         affected_site: DC1
-        tiebreaker_mon_site_name: arbiter
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
       desc: Test the cluster when the data site is rebooted
 
   - test:
-      name: test stretch Cluster site reboot - Arbiter site
+      name: test stretch Cluster site reboot - tiebreaker site
       module: test_stretch_site_reboot.py
       polarion-id: CEPH-83574977
       config:
         pool_name: test_stretch_pool4
-        affected_site: arbiter
-        tiebreaker_mon_site_name: arbiter
+        affected_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
-      desc: Test the cluster when the arbiter site is rebooted
+      desc: Test the cluster when the tiebreaker site is rebooted
 
   - test:
       name: Mon replacement on Data site
@@ -292,21 +292,21 @@ tests:
       config:
         pool_name: test_stretch_pool5
         replacement_site: DC1
-        tiebreaker_mon_site_name: arbiter
+        tiebreaker_mon_site_name: tiebreaker
         add_mon_without_location: true
         delete_pool: true
       desc: Test stretch Cluster mon replacement - Data site
 
   - test:
-      name: Mon replacement on Arbiter site
+      name: Mon replacement on tiebreaker site
       module: test_stretch_mon_replacements.py
       polarion-id: CEPH-83574971
       config:
         pool_name: test_stretch_pool6
-        replacement_site: arbiter
-        tiebreaker_mon_site_name: arbiter
+        replacement_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
-      desc: Test stretch Cluster mon replacement - Arbiter site
+      desc: Test stretch Cluster mon replacement - tiebreaker site
 
 # Commenting test until fix for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2249962
 # New Bug: https://bugzilla.redhat.com/show_bug.cgi?id=2265116
@@ -317,7 +317,7 @@ tests:
       config:
         pool_name: test_stretch_pool8
         netsplit_site: DC1
-        tiebreaker_mon_site_name: arbiter
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
       desc: Test stretch Cluster netsplit scenario between data sites
       comments: Active bug - 2249962
@@ -329,20 +329,20 @@ tests:
       config:
         pool_name: test_stretch_pool7
         stretch_bucket: datacenter
-        tiebreaker_mon_site_name: arbiter
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
       desc: Test stretch Cluster osd and Host replacement
 
   - test:
-      name: Netsplit Scenarios data-arbiter sites
+      name: Netsplit Scenarios data-tiebreaker sites
       module: test_stretch_netsplit_scenarios.py
       polarion-id: CEPH-83574979
       config:
         pool_name: test_stretch_pool7
-        netsplit_site: arbiter
-        tiebreaker_mon_site_name: arbiter
+        netsplit_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
-      desc: Test stretch Cluster netsplit scenario between data site and arbiter site
+      desc: Test stretch Cluster netsplit scenario between data site and tiebreaker site
 
   - test:
       name: test stretch Cluster maintenance mode - data site
@@ -351,7 +351,7 @@ tests:
       config:
         pool_name: test_stretch_pool1
         affected_site: DC1
-        tiebreaker_mon_site_name: arbiter
+        tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
       desc: Test the cluster when the Data site is moved to maintenance mode
 
@@ -361,5 +361,5 @@ tests:
       polarion-id: CEPH-83584499
       config:
         stretch_bucket: datacenter
-        tiebreaker_mon_site_name: arbiter
+        tiebreaker_mon_site_name: tiebreaker
       desc: Perform post-deployment negative tests on stretch mode
