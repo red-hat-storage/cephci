@@ -161,8 +161,8 @@ tests:
       config:
         no_affinity: false
         stretch_rule_name: stretch_rule
-        tiebreaker_mon_site_name: arbiter
-      desc: Enables connectivity mode and deploys cluster with Stretch rule with arbiter node
+        tiebreaker_mon_site_name: tiebreaker
+      desc: Enables connectivity mode and deploys cluster with Stretch rule with tiebreaker node
       abort-on-fail: true
 
 

@@ -8,25 +8,32 @@ globals:
   - ceph-cluster:
       name: ceph
       node1:
+        networks:
+          - provider_net_cci_16
         role:
           - _admin
           - installer
           - mon
-# Keeping the mgr daemon in the tiebreaker node until bug fix: https://bugzilla.redhat.com/show_bug.cgi?id=2249962
-          - mgr
           - alertmanager
           - grafana
           - prometheus
       node2:
+        networks:
+          - provider_net_cci_15
         role:
           - mon
           - mgr
           - _admin
           - osd
           - osd-bak
+          - alertmanager
+          - grafana
+          - prometheus
         no-of-volumes: 4
         disk-size: 25
       node3:
+        networks:
+          - provider_net_cci_15
         role:
           - mon
           - mgr
@@ -36,6 +43,8 @@ globals:
         no-of-volumes: 4
         disk-size: 25
       node4:
+        networks:
+          - provider_net_cci_15
         role:
           - rgw
           - osd
@@ -44,15 +53,22 @@ globals:
         no-of-volumes: 4
         disk-size: 25
       node5:
+        networks:
+          - provider_net_cci_13
         role:
           - mon
           - _admin
           - mgr
           - osd
           - osd-bak
+          - alertmanager
+          - grafana
+          - prometheus
         no-of-volumes: 4
         disk-size: 25
       node6:
+        networks:
+          - provider_net_cci_13
         role:
           - mon
           - mgr
@@ -62,6 +78,8 @@ globals:
         no-of-volumes: 4
         disk-size: 25
       node7:
+        networks:
+          - provider_net_cci_13
         role:
           - osd
           - rgw

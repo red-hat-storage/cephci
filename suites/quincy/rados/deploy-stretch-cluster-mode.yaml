@@ -22,8 +22,8 @@
 #              name: "DC2"                           # Name of the datacenter-2 to be added in crush map
 #              hosts: ["<host3-shortname>", ... ]    # List of hostnames present in datacenter-2
 #       - site3:
-#              name: "DC3"                           # Name of the Arbiter location to be added in crush map
-#              hosts: ["<host5-shortname>"]          # List of hostname present in Arbiter
+#              name: "DC3"                           # Name of the tiebreaker location to be added in crush map
+#              hosts: ["<host5-shortname>"]          # List of hostname present in tiebreaker
 
 tests:
   - test:
@@ -167,5 +167,5 @@ tests:
         site3:
           name: "DC3"
           hosts: ["<host5-shortname>"]
-      desc: Enables connectivity mode, deploys cluster with Stretch rule with arbiter node
+      desc: Enables connectivity mode, deploys cluster with Stretch rule with tiebreaker node
       abort-on-fail: true

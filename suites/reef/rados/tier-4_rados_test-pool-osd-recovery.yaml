@@ -201,7 +201,7 @@ tests:
         add_buckets:
           DC1: datacenter
           DC2: datacenter
-          Arbiter: datacenter
+          tiebreaker: datacenter
           test-host-1: host
           test-host-2: host
         bin_tests:

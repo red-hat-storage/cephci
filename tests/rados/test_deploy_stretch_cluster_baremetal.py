@@ -20,8 +20,8 @@ Example::
               name: "DC2"                           # Name of the datacenter-2 to be added in crush map
               hosts: ["<host3-shortname>", ... ]    # List of hostnames present in datacenter-2
             site3:
-              name: "DC3"                           # Name of the Arbiter location to be added in crush map
-              hosts: ["<host5-shortname>"]          # List of hostname present in Arbiter
+              name: "DC3"                           # Name of the tiebreaker location to be added in crush map
+              hosts: ["<host5-shortname>"]          # List of hostname present in tiebreaker
 """
 
 import re
@@ -38,12 +38,12 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    enables connectivity mode and deploys stretch cluster with arbiter mon node
+    enables connectivity mode and deploys stretch cluster with tiebreaker mon node
     Args:
         ceph_cluster (ceph.ceph.Ceph): ceph cluster
     """
 
-    log.info("Deploying stretch cluster with arbiter mon node")
+    log.info("Deploying stretch cluster with tiebreaker mon node")
     log.info(run.__doc__)
     config = kw.get("config")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
@@ -175,7 +175,7 @@ def run(ceph_cluster, **kw):
         )
         return 1
     log.info(f"Acting set : {acting_set} Consists of 4 OSD's per PG")
-    log.info("Stretch rule with arbiter monitor node set up successfully")
+    log.info("Stretch rule with tiebreaker monitor node set up successfully")
     return 0
 
 

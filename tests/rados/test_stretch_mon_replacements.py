@@ -3,7 +3,7 @@ This test module is used to test mon replacement scenarios in the stretch enviro
 includes:
 CEPH-83574971 - Adding and Removing Mons to the Cluster after stretch deployment
 1. Data Site mon replacement
-2. Arbiter Site  mon replacement
+2. tiebreaker Site  mon replacement
 
 """
 
@@ -38,7 +38,7 @@ def run(ceph_cluster, **kw):
     mon_obj = MonitorWorkflows(node=cephadm)
     replacement_site = config.get("replacement_site", "DC1")
     add_mon_without_location = config.get("add_mon_without_location", False)
-    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
 
     if not stretch_enabled_checks(rados_obj=rados_obj):
         log.error(
@@ -112,7 +112,7 @@ def run(ceph_cluster, **kw):
             log.error("Could not set the mon service to unmanaged")
             raise Exception("mon service not unmanaged error")
 
-        # Checking which DC mon to be replaced, It would be either data site or Arbiter site
+        # Checking which DC mon to be replaced, It would be either data site or tiebreaker site
         # Proceeding to replace mon in either one of the Data DCs if crush name sent is either DC1 or DC2.
         if replacement_site in [dc_1_name, dc_2_name]:
             log.debug(f"Proceeding to replace mon of the data site {dc_1_name}")
@@ -196,10 +196,10 @@ def run(ceph_cluster, **kw):
             log.info("A data site mon was removed and added back. Pass")
 
         else:
-            log.info("replacing Arbiter Mon daemon")
+            log.info("replacing tiebreaker Mon daemon")
 
             found = False
-            # Arbiter mon cannot be removed directly. A new tiebreaker mon should be deployed temporarily
+            # tiebreaker mon cannot be removed directly. A new tiebreaker mon should be deployed temporarily
             for item in cluster_nodes:
                 if item.hostname not in [mon.hostname for mon in mon_nodes]:
                     alt_mon_host = item
@@ -211,7 +211,7 @@ def run(ceph_cluster, **kw):
 
             log.debug(
                 f"Selected temp mon host: {alt_mon_host.hostname} with "
-                f"IP : {alt_mon_host.ip_address} to be deployed for replacement of Arbiter mon"
+                f"IP : {alt_mon_host.ip_address} to be deployed for replacement of tiebreaker mon"
             )
 
             # making sure that no mon daemon is running on the alternate host selected.
@@ -242,12 +242,12 @@ def run(ceph_cluster, **kw):
                 raise Exception("mon service not set as tiebreaker error")
 
             log.debug(
-                "New temp mon deployed and set as tiebreaker. Proceeding to remove Arbiter mon now"
+                "New temp mon deployed and set as tiebreaker. Proceeding to remove tiebreaker mon now"
             )
 
             # Removing mon service
             if not mon_obj.remove_mon_service(host=mon_host.hostname):
-                log.error("Could not remove the Arbiter mon")
+                log.error("Could not remove the tiebreaker mon")
                 raise Exception("mon service not removed error")
 
             quorum = mon_obj.get_mon_quorum_hosts()
@@ -284,7 +284,7 @@ def run(ceph_cluster, **kw):
             quorum = mon_obj.get_mon_quorum_hosts()
             if mon_host.hostname not in quorum:
                 log.error(
-                    f"selected host : {mon_host.hostname} arbiter mon is not present as part of Quorum post addition"
+                    f"selected host : {mon_host.hostname} tiebreaker mon is not present as part of Quorum post addition"
                 )
                 raise Exception("Mon not in quorum error post addition")
 
@@ -294,7 +294,7 @@ def run(ceph_cluster, **kw):
                 )
                 raise Exception("Mon in quorum error post removal")
 
-            log.info("Completed replacement of Arbiter mon daemon")
+            log.info("Completed replacement of tiebreaker mon daemon")
 
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")

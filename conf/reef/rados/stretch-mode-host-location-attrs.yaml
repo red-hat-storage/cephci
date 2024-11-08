@@ -12,7 +12,7 @@ globals:
           - _admin
           - installer
           - mon
-# Keeping the mgr daemon in the arbiter node until bug fix: https://bugzilla.redhat.com/show_bug.cgi?id=2249962
+# Keeping the mgr daemon in the tiebreaker node until bug fix: https://bugzilla.redhat.com/show_bug.cgi?id=2249962
           - mgr
           - alertmanager
           - grafana

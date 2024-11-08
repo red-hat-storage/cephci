@@ -49,7 +49,7 @@ def run(ceph_cluster, **kw):
     rhbuild = config.get("rhbuild")
     pool_name = config.get("pool_name", "test_stretch_io")
     stretch_bucket = config.get("stretch_bucket", "datacenter")
-    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
     add_network_delay = config.get("add_network_delay", False)
 
     def check_stretch_health_warning():

@@ -37,12 +37,12 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    enables connectivity mode and deploys stretch cluster with arbiter mon node
+    enables connectivity mode and deploys stretch cluster with additional tiebreaker mon node
     Args:
         ceph_cluster (ceph.ceph.Ceph): ceph cluster
     """
 
-    log.info("Deploying stretch cluster with arbiter mon node")
+    log.info("Deploying stretch cluster with tiebreaker mon node")
     log.info(run.__doc__)
     config = kw.get("config")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
@@ -51,7 +51,7 @@ def run(ceph_cluster, **kw):
     client_node = ceph_cluster.get_nodes(role="client")[0]
     stretch_rule_name = config.get("stretch_rule_name", "stretch_rule")
     no_affinity_crush_rule = config.get("no_affinity", False)
-    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "arbiter")
+    tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
     stretch_pre_deploy_negative_workflows = config.get("negative_scenarios", False)
     stretch_bucket = config.get("stretch_bucket", "datacenter")
 
@@ -79,7 +79,7 @@ def run(ceph_cluster, **kw):
         log.debug(f"Mons present on the cluster : {[mon for mon in mons_dict]}")
         if len(mons_dict) != 5:
             log.error(
-                f"Stretch Cluster needs 5 mons to be present on the cluster. 2 for each DC & 1 for arbiter node"
+                f"Stretch Cluster needs 5 mons to be present on the cluster. 2 for each DC & 1 for tiebreaker node"
                 f"Currently configured on cluster : {len(mons_dict)}"
             )
             raise Exception("Stretch mode cannot be enabled")
@@ -218,10 +218,10 @@ def run(ceph_cluster, **kw):
                     for entry in mons["mons"]
                     if entry.get("crush_location") == "{}"
                 ][0]
-                # Setting up CRUSH location on the final Arbiter mon
-                arbiter_cmd = f"ceph mon set_location {tiebreaker_mon} datacenter={tiebreaker_mon_site_name}"
+                # Setting up CRUSH location on the final tiebreaker mon
+                tiebreaker_cmd = f"ceph mon set_location {tiebreaker_mon} datacenter={tiebreaker_mon_site_name}"
             try:
-                rados_obj.run_ceph_command(arbiter_cmd)
+                rados_obj.run_ceph_command(tiebreaker_cmd)
             except Exception:
                 log.error(f"Failed to set location on mon : {entry['name']}")
                 raise Exception("Stretch mode deployment Failed")

@@ -27,7 +27,7 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    enables connectivity mode and deploys stretch cluster with arbiter mon node
+    enables connectivity mode and deploys stretch cluster with tiebreaker mon node
     Actions Performed:
     1. Disables the automatic crush map update
     2. Collects the OSD daemons in the cluster and split them into 2 sites.
@@ -44,7 +44,7 @@ def run(ceph_cluster, **kw):
     Args:
         ceph_cluster (ceph.ceph.Ceph): ceph cluster
     """
-    log.info("Deploying stretch cluster with arbiter mon node")
+    log.info("Deploying stretch cluster with tiebreaker mon node")
     log.info(run.__doc__)
     config = kw.get("config")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
@@ -301,7 +301,7 @@ def run(ceph_cluster, **kw):
         )
         return 1
     log.info(f"Acting set : {acting_set} Consists of 4 OSDs per PG")
-    log.info("Stretch rule with arbiter monitor node set up successfully")
+    log.info("Stretch rule with tiebreaker monitor node set up successfully")
     return 0
 
 
@@ -607,10 +607,10 @@ def get_mon_details(node: CephAdmin) -> dict:
 
 def set_mon_sites(node: CephAdmin, tiebreaker_node, site1: str, site2: str) -> bool:
     """
-    Adds the mon daemons into the two sites with arbiter node at site 3 as a tie breaker
+    Adds the mon daemons into the two sites with tiebreaker node at site 3 as a tie breaker
     Args:
         node: Cephadm node where the commands need to be executed
-        tiebreaker_node: name of the monitor to be added as tie breaker( site 3 )
+        tiebreaker_node: name of the monitor to be added as tiebreaker( site 3 )
         site1: Name the 1st site
         site2: Name of the 2nd site
     Returns: True -> pass, False -> fail
@@ -620,7 +620,7 @@ def set_mon_sites(node: CephAdmin, tiebreaker_node, site1: str, site2: str) -> b
     monitors = list(mon_state["monitors"])
     monitors.remove(tiebreaker_node.hostname)
     commands = [
-        f"/bin/ceph mon set_location {tiebreaker_node.hostname} datacenter=arbiter",
+        f"/bin/ceph mon set_location {tiebreaker_node.hostname} datacenter=tiebreaker",
         f"/bin/ceph mon set_location {monitors[0]} datacenter={site1}",
         f"/bin/ceph mon set_location {monitors[1]} datacenter={site1}",
         f"/bin/ceph mon set_location {monitors[2]} datacenter={site2}",
