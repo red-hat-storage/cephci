@@ -59,18 +59,18 @@ def run(ceph_cluster, **kw):
             retry_remove_volume(client1, fs_name)
             time.sleep(60)
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
-        print(len(mds_nodes))
+        log.info(len(mds_nodes))
         mds_names = []
         for mds in mds_nodes:
             mds_names.append(mds.node.hostname)
         # get last 4 nodes
         hosts = mds_names[-4:]
         mds_hosts = " ".join(hosts) + " "
-        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_name = "cephfs-mds-scrub" if not erasure else "cephfs-mds-scrub-ec"
         fs_details = fs_util.get_fs_info(client1, fs_name)
 
         if not fs_details:
-            fs_util.create_fs(client1, fs_name)
+            fs_util.create_fs(client1, fs_name, placement=f"4 {mds_hosts}")
         # getting all the MDS info to fail one of the MDS
         client1.exec_command(sudo=True, cmd=f"ceph fs set {fs_name} max_mds 2")
         # # set standby count to 2
@@ -88,7 +88,7 @@ def run(ceph_cluster, **kw):
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
         fuse_mounting_dir_2 = f"/mnt/cephfs_fuse{mounting_dir}_2/"
         mon_node_ips = fs_util.get_mon_node_ips()
-        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        default_fs = "cephfs-mds-scrub" if not erasure else "cephfs-mds-scrub-ec"
         for mount_dir in [fuse_mounting_dir_1, fuse_mounting_dir_2]:
             fs_util.fuse_mount(
                 [client1],
@@ -107,7 +107,7 @@ def run(ceph_cluster, **kw):
             "fill_data": 60,
             "io_tool": "smallfile",
             "mount": "fuse",
-            "filesystem": "cephfs",
+            "filesystem": fs_name,
             "mount_dir": "/mnt/mycephfs1",
         }
         # fill up to 60% of the cluster
@@ -122,17 +122,29 @@ def run(ceph_cluster, **kw):
                 active_mds_before.append(elem["name"])
         log.info(f"Active mds before mds fail {active_mds_before}")
         time.sleep(10)
+        clients[0].exec_command(
+            sudo=True, cmd=f"mkdir -p {fuse_mounting_dir_1}/dir_fuse_1"
+        )
+        clients[0].exec_command(
+            sudo=True, cmd=f"mkdir -p {fuse_mounting_dir_2}/dir_fuse_2"
+        )
+        clients[0].exec_command(
+            sudo=True, cmd=f"mkdir -p {kernel_mounting_dir_1}/dir_kernel_1"
+        )
+        clients[0].exec_command(
+            sudo=True, cmd=f"mkdir -p {kernel_mounting_dir_2}/dir_kernel_2"
+        )
         with parallel() as p:
-            p.spawn(fs_util.run_ios, client1, fuse_mounting_dir_1)
-            p.spawn(fs_util.run_ios, client1, fuse_mounting_dir_2)
-            p.spawn(fs_util.run_ios, client2, kernel_mounting_dir_1)
-            p.spawn(fs_util.run_ios, client2, kernel_mounting_dir_2)
+            p.spawn(fs_util.run_ios, client1, f"{fuse_mounting_dir_1}/dir_fuse_1")
+            p.spawn(fs_util.run_ios, client1, f"{fuse_mounting_dir_2}/dir_fuse_2")
+            p.spawn(fs_util.run_ios, client2, f"{kernel_mounting_dir_1}/dir_kernel_1")
+            p.spawn(fs_util.run_ios, client2, f"{kernel_mounting_dir_1}/dir_kernel_2")
         # kill active MDS
         client1.exec_command(sudo=True, cmd=f"ceph mds fail {active_mds_before[-1]}")
         time.sleep(30)
         rc, ec = client1.exec_command(
             sudo=True,
-            cmd="ceph tell mds.cephfs:0 scrub start / recursive -f json-pretty",
+            cmd=f"ceph tell mds.{default_fs}:0 scrub start / recursive -f json-pretty",
         )
         result = json.loads(rc)
         log.info(result)
@@ -169,7 +181,7 @@ def run(ceph_cluster, **kw):
             fs_util.client_clean_up(
                 "umount", kernel_clients=[client2], mounting_dir=kernel_mounting_dir_2
             )
-        fs_util.remove_fs(client1, vol_name="cephfs")
+        fs_util.remove_fs(client1, vol_name=fs_name)
         time.sleep(60)
 
         # create 2 file system
