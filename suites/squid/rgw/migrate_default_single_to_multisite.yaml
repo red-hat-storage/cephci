@@ -239,6 +239,7 @@ tests:
             config-file-name: test_rgw_restore_index_versioned_buckets.yaml
             run-on-haproxy: true
             monitor-consistency-bucket-stats: true
+            timeout: 7200
       desc: test rgw restore index tool on versioned bucket
       polarion-id: CEPH-83575473
       module: sanity_rgw_multisite.py
