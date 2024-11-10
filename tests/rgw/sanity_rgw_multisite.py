@@ -311,7 +311,7 @@ def run(**kw):
             )
             try:
                 for bucket in bucket_list_archive:
-                    if bucket.find("deleted"):
+                    if "deleted" in bucket:
                         log.info(f"Perform bucket stats on {bucket} at archive site")
                         output, _ = archive_client_node.exec_command(
                             cmd=f"sudo radosgw-admin bucket stats --bucket {bucket}"
