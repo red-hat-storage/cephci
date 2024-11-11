@@ -109,6 +109,7 @@ def run(ceph_cluster, **kw):
             )
             return 1
         default_fs = "cephfs" if not erasure else "cephfs-ec"
+
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
         nfs_name = "cephfs-nfs"
@@ -120,6 +121,7 @@ def run(ceph_cluster, **kw):
             log.info("ceph nfs cluster created successfully")
         else:
             raise CommandFailed("Failed to create nfs cluster")
+
         nfs_export_name = "/export_" + "".join(
             secrets.choice(string.digits) for i in range(3)
         )
@@ -159,19 +161,20 @@ def run(ceph_cluster, **kw):
             test_list = [test_name_type]
 
         export_created = 0
-        snap_test_params = {
-            "ceph_cluster": ceph_cluster,
-            "fs_name": default_fs,
-            "nfs_export_name": nfs_export_name,
-            "nfs_server": nfs_server,
-            "export_created": export_created,
-            "nfs_name": nfs_name,
-            "fs_util": fs_util_v1,
-            "snap_util": snap_util,
-            "client": client1,
-            "mgr_node": mgr_node,
-        }
+
         for test_case_name in test_list:
+            snap_test_params = {
+                "ceph_cluster": ceph_cluster,
+                "fs_name": default_fs,
+                "nfs_export_name": nfs_export_name,
+                "nfs_server": nfs_server,
+                "export_created": export_created,
+                "nfs_name": nfs_name,
+                "fs_util": fs_util_v1,
+                "snap_util": snap_util,
+                "client": client1,
+                "mgr_node": mgr_node,
+            }
             log.info(
                 f"\n\n                                   ============ {test_case_name} ============ \n"
             )
@@ -377,6 +380,8 @@ def snap_sched_test(snap_test_params):
                 deactivate_path,
                 sched_val=sched_val,
                 fs_name=snap_test_params.get("fs_name", "cephfs"),
+                subvol_name=snap_test_params.get("subvol_name", None),
+                group_name=snap_test_params.get("group_name", None),
             )
             time.sleep(10)
             log.info(
@@ -406,13 +411,19 @@ def snap_sched_test(snap_test_params):
         snap_test_params["client"],
         deactivate_path,
         fs_name=snap_test_params.get("fs_name", "cephfs"),
+        subvol_name=snap_test_params.get("subvol_name", None),
+        group_name=snap_test_params.get("group_name", None),
     )
     schedule_path = snap_test_params["path"]
     if "subvol" in snap_test_params.get("test_case"):
         schedule_path = f"{subvol_path.strip()}/.."
     post_test_params["test_status"] = test_fail
     snap_util.remove_snap_schedule(
-        client, schedule_path, fs_name=snap_test_params.get("fs_name", "cephfs")
+        client,
+        schedule_path,
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+        subvol_name=snap_test_params.get("subvol_name", None),
+        group_name=snap_test_params.get("group_name", None),
     )
 
     if "subvol" in snap_test_params.get("test_case"):
@@ -469,6 +480,8 @@ def snap_retention_test(snap_test_params):
         snap_test_params["path"],
         ret_val="1h",
         fs_name=snap_test_params.get("fs_name", "cephfs"),
+        subvol_name=snap_test_params.get("subvol_name", None),
+        group_name=snap_test_params.get("group_name", None),
     )
     snap_test_params["retention"] = (
         "3m5d4w" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "3M5d4w"
@@ -505,16 +518,26 @@ def snap_retention_test(snap_test_params):
     post_test_params["test_status"] = test_fail
     schedule_path = snap_test_params["path"]
     snap_util.deactivate_snap_schedule(
-        client, schedule_path, fs_name=snap_test_params.get("fs_name", "cephfs")
+        client,
+        schedule_path,
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+        subvol_name=snap_test_params.get("subvol_name", None),
+        group_name=snap_test_params.get("group_name", None),
     )
     snap_util.remove_snap_retention(
         client,
         snap_test_params["path"],
         ret_val=snap_test_params["retention"],
         fs_name=snap_test_params.get("fs_name", "cephfs"),
+        subvol_name=snap_test_params.get("subvol_name", None),
+        group_name=snap_test_params.get("group_name", None),
     )
     snap_util.remove_snap_schedule(
-        client, schedule_path, fs_name=snap_test_params.get("fs_name", "cephfs")
+        client,
+        schedule_path,
+        fs_name=snap_test_params.get("fs_name", "cephfs"),
+        subvol_name=snap_test_params.get("subvol_name", None),
+        group_name=snap_test_params.get("group_name", None),
     )
 
     if "subvol" in snap_test_params.get("test_case"):
@@ -623,6 +646,8 @@ def snap_retention_count_validate(snap_test_params):
         client,
         snap_test_params["path"],
         fs_name=snap_test_params.get("fs_name", "cephfs"),
+        subvol_name=snap_test_params.get("subvol_name", None),
+        group_name=snap_test_params.get("group_name", None),
     )
 
     log.info(
@@ -665,6 +690,8 @@ def snap_retention_count_validate(snap_test_params):
         snap_test_params["path"],
         ret_val=snap_test_params["retention"],
         fs_name=snap_test_params.get("fs_name", "cephfs"),
+        subvol_name=snap_test_params.get("subvol_name", None),
+        group_name=snap_test_params.get("group_name", None),
     )
     log.info("Perform schedule snaps cleanup")
     snap_util.sched_snap_cleanup(client, snap_path)
@@ -672,6 +699,8 @@ def snap_retention_count_validate(snap_test_params):
         client,
         snap_test_params["path"],
         fs_name=snap_test_params.get("fs_name", "cephfs"),
+        subvol_name=snap_test_params.get("subvol_name", None),
+        group_name=snap_test_params.get("group_name", None),
     )
     out, rc = client.exec_command(
         sudo=True, cmd=f"rmdir {snap_path}/.snap/manual_test_snap"
@@ -763,6 +792,8 @@ def snap_retention_count_validate(snap_test_params):
         client,
         snap_test_params["path"],
         fs_name=snap_test_params.get("fs_name", "cephfs"),
+        subvol_name=snap_test_params.get("subvol_name", None),
+        group_name=snap_test_params.get("group_name", None),
     )
 
     if "subvol" in snap_test_params.get("test_case"):
@@ -1027,7 +1058,9 @@ def snap_sched_multi_fs(snap_test_params):
     log.info("Verify snap-schedule remove with fs-name works")
     for i in range(1, fs_cnt):
         snap_util.remove_snap_schedule(
-            client, snap_test_params["path"], fs_name=total_fs[i]["name"]
+            client,
+            snap_test_params["path"],
+            fs_name=total_fs[i]["name"],
         )
 
     for i in range(1, fs_cnt):
