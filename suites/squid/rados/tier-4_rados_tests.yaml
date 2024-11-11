@@ -185,13 +185,14 @@ tests:
           obj_nums: 5
           delete_pool: true
 
-  - test:
-      name: Verify MAX_AVAIL variance with OSD size change
-      desc: MAX_AVAIL value update correctly when OSD size changes
-      module: test_cephdf.py
-      polarion-id: CEPH-83595780
-      config:
-        cephdf_max_avail_osd_expand: true
+# commented due to active bug: https://bugzilla.redhat.com/show_bug.cgi?id=2316351
+#  - test:
+#      name: Verify MAX_AVAIL variance with OSD size change
+#      desc: MAX_AVAIL value update correctly when OSD size changes
+#      module: test_cephdf.py
+#      polarion-id: CEPH-83595780
+#      config:
+#        cephdf_max_avail_osd_expand: true
 
   - test:
       name: Compression algorithms - modes
