@@ -200,12 +200,15 @@ def run(ceph_cluster, **kw):
             initial_pool_stat = rados_obj.get_cephdf_stats()["pools"]
 
             # obtain the last osd id
-            out, _ = cephadm.shell(args=["ceph osd ls"])
-            osd_id = out.strip().split("\n")[-1]
+            osd_list = rados_obj.get_active_osd_list()
+            osd_id = osd_list.pop(-1)
 
             osd_df_stats = rados_obj.get_osd_df_stats(
                 tree=False, filter_by="name", filter=f"osd.{osd_id}"
             )
+
+            # set osd service to unmanaged
+            utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
 
             org_weight = osd_df_stats["nodes"][0]["crush_weight"]
             osd_host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
@@ -222,6 +225,8 @@ def run(ceph_cluster, **kw):
             )
 
             out, _ = cephadm.shell(["ceph config set osd osd_crush_initial_weight 0"])
+            # set osd service to managed
+            utils.set_osd_devices_unmanaged(ceph_cluster, osd_list[-1], unmanaged=False)
             assert wait_for_device_rados(host=osd_host, osd_id=osd_id, action="add")
             assert utils.set_osd_in(ceph_cluster, all=True)
             time.sleep(8)  # blind sleep to let osd stats show up
@@ -279,11 +284,12 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info("\n ************* Executing finally block **********\n")
-            assert rados_obj.reweight_crush_items(
-                name=f"osd.{osd_id}", weight=org_weight
-            )
+            if "osd_id" in locals() or "osd_id" in globals():
+                rados_obj.reweight_crush_items(name=f"osd.{osd_id}", weight=org_weight)
             if df_config.get("delete_pool"):
                 rados_obj.delete_pool(pool=pool_name)
+            # set osd service to managed
+            utils.set_osd_devices_unmanaged(ceph_cluster, osd_list[-1], unmanaged=False)
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
@@ -335,6 +341,9 @@ def run(ceph_cluster, **kw):
                 log.error("MAX_AVAIL deviates on the cluster more than expected")
                 raise Exception("MAX_AVAIL deviates on the cluster more than expected")
             log.info("MAX_AVAIL on the cluster are as per expectation")
+
+            # set osd service to unmanaged
+            utils.set_osd_devices_unmanaged(ceph_cluster, "1", unmanaged=True)
 
             # add backup hosts to the cluster
             service_obj.add_new_hosts(add_nodes=["node12", "node13"], deploy_osd=False)
@@ -510,6 +519,8 @@ def run(ceph_cluster, **kw):
                 log.error("Cluster cloud not reach active+clean state")
                 return 1
             rados_obj.change_recovery_threads(config=config, action="rm")
+            # set osd service to managed
+            utils.set_osd_devices_unmanaged(ceph_cluster, "1", unmanaged=False)
 
             # log cluster health
             rados_obj.log_cluster_health()
