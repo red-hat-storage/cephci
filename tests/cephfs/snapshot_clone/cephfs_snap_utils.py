@@ -79,6 +79,10 @@ class SnapUtils(object):
         sched_cmd = (
             f"ceph fs snap-schedule add {snap_params['path']} {snap_params['sched']}"
         )
+        if snap_params.get("subvol_name"):
+            sched_cmd = f"ceph fs snap-schedule add / {snap_params['sched']} --subvol {snap_params['subvol_name']}"
+            if snap_params.get("group_name"):
+                sched_cmd += f" --group {snap_params['group_name']}"
         if snap_params.get("start_time"):
             sched_cmd += f" {snap_params['start_time']} "
         sched_cmd += f" --fs {snap_params['fs_name']}"
@@ -89,7 +93,12 @@ class SnapUtils(object):
         log.info(out)
 
         if snap_params["validate"] is True:
-            cmd = f"ceph fs snap-schedule status {snap_params['path']} --fs {snap_params['fs_name']} -f json"
+            cmd = f"ceph fs snap-schedule status {snap_params['path']} --fs {snap_params['fs_name']} --f json"
+            if snap_params.get("subvol_name"):
+                sv_name = snap_params["subvol_name"]
+                cmd = f"ceph fs snap-schedule status / --fs {snap_params['fs_name']} --subvol {sv_name} --f json"
+                if snap_params.get("group_name"):
+                    cmd += f" --group {snap_params['group_name']}"
             out, rc = client.exec_command(sudo=True, cmd=cmd)
             sched_status = json.loads(out)
             for sched_item in sched_status:
@@ -221,6 +230,11 @@ class SnapUtils(object):
         for eg., snap_util.activate_snap_schedule(client,activate_path,sched_val=sched_val)
         """
         cmd = f"ceph fs snap-schedule activate {path}"
+        if kw_args.get("subvol_name"):
+            sv_name = kw_args["subvol_name"]
+            cmd = f"ceph fs snap-schedule activate / --subvol {sv_name}"
+            if kw_args.get("group_name"):
+                cmd += f" --group {kw_args['group_name']}"
         if kw_args.get("sched_val"):
             cmd += f" {kw_args.get('sched_val')}"
         if kw_args.get("fs_name"):
@@ -240,6 +254,11 @@ class SnapUtils(object):
         for eg., snap_util.deactivate_snap_schedule(client,deactivate_path,sched_val=sched_val)
         """
         cmd = f"ceph fs snap-schedule deactivate {path}"
+        if kw_args.get("subvol_name"):
+            sv_name = kw_args["subvol_name"]
+            cmd = f"ceph fs snap-schedule deactivate / --subvol {sv_name}"
+            if kw_args.get("group_name"):
+                cmd += f" --group {kw_args['group_name']}"
         if kw_args.get("sched_val"):
             cmd += f" {kw_args.get('sched_val')}"
         if kw_args.get("fs_name"):
@@ -256,6 +275,11 @@ class SnapUtils(object):
         Returns: None
         """
         cmd = f"ceph fs snap-schedule remove {path}"
+        if kw_args.get("subvol_name"):
+            sv_name = kw_args["subvol_name"]
+            cmd = f"ceph fs snap-schedule remove / --subvol {sv_name}"
+            if kw_args.get("group_name"):
+                cmd += f" --group {kw_args['group_name']}"
         if kw_args.get("fs_name"):
             cmd += f" --fs {kw_args.get('fs_name')}"
         client.exec_command(sudo=True, cmd=cmd)
@@ -338,6 +362,11 @@ class SnapUtils(object):
         """
         client = snap_params["client"]
         sched_cmd = f"ceph fs snap-schedule retention add {snap_params['path']} {snap_params['retention']}"
+        if snap_params.get("subvol_name"):
+            sv_name = snap_params["subvol_name"]
+            sched_cmd = f"ceph fs snap-schedule retention add / {snap_params['retention']} --subvol {sv_name}"
+            if snap_params.get("group_name"):
+                sched_cmd += f" --group {snap_params['group_name']}"
         if snap_params.get("fs_name"):
             sched_cmd += f" --fs {snap_params.get('fs_name')}"
         out, rc = client.exec_command(sudo=True, cmd=sched_cmd)
@@ -347,6 +376,8 @@ class SnapUtils(object):
                 client=snap_params["client"],
                 sched_path=snap_params["path"],
                 ret_val=snap_params["retention"],
+                subvol_name=snap_params.get("subvol_name", None),
+                group_name=snap_params.get("group_name", None),
             )
             return ret_verify
         return 0
@@ -366,6 +397,11 @@ class SnapUtils(object):
         fs_name = kw_args.get("fs_name", "cephfs")
         client = kw_args.get("client")
         cmd = f"ceph fs snap-schedule status {kw_args.get('sched_path')} --fs {fs_name} -f json"
+        if kw_args.get("subvol_name"):
+            sv_name = kw_args["subvol_name"]
+            cmd = f"cceph fs snap-schedule status / --subvol {sv_name} --fs {fs_name} -f json"
+            if kw_args.get("group_name"):
+                cmd += f" --group {kw_args['group_name']}"
         out, rc = client.exec_command(sudo=True, cmd=cmd)
         sched_status = json.loads(out)
         for sched_item in sched_status:
@@ -393,6 +429,11 @@ class SnapUtils(object):
         Returns: None
         """
         cmd = f"ceph fs snap-schedule retention remove {path}"
+        if kw_args.get("subvol_name"):
+            sv_name = kw_args["subvol_name"]
+            cmd = f"ceph fs snap-schedule retention remove / --subvol {sv_name}"
+            if kw_args.get("group_name"):
+                cmd += f" --group {kw_args['group_name']}"
         if kw_args.get("ret_val"):
             cmd += f" {kw_args.get('ret_val')}"
         if kw_args.get("fs_name"):
