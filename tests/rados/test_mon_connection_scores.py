@@ -27,7 +27,7 @@ def run(ceph_cluster, **kw):
         # Collect mon details such as name, rank, number of mons ( no function to fetch number of mons in quorum )
         mon_quorum = mon_election_obj.get_mon_quorum()
         mon_nodes = ceph_cluster.get_nodes(role="mon")
-        mon_nums = len(mon_nodes)-1
+        mon_nums = len(mon_nodes)
 
         # Perform conn score checks
         if not connection_score_checks(mon_nodes, rados_obj, mon_quorum, mon_nums): 
@@ -52,25 +52,9 @@ def run(ceph_cluster, **kw):
         if not connection_score_checks(mon_nodes, rados_obj, mon_quorum, mon_nums): 
             raise Exception("Connection score checks failed")
     
-        #  Add monitor  tests
-        mon_host =  {  "hostname" : "ceph-vipin-squid-qqqj8c-node3" , "ip_address" : "10.0.66.71" }
-        
-        if not mon_workflow_obj.add_mon_service(host=mon_host):
-            log.error("Could not add mon service")
-            raise Exception("mon service not added error")
-        
-        # Update number of monitors, ranks and mon_hosts
-        mon_quorum = mon_election_obj.get_mon_quorum()
 
-        # Perform conn score checks
-        if not connection_score_checks(mon_nodes, rados_obj, mon_quorum, len(mon_nodes)): 
-            raise Exception("Connection score checks failed")
-
-        # Selecting one mon host to be removed at random during OSD down
-
-        return 0 
-    
-        mon_host = random.choice(mon_hosts)
+        # Selecting random mon service to be removed at random during OSD down 0 
+        mon_host = random.choice(mon_nodes)
 
         # Setting the mon service as unmanaged
         if not mon_workflow_obj.set_mon_service_managed_type(unmanaged=True):
@@ -86,45 +70,57 @@ def run(ceph_cluster, **kw):
         mon_quorum = mon_election_obj.get_mon_quorum()
 
         # Perform conn score checks
-        if not connection_score_checks(mon_hosts, mon_quorum, num_mons-1): 
+        if not connection_score_checks(mon_nodes, rados_obj, mon_quorum, mon_nums-1):  
+            raise Exception("Connection score checks failed")
+
+        #  Add monitor  tests
+        if not mon_workflow_obj.add_mon_service(host=mon_host):
+            log.error("Could not add mon service")
+            raise Exception("mon service not added error")
+        
+        # Update number of monitors, ranks and mon_hosts
+        mon_quorum = mon_election_obj.get_mon_quorum()
+
+        # Perform conn score checks
+        if not connection_score_checks(mon_nodes, rados_obj, mon_quorum, mon_nums): 
             raise Exception("Connection score checks failed")
 
     
         # restart mon service  - reuse function
         if not rados_obj.change_daemon_systemctl_state(
-            action="start", daemon_type="mon", daemon_id=test_mon_host.hostname
+            action="restart", daemon_type="mon", daemon_id=mon_host.hostname
         ):
-            log.error(f"Failed to start mon on host {test_mon_host.hostname}")
+            log.error(f"Failed to start mon on host {mon_host.hostname}")
             raise Exception("Mon start failure error")
         
 
         # Checks : Monitor should be removed from the quorum and its connection score should still be maintained by all mons 
         # Perform conn score checks
-        if not connection_score_checks(rados_obj, mon_quorum_hosts_and_ranks, num_mons): 
-            raise Exception("connection score checks failed")
+        if not connection_score_checks(mon_nodes, rados_obj, mon_quorum, mon_nums): 
+            raise Exception("Connection score checks failed")
 
-        # Stop mon service -  - reuse function
+        # Stop mon service - reuse function
         if not rados_obj.change_daemon_systemctl_state(
-            action="start", daemon_type="mon", daemon_id=test_mon_host.hostname
+            action="stop", daemon_type="mon", daemon_id=mon_host.hostname
         ):
-            log.error(f"Failed to start mon on host {test_mon_host.hostname}")
+            log.error(f"Failed to start mon on host {mon_host.hostname}")
             raise Exception("Mon start failure error")
         
         # Checks: Monitor should be removed from the quorum and its connection score should still be maintained by all mons 
         # Perform conn score checks
-        if not connection_score_checks(rados_obj, mon_quorum_hosts_and_ranks, num_mons): 
-            raise Exception("connection score checks failed")
+        if not connection_score_checks(mon_nodes, rados_obj, mon_quorum, mon_nums): 
+            raise Exception("Connection score checks failed")
 
         # start mon 
         if not rados_obj.change_daemon_systemctl_state(
-            action="start", daemon_type="mon", daemon_id=test_mon_host.hostname
+            action="start", daemon_type="mon", daemon_id=mon_host.hostname
         ):
-            log.error(f"Failed to start mon on host {test_mon_host.hostname}")
+            log.error(f"Failed to start mon on host {mon_host.hostname}")
             raise Exception("Mon start failure error")
         
         # Perform conn score checks
-        if not connection_score_checks(rados_obj, mon_quorum_hosts_and_ranks, num_mons): 
-            raise Exception("connection score checks failed")
+        if not connection_score_checks(mon_nodes, rados_obj, mon_quorum, mon_nums): 
+            raise Exception("Connection score checks failed")
 
 
     except Exception as e:
@@ -137,7 +133,7 @@ def run(ceph_cluster, **kw):
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         # # Setting the mon service as managed by cephadm
-        # if not mon_workflow_obj.set_mon_service_managed_type(unmanaged=True):
+        # if not mon_workflow_obj.set_mon_service_managed_type(unmanaged=False):
         #     log.error("Could not set the mon service to managed")
         #     return 1
 
