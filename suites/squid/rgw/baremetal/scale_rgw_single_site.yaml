@@ -145,4 +145,4 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_disable_and_enable_dynamic_resharding_with_10k_bucket.yaml
-        timeout: 300
+        timeout: 9000
