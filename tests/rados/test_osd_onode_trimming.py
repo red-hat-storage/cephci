@@ -202,8 +202,7 @@ def verify_osd_log(
     log.debug(f"Journalctl logs : {log_lines}")
     for line in lines:
         if line in log_lines:
-            log.error(f" The {line} found on the OSD : {osd}")
-            log.error(f"Journalctl logs lines: {log_lines}")
+            log.error(f"The line {line} found in OSD.{osd} logs")
             return False
-    log.info(f"Not found the log lines on OSD : {osd}")
+    log.info(f"{lines} not found in OSD.{osd} logs | Expected")
     return True
