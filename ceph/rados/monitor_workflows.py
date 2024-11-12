@@ -3,6 +3,7 @@ Module to perform Serviceability scenarios on mon daemons
 """
 
 import datetime
+import json
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -280,4 +281,105 @@ class MonitorWorkflows:
             )
             return False
         log.info("Successfully set the new tiebreaker mon on cluster")
+        return True
+
+    def connection_score_checks(
+        self, hosts, rados_obj, num_mons, mon_election_obj
+    ) -> bool:
+        """
+        Checks all mon daemons for correct number of monitors, correct number of peer monitors,
+        correct peer monitors exist for every monitor and valid connection scores for every
+        monitor ( connection scores in the range of 0 to 1 )
+
+        Example:
+            rados_obj = RadosOrchestrator(node=cephadm)
+            mon_election_obj = MonElectionStrategies(rados_obj=rados_obj)
+            mon_nodes = ceph_cluster.get_nodes(role="mon")
+            mon_nums = len(mon_nodes)
+
+            if not mon_workflow_obj.connection_score_checks(
+                mon_nodes, rados_obj, mon_nums, mon_election_obj
+            ):
+                raise Exception("Connection score checks failed")
+
+        Args:
+            hosts: Cluster object of all monitor host
+            rados_obj: RadosOrchestrator object
+            num_mons: Number of mons to exist in the cluster
+            mon_election_obj: MonElectionStrategies object
+
+        returns:
+            Pass -> True, Fail -> false
+        """
+        # Collect mon host and rank from ceph mon dump command
+        mon_quorum = mon_election_obj.get_mon_quorum()
+
+        for host in hosts:
+
+            if not rados_obj.check_daemon_exists_on_host(
+                host=host.hostname, daemon_type="mon"
+            ):
+                continue
+
+            mon_status, mon_status_desc = rados_obj.get_daemon_status(
+                daemon_type="mon", daemon_id=host.hostname
+            )
+
+            if mon_status != 1 or mon_status_desc != "running":
+                continue
+
+            cmd = (
+                f"cephadm shell ceph daemon mon.{host.hostname} connection scores dump"
+            )
+            out, err = host.exec_command(sudo=True, cmd=cmd)
+            mon_conn_score = json.loads(out)
+            log.info(
+                f"Connectivity score of all daemons in the cluster: \n {mon_conn_score}"
+            )
+
+            reports = mon_conn_score["reports"]
+
+            # Compare number of monitors from connection scores dump and
+            # ceph mon dump commands
+            if len(reports) != num_mons:
+                log.error("Invalid number of mons in connection scores dump")
+                return False
+
+            for report in reports:
+                current_mon_rank = report["rank"]
+
+                # collect peer mon ranks from ceph mon dump command
+                peer_mons_rank = [
+                    peer_mon_rank
+                    for peer_mon_rank in mon_quorum.values()
+                    if peer_mon_rank != current_mon_rank
+                ]
+                peer_scores = report["peer_scores"]
+
+                log.info(f"current mon: {current_mon_rank}")
+                log.info(f"peer mons: {peer_mons_rank}")
+
+                # Compare number of peer monitors in connection scores dump and
+                # ceph mon dump command
+                if len(peer_scores) != len(peer_mons_rank):
+                    log.error("Invalid number of peers in connection scores dump")
+                    return False
+
+                for peer_score_detail in peer_scores:
+                    log.info(
+                        f"peer mon rank: {peer_score_detail['peer_rank']} peer mon score:{peer_score_detail['peer_score']}"
+                    )
+                    if peer_score_detail["peer_rank"] not in peer_mons_rank:
+                        log.error("peer mon score missing in connection scores dump")
+                        return False
+
+                    # Connection scores for monitors are valid if they are in
+                    # the range of 0 to 1
+                    if (
+                        peer_score_detail["peer_score"] < 0
+                        and peer_score_detail["peer_score"] > 1
+                    ):
+                        log.error("Invalid peer_score value in connection scores dump")
+                        return False
+
         return True
