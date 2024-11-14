@@ -64,7 +64,7 @@ def volume_cleanup(volume, driver):
 
 def cleanup_ceph_vols(osp_cred):
     """Cleanup stale volumes with satus deleting, error."""
-    projects = ["ceph-jenkins", "ceph-core", "ceph-ci", "ceph-sys-test"]
+    projects = ["ceph-jenkins", "ceph-core", "ceph-ci", "ceph-sys-test", "ceph-perf"]
     vol_states = ["deleting", "error", "available"]
     for each_project in projects:
         print("Checking in project : ", each_project)
