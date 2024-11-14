@@ -1153,6 +1153,7 @@ tests:
       module: test_scrub_log.py
       polarion-id: CEPH-83575403
       config:
+        verify_log: true
         pool_configs:
             - type: replicated
               conf: sample-pool-2
