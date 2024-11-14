@@ -23,7 +23,7 @@ tests:
                 verbose: true
               args:
                 rhcs-version: 5.3
-                release: z5
+                release: z5     # deploying old build to verify obj snap deletion
                 mon-ip: node1
                 orphan-initial-daemons: true
                 registry-url: registry.redhat.io
@@ -146,11 +146,27 @@ tests:
       abort-on-fail: false
 
   - test:
+      name: "issue repro: obj snap and pool snap deletion"
+      module: test_pool_snap.py
+      desc: obj snap deletion when pool snapshot is deleted on unfixed build
+      polarion-id: CEPH-83602685
+      config:
+        issue_reproduction: true
+
+  - test:
       name: Upgrade ceph cluster
       desc: Upgrade cluster to latest version and check health warn
       module: test_upgrade_warn.py
       polarion-id: CEPH-83574934
       abort-on-fail: true
+
+  - test:
+      name: "verify fix: obj snap and pool snap deletion"
+      module: test_pool_snap.py
+      desc: obj snap deletion when pool snapshot is deleted on fixed build
+      polarion-id: CEPH-83602685
+      config:
+        verify_fix: true
 
   # Running basic rbd and rgw tests after upgrade
   - test:

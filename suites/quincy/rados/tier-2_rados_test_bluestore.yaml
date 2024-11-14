@@ -135,6 +135,7 @@ tests:
       desc: Verify tuning of BlueStore cache size for HDDs and SSDs
 
 # commented until CBT bluefs-stats o/p is not verbose
+# RFE: https://bugzilla.redhat.com/show_bug.cgi?id=2326891
 #  - test:
 #      name: Bluefs DB utilization
 #      desc: DB utilization is under check - bluefs files are not inflated
