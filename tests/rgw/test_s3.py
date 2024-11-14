@@ -94,7 +94,7 @@ S3CONF_ACC = """
 {%- if data.iamroot %}
 [iam root]
 display_name = {{ data.iamroot.name }}
-user_id = {{ data.iamroot.id }}
+user_id = {{ data.iamroot.account_id }}
 access_key = {{ data.iamroot.access_key }}
 secret_key = {{ data.iamroot.secret_key }}
 email = {{ data.iamroot.email }}
@@ -103,7 +103,7 @@ email = {{ data.iamroot.email }}
 {%- if data.iamrootalt %}
 [iam alt root]
 display_name = {{ data.iamrootalt.name }}
-user_id = {{ data.iamrootalt.id }}
+user_id = {{ data.iamrootalt.account_id }}
 access_key = {{ data.iamrootalt.access_key }}
 secret_key = {{ data.iamrootalt.secret_key }}
 email = {{ data.iamrootalt.email }}
@@ -352,9 +352,22 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
     uid = binascii.hexlify(os.urandom(32)).decode()
     display_name = f"{user_prefix}-user"
     log.info("Creating user: {display_name}".format(display_name=display_name))
+    if display_name == "iamrootalt-user":
+        cmd = (
+            f"radosgw-admin user create --uid=iamrootalt-user "
+            f"--account-id RGW22222222222222222 --account-root "
+            f"--display_name={display_name} --email={display_name}@foo.bar"
+        )
+    elif display_name == "iamroot-user":
+        cmd = (
+            f"radosgw-admin user create --uid=iamroot-user "
+            f"--account-id RGW11111111111111111 --account-root "
+            f"--display_name={display_name} --email={display_name}@foo.bar"
+        )
+    else:
 
-    cmd = f"radosgw-admin user create --uid={uid} --display_name={display_name}"
-    cmd += " --email={email}@foo.bar".format(email=uid)
+        cmd = f"radosgw-admin user create --uid={uid} --display_name={display_name}"
+        cmd += " --email={email}@foo.bar".format(email=uid)
 
     out, err = node.exec_command(sudo=True, cmd=cmd)
     user_info = json.loads(out)
@@ -366,6 +379,15 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
         "name": user_info["display_name"],
         "email": user_info["email"],
     }
+    if display_name == "iamrootalt-user" or "iamroot-user":
+        data[user_prefix] = {
+            "id": user_info["keys"][0]["user"],
+            "access_key": user_info["keys"][0]["access_key"],
+            "secret_key": user_info["keys"][0]["secret_key"],
+            "name": user_info["display_name"],
+            "email": user_info["email"],
+            "account_id": user_info["account_id"],
+        }
 
     if user_prefix == "iam":
         log.info("Adding user-policy caps for IAM user")
