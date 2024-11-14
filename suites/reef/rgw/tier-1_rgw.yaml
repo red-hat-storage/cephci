@@ -170,3 +170,12 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+  - test:
+      name: Indexless buckets
+      desc: Indexless (blind) buckets
+      polarion-id: CEPH-10354 # also applies to CEPH-10357
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_indexless_buckets.py
+        config-file-name: test_indexless_buckets_s3.yaml
