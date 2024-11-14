@@ -419,3 +419,10 @@ tests:
       module: clients.client_caps_update_validation.py
       name: client_caps_update_validation
       polarion-id: "CEPH-83597462"
+  - test:
+      abort-on-fail: false
+      desc: "Validate directory creation with non root user with root_squash"
+      module: clients.client_root_squash_non_root_user.py
+      name: client_root_squash_non_root_user
+      polarion-id: "CEPH-83602912"
+
