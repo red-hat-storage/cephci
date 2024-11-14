@@ -363,9 +363,9 @@ class PoolFunctions:
 
         """
         # Checking if snapshots can be created on the supplied pool
-        cmd = "ceph osd dump"
-        pool_status = self.rados_obj.run_ceph_command(cmd=cmd, timeout=800)
-        for detail in pool_status["pools"]:
+        cmd = "ceph osd pool ls detail"
+        pool_detail = self.rados_obj.run_ceph_command(cmd=cmd, timeout=800)
+        for detail in pool_detail:
             if detail["pool_name"] != pool_name:
                 continue
             if "selfmanaged_snaps" in detail["flags_names"]:
@@ -408,9 +408,9 @@ class PoolFunctions:
 
         Returns: list of the snaps created
         """
-        cmd = "ceph osd dump"
-        pool_status = self.rados_obj.run_ceph_command(cmd=cmd, timeout=800)
-        for detail in pool_status["pools"]:
+        cmd = "ceph osd pool ls detail"
+        pool_detail = self.rados_obj.run_ceph_command(cmd=cmd, timeout=800)
+        for detail in pool_detail:
             if detail["pool_name"] == pool_name:
                 snap_list = [snap["name"] for snap in detail["pool_snaps"]]
                 log.debug(f"snapshots on pool : {snap_list}")
@@ -426,7 +426,7 @@ class PoolFunctions:
 
         """
         if snap_name:
-            delete_list = list(snap_name)
+            delete_list = snap_name.split()
         else:
             delete_list = self.get_snap_names(pool_name=pool_name)
 

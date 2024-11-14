@@ -4300,9 +4300,9 @@ EOF"""
         """
         log.debug("Printing cluster health and status")
         health_detail, _ = self.node.shell(args=["ceph health detail"])
-        log.info(f"\n****\n Cluster health detail: \n {health_detail} \n ****")
+        log.info(f"\n****\n Cluster health detail: \n {health_detail} \n****")
         log.info(
-            f"\n****\n Cluster status: \n {self.run_ceph_command(cmd='ceph -s', client_exec=True)} \n ****"
+            f"\n****\n Cluster status: \n {self.client.exec_command(cmd='ceph -s', sudo=True)[0]} \n****"
         )
         return health_detail
 
@@ -4578,3 +4578,52 @@ EOF"""
             log.info(out)
             return True
         return False
+
+    def list_obj_snaps(self, pool_name: str, obj_name: str):
+        """
+        Module to fetch the list of snaps for an object
+        Args:
+            pool_name: name of the pool where obj is present
+            obj_name: name of the object
+        Return:
+            o/p of rados listsnaps -p <pool_name> <objectname>
+        Example:
+            # rados listsnaps -p test-snap obj-1
+            obj-1:
+            cloneid	snaps	size	overlap
+            2	1,2	4194304	[]
+            head	-	4194304
+        """
+        _cmd = f"rados listsnaps -p {pool_name} {obj_name}"
+        return self.run_ceph_command(cmd=_cmd, client_exec=True)
+
+    def list_pool_snaps(self, pool_name: str):
+        """
+        Module to list pool snapshots
+        Args:
+            pool_name: name of the pool
+        Returns:
+            o/p of rados lssnap -p <pool_name>
+        Example:
+            # rados lssnap -p test-snap
+            2	snap-2	2024.05.29 10:45:30
+            3	snap-3	2024.05.29 10:58:17
+            2 snaps
+        """
+        _cmd = f"rados lssnap -p {pool_name}"
+        return self.client.exec_command(cmd=_cmd, sudo=True)[0]
+
+    def get_rados_df(self, pool_name: str = None):
+        """
+        Module to fetch rados df output
+        should return only pool detail if pool_name is provided
+        Args:
+            pool_name(optional): name of the pool
+        Returns:
+            rados df o/p if no pool name if provided
+            rados df o/p for the pool whose pool name is provided
+        """
+        _cmd = f"rados df -p {pool_name}" if pool_name else "rados df"
+        out = self.run_ceph_command(cmd=_cmd, client_exec=True)
+
+        return out["pools"][0] if pool_name else out
