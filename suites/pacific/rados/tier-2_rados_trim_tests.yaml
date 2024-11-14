@@ -105,13 +105,6 @@ tests:
           mgr: "allow *"
 
   - test:
-      name: Enable logging to file
-      module: rados_prep.py
-      config:
-        log_to_file: true
-      desc: Change config options to enable logging to file
-
-  - test:
       name: Automatic trimming of osdmaps
       desc: check for periodic trimming of osdmaps
       module: test_osdmap_trim.py

@@ -308,8 +308,6 @@ tests:
         delete_pool: true
       desc: Test stretch Cluster mon replacement - tiebreaker site
 
-# Commenting test until fix for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2249962
-# New Bug: https://bugzilla.redhat.com/show_bug.cgi?id=2265116
   - test:
       name: Netsplit Scenarios data-data sites
       module: test_stretch_netsplit_scenarios.py
@@ -320,7 +318,7 @@ tests:
         tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
       desc: Test stretch Cluster netsplit scenario between data sites
-      comments: Active bug - 2249962
+      comments: Active bug - 2318975
 
   - test:
       name: OSD and host replacement
