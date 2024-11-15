@@ -3,8 +3,8 @@ version_id: 9.5
 id: rhel
 instance:
   create:
-    image-name: RHEL-9.5.0-x86_64-nightly-latest
-    vm-size: ci.standard.large
+    image-name: RHEL-9.5.0-x86_64-ga-latest
+    vm-size: ci.standard.medium
 
   setup: |
     #cloud-config
