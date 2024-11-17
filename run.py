@@ -1,9 +1,4 @@
-#!/usr/bin/env python
-
-# Allow parallelized behavior of gevent. It has to be the first line.
-from gevent import monkey
-
-monkey.patch_all()
+#!/usr/bin/env python3
 
 import datetime
 import importlib
