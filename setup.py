@@ -17,8 +17,6 @@ setup(
         "apache-libcloud>=3.3.0",
         "cryptography",
         "docopt",
-        "gevent",
-        "greenlet",
         "htmllistparse",
         "ibm-cloud-sdk-core==3.15.0 ; python_version<'3.7'",
         "ibm-cloud-sdk-core ; python_version>='3.7'",
