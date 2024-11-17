@@ -35,8 +35,16 @@ log = Log(__name__)
 def run(**kwargs):
     results = {}
     parallel_tests = kwargs["parallel"]
+    max_time = kwargs.get("config", {}).get("max_time", None)
+    wait_till_complete = kwargs.get("config", {}).get("wait_till_complete", True)
+    cancel_pending = kwargs.get("config", {}).get("cancel_pending", False)
 
-    with parallel() as p:
+    with parallel(
+        thread_pool=False,
+        timeout=max_time,
+        shutdown_wait=wait_till_complete,
+        shutdown_cancel_pending=cancel_pending,
+    ) as p:
         for test in parallel_tests:
             p.spawn(execute, test, kwargs, results)
             sleep(1)
