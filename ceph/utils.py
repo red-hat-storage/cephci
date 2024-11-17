@@ -5,11 +5,10 @@ import re
 import time
 import traceback
 from json import loads
-from time import mktime
+from time import mktime, sleep
 
 import requests
 import yaml
-from gevent import sleep
 from htmllistparse import fetch_listing
 from libcloud.common.exceptions import BaseHTTPError
 from libcloud.compute.providers import get_driver
