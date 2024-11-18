@@ -310,6 +310,7 @@ tests:
       name: notify on lifecycle expiration non current objects with prefix rule
       desc: notify on lifecycle expiration non current objects with prefix rule
       polarion-id: CEPH-83575583
+      comments: Known issue BZ-2324516 targeted to 8.1
       module: sanity_rgw.py
       config:
         run-on-rgw: true
@@ -321,7 +322,7 @@ tests:
       desc: notify on lifecycle transition events
       polarion-id: CEPH-83591037
       module: sanity_rgw.py
-      comments: Known issue BZ-2282699
+      comments: Known issue BZ-2282699 targeted to 8.1
       config:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
@@ -332,7 +333,7 @@ tests:
       desc: notify on lifecycle transition events with multipart objects
       polarion-id: CEPH-83591037
       module: sanity_rgw.py
-      comments: Known issue BZ-2282699
+      comments: Known issue BZ-2282699 targeted to 8.1
       config:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py

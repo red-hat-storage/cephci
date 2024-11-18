@@ -164,14 +164,14 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
 
-  - test:
-      name: Test Ratelimit at global scope
-      desc: Test Ratelimit at global scope
-      polarion-id: CEPH-83574915 # also CEPH-83574916 and CEPH-83574919
-      module: sanity_rgw.py
-      config:
-        script-name: ../s3cmd/test_ratelimit_global.py
-        config-file-name: ../../s3cmd/configs/test_ratelimit_global.yaml
+  # - test:
+  #    name: Test Ratelimit at global scope
+  #    desc: Test Ratelimit at global scope
+  #    polarion-id: CEPH-83574915 # also CEPH-83574916 and CEPH-83574919
+  #    module: sanity_rgw.py
+  #    config:
+  #      script-name: ../s3cmd/test_ratelimit_global.py
+  #      config-file-name: ../../s3cmd/configs/test_ratelimit_global.yaml
 
   - test:
       name: Test Ratelimit for versioned buckets

@@ -195,3 +195,12 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_multipart.yaml
+  - test:
+      name: Indexless buckets
+      desc: Indexless (blind) buckets
+      polarion-id: CEPH-10354 # also applies to CEPH-10357
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_indexless_buckets.py
+        config-file-name: test_indexless_buckets_s3.yaml

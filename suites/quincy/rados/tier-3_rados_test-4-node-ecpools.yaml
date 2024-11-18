@@ -381,6 +381,7 @@ tests:
       module: test_scrub_log.py
       polarion-id: CEPH-83575403
       config:
+        verify_log: true
         pool_configs:
             - type: erasure
               conf: sample-pool-4

@@ -68,234 +68,273 @@ def run(ceph_cluster, **kw) -> int:
 
     log.info("\n\n---- Starting All workflows ----\n\n")
     if not config.get("osd_host_fail", False):
-        # rebooting one OSD and checking cluster health
-        log.info(
-            "---- Starting workflow ----\n---- 1. Reboot of single osd and health check ----"
-        )
-        for pool in pools:
-            target_osd = rados_obj.get_pg_acting_set(pool_name=pool)[0]
-            log.debug(f"Rebooting OSD : {target_osd} and checking health status")
-            if not rados_obj.change_osd_state(action="restart", target=target_osd):
-                log.error(f"Unable to restart the OSD : {target_osd}")
-                raise Exception("Execution error")
-
-            # Waiting for recovery post OSD reboot
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool)
-            log.debug(
-                "PG's are active + clean post OSD reboot, proceeding to restart next OSD"
+        try:
+            # rebooting one OSD and checking cluster health
+            log.info(
+                "---- Starting workflow ----\n---- 1. Reboot of single osd and health check ----"
             )
-
-        log.info("All the planned primary OSD reboots have completed")
-        # Checking cluster health after the tests
-        method_should_succeed(rados_obj.run_pool_sanity_check)
-        log.info("----Completed workflows 1. Reboot of single osd and health check----")
-
-        log.info("---- Starting workflow ----\n---- 2. Rolling Reboot OSD hosts ----")
-        for nodes in osd_nodes:
-            log.info(f"Rebooting node : {nodes.hostname}")
-            nodes.exec_command(sudo=True, cmd="reboot", long_running=True)
-
-            # Sleeping for 10 seconds and starting verification.
-            time.sleep(10)
-
-            # Waiting for recovery to post OSD host reboot
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
-            log.info(f"PG's are active + clean post reboot of host {nodes.hostname}")
-
-        log.info(
-            "Completed reboot of all the OSD hosts, Checking cluster health status"
-        )
-        # Checking cluster health after the test
-        method_should_succeed(rados_obj.run_pool_sanity_check)
-
-        log.info("Wait for rebooted hosts to come online")
-        timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=900)
-        while datetime.datetime.now() < timeout_time:
-            try:
-                for node in osd_nodes:
-                    assert rados_obj.check_host_status(hostname=node.hostname)
-                log.info("Rebooted hosts are up")
-                break
-            except AssertionError:
-                time.sleep(25)
-                if datetime.datetime.now() >= timeout_time:
-                    log.error(f"{node.hostname} status is still offline after 15 mins")
-                    return 1
-        log.info(
-            "---- Completed workflows 2. Rolling Reboot OSD hosts and health check ----"
-        )
-
-        log.info(
-            "---- Starting workflow ----\n---- 3. Stopping and starting OSD daemons ----"
-        )
-        for pool in pools:
-            target_osd = rados_obj.get_pg_acting_set(pool_name=pool)[0]
-            log.debug(f"Stopping OSD : {target_osd} and checking health status")
-            if not rados_obj.change_osd_state(action="stop", target=target_osd):
-                log.error(f"Unable to stop the OSD : {target_osd}")
-                raise Exception("Execution error")
-
-            # Waiting for recovery to post OSD stop
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool)
-            log.debug(
-                f"PG's are active + clean post OSD stop of {target_osd}, proceeding to start OSD"
-            )
-
-            log.debug(f"Starting OSD : {target_osd} and checking health status")
-            if not rados_obj.change_osd_state(action="start", target=target_osd):
-                log.error(f"Unable to start the OSD : {target_osd}")
-                raise Exception("Execution error")
-
-            # Waiting for recovery to post OSD start
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool)
-            log.debug(
-                f"PG's are active + clean post OSD start of {target_osd}, proceeding to restart next OSD"
-            )
-
-        log.info(
-            "Completed start and stop for all targeted OSDs. Checking cluster health"
-        )
-        # Checking cluster health after the tests
-        method_should_succeed(rados_obj.run_pool_sanity_check)
-        log.info("--- Completed workflows 3. Stopping and starting OSD daemons ---")
-
-        log.info(
-            "---- Starting workflow ----\n---- 4. restart all OSD daemons belonging to single pg----"
-        )
-        for pool in pools:
-            pg_set = rados_obj.get_pg_acting_set(pool_name=pool)
-            log.debug(f"Acting set of OSDs for testing reboot are : {pg_set}")
-            for target_osd in pg_set:
-                log.debug(f"Restarting OSD : {target_osd} and checking health status")
+            for pool in pools:
+                target_osd = rados_obj.get_pg_acting_set(pool_name=pool)[0]
+                log.debug(f"Rebooting OSD : {target_osd} and checking health status")
                 if not rados_obj.change_osd_state(action="restart", target=target_osd):
                     log.error(f"Unable to restart the OSD : {target_osd}")
                     raise Exception("Execution error")
 
-                # Waiting for recovery to post OSD restart
-                method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+                # Waiting for recovery post OSD reboot
+                method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool)
                 log.debug(
-                    f"PG's are active + clean post OSD restart of {target_osd}, proceeding to restart next OSD"
+                    "PG's are active + clean post OSD reboot, proceeding to restart next OSD"
                 )
 
-        # Checking cluster health after the tests
-        method_should_succeed(rados_obj.run_pool_sanity_check)
-        log.info(
-            "--- Completed workflows 4. restart OSD daemons belonging to single pg ---"
-        )
-
-        log.info(
-            "---- Starting workflow ----\n---- 5. Removal and addition of OSD daemons"
-        )
-
-        # Removing a mon daemon and adding it back post OSD addition.
-        mon_obj = MonitorWorkflows(node=cephadm)
-        # Setting the mon service as unmanaged by cephadm
-        if not mon_obj.set_mon_service_managed_type(unmanaged=True):
-            log.error("Could not set the mon service to managed")
-            raise Exception("mon service not managed error")
-
-        init_mon_nodes = ceph_cluster.get_nodes(role="mon")
-        # Selecting one mon host to be removed at random during OSD down
-        test_mon_host = random.choice(init_mon_nodes)
-
-        # Removing mon service
-        if not mon_obj.remove_mon_service(host=test_mon_host.hostname):
-            log.error("Could not remove the new mon added previously")
-            raise Exception("mon service not removed error")
-
-        quorum = mon_obj.get_mon_quorum_hosts()
-        if test_mon_host.hostname in quorum:
-            log.error(
-                f"selected host : {test_mon_host.hostname} is present as part of Quorum post removal"
-            )
-            raise Exception("Mon in quorum error post removal error")
-
-        for pool in pools:
-            pg_set = rados_obj.get_pg_acting_set(pool_name=pool)
-            log.debug(f"Acting set for removal and addition of OSDs {pg_set}")
-            target_osd = pg_set[0]
-            host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=target_osd)
-
-            dev_path = get_device_path(host, target_osd)
-            log.debug(
-                f"osd device path  : {dev_path}, osd_id : {target_osd}, host.hostname : {host.hostname}"
-            )
-
-            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=True)
-            method_should_succeed(utils.set_osd_out, ceph_cluster, target_osd)
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
-            utils.osd_remove(ceph_cluster, target_osd)
-            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
-            method_should_succeed(
-                utils.zap_device, ceph_cluster, host.hostname, dev_path
-            )
-            method_should_succeed(
-                wait_for_device_rados, host, target_osd, action="remove"
-            )
-
-            # Checking cluster health after OSD removal
+            log.info("All the planned primary OSD reboots have completed")
+            # Checking cluster health after the tests
             method_should_succeed(rados_obj.run_pool_sanity_check)
             log.info(
-                f"Removal of OSD : {target_osd} is successful. Proceeding to add back the OSD daemon."
+                "----Completed workflows 1. Reboot of single osd and health check----"
             )
 
-            # Adding the removed OSD back and checking the cluster status
-            utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
-            method_should_succeed(wait_for_device_rados, host, target_osd, action="add")
-            time.sleep(10)
+            log.info(
+                "---- Starting workflow ----\n---- 2. Rolling Reboot OSD hosts ----"
+            )
+            for nodes in osd_nodes:
+                log.info(f"Rebooting node : {nodes.hostname}")
+                nodes.exec_command(sudo=True, cmd="reboot", long_running=True)
 
-            # Checking cluster health after OSD removal
+                # Sleeping for 10 seconds and starting verification.
+                time.sleep(10)
+
+                # Waiting for recovery to post OSD host reboot
+                method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+                log.info(
+                    f"PG's are active + clean post reboot of host {nodes.hostname}"
+                )
+
+            log.info(
+                "Completed reboot of all the OSD hosts, Checking cluster health status"
+            )
+            # Checking cluster health after the test
+            method_should_succeed(rados_obj.run_pool_sanity_check)
+
+            log.info("Wait for rebooted hosts to come online")
+            timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=900)
+            while datetime.datetime.now() < timeout_time:
+                try:
+                    for node in osd_nodes:
+                        assert rados_obj.check_host_status(hostname=node.hostname)
+                    log.info("Rebooted hosts are up")
+                    break
+                except AssertionError:
+                    time.sleep(25)
+                    if datetime.datetime.now() >= timeout_time:
+                        log.error(
+                            f"{node.hostname} status is still offline after 15 mins"
+                        )
+                        return 1
+            log.info(
+                "---- Completed workflows 2. Rolling Reboot OSD hosts and health check ----"
+            )
+
+            log.info(
+                "---- Starting workflow ----\n---- 3. Stopping and starting OSD daemons ----"
+            )
+            for pool in pools:
+                target_osd = rados_obj.get_pg_acting_set(pool_name=pool)[0]
+                log.debug(f"Stopping OSD : {target_osd} and checking health status")
+                if not rados_obj.change_osd_state(action="stop", target=target_osd):
+                    log.error(f"Unable to stop the OSD : {target_osd}")
+                    raise Exception("Execution error")
+
+                # Waiting for recovery to post OSD stop
+                method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool)
+                log.debug(
+                    f"PG's are active + clean post OSD stop of {target_osd}, proceeding to start OSD"
+                )
+
+                log.debug(f"Starting OSD : {target_osd} and checking health status")
+                if not rados_obj.change_osd_state(action="start", target=target_osd):
+                    log.error(f"Unable to start the OSD : {target_osd}")
+                    raise Exception("Execution error")
+
+                # Waiting for recovery to post OSD start
+                method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool)
+                log.debug(
+                    f"PG's are active + clean post OSD start of {target_osd}, proceeding to restart next OSD"
+                )
+
+            log.info(
+                "Completed start and stop for all targeted OSDs. Checking cluster health"
+            )
+            # Checking cluster health after the tests
+            method_should_succeed(rados_obj.run_pool_sanity_check)
+            log.info("--- Completed workflows 3. Stopping and starting OSD daemons ---")
+
+            log.info(
+                "---- Starting workflow ----\n---- 4. restart all OSD daemons belonging to single pg----"
+            )
+            for pool in pools:
+                pg_set = rados_obj.get_pg_acting_set(pool_name=pool)
+                log.debug(f"Acting set of OSDs for testing reboot are : {pg_set}")
+                for target_osd in pg_set:
+                    log.debug(
+                        f"Restarting OSD : {target_osd} and checking health status"
+                    )
+                    if not rados_obj.change_osd_state(
+                        action="restart", target=target_osd
+                    ):
+                        log.error(f"Unable to restart the OSD : {target_osd}")
+                        raise Exception("Execution error")
+
+                    # Waiting for recovery to post OSD restart
+                    method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+                    log.debug(
+                        f"PG's are active + clean post OSD restart of {target_osd}, proceeding to restart next OSD"
+                    )
+
+            # Checking cluster health after the tests
             method_should_succeed(rados_obj.run_pool_sanity_check)
             log.info(
-                f"Addition of OSD : {target_osd} back into the cluster was successful, and the health is good!"
+                "--- Completed workflows 4. restart OSD daemons belonging to single pg ---"
             )
 
-            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
-
-        # Adding the mon back to the cluster
-        if not mon_obj.add_mon_service(host=test_mon_host):
-            log.error(f"Could not add mon service on host {test_mon_host}")
-            raise Exception("mon service not added error")
-
-        # Setting the mon service as managed by cephadm
-        if not mon_obj.set_mon_service_managed_type(unmanaged=False):
-            log.error("Could not set the mon service to managed")
-            raise Exception("mon service not managed error")
-
-        # Checking if the mon added is part of Mon Quorum
-        quorum = mon_obj.get_mon_quorum_hosts()
-        if test_mon_host.hostname not in quorum:
-            log.error(
-                f"selected host : {test_mon_host.hostname} does not have mon as part of Quorum post addition "
+            log.info(
+                "---- Starting workflow ----\n---- 5. Removal and addition of OSD daemons"
             )
-            raise Exception("Mon not in quorum error")
-        log.info("---- Completed workflows 5. Removal and addition of OSD daemons ----")
 
-        log.info(
-            "---- Starting workflow ----\n---- 6. Removal and addition of OSD Hosts ----"
-        )
-        service_obj.add_new_hosts()
-        # Waiting for recovery to post OSD addition into cluster
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
-        log.debug("PG's are active + clean post OSD addition")
-        # Checking cluster health after the tests
-        method_should_succeed(rados_obj.run_pool_sanity_check)
-        log.info(
-            "Cluster is healthy post addition of New hosts and osds."
-            " Proceeding to remove one of the added host and it's OSDs"
-        )
+            # Removing a mon daemon and adding it back post OSD addition.
+            mon_obj = MonitorWorkflows(node=cephadm)
+            # Setting the mon service as unmanaged by cephadm
+            if not mon_obj.set_mon_service_managed_type(unmanaged=True):
+                log.error("Could not set the mon service to managed")
+                raise Exception("mon service not managed error")
 
-        # Removing newly added OSD host and checking status
-        service_obj.remove_custom_host(
-            host_node_name=config.get("remove_host", "node13")
-        )
-        # Waiting for recovery to post OSD host remove
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
-        log.debug("PG's are active + clean post OSD removal")
+            init_mon_nodes = ceph_cluster.get_nodes(role="mon")
+            # Selecting one mon host to be removed at random during OSD down
+            test_mon_host = random.choice(init_mon_nodes)
 
-        # Checking cluster health after the tests
-        method_should_succeed(rados_obj.run_pool_sanity_check)
-        log.info("---- Completed workflows 6. Removal and addition of OSD Hosts ----")
+            # Removing mon service
+            if not mon_obj.remove_mon_service(host=test_mon_host.hostname):
+                log.error("Could not remove the new mon added previously")
+                raise Exception("mon service not removed error")
+
+            quorum = mon_obj.get_mon_quorum_hosts()
+            if test_mon_host.hostname in quorum:
+                log.error(
+                    f"selected host : {test_mon_host.hostname} is present as part of Quorum post removal"
+                )
+                raise Exception("Mon in quorum error post removal error")
+
+            for pool in pools:
+                pg_set = rados_obj.get_pg_acting_set(pool_name=pool)
+                log.debug(f"Acting set for removal and addition of OSDs {pg_set}")
+                target_osd = pg_set[0]
+                host = rados_obj.fetch_host_node(
+                    daemon_type="osd", daemon_id=target_osd
+                )
+
+                dev_path = get_device_path(host, target_osd)
+                log.debug(
+                    f"osd device path  : {dev_path}, osd_id : {target_osd}, host.hostname : {host.hostname}"
+                )
+
+                utils.set_osd_devices_unmanaged(
+                    ceph_cluster, target_osd, unmanaged=True
+                )
+                method_should_succeed(utils.set_osd_out, ceph_cluster, target_osd)
+                method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+                utils.osd_remove(ceph_cluster, target_osd)
+                method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+                method_should_succeed(
+                    utils.zap_device, ceph_cluster, host.hostname, dev_path
+                )
+                method_should_succeed(
+                    wait_for_device_rados, host, target_osd, action="remove"
+                )
+
+                # Checking cluster health after OSD removal
+                method_should_succeed(rados_obj.run_pool_sanity_check)
+                log.info(
+                    f"Removal of OSD : {target_osd} is successful. Proceeding to add back the OSD daemon."
+                )
+
+                # Adding the removed OSD back and checking the cluster status
+                utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
+                method_should_succeed(
+                    wait_for_device_rados, host, target_osd, action="add"
+                )
+                time.sleep(10)
+
+                # Checking cluster health after OSD removal
+                method_should_succeed(rados_obj.run_pool_sanity_check)
+                log.info(
+                    f"Addition of OSD : {target_osd} back into the cluster was successful, and the health is good!"
+                )
+
+                utils.set_osd_devices_unmanaged(
+                    ceph_cluster, target_osd, unmanaged=False
+                )
+
+            # Adding the mon back to the cluster
+            if not mon_obj.add_mon_service(host=test_mon_host):
+                log.error(f"Could not add mon service on host {test_mon_host}")
+                raise Exception("mon service not added error")
+
+            # Setting the mon service as managed by cephadm
+            if not mon_obj.set_mon_service_managed_type(unmanaged=False):
+                log.error("Could not set the mon service to managed")
+                raise Exception("mon service not managed error")
+
+            # Checking if the mon added is part of Mon Quorum
+            quorum = mon_obj.get_mon_quorum_hosts()
+            if test_mon_host.hostname not in quorum:
+                log.error(
+                    f"selected host : {test_mon_host.hostname} does not have mon as part of Quorum post addition "
+                )
+                raise Exception("Mon not in quorum error")
+            log.info(
+                "---- Completed workflows 5. Removal and addition of OSD daemons ----"
+            )
+
+            log.info(
+                "---- Starting workflow ----\n---- 6. Removal and addition of OSD Hosts ----"
+            )
+            service_obj.add_new_hosts()
+            # Waiting for recovery to post OSD addition into cluster
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+            log.debug("PG's are active + clean post OSD addition")
+            # Checking cluster health after the tests
+            method_should_succeed(rados_obj.run_pool_sanity_check)
+            log.info(
+                "Cluster is healthy post addition of New hosts and osds."
+                " Proceeding to remove one of the added host and it's OSDs"
+            )
+
+            # Removing newly added OSD host and checking status
+            service_obj.remove_custom_host(
+                host_node_name=config.get("remove_host", "node13")
+            )
+            # Waiting for recovery to post OSD host remove
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+            log.debug("PG's are active + clean post OSD removal")
+
+            # Checking cluster health after the tests
+            method_should_succeed(rados_obj.run_pool_sanity_check)
+            log.info(
+                "---- Completed workflows 6. Removal and addition of OSD Hosts ----"
+            )
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            return 1
+        finally:
+            log.info("*********** Execution of finally block starts ***********")
+            # Delete the created osd pools
+            rados_obj.rados_pool_cleanup()
+            # log cluster health
+            rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         log.info("Completed All the workflows")
         return 0
@@ -350,17 +389,12 @@ def run(ceph_cluster, **kw) -> int:
             log.info("*********** Execution of finally block starts ***********")
             # Flush iptables to reset the rules
             out, _ = installer_node.exec_command(sudo=True, cmd="iptables -F")
+            # Delete the created osd pools
+            rados_obj.rados_pool_cleanup()
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
             if rados_obj.check_crash_status():
                 log.error("Test failed due to crash at the end of test")
                 return 1
-            # log.info(
-            #     f"----- Adding the failed OSD host {osd_hosts[0]} which was removed -------"
-            # )
-            # add_new_hosts(add_nodes=[osd_hosts[0]])
-            # # proceeding to remove the newly added OSD host
-            # log.info("----- Removing the newly added OSD host -------")
-            # remove_custom_host(host_node_name="node13")
         return 0
