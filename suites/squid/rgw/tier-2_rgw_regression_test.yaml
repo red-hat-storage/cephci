@@ -141,13 +141,13 @@ tests:
         config-file-name: test_modify_tenanted_subuser.yaml
 
   - test:
-       name: Swift bulk delete operation
-       desc: Swift bulk delete operation
-       polarion-id: CEPH-9753
-       module: sanity_rgw.py
-       config:
-           script-name: test_swift_bulk_delete.py
-           config-file-name: test_swift_bulk_delete.yaml
+      name: Swift bulk delete operation
+      desc: Swift bulk delete operation
+      polarion-id: CEPH-9753
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_bulk_delete.py
+        config-file-name: test_swift_bulk_delete.yaml
 
   - test:
       name: swift upload large object tests
@@ -591,3 +591,34 @@ tests:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_rate_limit.yaml
       comments: known issue BZ 2301986
+
+  # Checksum and CORS tests
+  - test:
+      name: Test Checksum on all supported algorithms
+      desc: Test Checksum on all supported algorithms
+      polarion-id: CEPH-83591679
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../aws/test_checksum.py
+        config-file-name: ../../aws/configs/test_checksum_api.yaml
+
+  - test:
+      name: Test Checksum which is wrongly computed
+      desc: Test Checksum which is wrongly computed
+      polarion-id: CEPH-83591699
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../aws/test_checksum.py
+        config-file-name: ../../aws/configs/test_wrong_checksum.yaml
+
+  - test:
+      name: Test CORS Feature
+      desc: Test CORS feature
+      polarion-id: CEPH-10355
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../curl/test_cors_using_curl.py
+        config-file-name: ../../curl/configs/test_cors_using_curl.yaml
