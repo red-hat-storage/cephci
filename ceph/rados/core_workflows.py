@@ -2216,13 +2216,13 @@ class RadosOrchestrator:
         cmd = "ceph pg "
         if pool_name:
             cmd += f"ls-by-pool {pool_name}"
-        elif osd:
+        elif osd is not None:
             cmd += f"ls-by-osd {osd}"
             cmd = f"{cmd} {pool_id}" if pool_id else cmd
-        elif osd_primary:
+        elif osd_primary is not None:
             cmd += f"ls-by-primary {osd_primary}"
             cmd = f"{cmd} {pool_id}" if pool_id else cmd
-        elif pool_id:
+        elif pool_id is not None:
             cmd += f"ls {pool_id}"
         else:
             log.info("No argument was provided.")
@@ -4566,9 +4566,10 @@ EOF"""
         if crash_list:
             log.error("!!!ERROR: Crash exists in the cluster \n\n:" f"{crash_list}")
             log.info("Logging crash info for each crash")
-            for crash_id in crash_list:
-                crash_info, _ = self.run_ceph_command(
-                    f"ceph crash info {crash_id}", client_exec=True
+            for entry in crash_list:
+                log.info(f"crash ID: {entry['crash_id']}")
+                crash_info = self.run_ceph_command(
+                    f"ceph crash info {entry['crash_id']}", client_exec=True
                 )
                 log.info(crash_info)
 

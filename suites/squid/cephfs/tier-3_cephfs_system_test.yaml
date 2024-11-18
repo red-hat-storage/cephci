@@ -1,0 +1,253 @@
+#===============================================================================================
+# Cluster Configuration:
+#    conf/squid/cephfs/tier-3_cephfs_system_test.yaml
+#===============================================================================================
+---
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow with label placement."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: CEPH-83573777
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: rhel94client1
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+        node: rhel94client2
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+        node: rhel94client3
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+        node: rhel94client4
+      desc: "Configure the Cephfs client system 4"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.5
+        install_packages:
+          - ceph-common
+        node: rhel94client5
+      desc: "Configure the Cephfs client system 5"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.6
+        install_packages:
+          - ceph-common
+        node: rhel94client6
+      desc: "Configure the Cephfs client system 6"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.7
+        install_packages:
+          - ceph-common
+        node: rhel94client7
+      desc: "Configure the Cephfs client system 7"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.8
+        install_packages:
+          - ceph-common
+        node: rhel94client8
+      desc: "Configure the Cephfs client system 8"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.9
+        install_packages:
+          - ceph-common
+        node: rhel94client9
+      desc: "Configure the Cephfs client system 9"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.10
+        install_packages:
+          - ceph-common
+        node: rhel994client10
+      desc: "Configure the Cephfs client system 10"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: cephfs_system.cephfs_systest_setup.py
+      name: "setup system test configuration"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Enable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-enable-logs
+      config:
+       ENABLE_LOGS : 1
+       daemon_list : ['mds','client','osd','mgr','mon']
+       daemon_dbg_level : {'mds':20,'client':20,'osd':10,'mgr':10,'mon':10}
+  - test:
+      name: CephFS_System_test
+      module: test_parallel.py
+      parallel:
+        -
+          test:
+            abort-on-fail: false
+            desc: Run Client IO workflows
+            module: cephfs_system.cephfs_systest_client_io.py
+            name: "CephFS System Test Client IO"
+        -
+          test:
+            abort-on-fail: true
+            desc: System monitor
+            module: cephfs_system.cephfs_systest_monitor.py
+            name: "CephFS System monitor"
+      desc: Running all System test workflows in parallel
+      abort-on-fail: false
+  -
+    test:
+      abort-on-fail: false
+      desc: Run Client IO workflow 7
+      module: cephfs_system.cephfs_systest_client_io.py
+      name: "CephFS System Test Client IO 7"
+      config:
+       test_name : io_test_workflow_7
+  -
+    test:
+      abort-on-fail: false
+      desc: "Disable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-disable-logs
+      config:
+       DISABLE_LOGS : 1
+       daemon_list : ['mds','client','osd','mgr','mon']

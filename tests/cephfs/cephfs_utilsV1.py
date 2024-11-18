@@ -25,6 +25,7 @@ import paramiko
 from ceph.ceph import CommandFailed, SSHConnectionManager
 from ceph.parallel import parallel
 from ceph.utils import check_ceph_healthly
+from cli.cephadm.cephadm import CephAdm
 from mita.v2 import get_openstack_driver
 from utility.log import Log
 from utility.retry import retry
@@ -69,7 +70,20 @@ class FsUtils(object):
         self.osds = ceph_cluster.get_ceph_objects("osd")
         self.mdss = ceph_cluster.get_ceph_objects("mds")
         self.clients = ceph_cluster.get_ceph_objects("client")
+        self.installer = ceph_cluster.get_nodes(role="installer")[0]
         self.test_data = kwargs.get("test_data")
+        enable_log = (
+            FsUtils.get_custom_config_value(self.test_data, "enable_log")
+            if self.test_data
+            else False
+        )
+        if enable_log:
+            if isinstance(enable_log, dict):
+                self.enable_logs(client=self.clients[0], daemons_value=enable_log)
+            else:
+                self.enable_logs(
+                    client=self.clients[0]
+                )  # daemons_value will use the default value
 
     def prepare_clients(self, clients, build):
         """
@@ -1343,14 +1357,57 @@ class FsUtils(object):
         raise ValueError(f"Cannot convert {value} to bool")
 
     @staticmethod
+    def parse_value(value):
+        """
+        Parse the value to return it in the appropriate format.
+
+        Args:
+            value (str): The string value to parse.
+
+        Returns:
+            bool, dict, list, str: The parsed value, which could be a boolean,
+                                   a dictionary, a list, or a single string.
+        """
+        # Check if the value should be treated as a boolean
+        try:
+            return FsUtils.str_to_bool(value)
+        except ValueError:
+            pass
+
+        # Check if the value can be parsed as a dictionary
+        if value.startswith("{") and value.endswith("}"):
+            try:
+                # Attempt to convert the string to a dictionary
+                return eval(value)
+            except (SyntaxError, ValueError):
+                raise ValueError(f"Cannot convert {value} to dict")
+
+        # Check if the value is a comma-separated list
+        if "," in value:
+            return [item.strip() for item in value.split(",")]
+
+        # Return as a single string if none of the above
+        return value
+
+    @staticmethod
     def get_custom_config_value(test_data, key_name):
+        """
+        Retrieve the custom configuration value based on the specified key name.
+
+        Args:
+            test_data (dict): The test data containing configuration.
+            key_name (str): The key to look for in the configuration.
+
+        Returns:
+            bool, dict, list, str: The configuration value in the required format.
+        """
         if "custom-config" in test_data and isinstance(
             test_data["custom-config"], list
         ):
             for config in test_data["custom-config"]:
                 key, value = config.split("=")
                 if key == key_name:
-                    return FsUtils.str_to_bool(value.lower())
+                    return FsUtils.parse_value(value.strip())
         return False
 
     def create_fs(self, client, vol_name, validate=True, **kwargs):
@@ -3874,37 +3931,27 @@ os.system('sudo systemctl start  network')
                             example : {'mds':5,'mgr':5}
         Returns: 0 if completed succesfully, else 1.
         """
-
+        cephadm = CephAdm(self.installer)
+        cephadm.ceph.config.set(key="log_to_file", value="true", daemon="global")
+        cephadm.ceph.config.set(key="debug_mds", value="5", daemon="mds")
         for k in daemons_value.keys():
-            client.exec_command(
-                sudo=True,
-                cmd=f"ceph config set {k} log_to_file true",
-            )
+            cephadm.ceph.config.set(key="log_to_file", value="true", daemon=k)
         for k, v in daemons_value.items():
-            client.exec_command(
-                sudo=True,
-                cmd=f"ceph config set {k} debug_{k} {v};",
-            )
+            cephadm.ceph.config.set(key=f"debug_{k}", value=v, daemon=k)
             if k == "mds":
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"ceph config set {k} debug_ms 1;",
-                )
+                cephadm.ceph.config.set(key="debug_ms", value=1, daemon=k)
+
         if validate:
             for k, v in daemons_value.items():
-                out, rc = client.exec_command(
-                    sudo=True,
-                    cmd=f"ceph config get {k} log_to_file",
-                )
-                if "true" not in out:
-                    log.error("Unable to set the debug logs : {out}")
+                out = cephadm.ceph.config.get(key="log_to_file", who=k)
+                actual_value = out[0].strip() if isinstance(out, tuple) else out.strip()
+                if "true" not in actual_value:
+                    log.error(f"Unable to set the debug logs : {out}")
                     return 1
-                out, rc = client.exec_command(
-                    sudo=True,
-                    cmd=f"ceph config get {k} debug_{k}",
-                )
-                if str(v) not in out:
-                    log.error("Unable to set the debug logs : {out}")
+                out = cephadm.ceph.config.get(key=f"debug_{k}", who=k)
+                actual_value = out[0].strip() if isinstance(out, tuple) else out.strip()
+                if str(v) not in actual_value:
+                    log.error(f"Unable to set the debug logs : {actual_value}")
                     return 1
         return 0
 

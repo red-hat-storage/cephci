@@ -105,14 +105,6 @@ tests:
           mgr: "allow *"
 
   - test:
-      name: Enable logging to file
-      module: rados_prep.py
-      config:
-        log_to_file: true
-      desc: Change config options to enable logging to file
-
-
-  - test:
       name: OMAP feature
       desc: Testing omap features
       module: test_scrub_omap.py
