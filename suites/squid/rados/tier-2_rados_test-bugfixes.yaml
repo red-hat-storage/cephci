@@ -204,3 +204,10 @@ tests:
       module: test_v1client.py
       polarion-id: CEPH-83594645
       desc: Ensure client connection over v1 port does not crash
+
+  - test:
+      name: Connection score test
+      desc: Verification of mon connection scores in different scenarios 
+      module: test_mon_connection_scores.py
+      polarion-id: CEPH-83602911
+      comments: Active bug 2151501
