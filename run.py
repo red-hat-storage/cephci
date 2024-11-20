@@ -870,17 +870,17 @@ def run(args):
             # Check for Log object
             _objects, _object = vars(test_mod), None
             for k in _objects.keys():
-                if type(_objects.get(k)) is Log:
+                if k == "test_errors":
                     _object = _objects.get(k)
                     break
 
             if rc != 0:
                 # Check if err_type is set for exception
-                if _object and not (tc.get("err_type") == "exception"):
+                if _object and tc.get("err_type") != "exception":
                     tc["err_type"], tc["err_msg"] = "error", ""
 
                     # Get error messages
-                    tc["err_msg"] = "\n".join(map(str, _object._log_errors))
+                    tc["err_msg"] = "\n".join(map(str, _object))
 
                 break
 
@@ -889,8 +889,7 @@ def run(args):
         tc["duration"] = elapsed
 
         # Reset errors list
-        if _object:
-            _object._log_errors = []
+        _object = None
 
         if rc == 0:
             tc["status"] = "Pass"
