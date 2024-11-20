@@ -4472,37 +4472,25 @@ EOF"""
                     mgr_node_list.append(host_name)
         return mgr_node_list
 
-    def get_active_osd_list(self) -> list:
+    def get_osd_list(self, status: str) -> list:
         """
-        Method to fetch list of OSDs which are UP and IN
+        Method to fetch list of OSDs which are in input state
+        Args:
+            status: state of OSD [UP | IN | DOWN | OUT | DESTROYED]
         Returns:
-            List of active OSDs
+            o/p of "ceph osd tree <status>"
         """
-        down_osd_list = out_osd_list = []
-        total_list = self.run_ceph_command(cmd="ceph osd ls")
-        log.info(f"ceph osd ls output: {total_list}")
-
-        # prepare list of OSDs which are down
-        down_osd_tree = self.run_ceph_command(cmd="ceph osd tree down")
-        if down_osd_tree["nodes"]:
-            for entry in down_osd_tree["nodes"]:
+        osd_dict = {"up": [], "down": [], "in": [], "out": [], "destroyed": []}
+        # prepare separate OSD lists
+        osd_tree = self.run_ceph_command(cmd="ceph osd tree")
+        if osd_tree["nodes"]:
+            for entry in osd_tree["nodes"]:
                 if entry["type"] == "osd":
-                    down_osd_list.append(entry["id"])
-        log.info(f"List of down OSDs: {down_osd_list}")
+                    osd_dict[entry["status"]].append(entry["id"])
+        for key in osd_dict:
+            log.info(f"List of {key} OSDs: {osd_dict[key]}")
 
-        # prepare list of OSDs which are out
-        out_osd_tree = self.run_ceph_command(cmd="ceph osd tree out")
-        if out_osd_tree["nodes"]:
-            for entry in out_osd_tree["nodes"]:
-                if entry["type"] == "osd":
-                    out_osd_list.append(entry["id"])
-        log.info(f"List of out OSDs: {out_osd_list}")
-
-        exclude_list = list(set(down_osd_list + out_osd_list))
-        if exclude_list:
-            [total_list.remove(i) for i in exclude_list]
-
-        return total_list
+        return osd_dict[status]
 
     def get_osd_details(self, osd_id: int):
         """

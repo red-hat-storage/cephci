@@ -45,7 +45,7 @@ def run(ceph_cluster, **kw):
 
     replicated_config = config.get("replicated_pool")
     pool_name = replicated_config["pool_name"]
-    active_osd_list = rados_obj.get_active_osd_list()
+    active_osd_list = rados_obj.get_osd_list(status="up")
     log.info(f"The active OSDs list before starting the test-{active_osd_list}")
     if not rados_obj.create_pool(pool_name=pool_name):
         log.error("Failed to create the  Pool")
@@ -194,7 +194,7 @@ def run(ceph_cluster, **kw):
             return 1
 
         if bug_exists:
-            active_osd_list = rados_obj.get_active_osd_list()
+            active_osd_list = rados_obj.get_osd_list(status="up")
             log.info(
                 f"The active OSDs list after reproducing the issue is-{active_osd_list}"
             )

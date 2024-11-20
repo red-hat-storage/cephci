@@ -33,8 +33,7 @@ def run(ceph_cluster, **kw):
 
     try:
         # 1. Crash an OSD daemon and inject crash manually
-        out, _ = cephadm.shell(args=["ceph osd ls"])
-        osd_list = out.strip().split("\n")
+        osd_list = rados_obj.get_osd_list(status="up")
         log.debug(f"List of OSDs: {osd_list}")
         osd_id = random.choice(osd_list)
         log.debug(f"Chosen OSD to crash: OSD.{osd_id}")
