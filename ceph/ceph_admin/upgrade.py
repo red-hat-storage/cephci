@@ -2,15 +2,14 @@
 
 from datetime import datetime, timedelta
 from json import loads
+from logging import getLogger
 from time import sleep
 from typing import Dict
-
-from utility.log import Log
 
 from .common import config_dict_to_string
 from .typing_ import OrchProtocol
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 class UpgradeFailure(Exception):

@@ -1,6 +1,9 @@
+# -*- code: utf-8 -*-
+
+from logging import getLogger
+
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
-from utility.log import Log
 
 from .daemon import Daemon
 from .device import Device
@@ -10,7 +13,7 @@ from .osd import Osd
 from .tuned_profile import TunedProfile
 from .upgrade import Upgrade
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class OrchApplyCommandError(Exception):

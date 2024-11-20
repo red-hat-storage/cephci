@@ -4,6 +4,7 @@ import re
 import socket
 from copy import deepcopy
 from datetime import datetime, timedelta
+from logging import getLogger
 from time import sleep
 from typing import Any, Dict, List, Optional
 
@@ -17,12 +18,11 @@ from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_vpc import VpcV1  # noqa
 from requests.exceptions import ReadTimeout
 
-from utility.log import Log
 from utility.retry import retry
 
 from .exceptions import NodeDeleteFailure, NodeError, ResourceNotFound
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 def get_ibm_service(access_key: str, service_url: str):

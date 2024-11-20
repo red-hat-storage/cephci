@@ -1,11 +1,11 @@
+from logging import getLogger
 from socket import socket
 
 from paramiko.ssh_exception import SSHException
 
 from ceph.ceph import CephNode, SocketTimeoutException, SSHConnectionManager
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def setup_windows_clients(windows_clients):

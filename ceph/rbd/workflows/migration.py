@@ -1,9 +1,11 @@
+# -*- code: utf-8 -*-
+
 import json
+from logging import getLogger
 
 from cli.rbd.rbd import Rbd
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def verify_migration_state(action, image_spec, **kw):

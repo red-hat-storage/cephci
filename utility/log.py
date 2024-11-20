@@ -6,7 +6,6 @@ import os
 import random
 import string
 
-
 FILE_SERVER = "http://magna002.ceph.redhat.com"
 LOG_URL = f"{FILE_SERVER}/cephci-jenkins/"
 LOG_FORMAT = (

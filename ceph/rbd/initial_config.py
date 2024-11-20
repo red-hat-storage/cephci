@@ -1,11 +1,14 @@
+# -*- code: utf-8 -*-
+
+from logging import getLogger
+
 from ceph.rbd.utils import getdict, random_string
 from ceph.rbd.workflows.rbd import create_pools_and_images
 from ceph.rbd.workflows.rbd_mirror import config_mirror_multi_pool
 from ceph.utils import get_node_by_id
 from cli.rbd.rbd import Rbd
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def update_config(**kw):

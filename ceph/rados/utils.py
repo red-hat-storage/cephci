@@ -7,13 +7,13 @@
 """
 
 from json import loads
+from logging import getLogger
 
 from ceph.ceph_admin.daemon import Daemon
 from ceph.ceph_admin.device import Device
 from ceph.ceph_admin.osd import OSD
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged):

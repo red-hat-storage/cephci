@@ -1,4 +1,9 @@
+#! /usr/bin/env python3
+
+# -*- code: utf-8 -*-
+
 from datetime import datetime, timezone
+from logging import getLogger
 
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs, get_database_credentials
@@ -7,10 +12,9 @@ from utils.utility import set_logging_env
 from cli.cloudproviders import CloudProvider
 from cli.exceptions import ConfigError
 from cli.reports.database import Database
-from utility.log import Log
 
 # Set logging env
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 # Table names corresponding to different usecases
 HARDWARE_MONITORING_TABLE = "hardware_monitoring"

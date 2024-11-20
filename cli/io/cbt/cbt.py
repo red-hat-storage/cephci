@@ -1,12 +1,12 @@
 import copy
+from logging import getLogger
 
 import yaml
 
 from cli import Cli
-from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class CbtError(Exception):

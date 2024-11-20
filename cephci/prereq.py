@@ -1,5 +1,10 @@
+#! /usr/bin/env python3
+
+# -*- code: utf-8 -*-
+
 import pickle
 import re
+from logging import getLogger
 
 from docopt import docopt
 
@@ -31,9 +36,8 @@ from cli.utilities.packages import SubscriptionManager as sm
 from cli.utilities.packages import SubscriptionManagerError
 from cli.utilities.utils import os_major_version
 from cli.utilities.waiter import WaitUntil
-from utility.log import Log
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 CEPHADM_ANSIBLE = "cephadm-ansible"
 

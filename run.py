@@ -3,6 +3,7 @@
 import datetime
 import importlib
 import json
+import logging
 import os
 import pickle
 import re
@@ -18,6 +19,7 @@ from docopt import docopt
 from libcloud.common.types import LibcloudError
 
 import init_suite
+import utility.log as log_utils
 from ceph.ceph import Ceph, CephNode
 from ceph.clients import WinNode
 from ceph.utils import (
@@ -34,7 +36,6 @@ from cli.performance.memory_and_cpu_utils import (
     upload_mem_and_cpu_logger_script,
 )
 from utility import sosreport
-from utility.log import Log
 from utility.polarion import post_to_polarion
 from utility.retry import retry
 from utility.utils import (  # ReportPortal,
@@ -159,7 +160,7 @@ Options:
   --disable-console-log             To stopping logging to console
                                     [default: false]
 """
-log = Log()
+log = logging.getLogger(__name__)
 test_names = []
 run_summary = {}
 
@@ -397,10 +398,11 @@ def run(args):
 
     run_dir = create_run_dir(run_id, log_directory)
 
-    log.configure_logger("startup", run_dir, disable_console_log)
+    log_utils.log_configure_defaults(console=disable_console_log)
+    log_utils.log_add_file_handler(__name__, run_dir, "startup")
 
     if console_log_level:
-        log.logger.setLevel(console_log_level.upper())
+        log.setLevel(console_log_level.upper())
 
     run_start_time = datetime.datetime.now()
     trigger_user = getuser()

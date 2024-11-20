@@ -1,12 +1,14 @@
+# -*- code: utf-8 -*-
+
 from json import loads
+from logging import getLogger
 
 from cli.cephadm.ansible import Ansible
 from cli.exceptions import AnsiblePlaybookExecutionError, OperationFailedError
 from cli.utilities.containers import Container
 from cli.utilities.packages import Package
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 CEPHADM_PREFLIGHT_PLAYBOOK = "cephadm-preflight.yml"
 ETC_HOSTS = "/etc/hosts"

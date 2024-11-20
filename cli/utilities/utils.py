@@ -5,6 +5,7 @@ import string
 import tempfile
 from datetime import datetime
 from json import loads
+from logging import getLogger
 from subprocess import PIPE, Popen
 from threading import Thread
 from time import sleep
@@ -14,9 +15,8 @@ import yaml
 from ceph.waiter import WaitUntil
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.containers import Container
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 SSH_COPYID = "ssh-copy-id -f -i {} {}@{}"
 

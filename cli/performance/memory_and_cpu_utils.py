@@ -1,10 +1,10 @@
 import os
+from logging import getLogger
 from threading import Thread
 
 from cli.utilities.configs import get_cephci_config
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 SCRIPT = "memory_and_cpu_logger.py"

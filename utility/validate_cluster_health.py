@@ -1,4 +1,8 @@
+#! /usr/bin/env python3
+# -*- code: utf-8 -*-
+
 import json
+import logging
 import pickle
 
 import paramiko
@@ -6,10 +10,9 @@ import yaml
 from docopt import docopt
 
 from ceph.ceph import CommandFailed
-from utility.log import Log
 from utility.retry import retry
 
-LOG = Log(__name__)
+LOG = logging.getLogger(__name__)
 
 
 doc = """

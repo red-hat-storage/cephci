@@ -1,10 +1,9 @@
+# -*- code: utf-8 -*-
+
 import json
 
 from ceph.ceph_admin.common import config_dict_to_string
 from cli import Cli
-from utility.log import Log
-
-LOG = Log(__name__)
 
 
 class NVMeCLI(Cli):

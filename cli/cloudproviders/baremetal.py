@@ -1,11 +1,13 @@
+# -*- code: utf-8 -*-
+
 import json
 import socket
+from logging import getLogger
 
 from cli.connectible.remote import Remote
 from cli.exceptions import CloudProviderError, ConfigError, UnexpectedStateError
-from utility.log import Log
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 class Baremetal:

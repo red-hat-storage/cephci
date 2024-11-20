@@ -1,16 +1,20 @@
+#! /usr/bin/env python3
+
+# -*- code: utf-8 -*-
+
 import datetime
 import os
 import sys
 import xml.etree.ElementTree as ET
+from logging import getLogger
 
 from docopt import docopt
 from utils.configs import get_configs, get_reports
 from utils.utility import set_logging_env
 
 from cli.exceptions import NotSupportedError
-from utility.log import Log
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 DEFAULT_PROJECT = "CEPH"
 DEFAULT_QUERY = "NOT HAS_VALUE:resolution AND type:testcase AND NOT status:inactive AND caseautomation.KEY:automated"

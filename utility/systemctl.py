@@ -1,9 +1,11 @@
+# -*- code: utf-8 -*-
+
+import logging
 from json import loads
 
 from cli.utilities.utils import config_dict_to_string
-from utility.log import Log
 
-LOG = Log(__name__)
+LOG = logging.getLogger(__name__)
 
 
 class SystemCtl:

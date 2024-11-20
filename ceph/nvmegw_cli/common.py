@@ -5,15 +5,15 @@
 """
 
 from json import loads
+from logging import getLogger
 
 from ceph.ceph_admin.common import config_dict_to_string
 from cli.utilities.configs import get_registry_details
 from cli.utilities.containers import Registry
-from utility.log import Log
 
 from . import NVMeGWCLI
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 def find_client_daemon_id(node, port=5500):

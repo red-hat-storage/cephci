@@ -6,12 +6,12 @@ Provide the interfaces to ceph orch and in turn manage the orchestration engine.
 
 from datetime import datetime, timedelta
 from json import loads
+from logging import getLogger
 from time import sleep
 
 from dateutil import parser
 
 from ceph.ceph import ResourceNotFoundError
-from utility.log import Log
 
 from .ceph import CephCLI
 from .common import config_dict_to_string
@@ -28,7 +28,7 @@ from .start import StartMixin
 from .stop import StopMixin
 from .upgrade import UpgradeMixin
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 class Orch(

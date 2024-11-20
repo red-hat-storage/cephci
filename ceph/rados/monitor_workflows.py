@@ -4,12 +4,12 @@ Module to perform Serviceability scenarios on mon daemons
 
 import datetime
 import time
+from logging import getLogger
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def count(func):

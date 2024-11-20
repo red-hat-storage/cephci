@@ -1,3 +1,5 @@
+# -*- code: utf-8 -*-
+
 import logging
 import os
 from subprocess import call

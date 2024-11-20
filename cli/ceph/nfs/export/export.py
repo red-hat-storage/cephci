@@ -1,7 +1,10 @@
-from cli import Cli
-from utility.log import Log
+# -*- code: utf-8 -*-
 
-log = Log(__name__)
+from logging import getLogger
+
+from cli import Cli
+
+log = getLogger(__name__)
 
 
 class Export(Cli):

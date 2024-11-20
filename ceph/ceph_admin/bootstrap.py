@@ -3,11 +3,11 @@
 import json
 import tempfile
 from distutils.version import LooseVersion
+from logging import getLogger
 from typing import Dict
 
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
 from ceph.utils import get_node_by_id, get_public_network, setup_repos
-from utility.log import Log
 from utility.utils import fetch_build_artifacts, get_cephci_config
 
 from ..ceph import ResourceNotFoundError
@@ -15,7 +15,7 @@ from .common import config_dict_to_string
 from .helper import GenerateServiceSpec, create_ceph_config_file, validate_spec_services
 from .typing_ import CephAdmProtocol
 
-logger = Log(__name__)
+logger = getLogger(__name__)
 
 __DEFAULT_CEPH_DIR = "/etc/ceph"
 __DEFAULT_CONF_PATH = "/etc/ceph/ceph.conf"

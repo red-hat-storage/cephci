@@ -1,5 +1,8 @@
+# -*- code: utf-8 -*-
+
 import json
 from importlib import import_module
+from logging import getLogger
 
 from ceph.parallel import parallel
 from ceph.rbd.utils import get_md5sum_rbd_image, random_string
@@ -7,9 +10,8 @@ from ceph.rbd.workflows.snap_scheduling import (
     run_io_verify_snap_schedule_single_image,
     verify_snapshot_schedule,
 )
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def snap_list(**kw):

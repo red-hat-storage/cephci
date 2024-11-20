@@ -1,11 +1,11 @@
 import json
+from logging import getLogger
 
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.exceptions import UnexpectedStateError
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def wait_for_cluster_health(node, status, timeout=300, interval=20):

@@ -2,17 +2,17 @@
 
 import json
 from copy import deepcopy
+from logging import getLogger
 
 from ceph.ceph import CephNode
 from ceph.utils import get_node_by_id
-from utility.log import Log
 
 from .common import config_dict_to_string
 from .helper import monitoring_file_existence
 from .maintenance import MaintenanceMixin
 from .orch import Orch, ResourceNotFoundError
 
-logger = Log(__name__)
+logger = getLogger(__name__)
 DEFAULT_KEYRING_PATH = "/etc/ceph/ceph.client.admin.keyring"
 DEFAULT_CEPH_CONF_PATH = "/etc/ceph/ceph.conf"
 

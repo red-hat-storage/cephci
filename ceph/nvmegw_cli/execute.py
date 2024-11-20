@@ -1,7 +1,9 @@
-from ceph.ceph_admin.common import config_dict_to_string
-from utility.log import Log
+# -*- code: utf-8 -*-
+from logging import getLogger
 
-LOG = Log(__name__)
+from ceph.ceph_admin.common import config_dict_to_string
+
+LOG = getLogger(__name__)
 
 DISCARD_OUTPUT_STR = (
     "Enable server auth since both --client-key and --client-cert are provided"

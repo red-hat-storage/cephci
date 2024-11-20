@@ -1,13 +1,14 @@
+# -*- code: utf-8 -*-
 import random
 from copy import deepcopy
+from logging import getLogger
 from time import sleep
 
 from ceph.rbd.utils import check_data_integrity, copy_file, random_string
 from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
 from ceph.rbd.workflows.rbd import create_snap_and_clone
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 IO_CONFIG = {
     "rbd": None,

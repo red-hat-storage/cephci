@@ -1,12 +1,13 @@
+# -*- code: utf-8 -*-
+
 import datetime
 import json
 import random
 import time
 import traceback
+from logging import getLogger
 
-from utility.log import Log
-
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class RadosHelper:

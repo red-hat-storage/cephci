@@ -11,14 +11,13 @@ Example:
 This module is inherited where orchestrator operations are paused using pause command.
 """
 
+from logging import getLogger
 from typing import Dict
-
-from utility.log import Log
 
 from .common import config_dict_to_string
 from .typing_ import ServiceProtocol
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 class PauseFailure(Exception):

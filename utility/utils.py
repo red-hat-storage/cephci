@@ -1,6 +1,7 @@
 import datetime
 import getpass
 import json
+import logging
 import os
 import random
 import re
@@ -26,9 +27,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
 from reportportal_client import ReportPortalService
 
-from utility.log import Log
-
-log = Log(__name__)
+log = logging.getLogger(__name__)
 
 # variables
 mounting_dir = "/mnt/cephfs/"

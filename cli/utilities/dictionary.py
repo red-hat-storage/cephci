@@ -1,6 +1,6 @@
-from utility.log import Log
+from logging import getLogger
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 # Fetches all the items in a dictionary whole value is also a dictionary

@@ -1,7 +1,10 @@
-from cli.rbd.rbd import Rbd
-from utility.log import Log
+# -*- code: utf-8 -*-
 
-log = Log(__name__)
+from logging import getLogger
+
+from cli.rbd.rbd import Rbd
+
+log = getLogger(__name__)
 
 
 def create_namespace_and_verify(**kw):

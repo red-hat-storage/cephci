@@ -1,5 +1,6 @@
 """Retrieve and process CephCI suites."""
 
+import logging
 import os
 from copy import deepcopy
 from glob import glob
@@ -7,9 +8,7 @@ from typing import List
 
 import yaml
 
-from utility.log import Log
-
-log = Log(__name__)
+log = logging.getLogger(__name__)
 
 
 def merge_dicts(dict1, dict2):

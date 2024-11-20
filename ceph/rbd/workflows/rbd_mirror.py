@@ -1,15 +1,17 @@
+# -*- code: utf-8 -*-
+
 import ast
 import datetime
 import json
 import time
 from copy import deepcopy
+from logging import getLogger
 
 from ceph.parallel import parallel
 from ceph.rbd.utils import copy_file, exec_cmd, getdict, value
 from ceph.rbd.workflows.snap_scheduling import add_snapshot_scheduling
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 # Get Position

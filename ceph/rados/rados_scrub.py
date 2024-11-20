@@ -23,11 +23,11 @@
 import datetime
 import json
 from collections import defaultdict
+from logging import getLogger
 
 from ceph.rados.core_workflows import RadosOrchestrator
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class RadosScrubber(RadosOrchestrator):

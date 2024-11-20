@@ -1,11 +1,13 @@
+# -*- code: utf-8 -*-
+
 import os
+from logging import getLogger
 
 import yaml
 
 from cli.exceptions import ConfigError
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 DEFAULT_CONFIG_PATH = os.path.join(os.path.expanduser("~"), ".cephci.yaml")
 CONFIG = None

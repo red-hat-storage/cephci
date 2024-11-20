@@ -1,13 +1,13 @@
 """Collects the Baremetal information and creates the cephNode object."""
 
 from copy import deepcopy
+from logging import getLogger
 from os.path import expanduser
 from typing import List, Optional
 
 from ceph.ceph import SSHConnectionManager
-from utility.log import Log
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 class CephBaremetalNode:

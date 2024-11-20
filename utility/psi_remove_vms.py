@@ -1,3 +1,5 @@
+# -*- code: utf-8 -*-
+
 """
     Utility to cleanup instances in RHOS-D environment that have crossed the maximum
     allowed duration and instances that are in error status. There are multiple

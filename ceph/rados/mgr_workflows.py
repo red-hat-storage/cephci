@@ -4,13 +4,13 @@ Module to perform Serviceability scenarios on mgr daemons
 
 import datetime
 import time
+from logging import getLogger
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class MgrWorkflows:

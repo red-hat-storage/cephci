@@ -1,3 +1,9 @@
+#! /usr/bin/env python3
+
+# -*- code: utf-8 -*-
+
+from logging import getLogger
+
 from cluster_conf import collect_conf, write_output
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs
@@ -8,10 +14,9 @@ from cli.cluster.node import Node
 from cli.cluster.volume import Volume
 from cli.exceptions import ConfigError
 from cli.utilities.utils import load_config
-from utility.log import Log
 
 # Set logging env
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 # Set default configs
 DEFAULT_VMSIZE = "ci.standard.medium"

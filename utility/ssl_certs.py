@@ -1,6 +1,8 @@
+# -*- code: utf-8 -*-
 """SSL Cert generation module."""
 
 import ipaddress
+import logging
 from datetime import datetime, timedelta
 
 from cryptography.hazmat.backends import default_backend
@@ -20,9 +22,7 @@ from cryptography.x509 import (
     random_serial_number,
 )
 
-from utility.log import Log
-
-LOG = Log(__name__)
+LOG = logging.getLogger(__name__)
 
 
 class CertificateGenerator:

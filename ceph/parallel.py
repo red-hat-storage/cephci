@@ -1,4 +1,5 @@
 # -*- code: utf-8 -*-
+
 """
 This module provides a context manager for running methods concurrently.
 
@@ -43,6 +44,7 @@ At the end of the with block, the main thread waits until all
 spawned functions have completed, or, if one exited with an exception,
 kills the rest and raises the exception.
 """
+
 import logging
 from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 

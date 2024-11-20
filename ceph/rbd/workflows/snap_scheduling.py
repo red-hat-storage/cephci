@@ -1,12 +1,14 @@
+# -*- code: utf-8 -*-
+
 import json
 import time
 from copy import deepcopy
+from logging import getLogger
 
 from ceph.rbd.utils import getdict
 from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def add_snapshot_scheduling(rbd, **kw):

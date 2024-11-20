@@ -1,8 +1,11 @@
+# -*- code: utf-8 -*-
+
+from logging import getLogger
+
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class Osd(Cli):

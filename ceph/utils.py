@@ -1,3 +1,5 @@
+# -*- code: utf-8 -*-
+
 import datetime
 import json
 import os
@@ -5,6 +7,7 @@ import re
 import time
 import traceback
 from json import loads
+from logging import getLogger
 from time import mktime, sleep
 
 import requests
@@ -18,14 +21,13 @@ from cli.utilities.configure import add_centos_epel_repo
 from compute.baremetal import CephBaremetalNode
 from compute.ibm_vpc import CephVMNodeIBM, get_ibm_service
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
-from utility.log import Log
 from utility.retry import retry
 from utility.utils import generate_node_name
 
 from .ceph import Ceph, CommandFailed, RolesContainer
 from .parallel import parallel
 
-log = Log(__name__)
+log = getLogger(__name__)
 RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
 DEFAULT_OSBS_SERVER = "http://file.corp.redhat.com/~kdreyer/osbs/"
 

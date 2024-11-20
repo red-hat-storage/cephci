@@ -3,13 +3,12 @@
 import json
 import tempfile
 from json import loads
+from logging import getLogger
 from time import sleep
 
 import requests
 
-from utility.log import Log
-
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 class DaemonFailure(Exception):

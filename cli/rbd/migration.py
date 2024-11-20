@@ -1,9 +1,9 @@
 import json
+from logging import getLogger
 
 from cli import Cli
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class Migration(Cli):

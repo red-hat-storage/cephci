@@ -1,10 +1,12 @@
+# -*- code: utf-8 -*-
+
 import json
+from logging import getLogger
 from time import sleep
 
 from ceph.rbd.utils import exec_cmd, getdict
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def cleanup(pool_types, multi_cluster_obj, **kw):

@@ -15,12 +15,12 @@ import math
 import re
 import time
 from collections import namedtuple
+from logging import getLogger
 
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class RadosOrchestrator:

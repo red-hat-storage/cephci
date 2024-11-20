@@ -1,13 +1,13 @@
 import socket
+from logging import getLogger
 
 from libcloud.compute.providers import get_driver
 from libcloud.compute.types import Provider
 
 from cli.exceptions import CloudProviderError, ConfigError, UnexpectedStateError
 from cli.utilities.waiter import WaitUntil
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 TIMEOUT = 280
 API_VERSION = "2.2"

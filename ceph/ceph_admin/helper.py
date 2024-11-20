@@ -7,6 +7,7 @@ import os
 import tempfile
 from datetime import datetime, timedelta
 from distutils.version import LooseVersion
+from logging import getLogger
 from os.path import dirname
 from time import sleep
 from typing import Optional
@@ -16,11 +17,10 @@ from jinja2 import Template
 
 from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids
-from utility.log import Log
 from utility.ssl_certs import CertificateGenerator
 from utility.utils import generate_self_signed_certificate
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 class UnknownSpecFound(Exception):

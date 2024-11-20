@@ -1,15 +1,15 @@
 """CephADM orchestration Device operations."""
 
+from logging import getLogger
 from time import sleep
 from typing import Dict, Optional, Tuple
 
 from ceph.utils import get_node_by_id
-from utility.log import Log
 
 from .common import config_dict_to_string
 from .orch import Orch
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class Device(Orch):

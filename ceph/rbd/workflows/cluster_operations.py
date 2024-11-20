@@ -1,14 +1,16 @@
+# -*- code: utf-8 -*-
+
 import re
 import time
 from importlib import import_module
+from logging import getLogger
 
 from ceph.rados import utils
 from tests.rados.rados_test_util import get_device_path, wait_for_device
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
-from utility.log import Log
 from utility.utils import method_should_succeed
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def restart_ceph_target(admin_node):

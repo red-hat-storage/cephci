@@ -1,7 +1,8 @@
-from cli.exceptions import OperationFailedError, ResourceNotFoundError
-from utility.log import Log
+from logging import getLogger
 
-log = Log(__name__)
+from cli.exceptions import OperationFailedError, ResourceNotFoundError
+
+log = getLogger(__name__)
 
 
 class Node:

@@ -1,13 +1,15 @@
+# -*- code: utf-8 -*-
+
 import datetime
 import time
+from logging import getLogger
 
 from ceph.rbd.initial_config import random_string
 from ceph.rbd.utils import get_md5sum_rbd_image
 from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
 from ceph.rbd.workflows.rbd_mirror import wait_for_replay_complete
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def config_mirroring_delay(**kw):

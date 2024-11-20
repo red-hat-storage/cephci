@@ -1,10 +1,10 @@
 from json import loads
+from logging import getLogger
 
 from cli.cephadm.cephadm import CephAdm
 from cli.utilities.waiter import WaitUntil
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def check_host_status(node, hostname, status=None):

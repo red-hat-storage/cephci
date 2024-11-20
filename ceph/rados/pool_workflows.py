@@ -8,13 +8,13 @@ import datetime
 import random
 import time
 import traceback
+from logging import getLogger
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.rados_scrub import RadosScrubber
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class PoolFunctions:

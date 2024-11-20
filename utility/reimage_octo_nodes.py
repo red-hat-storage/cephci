@@ -1,3 +1,6 @@
+#! /usr/bin/env python3
+# -*- code: utf-8 -*-
+
 """
 Usage:
   reimage_octo_nodes.py [--username=<username>] [--password=<password>] --os_version=<version> --nodes=<nodes>

@@ -1,15 +1,16 @@
+# -*- code: utf-8 -*-
+
 import datetime
 import logging
 import os
 import tempfile
+from logging import getLogger
 
 import __main__
 
-from utility.log import Log
-
 
 def set_logging_env(level=None, path=None):
-    log = Log()
+    log = getLogger(__name__)
     log.info("Setting up log environment")
 
     # Setup log directory

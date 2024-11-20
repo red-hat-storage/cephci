@@ -1,4 +1,9 @@
+#! /usr/bin/env python3
+
+# -*- code: utf-8 -*-
+
 import multiprocessing as mp
+from logging import getLogger
 
 from docopt import docopt
 from utils.configs import get_cloud_credentials, get_configs
@@ -8,9 +13,8 @@ from cli.cloudproviders import CloudProvider
 from cli.cluster.node import Node
 from cli.cluster.volume import Volume
 from cli.exceptions import OperationFailedError
-from utility.log import Log
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 doc = """

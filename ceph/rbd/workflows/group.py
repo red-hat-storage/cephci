@@ -1,10 +1,12 @@
+# -*- code: utf-8 -*-
+
 from copy import deepcopy
+from logging import getLogger
 
 from ceph.rbd.utils import random_string
 from cli.rbd.rbd import Rbd
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def create_group_and_verify(**kw):

@@ -1,3 +1,5 @@
+# -*- code: utf-8 -*-
+
 """
 Ceph Administrator aka cephadm module is a configuration tool for Ceph cluster.
 
@@ -8,16 +10,16 @@ Over here, we create a glue between the CLI and CephCI to allow the QE to write 
 scenarios for verifying and validating cephadm.
 """
 
+from logging import getLogger
 from typing import Dict
 
 from cli.utilities.configure import setup_ibm_licence
-from utility.log import Log
 
 from .bootstrap import BootstrapMixin
 from .registry_login import RegistryLoginMixin
 from .shell import ShellMixin
 
-logger = Log(__name__)
+logger = getLogger(__name__)
 
 
 class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):

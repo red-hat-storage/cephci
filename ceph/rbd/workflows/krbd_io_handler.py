@@ -1,10 +1,13 @@
+# -*- code: utf-8 -*-
+
+from logging import getLogger
+
 from ceph.rbd.utils import create_map_options, exec_cmd
 from ceph.rbd.workflows.cleanup import device_cleanup
 from cli.rbd.rbd import Rbd
-from utility.log import Log
 from utility.utils import run_fio, run_mkfs
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def run(**kw):

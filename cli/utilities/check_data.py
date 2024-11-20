@@ -1,7 +1,8 @@
-from cli.rbd.rbd import Rbd
-from utility.log import Log
+from logging import getLogger
 
-log = Log(__name__)
+from cli.rbd.rbd import Rbd
+
+log = getLogger(__name__)
 
 
 is_list_equal = lambda x: all(i == x[0] for i in x)

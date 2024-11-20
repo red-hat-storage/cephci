@@ -1,15 +1,17 @@
+# -*- code: utf-8 -*-
+
 import datetime
 import json
 from importlib import import_module
+from logging import getLogger
 from time import sleep
 
 from ceph.parallel import parallel
 from ceph.rbd.utils import convert_size, getdict, random_string
 from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
 from ceph.rbd.workflows.pool import create_ecpool, create_pool
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def create_snap_and_clone(rbd, snap_spec, clone_spec, **kw):

@@ -1,11 +1,13 @@
+# -*- code: utf-8 -*-
+
 import math
 import random
 import string
+from logging import getLogger
 
 from ceph.ceph import CommandFailed
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 getdict = lambda x: {k: v for (k, v) in x.items() if isinstance(v, dict)}

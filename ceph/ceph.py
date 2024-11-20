@@ -7,6 +7,7 @@ import random
 import re
 import socket
 from distutils.version import LooseVersion
+from logging import getLogger
 from time import sleep, time
 
 import paramiko
@@ -16,10 +17,9 @@ import yaml
 from ceph.parallel import parallel
 from cli.ceph.ceph import Ceph as CephCli
 from utility import lvm_utils
-from utility.log import Log
 from utility.utils import custom_ceph_config
 
-logger = Log(__name__)
+logger = getLogger(__name__)
 
 
 class SocketTimeoutException(Exception):

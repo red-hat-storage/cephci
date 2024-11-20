@@ -1,7 +1,12 @@
+#! /usr/bin/env python3
+
+# -*- code: utf-8 -*-
+
 import json
 import os
 import pickle
 import re
+from logging import getLogger
 from stat import S_ISDIR, S_ISREG
 
 import yaml
@@ -17,9 +22,8 @@ from cli.utilities.utils import (
     get_release_info,
     get_running_containers,
 )
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 CEPH_VAR_LOG_DIR = "/var/log/ceph"
 

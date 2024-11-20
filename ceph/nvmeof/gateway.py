@@ -1,3 +1,5 @@
+# -*- code: utf-8 -*-
+
 """Ceph-NVMeoF gateway module.
 
 - Configure spdk and start spdk.
@@ -5,13 +7,13 @@
 """
 
 import re
+from logging import getLogger
 
 from ceph.ceph import CephNode
 from ceph.ceph_admin.common import config_dict_to_string
 from cli.utilities.packages import Package
-from utility.log import Log
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 REPO_PATH = "/tmp/ceph-nvmeof"
 CEPH_NVMEOF_REPO = "https://github.com/ceph/ceph-nvmeof.git"

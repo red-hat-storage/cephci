@@ -18,14 +18,14 @@ Module to perform specific functionalities of ceph-bluestore-tool.
  - ceph-bluestore-tool bluefs-stats --path osd path
 """
 
+from logging import getLogger
 from typing import Dict
 
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import config_dict_to_string
 from ceph.rados.core_workflows import RadosOrchestrator
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class BluestoreToolWorkflows:

@@ -1,16 +1,15 @@
 """Manage OSD service via cephadm CLI."""
 
 import json
+from logging import getLogger
 from time import sleep
 from typing import Dict
-
-from utility.log import Log
 
 from .apply import ApplyMixin
 from .common import config_dict_to_string
 from .orch import Orch
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 class OSDServiceFailure(Exception):

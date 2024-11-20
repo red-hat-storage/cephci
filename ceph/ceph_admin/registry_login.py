@@ -1,14 +1,13 @@
 """Cephadm registry login CLI Command."""
 
 from copy import deepcopy
+from logging import getLogger
 from typing import Dict
-
-from utility.log import Log
 
 from .common import config_dict_to_string
 from .typing_ import CephAdmProtocol
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 BASE_CMD = ["cephadm"]
 
 

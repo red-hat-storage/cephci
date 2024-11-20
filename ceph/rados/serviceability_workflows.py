@@ -5,6 +5,7 @@ Module to perform Serviceability scenarios on Cluster Hosts / Nodes
 import datetime
 import json
 import time
+from logging import getLogger
 
 from ceph import utils
 from ceph.ceph_admin import CephAdmin
@@ -13,9 +14,8 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from tests.ceph_installer import test_cephadm
 from tests.cephadm.test_host import run as deploy_host
 from tests.rados import rados_test_util as rados_utils
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 class ServiceabilityMethods:

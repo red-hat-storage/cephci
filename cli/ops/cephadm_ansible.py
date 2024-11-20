@@ -1,13 +1,13 @@
 import os
+from logging import getLogger
 
 from cli.cephadm.ansible import Ansible
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import CephadmOpsExecutionError, ConfigError, ResourceNotFoundError
 from cli.utilities.configs import get_registry_details
 from cli.utilities.utils import copy_ceph_sshkey_to_host, get_node_by_id, get_node_ip
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 # CephAdm ansible wrapper playbook path
 CEPHADM_ANSIBLE_WRAPPER_PLAYBOOKS = "tests/cephadm/ansible_wrapper"

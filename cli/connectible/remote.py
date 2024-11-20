@@ -1,12 +1,12 @@
 import socket
+from logging import getLogger
 
 import paramiko
 
 from cli.exceptions import RemoteConnectionError, UnexpectedStateError
 from cli.utilities.waiter import WaitUntil
-from utility.log import Log
 
-LOG = Log(__name__)
+LOG = getLogger(__name__)
 
 
 class Remote:

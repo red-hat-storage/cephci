@@ -1,10 +1,12 @@
+# -*- code: utf-8 -*-
+
 import json
+from logging import getLogger
 
 from ceph.rbd.utils import exec_cmd
 from ceph.waiter import WaitUntil
-from utility.log import Log
 
-log = Log(__name__)
+log = getLogger(__name__)
 
 
 def check_pool_exists(pool_name, client, timeout=10, interval=10):
