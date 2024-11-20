@@ -23,7 +23,7 @@ tests:
                 verbose: true
               args:
                 rhcs-version: 7.1
-                release: rc
+                release: z1     # deploying old build to verify obj snap deletion
                 mon-ip: node1
                 orphan-initial-daemons: true
                 registry-url: registry.redhat.io
@@ -145,6 +145,15 @@ tests:
       polarion-id: CEPH-83574439
       abort-on-fail: false
 
+# commented until fix merged in Squid: #2326892
+#  - test:
+#      name: "issue repro-obj snap and pool snap deletion"
+#      module: test_pool_snap.py
+#      desc: obj snap deletion when pool snapshot is deleted on unfixed build
+#      polarion-id: CEPH-83602685
+#      config:
+#        issue_reproduction: true
+
   - test:
       name: Upgrade cluster to latest 8.x ceph version
       desc: Upgrade cluster to latest version
@@ -158,6 +167,15 @@ tests:
         verify_cluster_health: true
       destroy-cluster: false
       abort-on-fail: true
+
+# commented until fix merged in Squid: #2326892
+#  - test:
+#      name: "verify fix-obj snap and pool snap deletion"
+#      module: test_pool_snap.py
+#      desc: obj snap deletion when pool snapshot is deleted on fixed build
+#      polarion-id: CEPH-83602685
+#      config:
+#        verify_fix: true
 
   # Running basic rbd and rgw tests after upgrade
   - test:
