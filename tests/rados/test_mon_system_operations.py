@@ -136,8 +136,7 @@ def run(ceph_cluster, **kw):
         )
 
         # fetching all the OSDs on the cluster and selecting 1 OSD at random to be shut down.
-        out, _ = cephadm.shell(args=["ceph osd ls"])
-        osd_list = out.strip().split("\n")
+        osd_list = rados_obj.get_osd_list(status="up")
 
         osd_id = int(random.choice(osd_list))
         log.debug(f"Selected OSD : {osd_id} to be shut down")
@@ -202,8 +201,7 @@ def run(ceph_cluster, **kw):
         )
 
         # fetching all the OSDs on the cluster and selecting 1 OSD at random to be shut down.
-        out, _ = cephadm.shell(args=["ceph osd ls"])
-        osd_list = out.strip().split("\n")
+        osd_list = rados_obj.get_osd_list(status="up")
 
         osd_id = int(random.choice(osd_list))
         log.debug(f"Selected OSD : {osd_id} to be shut down")

@@ -50,8 +50,7 @@ def run(ceph_cluster, **kw):
                 pool_name=pool_name, rados_write_duration=900, background=True
             )
 
-            out, _ = cephadm.shell(args=["ceph osd ls"])
-            osd_list = out.strip().split("\n")
+            osd_list = rados_object.get_osd_list(status="up")
             log.debug(f"List of OSDs: \n{osd_list}")
             log.info(f"The number of OSDs in the cluster are-{len(osd_list)}")
 

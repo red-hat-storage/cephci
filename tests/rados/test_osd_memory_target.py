@@ -55,8 +55,7 @@ def run(ceph_cluster, **kw):
         """
         log.info(doc)
         try:
-            out, _ = cephadm.shell(args=["ceph osd ls"])
-            osd_list = out.strip().split("\n")
+            osd_list = rados_obj.get_osd_list(status="up")
             log.debug(f"List of OSDs: {osd_list}")
 
             """ inorder to verify the precedence between osd_memory_target set at

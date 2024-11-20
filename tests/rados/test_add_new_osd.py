@@ -25,8 +25,7 @@ def run(ceph_cluster, **kw):
     log.info("Running test case to verify addition of new OSD on existing OSD disk")
 
     try:
-        out, _ = cephadm.shell(args=["ceph osd ls"])
-        osd_list = out.strip().split("\n")
+        osd_list = rados_obj.get_osd_list(status="up")
         osd_id = random.choice(osd_list)
         osd_metadata = ceph_cluster.get_osd_metadata(osd_id=int(osd_id), client=client)
         log.debug(osd_metadata)
