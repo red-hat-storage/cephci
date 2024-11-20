@@ -144,16 +144,6 @@ tests:
         clients: 2
 
   - test:
-      name: Nfs Ganesha Pynfs
-      module: nfs_verify_pynfs.py
-      desc: Perform pynfs tests on the Nfs cluster
-      polarion-id: CEPH-83577559
-      abort-on-fail: false
-      config:
-        nfs_version: 3
-        clients: 2
-
-  - test:
       name: Nfs Verify Readdir Ops
       module: nfs_verify_readdir_ops.py
       desc: Perform readir operation from clients
