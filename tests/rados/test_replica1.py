@@ -64,8 +64,7 @@ def run(ceph_cluster, **kw):
             log.info("Running test case to verify replica-1 non-resilient pool")
 
             # Fetch all the OSDs on the cluster
-            out, _ = cephadm.shell(args=["ceph osd ls"])
-            osd_list = out.strip().split("\n")
+            osd_list = rados_obj.get_osd_list(status="up")
             log.debug(f"List of OSDs: {osd_list}")
 
             # remove the device class for all the OSDs

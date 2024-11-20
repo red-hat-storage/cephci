@@ -65,7 +65,7 @@ def run(ceph_cluster, **kw):
 
         # determine the number of replicas that would ideally exist on an OSD
         # pick an OSD at random from list of active OSDs
-        osd_list = rados_obj.get_active_osd_list()
+        osd_list = rados_obj.get_osd_list(status="up")
         osd_id = random.choice(osd_list)
 
         # determine the OSD size is GB

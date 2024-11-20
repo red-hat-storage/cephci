@@ -53,7 +53,7 @@ def run(ceph_cluster, **kw):
 
     try:
         # choosing an OSD at random
-        osd_list = rados_obj.get_active_osd_list()
+        osd_list = rados_obj.get_osd_list(status="up")
         log.info(f"List of active OSDs on the cluster: {osd_list}")
         osd_id = random.choice(osd_list)
         log.info(f"Random OSD chosen for the test: {osd_id}")

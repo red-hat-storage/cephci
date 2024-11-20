@@ -200,7 +200,7 @@ def run(ceph_cluster, **kw):
             initial_pool_stat = rados_obj.get_cephdf_stats()["pools"]
 
             # obtain the last osd id
-            osd_list = rados_obj.get_active_osd_list()
+            osd_list = rados_obj.get_osd_list(status="up")
             osd_id = osd_list.pop(-1)
 
             osd_df_stats = rados_obj.get_osd_df_stats(
@@ -373,7 +373,7 @@ def run(ceph_cluster, **kw):
                     f"List of LVMs created on {node_obj.hostname}: {lvm_list[node]}"
                 )
 
-            init_osd_list = rados_obj.get_active_osd_list()
+            init_osd_list = rados_obj.get_osd_list(status="up")
             log.info(f"Active OSD list before OSD addition: {init_osd_list}")
             init_osd_count = len(init_osd_list)
             # deploy single OSD on lvm devices created
@@ -391,7 +391,7 @@ def run(ceph_cluster, **kw):
                     raise Exception(f"OSD addition on {node_obj.hostname} failed")
 
             time.sleep(30)
-            post_osd_list = rados_obj.get_active_osd_list()
+            post_osd_list = rados_obj.get_osd_list(status="up")
             log.info(f"Active OSD list after OSD addition: {post_osd_list}")
             post_osd_count = len(post_osd_list)
             if post_osd_count - init_osd_count < 2:

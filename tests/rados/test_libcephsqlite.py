@@ -73,8 +73,7 @@ def run(ceph_cluster, **kw):
         )
 
         # Fetch list of OSDs in the cluster
-        out, _ = cephadm.shell(args=["ceph osd ls"])
-        osd_list = out.strip().split("\n")
+        osd_list = rados_obj.get_osd_list(status="up")
         log.debug(f"List of OSDs: \n{osd_list}")
 
         # Choose an OSD at random
