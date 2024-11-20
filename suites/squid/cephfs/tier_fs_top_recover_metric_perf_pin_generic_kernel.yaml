@@ -1,0 +1,393 @@
+---
+#=======================================================================================================================
+# Tier-level: 3
+# Test-Suite: tier-3_fs_top_recovery_metrics_perf_pin_generic_kernel
+# Conf file : conf/squid/cephfs/tier-2_cephfs_9-node-cluster.yaml
+# Description - This test suite contains tests which covers cephfs-top feature
+# Test-Case Covered:
+#  1.tier-3_cephfs_test_cephfs-top.yaml
+#  2.tier-4_cephfs_recovery.yaml#
+#  3.tier-2_cephfs_test-metrics.yaml
+#  4.tier-3_cephfs_test_performance.yaml
+#  5.tier-2_cephfs_test_mds_pinning.yaml
+#  6.tier-2_cephfs_generic.yaml
+#  7.tier-1_fs_kernel_pipeline.yaml
+#=======================================================================================================================
+
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-data-ec
+                - "64"
+                - erasure
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-metadata
+                - "64"
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - set
+                - cephfs-data-ec
+                - allow_ec_overwrites
+                - "true"
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - new
+                - cephfs-ec
+                - cephfs-metadata
+                - cephfs-data-ec
+                - --force
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  label: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node8
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node9
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node10
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node11
+      desc: "Configure the Cephfs client system 4"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      name: Run xfs test on kernel
+      module: xfs_test.py
+      polarion-id: CEPH-83592787
+      desc: Run xfs test on kernel
+      abort-on-fail: false
+  - test:
+      name: Run fsstress on kernel and fuse mounts
+      module: cephfs_bugs.test_fsstress_on_kernel_and_fuse.py
+      polarion-id: CEPH-83575623
+      desc: Run fsstress on kernel and fuse mounts
+      abort-on-fail: false
+  - test:
+      name: Verify enable and disble mgr module for stats works
+      module: cephfs_top.cephfs_cephfs-top_verify_mgr_module_for_stats.py
+      polarion-id: CEPH-83573836
+      desc: Verify enable and disble mgr module for stats works
+      abort-on-fail: false
+  - test:
+      name: cephfs-top initiate testing
+      module: cephfs_top.cephfs_top_initiate.py
+      polarion-id: CEPH-83573829
+      desc: Testing basic cephfs-top initiate conditions
+  - test:
+      name: cephfs-top negative testing
+      module: cephfs_top.cephfs_top_negative_tests.py
+      polarion-id: CEPH-83575020
+      desc: cephfs-top negative testing
+      abort-on-fail: false
+  - test:
+      name: cephfs-top metrcis testing
+      module: cephfs_top.cephfs_top_dump.py
+      polarion-id: CEPH-83573848
+      desc: cephfs-top metrcis verification using --dump
+      abort-on-fail: false
+  - test:
+      name: cephfs-top validate top stats
+      module: cephfs_top.validate_fs_top_stats.py
+      polarion-id: CEPH-83573838
+      desc: cephfs-top validate top stats
+      abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "Taking the cephfs down with down flag"
+      module: cephfs_recovery.fs_down_flag.py
+      polarion-id: CEPH-83573264
+      name: "Taking the cephfs down with down flag"
+      comments: "Product bug - BZ-2225891"
+  - test:
+      abort-on-fail: false
+      desc: "Execute FS Scrub Commands on cephfs"
+      module: cephfs_recovery.fs_scrub.py
+      polarion-id: CEPH-11267
+      name: "Cephfs Scrubing"
+  - test:
+      name: snap_retention_service_restart
+      module: snapshot_clone.snap_schedule_retention_vol_subvol.py
+      polarion-id: CEPH-83575627
+      desc: Verify Snapshot retention works even after service restarts
+      abort-on-fail: false
+      config:
+        test_name: snap_retention_service_restart
+      comments: "Product bug - BZ-2314146"
+  - test:
+      name: Move data and meta_data pool to different root level bucket in OSD tree.
+      module: cephfs_generic.test_data_migrate_bw_buckets.py
+      polarion-id: CEPH-11264
+      desc: Move data and meta_data pool to different root level bucket in OSD tree.
+      abort-on-fail: false
+      comments: "Unable to install ceph-base"
+  - test:
+      abort-on-fail: false
+      desc: "cephfs_journal_tool_journal_mode_functional"
+      module: cephfs_journal_tool.cephfs_journal_tool_journal_mode.py
+      name: journal_tool_journal_mode
+      polarion-id: "CEPH-83594249"
+  - test:
+      abort-on-fail: false
+      desc: "cephfs_journal_tool_header_mode_functional"
+      module: cephfs_journal_tool.cephfs_journal_tool_header_mode.py
+      name: journal_tool_header_mode
+      polarion-id: "CEPH-83594266"
+  - test:
+      abort-on-fail: false
+      desc: "cephfs_journal_tool_event_mode_functional"
+      module: cephfs_journal_tool.cephfs_journal_tool_event_mode.py
+      name: journal_tool_event_mode
+      polarion-id: "CEPH-83595482"
+  - test:
+      name: MDS client metrics scale
+      module: cephfs_metrics.cephfs_metrics_scale.py
+      polarion-id: CEPH-83588355
+      desc: Verify MDS metrics in multiple clients
+      abort-on-fail: false
+  - test:
+      name: MDS client metrics functional
+      module: cephfs_metrics.cephfs_metrics_functional.py
+      polarion-id: CEPH-83588303
+      desc: Verify MDS client metrics
+      abort-on-fail: false
+  - test:
+      name: MDS client metrics negative case
+      module: cephfs_metrics.cephfs_client_metrics_negative_case.py
+      polarion-id: CEPH-83588357
+      desc: Reboot MDS node and verify the metrics
+      abort-on-fail: false
+  - test:
+      name: CephFS performance between Fuse and kernel client.
+      module: cephfs_perf.fuse_kernel_performance.py
+      polarion-id: CEPH-10560
+      desc: CephFS performance between Fuse and kernel client.
+      abort-on-fail: false
+  - test:
+      name: CephFS-IO Read and Write from 2 different Clients
+      module: cephfs_perf.cephfs_io_read_write_from_diff_clients.py
+      polarion-id: CEPH-11220
+      desc: Mount CephFS on multiple clients, read and write same file from 2 different clients.
+      abort-on-fail: false
+  - test:
+      name: CephFS-IO Read and Write from multiple different clients
+      module: cephfs_perf.cephfs_io_read_write_from_multiple_clients.py
+      polarion-id: CEPH-11221
+      desc: Mount CephFS on multiple clients, perform IO ,fill cluster upto 30%, read and write from multiple clients
+      abort-on-fail: false
+  - test:
+      name: cephfs-stressIO
+      module: cephfs_perf.cephfs_stress_io_from_multiple_clients.py
+      polarion-id: CEPH-11222
+      config:
+        num_of_osds: 12
+      desc: Mount CephFS on multiple clients,
+      abort-on-fail: false
+  - test:
+      name: cephfs-mdsfailover-pinning-io
+      module: cephfs_mds_pinning.mds_pinning_load_balancing.py
+      config:
+        num_of_dirs: 200
+      polarion-id: CEPH-11227
+      desc: MDSfailover on active-active mdss,performing client IOs with no pinning at
+        the first,later pin 10 dirs with IOs
+      abort-on-fail: false
+  - test:
+      name: Directory pinning on two MDss with max:min number of directories
+      module: cephfs_mds_pinning.mds_pinning_max_min_dir_on_two_mdss.py
+      config:
+        num_of_dirs: 100
+      polarion-id: CEPH-11228
+      desc: MDSfailover on active-active mdss,performing client IOs with max:min directory pinning with 2 active mdss
+      abort-on-fail: false
+  - test:
+      name: Directory pinning on two MDSs with unequal ratio of directories
+      module: cephfs_mds_pinning.mds_pinning_unequal_dir_on_two_mdss.py
+      config:
+        num_of_dirs: 100
+      polarion-id: CEPH-11229
+      desc: MDSfailover on active-active mdss,performing client IOs with 10:2 directory pinning with 2 active mdss
+      abort-on-fail: false
+  - test:
+      name: Directory pinning on two MDS with equal ratio of directories
+      module: cephfs_mds_pinning.mds_pinning_equal_dir_on_two_mdss.py
+      config:
+        num_of_dirs: 100
+      polarion-id: CEPH-11230
+      desc: MDSfailover on active-active mdss,performing client IOs with equal directory pinning with 2 active mdss
+      abort-on-fail: false
+  - test:
+      name: Directory pinning on two MDS with node reboots
+      module: cephfs_mds_pinning.mds_pinning_node_reboots.py
+      polarion-id: CEPH-11231
+      desc: Directory pinning on two MDS with node reboots
+      abort-on-fail: false
+  - test:
+      name: Subtree Split and Subtree merging by pinning Subtrees directories to MDS.
+      module: cephfs_mds_pinning.mds_pinning_split_merge.py
+      polarion-id: CEPH-11233
+      desc: Subtree Split and Subtree merging by pinning Subtrees directories to MDS.
+      abort-on-fail: false
+  - test:
+      name: map and unmap directory trees to a mds rank
+      module: cephfs_mds_pinning.map_and_unmap_directory_trees_to_a_mds_rank.py
+      polarion-id: CEPH-83574329
+      desc: map and unmap directory trees to a mds rank
+      abort-on-fail: false
+  - test:
+      name: the max mds daemons
+      module: ceph-83573462.py
+      polarion-id: CEPH-83573462
+      desc: Validate the fs command to increase decrease the max mds daemons
+      abort-on-fail: false
+  - test:
+      name: Configure the standby_replay daemons
+      module: ceph_83574291.py
+      polarion-id: CEPH-83574291
+      desc: Configure the standby_replay daemons for active mds verify add and remove of the feature
+      abort-on-fail: false
+  - test:
+      name: Fail mds daemon by it rank
+      module: mds_fail_with_rank.py
+      polarion-id: CEPH-83573429
+      desc: Fail mds daemon by it rank
+      abort-on-fail: false
