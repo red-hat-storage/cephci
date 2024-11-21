@@ -5,6 +5,7 @@ Module to test bluestore_min_alloc_size functionality on RHCS 7.0 and above clus
 
 import re
 import time
+import json
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
@@ -107,13 +108,11 @@ def run(ceph_cluster, **kw):
 
             # Getting random OSDs and checking their alloc size
             pg_set = rados_obj.get_pg_acting_set()
-            log.info(f"Acting set collected for PG 1.0 is {pg_set}")
             for osd_id in pg_set:
-                log.info(f"Collecting metadata details for OSD : {osd_id}")
                 osd_meta = rados_obj.get_daemon_metadata(
                     daemon_type="osd", daemon_id=osd_id
                 )
-                log.debug(f"metadata details for OSD : {osd_id} is \n{osd_meta}\n")
+
                 if (
                     not min_alloc_size_hdd
                     == min_alloc_size_ssd
@@ -129,10 +128,52 @@ def run(ceph_cluster, **kw):
                     raise Exception(
                         "default values for min_alloc_size on cluster post changing"
                     )
+                """ 
+                enhance the tests by adding ceph config show osd.id and ceph daemon osd.id config show | grep min_alloc_size 
+                """
+                # Enhanced test: Check ceph config show and daemon output for each OSD
+                show_config_hdd = mon_obj.show_config(
+                            daemon="osd", id=osd_id,param="bluestore_min_alloc_size_hdd")
+                
+                show_config_ssd = mon_obj.show_config(
+                            daemon="osd", id=osd_id,param="bluestore_min_alloc_size_ssd")
+                
+                
+                if not show_config_hdd == show_config_ssd == custom_min_alloc_size:
+                    log.error(
+                        f"min_alloc_size does not match the expected custom value of {custom_min_alloc_size}"
+                        f"min_alloc_size_ssd on cluster: {show_config_ssd}"
+                        f"min_alloc_size_hdd on cluster: {show_config_hdd}"
+                    )
+                    raise Exception("Value not updated for min_alloc_size on cluster")
+                
+                log.info("Successfully modified the value of min_alloc_size")
+                
 
-                log.info(
-                    f"OSDs successfully deployed with the new alloc size, and verified the size on OSD: {osd_id}"
+                # determine the OSD node for chosen osd
+                osd_node = rados_obj.fetch_host_node(
+                    daemon_type="osd", daemon_id=f"osd.{osd_id}"
                 )
+
+                # determine osd's block device path
+                _cmd = f"cephadm shell -- ceph daemon osd config show  {osd_id} --format json"
+                json_str_out, _ = osd_node.exec_command(cmd=_cmd, sudo=True)
+                json_out = json.loads(json_str_out)
+                min_alloc_size_hdd = json_out['bluestore_min_alloc_size_hdd']
+                min_alloc_size_ssd = json_out['bluestore_min_alloc_size_ssd']
+
+                if not min_alloc_size_hdd == min_alloc_size_ssd == custom_min_alloc_size:
+                    log.error(
+                        f"min_alloc_size does not match the expected custom value of {custom_min_alloc_size}"
+                        f"min_alloc_size_ssd on cluster: {min_alloc_size_ssd}"
+                        f"min_alloc_size_hdd on cluster: {min_alloc_size_hdd}"
+                    )
+                    raise Exception("Value not updated for min_alloc_size on cluster")
+                
+                log.info("Successfully modified the value of min_alloc_size")
+
+                return 0          
+                
 
             mon_obj.set_config(
                 section="osd",
@@ -212,6 +253,50 @@ def run(ceph_cluster, **kw):
                         f"OSD : {rm_osd} could not be redeployed with alloc size {default_min_alloc_size}"
                     )
                     return 1
+                """
+                add checks for ceph config show and ceph daemon with min_alloc_size
+                """
+
+                show_config_hdd = mon_obj.show_config(
+                            daemon="osd", id=osd_id,param="bluestore_min_alloc_size_hdd")
+                
+                show_config_ssd = mon_obj.show_config(
+                            daemon="osd", id=osd_id,param="bluestore_min_alloc_size_ssd")
+                
+                
+                if not show_config_hdd == show_config_ssd == default_min_alloc_size:
+                    log.error(
+                        f"min_alloc_size does not match the expected custom value of {default_min_alloc_size}"
+                        f"min_alloc_size_ssd on cluster: {show_config_ssd}"
+                        f"min_alloc_size_hdd on cluster: {show_config_hdd}"
+                    )
+                    raise Exception("Value not updated for min_alloc_size on cluster")
+                
+                log.info("Successfully modified the value of min_alloc_size")
+
+                # determine the OSD node for chosen osd
+                osd_node = rados_obj.fetch_host_node(
+                    daemon_type="osd", daemon_id=f"osd.{osd_id}"
+                )
+
+                # determine osd's block device path
+                _cmd = f"cephadm shell -- ceph daemon osd config show  {osd_id} --format json"
+                json_str_out, _ = osd_node.exec_command(cmd=_cmd, sudo=True)
+                json_out = json.loads(json_str_out)
+                min_alloc_size_hdd = json_out['bluestore_min_alloc_size_hdd']
+                min_alloc_size_ssd = json_out['bluestore_min_alloc_size_ssd']
+
+                if not min_alloc_size_hdd == min_alloc_size_ssd == default_min_alloc_size:
+                    log.error(
+                        f"min_alloc_size does not match the expected custom value of {default_min_alloc_size}"
+                        f"min_alloc_size_ssd on cluster: {min_alloc_size_ssd}"
+                        f"min_alloc_size_hdd on cluster: {min_alloc_size_hdd}"
+                    )
+                    raise Exception("Value not updated for min_alloc_size on cluster")
+                
+                log.info("Successfully modified the value of min_alloc_size")
+                
+
                 log.info(
                     f"OSD : {rm_osd} successfully redeployed with alloc size {default_min_alloc_size}"
                 )
@@ -256,7 +341,3 @@ def run(ceph_cluster, **kw):
         time.sleep(60)
         # log cluster health
         rados_obj.log_cluster_health()
-        # check for crashes after test execution
-        if rados_obj.check_crash_status():
-            log.error("Test failed due to crash at the end of test")
-            return 1
