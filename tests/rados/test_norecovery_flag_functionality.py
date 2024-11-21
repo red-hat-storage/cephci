@@ -1,7 +1,7 @@
 """
 This file contains the  methods to verify the  norecover flag functionality.
 Bug- https://bugzilla.redhat.com/show_bug.cgi?id=2134786
-1.Checking that norecover falg  should not perform any autoscale on PG
+1.Checking that norecover flag  should not perform any autoscale on PG
 2.After setting the autorecover checking that the recovery is progress on the cluster
 """
 
@@ -43,8 +43,10 @@ def run(ceph_cluster, **kw):
             """
             Method to check if the PG count has reached desired counts
             """
+            log.debug("Updating recovery thread to assist faster recovery")
+            rados_obj.change_recovery_threads(config={}, action="set")
             pg_num_final = pool_obj.get_pg_autoscaler_value(pool_name, "pg_num_final")
-            endtime = datetime.datetime.now() + datetime.timedelta(seconds=1800)
+            endtime = datetime.datetime.now() + datetime.timedelta(seconds=2700)
             pg_increased = False
             while datetime.datetime.now() < endtime:
                 current_pg_num = rados_obj.get_pool_property(
@@ -54,9 +56,9 @@ def run(ceph_cluster, **kw):
                     log.debug(
                         f"PG count on the pool not reached desired levels,"
                         f"current count : {current_pg_num}, target count : {pg_num_final}"
-                        f" sleeping for 10 seconds and checking again"
+                        f" sleeping for 60 seconds and checking again"
                     )
-                    time.sleep(10)
+                    time.sleep(60)
                 else:
                     log.info("PG count on the pool has reached desired levels")
                     pg_increased = True
@@ -64,7 +66,7 @@ def run(ceph_cluster, **kw):
             return pg_increased
 
         log.info(
-            "Scenario1: Verify that the pg_num should not  increase after setting the norecover flag"
+            "Scenario1: Verify that the pg_num should not increase after setting the norecover flag"
         )
         method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         utils.configure_osd_flag(ceph_cluster, "set", "norecover")
@@ -256,6 +258,7 @@ def run(ceph_cluster, **kw):
         rados_obj.rados_pool_cleanup()
         utils.configure_osd_flag(ceph_cluster, "unset", "norecover")
         log.info("The norecover is unset on the cluster")
+        rados_obj.change_recovery_threads(config={}, action="rm")
         time.sleep(20)
         # log cluster health
         rados_obj.log_cluster_health()

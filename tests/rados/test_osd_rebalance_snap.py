@@ -121,8 +121,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
-        out, _ = cephadm.shell(args=["ceph osd ls"])
-        active_osd_list = out.strip().split("\n")
+        active_osd_list = rados_obj.get_osd_list(status="up")
         log.debug(f"List of active OSDs: \n{active_osd_list}")
         if osd_id not in active_osd_list:
             utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)

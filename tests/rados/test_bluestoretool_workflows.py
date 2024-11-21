@@ -56,7 +56,7 @@ def run(ceph_cluster, **kw):
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
 
     try:
-        osd_list = rados_obj.get_active_osd_list()
+        osd_list = rados_obj.get_osd_list(status="up")
         log.info(f"List of OSDs: \n{osd_list}")
 
         if config.get("non-collocated"):

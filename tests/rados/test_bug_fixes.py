@@ -175,8 +175,7 @@ def run(ceph_cluster, **kw):
             rand_host = random.choice(osd_hosts)
             log.info(f"Chosen OSD host to add network delay: {rand_host}")
 
-            _cmd = f"ceph osd ls-tree {rand_host}"
-            osd_list = rados_obj.run_ceph_command(cmd=_cmd, client_exec=True)
+            osd_list = rados_obj.collect_osd_daemon_ids(osd_node=rand_host)
             log.info(f"List of OSDs on the host: {osd_list}")
 
             assert rados_obj.add_network_delay_on_host(
@@ -346,7 +345,7 @@ def run(ceph_cluster, **kw):
             _pool_name = "test-bluefs-shared"
 
             # get the list of OSDs on the cluster
-            osd_list = rados_obj.run_ceph_command(cmd="ceph osd ls")
+            osd_list = rados_obj.get_osd_list(status="up")
             log.debug(f"List of active OSDs: \n{osd_list}")
 
             # check the current value of 'bluestore_min_alloc_size'

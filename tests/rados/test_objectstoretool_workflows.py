@@ -91,7 +91,7 @@ def run(ceph_cluster, **kw):
     ]
     operations = config.get("operations", all_ops)
     try:
-        osd_list = rados_obj.get_active_osd_list()
+        osd_list = rados_obj.get_osd_list(status="up")
         log.info(f"List of OSDs: \n{osd_list}")
 
         log.info("Create a data pool with default config")
