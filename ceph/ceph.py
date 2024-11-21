@@ -1561,7 +1561,7 @@ class CephNode(object):
             timeout = None if kw["timeout"] == "notimeout" else kw["timeout"]
         else:
             # Set defaults if long_running then 1h else 5m
-            timeout = 3600 if kw.get("long_running", False) in kw else 300
+            timeout = 3600 if kw.get("long_running", False) else 300
 
         try:
             channel = ssh().get_transport().open_session(timeout=timeout)
