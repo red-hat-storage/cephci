@@ -141,6 +141,7 @@ tests:
               - "radosgw-admin period update --rgw-realm india --commit"
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zonegroup modify --rgw-realm india --rgw-zonegroup shared --enable-feature resharding"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
@@ -234,6 +235,16 @@ tests:
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
 
 #  Dynamic resharding tests
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            config-file-name: test_bucket_chown_reshard.yaml
+            script-name: test_dynamic_bucket_resharding.py
+      desc: Resharding test - Test manual reshard after bucket owner change
+      name: Test manual reshard after bucket owner change
+      polarion-id: CEPH-83574627
+      module: sanity_rgw_multisite.py
   - test:
       name: Disable DBR feature on zonegroup
       desc: Disable DBR feature on zonegroup
