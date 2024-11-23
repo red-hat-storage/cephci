@@ -419,6 +419,19 @@ class BootstrapMixin:
             self.shell(
                 args=["ceph", "config", "set", "global cluster_network", cluster_nws]
             )
+        if self.cluster.rhcs_version >= LooseVersion("8.0"):
+            wa_txt = """
+            Disabling the balancer module as a WA for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2314146
+            Issue : If any mgr module based operation is performed right after mgr failover, The command execution fails
+            as the module isn't loaded by mgr daemon. Issue was identified to be with Balancer module.
+            Disabling automatic balancing on the cluster as a WA until we get the fix for the same.
+            Disabling balancer should unblock Upgrade tests.
+            Error snippet :
+    Error ENOTSUP: Warning: due to ceph-mgr restart, some PG states may not be up to date
+    Module 'crash' is not enabled/loaded (required by command 'crash ls'): use `ceph mgr module enable crash` to enable
+            """
+            logger.info(wa_txt)
+            self.shell(args=["ceph balancer off"])
 
         # validate spec file
         if specs:
