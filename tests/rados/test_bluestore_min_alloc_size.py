@@ -145,9 +145,9 @@ def run(ceph_cluster, **kw):
                         f"min_alloc_size_ssd on cluster: {show_config_ssd}"
                         f"min_alloc_size_hdd on cluster: {show_config_hdd}"
                     )
-                    raise Exception("Value not updated for min_alloc_size on cluster")
+                    raise Exception("The output from ceph show is not as expected")
                 
-                log.info("Successfully modified the value of min_alloc_size")
+                log.info("Ceph config show is successfully verified for the value of min_alloc_size")
                 
 
                 # determine the OSD node for chosen osd
@@ -155,22 +155,22 @@ def run(ceph_cluster, **kw):
                     daemon_type="osd", daemon_id=f"osd.{osd_id}"
                 )
 
-                # determine osd's block device path
-                _cmd = f"cephadm shell -- ceph daemon osd config show  {osd_id} --format json"
+                # determine osd's block device 
+                _cmd = f"cephadm shell -- ceph daemon osd.{osd_id} config show  --format json"
                 json_str_out, _ = osd_node.exec_command(cmd=_cmd, sudo=True)
                 json_out = json.loads(json_str_out)
-                min_alloc_size_hdd = json_out['bluestore_min_alloc_size_hdd']
-                min_alloc_size_ssd = json_out['bluestore_min_alloc_size_ssd']
+                daemon_alloc_size_hdd = json_out['bluestore_min_alloc_size_hdd']
+                daemon_alloc_size_ssd = json_out['bluestore_min_alloc_size_ssd']
 
-                if not min_alloc_size_hdd == min_alloc_size_ssd == custom_min_alloc_size:
+                if not daemon_alloc_size_hdd == daemon_alloc_size_ssd == custom_min_alloc_size:
                     log.error(
                         f"min_alloc_size does not match the expected custom value of {custom_min_alloc_size}"
-                        f"min_alloc_size_ssd on cluster: {min_alloc_size_ssd}"
-                        f"min_alloc_size_hdd on cluster: {min_alloc_size_hdd}"
+                        f"min_alloc_size_ssd on cluster: {daemon_alloc_size_ssd}"
+                        f"min_alloc_size_hdd on cluster: {daemon_alloc_size_hdd}"
                     )
-                    raise Exception("Value not updated for min_alloc_size on cluster")
+                    raise Exception("The output from ceph daemon is not as expected")
                 
-                log.info("Successfully modified the value of min_alloc_size")
+                log.info("Ceph daemon is successfully verified for the value of min_alloc_size")
 
                 return 0          
                 
@@ -280,17 +280,17 @@ def run(ceph_cluster, **kw):
                 )
 
                 # determine osd's block device path
-                _cmd = f"cephadm shell -- ceph daemon osd config show  {osd_id} --format json"
+                _cmd = f"cephadm shell -- ceph daemon osd.{osd_id} config show  --format json"
                 json_str_out, _ = osd_node.exec_command(cmd=_cmd, sudo=True)
                 json_out = json.loads(json_str_out)
-                min_alloc_size_hdd = json_out['bluestore_min_alloc_size_hdd']
-                min_alloc_size_ssd = json_out['bluestore_min_alloc_size_ssd']
+                daemon_alloc_size_hdd = json_out['bluestore_min_alloc_size_hdd']
+                daemon_alloc_size_ssd = json_out['bluestore_min_alloc_size_ssd']
 
-                if not min_alloc_size_hdd == min_alloc_size_ssd == default_min_alloc_size:
+                if not daemon_alloc_size_hdd == daemon_alloc_size_ssd == default_min_alloc_size:
                     log.error(
                         f"min_alloc_size does not match the expected custom value of {default_min_alloc_size}"
-                        f"min_alloc_size_ssd on cluster: {min_alloc_size_ssd}"
-                        f"min_alloc_size_hdd on cluster: {min_alloc_size_hdd}"
+                        f"min_alloc_size_ssd on cluster: {daemon_alloc_size_hdd}"
+                        f"min_alloc_size_hdd on cluster: {daemon_alloc_size_hdd}"
                     )
                     raise Exception("Value not updated for min_alloc_size on cluster")
                 
@@ -341,3 +341,7 @@ def run(ceph_cluster, **kw):
         time.sleep(60)
         # log cluster health
         rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
