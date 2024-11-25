@@ -2,7 +2,7 @@
 # Automation support for upgrade from RHCS5 to RHCS7 in RHEL9
 #
 #--------------------------------------------------------------------------------
-# Cluster Configuration: conf/reef/upgrades/upgrade_4-node-cluster.yaml
+# Cluster Configuration: conf/6-node-cluster-with-1-client.yaml
 #--------------------------------------------------------------------------------
 #
 # Test Steps:
@@ -82,9 +82,9 @@ tests:
               args:
                 placement:
                   nodes:
-                    - node2
+                    - node4
+                    - node5
                     - node6
-                  limit: 2            # no of daemons
                   sep: " "            # separator to be used for placements
           - config:
               args:
