@@ -148,6 +148,7 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
             release (Str): Ceph Release Version (default: None)
         """
         rh_cdn_repos = {
+            "8": {"9": "rhceph-8-tools-for-rhel-9-x86_64-rpms"},
             "7": {"9": "rhceph-7-tools-for-rhel-9-x86_64-rpms"},
             "6": {"9": "rhceph-6-tools-for-rhel-9-x86_64-rpms"},
             "5": {
@@ -156,6 +157,9 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
             },
         }
         ibm_cdn_repos = {
+            "8": {
+                "9": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-8-rhel-9.repo"
+            },
             "7": {
                 "9": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-7-rhel-9.repo"
             },

@@ -202,7 +202,11 @@ def enable_ceph_tools_repo(node, ceph_version, platform):
     """
     # Set ceph tools repo
     cdn_repo = {}
-    if ceph_version.startswith("7"):
+    if ceph_version.startswith("8"):
+        cdn_repo = {
+            "rhel-9": "rhceph-8-tools-for-rhel-9-x86_64-rpms",
+        }
+    elif ceph_version.startswith("7"):
         cdn_repo = {
             "rhel-9": "rhceph-7-tools-for-rhel-9-x86_64-rpms",
         }
