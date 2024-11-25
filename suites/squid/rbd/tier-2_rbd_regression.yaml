@@ -190,6 +190,31 @@ tests:
       polarion-id: CEPH-9861
 
   - test:
+      desc: Verify RBD image with zero size
+      config:
+        resize_to: 0
+        rep_pool_config:
+          num_pools: 1
+          num_images: 2
+          images:
+            image_1024:
+              size: 1024
+            image_zero:
+              size: 0
+        ec_pool_config:
+          num_pools: 1
+          num_images: 2
+          images_ec:
+            data_pool: rbd_ec_data_pool
+            image_1024:
+              size: 1024
+            image_zero:
+              size: 0
+      module: test_rbd_image_zero_size.py
+      name: Test to verify RBD image with zero size
+      polarion-id: CEPH-83597243
+
+  - test:
       desc: Verify rbd_compression_hint config settings
       config:
         compression_algorithm: snappy
