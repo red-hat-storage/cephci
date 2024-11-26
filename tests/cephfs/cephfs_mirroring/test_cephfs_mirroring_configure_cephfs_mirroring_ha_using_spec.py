@@ -70,16 +70,16 @@ def run(ceph_cluster, **kw):
         source_clients[0].exec_command(sudo=True, cmd=f"ceph orch apply -i {file_path}")
         fs_util_ceph1.validate_services(source_clients[0], "cephfs-mirror")
 
-        source_fs = "cephfs" if not erasure else "cephfs-ec"
-        target_fs = "cephfs" if not erasure else "cephfs-ec"
+        source_fs = "cephfs-spec" if not erasure else "cephfs-spec-ec"
+        target_fs = "cephfs-spec" if not erasure else "cephfs-spec-ec"
         fs_details_source = fs_util_ceph1.get_fs_info(source_clients[0], source_fs)
         if not fs_details_source:
             fs_util_ceph1.create_fs(source_clients[0], source_fs)
         fs_details_target = fs_util_ceph1.get_fs_info(target_clients[0], target_fs)
         if not fs_details_target:
             fs_util_ceph2.create_fs(target_clients[0], target_fs)
-        target_user = "mirror_remote"
-        target_site_name = "remote_site"
+        target_user = "mirror_remote_spec"
+        target_site_name = "remote_site_spec"
         fs_mirroring_utils.deploy_cephfs_mirroring(
             source_fs,
             source_clients[0],

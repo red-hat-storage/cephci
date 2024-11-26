@@ -64,16 +64,16 @@ def run(ceph_cluster, **kw):
         fs_util_ceph1.auth_list(source_clients)
         fs_util_ceph2.auth_list(target_clients)
 
-        source_fs = "cephfs" if not erasure else "cephfs-ec"
-        target_fs = "cephfs" if not erasure else "cephfs-ec"
+        source_fs = "cephfs-4-nodes" if not erasure else "cephfs-ec-4-nodes"
+        target_fs = "cephfs-4-nodes" if not erasure else "cephfs-ec-4-nodes"
         fs_details_source = fs_util_ceph1.get_fs_info(source_clients[0], source_fs)
         if not fs_details_source:
             fs_util_ceph1.create_fs(source_clients[0], source_fs)
         fs_details_target = fs_util_ceph1.get_fs_info(target_clients[0], target_fs)
         if not fs_details_target:
             fs_util_ceph1.create_fs(target_clients[0], target_fs)
-        target_user = "mirror_remote"
-        target_site_name = "remote_site"
+        target_user = "mirror_remote-4-nodes"
+        target_site_name = "remote_site-4-nodes"
 
         mds_nodes = ceph_cluster_dict.get("ceph1").get_ceph_objects("mds")
         mds_names_hostname = []

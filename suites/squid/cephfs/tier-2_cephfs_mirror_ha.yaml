@@ -181,9 +181,20 @@ tests:
         ceph1:
           config:
             name: Validate the Synchronisation is successful upon enabling fs mirroring ha setup
+            cleanup: false
       module: cephfs_mirroring.test_cephfs_mirroring_configure_cephfs_mirroring_ha.py
       name: Validate the Synchronisation is successful upon enabling fs mirroring ha setup.
       polarion-id: "CEPH-83575332"
+  - test:
+      abort-on-fail: false
+      desc: "Validate CephFS Mirroring Metrics on a HA Setup"
+      clusters:
+        ceph1:
+          config:
+            name: Validate the CephFS Mirroring Metrics on HA Setup
+      module: cephfs_mirroring.test_cephfs_mirroring_ha_metrics.py
+      name: Validate the CephFS Mirroring Metrics on HA Setup
+      polarion-id: "CEPH-83584059"
   - test:
       abort-on-fail: false
       desc: "Configure CephFS Mirroring HA using a spec file"
@@ -214,4 +225,3 @@ tests:
       module: cephfs_mirroring.test_cephfs_mirroring_configure_cephfs_mirroring_ha_on_4_nodes.py
       name: Validate FS mirroring on ha with 4 nodes
       polarion-id: "CEPH-83575338"
-
