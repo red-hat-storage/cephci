@@ -34,12 +34,10 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                custom_repo: https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-8.0-202409180241.ci.0/IBM-CEPH-8.0-202409180241.ci.0-rhel9.repo
-                custom_image: cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-30
+                custom_repo: "cdn"
+                custom_image: false
                 rhcs-version: "8.0"
                 mon-ip: node1
-                orphan-initial-daemons: true
-                skip-monitoring-stack: true
                 log-to-file: true
           - config:
               command: add_hosts
