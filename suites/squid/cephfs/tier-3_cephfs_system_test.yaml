@@ -216,6 +216,16 @@ tests:
        ENABLE_LOGS : 1
        daemon_list : ['mds','client','osd','mgr','mon']
        daemon_dbg_level : {'mds':20,'client':20,'osd':10,'mgr':10,'mon':10}
+  -
+    test:
+      abort-on-fail: false
+      desc: "Setup Crash configuration"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-setup
+      config:
+       crash_setup : 1
+       daemon_list : ['mds','osd','mgr','mon']
+
   - test:
       name: CephFS_System_test
       module: test_parallel.py
@@ -242,6 +252,15 @@ tests:
       name: "CephFS System Test Client IO 7"
       config:
        test_name : io_test_workflow_7
+  -
+    test:
+      abort-on-fail: false
+      desc: "Check for Crash"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-check
+      config:
+       crash_check : 1
+       daemon_list : ['mds','osd','mgr','mon']
   -
     test:
       abort-on-fail: false

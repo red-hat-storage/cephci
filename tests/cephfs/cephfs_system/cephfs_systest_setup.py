@@ -41,7 +41,7 @@ def run(ceph_cluster, **kw):
         file = "cephfs_systest_data.json"
         mnt_type_list = ["kernel", "fuse", "nfs"]
         client1 = clients[0]
-        ephemeral_pin = config.get("ephemeral_pin", 0)
+        ephemeral_pin = config.get("ephemeral_pin", 1)
         client1.upload_file(
             sudo=True,
             src=f"tests/cephfs/cephfs_system/{file}",
@@ -74,6 +74,7 @@ def run(ceph_cluster, **kw):
             client1.exec_command(sudo=True, cmd=cmd)
 
         for i in cephfs_config:
+            mds_pin_cnt = 1
             fs_details = fs_util_v1.get_fs_info(client1, fs_name=i)
             if not fs_details:
                 log.info(f"Creating FileSystem {i}")
@@ -115,7 +116,8 @@ def run(ceph_cluster, **kw):
                         )
                         fs_util_v1.create_subvolume(client1, **sv_iter)
                         cephfs_config[i]["group"][j][type].update({sv_name: {}})
-                        mnt_client = random.choice(clients)
+                        mnt_client1 = random.choice(clients)
+                        mnt_client2 = random.choice(clients)
                         cmd = f"ceph fs subvolume getpath {i} {sv_name}"
                         if "default" not in j:
                             cmd += f" {j}"
@@ -126,7 +128,6 @@ def run(ceph_cluster, **kw):
                         mnt_path = subvol_path.strip()
                         mount_params = {
                             "fs_util": fs_util_v1,
-                            "client": mnt_client,
                             "mnt_path": mnt_path,
                             "fs_name": i,
                             "export_created": 0,
@@ -143,11 +144,16 @@ def run(ceph_cluster, **kw):
                                 }
                             )
                         log.info(f"Perform {mnt_type} mount of {sv_name}")
-                        mounting_dir, _ = fs_util_v1.mount_ceph(mnt_type, mount_params)
+                        mount_params.update({"client": mnt_client1})
+                        mounting_dir1, _ = fs_util_v1.mount_ceph(mnt_type, mount_params)
+                        mount_params.update({"client": mnt_client2})
+                        mounting_dir2, _ = fs_util_v1.mount_ceph(mnt_type, mount_params)
                         cephfs_config[i]["group"][j][type][sv_name].update(
                             {
-                                "mnt_pt": mounting_dir,
-                                "mnt_client": mnt_client.node.hostname,
+                                "mnt_pt1": mounting_dir1,
+                                "mnt_client1": mnt_client1.node.hostname,
+                                "mnt_pt2": mounting_dir2,
+                                "mnt_client2": mnt_client2.node.hostname,
                                 "mnt_type": mnt_type,
                             }
                         )
@@ -159,13 +165,19 @@ def run(ceph_cluster, **kw):
                                     "nfs_server": nfs_server,
                                 }
                             )
-                        elif ephemeral_pin == 1:
-                            log.info("Configure MDS pinning")
-                            cmd = f"setfattr -n ceph.dir.pin.random -v 0.75 {mounting_dir}"
-                            mnt_client.exec_command(
+                        elif (ephemeral_pin == 1) and (mds_pin_cnt < 5):
+                            log.info(f"Configure MDS pinning : {mds_pin_cnt}")
+                            cmd = f"setfattr -n ceph.dir.pin.random -v 0.75 {mounting_dir1}"
+                            mnt_client1.exec_command(
                                 sudo=True,
                                 cmd=cmd,
                             )
+                            cmd = f"setfattr -n ceph.dir.pin.random -v 0.75 {mounting_dir2}"
+                            mnt_client2.exec_command(
+                                sudo=True,
+                                cmd=cmd,
+                            )
+                            mds_pin_cnt += 1
 
         log.info(f"CephFS System Test config : {cephfs_config}")
         f = clients[0].remote_file(
