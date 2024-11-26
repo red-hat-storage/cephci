@@ -38,8 +38,6 @@ tests:
                 custom_image: false
                 rhcs-version: "7.1"
                 mon-ip: node1
-                orphan-initial-daemons: true
-                skip-monitoring-stack: true
                 log-to-file: true
           - config:
               command: add_hosts
