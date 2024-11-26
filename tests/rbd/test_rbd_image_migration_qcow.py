@@ -46,7 +46,8 @@ def test_qcow_image_migration(rbd_obj, client, **kw):
     }
 
     client.exec_command(
-        cmd="sudo curl -o /mnt/ubuntu-12.04.qcow2 http://download.ceph.com/qa/ubuntu-12.04.qcow2"
+        cmd="sudo curl -o /mnt/ubuntu-12.04.qcow2 http://download.ceph.com/qa/ubuntu-12.04.qcow2",
+        long_running=True,
     )
     out, err = client.exec_command(
         cmd="sudo du -h /mnt/ubuntu-12.04.qcow2", output=True
@@ -92,6 +93,7 @@ def test_qcow_image_migration(rbd_obj, client, **kw):
                 action="execute",
                 dest_spec=image_spec,
                 client_node=client,
+                long_running=True,
                 **kw,
             )
 
@@ -99,6 +101,7 @@ def test_qcow_image_migration(rbd_obj, client, **kw):
             if verify_migration_state(
                 action="execute",
                 image_spec=image_spec,
+                long_running=True,
                 **kw,
             ):
                 log.error("Failed to execute migration")
