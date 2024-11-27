@@ -314,15 +314,25 @@ tests:
             script-name: test_bucket_notifications.py
             config-file-name: test_bucket_notification_kafka_broker_ms_replication_from_sec.yaml
 
-# please include test cases before below rename testcase as the process is disruptive currently
-  # - test:
-  #     clusters:
-  #       ceph-pri:
-  #         config:
-  #           script-name: test_check_sharding_enabled.py
-  #           config-file-name: test_zone_rename.yaml
-  #     desc: Test zone rename in master
-  #     module: sanity_rgw_multisite.py
-  #     name: Perform zone rename in master
-  #     polarion-id: CEPH-10740
-  #     comments: known issue (BZ2210695)targeted to 8.0
+  - test:
+      name: resharding in versioned bucket with and without suspend versioning
+      desc: test resharding in versioned bucket with and without suspend versioning
+      polarion-id: CEPH-83574431
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_dynamic_bucket_resharding.py
+            verify-io-on-site: ["ceph-sec"]
+            config-file-name: test_versioning_objects_suspend_enable.yaml
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_zone_rename.yaml
+      desc: Test zone rename in master
+      module: sanity_rgw_multisite.py
+      name: Perform zone rename in master
+      polarion-id: CEPH-10740
