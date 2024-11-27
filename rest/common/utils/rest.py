@@ -6,26 +6,32 @@ import json
 import time
 
 import requests
-from dotenv import dotenv_values
 
 from rest.common.config.config import Config
 from rest.common.utils.exceptions import CommandExecutionError, HTTPError
 from utility.log import Log
 
+# from dotenv import dotenv_values
+
+
 log = Log(__name__)
 
 
-def rest():
+def rest(**kw):
     """
     REST method to be used by any test method
     # config = {"IP": "10.12.34.23", "USERNAME": "admin", "PASSWORD":"passwd", "PORT":"3211"}
     """
-    config = dotenv_values(".env")
-    username = config["USERNAME"]
-    password = config["PASSWORD"]
-    port = config["PORT"]
-    ip = config["IP"]
-    rest = REST(ip=ip, username=username, password=password, port=port)
+    # config = dotenv_values(".env")
+    # username = config["USERNAME"]
+    # password = config["PASSWORD"]
+    # port = config["PORT"]
+    # ip = config["IP"]
+    # rest = REST(ip=ip, username=username, password=password, port=port)
+    ceph_cluster = kw.get("ceph_cluster")
+    nodes = ceph_cluster.node_list
+    ip = nodes[0].ip_address
+    rest = REST(ip=ip)
     return rest
 
 
