@@ -56,35 +56,6 @@ tests:
                 all-available-devices: true
               command: apply
               service: osd
-          -
-            config:
-              args:
-                - ceph
-                - fs
-                - volume
-                - create
-                - cephfs
-              command: shell
-          -
-            config:
-              args:
-                placement:
-                  label: mds
-              base_cmd_args:
-                verbose: true
-              command: apply
-              pos_args:
-                - cephfs
-              service: mds
-          - config:
-              args:
-                - ceph
-                - fs
-                - set
-                - cephfs
-                - max_mds
-                - "2"
-              command: shell
         verify_cluster_health: true
       desc: "Execute the cluster deployment workflow."
       destroy-cluster: false
@@ -162,16 +133,6 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "Enable ceph debug logs"
-      module: cephfs_logs_util.py
-      name: cephfs-enable-logs
-      config:
-       ENABLE_LOGS : 1
-       daemon_list : ['mds','client']
-       daemon_dbg_level : {'mds':20,'client':20}
-  -
-    test:
-      abort-on-fail: false
       desc: "Verify quiesce suceeds with IO from nfs,fuse and kernel mounts"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
@@ -220,12 +181,3 @@ tests:
       config:
        test_name: cg_snap_interop_workflow_1
       comments: product bug bz-2273569
-  -
-    test:
-      abort-on-fail: false
-      desc: "Disable ceph debug logs"
-      module: cephfs_logs_util.py
-      name: cephfs-disable-logs
-      config:
-       DISABLE_LOGS : 1
-       daemon_list : ['mds','client']
