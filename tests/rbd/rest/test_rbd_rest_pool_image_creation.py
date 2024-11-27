@@ -17,7 +17,7 @@ def test_rest_image_creation_in_pool(client, **kw):
         client: rbd client obj
         **kw: test data
     """
-    _rest = rest()
+    _rest = rest(**kw)
     config = {}
     rep_pool_config = kw["config"].get("rep_pool_config", None)
     if rep_pool_config:
