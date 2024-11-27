@@ -2773,6 +2773,7 @@ def cg_snap_neg_1(cg_test_params):
                     "timeout": 300,
                     "expiration": 300,
                     "if_await": "False",
+                    "fs_name": fs_name,
                 }
                 try:
                     quiesce_proc = Thread(
@@ -3005,7 +3006,8 @@ def cg_mds_failover(fs_util, client, fs_name, repeat_cnt=1):
         standby_mds = [
             mds["name"] for mds in output["mdsmap"] if mds["state"] == "standby"
         ]
-        mds_to_fail = random.sample(mds_ls, len(standby_mds))
+        sample_cnt = min(3, len(standby_mds))
+        mds_to_fail = random.sample(mds_ls, sample_cnt)
         for mds in mds_to_fail:
             out, rc = client.exec_command(cmd=f"ceph mds fail {mds}", client_exec=True)
             log.info(out)
