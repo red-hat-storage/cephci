@@ -128,6 +128,7 @@ def client_caps_quiesce_test(client, subvol_path, fs_name, qs_set, cg_snap_util)
     """
     out, _ = client.exec_command(sudo=True, cmd="ceph tell mds.0 client ls --f json")
     client_ls = json.loads(out)
+    client_id = ""
     for i in range(0, len(client_ls)):
         log.info(client_ls[i])
         if client_ls[i]["client_metadata"].get("root"):
@@ -135,7 +136,11 @@ def client_caps_quiesce_test(client, subvol_path, fs_name, qs_set, cg_snap_util)
             if sv_path in subvol_path and sv_path != "/":
                 caps_before_quiesce = client_ls[i]["num_caps"]
                 client_id = client_ls[i]["id"]
+                log.info(f"client_id is assigned with value {client_id}")
                 break
+    log.info(
+        f"client_id is assigned with value {client_id} After looping through clients"
+    )
     log.info(f"CG quiesce on members:{qs_set}")
     rand_str = "".join(random.choice(string.digits) for i in range(3))
     qs_id_val = f"caps_test_{rand_str}"

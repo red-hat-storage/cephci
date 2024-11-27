@@ -14,6 +14,11 @@
 #     7. https://bugzilla.redhat.com/show_bug.cgi?id=2264052
 #     8. https://bugzilla.redhat.com/show_bug.cgi?id=2260306
 #     9. https://bugzilla.redhat.com/show_bug.cgi?id=2237038
+#     10.https://bugzilla.redhat.com/show_bug.cgi?id=1892173
+#     11.https://bugzilla.redhat.com/show_bug.cgi?id=2174954
+#     12.https://bugzilla.redhat.com/show_bug.cgi?id=2151501
+#     13.https://bugzilla.redhat.com/show_bug.cgi?id=2315595
+#     14.https://bugzilla.redhat.com/show_bug.cgi?id=2326179
 #===============================================================================================
 tests:
   - test:
@@ -204,3 +209,10 @@ tests:
       module: test_v1client.py
       polarion-id: CEPH-83594645
       desc: Ensure client connection over v1 port does not crash
+
+  - test:
+      name: Mon connection scores testing
+      desc: Verification of mon connection scores in different scenarios
+      module: test_mon_connection_scores.py
+      polarion-id: CEPH-83602911
+      comments: Active bug 2151501

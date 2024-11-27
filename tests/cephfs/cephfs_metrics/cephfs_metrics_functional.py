@@ -23,6 +23,10 @@ Testing cephfs client metrics
 """
 
 
+class Metrics_Value_Not_Matching(Exception):
+    pass
+
+
 def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83588303"
@@ -100,7 +104,7 @@ def run(ceph_cluster, **kw):
             )
             if previous_inode >= current_inode:
                 log.error(f"Failed to verify {inode}")
-                return 1
+                raise Metrics_Value_Not_Matching(f"Failed to verify {inode}")
 
         # Verify cap_hits and cap_miss
         log.info("Verifying cap_hits, cap_miss")
@@ -125,8 +129,7 @@ def run(ceph_cluster, **kw):
             current_cap = mds_metric3["counters"][cap]
             log.info(f"previous_cap: {previous_cap}, current_cap: {current_cap}")
             if previous_cap >= current_cap:
-                log.error(f"Failed to verify {cap}")
-                return 1
+                raise Metrics_Value_Not_Matching(f"Failed to verify {cap}")
 
         # Verify dentry_lease_hits and dentry_lease_miss
         log.info("Verifying dentry_lease_hits, dentry_lease_miss")
@@ -174,7 +177,7 @@ def run(ceph_cluster, **kw):
             )
             if previous_dentry >= current_dentry:
                 log.error(f"Failed to verify {dentry}")
-                return 1
+                raise Metrics_Value_Not_Matching(f"Failed to verify {dentry}")
 
         # Verify opened files
         log.info("Verifying opened files")
@@ -206,8 +209,7 @@ def run(ceph_cluster, **kw):
         final_opened_files = final_metrics["counters"]["opened_files"]
         log.info(f"Increased opened_files: {final_opened_files}")
         if final_opened_files <= mds_metric4["counters"]["opened_files"]:
-            log.error("Failed to verify opened_files")
-            return 1
+            raise Metrics_Value_Not_Matching("Failed to verify opened_files")
         # Kill the tail processes
         try:
             for pid in pids:
@@ -258,21 +260,24 @@ def run(ceph_cluster, **kw):
         # Get final MDS metrics after reading and writing files
         final_metrics3 = fs_util.get_mds_metrics(client1, 0, fuse_mounting_dir_1)
         log.info(f"final_metrics after reading and writing a file: {final_metrics3}")
-
         # Verify if read and write metrics have increased
         for read in rw_list:
             previous_read = rw_dic[read]
             current_read = final_metrics3["counters"][read]
             log.info(f"previous_read: {previous_read}, current_read: {current_read}")
             if previous_read >= current_read:
-                log.error(f"Failed to verify {read}")
-                return 1
+                raise Metrics_Value_Not_Matching(f"Failed to verify {read}")
         ceph_health, _ = client1.exec_command(sudo=True, cmd="ceph -s")
         log.info(ceph_health)
         fs_status, _ = client1.exec_command(sudo=True, cmd="ceph fs status")
         log.info(fs_status)
         return 0
-
+    except Metrics_Value_Not_Matching as e:
+        log.error(e)
+        log.error(traceback.format_exc())
+        log.error("Metrics value not matching print all the metrics")
+        log.error(fs_util.get_mds_metrics(client1, 0, fuse_mounting_dir_1, "cephfs"))
+        return 1
     except CommandFailed as e:
         log.error(e)
         log.error(traceback.format_exc())

@@ -106,7 +106,8 @@ def run(ceph_cluster, **kw):
         if result["fsal"]["name"] != "CEPH":
             do_not_match.append("[fsal][name]")
 
-        elif result["fsal"]["user_id"] != user_id:
+        # In 8.0 the user_id is getting appended with 8 character sample : nfs.test-nfs_32igz.cephfs.540bf01f
+        elif not result["fsal"]["user_id"].startswith(user_id):
             do_not_match.append("[fsid][user_id]")
 
         elif result["fsal"]["fs_name"] != fs_name:

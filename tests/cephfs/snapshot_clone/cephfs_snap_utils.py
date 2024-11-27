@@ -321,16 +321,28 @@ class SnapUtils(object):
         sched_verified = 0
         snap_count = 1
         for i in range(len(sched_snap_list)):
+            log.debug(
+                f"Comparing snapshot {sched_snap_list[i]} with subsequent snapshots."
+            )
             for j in range(i + 1, len(sched_snap_list)):
+                log.debug(
+                    f"Time difference between snapshot {sched_snap_list[i]} and {sched_snap_list[j]} minutes"
+                )
                 if sched_type == m_granularity:
-                    if int(sched_num) == abs(
-                        int(
-                            int(sched_snap_list[i].split("_")[1])
-                            - int(sched_snap_list[j].split("_")[1])
-                        )
-                    ):
+                    time_diff = abs(
+                        int(sched_snap_list[i].split("_")[1])
+                        - int(sched_snap_list[j].split("_")[1])
+                    )
+                    log.debug(
+                        f"Time difference between snapshot {sched_snap_list[i]} and "
+                        f"{sched_snap_list[j]}: {time_diff} minutes"
+                    )
+                    if int(sched_num) == time_diff:
                         sched_verified = 1
                         snap_count += 1
+                        log.info(
+                            f"Verified snapshot interval: {sched_num} {sched_type}. Verified count: {snap_count}"
+                        )
                 if sched_type == "h":
                     hour_val2 = sched_snap_list[j].split("-")[4].split("_")[0]
                     hour_val1 = sched_snap_list[i].split("-")[4].split("_")[0]
@@ -399,7 +411,7 @@ class SnapUtils(object):
         cmd = f"ceph fs snap-schedule status {kw_args.get('sched_path')} --fs {fs_name} -f json"
         if kw_args.get("subvol_name"):
             sv_name = kw_args["subvol_name"]
-            cmd = f"cceph fs snap-schedule status / --subvol {sv_name} --fs {fs_name} -f json"
+            cmd = f"ceph fs snap-schedule status / --subvol {sv_name} --fs {fs_name} -f json"
             if kw_args.get("group_name"):
                 cmd += f" --group {kw_args['group_name']}"
         out, rc = client.exec_command(sudo=True, cmd=cmd)

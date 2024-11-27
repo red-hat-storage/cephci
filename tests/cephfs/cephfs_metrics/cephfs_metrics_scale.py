@@ -20,6 +20,10 @@ Testing CephFS metrics Scale
 """
 
 
+class Metrics_Value_Not_Matching(Exception):
+    pass
+
+
 def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83588355"
@@ -42,6 +46,7 @@ def run(ceph_cluster, **kw):
         client2 = clients[1]
         client3 = clients[2]
         client4 = clients[3]
+
         # install JQ package for all the clients
         for client in [client1, client2, client3, client4]:
             jq_check = client.exec_command(cmd="rpm -qa | grep jq")
@@ -52,6 +57,10 @@ def run(ceph_cluster, **kw):
             fs_util.create_fs(client1, "cephfs")
         cephfs = "cephfs"
         # Generate random string for directory names
+        ranked_mds, _ = client1.exec_command(
+            sudo=True,
+            cmd=f"ceph fs status {cephfs} -f json | jq '.mdsmap[] | select(.rank == 0) | .name'",
+        )
         rand = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
         )
@@ -170,13 +179,17 @@ def run(ceph_cluster, **kw):
                 >= client1_post_inode_metrics["counters"][inode]
             ):
                 log.error(f"Failed to verify {inode} for client1")
-                return 1
+                raise Metrics_Value_Not_Matching(
+                    f"Failed to verify {inode} for client1"
+                )
             if (
                 inode_dic_client3_pre[inode]
                 >= client3_post_inode_metrics["counters"][inode]
             ):
                 log.error(f"Failed to verify {inode} for client3")
-                return 1
+                raise Metrics_Value_Not_Matching(
+                    f"Failed to verify {inode} for client3"
+                )
         log.info("Verified inode metrics for client1 and client3")
         log.info("Verify opened_files metrics for client2 and client4")
         log.info(
@@ -237,10 +250,15 @@ def run(ceph_cluster, **kw):
         log.info(f"client4_post_opened_files: {client4_post_opened_files}")
         if client2_post_opened_files <= pre_opened_files_client2:
             log.error("Failed to verify opened_files for client2")
-            return 1
+            raise Metrics_Value_Not_Matching(
+                "Failed to verify opened_files for client2"
+            )
         if client4_post_opened_files <= pre_opened_files_client4:
             log.error("Failed to verify opened_files for client4")
-            return 1
+            raise Metrics_Value_Not_Matching(
+                "Failed to verify opened_files for client4"
+            )
+
         try:
             for pid in pids2:
                 client2.exec_command(sudo=True, cmd=f"kill {pid}")
@@ -261,10 +279,14 @@ def run(ceph_cluster, **kw):
         # check if it decreased to 0
         if int(post_opened_files_client2) != 0:
             log.error("Failed to verify opened_files for client2 expected 0")
-            return 1
+            raise Metrics_Value_Not_Matching(
+                "Failed to verify opened_files for client2"
+            )
         if int(post_opened_files_client4) != 0:
             log.error("Failed to verify opened_files for client4 expected 0")
-            return 1
+            raise Metrics_Value_Not_Matching(
+                "Failed to verify opened_files for client4"
+            )
         log.info("Verify if other clients opened_files metrics remain same")
         post_opened_files_client1 = fs_util.get_mds_metrics(
             client1, 0, fuse_mounting_dir_1, cephfs
@@ -276,10 +298,14 @@ def run(ceph_cluster, **kw):
         log.info(f"post_opened_files_client3: {post_opened_files_client3}")
         if int(post_opened_files_client1) != 0:
             log.error("Failed to verify opened_files for client1 expected 0")
-            return 1
+            raise Metrics_Value_Not_Matching(
+                "Failed to verify opened_files for client1"
+            )
         if int(post_opened_files_client3) != 0:
             log.error("Failed to verify opened_files for client3 expected 0")
-            return 1
+            raise Metrics_Value_Not_Matching(
+                "Failed to verify opened_files for client3"
+            )
         log.info("Verified opened_files metrics for client2 and client4")
 
         # verify dentry_lease_hits and dentry_lease_miss metrics for client2 and client4
@@ -353,10 +379,14 @@ def run(ceph_cluster, **kw):
         for dentry in dentry_list:
             if pre_dentry_client2[dentry] >= post_dentry_client2[dentry]:
                 log.error(f"Failed to verify {dentry} for client2")
-                return 1
+                raise Metrics_Value_Not_Matching(
+                    f"Failed to verify {dentry} for client2"
+                )
             if pre_dentry_client4[dentry] >= post_dentry_client4[dentry]:
                 log.error(f"Failed to verify {dentry} for client4")
-                return 1
+                raise Metrics_Value_Not_Matching(
+                    f"Failed to verify {dentry} for client4"
+                )
         log.info("Verify if other clients dentry metrics remain same")
         post_dentry_client1 = fs_util.get_mds_metrics(
             client1, 0, fuse_mounting_dir_1, cephfs
@@ -369,10 +399,14 @@ def run(ceph_cluster, **kw):
         for dentry in dentry_list:
             if pre_dentry_client1[dentry] != post_dentry_client1[dentry]:
                 log.error(f"Failed to verify {dentry} for client1")
-                return 1
+                raise Metrics_Value_Not_Matching(
+                    f"Failed to verify {dentry} for client1"
+                )
             if pre_dentry_client3[dentry] != post_dentry_client3[dentry]:
                 log.error(f"Failed to verify {dentry} for client3")
-                return 1
+                raise Metrics_Value_Not_Matching(
+                    f"Failed to verify {dentry} for client3"
+                )
         log.info("Verified dentry metrics for client2 and client4")
 
         # Verify total_read_ops, total_read_size, total_write_ops, and total_write_size
@@ -433,16 +467,25 @@ def run(ceph_cluster, **kw):
         for rw in rw_list[:2]:
             if pre_read_ops_client1[rw] >= post_read_ops_client1[rw]:
                 log.error(f"Failed to verify {rw} for client1")
-                return 1
+                raise Metrics_Value_Not_Matching(f"Failed to verify {rw} for client1")
         for rw in rw_list[2:]:
             if pre_write_ops_client2[rw] >= post_write_ops_client2[rw]:
                 log.error(f"Failed to verify {rw} for client2")
-                return 1
+                raise Metrics_Value_Not_Matching(f"Failed to verify {rw} for client2")
         log.info(
             "Verified total_read_ops, total_read_size, total_write_ops, and total_write_size"
         )
         return 0
 
+    except Metrics_Value_Not_Matching as e:
+        log.error(e)
+        log.error(traceback.format_exc())
+        log.error("Metrics value not matching print all the metrics")
+        log.error(fs_util.get_mds_metrics(client1, 0, fuse_mounting_dir_1, cephfs))
+        log.error(fs_util.get_mds_metrics(client2, 0, fuse_mounting_dir_2, cephfs))
+        log.error(fs_util.get_mds_metrics(client3, 0, fuse_mounting_dir_3, cephfs))
+        log.error(fs_util.get_mds_metrics(client4, 0, fuse_mounting_dir_4, cephfs))
+        return 1
     except CommandFailed as e:
         log.error(e)
         log.error(traceback.format_exc())
@@ -452,7 +495,6 @@ def run(ceph_cluster, **kw):
         log.error(e)
         log.error(traceback.format_exc())
         return 1
-
     finally:
         ceph_health, _ = client1.exec_command(sudo=True, cmd="ceph -s")
         log.info(ceph_health)
