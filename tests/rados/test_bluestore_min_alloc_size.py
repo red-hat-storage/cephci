@@ -3,7 +3,6 @@ Module to test bluestore_min_alloc_size functionality on RHCS 7.0 and above clus
 
 """
 
-import json
 import re
 import time
 
@@ -38,7 +37,7 @@ def run(ceph_cluster, **kw):
     build = (re.search(regex, config.get("build", config.get("rhbuild")))).groups()[0]
     if not float(build) >= 7.0:
         log.info(
-            "Test running on version less than 7.0, skipping verifying Reads Balancer functionality"
+            "Test running on version less than 7.0, skipping verifying Bluestore_min_alloc_size functionality"
         )
         return 0
 
@@ -101,7 +100,6 @@ def run(ceph_cluster, **kw):
             min_alloc_size_hdd = int(
                 mon_obj.get_config(section="osd", param="bluestore_min_alloc_size_hdd")
             )
-
             min_alloc_size_ssd = int(
                 mon_obj.get_config(section="osd", param="bluestore_min_alloc_size_ssd")
             )
@@ -115,7 +113,6 @@ def run(ceph_cluster, **kw):
                     daemon_type="osd", daemon_id=osd_id
                 )
                 log.debug(f"metadata details for OSD : {osd_id} is \n{osd_meta}\n")
-
                 if (
                     not min_alloc_size_hdd
                     == min_alloc_size_ssd
@@ -135,9 +132,10 @@ def run(ceph_cluster, **kw):
                 log.info(
                     f"OSDs successfully deployed with the new alloc size, and verified the size on OSD: {osd_id}"
                 )
+
                 """
-                enhance the tests by adding ceph config show osd.id and
-                ceph daemon osd.id config show | grep min_alloc_size
+                enhance the tests by adding ceph config show osd.id and ceph
+                daemon osd.id config show
                 """
                 # Enhanced test: Check ceph config show and daemon output for each OSD
                 show_config_hdd = mon_obj.show_config(
@@ -160,15 +158,9 @@ def run(ceph_cluster, **kw):
                     "Ceph config show is successfully verified for the value of min_alloc_size"
                 )
 
-                # determine the OSD node for chosen osd
-                osd_node = rados_obj.fetch_host_node(
+                json_out = mon_obj.daemon_config_show(
                     daemon_type="osd", daemon_id=f"osd.{osd_id}"
                 )
-
-                # determine osd's block device path
-                _cmd = f"cephadm shell -- ceph daemon osd.{osd_id} config show --format json"
-                json_str_out, _ = osd_node.exec_command(cmd=_cmd, sudo=True)
-                json_out = json.loads(json_str_out)
                 daemon_alloc_size_hdd = json_out["bluestore_min_alloc_size_hdd"]
                 daemon_alloc_size_ssd = json_out["bluestore_min_alloc_size_ssd"]
 
@@ -259,7 +251,7 @@ def run(ceph_cluster, **kw):
                 return True
 
             rm_osd = pg_set[0]
-            log.debug(f"Selected OSD for removal : {rm_osd}")
+            log.debug(f"Selected for removal : {rm_osd}")
             try:
                 if not remove_osd_check_metadata(
                     target_osd=rm_osd, alloc_size=default_min_alloc_size
@@ -290,15 +282,10 @@ def run(ceph_cluster, **kw):
 
                 log.info("Successfully modified the value of min_alloc_size")
 
-                # determine the OSD node for chosen osd
-                osd_node = rados_obj.fetch_host_node(
+                # determine osd's block device path
+                json_out = mon_obj.daemon_config_show(
                     daemon_type="osd", daemon_id=f"osd.{osd_id}"
                 )
-
-                # determine osd's block device path
-                _cmd = f"cephadm shell -- ceph daemon osd.{osd_id} config show --format json"
-                json_str_out, _ = osd_node.exec_command(cmd=_cmd, sudo=True)
-                json_out = json.loads(json_str_out)
                 daemon_alloc_size_hdd = json_out["bluestore_min_alloc_size_hdd"]
                 daemon_alloc_size_ssd = json_out["bluestore_min_alloc_size_ssd"]
 
@@ -307,6 +294,7 @@ def run(ceph_cluster, **kw):
                     == daemon_alloc_size_ssd
                     == default_min_alloc_size
                 ):
+
                     log.error(
                         f"min_alloc_size does not match the expected custom value of {default_min_alloc_size}"
                         f"min_alloc_size_ssd on cluster: {daemon_alloc_size_ssd}"

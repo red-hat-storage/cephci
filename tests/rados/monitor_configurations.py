@@ -14,6 +14,7 @@ elections
  configuration database.
 """
 
+import json
 import re
 import time
 
@@ -428,3 +429,49 @@ class MonConfigMethods:
             log.error(f"The error is:{error}")
             return "null"
         return result
+
+    def daemon_config_show(self, daemon_type: str, daemon_id: str) -> dict:
+        """
+        Fetches the full configuration of the given daemon in a cluster.
+
+        Args:
+            daemon_type (str): Type of daemon (e.g., 'osd', 'mon', 'mgr')
+            daemon_id (str): Name or ID of the daemon.
+
+        Returns:
+            dict: Configuration in JSON format.
+
+        Example:
+            ceph daemon mgr.ceph-dpentako-bluestore-fku9su-node1-installer.ssjeao config show --format json
+
+        """
+
+        cmd = f"cephadm shell -- ceph daemon {daemon_type}.{daemon_id} config show --format json"
+        daemon_node = self.rados_obj.fetch_host_node(daemon_type, daemon_id)
+        json_str = daemon_node.exec_command(args=[cmd], sudo=True)
+        json_output = json.loads(json_str)
+        return json_output
+
+    def daemon_config_get(self, daemon_type: str, daemon_id: str, param: str) -> dict:
+        """
+                Fetches a specific configuration parameter of a given daemon.
+
+                Args:
+                    daemon_type (str): Type of daemon (e.g., 'osd', 'mon', 'mgr')
+                    daemon_id (str): Name or ID of the daemon.
+                    param (str): Configuration parameter to retrieve.
+
+                Returns:
+                    str: Value of the configuration parameter.
+
+                Example:
+                     ceph daemon osd.9 config get bluestore_min_alloc_size_hdd --format json
+        {"bluestore_min_alloc_size_hdd":"8192"}
+
+        """
+
+        cmd = f"cephadm shell -- ceph daemon {daemon_type}.{daemon_id} config get {param} --format json"
+        daemon_node = self.rados_obj.fetch_host_node(daemon_type, daemon_id)
+        param_str = daemon_node.exec_command(args=[cmd], sudo=True)
+        param_output = json.loads(param_str)
+        return param_output
