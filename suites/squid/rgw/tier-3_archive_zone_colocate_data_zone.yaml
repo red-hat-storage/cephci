@@ -247,19 +247,6 @@ tests:
 
 
   # Test work flow
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            set-env: true
-            script-name: user_create.py
-            config-file-name: non_tenanted_user.yaml
-            copy-user-info-to-site: ceph-sec
-      desc: create non-tenanted user
-      module: sanity_rgw_multisite.py
-      name: create non-tenanted user
-      polarion-id: CEPH-83575199
   - test:
       abort-on-fail: true
       clusters:
@@ -273,7 +260,6 @@ tests:
       desc: "Configure HAproxy"
       module: haproxy.py
       name: "Configure HAproxy"
-
 
   - test:
       clusters:

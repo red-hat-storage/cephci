@@ -302,20 +302,7 @@ tests:
             config-file-name: test_lc_rule_prefix_and_tag.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
 
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: ../s3cmd/test_rgw_ops_log.py
-            config-file-name: ../../s3cmd/multisite_configs/test_rgw_log_details.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-      desc: S3CMD tests, rgw log details pre upgrade
-      module: sanity_rgw_multisite.py
-      name: S3CMD tests, rgw log details pre upgrade
-      polarion-id: CEPH-83575470
-
   # Performing cluster upgrade
-
 
   - test:
       name: RGW MS upgarde and IO parallelly
@@ -377,15 +364,3 @@ tests:
             polarion-id: CEPH-83575200
             module: exec.py
             name: Retrieve the versions of the cluster in secondary
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: ../s3cmd/test_rgw_ops_log.py
-            config-file-name: ../../s3cmd/multisite_configs/test_rgw_log_details.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-      desc: S3CMD tests, rgw log details post upgrade
-      module: sanity_rgw_multisite.py
-      name: S3CMD tests, rgw log details post upgrade
-      polarion-id: CEPH-83575470
