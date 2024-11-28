@@ -62,7 +62,7 @@ def run(ceph_cluster, **kw):
 
             # Now create a new user and try reading the file
             cmd = "useradd test_non_root_user"
-            clients[1].exec_command(cmd=cmd, sudo=True)
+            clients[1].exec_command(cmd=cmd, sudo=True, check_ec=False)
 
             # Try accessing the file using the new user
             flag = False

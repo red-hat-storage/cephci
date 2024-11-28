@@ -49,13 +49,15 @@ def run(ceph_cluster, **kw):
 
         # Create a file on Client 1
         cmd = (
-            f"python3 -m pip install ply;cd {nfs_mount};git clone git://linux-nfs.org/~bfields/pynfs.git;cd pynfs;-- "
+            "python3 -m pip install ply;"
+            f"cd {nfs_mount};"
+            "git clone git://git.linux-nfs.org/projects/bfields/pynfs.git;cd pynfs;-- "
             f"yes |"
             f"python setup.py build;cd nfs{version};./testserver.py {nfs_server_name}:{nfs_export}_0 -v --outfile "
             f"~/pynfs.run --maketree --showomit --rundep all"
         )
 
-        out, _ = clients[0].exec_command(cmd=cmd, sudo=True)
+        out, _ = clients[0].exec_command(cmd=cmd, sudo=True, timeout=600)
         if "FailureException" in out:
             OperationFailedError(f"Failed to run {cmd} on {clients[0].hostname}")
     except Exception as e:
