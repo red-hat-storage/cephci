@@ -190,7 +190,6 @@ tests:
       module: test_s3.py
       name: execute s3tests
       polarion-id: CEPH-83575225
-      comments: BZ2268234 - list_buckets_bad_auth targeted to 8.0
 
   - test:
       name: object level retention test Governance mode

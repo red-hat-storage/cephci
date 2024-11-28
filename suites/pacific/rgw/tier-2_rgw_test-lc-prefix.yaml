@@ -160,7 +160,6 @@ tests:
       name: Bucket Lifecycle Object_transition_tests to ec pool
       desc: Test Bucket Lifecycle Object_transition_tests to ec pool
       polarion-id: CEPH-83574470
-      comments: Known issue Bug-2172838
       module: sanity_rgw.py
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py

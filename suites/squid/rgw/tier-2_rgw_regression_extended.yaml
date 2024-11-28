@@ -75,7 +75,6 @@ tests:
       desc: BucketNotification with users in same tenant and different tenant
       polarion-id: CEPH-11204
       module: sanity_rgw.py
-      comments: known issue (bz-2309013)
       config:
         run-on-rgw: true
         extra-pkgs:
@@ -256,7 +255,6 @@ tests:
       module: test_s3.py
       name: execute s3tests
       polarion-id: CEPH-83575225
-      comments: BZ2268234 - list_buckets_bad_auth targeted to 8.0
 
   - test:
       abort-on-fail: false

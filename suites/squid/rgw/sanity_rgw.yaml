@@ -213,7 +213,6 @@ tests:
       desc: Apply lc configuration to bucket with tenant user and perform get lc with other users of tenant
       polarion-id: CEPH-11206
       module: sanity_rgw.py
-      comments: known issue (bz-2302940)
       config:
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_bucket_put_get_lifecycle_configuration_with_tenant_users.yaml
