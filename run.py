@@ -822,17 +822,30 @@ def run(args):
                 # Initialize the cluster with the expected rhcs_version
                 ceph_cluster_dict[cluster_name].rhcs_version = _rhcs_version
                 if mod_file_name not in skip_tc_list or do_not_skip_test:
-                    rc = test_mod.run(
-                        ceph_cluster=ceph_cluster_dict[cluster_name],
-                        ceph_nodes=ceph_cluster_dict[cluster_name],
-                        config=config,
-                        parallel=parallel,
-                        test_data=ceph_test_data,
-                        ceph_cluster_dict=ceph_cluster_dict,
-                        clients=clients,
-                        run_config=run_config,
-                    )
-
+                    if parallel:
+                        parallel_tcs, rc = test_mod.run(
+                            ceph_cluster=ceph_cluster_dict[cluster_name],
+                            ceph_nodes=ceph_cluster_dict[cluster_name],
+                            config=config,
+                            parallel=parallel,
+                            test_data=ceph_test_data,
+                            ceph_cluster_dict=ceph_cluster_dict,
+                            clients=clients,
+                            run_config=run_config,
+                            tc=tc,
+                        )
+                        tcs.extend(parallel_tcs)
+                    else:
+                        rc = test_mod.run(
+                            ceph_cluster=ceph_cluster_dict[cluster_name],
+                            ceph_nodes=ceph_cluster_dict[cluster_name],
+                            config=config,
+                            parallel=parallel,
+                            test_data=ceph_test_data,
+                            ceph_cluster_dict=ceph_cluster_dict,
+                            clients=clients,
+                            run_config=run_config,
+                        )
                 else:
                     rc = -1
 
