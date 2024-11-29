@@ -14,7 +14,7 @@ def create_group_and_verify(**kw):
         kw(dict): Key/value pairs that needs to be provided to the installer
             Example::
             Supported keys:
-                pool(str): pool nane where group should be created
+                pool(str): pool name where group should be created
                 namespace(str): pool|[namespace] where greoup should be created
                 group(str): group name to be created
     """
@@ -92,7 +92,7 @@ def add_image_to_group_and_verify(**kw):
         kw(dict): Key/value pairs that needs to be provided to the installer
             Example::
             Supported keys:
-                pool(str): pool nane where group should be created
+                pool(str): pool name where group should be created
                 namespace(str): pool|[namespace] where greoup should be created
                 group(str): group name to be created
                 image(str): image to be added to the group
@@ -147,7 +147,7 @@ def create_snap_and_verify(**kw):
         kw(dict): Key/value pairs that needs to be provided to this method
             Example::
             Supported keys:
-                pool(str): pool nane where group should be created
+                pool(str): pool name where group should be created
                 namespace(str): pool|[namespace] where greoup should be created
                 group(str): group name to be created
                 snap(str): snap to be created to the group
@@ -202,7 +202,7 @@ def rollback_to_snap(**kw):
         kw(dict): Key/value pairs that needs to be provided to this method
             Example::
             Supported keys:
-                pool(str): pool nane where group should be created
+                pool(str): pool name where group should be created
                 namespace(str): pool|[namespace] where greoup should be created
                 group(str): group name to be created
                 snap(str): snap to be rollbacked to the group
@@ -236,3 +236,65 @@ def rollback_to_snap(**kw):
     else:
         log.info(f"SUCCESS: Group {group} rollbacked to {snap} successfully")
         return 0
+
+
+def group_info(**kw):
+    """
+    Displays Pool Group info
+    Args:
+        kw(dict): Key/value pairs that needs to be provided to this method
+            Example::
+            Supported keys:
+                pool(str): pool name where group exist
+                group(str): group name for which information needs to be retrieved
+    """
+    rbd = Rbd(kw["client"])
+    pool = kw.get("pool", "rbd")
+    group = kw.get("group", None)
+    group_info_kw = kw
+    group_info_kw.pop("client")
+    if pool is not None:
+        group_info_kw.update({"pool": pool})
+    if group is not None:
+        group_info_kw.update({"group": group})
+    else:
+        log.error(
+            f"Group is the must param for displaying group info for group: {group}"
+        )
+        return 1
+
+    # Group info
+    (group_i_out, group_i_err) = rbd.group.info(**group_info_kw)
+    return (group_i_out, group_i_err)
+
+
+def group_snap_info(**kw):
+    """
+    Displays info for group snapshot
+    Args:
+        kw(dict): Key/value pairs that needs to be provided to this method
+            Example::
+            Supported keys:
+                pool(str): pool name where group is present
+                group(str): group name for which information needs to be retrived
+                snap(str): group snapshot name for which info is needed
+    """
+    rbd = Rbd(kw["client"])
+    pool = kw.get("pool", "rbd")
+    group = kw.get("group", None)
+    snap = kw.get("snap", None)
+    group_snap_info_kw = kw
+    group_snap_info_kw.pop("client")
+    if pool is not None:
+        group_snap_info_kw.update({"pool": pool})
+    if snap is not None:
+        group_snap_info_kw.update({"snap": snap})
+    if group is not None:
+        group_snap_info_kw.update({"group": group})
+    else:
+        log.error(f"Group is the must param for group snapshot information: {group}")
+        return 1
+
+    # Group info
+    (group_snap_out, group_snap_err) = rbd.group.snap.info(**group_snap_info_kw)
+    return (group_snap_out, group_snap_err)
