@@ -1,5 +1,6 @@
 # Suite contains tests related to osd re-balance upon OSD addition / removal
 # conf - conf/squid/rados/11-node-cluster.yaml
+# RHOS-d run duration: 60 mins
 tests:
   - test:
       name: setup install pre-requisistes

@@ -1,5 +1,6 @@
 # Suite contains basic tier-4 rados tests
 # conf - conf/squid/rados/13-node-cluster.yaml
+# RHOS-d run duration: 170 mins
 tests:
   - test:
       name: setup install pre-requisistes
