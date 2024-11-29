@@ -154,3 +154,19 @@ tests:
           obj_end: 15
           normal_objs: 400
           num_keys_obj: 200001
+
+  - test:
+      name: Ceph Volume utility zap test with destroy flag
+      module: test_cephvolume_workflows.py
+      polarion-id:
+      desc: verify ceph-volume lvm zap functionality with destroy flag
+      config:
+        zap_with_destroy_flag: true
+
+  - test:
+      name: Ceph Volume utility zap test without destroy flag
+      module: test_cephvolume_workflows.py
+      polarion-id:
+      desc: verify ceph-volume lvm zap functionality without destroy flag
+      config:
+        zap_without_destroy_flag: true
