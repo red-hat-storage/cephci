@@ -6,6 +6,7 @@
 # Conf: conf/squid/rados/7-node-cluster.yaml
 #
 #===============================================================================================
+# RHOS-d run duration: 190 mins
 tests:
   - test:
       name: setup install pre-requisistes

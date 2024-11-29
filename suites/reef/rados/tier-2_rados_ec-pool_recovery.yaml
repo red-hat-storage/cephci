@@ -197,3 +197,71 @@ tests:
           - ec_pool_overwrite
           - re_pool_overwrite
       desc: EC pool with Overwrites & create RBD pool
+
+# below tests have been moved here from - tier-2_rados_test-clay-ecpool.yaml
+  - test:
+      name: EC pool with clay profile for RBD
+      module: test_clay_ecpool.py
+      polarion-id: CEPH-83574881
+      config:
+        clay_pool:
+          profile_name: clay_profile1
+          pool_name: clay_ec_pool1
+          k: 4
+          m: 3
+          d: 6
+          plugin: clay
+          app_name: rbd
+          erasure_code_use_overwrites: "true"
+          crush-failure-domain: osd
+          force: true
+          test_overwrites_pool: true
+          delete_pools: true
+          image_name: test_clay_image1
+          image_size: 50G
+          metadata_pool: clay_meta_pool1
+      desc: Create and delete CLAY profile EC pool with RBD Images
+
+  - test:
+      name: Pool tests with clay profile for RBD Images
+      module: test_clay_ecpool.py
+      polarion-id: CEPH-83574880
+      config:
+        clay_pool:
+          profile_name: clay_profile2
+          pool_name: clay_ec_pool2
+          k: 4
+          m: 2
+          d: 5
+          plugin: clay
+          app_name: rbd
+          erasure_code_use_overwrites: "true"
+          crush-failure-domain: osd
+          force: true
+          test_overwrites_pool: true
+          delete_pools: true
+          image_name: test_clay_image2
+          image_size: 50G
+          metadata_pool: clay_meta_pool2
+          test_tier3_system_tests: true
+          test_compression:
+            configurations:
+              - config-1:
+                  compression_mode: force
+                  compression_algorithm: snappy
+                  compression_required_ratio: 0.3
+                  compression_min_blob_size: 1B
+                  byte_size: 10KB
+              - config-2:
+                  compression_mode: passive
+                  compression_algorithm: zlib
+                  compression_required_ratio: 0.7
+                  compression_min_blob_size: 10B
+                  byte_size: 100KB
+              - config-3:
+                  compression_mode: aggressive
+                  compression_algorithm: zstd
+                  compression_required_ratio: 0.5
+                  compression_min_blob_size: 1KB
+                  byte_size: 100KB
+      desc: Perform tests on EC pools having a RBD Image

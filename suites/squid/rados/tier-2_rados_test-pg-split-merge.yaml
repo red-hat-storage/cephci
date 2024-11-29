@@ -1,4 +1,5 @@
 # Suite contains tests related pg split and merge scenario
+# RHOS-d run duration: 290 mins
 tests:
   - test:
       name: setup install pre-requisistes
