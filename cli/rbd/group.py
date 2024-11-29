@@ -32,7 +32,7 @@ class Group(Cli):
 
     def list(self, **kw):
         """
-        lists all grouos in a given pool/[namespace], if pool is not given then list in default pool i.e rbd.
+        lists all groups in a given pool/[namespace], if pool is not given then list in default pool i.e rbd.
         Args:
         kw(dict): Key/value pairs that needs to be provided to the installer
             Example::
@@ -46,6 +46,23 @@ class Group(Cli):
         kw_copy = deepcopy(kw)
         pool_spec = kw_copy.pop("pool-spec", "")
         cmd = f"{self.base_cmd} list {pool_spec} {build_cmd_from_args(**kw_copy)}"
+
+        return self.execute_as_sudo(cmd=cmd)
+
+    def info(self, **kw):
+        """
+        lists info of group snapshot, if pool is not given then list in default pool i.e rbd.
+        Args:
+        kw(dict): Key/value pairs that needs to be provided to the installer
+            Example::
+            Supported keys:
+                pool(str) : name of the pool into which namespace should be stored
+                namespace(str): namespace in the pool
+                pool-spec(str): <pool-name>[/<namespace>]
+                format(str): json format output of listing namespace
+                See rbd help group ls/list for more supported keys
+        """
+        cmd = f"{self.base_cmd} info {build_cmd_from_args(**kw)}"
 
         return self.execute_as_sudo(cmd=cmd)
 
@@ -210,6 +227,26 @@ class Group(Cli):
             kw_copy = deepcopy(kw)
             group_spec = kw_copy.pop("group-spec", "")
             cmd = f"{self.base_cmd} list {group_spec} {build_cmd_from_args(**kw_copy)}"
+
+            return self.parent.execute_as_sudo(cmd=cmd)
+
+        def info(self, **kw):
+            """
+            lists information for particular group snaps in a given pool.
+            If pool is not given then list in default pool i.e rbd.
+            Args:
+            kw(dict): Key/value pairs that needs to be provided to the installer
+                Example::
+                Supported keys:
+                    pool(str) : name of the pool where group is present
+                    group(str): group name where snap to be listed
+                    snap(str): group snapshot name to be listed
+                    format(str): json format output of listing namespace
+                    See rbd help group snap ls/list for more supported keys
+            """
+            kw_copy = kw
+            group_spec = kw_copy.pop("group-spec", "")
+            cmd = f"{self.base_cmd} info {group_spec} {build_cmd_from_args(**kw_copy)}"
 
             return self.parent.execute_as_sudo(cmd=cmd)
 
