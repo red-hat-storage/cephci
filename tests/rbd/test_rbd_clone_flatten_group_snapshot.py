@@ -55,9 +55,9 @@ def clone_flatten_group_snapshot(rbd_obj, client, **kw):
     """
         Test to verify Cloning and Flattening a Group Snapshot
     Args:
-        rbd: RBD object
-        pool_type: pool type (ec_pool_config or rep_pool_config)
-        **kw: test data
+        rbd_obj: RBD object
+        client : client node object
+        **kw: any other arguments
     """
 
     kw["client"] = client
@@ -165,11 +165,11 @@ def clone_flatten_group_snapshot(rbd_obj, client, **kw):
             }
             _, err = rbd.clone(**clone_spec)
             if err and "parent snapshot must be protected" in err:
-                log.error(
-                    f"Clone creation failed  as expected for {pool}/{image}  for clone fomrat 1 , with error {err}"
+                log.info(
+                    f"Clone creation failed  as expected for {pool}/{image}  for clone format 1 , with error {err}"
                 )
             else:
-                log.info(
+                log.error(
                     "Clone creation passed for clone fomrat 1 which is not expected"
                 )
                 return 1
@@ -197,36 +197,17 @@ def clone_flatten_group_snapshot(rbd_obj, client, **kw):
                     out_json.get("parent", {}).get("pool") == pool
                     and out_json.get("parent", {}).get("image") == image
                 ):
-                    log.info("parent details are reflected correctly ")
+                    log.info("Parent details are reflected correctly for the cloned image of the group snapshot.")
                 else:
-                    log.error("Parent pool and image are not reflected correctly")
+                    log.error("Parent details are not reflected correctly for the cloned image of the group snapshot")
                     return 1
             else:
                 log.error("Parent option is not reflected in the clone info output")
+                return 1
 
             # Map the cloned images as a new block disk using rbd map
             # Mount the directory onto that disk and create some files on that directory and write data to the files
-            io_config = {
-                "rbd_obj": rbd,
-                "client": client,
-                "size": fio["size"],
-                "do_not_create_image": True,
-                "config": {
-                    "file_size": fio["size"],
-                    "file_path": [f"/mnt/mnt_{random_string(len=5)}/file"],
-                    "get_time_taken": True,
-                    "image_spec": [f"{pool}/{clone}"],
-                    "operations": {
-                        "fs": "ext4",
-                        "io": True,
-                        "mount": True,
-                        "map": True,
-                    },
-                    "skip_mkfs": False,
-                    "cmd_timeout": 2400,
-                    "io_type": "write",
-                },
-            }
+            io_config["config"]["image_spec"] = [f"{pool}/{clone}"]
 
             krbd_io_handler(**io_config)
 
@@ -247,7 +228,7 @@ def clone_flatten_group_snapshot(rbd_obj, client, **kw):
                 log.error("parent information still exist for flattened clone")
                 return 1
             else:
-                log.error(
+                log.info(
                     "Parent details do not exist after flattening clone as expected"
                 )
 
@@ -267,7 +248,7 @@ def clone_flatten_group_snapshot(rbd_obj, client, **kw):
 
 
 def run(**kw):
-    """Test to verify Cloning and Flattening a Group Snapshot
+    """
     This test verifies clonign and flattening a group snapshot
     Args:
         kw: test data
