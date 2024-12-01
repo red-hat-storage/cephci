@@ -246,17 +246,10 @@ tests:
         snap: group_snap
         rep_pool_config:
           num_pools: 1
-          num_images: 1
-          pool_rep:
-            image_1024:
-              size: 1024
+          num_images: 1            
         ec_pool_config:
           num_pools: 1
           num_images: 1
-          pool_ec:
-            data_pool: rbd_ec_data_pool
-            image_ec_1024:
-              size: 1024
         fio:
           size: 100M
       module: test_rbd_clone_flatten_group_snapshot.py
