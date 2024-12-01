@@ -75,7 +75,7 @@ tests:
       destroy-clster: false
       module: test_cephadm.py
       name: deploy cluster
-# # Test cases to be executed
+   # Test cases to be executed
   - test:
       abort-on-fail: true
       config:
@@ -238,3 +238,27 @@ tests:
       module: test_rbd_python_module.py
       polarion-id: CEPH-83574791
       name: Test image creation, write and read data using python rbd module
+
+  - test:
+      desc: Verify cloning and flattening a group snapshot
+      config:
+        group: image_group
+        snap: group_snap
+        rep_pool_config:
+          num_pools: 1
+          num_images: 1
+          pool_rep:
+            image_1024:
+              size: 1024
+        ec_pool_config:
+          num_pools: 1
+          num_images: 1
+          pool_ec:
+            data_pool: rbd_ec_data_pool
+            image_ec_1024:
+              size: 1024
+        fio:
+          size: 100M
+      module: test_rbd_clone_flatten_group_snapshot.py
+      name: Test cloning and flattening group snapshot
+      polarion-id: CEPH-83594299
