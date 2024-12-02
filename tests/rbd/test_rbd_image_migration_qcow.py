@@ -114,6 +114,7 @@ def test_qcow_image_migration(rbd_obj, client, **kw):
                 action="commit",
                 dest_spec=image_spec,
                 client_node=client,
+                long_running=True,
                 **kw,
             )
 
@@ -121,6 +122,7 @@ def test_qcow_image_migration(rbd_obj, client, **kw):
             if verify_migration_state(
                 action="commit",
                 image_spec=image_spec,
+                long_running=True,
                 **kw,
             ):
                 log.error("Failed to commit migration")

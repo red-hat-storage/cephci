@@ -28,7 +28,7 @@ def rest(**kw):
     # port = config["PORT"]
     # ip = config["IP"]
     # rest = REST(ip=ip, username=username, password=password, port=port)
-    ceph_cluster = kw.get("ceph_cluster")
+    ceph_cluster = kw["ceph_cluster"]
     nodes = ceph_cluster.node_list
     ip = nodes[0].ip_address
     rest = REST(ip=ip)
