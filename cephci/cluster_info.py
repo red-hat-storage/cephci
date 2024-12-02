@@ -2,7 +2,6 @@ import json
 import os
 import pickle
 import re
-from stat import S_ISDIR, S_ISREG
 
 import yaml
 from docopt import docopt
@@ -166,41 +165,18 @@ def get_ceph_var_logs(cluster, log_dir):
     This method is to download and store
     ceph cluster var logs into log directory.
     """
+    download_dir = os.path.join(log_dir, "ceph_logs")
+    os.makedirs(download_dir, exist_ok=True)
     for node in cluster.get_nodes():
-        download_dir = os.path.join(log_dir, "ceph_logs", node.hostname)
-        os.makedirs(download_dir, exist_ok=True)
-        file_attributes = node.get_listdir_attr(dir_path=CEPH_VAR_LOG_DIR, sudo=True)
-        if not file_attributes:
-            continue
-        for attribute in file_attributes:
-            if S_ISDIR(attribute.st_mode):
-                os.makedirs(
-                    os.path.join(download_dir, attribute.filename), exist_ok=True
-                )
-                ceph_files = node.get_dir_list(
-                    dir_path=os.path.join(CEPH_VAR_LOG_DIR, attribute.filename),
-                    sudo=True,
-                )
-                for ceph_file in ceph_files:
-                    node.download_file(
-                        src=os.path.join(
-                            CEPH_VAR_LOG_DIR, attribute.filename, ceph_file
-                        ),
-                        dst=os.path.join(download_dir, attribute.filename, ceph_file),
-                        sudo=True,
-                    )
-                    log.info(
-                        f"Downloading {ceph_file} from {node.hostname} to {download_dir}/{attribute.filename}"
-                    )
-            elif S_ISREG(attribute.st_mode):
-                node.download_file(
-                    src=os.path.join(CEPH_VAR_LOG_DIR, attribute.filename),
-                    dst=os.path.join(download_dir, attribute.filename),
-                    sudo=True,
-                )
-                log.info(
-                    f"Downloading {attribute.filename} from {node.hostname} to {download_dir}"
-                )
+        tar_file = f"{node.hostname}-cephlog.tar"
+        node.exec_command(cmd=f"tar -cvzf {tar_file} {CEPH_VAR_LOG_DIR}", sudo=True)
+
+        node.download_file(
+            src=tar_file,
+            dst=os.path.join(download_dir, tar_file),
+            sudo=True,
+        )
+        log.info(f"Downloading {tar_file} from {node.hostname} to {download_dir}")
 
 
 def write_output(data, output):
