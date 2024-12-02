@@ -249,6 +249,18 @@ tests:
         num_dirs: 1000
 
   - test:
+      name: Nfs Ganesha rename operations
+      module: test_file_ops_renames.py
+      desc: Perform file and dir renaming and lookups in parallel
+      polarion-id: CEPH-83577594
+      abort-on-fail: true
+      config:
+        nfs_version: 4.2
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
+
+  - test:
       name: Nfs Ganesha test multi mount versions
       module: nfs_verify_multi_mount_version.py
       desc: Perform different mount versions on clients and validate the behavior

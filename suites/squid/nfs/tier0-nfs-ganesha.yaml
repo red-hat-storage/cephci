@@ -175,18 +175,6 @@ tests:
         clients: 4
 
   - test:
-      name: Nfs Ganesha rename operations
-      module: test_file_ops_renames.py
-      desc: Perform file and dir renaming and lookups in parallel
-      polarion-id: CEPH-83577594
-      abort-on-fail: true
-      config:
-        nfs_version: 4.1
-        clients: 3
-        num_files: 1000
-        num_dirs: 1000
-
-  - test:
       name: Verify create file, create soflink and lookups from nfs clients
       module: nfs_verify_file_ops_soft_links.py
       desc: Verify create file, create soflink and lookups from nfs clients
