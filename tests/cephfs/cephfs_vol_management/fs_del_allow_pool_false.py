@@ -34,12 +34,13 @@ def run(ceph_cluster, **kw):
             )
             return 1
         client1 = clients[0]
-        fs_util.create_fs(client1, "cephfs_new")
+        cephfs_name = "cephfs_new"
+        fs_util.create_fs(client1, cephfs_name)
         client1.exec_command(
             sudo=True, cmd="ceph config set mon mon_allow_pool_delete false"
         )
         out, rc = fs_util.remove_fs(
-            client1, "cephfs_new", validate=False, check_ec=False
+            client1, cephfs_name, validate=False, check_ec=False
         )
         if rc == 0:
             raise CommandFailed(
@@ -54,9 +55,4 @@ def run(ceph_cluster, **kw):
         log.info(traceback.format_exc())
         return 1
     finally:
-        commands = [
-            "ceph config set mon mon_allow_pool_delete true",
-            "ceph fs volume rm cephfs_new --yes-i-really-mean-it",
-        ]
-        for command in commands:
-            client1.exec_command(sudo=True, cmd=command, check_ec=False)
+        fs_util.remove_fs(client1, cephfs_name, validate=True, check_ec=False)
