@@ -197,9 +197,13 @@ def clone_flatten_group_snapshot(rbd_obj, client, **kw):
                     out_json.get("parent", {}).get("pool") == pool
                     and out_json.get("parent", {}).get("image") == image
                 ):
-                    log.info("Parent details are reflected correctly for the cloned image of the group snapshot.")
+                    log.info(
+                        "Parent details are reflected correctly for the cloned image of the group snapshot."
+                    )
                 else:
-                    log.error("Parent details are not reflected correctly for the cloned image of the group snapshot")
+                    log.error(
+                        "Parent details are not reflected correctly for the cloned image of the group snapshot"
+                    )
                     return 1
             else:
                 log.error("Parent option is not reflected in the clone info output")
@@ -269,6 +273,9 @@ def run(**kw):
             log.info("Executing test on Replication and EC pool")
             if clone_flatten_group_snapshot(rbd_obj, client, **kw):
                 return 1
+            log.info(
+                "Test Cloning and Flattening a Group Snapshot on Replication and EC pool is successful"
+            )
 
     except Exception as e:
         log.error(f"Test Cloning and Flattening a Group Snapshot failed: {str(e)}")
