@@ -219,3 +219,10 @@ tests:
       polarion-id: CEPH-83574329
       desc: map and unmap directory trees to a mds rank
       abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "Validate selinux relabel on kernel client"
+      module: clients.test_selinux_relabel.py
+      name: Validate selinux relabels
+      comments: "BZ-2309363"
+      polarion-id: "CEPH-83595737"
