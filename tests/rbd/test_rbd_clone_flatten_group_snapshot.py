@@ -253,7 +253,7 @@ def clone_flatten_group_snapshot(rbd_obj, client, **kw):
 
 def run(**kw):
     """
-    This test verifies clonign and flattening a group snapshot
+    This test verifies cloning and flattening a group snapshot
     Args:
         kw: test data
     Returns:
