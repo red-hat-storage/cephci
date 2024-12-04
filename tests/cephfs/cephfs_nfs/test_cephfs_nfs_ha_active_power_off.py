@@ -131,7 +131,7 @@ def run(ceph_cluster, **kw):
         backend_server = get_active_nfs_server(client1, nfs_name, ceph_cluster)
         log.info(backend_server)
         for server in backend_server:
-            log.info(f"Active backend servers {server.node.hostname}")
+            log.info(f"Active backend servers {server.hostname}")
         dir_name = "smallfile_dir"
         for i, mount in enumerate(mount_dir):
             client1.exec_command(sudo=True, cmd=f"mkdir -p {mount}{dir_name}_{i}")
@@ -139,14 +139,14 @@ def run(ceph_cluster, **kw):
             p.spawn(write_io, client1, mount_dir, config.get("io_runtime", 300))
             for i in backend_server:
                 active_nfs_ipmi = IPMIPowerControl(
-                    host=f"{i.node.hostname}.ipmi.ceph.redhat.com",
+                    host=f"{i.hostname}.ipmi.ceph.redhat.com",
                     username=baremetal_username,
                     password=baremetal_password,
                 )
-                log.info(f"Powering Off {i.node.hostname}")
+                log.info(f"Powering Off {i.hostname}")
                 active_nfs_ipmi.power_down()
                 time.sleep(config.get("shutdown_time", 300))
-                log.info(f"Powering On {i.node.hostname}")
+                log.info(f"Powering On {i.hostname}")
                 active_nfs_ipmi.power_up()
                 fs_util_v1.wait_for_host_online(client1, i)
                 fs_util_v1.wait_for_service_to_be_in_running(client1, i)
@@ -164,7 +164,7 @@ def run(ceph_cluster, **kw):
         )
         backend_server = get_active_nfs_server(client1, nfs_name, ceph_cluster)
         for server in backend_server:
-            log.info(f"Active backend servers after reboots {server.node.hostname}")
+            log.info(f"Active backend servers after reboots {server.hostname}")
         log.info("Test completed successfully")
         return 0
     except Exception as e:
@@ -206,13 +206,9 @@ def get_active_nfs_server(client, nfs_cluster, ceph_cluster):
     output = json.loads(out)
     log.info(output)
     backend_servers = [server["hostname"] for server in output[nfs_cluster]["backend"]]
-    ceph_nodes = ceph_cluster.get_ceph_objects()
-    server_list = []
-    for node in ceph_nodes:
-        if node.node.hostname in backend_servers:
-            log.info(f"{node.node.hostname} is added to server list")
-            server_list.append(node)
-    return list(set(server_list))
+    server_list = [ceph_cluster.get_node_by_hostname(node) for node in backend_servers]
+    log.info(server_list)
+    return server_list
 
 
 def write_io(client1, mount_dir, timeout=600):

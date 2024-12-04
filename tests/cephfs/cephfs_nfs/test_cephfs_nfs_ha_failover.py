@@ -118,14 +118,14 @@ def run(ceph_cluster, **kw):
         backend_server = get_active_nfs_server(client1, nfs_name, ceph_cluster)
         log.info(backend_server)
         for server in backend_server:
-            log.info(f"Active backend servers {server.node.hostname}")
+            log.info(f"Active backend servers {server.hostname}")
         dir_name = "smallfile_dir"
         for i, mount in enumerate(mount_dir):
             client1.exec_command(sudo=True, cmd=f"mkdir -p {mount}{dir_name}_{i}")
         with parallel() as p:
             p.spawn(write_io, client1, mount_dir)
             for i in backend_server:
-                fs_util_v1.reboot_node(i, timeout=300)
+                fs_util_v1.reboot_node_v1(i, timeout=300)
                 time.sleep(120)
         active_nfs_after = get_active_nfs(nfs_servers, virtual_ip)
         if active_nfs.node.hostname == active_nfs_after.node.hostname:
@@ -141,7 +141,7 @@ def run(ceph_cluster, **kw):
         )
         backend_server = get_active_nfs_server(client1, nfs_name, ceph_cluster)
         for server in backend_server:
-            log.info(f"Active backend servers after reboots {server.node.hostname}")
+            log.info(f"Active backend servers after reboots {server.hostname}")
         log.info("Test completed successfully")
         return 0
     except Exception as e:
@@ -183,12 +183,8 @@ def get_active_nfs_server(client, nfs_cluster, ceph_cluster):
     output = json.loads(out)
     log.info(output)
     backend_servers = [server["hostname"] for server in output[nfs_cluster]["backend"]]
-    ceph_nodes = ceph_cluster.get_ceph_objects()
-    server_list = []
-    for node in ceph_nodes:
-        if node.node.hostname in backend_servers:
-            log.info(f"{node.node.hostname} is added to server list")
-            server_list.append(node)
+    server_list = [ceph_cluster.get_node_by_hostname(node) for node in backend_servers]
+    log.info(server_list)
     return server_list
 
 
@@ -198,9 +194,10 @@ def write_io(client1, mount_dir):
     while datetime.datetime.now() < end_time:
         for i, mount in enumerate(mount_dir):
             log.info(f"Iteration : {i}")
-            out, rc = client1.exec_command(
+            out = client1.exec_command(
                 sudo=True,
                 cmd=f"dd if=/dev/zero of={mount}{dir_name}_{i}/test_{i}.txt bs=100M "
                 "count=100",
+                long_running=True,
             )
             log.info(out)
