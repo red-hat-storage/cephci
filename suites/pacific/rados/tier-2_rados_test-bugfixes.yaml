@@ -13,6 +13,7 @@
 #     6. https://bugzilla.redhat.com/show_bug.cgi?id=2264052
 #     7. https://bugzilla.redhat.com/show_bug.cgi?id=2260306
 #     8. https://bugzilla.redhat.com/show_bug.cgi?id=2237038
+#     9. https://bugzilla.redhat.com/show_bug.cgi?id=2249017
 #===============================================================================================
 tests:
   - test:
@@ -184,3 +185,9 @@ tests:
       module: test_v1client.py
       polarion-id: CEPH-83594645
       desc: Ensure client connection over v1 port does not crash
+
+  - test:
+      name: Verify config values via cephadm-ansible
+      module: test_bz_2213766.py
+      polarion-id: CEPH-83602686
+      desc: Ensure configuration values are accessible via cephadm-ansible module
