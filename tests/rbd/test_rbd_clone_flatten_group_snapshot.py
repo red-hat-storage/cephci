@@ -262,7 +262,7 @@ def run(**kw):
     """
     try:
         log.info("CEPH-83594299 -  Cloning and Flattening a Group Snapshot")
-
+        pool_types = list()
         if kw.get("client_node"):
             client = get_node_by_id(kw.get("ceph_cluster"), kw.get("client_node"))
         else:
