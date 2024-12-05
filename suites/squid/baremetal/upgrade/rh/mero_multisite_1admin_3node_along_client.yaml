@@ -9,7 +9,7 @@
 
 # The deployment is evaluated by running IOs across the environments.
 # tested with conf file: conf/baremetal/extensa_mero_multisite_1admin_5node_along_client.yaml
-
+---
 tests:
 
   - test:
@@ -24,7 +24,14 @@ tests:
           config:
             env_type: "RH"
       name: "Validate the ceph version before upgrade"
-
+  - test:
+      name: Check cluster health
+      desc: Check Ceph cluster health
+      module: exec.py
+      config:
+        cmd: ceph -s
+        sudo: true
+      abort-on-fail: true
   - test:
       abort-on-fail: true
       desc: Multisite upgrade
