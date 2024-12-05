@@ -9,6 +9,14 @@ tests:
         env_type: "RH"
       name: "Validate the ceph version before upgrade"
   - test:
+      name: Check cluster health
+      desc: Check Ceph cluster health
+      module: exec.py
+      config:
+        cmd: ceph -s
+        sudo: true
+      abort-on-fail: true
+  - test:
       name: Upgrade ceph
       desc: Upgrade cluster to latest version
       module: cephadm.test_cephadm_upgrade.py
