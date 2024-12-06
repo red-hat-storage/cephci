@@ -186,6 +186,7 @@ tests:
         branch: ceph-squid
         kms_keyid: testKey01
       desc: S3tests
+      comments: Known issue BZ-2312112 targeted to 8.0z2
       destroy-cluster: false
       module: test_s3.py
       name: execute s3tests
