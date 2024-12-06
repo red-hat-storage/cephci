@@ -1,5 +1,5 @@
 # Suite is to be used to verify the EC 8+6 with MSR config on 4 nodes
-
+# to be run in regression conf: 4-node-ec-cluster-1-client.yaml
 tests:
   - test:
       name: setup install pre-requisistes

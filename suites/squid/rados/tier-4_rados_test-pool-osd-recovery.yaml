@@ -1,6 +1,6 @@
 # Suite contains tier-4 tests to verify and test ceph pools upon OSD changes
 # This suite is to be run with conf : conf/squid/rados/13-node-cluster.yaml
-
+# RHOS-d run duration: 200 mins
 tests:
   - test:
       name: setup install pre-requisistes
