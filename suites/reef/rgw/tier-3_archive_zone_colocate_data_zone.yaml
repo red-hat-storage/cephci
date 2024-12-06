@@ -265,6 +265,7 @@ tests:
       clusters:
         ceph-pri:
           config:
+            set-env: true
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_multipart_archive_colocated.yaml
             run-on-haproxy: true
