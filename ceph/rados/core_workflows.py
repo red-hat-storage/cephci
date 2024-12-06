@@ -4615,3 +4615,68 @@ EOF"""
         out = self.run_ceph_command(cmd=_cmd, client_exec=True)
 
         return out["pools"][0] if pool_name else out
+
+    def set_configuration(self, who: str, param: str, value: str) -> int:
+        """
+        Module to set the configuration parameter of daemons
+        Args:
+            who: global or daemon ( osd, on, mgr, mds )
+            params : Parameters to be set
+
+        Returns:
+            success -> True
+            failure -> False
+
+        Usage:
+            rados_obj.set_configuration(who="osd", param="osd_mclock_override_recovery_settings", value="true")
+            rados_obj.set_configuration(who="mgr", param="mgr/dashboard/ceph1/server_addr", value="10.74.250.90")
+        """
+        log.info(f"Setting configuration parameter {param} on {who}")
+        cmd = f"ceph config set {who} {param} {value}"
+        _ = self.run_ceph_command(cmd=cmd)
+        actual_value = self.get_configuration(who=who, param=param)
+        log.info(f"actual value: {actual_value}")
+        log.info(f"value: {value}")
+        if actual_value == value:
+            log.info(f"Configuration parameter {param} is set with {value} on {who}")
+            return True
+        else:
+            return False
+
+    def get_configuration(self, who: str, param: str) -> int:
+        """
+        Module to get the configuration parameter of daemons
+        Args:
+            who: global or daemon ( osd, on, mgr, mds )
+            params : Parameters to be set
+
+        Returns:
+            value of the configuration
+
+        Usage:
+            rados_obj.set_configuration(who="osd", param="osd_mclock_override_recovery_settings", value="true")
+            rados_obj.set_configuration(who="mgr", param="mgr/dashboard/ceph1/server_addr", value="10.74.250.90")
+        """
+
+        log.info(f"Getting {who} configuration parameter {param}")
+        cmd = f"ceph config get {who} {param}"
+        return self.client.exec_command(cmd=cmd)[0].strip()
+
+    def remove_configuration(self, who: str, param: str) -> int:
+        """
+        Module to remove the configuration values of daemons
+        Args:
+            who: global or daemon ( osd, on, mgr, mds )
+            params : Parameters to be set
+
+        Returns:
+            None
+
+        Usage:
+            rados_obj.remove_configuration(who="osd", param="osd_mclock_override_recovery_settings")
+            rados_obj.remove_configuration(who="mgr", param="mgr/dashboard/ceph1/server_addr")
+        """
+        log.info(f"Removing configuration parameter {param} of {who}")
+        cmd = f"ceph config rm {who} {param}"
+        _ = self.run_ceph_command(cmd=cmd)
+        log.info(f"Removed configuration paramater {param} of {who}")
