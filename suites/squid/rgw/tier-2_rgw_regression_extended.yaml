@@ -251,6 +251,7 @@ tests:
       config:
         branch: ceph-squid
       desc: Run the external S3test suites.
+      comments: Known issue BZ-2312112 targeted to 8.0z2
       destroy-cluster: false
       module: test_s3.py
       name: execute s3tests
