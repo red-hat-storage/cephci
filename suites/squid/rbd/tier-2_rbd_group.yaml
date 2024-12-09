@@ -106,13 +106,12 @@ tests:
   - test:
       desc: Cloning an image from a Group Snapshot
       module: test_rbd_groups_image_clone.py
-      name: RBD group image clone create
+      name: RBD group image clone create and delete
       polarion-id: CEPH-83594298
       config:
         group: group1
         group_snap: group_snap
         user_snap: user_snap
-        size: 4G
         rep_pool_config:
           rbd_pool:
             rbd_image_group:
