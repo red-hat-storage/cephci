@@ -33,7 +33,7 @@ class BluestoreToolWorkflows:
     Contains various functions to verify ceph-bluestore-tool commands
     """
 
-    def __init__(self, node: CephAdmin):
+    def __init__(self, node: CephAdmin, nostop=None, nostart=None):
         """
         initializes the env to run Ceph-BlueStore-Tool commands
         Args:
@@ -42,6 +42,8 @@ class BluestoreToolWorkflows:
         self.rados_obj = RadosOrchestrator(node=node)
         self.cluster = node.cluster
         self.client = node.cluster.get_nodes(role="client")[0]
+        self.nostop = nostop
+        self.nostart = nostart
 
     def run_cbt_command(
         self, cmd: str, osd_id: int, timeout: int = 300, env: Dict = None
@@ -66,13 +68,15 @@ class BluestoreToolWorkflows:
             base_cmd = f"{base_cmd} {env_cmd}"
         _cmd = f"{base_cmd} -- {cmd} --path /var/lib/ceph/osd/ceph-{osd_id}"
         try:
-            self.rados_obj.change_osd_state(action="stop", target=osd_id)
+            if not self.nostop:
+                self.rados_obj.change_osd_state(action="stop", target=osd_id)
             out, err = osd_node.exec_command(sudo=True, cmd=_cmd, timeout=timeout)
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
             raise
         finally:
-            self.rados_obj.change_osd_state(action="start", target=osd_id)
+            if not self.nostart:
+                self.rados_obj.change_osd_state(action="start", target=osd_id)
         return str(out)
 
     def help(self, osd_id: int):

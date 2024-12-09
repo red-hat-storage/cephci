@@ -33,7 +33,7 @@ class objectstoreToolWorkflows:
     Contains various functions to verify ceph-objectstore-tool commands
     """
 
-    def __init__(self, node: CephAdmin):
+    def __init__(self, node: CephAdmin, nostop=None, nostart=None):
         """
         initializes the env to run Ceph-objectstore-Tool commands
         Args:
@@ -42,6 +42,8 @@ class objectstoreToolWorkflows:
         self.rados_obj = RadosOrchestrator(node=node)
         self.cluster = node.cluster
         self.client = node.cluster.get_nodes(role="client")[0]
+        self.nostop = nostop
+        self.nostart = nostart
 
     def run_cot_command(
         self,
@@ -49,7 +51,6 @@ class objectstoreToolWorkflows:
         osd_id: int,
         timeout: int = 300,
         mount: bool = False,
-        start: bool = True,
     ) -> str:
         """
         Runs ceph-objectstore-tool commands within OSD container
@@ -71,13 +72,14 @@ class objectstoreToolWorkflows:
             base_cmd = f"{base_cmd} --mount /tmp/"
         _cmd = f"{base_cmd} -- ceph-objectstore-tool --data-path /var/lib/ceph/osd/ceph-{osd_id} {cmd}"
         try:
-            self.rados_obj.change_osd_state(action="stop", target=osd_id)
+            if not self.nostop:
+                self.rados_obj.change_osd_state(action="stop", target=osd_id)
             out, err = osd_node.exec_command(sudo=True, cmd=_cmd, timeout=timeout)
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
             raise
         finally:
-            if start:
+            if not self.nostart:
                 self.rados_obj.change_osd_state(action="start", target=osd_id)
         return str(out)
 
@@ -170,10 +172,12 @@ class objectstoreToolWorkflows:
         Returns:
             Returns the output of cbt repair cmd
         """
+        if not start:
+            self.nostart = True
         _cmd = f"'{obj}' set-bytes < {in_file}"
         if pgid:
             _cmd = f"--pgid {pgid} {_cmd}"
-        return self.run_cot_command(cmd=_cmd, osd_id=osd_id, mount=True, start=start)
+        return self.run_cot_command(cmd=_cmd, osd_id=osd_id, mount=True)
 
     def remove_object(self, osd_id: int, pgid: str, obj: str):
         """Module to remove an object within a placement group

@@ -675,8 +675,7 @@ def setup_crush_rule_with_no_affinity(node, rule_name: str) -> bool:
     rule = rule_name
     rules = """id 11
 type replicated
-min_size 1
-max_size 10
+step take default
 step choose firstn 0 type datacenter
 step chooseleaf firstn 2 type host
 step emit"""
