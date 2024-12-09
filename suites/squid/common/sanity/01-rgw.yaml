@@ -1,0 +1,126 @@
+
+tests:
+
+# Tests from - suites/squid/rgw/tier-1_rgw.yaml
+
+  - test:
+      name: enable bucket versioning
+      desc: Basic versioning test, also called as test to enable bucket versioning
+      polarion-id: CEPH-14261 # also applies to CEPH-9222 and CEPH-10652
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_enable.yaml
+
+  - test:
+      name: Parallel run
+      desc: RGW tier-1 parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            name: Test M buckets with N objects
+            desc: test to create "M" no of buckets and "N" no of objects
+            polarion-id: CEPH-9789
+            module: sanity_rgw.py
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              install_common: false
+              run-on-rgw: true
+
+        - test:
+            name: Test delete using M buckets with N objects
+            desc: test to create "M" no of buckets and "N" no of objects with delete
+            polarion-id: CEPH-14237
+            module: sanity_rgw.py
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+              install_common: false
+              run-on-rgw: true
+
+        - test:
+            name: Test download with M buckets with N objects
+            desc: test to create "M" no of buckets and "N" no of objects with download
+            polarion-id: CEPH-14237
+            module: sanity_rgw.py
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+              install_common: false
+              run-on-rgw: true
+
+        - test:
+            name: Test multipart upload of M buckets with N objects
+            desc: test to create "M" no of buckets and "N" no of objects with multipart upload
+            polarion-id: CEPH-9801
+            module: sanity_rgw.py
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+              install_common: false
+              run-on-rgw: true
+
+        - test:
+            name: test_bi_purge for a bucket
+            desc: test bi_purge should not error
+            polarion-id: CEPH-83575234
+            module: sanity_rgw.py
+            config:
+              install_common: false
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_bi_purge.yaml
+
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests for non current version expiration
+      desc: Test object expiration for non current version expiration
+      polarion-id: CEPH-11190
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_prefix_non_current_days.yaml
+
+  - test:
+      name: Bucket Lifecycle Object_transition_tests for Prefix filter and versioned buckets
+      desc: Test object transition for Prefixand versioned buckets
+      polarion-id: CEPH-83574050 # also applies to CEPH-83574049, CEPH-83574053
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_with_prefix_rule.yaml
+
+  - test:
+      name: S3CMD small and multipart object download
+      desc: S3CMD small and multipart object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+
+  - test:
+      name: Test GetObjectAttributes with normal objects
+      desc: Test GetObjectAttributes with normal objects
+      polarion-id: CEPH-83595849
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes.yaml
+
+  - test:
+      name: Test GetObjectAttributes with checksum sha256
+      desc: Test GetObjectAttributes with checksum sha256
+      polarion-id: CEPH-83595849
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_checksum_sha256.yaml
+
+  - test:
+      name: Test GetObjectAttributes with multipart objects
+      desc: Test GetObjectAttributes with multipart objects
+      polarion-id: CEPH-83595849
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_multipart.yaml
