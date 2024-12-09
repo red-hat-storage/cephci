@@ -62,10 +62,6 @@ tests:
               service: osd
               args:
                 all-available-devices: true
-          - config:
-              command: shell
-              args:
-                - ceph config set mgr mgr/cephadm/container_image_nvmeof cp.stg.icr.io/cp/ibm-ceph/nvmeof-rhel9:1.3.2-1
       destroy-cluster: false
       abort-on-fail: true
 
