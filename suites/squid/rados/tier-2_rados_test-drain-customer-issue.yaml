@@ -142,4 +142,5 @@ tests:
           create: true
           pool_name: mgr_test_pool
           delete_pool: mgr_test_pool
+      comments: Active bug 2328605
       desc: Ceph mgr crashed after a mgr failover with the message mgr operator
