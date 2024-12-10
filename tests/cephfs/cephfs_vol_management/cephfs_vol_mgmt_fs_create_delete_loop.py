@@ -169,18 +169,11 @@ def run(ceph_cluster, **kw):
                 secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
             )
 
-            if "5.0" in rhbuild:
-                client1.exec_command(
-                    sudo=True,
-                    cmd=f"ceph nfs export create cephfs {fs_name} {nfs_name} "
-                    f"{nfs_export_name} path={export_path}",
-                )
-            else:
-                client1.exec_command(
-                    sudo=True,
-                    cmd=f"ceph nfs export create cephfs {nfs_name} "
-                    f"{nfs_export_name} {fs_name} path={export_path}",
-                )
+            client1.exec_command(
+                sudo=True,
+                cmd=f"ceph nfs export create cephfs {nfs_name} "
+                f"{nfs_export_name} {fs_name} path={export_path}",
+            )
 
             rc = fs_util.cephfs_nfs_mount(
                 client1, nfs_server, nfs_export_name, nfs_mounting_dir
