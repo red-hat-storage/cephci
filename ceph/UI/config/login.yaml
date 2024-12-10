@@ -1,0 +1,35 @@
+username_login:
+  username:
+    id: "username"
+    xpath: "//input[contains(@placeholder, 'username')]"
+  password:
+    id: "password"
+    xpath: "//input[contains(@placeholder, 'password')]"
+  login_button:
+    id: "submit"
+    xpath: "//button[contains(text(), 'Login')]"
+
+email_login:
+  email:
+    name: "email"
+    xpath: "//input[@type='email']"
+  password:
+    name: "pass"
+    xpath: "//input[@type='password']"
+  login_button:
+    xpath: "//button[@type='submit']"
+  sign_up_email:
+    xpath: "//input[@type='email']"
+  sign_up_password:
+    xpath: "//input[@type='password']"
+  sign_up_button:
+    xpath: "//button[contains(text(), 'Register')]"
+
+common:
+  sign_in_button:
+    xpath: "//button[contains(text(), 'Sign In')]"
+    id: "sign-in"
+  sign_up_button:
+    xpath: "//button[contains(text(), 'Sign Up')]"
+    id: "sign-up"
+
