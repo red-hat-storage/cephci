@@ -142,7 +142,6 @@ def run(ceph_cluster, **kw):
 
             # Mounting Subvolume3 on nfs
             log.info(f"Mount subvolume {subvolume_name}_3 on NFS Client")
-            rhbuild = config.get("rhbuild")
             nfs_servers = ceph_cluster.get_ceph_objects("nfs")
             nfs_server = nfs_servers[0].node.hostname
             nfs_name = "cephfs-nfs"
