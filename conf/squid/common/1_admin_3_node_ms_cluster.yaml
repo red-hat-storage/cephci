@@ -1,0 +1,83 @@
+# Cluster Configuration:
+#    3-Node cluster
+#    3 MONS, 2 MGR, 3 OSD, 2 MDS and 2 RGW service daemon(s)
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+        no-of-volumes: 6
+        disk-size: 20
+      node2:
+        role:
+          - osd
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - alertmanager
+          - crash
+          - rgw
+        no-of-volumes: 6
+        disk-size: 20
+      node3:
+        role:
+          - mon
+          - osd
+          - node-exporter
+          - crash
+          - rgw
+          - mds
+          - client
+        no-of-volumes: 6
+        disk-size: 20
+
+  - ceph-cluster:
+      name: ceph-sec
+      node1:
+        role:
+          - _admin
+          - installer
+          - mon
+          - mgr
+          - osd
+          - node-exporter
+          - alertmanager
+          - grafana
+          - prometheus
+          - crash
+        no-of-volumes: 6
+        disk-size: 20
+      node2:
+        role:
+          - osd
+          - mon
+          - mgr
+          - mds
+          - node-exporter
+          - alertmanager
+          - crash
+          - rgw
+        no-of-volumes: 6
+        disk-size: 20
+      node3:
+        role:
+          - mon
+          - osd
+          - node-exporter
+          - crash
+          - rgw
+          - mds
+          - client
+        no-of-volumes: 6
+        disk-size: 20
