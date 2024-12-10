@@ -1,5 +1,6 @@
 # Suite contains tests to be run after upgrade [brownfield deployment]
 # Use cluster-conf file: conf/squid/rados/7-node-cluster.yaml
+# RHOS-d run duration: 100 mins
 
 tests:
   - test:

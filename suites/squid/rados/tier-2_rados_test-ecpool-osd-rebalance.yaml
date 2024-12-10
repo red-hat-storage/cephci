@@ -1,5 +1,6 @@
 # Suite contains tests related to osd re-balance upon OSD addition / removal
 # Can be run on RHOS-d env pipeline or BM pipeline.
+# RHOS-d run duration: 220 mins
 tests:
   - test:
       name: setup install pre-requisistes
