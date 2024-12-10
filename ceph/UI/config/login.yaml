@@ -1,0 +1,23 @@
+login_username:
+  id: "username"
+  name: "username"
+  xpath: "//input[@name='username']"
+  css: "#username"
+
+login_password:
+  id: "password"
+  name: "password"
+  xpath: "//input[@name='password']"
+  css: "#password"
+
+login_button:
+  id: "login-btn"
+  name: "login"
+  xpath: "//button[@type='submit']"
+  css: ".btn-login"
+
+search_box:
+  id: "search"
+  name: "q"
+  xpath: "//input[@name='q']"
+  css: ".search-box"
