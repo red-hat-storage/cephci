@@ -1,7 +1,7 @@
 import random
+import secrets
 import string
 import traceback
-import secrets
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
