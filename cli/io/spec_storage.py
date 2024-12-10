@@ -35,12 +35,12 @@ class SpecStorage(Cli):
             # Add SpecStorage tool
             self.execute(sudo=True, cmd=f"mkdir -p {self.install_dest}")
             cmd = (
-                f"wget {self.install_loc}spec_storage/SPECstorage2020-2529.tgz "
+                f"wget {self.install_loc}SPECstorage2020-2529.tgz "
                 f"-O {self.install_dest}/SPECstorage2020-2529.tgz"
             )
             self.execute(sudo=True, cmd=cmd)
             cmd = (
-                f"wget {self.install_loc}spec_storage/SPECstorage_clients.sh "
+                f"wget {self.install_loc}SPECstorage_clients.sh "
                 f"-O {self.install_dest}/SPECstorage_clients.sh"
             )
             self.execute(sudo=True, cmd=cmd)
