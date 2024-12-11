@@ -1,6 +1,6 @@
 # Use cluster-conf file: conf/reef/rados/3AZ-cluster-rhos-1.yaml
 # 3 AZ cluster deployment tests
-
+# can be part of regression/weekly
 tests:
   - test:
       name: Install ceph pre-requisites

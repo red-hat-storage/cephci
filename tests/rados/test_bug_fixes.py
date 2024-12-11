@@ -171,9 +171,9 @@ def run(ceph_cluster, **kw):
                 )
 
             # fetch list of OSD hosts
-            osd_hosts = rados_obj.get_osd_hosts()
+            osd_hosts = ceph_cluster.get_nodes(role="osd")
             rand_host = random.choice(osd_hosts)
-            log.info(f"Chosen OSD host to add network delay: {rand_host}")
+            log.info(f"Chosen OSD host to add network delay: {rand_host.hostname}")
 
             osd_list = rados_obj.collect_osd_daemon_ids(osd_node=rand_host)
             log.info(f"List of OSDs on the host: {osd_list}")

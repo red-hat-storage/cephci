@@ -681,7 +681,7 @@ class CrushToolWorkflows:
             False -> device class removal failed
         """
         device_rm_cmd = "ceph osd crush rm-device-class "
-        _cmd = device_rm_cmd + " ".join(osd_list)
+        _cmd = device_rm_cmd + " ".join(str(oid) for oid in osd_list)
         out, err = self.client.exec_command(cmd=_cmd, sudo=True)
         log.info(err)
         if "done removing class of osd" in err or "belongs to no class" in err:

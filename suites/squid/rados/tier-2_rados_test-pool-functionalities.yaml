@@ -1,4 +1,5 @@
 # Suite contains tests to verify and test ceph pools
+# RHOS-d run duration: 290 mins
 tests:
   - test:
       name: setup install pre-requisistes

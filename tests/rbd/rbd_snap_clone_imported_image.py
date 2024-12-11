@@ -1,5 +1,5 @@
 from tests.rbd.exceptions import RbdBaseException
-from tests.rbd.rbd_utils import Rbd, initial_rbd_config
+from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 
 log = Log(__name__)
@@ -31,17 +31,13 @@ def test_snap_clone(rbd, pool_type, **kw):
     5. perform same test on EC pool
     """
     log.info("Running snap and clone operations on imported image")
-    rbd = Rbd(**kw)
-    pool = rbd.random_string()
+    pool = kw["config"][pool_type]["pool"]
     image = rbd.random_string()
     snap = rbd.random_string()
     dir_name = rbd.random_string()
     clone = rbd.random_string()
     rbd.exec_cmd(cmd="mkdir {}".format(dir_name))
     try:
-        if not rbd.create_pool(poolname=pool):
-            log.error(f"Pool creation failed for pool {pool}")
-            return 1
         rbd.create_file_to_import(filename="dummy_file")
         rbd.import_file("dummy_file", pool, image)
         rbd.snap_create(pool, image, snap)
@@ -57,7 +53,14 @@ def test_snap_clone(rbd, pool_type, **kw):
 
     finally:
         if not kw.get("config").get("do_not_cleanup_pool"):
-            rbd.clean_up(pools=[pool])
+            pool_list = []
+            pool_list.append(pool)
+            if pool_type == "rep_pool_config":
+                pool_list.append(kw["config"][pool_type]["pool"])
+            if pool_type == "ec_pool_config":
+                pool_list.append(kw["config"][pool_type]["pool"])
+                pool_list.append(rbd.datapool)
+            rbd.clean_up(pools=pool_list)
 
 
 def run(**kw):

@@ -1455,6 +1455,18 @@ class FsUtils(object):
             volname_ls = json.loads(out)
             if vol_name not in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
+
+        log.info("Validating the creation of pools")
+        outpools, rcpools = client.exec_command(
+            sudo=True,
+            cmd=f"ceph osd lspools | grep -E 'cephfs.{vol_name}.data|cephfs.{vol_name}.meta' | wc -l",
+        )
+        if outpools.strip() != "2":
+            raise CommandFailed(
+                f"Creation of pools: {vol_name} failed. Actual Output: {outpools}"
+            )
+        log.info(f"Creation of pools for {vol_name} is successful")
+
         apply_cmd = f"ceph orch apply mds {vol_name}"
         if erasure and validate:
             if kwargs.get("placement"):
@@ -1918,6 +1930,18 @@ class FsUtils(object):
             volname_ls = json.loads(out)
             if vol_name in [i["name"] for i in volname_ls]:
                 raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
+
+            log.info("Validating the deletion of pools")
+            outpools, rcpools = client.exec_command(
+                sudo=True,
+                cmd=f"ceph osd lspools | grep -E 'cephfs.{vol_name}.data|cephfs.{vol_name}.meta' | wc -l",
+            )
+            if outpools.strip() != "0":
+                raise CommandFailed(
+                    f"Deletion of pools: {vol_name} failed. Actual Output: {outpools}"
+                )
+            log.info(f"Deletion of pools for {vol_name} is successful")
+
         return cmd_out, cmd_rc
 
     def fs_client_authorize(
