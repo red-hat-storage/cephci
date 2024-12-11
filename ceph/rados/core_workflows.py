@@ -4482,12 +4482,12 @@ EOF"""
         """
         osd_dict = {"up": [], "down": [], "in": [], "out": [], "destroyed": []}
         # prepare separate OSD lists
-        osd_tree = self.run_ceph_command(cmd="ceph osd tree")
-        if osd_tree["nodes"]:
-            for entry in osd_tree["nodes"]:
-                if entry["type"] == "osd":
-                    osd_dict[entry["status"]].append(entry["id"])
         for key in osd_dict:
+            osd_tree = self.run_ceph_command(cmd=f"ceph osd tree {key}")
+            if osd_tree["nodes"]:
+                for entry in osd_tree["nodes"]:
+                    if entry["type"] == "osd":
+                        osd_dict[key].append(entry["id"])
             log.info(f"List of {key} OSDs: {osd_dict[key]}")
 
         return osd_dict[status]
