@@ -7,7 +7,7 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def check_pool_exists(pool_name, client, timeout=10, interval=10):
+def check_pool_exists(pool_name, client, timeout=10, interval=10, cluster="ceph"):
     """
     recursively checks if the specified pool exists in the cluster
     Args:
@@ -16,6 +16,7 @@ def check_pool_exists(pool_name, client, timeout=10, interval=10):
                   default will be 10
         interval: number in seconds to check for pool existence until timeout
                   default will be 10
+        cluster: Name of the ceph cluster
 
     Returns:
         0 if pool created successfully,
@@ -23,7 +24,9 @@ def check_pool_exists(pool_name, client, timeout=10, interval=10):
 
     """
     for w in WaitUntil(timeout=timeout, interval=interval):
-        out = exec_cmd(node=client, cmd="ceph df -f json", output=True)
+        out = exec_cmd(
+            node=client, cmd=f"ceph df -f json --cluster {cluster}", output=True
+        )
         if pool_name in [ele["name"] for ele in json.loads(out)["pools"]]:
             log.info(f"Pool '{pool_name}' present in the cluster")
             return 0
@@ -43,7 +46,7 @@ def check_pool_exists(pool_name, client, timeout=10, interval=10):
         return 1
 
 
-def set_ec_profile(k_m, profile, failure_domain, client):
+def set_ec_profile(k_m, profile, failure_domain, client, cluster="ceph"):
     """
     Sets erasure code profile for the given k_m and profile values
 
@@ -51,14 +54,19 @@ def set_ec_profile(k_m, profile, failure_domain, client):
         k_m: Comma separated values of k and m. Ex: 2,1
         profile: EC profile name to be created
         failure_domain: osd
+        client: client node
+        cluster: Name of the ceph cluster
 
     Returns:
         0 if ec profile creation is successful
         1 if ec profile creation fails
     """
-    exec_cmd(node=client, cmd=f"ceph osd erasure-code-profile rm {profile}")
+    exec_cmd(
+        node=client,
+        cmd=f"ceph osd erasure-code-profile rm {profile} --cluster {cluster}",
+    )
 
-    cmd = f"ceph osd erasure-code-profile set {profile} k={k_m[0]} m={k_m[2]}"
+    cmd = f"ceph osd erasure-code-profile set {profile} k={k_m[0]} m={k_m[2]} --cluster {cluster}"
     if failure_domain:
         cmd += f" crush-failure-domain={failure_domain}"
     return exec_cmd(node=client, cmd=cmd)
@@ -94,17 +102,26 @@ def create_ecpool(
     if profile != "use_default":
         cmd += profile
         if set_ec_profile(
-            client=client, k_m=k_m, profile=profile, failure_domain=failure_domain
+            client=client,
+            k_m=k_m,
+            profile=profile,
+            failure_domain=failure_domain,
+            cluster=cluster,
         ):
             log.error("EC profile creation failed")
             return 1
     if exec_cmd(node=client, cmd=cmd):
         log.error("Pool creation failed")
         return 1
-    if check_pool_exists(pool_name=pool, client=client, timeout=200, interval=2):
+    if check_pool_exists(
+        pool_name=pool, client=client, timeout=200, interval=2, cluster=cluster
+    ):
         log.error("Pool not created")
         return 1
-    if exec_cmd(node=client, cmd=f"ceph osd pool set {pool} allow_ec_overwrites true"):
+    if exec_cmd(
+        node=client,
+        cmd=f"ceph osd pool set {pool} allow_ec_overwrites true --cluster {cluster}",
+    ):
         log.error("Set allow_ec_overwrites failed")
         return 1
     return 0
@@ -119,6 +136,7 @@ def create_pool(pool, client, pg_num=64, pgp_num=64, cluster="ceph"):
         client: client node to be used to execute commands
         pg_num: pg_num value for the pool, default 64
         pgp_num: pgp_num value for the pool, default 64
+        cluster: Name of the ceph cluster
 
     Returns:
         0 if pool creation is successful
@@ -130,7 +148,7 @@ def create_pool(pool, client, pg_num=64, pgp_num=64, cluster="ceph"):
     ):
         log.error("Pool creation failed")
         return 1
-    if check_pool_exists(client=client, pool_name=pool):
+    if check_pool_exists(client=client, pool_name=pool, cluster=cluster):
         log.error("Pool not created")
         return 1
     return 0

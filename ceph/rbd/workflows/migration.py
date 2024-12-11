@@ -6,7 +6,7 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def verify_migration_state(action, image_spec, **kw):
+def verify_migration_state(action, image_spec, cluster_name="ceph", **kw):
     """verify the migration status at each action.
 
     This method will verify the migration state for an image for
@@ -24,7 +24,12 @@ def verify_migration_state(action, image_spec, **kw):
     """
     rbd = Rbd(kw["client"])
     log.info("verifying migration state")
-    status_config = {"image-spec": image_spec, "format": "json"}
+
+    status_config = {
+        "image-spec": image_spec,
+        "cluster": cluster_name,
+        "format": "json",
+    }
     out, err = rbd.status(**status_config)
     log.info(out)
     status = json.loads(out)
