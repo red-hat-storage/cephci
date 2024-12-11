@@ -1,4 +1,5 @@
 # Suite contains basic tier-2 rados tests
+# RHOS-d run duration: 70 mins
 tests:
   - test:
       name: setup install pre-requisistes
@@ -98,6 +99,8 @@ tests:
           mds: "allow *"
           mgr: "allow *"
 
+# RHOS-d run duration: 1 min
+# env: VM + BM
   - test:
       name: Configure email alerts
       module: rados_prep.py
@@ -113,6 +116,8 @@ tests:
           smtp_from_name: Rados Sanity Cluster Alerts
       desc: Configure email alerts on ceph cluster
 
+# RHOS-d run duration: 2 mins
+# env: VM + BM
   - test:
       name: Test configuration Assimilation
       module: test_config_assimilation.py
@@ -153,6 +158,8 @@ tests:
 
 # The below test is openstack only, and would need modifications to run on BM.
 # commenting the run of below test in BM pipeline
+# RHOS-d run duration: 6 mins
+# env: VM only
   - test:
       name: Verify osd heartbeat no reply
       desc: heartbeat_check log entries should contain hostname:port
@@ -160,6 +167,8 @@ tests:
       module: test_osd_heartbeat.py
       destroy-cluster: false
 
+# RHOS-d run duration: 6 mins
+# env: VM only
   - test:
       name: Monitor configuration - section and masks changes
       module: rados_prep.py
@@ -209,6 +218,8 @@ tests:
                 value: "10/10"
       desc: Verify config changes for section & masks like device class, host etc
 
+# RHOS-d run duration: 4 mins
+# env: VM + BM
   - test:
       name: Monitor configuration - msgrv2 compression modes
       module: rados_prep.py
@@ -234,6 +245,8 @@ tests:
                 value: "1024"
       desc: Verify the health status of the cluster by randomly changing the compression configuration values
 
+# RHOS-d run duration: 3 mins
+# env: VM + BM
   - test:
       name: Replicated pool LC
       module: rados_prep.py
@@ -259,6 +272,8 @@ tests:
           - test_re_pool
       desc: Create replicated pools and run IO
 
+# RHOS-d run duration: 8 mins
+# env: VM + BM
   - test:
       name: Compression algorithms
       module: rados_prep.py
@@ -297,6 +312,8 @@ tests:
           - re_pool_compress
       desc: Enable/disable different compression algorithms.
 
+# RHOS-d run duration: 1 min
+# env: VM + BM
   - test:
       name: Ceph balancer plugin
       module: rados_prep.py
@@ -309,6 +326,8 @@ tests:
           sleep_interval: 30
       desc: Ceph balancer plugins CLI validation in crush-compat mode
 
+# RHOS-d run duration: 1 min
+# env: VM + BM
   - test:
       name: Ceph balancer test
       module: rados_prep.py
@@ -321,6 +340,8 @@ tests:
           sleep_interval: 60
       desc: Ceph balancer plugins CLI validation in upmap mode
 
+# RHOS-d run duration: 3 mins
+# env: VM + BM
   - test:
       name: Ceph PG Autoscaler
       module: rados_prep.py
@@ -344,6 +365,8 @@ tests:
           - rep_test_pool
       desc: Ceph PG autoscaler CLI validation
 
+# RHOS-d run duration: 1 min
+# env: VM + BM
   - test:
       name: Config checks
       module: rados_prep.py
@@ -360,12 +383,16 @@ tests:
             - osd_linkspeed
       desc: Enable Cluster Configuration checks
 
+# RHOS-d run duration: 1 min
+# env: VM + BM
   - test:
       name: config source changes log
       module: test_mon_config_history.py
       polarion-id: CEPH-83573479
       desc: Config sources - Verify config source changes in the log
 
+# RHOS-d run duration: 1 min
+# env: VM + BM
   - test:
       name: config source changes reset
       module: test_mon_config_reset.py
@@ -374,6 +401,7 @@ tests:
 
 # Commenting until bug fix : https://bugzilla.redhat.com/show_bug.cgi?id=2252788
 # Other issues with noautoscale flag listed here : https://bugzilla.redhat.com/show_bug.cgi?id=2283358
+# RHOS-d run duration: 8 mins
   - test:
       name: autoscaler flags
       module: test_pg_autoscale_flag.py
@@ -385,12 +413,16 @@ tests:
       desc: verify autoscaler flags functionality
       comments: active Bugs 2252788, 2283358
 
+# RHOS-d run duration: 1 min
+# env: VM + BM
   - test:
       name: Mon election strategies
       polarion-id: CEPH-83573627
       module: test_election_strategies.py
       desc: Change Mon election strategies and verify status
 
+# RHOS-d run duration: 6 min
+# env: VM + BM
   - test:
       name: EC Profile tests
       module: pool_tests.py
@@ -407,3 +439,11 @@ tests:
           rados_read_duration: 50
           crush-failure-domain: host
       desc: Verify the behaviour of EC profiles in ceph
+
+# RHOS-d run duration: 8 mins
+  - test:
+      name: MGR regression test
+      module: test_mgr_daemon.py
+      polarion-id: CEPH-83586116
+      desc: MGR regression testing
+

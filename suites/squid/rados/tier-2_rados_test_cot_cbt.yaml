@@ -5,6 +5,7 @@
 # Conf: conf/squid/rados/13-node-cluster.yaml
 # Test suite is targeted only for OpenStack
 #===============================================================================================
+# RHOS-d run duration: 170 mins
 tests:
   - test:
       name: setup install pre-requisistes

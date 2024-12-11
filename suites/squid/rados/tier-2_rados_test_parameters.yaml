@@ -10,6 +10,7 @@
 # - Check the MSGRV2 paramters and Mclock parameters
 #--------------------------------------------------------------------------------
 #################################################################################
+# RHOS-d run duration: 190 mins
 tests:
   - test:
       name: setup install pre-requisistes

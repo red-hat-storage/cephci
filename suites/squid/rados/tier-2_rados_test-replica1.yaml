@@ -1,5 +1,6 @@
 # Suite contains tests for replica-1 non-resilient pool
 # conf: conf/squid/rados/11-node-replica1-cluster.yaml
+# RHOS-d run duration: 40 mins
 tests:
   - test:
       name: setup install pre-requisistes

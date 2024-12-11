@@ -407,3 +407,9 @@ tests:
           rados_read_duration: 50
           crush-failure-domain: host
       desc: Verify the behaviour of EC profiles in ceph
+
+  - test:
+      name: MGR regression test
+      module: test_mgr_daemon.py
+      polarion-id: CEPH-83586116
+      desc: MGR regression testing
