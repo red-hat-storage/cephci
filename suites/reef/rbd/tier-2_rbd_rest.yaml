@@ -8,7 +8,7 @@
 #    Node 4 must to be a client node
 tests:
 
-  # Setup the cluster
+  #Setup the cluster
   - test:
       abort-on-fail: true
       module: install_prereq.py
@@ -26,6 +26,8 @@ tests:
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
+                initial-dashboard-password : "admin123"
+                dashboard-password-noupdate: true
           - config:
               command: add_hosts
               service: host
