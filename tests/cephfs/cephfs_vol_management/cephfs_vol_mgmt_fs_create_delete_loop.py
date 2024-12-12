@@ -24,58 +24,67 @@ def run(ceph_cluster, **kw):
     2. Create subvolume
     3. Mount file system using fuse mount, kernel mount and nfs
     4. Run IOs
-    5. Unmount all the FS
+    5. Unmount all the Subvolumes, Subvolume group and FS
     6. Delete FS
     7. Repeat the same steps with the same FS name for 5 runs
     """
+
+    tc = "CEPH-83604070"
+    log.info(f"Running CephFS tests {tc}")
+    test_data = kw.get("test_data")
+    fs_util = FsUtils(ceph_cluster, test_data=test_data)
+    config = kw.get("config")
+    clients = ceph_cluster.get_ceph_objects("client")
+    build = config.get("build", config.get("rhbuild"))
+
+    log.info("checking Pre-requisites")
+    if not clients:
+        log.info(
+            f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
+        )
+        return 1
+
+    fs_name = "cephfs_recursive"
+
+    subvolume_group_name = "subvol_group1"
+    subvolume_name = "subvol"
+    subvolumegroup = {
+        "vol_name": fs_name,
+        "group_name": subvolume_group_name,
+    }
+    subvolume_list = [
+        {
+            "vol_name": fs_name,
+            "subvol_name": f"{subvolume_name}_1",
+            "group_name": subvolume_group_name,
+        },
+        {
+            "vol_name": fs_name,
+            "subvol_name": f"{subvolume_name}_2",
+            "group_name": subvolume_group_name,
+        },
+        {
+            "vol_name": fs_name,
+            "subvol_name": f"{subvolume_name}_3",
+            "group_name": subvolume_group_name,
+        },
+    ]
+
+    # Run the FS lifecycle for 5 iteration
     for i in range(1, 6):
         log.info(f"Loop {i}: Started file system lifecycle")
         try:
-            test_data = kw.get("test_data")
-            fs_util = FsUtils(ceph_cluster, test_data=test_data)
-            config = kw.get("config")
-            clients = ceph_cluster.get_ceph_objects("client")
-            build = config.get("build", config.get("rhbuild"))
             fs_util.prepare_clients(clients, build)
             fs_util.auth_list(clients)
-            log.info("checking Pre-requisites")
-            if not clients:
-                log.info(
-                    f"This test requires minimum 1 client nodes.This has only {len(clients)} clients"
-                )
-                return 1
             client1 = clients[0]
 
             # Creation of FS
-            fs_name = "cephfs_recursive"
             fs_util.create_fs(client1, fs_name)
             fs_util.wait_for_mds_process(client1, fs_name)
 
             # Creation of subvolume group and subvolumes
-            subvolume_group_name = "subvol_group1"
-            subvolume_name = "subvol"
-            subvolumegroup = {
-                "vol_name": fs_name,
-                "group_name": subvolume_group_name,
-            }
             fs_util.create_subvolumegroup(client1, **subvolumegroup)
-            subvolume_list = [
-                {
-                    "vol_name": fs_name,
-                    "subvol_name": f"{subvolume_name}_1",
-                    "group_name": subvolume_group_name,
-                },
-                {
-                    "vol_name": fs_name,
-                    "subvol_name": f"{subvolume_name}_2",
-                    "group_name": subvolume_group_name,
-                },
-                {
-                    "vol_name": fs_name,
-                    "subvol_name": f"{subvolume_name}_3",
-                    "group_name": subvolume_group_name,
-                },
-            ]
+
             for subvolume in subvolume_list:
                 fs_util.create_subvolume(client1, **subvolume)
                 subvolume_size_subvol = fs_util.get_subvolume_info(
@@ -226,6 +235,13 @@ def run(ceph_cluster, **kw):
                 check_ec=False,
             )
 
+            for subvolume in subvolume_list:
+                fs_util.remove_subvolume(client1, **subvolume)
+
+            fs_util.remove_subvolumegroup(client1, **subvolumegroup)
+
             fs_util.remove_fs(client1, fs_name)
             log.info(f"Loop {i}: Completed file system lifecycle")
+
+    log.info(f"Completed CephFS tests {tc}")
     return 0
