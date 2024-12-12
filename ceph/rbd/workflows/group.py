@@ -167,9 +167,7 @@ def add_image_to_group_and_verify(**kw):
     (g_ls_out, _) = rbd.group.image.list(**group_ls_kw)
 
     if namespace and f"{image_pool}/{namespace}/{image}" in g_ls_out:
-        log.info(
-            f"Added Namespace image in the group {group}  successfully verified"
-        )
+        log.info(f"Added Namespace image in the group {group}  successfully verified")
         return 0
     elif f"{pool}/{image}" in g_ls_out:
         log.info(f"Image {image} to the group {group} successfully verified")
