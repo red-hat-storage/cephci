@@ -168,7 +168,7 @@ def add_image_to_group_and_verify(**kw):
 
     if namespace and f"{image_pool}/{namespace}/{image}" in g_ls_out:
         log.info(
-            f"Image {image} to the group {group} and namespace {namespace} successfully verified"
+            f"Added Namespace image in the group {group}  successfully verified"
         )
         return 0
     elif f"{pool}/{image}" in g_ls_out:

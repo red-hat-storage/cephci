@@ -52,7 +52,7 @@ log = Log(__name__)
 
 def clone_rollback_group_snapshot_on_namespace(rbd_obj, client, **kw):
     """
-        Test to verify Cloning and Flattening a Group Snapshot
+        Test to verify creating group snapshot from pool namespace along with clone and rollback
     Args:
         rbd_obj: RBD object
         client : client node object
@@ -71,7 +71,7 @@ def clone_rollback_group_snapshot_on_namespace(rbd_obj, client, **kw):
                 _ = pool_config.pop("data_pool")
 
             kw["pool-name"] = pool
-            namespace = "ns_" + random_string(len=5)
+            namespace = "namespace_" + random_string(len=5)
             kw["namespace"] = namespace
             rc = create_namespace_and_verify(**kw)
             if rc != 0:
@@ -91,14 +91,8 @@ def clone_rollback_group_snapshot_on_namespace(rbd_obj, client, **kw):
                 else:
                     log.info(f"Image {pool}/{namespace}/{image} creation is complete")
 
-            # dev_path = rbd.map(**{"image-or-snap-spec":f"{pool}/{namespace}/{images[0]}"})
-            bench_kw = {
-                "image-spec": f"{pool}/{namespace}/{images[0]}",
-                "io-type": "write",
-                "io-threads": 16,
-                "io-pattern": "rand",
-                "io-size": "1G",
-            }
+            bench_kw = kw.get("config", {}).get("io", {})
+            bench_kw.update({"image-spec": f"{pool}/{namespace}/{images[0]}"})
 
             out, err = rbd.bench(**bench_kw)
             if err:
@@ -117,7 +111,7 @@ def clone_rollback_group_snapshot_on_namespace(rbd_obj, client, **kw):
             )
             log.info(f"md5 before snap is {md5_before_snap}")
 
-            # 4. Create a group and add the image to an RBD group
+            # Create a group and add the image to an RBD group
             group = kw.get("config", {}).get("group", "image_group_default")
             group_create_kw = {
                 "client": client,
@@ -178,13 +172,7 @@ def clone_rollback_group_snapshot_on_namespace(rbd_obj, client, **kw):
                 return 1
             else:
                 log.info(f"Clone created successfully for {pool}/{namespace}/{image}")
-            bench_kw = {
-                "image-spec": f"{pool}/{namespace}/{images[0]}",
-                "io-type": "write",
-                "io-threads": 16,
-                "io-pattern": "rand",
-                "io-size": "1G",
-            }
+
             out, err = rbd.bench(**bench_kw)
             if err:
                 log.error(
@@ -256,7 +244,7 @@ def run(**kw):
         log.info(
             "CEPH-83594337 - Creating group snapshot, clone, snap rollback  from pool namespace"
         )
-
+        pool_types = list()
         if kw.get("client_node"):
             client = get_node_by_id(kw.get("ceph_cluster"), kw.get("client_node"))
         else:
@@ -264,7 +252,7 @@ def run(**kw):
         rbd_obj = initial_rbd_config(**kw)
         pool_types = rbd_obj.get("pool_types")
         if rbd_obj:
-            log.info("Executing test on Replication and EC pool")
+            log.info("Executing test on Replicated and EC pool")
             if clone_rollback_group_snapshot_on_namespace(rbd_obj, client, **kw):
                 return 1
             log.info(
