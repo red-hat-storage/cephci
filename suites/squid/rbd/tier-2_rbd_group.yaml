@@ -164,3 +164,20 @@ tests:
       module: test_rbd_clone_flatten_group_snapshot.py
       name: Test cloning and flattening group snapshot
       polarion-id: CEPH-83594299
+
+  - test:
+      desc: Verify group snapshot rollback not allowed if memberships dont match
+      config:
+        group: test_group
+        snap: test_snap
+        rep_pool_config:
+          num_pools: 2
+          num_images: 1
+        ec_pool_config:
+          num_pools: 2
+          num_images: 1
+        fio:
+          size: 10M
+      module: test_rbd_disallow_group_snapshot_rollback.py
+      name: Disallow Group Snapshot Rollback if Memberships Don't Match
+      polarion-id: CEPH-83594544
