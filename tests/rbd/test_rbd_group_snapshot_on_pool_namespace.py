@@ -67,9 +67,6 @@ def clone_rollback_group_snapshot_on_namespace(rbd_obj, client, **kw):
         multi_pool_config = getdict(rbd_config)
 
         for pool, pool_config in multi_pool_config.items():
-            if "data_pool" in pool_config.keys():
-                _ = pool_config.pop("data_pool")
-
             kw["pool-name"] = pool
             namespace = "namespace_" + random_string(len=5)
             kw["namespace"] = namespace
@@ -244,7 +241,7 @@ def run(**kw):
         log.info(
             "CEPH-83594337 - Creating group snapshot, clone, snap rollback  from pool namespace"
         )
-        pool_types = list()
+
         if kw.get("client_node"):
             client = get_node_by_id(kw.get("ceph_cluster"), kw.get("client_node"))
         else:
