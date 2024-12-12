@@ -35,7 +35,6 @@
 #   CEPH-83581592: Verify Client eviction is deferred if OSD was laggy.
 #   CEPH-83581613: Verify Client is blocklisted if session metadata is bloated.
 #   CEPH-83591419: Validate Root Sqaush operations on Cephfs
-#   CEPH-83595737: Validate selinux relabel on kernel client
 #
 # Bugs :
 # https://bugzilla.redhat.com/show_bug.cgi?id=2309363
@@ -425,4 +424,3 @@ tests:
       module: clients.client_root_squash_non_root_user.py
       name: client_root_squash_non_root_user
       polarion-id: "CEPH-83602912"
-
