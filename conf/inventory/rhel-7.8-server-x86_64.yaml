@@ -40,7 +40,7 @@ instance:
         - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
         - systemctl restart sshd
         - curl -m 120 -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem
-        - curl -m 120 -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://certs.corp.redhat.com/certs/Current-IT-Root-CA.pem
+        - curl -m 120 -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://certs.corp.redhat.com/certs/Current-IT-Root-CAs.pem
         - update-ca-trust
         - touch /ceph-qa-ready
 
