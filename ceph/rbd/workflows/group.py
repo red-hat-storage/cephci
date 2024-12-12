@@ -14,7 +14,7 @@ def create_group_and_verify(**kw):
         kw(dict): Key/value pairs that needs to be provided to the installer
             Example::
             Supported keys:
-                pool(str): pool nane where group should be created
+                pool(str): pool name where group should be created
                 namespace(str): pool|[namespace] where greoup should be created
                 group(str): group name to be created
     """
@@ -92,7 +92,7 @@ def add_image_to_group_and_verify(**kw):
         kw(dict): Key/value pairs that needs to be provided to the installer
             Example::
             Supported keys:
-                pool(str): pool nane where group should be created
+                pool(str): pool name where group should be created
                 namespace(str): pool|[namespace] where greoup should be created
                 group(str): group name to be created
                 image(str): image to be added to the group
