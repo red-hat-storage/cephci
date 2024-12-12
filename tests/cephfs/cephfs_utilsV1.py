@@ -4505,7 +4505,6 @@ os.system('sudo systemctl start  network')
         num_of_osds,
         build,
         mount_paths,
-        mount_type,
     ):
         """
         Processes the active MDS nodes by running IO operations and rebooting the active MDS nodes.
@@ -4599,7 +4598,6 @@ os.system('sudo systemctl start  network')
         num_of_osds,
         build,
         mount_paths,
-        mount_type,
     ):
         """
         Processes the standby-replay MDS nodes by running IO operations and rebooting the standby-replay MDS nodes.
