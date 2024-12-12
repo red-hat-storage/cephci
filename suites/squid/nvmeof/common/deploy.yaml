@@ -1,7 +1,3 @@
-# NVMeoTCP functional regression tests suite
-# cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_functional.yaml
-# Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
-
 tests:
 # Set up the cluster
   - test:
@@ -45,19 +41,18 @@ tests:
               args:
                 all-available-devices: true
       desc: RHCS cluster deployment using cephadm
-      destroy-cluster: false
+      destroy-clster: false
       module: test_cephadm.py
       name: deploy cluster
 
-#  Test cases to be executed
   - test:
       abort-on-fail: true
       config:
         command: add
         id: client.1
         nodes:
-          - node10
-          - node11
+          - node14
+          - node15
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -65,40 +60,4 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure Ceph client for NVMe tests
-      polarion-id: CEPH-83573758
-
-  - test:
-      abort-on-fail: true
-      config:
-        gw_node: node6
-        rbd_pool: rbd
-        gw_group: gw_group1
-        do_not_create_image: true
-        rep-pool-only: true
-        rep_pool_config:
-          pool: rbd
-        initiator_node: node10
-        operation: CEPH-83576084
-      desc: Delete-recreate bdev in loop and rediscover namespace
-      destroy-cluster: false
-      module: test_ceph_nvmeof_neg_tests.py
-      name: Delete-recreate bdev namespace
-      polarion-id: CEPH-83576084
-
-  - test:
-      abort-on-fail: false
-      config:
-        gw_node: node6
-        rbd_pool: rbd
-        gw_group: gw_group2
-        do_not_create_image: true
-        rep-pool-only: true
-        rep_pool_config:
-          pool: rbd
-        initiator_node: node10
-        operation: CEPH-83575814
-      desc: Perform cluster operations when  IO operations between NVMeOF target NVMe-OF initiator are in progress.
-      destroy-cluster: false
-      module: test_ceph_nvmeof_neg_tests.py
-      name: Perform cluster operations when  IO operations are in progress.
-      polarion-id: CEPH-83575814
+      polarion-id: CEPH-23573752
