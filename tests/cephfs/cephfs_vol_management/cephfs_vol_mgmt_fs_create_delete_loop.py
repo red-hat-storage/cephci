@@ -209,8 +209,8 @@ def run(ceph_cluster, **kw):
                 log.info(f"Subvolume Info after IO: {subvolume_size_subvol}")
 
         except Exception as e:
-            log.info(e)
-            log.info(traceback.format_exc())
+            log.error(e)
+            log.error(traceback.format_exc())
             return 1
 
         finally:
