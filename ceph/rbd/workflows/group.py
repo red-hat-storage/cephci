@@ -279,6 +279,7 @@ def rollback_to_snap(**kw):
         log.info(f"SUCCESS: Group {group} rollbacked to {snap} successfully")
         return 0
 
+
 def group_info(**kw):
     """
     Displays Pool Group info
@@ -308,6 +309,7 @@ def group_info(**kw):
     (group_i_out, group_i_err) = rbd.group.info(**group_info_kw)
     return (group_i_out, group_i_err)
 
+
 def group_snap_info(**kw):
     """
     Displays info for group snapshot
@@ -318,12 +320,12 @@ def group_snap_info(**kw):
                 pool(str): pool name where group is present
                 group(str): group name for which information needs to be retrived
                 snap(str): group snapshot name for which info is needed
-    """ 
+    """
     rbd = Rbd(kw["client"])
     pool = kw.get("pool", "rbd")
     group = kw.get("group", None)
-    snap = kw.get("snap", None) 
-    group_snap_info_kw = kw 
+    snap = kw.get("snap", None)
+    group_snap_info_kw = kw
     group_snap_info_kw.pop("client")
     if pool is not None:
         group_snap_info_kw.update({"pool": pool})
