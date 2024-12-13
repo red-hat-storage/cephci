@@ -6,7 +6,7 @@ from typing import Dict
 from .config import TestMetaData
 
 LOG_FORMAT = (
-    "%(asctime)s - %(name)s - %(modname)s:%(lineno)d - [%(levelname)s] - %(message)s"
+    "%(asctime)s - %(name)s - %(module)s:%(lineno)d - %(levelname)s - %(message)s"
 )
 
 magna_server = "http://magna002.ceph.redhat.com"
