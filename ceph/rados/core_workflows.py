@@ -2628,25 +2628,26 @@ EOF"""
             heap_dump[osd_id] = out.strip()
         return heap_dump
 
-    def list_orch_services(self, service_type=None) -> list:
+    def list_orch_services(self, service_type=None, export=None) -> list:
         """
         Retrieves the list of orch services
         Args:
             service_type(optional): service name | e.g. mon, mgr, osd, etc
-
+            export(optional): return export of orch service
         Returns:
-            list of service names using ceph orch ls [<service>]
+            list of service names using ceph orch ls [<service>] [--export]
         """
-        service_name_ls = []
         base_cmd = "ceph orch ls"
 
         cmd = f"{base_cmd} {service_type}" if service_type else base_cmd
-        orch_ls_op = self.run_ceph_command(cmd=cmd)
+        cmd += " --export" if export else cmd
+        orch_ls_op = self.run_ceph_command(cmd=cmd, client_exec=True)
+
+        if export:
+            return orch_ls_op
 
         if orch_ls_op:
-            for service in orch_ls_op:
-                service_name_ls.append(service["service_name"])
-        return service_name_ls
+            return [service["service_name"] for service in orch_ls_op]
 
     def check_host_status(self, hostname, status: str = None) -> bool:
         """
@@ -4432,7 +4433,7 @@ EOF"""
         log.error("The unmanaged flag is not unset")
         return False
 
-    def check_daemon_exists_on_host(self, host, daemon_type) -> bool:
+    def check_daemon_exists_on_host(self, host, daemon_type=None) -> bool:
         """
         Method to check a daemon is running on the given host
         Args:
@@ -4444,6 +4445,13 @@ EOF"""
         """
         cmd = f"ceph orch ps {host}"
         out = self.run_ceph_command(cmd=cmd, client_exec=True)
+        if daemon_type is None:
+            if not out:
+                log.info(f"There are no daemons in the {host} node.")
+                return False
+            else:
+                log.info(f"The {host} node contain the daemons- {out}.")
+                return True
         for entry in out:
             if entry["daemon_type"] == daemon_type:
                 log.debug(f"{daemon_type} daemon present on the host")
@@ -4615,3 +4623,57 @@ EOF"""
         out = self.run_ceph_command(cmd=_cmd, client_exec=True)
 
         return out["pools"][0] if pool_name else out
+
+    def set_service_managed_type(self, service_type, unmanaged) -> bool:
+        """
+        Method to set the service to either managed or unmanaged
+        Args:
+            unmanaged: True or false, for the service management
+            service_type : service types are- mon,mgr,osd,rgw, mds
+        returns:
+            Pass -> True, Fail -> false
+        """
+        file_name = (
+            f"/tmp/{service_type}_spec_{self.set_service_managed_type.__name__}.yaml"
+        )
+
+        # Creating service config file
+        self.client.exec_command(sudo=True, cmd=f"touch {file_name}")
+
+        cmd_export = f"ceph orch ls {service_type} --export"
+        out = self.run_ceph_command(cmd=cmd_export, client_exec=True)
+        for osd_service in out:
+            if unmanaged:
+                log.debug(
+                    f"Setting the {service_type} service as unmanaged by cephadm. current status : {out}"
+                )
+                osd_service["unmanaged"] = "true"
+            else:
+                log.debug(
+                    f"Setting the {service_type} service as unmanaged by cephadm. current status : {out}"
+                )
+                osd_service["unmanaged"] = "false"
+            json_out = json.dumps(osd_service)
+            # Adding the spec rules into the file
+            cmd = f"echo '{json_out}' > {file_name}"
+            self.client.exec_command(cmd=cmd, sudo=True)
+            log.debug(f"Contents of {service_type} spec file : {out}")
+            apply_cmd = f"ceph orch apply -i {file_name}"
+            log.info(f"Applying the spec file via cmd : {apply_cmd}")
+            self.client.exec_command(cmd=apply_cmd, sudo=True)
+            time.sleep(10)
+        out = self.list_orch_services(service_type=service_type, export=True)
+        for osd_service in out:
+            status = osd_service.get("unmanaged", False)
+            if status == "false":
+                unmanaged_check = False
+            else:
+                unmanaged_check = True
+
+            if unmanaged_check != unmanaged:
+                log.error(
+                    f"{service_type} Service with {osd_service['service_id']}not unmanaged={unmanaged} state. Fail"
+                )
+                return False
+        log.info(f" All {service_type} Service in unmanaged={unmanaged} state. Pass")
+        return True

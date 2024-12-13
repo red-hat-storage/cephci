@@ -195,17 +195,24 @@ def set_osd_in(
     return ret_val
 
 
-def osd_remove(ceph_cluster, osd_id, zap=False):
+def osd_remove(ceph_cluster, osd_id, zap=False, force=False):
     """
     osd remove
     Args:
         ceph_cluster: ceph cluster
         osd_id: osd id
         zap: flag to control zapping of device
+        force: flag to remove the OSD forcefully
     """
     config = {"command": "rm", "service": "osd", "pos_args": [osd_id]}
+    cmd_args = {}
     if zap:
-        config["base_cmd_args"] = {"zap": True}
+        cmd_args["zap"] = True
+        cmd_args["force"] = True
+    if force:
+        cmd_args["force"] = True
+    if bool(cmd_args):
+        config["base_cmd_args"] = cmd_args
     log.info(f"Executing OSD {config.pop('command')} service")
     osd = OSD(cluster=ceph_cluster, **config)
     osd.rm(config)
