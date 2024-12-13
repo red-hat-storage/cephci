@@ -19,6 +19,7 @@
 #     12.https://bugzilla.redhat.com/show_bug.cgi?id=2151501
 #     13.https://bugzilla.redhat.com/show_bug.cgi?id=2315595
 #     14.https://bugzilla.redhat.com/show_bug.cgi?id=2326179
+#     15.https://bugzilla.redhat.com/show_bug.cgi?id=2213766
 #===============================================================================================
 # RHOS-d run duration: 330 mins
 tests:
@@ -217,3 +218,9 @@ tests:
       module: test_mon_connection_scores.py
       polarion-id: CEPH-83602911
       comments: Active bug 2151501
+
+  - test:
+      name: Verify config values via cephadm-ansible
+      module: test_cephadm_ansible.py
+      polarion-id: CEPH-83602686
+      desc: Ensure configuration values are accessible via cephadm-ansible module
