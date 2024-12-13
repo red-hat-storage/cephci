@@ -656,7 +656,7 @@ tests:
           plugin: clay
           app_name: rbd
           erasure_code_use_overwrites: "true"
-          crush-failure-domain: osd
+          crush-failure-domain: host
           force: true
           test_overwrites_pool: true
           delete_pools: true
@@ -679,7 +679,7 @@ tests:
           plugin: clay
           app_name: rbd
           erasure_code_use_overwrites: "true"
-          crush-failure-domain: osd
+          crush-failure-domain: host
           force: true
           test_overwrites_pool: true
           delete_pools: true

@@ -30,7 +30,7 @@ globals:
           - grafana
           - prometheus
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node3:
         networks:
           - provider_net_cci_15
@@ -41,7 +41,7 @@ globals:
           - osd
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node4:
         networks:
           - provider_net_cci_15
@@ -51,7 +51,7 @@ globals:
           - mds
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node5:
         networks:
           - provider_net_cci_13
@@ -65,7 +65,7 @@ globals:
           - grafana
           - prometheus
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node6:
         networks:
           - provider_net_cci_13
@@ -76,7 +76,7 @@ globals:
           - nfs
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node7:
         networks:
           - provider_net_cci_13
@@ -86,7 +86,7 @@ globals:
           - mds
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node8:
         role:
           - client

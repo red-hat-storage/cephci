@@ -1,4 +1,4 @@
-# Use cluster-conf file: conf/reef/rados/3AZ-cluster-rhos-1.yaml
+# Use cluster-conf file: conf/squid/rados/3AZ-cluster-rhos-1.yaml
 # 3 AZ cluster deployment tests
 # can be part of regression/weekly
 tests:
@@ -104,6 +104,31 @@ tests:
               command: shell
               args: # display OSD tree
                 - "ceph osd tree"
+
+  - test:
+        name: MDS Service deployment with spec
+        desc: Add MDS services using spec file
+        module: test_cephadm.py
+        polarion-id: CEPH-83574728
+        config:
+          steps:
+            - config:
+                command: shell
+                args: # arguments to ceph orch
+                  - ceph
+                  - fs
+                  - volume
+                  - create
+                  - cephfs
+            - config:
+                command: apply_spec
+                service: orch
+                validate-spec-services: true
+                specs:
+                  - service_type: mds
+                    service_id: cephfs
+                    placement:
+                      label: mds
 
   - test:
       name: RGW Service deployment

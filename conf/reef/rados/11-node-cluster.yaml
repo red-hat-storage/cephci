@@ -28,22 +28,22 @@ globals:
           - osd
           - node-exporter
           - crash
-        no-of-volumes: 4
-        disk-size: 25
+        no-of-volumes: 3
+        disk-size: 15
       node4:
         role:
           - osd
           - node-exporter
           - crash
-        no-of-volumes: 4
-        disk-size: 25
+        no-of-volumes: 3
+        disk-size: 15
       node5:
         role:
           - osd
           - node-exporter
           - crash
-        no-of-volumes: 4
-        disk-size: 25
+        no-of-volumes: 3
+        disk-size: 15
       node6:
         role:
           - mon
@@ -66,15 +66,15 @@ globals:
           - osd
           - node-exporter
           - crash
-        no-of-volumes: 4
-        disk-size: 25
+        no-of-volumes: 3
+        disk-size: 15
       node10:
         role:
           - osd
           - node-exporter
           - crash
-        no-of-volumes: 4
-        disk-size: 25
+        no-of-volumes: 3
+        disk-size: 15
       node11:
         role:
           - mon
