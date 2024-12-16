@@ -263,7 +263,6 @@ def run(ceph_cluster, **kw):
             num_of_osds,
             build,
             fuse_subvol_mount_paths,
-            "fuse",
         )
 
         log.info(
@@ -277,7 +276,6 @@ def run(ceph_cluster, **kw):
             num_of_osds,
             build,
             kernel_subvol_mount_paths,
-            "kernel",
         )
 
         log.info("Capture the mds states after rebooting")
@@ -356,7 +354,6 @@ def run(ceph_cluster, **kw):
                 num_of_osds,
                 build,
                 fuse_subvol_mount_paths,
-                "fuse",
             )
 
             log.info(
@@ -370,7 +367,6 @@ def run(ceph_cluster, **kw):
                 num_of_osds,
                 build,
                 kernel_subvol_mount_paths,
-                "kernel",
             )
 
             log.info("Capture the mds states after rebooting")
@@ -435,7 +431,6 @@ def run(ceph_cluster, **kw):
             fs_name1,
             clients[0],
             fuse_subvol_mount_paths,
-            "fuse",
             max_mds_value=1,
         )
         log.info("Validate the rank after modifying the max_mds")
@@ -454,7 +449,6 @@ def run(ceph_cluster, **kw):
             fs_name1,
             clients[0],
             kernel_subvol_mount_paths,
-            "kernel",
             max_mds_value=2,
         )
         validate_ranks(
@@ -516,7 +510,6 @@ def run(ceph_cluster, **kw):
             num_of_osds,
             build,
             kernel_subvol_mount_paths,
-            "fuse",
         )
 
         log.info(
@@ -531,7 +524,6 @@ def run(ceph_cluster, **kw):
             num_of_osds,
             build,
             kernel_subvol_mount_paths,
-            "kernel",
         )
 
         log.info("Capture the mds states after standby-replay nodes are replaced")

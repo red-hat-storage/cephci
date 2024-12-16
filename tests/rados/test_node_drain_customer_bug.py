@@ -1,6 +1,6 @@
 """
 The file contain the method to check the customer issue-
- CEPH-83593996 - Check that the Ceph cluster logs are being generated appropriately according to the log level
+ CEPH-83595932-To verify crashes while executing drain and mgr failover commands
 """
 
 import datetime
@@ -14,6 +14,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.mgr_workflows import MgrWorkflows
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 
 log = Log(__name__)
@@ -21,7 +22,7 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kw):
     """
-    # CEPH-83593996
+    # CEPH-83595932
     Bug id - https://bugzilla.redhat.com/show_bug.cgi?id=2305677
     1. Configure a cluster that have more than four OSD nodes
     2. Select an OSD node and drain the node
@@ -42,29 +43,35 @@ def run(ceph_cluster, **kw):
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
     ceph_nodes = kw.get("ceph_nodes")
     config = kw["config"]
-
     replicated_config = config.get("replicated_pool")
     pool_name = replicated_config["pool_name"]
-    active_osd_list = rados_obj.get_osd_list(status="up")
+    active_osd_list = rados_obj.get_osd_list(status="in")
     log.info(f"The active OSDs list before starting the test-{active_osd_list}")
     if not rados_obj.create_pool(pool_name=pool_name):
         log.error("Failed to create the  Pool")
         return 1
 
-    rados_obj.bench_write(pool_name=pool_name, byte_size="5M", rados_write_duration=90)
+    rados_obj.bench_write(pool_name=pool_name, byte_size="5M", rados_write_duration=180)
     mgr_daemon = Thread(
         target=background_mgr_task, kwargs={"mgr_object": mgr_obj}, daemon=True
     )
+    wait_for_clean_pg_sets(rados_obj)
     # Printing the hosts in cluster
     cmd_host_ls = "ceph orch host ls"
     out = rados_obj.run_ceph_command(cmd=cmd_host_ls)
     log.debug(f"The hosts in the cluster before starting the test are - {out}")
-
+    txt_version_logic = """ The logic developed to select the drain host is-
+        1. Select the cluster node that has the _no_schedule label.This check is included because in few
+           scenarios(7.1z0) first the issue is reproducing and upgrading to the latest version and again
+           checking the bug
+        2. Select the node with OSD weight/reweight are 0 if none of the hosts have the _no_schedule label
+        3. If both 1&2 failed then select a random OSD node
+    """
     mgr_host_object_list = []
     for node in ceph_nodes:
         if node.role == "mgr":
             mgr_host_object_list.append(node)
-            log.debug(f"The mgr host node is{node.hostname}")
+            log.debug(f"The mgr host node is {node.hostname}")
 
     mgr_daemon_list = mgr_obj.get_mgr_daemon_list()
     log.debug(f"The MGR daemons list are -{mgr_daemon_list}")
@@ -95,15 +102,8 @@ def run(ceph_cluster, **kw):
         log.info(f"The bug exists and  the ceph version is - {ceph_version}")
     else:
         log.info(f"The bug not exists and the ceph version is - {ceph_version}")
+    log.info(f"{txt_version_logic}")
 
-    log.info(
-        "The logic developed to select the drain host is-"
-        "1. Select the cluster node that has the _no_schedule label.This check is included because in few "
-        "   scenarios(7.1z0) first the issue is reproducing and upgrading to the latest version and again "
-        "   checking the bug"
-        "2. Select the node with OSD weight/reweight are 0 if none of the hosts have the _no_schedule label"
-        "3. If both 1&2 failed then select a random OSD node"
-    )
     cmd_host_ls = "ceph orch host ls"
     out = rados_obj.run_ceph_command(cmd=cmd_host_ls)
     log.info(f"The node details in the cluster -{out} ")
@@ -133,8 +133,10 @@ def run(ceph_cluster, **kw):
     try:
         osd_count_before_test = get_node_osd_list(rados_obj, ceph_nodes, drain_host)
         log.info(
-            f"The OSDs in the drain node before starting the test - {osd_count_before_test} "
+            f"The OSDs in the drain node before starting the test- {osd_count_before_test} "
         )
+        rados_obj.set_service_managed_type("osd", unmanaged=True)
+        time.sleep(10)
         mgr_daemon.start()
         service_obj.remove_custom_host(host_node_name=drain_host)
         time.sleep(300)
@@ -152,6 +154,9 @@ def run(ceph_cluster, **kw):
                 "The traceback messages are noticed in logs.The error snippets are noticed in the MGR logs"
             )
             return 1
+        rados_obj.set_service_managed_type("osd", unmanaged=False)
+        time.sleep(10)
+
         log.info(
             "Adding the node by providing the deploy_osd as False, because the script is not setting the "
             "--unmanaged=true.Once the node is added back to the cluster the OSDs get configured automatically"
@@ -194,7 +199,7 @@ def run(ceph_cluster, **kw):
             return 1
 
         if bug_exists:
-            active_osd_list = rados_obj.get_osd_list(status="up")
+            active_osd_list = rados_obj.get_osd_list(status="in")
             log.info(
                 f"The active OSDs list after reproducing the issue is-{active_osd_list}"
             )
@@ -237,6 +242,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
+
+        rados_obj.set_service_managed_type("osd", unmanaged=False)
+        time.sleep(10)
         if replicated_config.get("delete_pool"):
             rados_obj.delete_pool(pool=pool_name)
         time.sleep(5)
@@ -297,7 +305,7 @@ def background_mgr_task(mgr_object):
         mgr_object: mgr object
     Returns: None
     """
-    time.sleep(20)
+    time.sleep(5)
     for _ in range(10):
         active_mgr_before_fail = mgr_object.get_active_mgr()
         mgr_object.set_mgr_fail()
@@ -306,7 +314,7 @@ def background_mgr_task(mgr_object):
             active_mgr_after_fail = mgr_object.get_active_mgr()
             if active_mgr_before_fail != active_mgr_after_fail:
                 break
-            time.sleep(1)
+            time.sleep(5)
 
 
 def get_node_osd_list(rados_object, ceph_nodes, drain_host):

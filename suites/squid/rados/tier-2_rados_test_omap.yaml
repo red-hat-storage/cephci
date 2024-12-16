@@ -164,7 +164,6 @@ tests:
               pool_type: replicated
               pg_num: 16
         delete_pool: true
-      comments: Active BZ-2269089
 
   - test:
       name: Omap creations on objects

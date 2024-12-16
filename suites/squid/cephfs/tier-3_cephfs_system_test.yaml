@@ -227,7 +227,7 @@ tests:
        daemon_list : ['mds','osd','mgr','mon']
 
   - test:
-      name: CephFS_System_test
+      name: CephFS_System_test_1
       module: test_parallel.py
       parallel:
         -
@@ -238,20 +238,38 @@ tests:
             name: "CephFS System Test Client IO"
         -
           test:
+            abort-on-fail: false
+            desc: Run SV and Clone ops
+            module: cephfs_system.cephfs_systest_sv_clone_ops.py
+            name: "CephFS System Test SV Clone ops"
+        -
+          test:
             abort-on-fail: true
             desc: System monitor
             module: cephfs_system.cephfs_systest_monitor.py
             name: "CephFS System monitor"
       desc: Running all System test workflows in parallel
       abort-on-fail: false
-  -
-    test:
+  - test:
+      name: CephFS_System_test_2
+      module: test_parallel.py
+      parallel:
+        -
+          test:
+            abort-on-fail: false
+            desc: Run Client IO workflow 7
+            module: cephfs_system.cephfs_systest_client_io.py
+            name: "CephFS System Test Client IO 7"
+            config:
+            test_name : io_test_workflow_7
+        -
+          test:
+            abort-on-fail: true
+            desc: System monitor
+            module: cephfs_system.cephfs_systest_monitor.py
+            name: "CephFS System monitor"
+      desc: Running all System test workflows in parallel
       abort-on-fail: false
-      desc: Run Client IO workflow 7
-      module: cephfs_system.cephfs_systest_client_io.py
-      name: "CephFS System Test Client IO 7"
-      config:
-       test_name : io_test_workflow_7
   -
     test:
       abort-on-fail: false

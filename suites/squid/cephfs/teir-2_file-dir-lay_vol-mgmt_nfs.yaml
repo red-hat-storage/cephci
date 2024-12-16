@@ -320,6 +320,12 @@ tests:
       desc: File system life cycle
       abort-on-fail: false
   - test:
+      name: Test fs volume creation, run IO & deletion in loop for 5 times
+      module: cephfs_vol_management.cephfs_vol_mgmt_fs_create_delete_loop.py
+      polarion-id: CEPH-83604070
+      desc: Test fs volume creation, run IO & deletion in loop for 5 times
+      abort-on-fail: false
+  - test:
       abort-on-fail: true
       desc: "test cephfs nfs export path"
       module: cephfs_nfs.nfs_export_path.py
