@@ -133,3 +133,19 @@ tests:
       config:
         bluestore_cache: true
       desc: Verify tuning of BlueStore cache size for HDDs and SSDs
+
+  - test:
+      name: Ceph Volume utility zap test with destroy flag
+      module: test_cephvolume_workflows.py
+      polarion-id:
+      desc: verify ceph-volume lvm zap functionality with destroy flag
+      config:
+        zap_with_destroy_flag: true
+
+  - test:
+      name: Ceph Volume utility zap test without destroy flag
+      module: test_cephvolume_workflows.py
+      polarion-id:
+      desc: verify ceph-volume lvm zap functionality without destroy flag
+      config:
+        zap_without_destroy_flag: true
