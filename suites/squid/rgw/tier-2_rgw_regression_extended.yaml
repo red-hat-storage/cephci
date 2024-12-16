@@ -75,6 +75,7 @@ tests:
       desc: BucketNotification with users in same tenant and different tenant
       polarion-id: CEPH-11204
       module: sanity_rgw.py
+      comments: known issue (bz-2309013)
       config:
         run-on-rgw: true
         extra-pkgs:
@@ -245,17 +246,28 @@ tests:
       config:
         script-name: user_create.py
         config-file-name: test_user_with_placement_id_storage_class.yaml
+  - test:
+      abort-on-fail: false
+      config:
+        role: "client"
+        commands:
+          - "radosgw-admin account create --account-id RGW11111111111111111 --account-name Account1 --email account1@ceph.com"
+          - "radosgw-admin account create --account-id RGW22222222222222222 --account-name Account2 --email account2@ceph.com"
 
+      desc: Create 2 rgw accounts
+      module: exec.py
+      name: Create 2 rgw accounts
+      polarian-id: CEPH-83591683
   - test:
       abort-on-fail: false
       config:
         branch: ceph-squid
       desc: Run the external S3test suites.
-      comments: Known issue BZ-2312112 targeted to 8.0z2
       destroy-cluster: false
       module: test_s3.py
       name: execute s3tests
-      polarion-id: CEPH-83575225
+      polarion-id: CEPH-83575225 #CEPH-83591682 #CEPH-83591676
+      comments: BZ2268234 - list_buckets_bad_auth targeted to 8.0
 
   - test:
       abort-on-fail: false
