@@ -80,6 +80,7 @@ tests:
   - test:
       name: notify on multipart upload events with kafka_broker and SSL security
       desc: notify on multipart upload events with kafka_broker and SSL security
+      comments: Known issue BZ-2327774 targeted 8.1 (intermittent crash)
       polarion-id: CEPH-83575471
       module: sanity_rgw.py
       config:
