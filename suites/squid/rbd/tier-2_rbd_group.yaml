@@ -149,6 +149,26 @@ tests:
           size: 100M
 
   - test:
+      desc: Creating group snapshot, clone, snap rollback from pool namespace
+      config:
+        group: image_group
+        snap: group_snap
+        rep_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        ec_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        io:
+          io-type: write
+          io-size: 1G
+          io-threads: 16
+          io-pattern: rand
+      module: test_rbd_group_snapshot_on_pool_namespace.py
+      name: Test group snapshot, clone, rollback from pool namespace
+      polarion-id: CEPH-83594337
+
+  - test:
       desc: Verify cloning and flattening a group snapshot
       config:
         group: image_group
