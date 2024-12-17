@@ -244,6 +244,12 @@ tests:
             name: "CephFS System Test SV Clone ops"
         -
           test:
+            abort-on-fail: false
+            desc: Run MDS ops
+            module: cephfs_system.cephfs_systest_mds_ops.py
+            name: "CephFS System Test MDS ops"
+        -
+          test:
             abort-on-fail: true
             desc: System monitor
             module: cephfs_system.cephfs_systest_monitor.py
