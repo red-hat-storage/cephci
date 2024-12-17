@@ -57,7 +57,7 @@ def create_group_and_verify(**kw):
                     f"FAIL: Namespace {namespace} creation failed in pool {pool_name} with error {ns_create_err}"
                 )
                 return 1
-            group_kw.update({"namespace": namespace})
+        group_kw.update({"namespace": namespace})
 
     # create a group in the pool/[namespace]
     group = kw.get("group", None)
@@ -96,6 +96,8 @@ def add_image_to_group_and_verify(**kw):
                 namespace(str): pool|[namespace] where greoup should be created
                 group(str): group name to be created
                 image(str): image to be added to the group
+                group-spec: {pool}/{namespace}/{group}
+                image-spec: {pool}/{namespace}/{image}
     """
     rbd = Rbd(kw["client"])
 
@@ -104,22 +106,48 @@ def add_image_to_group_and_verify(**kw):
     namespace = kw.get("namespace", None)
     group = kw.get("group", None)
     image = kw.get("image", None)
+    group_spec = kw.get("group-spec", None)
+    image_spec = kw.get("image-spec", None)
+
     image_group_kw = {}
-    if pool is not None:
-        image_group_kw.update({"group-pool": pool})
-        image_group_kw.update({"image-pool": pool})
-    if namespace is not None:
-        image_group_kw.update({"namespace": namespace})
-    if group is not None:
-        image_group_kw.update({"group": group})
+
+    if group_spec and image_spec:
+
+        image_group_kw.update({"group-spec": group_spec})
+        image_group_kw.update({"image-spec": image_spec})
+        group_entities = group_spec.split("/")
+        if len(group_entities) > 2:
+            namespace = group_entities[1]
+            group = group_entities[2]
+        else:
+            group = group_entities[1]
+            pool = group_entities[0]
+        image_entities = image_spec.split("/")
+        if len(image_entities) > 2:
+            image_pool = image_entities[0]
+            namespace = image_entities[1]
+            image = image_entities[2]
+        else:
+            image_pool = image_entities[0]
+            image = image_entities[1]
+
     else:
-        log.error("Group is the must param for adding image to the group")
-        return 1
-    if image is not None:
-        image_group_kw.update({"image": image})
-    else:
-        log.error("Image is the must kw for adding image to the group")
-        return 1
+
+        if pool is not None:
+            image_group_kw.update({"group-pool": pool})
+            image_group_kw.update({"image-pool": pool})
+        if namespace is not None:
+            image_group_kw.update({"namespace": namespace})
+        if group is not None:
+            image_group_kw.update({"group": group})
+        else:
+            log.error("Group is the must param for adding image to the group")
+            return 1
+        if image is not None:
+            image_group_kw.update({"image": image})
+        else:
+            log.error("Image is the must kw for adding image to the group")
+            return 1
     (_, img_g_err) = rbd.group.image.add(**image_group_kw)
     if not img_g_err:
         log.info(f"{image} successfully added to the group {group}")
@@ -129,15 +157,25 @@ def add_image_to_group_and_verify(**kw):
 
     # verify image creation to the group
     group_ls_kw = {}
-    group_ls_kw.update({"pool": pool})
-    group_ls_kw.update({"group": group})
+    if group_spec and image_spec:
+        group_ls_kw.update({"group-spec": group_spec})
+    else:
+        group_ls_kw.update({"pool": pool})
+        group_ls_kw.update({"group": group})
+        if namespace is not None:
+            group_ls_kw.update({"namespace": namespace})
     (g_ls_out, _) = rbd.group.image.list(**group_ls_kw)
-    if f"{pool}/{image}" in g_ls_out:
+
+    if namespace and f"{image_pool}/{namespace}/{image}" in g_ls_out:
+        log.info(f"Added Namespace image in the group {group}  successfully verified")
+    elif f"{pool}/{image}" in g_ls_out:
         log.info(f"Image {image} to the group {group} successfully verified")
-        return 0
+    elif f"{image_pool}/{image}" in g_ls_out:
+        log.info(f"Image {image} to the group {group} successfully verified")
     else:
         log.info(f"Image {image} to the group {group} verification failed")
         return 1
+    return 0
 
 
 def create_snap_and_verify(**kw):
