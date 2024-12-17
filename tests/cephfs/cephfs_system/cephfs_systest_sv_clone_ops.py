@@ -13,6 +13,7 @@ from ceph.parallel import parallel
 
 # from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_system.cephfs_system_utils import CephFSSystemUtils
+from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.log import Log
 
 log = Log(__name__)
@@ -34,10 +35,11 @@ def run(ceph_cluster, **kw):
     """
     try:
         fs_system_utils = CephFSSystemUtils(ceph_cluster)
+        fs_util = FsUtilsV1(ceph_cluster)
         config = kw.get("config")
         cephfs_config = {}
-        run_time = config.get("run_time", 3600)
-        sv_cnt = config.get("sv_cnt", 300)
+        run_time = config.get("run_time_hrs", 4)
+        sv_cnt = config.get("sv_cnt", 100)
         clone_cnt = config.get("clone_cnt", 10)
         clients = ceph_cluster.get_ceph_objects("client")
 
@@ -91,6 +93,7 @@ def run(ceph_cluster, **kw):
                     log_path,
                     clients,
                     fs_system_utils,
+                    fs_util,
                     cephfs_config,
                 ),
             )
@@ -123,6 +126,7 @@ def io_test_runner(
     log_path,
     clients,
     fs_system_utils,
+    fs_util,
     cephfs_config,
 ):
     io_tests = {
@@ -136,7 +140,7 @@ def io_test_runner(
     if io_test == "sv_test_workflow_1":
         client = random.choice(clients)
         io_proc_check_status = io_tests[io_test](
-            run_time, fs_name, sv_cnt, log_path, client, fs_system_utils
+            run_time, fs_name, sv_cnt, log_path, client, fs_system_utils, fs_util
         )
     else:
         sv_info_list = []
@@ -159,6 +163,7 @@ def io_test_runner(
             log_path,
             client,
             fs_system_utils,
+            fs_util,
             sv_info_list,
         )
 
@@ -166,7 +171,9 @@ def io_test_runner(
     return io_proc_check_status
 
 
-def sv_test_workflow_1(run_time, fs_name, sv_cnt, log_path, client, fs_system_utils):
+def sv_test_workflow_1(
+    run_time, fs_name, sv_cnt, log_path, client, fs_system_utils, fs_util
+):
     log_name = "sv_create_delete_in_bulk"
     log1 = fs_system_utils.configure_logger(log_path, log_name)
     log1.info(f"Start {log_name}")
@@ -177,15 +184,17 @@ def sv_test_workflow_1(run_time, fs_name, sv_cnt, log_path, client, fs_system_ut
     sv_rm_list = []
     for k in range(0, sv_cnt):
         sv_name = f"systest_sv_{k}"
-        sv_obj = {
-            "sv_name": sv_name,
+        subvolume = {
+            "vol_name": fs_name,
+            "subvol_name": sv_name,
+            "group_name": group_name,
         }
-        cmd = f"ceph fs subvolume create {fs_name} {sv_name} {group_name}"
-        out, _ = client.exec_command(sudo=True, cmd=cmd)
-        sv_rm_list.append(sv_obj)
+        fs_util.create_subvolume(client, **subvolume, validate=False)
+        log1.info(f"Created {sv_name} on {group_name}")
+        sv_rm_list.append(sv_name)
     k += 1
 
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     cluster_healthy = 1
 
     while datetime.datetime.now() < end_time and cluster_healthy:
@@ -194,48 +203,64 @@ def sv_test_workflow_1(run_time, fs_name, sv_cnt, log_path, client, fs_system_ut
             with parallel() as p:
                 j = i + 100
                 for n in range(i, j):
-                    sv_obj = sv_rm_list.pop(0)
-                    cmd = f"ceph fs subvolume rm {fs_name} {sv_obj['sv_name']} {group_name}"
-
-                    p.spawn(run_cmd, cmd, client, log1)
+                    sv_name = sv_rm_list.pop(0)
+                    subvolume = {
+                        "vol_name": fs_name,
+                        "subvol_name": sv_name,
+                        "group_name": group_name,
+                    }
+                    p.spawn(
+                        fs_util.remove_subvolume, client, **subvolume, validate=True
+                    )
+                    log1.info(f"started {sv_name} remove")
                     cnt = k + n
                     sv_name = f"systest_sv_{cnt}"
-                    sv_obj = {
-                        "sv_name": sv_name,
+                    subvolume1 = {
+                        "vol_name": fs_name,
+                        "subvol_name": sv_name,
+                        "group_name": group_name,
                     }
-                    cmd = f"ceph fs subvolume create {fs_name} {sv_name} {group_name} "
-
-                    p.spawn(run_cmd, cmd, client, log1)
-
-                    sv_rm_list.append(sv_obj)
+                    p.spawn(
+                        fs_util.create_subvolume, client, **subvolume1, validate=False
+                    )
+                    log1.info(f"started {sv_name} create")
+                    sv_rm_list.append(sv_name)
             i += 100
         time.sleep(30)
         cluster_healthy = is_cluster_healthy(client)
-        log1.info(f"cluster_health{cluster_healthy}")
+        log1.info(f"cluster_health {cluster_healthy}")
 
     log1.info("sv_test_workflow_1 completed")
     return 0
 
 
 def clone_test_workflow_2(
-    run_time, fs_name, clone_cnt, log_path, client, fs_system_utils, sv_info_list
+    run_time,
+    fs_name,
+    clone_cnt,
+    log_path,
+    client,
+    fs_system_utils,
+    fs_util,
+    sv_info_list,
 ):
-    # Overwrite and Read to same file from different client sessions
-
+    # Bulk Clone create and deletes in parallel
     log_name = "clone_bulk_create_delete"
     log1 = fs_system_utils.configure_logger(log_path, log_name)
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
-
     cluster_healthy = 1
     log1.info(f"Start {log_name} on {sv_info_list}")
     for sv_info in sv_info_list:
         for i in sv_info:
             sv_name = i
         snap_name = f"{sv_name}_snap"
-        cmd = f"ceph fs subvolume snapshot create {fs_name} {sv_name} {snap_name}"
-        if sv_info[sv_name].get("group_name"):
-            cmd += f" {sv_info[sv_name]['group_name']}"
-        client.exec_command(sudo=True, cmd=cmd)
+        snapshot = {
+            "vol_name": fs_name,
+            "subvol_name": sv_name,
+            "snap_name": snap_name,
+            "group_name": sv_info[sv_name].get("group_name", None),
+        }
+        fs_util.create_snapshot(client, **snapshot, validate=False)
+        log1.info(f"Snapshot {snap_name} created on {sv_name}")
         sv_info[sv_name].update({"snap_name": snap_name})
     k = 0
     clone_rm_list = []
@@ -252,106 +277,68 @@ def clone_test_workflow_2(
                         "clone_name": clone_name,
                         "sv_name": sv_name,
                         "snap_name": snap_name,
+                        "group_name": sv_info[sv_name].get("group_name", None),
                     }
-                    cmd = f"ceph fs subvolume snapshot clone {fs_name} {sv_name} {snap_name} {clone_name}"
-                    if sv_info[sv_name].get("group_name"):
-                        group_name = sv_info[sv_name]["group_name"]
-                        clone_obj.update({"group_name": group_name})
-                        cmd += f" --group_name {group_name} --target_group_name {group_name}"
-
-                    p.spawn(run_cmd, cmd, client, log1)
+                    clone_create = {
+                        "vol_name": fs_name,
+                        "subvol_name": sv_name,
+                        "snap_name": snap_name,
+                        "target_subvol_name": clone_name,
+                        "group_name": sv_info[sv_name].get("group_name", None),
+                        "target_group_name": sv_info[sv_name].get("group_name", None),
+                    }
+                    p.spawn(
+                        fs_util.create_clone, client, **clone_create, validate=False
+                    )
+                    log1.info(f"Started {clone_name} on {sv_name}")
                     k += 1
                     clone_rm_list.append(clone_obj)
-
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
+    iter_cnt = 0
     while datetime.datetime.now() < end_time and cluster_healthy:
         rm_cmd_list = []
         clone_cmd_list = []
         for i in range(0, clone_cnt):
             clone_obj = clone_rm_list.pop(0)
             sv_name = clone_obj["sv_name"]
-            rm_cmd = f"ceph fs subvolume rm {fs_name} {clone_obj['clone_name']}"
-            if clone_obj.get("group_name"):
-                rm_cmd += f" {clone_obj['group_name']}"
-            rm_cmd_list.append(rm_cmd)
-            # p.spawn(run_cmd, cmd, client, log1)
+            clone_rm = {
+                "vol_name": fs_name,
+                "subvol_name": clone_obj["clone_name"],
+                "group_name": clone_obj.get("group_name", None),
+            }
+            rm_cmd_list.append(clone_rm)
             clone_name = f"{sv_name}_clone_{k}"
             clone_obj_new = {
                 "sv_name": clone_obj["sv_name"],
                 "clone_name": clone_name,
                 "snap_name": clone_obj["snap_name"],
+                "group_name": clone_obj.get("group_name", None),
             }
-            clone_cmd = f"ceph fs subvolume snapshot clone {fs_name} {sv_name} {clone_obj['snap_name']} {clone_name}"
-            if clone_obj.get("group_name"):
-                group_name = clone_obj["group_name"]
-                clone_obj_new.update({"group_name": group_name})
-                clone_cmd += (
-                    f" --group_name {group_name} --target_group_name {group_name}"
-                )
-            clone_cmd_list.append(clone_cmd)
-            # p.spawn(run_cmd, cmd, client, log1)
+            clone_create = {
+                "vol_name": fs_name,
+                "subvol_name": clone_obj["sv_name"],
+                "snap_name": clone_obj["snap_name"],
+                "target_subvol_name": clone_name,
+                "group_name": clone_obj.get("group_name", None),
+                "target_group_name": clone_obj.get("group_name", None),
+            }
+            clone_cmd_list.append(clone_create)
             k += 1
             clone_rm_list.append(clone_obj_new)
         with parallel() as p:
-            for cmd1, cmd2 in zip(rm_cmd_list, clone_cmd_list):
-                p.spawn(run_cmd, cmd1, client, log1)
-                p.spawn(run_cmd, cmd2, client, log1)
+            for clone_rm, clone_create in zip(rm_cmd_list, clone_cmd_list):
+                sv_name = clone_rm["subvol_name"]
+                p.spawn(fs_util.remove_subvolume, client, **clone_rm, validate=True)
+                log1.info(f"Deleting {clone_rm['subvol_name']}")
+                p.spawn(fs_util.create_clone, client, **clone_create, validate=False)
+                log1.info(f"Creating {clone_create['subvol_name']}")
         time.sleep(30)
-        log1.info("clone_test_workflow_1 iteration 1 complete")
-        # cluster_healthy = is_cluster_healthy(client)
+        log1.info(f"clone_test_workflow_1 iteration {iter_cnt} complete")
+        iter_cnt += 1
+        cluster_healthy = is_cluster_healthy(client)
 
     log1.info("clone_test_workflow_2 completed")
     return 0
-
-
-def run_cmd(cmd, client, logger):
-    logger.info(f"Executing cmd {cmd}")
-    try:
-        client.exec_command(
-            sudo=True,
-            cmd=cmd,
-            long_running=True,
-            timeout=3600,
-        )
-    except BaseException as ex:
-        logger.info(ex)
-
-
-def get_group_name(client, sv_name, fs_name):
-    cmd = f"ceph fs subvolume info {fs_name} {sv_name}"
-    try:
-        client.exec_command(
-            sudo=True,
-            cmd=cmd,
-            timeout=3600,
-        )
-        group = "default"
-        return group
-    except BaseException as ex:
-        log.info(ex)
-
-    cmd = f"ceph fs subvolumegroup ls {fs_name} --f json"
-    out, _ = client.exec_command(
-        sudo=True,
-        cmd=cmd,
-        long_running=True,
-        timeout=3600,
-    )
-    output = json.loads(out)
-    for grp_iter in output:
-        group_name = grp_iter["name"]
-        cmd = f"ceph fs subvolume info {fs_name} {sv_name} {group_name}"
-        try:
-            out, _ = client.exec_command(
-                sudo=True,
-                cmd=cmd,
-                long_running=True,
-                timeout=3600,
-            )
-            return group_name
-        except BaseException as ex:
-            if "ENOENT" in str(ex):
-                next
-    return 1
 
 
 def is_cluster_healthy(client):

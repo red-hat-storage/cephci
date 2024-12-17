@@ -3,6 +3,7 @@ import logging
 import os
 import random
 import threading
+import time
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
@@ -229,3 +230,46 @@ class CephFSSystemUtils(object):
                         crash_node.download_file(src=src_path, dst=dst_path, sudo=True)
                     log.info(f"Copied {crash_path} to {crash_dst_path}")
         return 0
+
+    def wait_for_two_active_mds(
+        self, client1, fs_name, max_wait_time=180, retry_interval=10
+    ):
+        """
+        Wait until two active MDS (Metadata Servers) are found or the maximum wait time is reached.
+
+        Args:
+            data (str): JSON data containing MDS information.
+            max_wait_time (int): Maximum wait time in seconds (default: 180 seconds).
+            retry_interval (int): Interval between retry attempts in seconds (default: 5 seconds).
+
+        Returns:
+            bool: True if two active MDS are found within the specified time, False if not.
+
+        Example usage:
+        ```
+        data = '...'  # JSON data
+        if wait_for_two_active_mds(data):
+            print("Two active MDS found.")
+        else:
+            print("Timeout: Two active MDS not found within the specified time.")
+        ```
+        """
+
+        start_time = time.time()
+        while time.time() - start_time < max_wait_time:
+            out, rc = client1.exec_command(
+                cmd=f"ceph fs status {fs_name} -f json", client_exec=True
+            )
+            log.info(out)
+            parsed_data = json.loads(out)
+            active_mds = [
+                mds
+                for mds in parsed_data.get("mdsmap", [])
+                if mds.get("rank", -1) in [0, 1] and mds.get("state") == "active"
+            ]
+            if len(active_mds) == 2:
+                return True  # Two active MDS found
+            else:
+                time.sleep(retry_interval)  # Retry after the specified interval
+
+        return False

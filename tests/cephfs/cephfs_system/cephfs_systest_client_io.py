@@ -48,7 +48,7 @@ def run(ceph_cluster, **kw):
         fs_system_utils = CephFSSystemUtils(ceph_cluster)
         config = kw.get("config")
         cephfs_config = {}
-        run_time = config.get("run_time", 3600)
+        run_time = config.get("run_time_hrs", 4)
         clients = ceph_cluster.get_ceph_objects("client")
 
         file = "cephfs_systest_data.json"
@@ -248,9 +248,9 @@ def io_test_workflow_1(
         )
     # Run Read,Write and getattr in parallel
     log1.info(
-        f"Run write,read and getattr in parallel, Repeat test until {run_time}secs"
+        f"Run write,read and getattr in parallel, Repeat test until {run_time}hrs"
     )
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
         rand_str = "".join(
@@ -321,8 +321,8 @@ def io_test_workflow_2(
     log1 = fs_system_utils.configure_logger(log_path, log_name)
     smallfile_cmd = "python3 /home/cephuser/smallfile/smallfile_cli.py"
     sv_info_objs = {}
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
-    log1.info(f"Run overwrite and read in parallel, Repeat test until {run_time}secs")
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
+    log1.info(f"Run overwrite and read in parallel, Repeat test until {run_time}hrs")
     cluster_healthy = 1
     log1.info(f"Start {log_name} on {sv_info_list}")
     while datetime.datetime.now() < end_time and cluster_healthy:
@@ -415,9 +415,9 @@ def io_test_workflow_3(
     log1 = fs_system_utils.configure_logger(log_path, log_name)
     smallfile_cmd = "python3 /home/cephuser/smallfile/smallfile_cli.py"
     sv_info_objs = {}
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
 
-    log1.info(f"Run Truncate and read in parallel, Repeat test until {run_time}secs")
+    log1.info(f"Run Truncate and read in parallel, Repeat test until {run_time}hrs")
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
         rand_str = "".join(
@@ -539,8 +539,8 @@ def io_test_workflow_4(
             log1.info(f"Create FIO file for random read test,executing cmd {cmd}")
             p.spawn(run_cmd, cmd, client1, log1)
 
-    log1.info(f"Run random reads in parallel, Repeat test until {run_time}secs")
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    log1.info(f"Run random reads in parallel, Repeat test until {run_time}hrs")
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
         with parallel() as p:
@@ -613,9 +613,9 @@ def io_test_workflow_5(
             p.spawn(run_cmd, cmd, client, log1)
 
     log1.info(
-        f"Run continuous overwrites on large file, Repeat test until {run_time}secs"
+        f"Run continuous overwrites on large file, Repeat test until {run_time}hrs"
     )
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
         with parallel() as p:
@@ -663,9 +663,9 @@ def io_test_workflow_6(
     log1 = fs_system_utils.configure_logger(log_path, log_name)
     smallfile_cmd = "python3 /home/cephuser/smallfile/smallfile_cli.py"
     sv_info_objs = {}
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     log1.info(
-        f"Run find and delete in parallel on many files, Repeat test until {run_time}secs"
+        f"Run find and delete in parallel on many files, Repeat test until {run_time}hrs"
     )
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
@@ -759,11 +759,11 @@ def io_test_workflow_7(
         )
 
     log1.info(
-        f"Run Scale test to increase IO requests to MDS until 6k, Repeat test until {run_time}secs"
+        f"Run Scale test to increase IO requests to MDS until 6k, Repeat test until {run_time}hrs"
     )
     file_ops = ["read", "overwrite", "symlink", "stat"]
     request_limit = 6000
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
         retry_cnt = 0
@@ -855,8 +855,8 @@ def io_test_workflow_8(
                 }
             }
         )
-    log1.info(f"Run unlink and rename in parallel, Repeat test until {run_time}secs")
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    log1.info(f"Run unlink and rename in parallel, Repeat test until {run_time}hrs")
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
         for sv_name in sv_info_objs:
@@ -956,9 +956,9 @@ def io_test_workflow_9(run_time, log_path, cleanup, clients, fs_system_utils, sv
     mnt_type_list = ["kernel", "fuse", "nfs"]
 
     log1.info(
-        f"Run mount and unmount in parallel test, Repeat test until {run_time}secs"
+        f"Run mount and unmount in parallel test, Repeat test until {run_time}hrs"
     )
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
         mount_params = {
@@ -1049,10 +1049,10 @@ def io_test_workflow_10(
         dir_path = f"{mnt_pt}/io_test_workflow_10"
         sv_info_objs.update({sv_name: {"dir_path": dir_path, "client": client}})
     log1.info(
-        f"Run continuous io and check request seq num test, Repeat test until {run_time}secs"
+        f"Run continuous io and check request seq num test, Repeat test until {run_time}hrs"
     )
     smallfile_cmd = "python3 /home/cephuser/smallfile/smallfile_cli.py"
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
         rand_str = "".join(
@@ -1096,10 +1096,10 @@ def io_test_workflow_11(run_time, log_path, cleanup, clients, fs_system_utils, s
             break
     mnt_pt = sv_info[sv_name]["mnt_pt1"]
     log1.info(
-        f"Run large file download that does read/write locks, Repeat test until {run_time}secs"
+        f"Run large file download that does read/write locks, Repeat test until {run_time}hrs"
     )
     run_time = 300
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
         rand_str = "".join(
