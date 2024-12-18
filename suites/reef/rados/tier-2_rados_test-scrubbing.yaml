@@ -117,6 +117,7 @@ tests:
           pg_num: 1
           disable_pg_autoscale: true
         scenario: "default"
+        debug_enable: False
       delete_pools:
         - scrub_pool
   - test:
@@ -131,6 +132,7 @@ tests:
           pg_num: 1
           disable_pg_autoscale: true
         scenario: "begin_end_time_equal"
+        debug_enable: False
       delete_pools:
         - scrub_pool
   - test:
@@ -145,6 +147,7 @@ tests:
           pg_num: 1
           disable_pg_autoscale: true
         scenario: "beginTime gt endTime"
+        debug_enable: False
       delete_pools:
         - scrub_pool
   - test:
@@ -159,6 +162,7 @@ tests:
           pg_num: 1
           disable_pg_autoscale: true
         scenario: "beginTime gt endTime lt currentTime"
+        debug_enable: False
       delete_pools:
         - scrub_pool
   - test:
@@ -173,9 +177,10 @@ tests:
           pg_num: 1
           disable_pg_autoscale: true
         scenario: "beginTime and endTime gt currentTime"
+        debug_enable: False
       delete_pools:
         - scrub_pool
-      comments: Active Bug#2312538
+
   - test:
       name: Decrease scrub time
       polarion-id: CEPH-9371
@@ -188,6 +193,7 @@ tests:
           pg_num: 1
           disable_pg_autoscale: true
         scenario: "decreaseTime"
+        debug_enable: False
       delete_pools:
         - scrub_pool
   - test:
@@ -202,6 +208,7 @@ tests:
           pg_num: 1
           disable_pg_autoscale: true
         scenario: "unsetScrub"
+        debug_enable: False
       delete_pools:
         - scrub_pool
 
