@@ -260,6 +260,19 @@ class MonitorWorkflows:
         quorum = self.rados_obj.run_ceph_command(cmd)
         return [entry["name"] for entry in quorum["quorum"]]
 
+    def get_mon_quorum(self) -> dict:
+        """
+        Fetches mon details and returns the names of monitors present in the quorum
+        Returns: dictionary with mon names as keys and Rank as value
+                eg: {'magna045': 0, 'magna046': 1, 'magna047': 2}
+        """
+        cmd = "ceph mon stat"
+        quorum = self.rados_obj.run_ceph_command(cmd, client_exec=True)
+        mon_members = {}
+        for entry in quorum["quorum"]:
+            mon_members.setdefault(entry["name"], entry["rank"])
+        return mon_members
+
     def set_tiebreaker_mon(self, host) -> bool:
         """
         Sets the passed host mon as the new tiebreaker mon daemon in stretch mode
