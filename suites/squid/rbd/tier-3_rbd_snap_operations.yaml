@@ -100,3 +100,24 @@ tests:
               size: 1G
               num_of_snaps: 500
           test_ops_parallely: true
+
+  - test:
+      desc: Scale-level cloning from group snapshot
+      module: test_scale_group_snap_clone.py
+      name: RBD group image clone create
+      polarion-id: CEPH-83594558
+      config:
+        group: group1
+        group_snap: group_snap
+        rep_pool_config:
+          num_pools: 1
+          num_images: 100
+          pool_prefix: "rep_pool"
+          size: 4096
+        ec_pool_config:
+          num_pools: 1
+          num_images: 100
+          pool_prefix: "ec_pool"
+          size: 4096
+        fio:
+          size: 4096
