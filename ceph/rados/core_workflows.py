@@ -2640,7 +2640,7 @@ EOF"""
         base_cmd = "ceph orch ls"
 
         cmd = f"{base_cmd} {service_type}" if service_type else base_cmd
-        cmd += " --export" if export else cmd
+        cmd = f"{cmd} --export" if export else cmd
         orch_ls_op = self.run_ceph_command(cmd=cmd, client_exec=True)
 
         if export:

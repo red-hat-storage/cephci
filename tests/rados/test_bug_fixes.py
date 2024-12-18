@@ -179,7 +179,7 @@ def run(ceph_cluster, **kw):
             log.info(f"List of OSDs on the host: {osd_list}")
 
             assert rados_obj.add_network_delay_on_host(
-                hostname=rand_host, delay="1100ms", set_delay=True
+                hostname=rand_host.hostname, delay="1100ms", set_delay=True
             )
 
             # smart wait for 120 secs to check Slow OSD heartbeat warning
@@ -215,7 +215,7 @@ def run(ceph_cluster, **kw):
             if "rand_host" in globals() or "rand_host" in locals():
                 # removing network delay
                 rados_obj.add_network_delay_on_host(
-                    hostname=rand_host, delay="1100ms", set_delay=False
+                    hostname=rand_host.hostname, delay="1100ms", set_delay=False
                 )
 
             # log cluster health
@@ -262,19 +262,12 @@ def run(ceph_cluster, **kw):
                 )
 
             # fetch list of OSD hosts
-            osd_hosts = rados_obj.get_osd_hosts()
+            osd_hosts = ceph_cluster.get_nodes(role="osd")
             rand_host = random.choice(osd_hosts)
-            log.info(f"Chosen OSD host to be restarted: {rand_host}")
-            osd_nodes = ceph_cluster.get_nodes(role="osd")
-
-            # get the ceph node for chosen osd host
-            for node in osd_nodes:
-                if node.hostname == rand_host:
-                    osd_node = node
-                    break
+            log.info(f"Chosen OSD host to be restarted: {rand_host.hostname}")
 
             # restart the osd host
-            reboot_node(node=osd_node)
+            reboot_node(node=rand_host)
 
             # smart wait for 15 mins and check health status on regular intervals
             timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=900)
