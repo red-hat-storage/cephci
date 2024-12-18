@@ -201,3 +201,16 @@ tests:
       module: test_rbd_disallow_group_snapshot_rollback.py
       name: Disallow Group Snapshot Rollback if Memberships Don't Match
       polarion-id: CEPH-83594544
+
+  - test:
+      desc: Verify rbd group commands
+      config:
+        rep_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        ec_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+      module: test_rbd_group_commands_validation.py
+      name: RBD Group-related commands validation
+      polarion-id: CEPH-83594545
