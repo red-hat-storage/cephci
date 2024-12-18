@@ -12,7 +12,7 @@ globals:
             - mgr
             - rgw
           no-of-volumes: 6
-          disk-size: 25
+          disk-size: 15
       node2:
           role:
             - mgr
@@ -22,7 +22,7 @@ globals:
             - mds
             - _admin
           no-of-volumes: 6
-          disk-size: 25
+          disk-size: 15
       node3:
           role:
             - mds
@@ -30,7 +30,7 @@ globals:
             - mgr
             - osd
           no-of-volumes: 6
-          disk-size: 25
+          disk-size: 15
       node4:
           role:
             - osd
@@ -41,13 +41,13 @@ globals:
             - grafana
             - prometheus
           no-of-volumes: 6
-          disk-size: 25
+          disk-size: 15
       node5:
         role:
           - _admin
           - osd-bak
         no-of-volumes: 6
-        disk-size: 25
+        disk-size: 15
       node6:
         role:
           - client

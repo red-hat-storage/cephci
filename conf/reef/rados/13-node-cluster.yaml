@@ -24,17 +24,17 @@ globals:
         role:
           - osd
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node4:
         role:
           - osd
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node5:
         role:
           - osd
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node6:
         role:
           - mon
@@ -52,12 +52,12 @@ globals:
         role:
           - osd
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node10:
         role:
           - osd
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node11:
         role:
           - mon
@@ -66,9 +66,9 @@ globals:
         role:
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node13:
         role:
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15

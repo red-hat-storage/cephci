@@ -15,17 +15,17 @@ erasure:
   sample-pool-1:
     pool_name: ec_pool_10
     pool_type: erasure
-    k: 8
-    m: 2
+    k: 4
+    m: 3
     plugin: jerasure
-    crush-failure-domain: osd
+    crush-failure-domain: host
   sample-pool-2:
     pool_name: ec_pool_20
     pool_type: erasure
     k: 4
     m: 2
     plugin: jerasure
-    crush-failure-domain: osd
+    crush-failure-domain: host
   sample-pool-3:
     profile_name: ec86_profile
     pool_name: ec86_msr_pool

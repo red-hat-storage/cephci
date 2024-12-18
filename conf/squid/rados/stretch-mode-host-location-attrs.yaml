@@ -25,7 +25,7 @@ globals:
           - osd
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node3:
         role:
           - mon
@@ -34,7 +34,7 @@ globals:
           - osd
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node4:
         role:
           - rgw
@@ -42,7 +42,7 @@ globals:
           - mds
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node5:
         role:
           - mon
@@ -51,7 +51,7 @@ globals:
           - osd
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node6:
         role:
           - mon
@@ -60,7 +60,7 @@ globals:
           - nfs
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node7:
         role:
           - osd
@@ -68,7 +68,7 @@ globals:
           - mds
           - osd-bak
         no-of-volumes: 4
-        disk-size: 25
+        disk-size: 15
       node8:
         role:
           - client
