@@ -1546,6 +1546,7 @@ class FsUtils(object):
                 gid : str
                 mode : str
                 namespace_isolated : boolean
+                earmark : starts with smd or nfs
                 check_ec = True
         Returns:
             Returns the cmd_out and cmd_rc for Create cmd
@@ -1565,6 +1566,8 @@ class FsUtils(object):
             subvolume_cmd += f" --mode {kwargs.get('mode')}"
         if kwargs.get("namespace_isolated"):
             subvolume_cmd += " --namespace-isolated"
+        if kwargs.get("earmark"):
+            subvolume_cmd += f" --earmark {kwargs.get('earmark')}"
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=subvolume_cmd, check_ec=kwargs.get("check_ec", True)
         )
@@ -5194,3 +5197,85 @@ os.system('sudo systemctl start  network')
         client_id = client_id.replace('"', "").replace("\n", "")
         log.info(f"Client ID : {client_id} for Mounted Directory : {mounted_dir}")
         return client_id
+
+    def set_subvolume_earmark(
+        self, client, vol_name, subvol_name, earmark, group_name=None
+    ):
+        """
+        Set earmark for a subvolume and verify the earmark is set
+        Args:
+            vol_name (str): Volume name
+            subvol_name (str): Subvolume name
+            earmark (str): Earmark name -> either starts with nfs or smb
+        Returns:
+            tuple: output, error
+        """
+        command = f"ceph fs subvolume earmark set {vol_name} {subvol_name} --earmark {earmark}"
+        if group_name:
+            command += f" --group_name={group_name}"
+        log.info(f"Setting earmark for subvolume: {command}")
+        out, err = client.exec_command(sudo=True, cmd=command)
+        if "Error" in err:
+            log.error(f"Failed to set earmark for subvolume: {err}")
+            return 1
+        # verify the earmark is set
+        command = f"ceph fs subvolume earmark get {vol_name} {subvol_name}"
+        if group_name:
+            command += f" --group_name={group_name}"
+        log.info(f"Getting earmark for subvolume: {command}")
+        out, err = client.exec_command(sudo=True, cmd=command)
+        if earmark not in out:
+            log.error(f"Earmark not set for subvolume: {err}")
+            return 1
+        log.info(f"Earmark set for subvolume: {out}")
+        log.info(f"Eearmark set for subvolume:[{subvol_name}] as [{earmark}]successful")
+        return 0
+
+    def get_subvolume_earmark(self, client, vol_name, subvol_name, group_name=None):
+        """
+        Get earmark for a subvolume
+        Returns: Earmark name
+        """
+        command = f"ceph fs subvolume earmark get {vol_name} {subvol_name}"
+        if group_name:
+            command += f" --group_name={group_name}"
+        log.info(f"Getting earmark for subvolume: {command}")
+        out, err = client.exec_command(sudo=True, cmd=command)
+        if "Error" in err:
+            log.error(f"Failed to get earmark for subvolume: {err}")
+            return 1
+        log.info(f"Earmark for subvolume: {out}")
+        return out
+
+    def remove_subvolume_earmark(self, client, vol_name, subvol_name, group_name=None):
+        """
+        Remove earmark for a subvolume and verify the earmark is removed
+        Args:
+            client:
+            vol_name:
+            subvol_name:
+            group_name:
+
+        Returns:
+
+        """
+        command = f"ceph fs subvolume earmark rm {vol_name} {subvol_name}"
+        if group_name:
+            command += f" --group_name={group_name}"
+        log.info(f"Removing earmark for subvolume: {command}")
+        out, err = client.exec_command(sudo=True, cmd=command)
+        if "Error" in err:
+            log.error(f"Failed to remove earmark for subvolume: {err}")
+            return 1
+        # verify the earmark is removed
+        command = f"ceph fs subvolume earmark get {vol_name} {subvol_name}"
+        if group_name:
+            command += f" --group_name={group_name}"
+        log.info(f"Getting earmark for subvolume: {command}")
+        out, err = client.exec_command(sudo=True, cmd=command)
+        if "Error" in err:
+            log.error(f"Earmark not removed for subvolume: {err}")
+            return 1
+        log.info(f"Earmark removed for subvolume: {out}")
+        log.info(f"Eearmark removed for subvolume:[{subvol_name}] successful")
+        return 0
