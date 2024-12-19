@@ -1,7 +1,10 @@
+import json
 import random
 import string
 import traceback
 
+from ceph.ceph import CommandFailed
+from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
@@ -101,14 +104,30 @@ def run(ceph_cluster, **kw):
         )
         fs_util.set_quota_attrs(clients[0], 9999, 999, kernel_mounting_dir_1)
         quota_attrs = fs_util.get_quota_attrs(clients[0], kernel_mounting_dir_1)
-        snapshot = {
+        snapshot_1 = {
             "vol_name": default_fs,
             "subvol_name": "subvol_clone_attr_vol",
             "snap_name": "snap_1",
             "group_name": "subvolgroup_clone_attr_vol_1",
         }
-        fs_util.create_snapshot(client1, **snapshot)
-        client1.exec_command(sudo=True, cmd=f"mkdir -p /tmp/{mounting_dir}")
+        fs_util.create_snapshot(client1, **snapshot_1)
+        client1.exec_command(
+            sudo=True, cmd=f"mkdir -p {kernel_mounting_dir_1}/iteration_2"
+        )
+        client1.exec_command(
+            sudo=True,
+            cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
+            f"--files 100 --files-per-dir 10 --dirs-per-dir 1 --top "
+            f"{kernel_mounting_dir_1}/iteration_2",
+            long_running=True,
+        )
+        snapshot_2 = {
+            "vol_name": default_fs,
+            "subvol_name": "subvol_clone_attr_vol",
+            "snap_name": "snap_2",
+            "group_name": "subvolgroup_clone_attr_vol_1",
+        }
+        fs_util.create_snapshot(client1, **snapshot_2)
 
         log.info("Clone a subvolume from snapshot")
         clone_attr_vol_1 = {
@@ -124,23 +143,100 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume getpath {default_fs} {clone_attr_vol_1['target_subvol_name']}",
         )
-        fuse_mounting_dir_2 = f"/mnt/cephfs_fuse{mounting_dir}_2/"
-        fs_util.fuse_mount(
-            [client1],
-            fuse_mounting_dir_2,
-            extra_params=f" -r {clonevol_path.strip()} --client_fs {default_fs}",
-        )
-        quota_attrs_clone = fs_util.get_quota_attrs(clients[0], fuse_mounting_dir_2)
-        client1.exec_command(
-            sudo=True, cmd=f"diff -qr {kernel_mounting_dir_1} {fuse_mounting_dir_2}"
-        )
-        if quota_attrs_clone != quota_attrs:
-            log.info(f"attributes of cloned volumes{quota_attrs_clone}")
-            log.info(f"attributes of volumes{quota_attrs}")
-            log.error(
-                "Quota attributes of the clone is not matching with quota attributes of subvolume"
+        clone_attr_vol_2 = {
+            "vol_name": default_fs,
+            "subvol_name": "subvol_clone_attr_vol",
+            "snap_name": "snap_2",
+            "target_subvol_name": "clone_attr_vol_2",
+            "group_name": "subvolgroup_clone_attr_vol_1",
+        }
+        with parallel() as p:
+            log.info("Start Writing IO on the subvolume")
+            p.spawn(
+                fs_util.run_ios_V1,
+                client=client1,
+                mounting_dir=kernel_mounting_dir_1,
+                run_time=2,
+                io_tools=["dd"],
             )
-            return 1
+            fs_util.create_clone(client1, **clone_attr_vol_2)
+            fs_util.validate_clone_state(client1, clone_attr_vol_2)
+            subvol_1_info, rc = client1.exec_command(
+                sudo=True,
+                cmd=f"ceph fs subvolume info {default_fs} subvol_clone_attr_vol subvolgroup_clone_attr_vol_1",
+            )
+            clonevol_1_info, rc = client1.exec_command(
+                sudo=True,
+                cmd=f"ceph fs subvolume info {default_fs} {clone_attr_vol_1['target_subvol_name']}",
+            )
+            clonevol_2_info, rc = client1.exec_command(
+                sudo=True,
+                cmd=f"ceph fs subvolume info {default_fs} {clone_attr_vol_2['target_subvol_name']}",
+            )
+            subvol_1_info = json.loads(subvol_1_info)
+            clonevol_1_info = json.loads(clonevol_1_info)
+            clonevol_2_info = json.loads(clonevol_2_info)
+            compare_json(
+                clonevol_1_info,
+                subvol_1_info,
+                keys_to_check=[
+                    "atime",
+                    "bytes_quota",
+                    "data_pool",
+                    "features",
+                    "flavor",
+                    "gid",
+                    "mode",
+                    "mon_addrs",
+                    "uid",
+                ],
+            )
+            compare_json(
+                clonevol_2_info,
+                subvol_1_info,
+                keys_to_check=[
+                    "atime",
+                    "bytes_quota",
+                    "data_pool",
+                    "features",
+                    "flavor",
+                    "gid",
+                    "mode",
+                    "mon_addrs",
+                    "uid",
+                ],
+            )
+            fuse_mounting_dir_2 = f"/mnt/cephfs_fuse{mounting_dir}_2/"
+            fs_util.fuse_mount(
+                [client1],
+                fuse_mounting_dir_2,
+                extra_params=f" -r {clonevol_path.strip()} --client_fs {default_fs}",
+            )
+
+            clonevol_2_path, rc = client1.exec_command(
+                sudo=True,
+                cmd=f"ceph fs subvolume getpath {default_fs} {clone_attr_vol_2['target_subvol_name']}",
+            )
+            fuse_mounting_dir_3 = f"/mnt/cephfs_fuse{mounting_dir}_3/"
+            fs_util.fuse_mount(
+                [client1],
+                fuse_mounting_dir_3,
+                extra_params=f" -r {clonevol_2_path.strip()} --client_fs {default_fs}",
+            )
+            quota_attrs_clone = fs_util.get_quota_attrs(clients[0], fuse_mounting_dir_2)
+            quota_attrs_clone_1 = fs_util.get_quota_attrs(
+                clients[0], fuse_mounting_dir_3
+            )
+
+            if quota_attrs_clone != quota_attrs and quota_attrs_clone_1 != quota_attrs:
+                log.info(f"attributes of cloned volumes{quota_attrs_clone}")
+                log.info(f"attributes of volumes{quota_attrs}")
+                log.error(
+                    "Quota attributes of the clone is not matching with quota attributes of subvolume"
+                )
+                return 1
+            log.info("Validate the subvolume GID and UID attributes")
+
         return 0
     except Exception as e:
         log.info(e)
@@ -150,10 +246,57 @@ def run(ceph_cluster, **kw):
         log.info("Clean Up in progess")
         rmclone_list = [
             {"vol_name": default_fs, "subvol_name": "clone_attr_vol_1"},
+            {"vol_name": default_fs, "subvol_name": "clone_attr_vol_2"},
         ]
         for clone_vol in rmclone_list:
             fs_util.remove_subvolume(client1, **clone_vol)
-        fs_util.remove_snapshot(client1, **snapshot, validate=False, check_ec=False)
+        fs_util.remove_snapshot(client1, **snapshot_1, validate=False, check_ec=False)
+        fs_util.remove_snapshot(client1, **snapshot_2, validate=False, check_ec=False)
         fs_util.remove_subvolume(client1, **subvolume, validate=False, check_ec=False)
         for subvolumegroup in subvolumegroup_list:
             fs_util.remove_subvolumegroup(client1, **subvolumegroup, force=True)
+
+
+def compare_json(subvol_info_1, subvol_info_2, keys_to_check=None):
+    """
+    Compares specified keys in two JSON strings for equality.
+
+    Args:
+        subvol_info_1 (str): First JSON string.
+        subvol_info_2 (str): Second JSON string.
+        keys_to_check (list): List of keys to compare. Defaults to a predefined set of keys.
+
+    Returns:
+        tuple: (bool, dict) where the bool indicates if all keys match,
+               and dict contains mismatched keys with their respective values.
+    """
+    # Default keys to check
+    default_keys = [
+        "atime",
+        "bytes_quota",
+        "bytes_used",
+        "data_pool",
+        "features",
+        "flavor",
+        "gid",
+        "mode",
+        "mon_addrs",
+        "uid",
+    ]
+    keys_to_check = keys_to_check or default_keys
+
+    # Load JSON data
+
+    mismatches = {}
+
+    for key in keys_to_check:
+        if subvol_info_1.get(key) != subvol_info_2.get(key):
+            mismatches[key] = {
+                "value1": subvol_info_1.get(key),
+                "value2": subvol_info_2.get(key),
+            }
+
+    # Return True if no mismatches, otherwise return mismatches
+    if not len(mismatches) == 0:
+        raise CommandFailed(f"clone attributes are mismatching {mismatches}")
+    # return (len(mismatches) == 0), mismatches
