@@ -63,6 +63,7 @@ def get_md5sum_rbd_image(**kw):
         export_spec = {
             "source-image-or-snap-spec": kw.get("image_spec"),
             "path-name": kw.get("file_path"),
+            "cluster-name": kw.get("cluster_name", None),
         }
         out, err = kw.get("rbd").export(**export_spec)
         if "100% complete...done" not in out + err:
