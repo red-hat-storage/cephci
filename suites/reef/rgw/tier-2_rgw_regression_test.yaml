@@ -599,3 +599,13 @@ tests:
         run-on-rgw: true
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_rate_limit.yaml
+
+  - test:
+      name: Test CRLF Injection
+      desc: Test CRLF Injection
+      polarion-id: CEPH-83574745
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../curl/test_cors_using_curl.py
+        config-file-name: ../../curl/configs/test_crlf_injection_curl.yaml
