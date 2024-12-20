@@ -67,7 +67,7 @@ def uploadTestResults(def sourceDir, def credPreproc, def runProperties, def sta
     // Upload test result to polarion using xUnit Xml file
     withCredentials([
         usernamePassword(
-            credentialsId: 'psi-ceph-jenkins',
+            credentialsId: 'ceph-qe-sa',
             usernameVariable: 'OSPUSER',
             passwordVariable: 'OSPCRED'
         )
