@@ -1331,7 +1331,18 @@ class CG_snap_IO(object):
             while retry_cnt > 0:
                 file_name = random.choice(files)
                 retry_cnt -= 1
-                if ("_copy" not in file_name) and ("dir" not in file_name):
+                cmd = f"ls {dir_path}/{file_name}"
+                file_exists = 0
+                try:
+                    out, _ = client.exec_command(sudo=True, cmd=cmd, timeout=15)
+                    file_exists = 1
+                except BaseException as ex:
+                    log.info(ex)
+                if (
+                    ("_copy" not in file_name)
+                    and ("dir" not in file_name)
+                    and file_exists
+                ):
                     retry_cnt = 0
             client_name = client.node.hostname
             client_name_1 = f"{client_name[0: -1]}"

@@ -153,16 +153,6 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "Verify quiesce lifecycle with and without --await"
-      destroy-cluster: false
-      module: snapshot_clone.cg_snap_test.py
-      name: "cg_snap_func_workflow_1"
-      polarion-id: CEPH-83581467
-      config:
-       test_name: cg_snap_func_workflow_1
-  -
-    test:
-      abort-on-fail: false
       desc: "Verify CG quiesce on pre-provisioned quiesce set"
       destroy-cluster: false
       module: snapshot_clone.cg_snap_test.py
@@ -170,6 +160,26 @@ tests:
       polarion-id: CEPH-83590253
       config:
        test_name: cg_snap_func_workflow_3
+  -
+    test:
+      abort-on-fail: false
+      desc: "Enable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-enable-logs
+      config:
+       ENABLE_LOGS : 1
+       daemon_list : ['mds','client']
+       daemon_dbg_level : {'mds':20,'client':20}
+  -
+    test:
+      abort-on-fail: false
+      desc: "Verify quiesce lifecycle with and without --await"
+      destroy-cluster: false
+      module: snapshot_clone.cg_snap_test.py
+      name: "cg_snap_func_workflow_1"
+      polarion-id: CEPH-83581467
+      config:
+       test_name: cg_snap_func_workflow_1
   -
     test:
       abort-on-fail: false
@@ -181,3 +191,12 @@ tests:
       config:
        test_name: cg_snap_interop_workflow_1
       comments: product bug bz-2273569
+  -
+    test:
+      abort-on-fail: false
+      desc: "Disable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-disable-logs
+      config:
+       DISABLE_LOGS : 1
+       daemon_list : ['mds','client']

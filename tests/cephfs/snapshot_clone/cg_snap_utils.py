@@ -147,10 +147,8 @@ class CG_Snap_Utils(object):
             cmd += f"  --timeout {kw_args['timeout']}"
         if kw_args.get("expiration"):
             cmd += f"  --expiration {kw_args['expiration']}"
-        out, rc = client.exec_command(
-            sudo=True,
-            cmd=cmd,
-        )
+        cmd_timeout = kw_args.get("cmd_timeout", 300)
+        out, rc = client.exec_command(sudo=True, cmd=cmd, timeout=cmd_timeout)
         if kw_args.get("qs_id"):
             log.info(f"Quiesce cmd response for qs_id {kw_args['qs_id']} : {out}")
         else:
@@ -195,10 +193,8 @@ class CG_Snap_Utils(object):
             cmd += "  --await"
         if kw_args.get("if_version"):
             cmd += f"  --if_version {kw_args['if_version']}"
-        out, rc = client.exec_command(
-            sudo=True,
-            cmd=cmd,
-        )
+        cmd_timeout = kw_args.get("cmd_timeout", 300)
+        out, rc = client.exec_command(sudo=True, cmd=cmd, timeout=cmd_timeout)
         qs_output = json.loads(out)
         if kw_args.get("task_validate", True):
             for qs_id in qs_output["sets"]:
@@ -438,10 +434,8 @@ class CG_Snap_Utils(object):
         cmd = f"ceph fs quiesce {fs_name} --set-id {qs_id} --reset {qs_member_str} --format json"
         if if_await:
             cmd += "  --await"
-        out, rc = client.exec_command(
-            sudo=True,
-            cmd=cmd,
-        )
+        cmd_timeout = kw_args.get("cmd_timeout", 300)
+        out, rc = client.exec_command(sudo=True, cmd=cmd, timeout=cmd_timeout)
         qs_output = json.loads(out)
         if kw_args.get("task_validate", True):
             for qs_id in qs_output["sets"]:

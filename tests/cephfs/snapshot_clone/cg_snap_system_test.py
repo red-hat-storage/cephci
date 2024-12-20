@@ -676,7 +676,7 @@ def cg_stress(cg_test_params):
                 check_ec=False,
             )
             log.info(f"Reset the quiesce set - {qs_set}")
-            cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set)
+            cg_snap_util.cg_quiesce_reset(client, qs_id_val, qs_set, cmd_timeout=600)
             client.exec_command(
                 sudo=True,
                 cmd="ceph config set mds log_to_file false",
