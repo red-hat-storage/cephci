@@ -69,7 +69,7 @@
             <th>Volume Used in GB</th>
         </tr>
     <% for (user in quota["User Stats"]) { %>
-        <% if (user.User == "psi-ceph-jenkins") { continue; } %>
+        <% if (user.User == "ceph-qe-sa") { continue; } %>
         <% u_range = user["Instance Count"].intValue() %>
         <% if (u_range > user_range[0]) { %>
             <% color = "F1948A" %>
