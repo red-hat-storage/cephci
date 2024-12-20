@@ -12,7 +12,7 @@ def prepareNode() {
     */
     withCredentials([
         usernamePassword(
-            credentialsId: 'psi-ceph-jenkins',
+            credentialsId: 'ceph-qe-sa',
             usernameVariable: 'OSPUSER',
             passwordVariable: 'OSPCRED'
         )
