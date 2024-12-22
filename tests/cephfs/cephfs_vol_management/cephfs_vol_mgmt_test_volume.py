@@ -1,10 +1,7 @@
-import json
 import random
 import string
-import time
 import traceback
 
-from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 from utility.retry import retry
@@ -75,6 +72,8 @@ def run(ceph_cluster, **kw):
 
         fs_name_1 = f"cephfs_83604097_1_{rand}"
         fs_name_2 = f"cephfs_83604097_2_{rand}"
+        mon_node_ips = {"mon_addrs": fs_util.get_mon_node_ips()}
+        log.info(mon_node_ips)
 
         log.info(
             "\n"
@@ -94,6 +93,7 @@ def run(ceph_cluster, **kw):
         )
         keys_to_convert = ["data_avail", "meta_avail", "data_used", "meta_used"]
         fs_volume_dict = update_dict_from_b_gb(fs_volume_dict, keys_to_convert)
+        fs_volume_dict['mon_addrs'] = [addr.replace(':6789', '') for addr in fs_volume_dict['mon_addrs']]
         log.debug(f"Output of FS_1 volume: {fs_volume_dict}")
 
         # Get ceph fs dump output
@@ -122,9 +122,10 @@ def run(ceph_cluster, **kw):
             "data_used",
             "meta_avail",
             "meta_used",
+            "mon_addrs"
         ]
         rc = fs_util.validate_dicts(
-            [fs_status_dict, fs_volume_dict, fs_dump_dict, fs_get_dict],
+            [fs_status_dict, fs_volume_dict, fs_dump_dict, fs_get_dict, mon_node_ips],
             keys_to_be_validated,
         )
 
@@ -159,6 +160,7 @@ def run(ceph_cluster, **kw):
             client1, fs_name_2
         )
         fs_volume_dict_2 = update_dict_from_b_gb(fs_volume_dict_2, keys_to_convert)
+        fs_volume_dict_2['mon_addrs'] = [addr.replace(':6789', '') for addr in fs_volume_dict_2['mon_addrs']]
         log.debug(f"Output of FS_2 volume: {fs_volume_dict_2}")
 
         # Get ceph fs dump output
@@ -176,20 +178,8 @@ def run(ceph_cluster, **kw):
         fs_status_dict_2 = update_dict_from_b_gb(fs_status_dict_2, keys_to_convert)
         log.debug(f"Output of FS_2 status: {fs_status_dict_2}")
 
-        # Validation
-        keys_to_be_validated = [
-            "status",
-            "fsname",
-            "fsid",
-            "rank",
-            "mds_name",
-            "data_avail",
-            "data_used",
-            "meta_avail",
-            "meta_used",
-        ]
         rc = fs_util.validate_dicts(
-            [fs_status_dict_2, fs_volume_dict_2, fs_dump_dict_2, fs_get_dict_2],
+            [fs_status_dict_2, fs_volume_dict_2, fs_dump_dict_2, fs_get_dict_2, mon_node_ips],
             keys_to_be_validated,
         )
 
@@ -295,7 +285,6 @@ def run(ceph_cluster, **kw):
         #     "\n---------------***************---------------"
         #     "\n"
         # )
-        return 0
     except Exception as e:
         log.error(e)
         log.error(traceback.format_exc())
