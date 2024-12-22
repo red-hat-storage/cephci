@@ -5620,7 +5620,7 @@ os.system('sudo systemctl start  network')
 
     def validate_dicts(self, dicts, keys_to_check):
         """
-        Validate values of specific keys across multiple dictionaries.
+        Validate values of specific keys across multiple dictionaries and dictionary of list.
 
         Parameters:
             dicts (list): List of dictionaries to compare.
@@ -5641,13 +5641,28 @@ os.system('sudo systemctl start  network')
                 log.error(f"Key '{key}' found in only one dictionary, cannot validate")
                 return False
             else:
-                # Compare values of the key across the dictionaries
-                values = set(d[key] for d in dicts_with_key)
-                if len(values) == 1:
-                    log.info(
-                        f"Key '{key}' validated across {len(dicts_with_key)} dictionaries with the value {values}"
-                    )
+                # Collect values for the key
+                values = [d[key] for d in dicts_with_key]
+
+                # Check if values are lists
+                if all(isinstance(v, list) for v in values):
+                    # Compare list contents
+                    if all(sorted(v) == sorted(values[0]) for v in values):
+                        log.info(
+                            f"Key '{key}' validated across {len(dicts_with_key)} dictionaries with the list value {values[0]}"
+                        )
+                    else:
+                        log.error(f"Key '{key}' mismatch: List values = {values}")
+                        return False
                 else:
-                    log.error(f"Key '{key}' mismatch: Values = {values}")
-                    return False
+                    # Compare values of the key across the dictionaries
+                    # Rewriting values using set for single value
+                    values = set(d[key] for d in dicts_with_key)
+                    if len(values) == 1:
+                        log.info(
+                            f"Key '{key}' validated across {len(dicts_with_key)} dictionaries with the value {values}"
+                        )
+                    else:
+                        log.error(f"Key '{key}' mismatch: Values = {values}")
+                        return False
         return True
