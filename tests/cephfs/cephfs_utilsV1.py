@@ -652,6 +652,25 @@ class FsUtils(object):
             return False
         return True
 
+    def get_fs_info_dump(self, client, fs_name, **kwargs):
+        """
+        Dumps output of fs info command.
+        Command: ceph fs volume info
+        Args:
+            fs_name : Name of the fs volume for which we need the status
+            human_readable: If the output needs to be human readble set it to True
+        Return:
+            returns ceph fs volume info dump in json format
+        """
+        if fs_name:
+            fs_info_cmd = f"ceph fs volume info {fs_name} --format json"
+        if kwargs.get("human_readable"):
+            fs_info_cmd += " --human-readable"
+
+        out, _ = client.exec_command(sudo=True, cmd=fs_info_cmd)
+        fs_info = json.loads(out)
+        return fs_info
+
     def get_fs_details(self, client, **kwargs):
         """
         Gets all filesystems information
@@ -5098,6 +5117,24 @@ os.system('sudo systemctl start  network')
         mds_config = parsed_data.get("mdsmap")
         return mds_config
 
+    def get_fs_status_dump(self, client, **kwargs):
+        """
+        Gets the overall info about fs
+        Args:
+            client: client node
+            **kwargs:
+                vol_name : Name of the fs volume for which we need the status
+        Return:
+            returns ceph fs ls dump in json format
+        """
+        fs_status_cmd = "ceph fs status"
+        if kwargs.get("vol_name"):
+            fs_status_cmd += f" {kwargs.get('vol_name')}"
+        fs_status_cmd += " --format json"
+        out, rc = client.exec_command(sudo=True, cmd=fs_status_cmd)
+        fs_status = json.loads(out)
+        return fs_status
+
     def get_mds_standby_replay_pair(self, client, fs_name, mds_config):
         mds_pair_info = {}
         for mds in mds_config:
@@ -5279,3 +5316,338 @@ os.system('sudo systemctl start  network')
         log.info(f"Earmark removed for subvolume: {out}")
         log.info(f"Eearmark removed for subvolume:[{subvol_name}] successful")
         return 0
+    def get_fs_dump(self, client):
+        """
+        Gets the dump output of fs
+        Args:
+            client: client node
+        Return:
+            returns ceph fs dump in json format
+        """
+        fs_dump_cmd = "ceph fs dump --format json"
+        out, _ = client.exec_command(sudo=True, cmd=fs_dump_cmd)
+        fs_dump_output = json.loads(out)
+        return fs_dump_output
+
+    def fetch_value_from_json_output(self, **kwargs):
+        """
+        Recursive function to iteratively check the nested list of dictionaries
+        Args:
+            search_list: Accepts lists, list of dictionary
+            match_key: Provide a match_key, match_value pair to select the list that is expected from multiple list
+            match_value: Provide a match_key, match_value pair to select the list that is expected from multiple list
+            target_key: To figure out the value of particular key
+        Return:
+            If success, returns the value of the target_key
+            If no key found, return None
+        Usage:
+            fetch_value_from_json_output(search_list=[{node1: "node1", node2: "node2"}], match_key="name", match_value="cephfs1", target_key="status")
+            Explanation: This will basically try to fetch the list where the value of "name" matches with ".*cephfs1.*" from the search_list and gives us the value of key "status" from the list
+        """
+        if all(value is not None for value in kwargs.values()):
+            for item in kwargs.get("search_list"):
+                if isinstance(item, dict):
+                    # If 'name' exists and matches partially, return the desired key
+                    if kwargs.get("match_value") in item.get(
+                        kwargs.get("match_key"), ""
+                    ):
+                        return item.get(kwargs.get("target_key"))
+
+                    if (
+                        kwargs.get("target_key") == "fs_name"
+                        and kwargs.get("target_key") in item
+                        and any(
+                            kwargs.get("match_value")
+                            in info_item.get(kwargs.get("match_key"), "")
+                            for info_item in item["info"].values()
+                        )
+                    ):
+                        return item["fs_name"]
+
+                    if (
+                        kwargs.get("target_key") == "id"
+                        and kwargs.get("target_key") in item
+                        and any(
+                            kwargs.get("match_value")
+                            in info_item.get(kwargs.get("match_key"), "")
+                            for info_item in item["mdsmap"]["info"].values()
+                        )
+                    ):
+                        return item["id"]
+
+                    # Traverse nested dictionaries
+                    for value in item.values():
+                        if isinstance(value, (dict, list)):
+                            result = self.fetch_value_from_json_output(
+                                search_list=(
+                                    [value] if isinstance(value, dict) else value
+                                ),
+                                match_key=kwargs.get("match_key"),
+                                match_value=kwargs.get("match_value"),
+                                target_key=kwargs.get("target_key"),
+                            )
+                            if result is not None:
+                                return result
+            return None
+        else:
+            return log.error(
+                "One or more values are none. Expected Key-Value pair: search_list, match_key, match_value, target_key"
+            )
+
+    def collect_fs_status_data_for_validation(self, client, fs_name):
+        """
+        Gets the output using fs status and collect required info
+        Args:
+            client: client node
+            fs_name: File system name
+        Return:
+            returns status,data_avail,data_used,meta_avail,meta_used and mds name from ceph fs status in dict format
+        """
+        fs_status_dict = {}
+        fs_status_info = self.get_fs_status_dump(client)
+        log.debug(f"Output: {fs_status_info}")
+
+        status = self.fetch_value_from_json_output(
+            search_list=fs_status_info["mdsmap"],
+            match_key="name",
+            match_value=fs_name,
+            target_key="state",
+        )
+        data_avail = self.fetch_value_from_json_output(
+            search_list=fs_status_info["pools"],
+            match_key="name",
+            match_value=fs_name + ".data",
+            target_key="avail",
+        )
+        data_used = self.fetch_value_from_json_output(
+            search_list=fs_status_info["pools"],
+            match_key="name",
+            match_value=fs_name + ".data",
+            target_key="used",
+        )
+        meta_avail = self.fetch_value_from_json_output(
+            search_list=fs_status_info["pools"],
+            match_key="name",
+            match_value=fs_name + ".meta",
+            target_key="avail",
+        )
+        meta_used = self.fetch_value_from_json_output(
+            search_list=fs_status_info["pools"],
+            match_key="name",
+            match_value=fs_name + ".meta",
+            target_key="used",
+        )
+        for entry in fs_status_info["mdsmap"]:
+            for key, value in entry.items():
+                if key == "state" and value == "active" and fs_name in entry["name"]:
+                    mds_name = entry["name"]
+
+        fs_status_dict.update(
+            {
+                "status": status,
+                "data_avail": data_avail,
+                "data_used": data_used,
+                "meta_avail": meta_avail,
+                "meta_used": meta_used,
+                "mds_name": mds_name,
+            }
+        )
+        return fs_status_dict
+
+    def collect_fs_volume_info_for_validation(self, client, fs_name):
+        """
+        Gets the output using fs volume info and collected required info
+        Args:
+            client: client node
+            fs_name: File system name
+        Return:
+            returns data_avail,data_used,meta_avail,meta_used and mon addrs from ceph fs volume info in dict format
+        """
+        fs_volume_info_dict = {}
+        fs_vol_info = self.get_fs_info_dump(client, fs_name, human_readable=False)
+        log.debug(f"Output: {fs_vol_info}")
+
+        data_avail = self.fetch_value_from_json_output(
+            search_list=[fs_vol_info],
+            match_key="name",
+            match_value=fs_name + ".data",
+            target_key="avail",
+        )
+        data_used = self.fetch_value_from_json_output(
+            search_list=[fs_vol_info],
+            match_key="name",
+            match_value=fs_name + ".data",
+            target_key="used",
+        )
+        meta_avail = self.fetch_value_from_json_output(
+            search_list=[fs_vol_info],
+            match_key="name",
+            match_value=fs_name + ".meta",
+            target_key="avail",
+        )
+        meta_used = self.fetch_value_from_json_output(
+            search_list=[fs_vol_info],
+            match_key="name",
+            match_value=fs_name + ".meta",
+            target_key="used",
+        )
+        mon_addrs = fs_vol_info["mon_addrs"]
+
+        fs_volume_info_dict.update(
+            {
+                "data_avail": data_avail,
+                "data_used": data_used,
+                "meta_avail": meta_avail,
+                "meta_used": meta_used,
+                "mon_addrs": mon_addrs,
+            }
+        )
+        return fs_volume_info_dict
+
+    def collect_fs_dump_for_validation(self, client, fs_name):
+        """
+        Gets the output using fs dump and collected required info
+        Args:
+            client: client node
+            fs_name: File system name
+        Return:
+            returns status, fs_name, fsid, rank and mds name from ceph fs dump in dict format
+        """
+        fs_dump_info_dict = {}
+        fs_dump = self.get_fs_dump(client)
+        log.debug(fs_dump)
+
+        status = (
+            self.fetch_value_from_json_output(
+                search_list=fs_dump["filesystems"],
+                match_key="name",
+                match_value=fs_name,
+                target_key="state",
+            )
+        ).split(":", 1)[1]
+        fsname = self.fetch_value_from_json_output(
+            search_list=fs_dump["filesystems"],
+            match_key="name",
+            match_value=fs_name,
+            target_key="fs_name",
+        )
+        fsid = self.fetch_value_from_json_output(
+            search_list=fs_dump["filesystems"],
+            match_key="name",
+            match_value=fs_name,
+            target_key="id",
+        )
+        rank = self.fetch_value_from_json_output(
+            search_list=fs_dump["filesystems"],
+            match_key="name",
+            match_value=fs_name,
+            target_key="rank",
+        )
+        mds_name = self.fetch_value_from_json_output(
+            search_list=fs_dump["filesystems"],
+            match_key="name",
+            match_value=fs_name,
+            target_key="name",
+        )
+
+        fs_dump_info_dict.update(
+            {
+                "status": status,
+                "fsname": fsname,
+                "fsid": fsid,
+                "rank": rank,
+                "mds_name": mds_name,
+            }
+        )
+        return fs_dump_info_dict
+
+    def collect_fs_get_for_validation(self, client, fs_name):
+        """
+        Gets the output using fs get and collected required info
+        Args:
+            client: client node
+            fs_name: File system name
+        Return:
+            returns status, fs_name, fsid, rank and mds name from ceph fs get in dict format
+        """
+        fs_get_info_dict = {}
+        fs_get_output = self.get_fsmap(client, fs_name)
+        log.debug(fs_get_output)
+
+        status = (
+            self.fetch_value_from_json_output(
+                search_list=[fs_get_output],
+                match_key="name",
+                match_value=fs_name,
+                target_key="state",
+            )
+        ).split(":", 1)[1]
+        fsname = self.fetch_value_from_json_output(
+            search_list=[fs_get_output],
+            match_key="name",
+            match_value=fs_name,
+            target_key="fs_name",
+        )
+        fsid = self.fetch_value_from_json_output(
+            search_list=[fs_get_output],
+            match_key="name",
+            match_value=fs_name,
+            target_key="id",
+        )
+        rank = self.fetch_value_from_json_output(
+            search_list=[fs_get_output],
+            match_key="name",
+            match_value=fs_name,
+            target_key="rank",
+        )
+        mds_name = self.fetch_value_from_json_output(
+            search_list=[fs_get_output],
+            match_key="name",
+            match_value=fs_name,
+            target_key="name",
+        )
+
+        fs_get_info_dict.update(
+            {
+                "status": status,
+                "fsname": fsname,
+                "fsid": fsid,
+                "rank": rank,
+                "mds_name": mds_name,
+            }
+        )
+        return fs_get_info_dict
+
+    def validate_dicts(self, dicts, keys_to_check):
+        """
+        Validate values of specific keys across multiple dictionaries.
+
+        Parameters:
+            dicts (list): List of dictionaries to compare.
+            keys_to_check (list): List of keys to check for validation.
+
+        Returns:
+            dict: Validation results for each key.
+        """
+
+        for key in keys_to_check:
+            # Find dictionaries that contain the key
+            dicts_with_key = [d for d in dicts if key in d]
+
+            if len(dicts_with_key) == 0:
+                log.error(f"Key '{key}' not found in any dictionary")
+                return False
+            elif len(dicts_with_key) == 1:
+                log.error(f"Key '{key}' found in only one dictionary, cannot validate")
+                return False
+            else:
+                # Compare values of the key across the dictionaries
+                values = set(d[key] for d in dicts_with_key)
+                if len(values) == 1:
+                    log.info(
+                        f"Key '{key}' validated across {len(dicts_with_key)} dictionaries with the value {values}"
+                    )
+                else:
+                    log.error(f"Key '{key}' mismatch: Values = {values}")
+                    return False
+        return True
