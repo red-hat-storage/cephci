@@ -1,7 +1,3 @@
-# Suite contains tests for replica-1 non-resilient pool
-# conf: conf/squid/rados/7-node-cluster.yaml
-# RHOS-d run duration: 700 mins
-# move from tier-2 to tier-3 and move to weekly
 tests:
 
   # Cluster deployment stage

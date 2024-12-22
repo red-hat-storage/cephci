@@ -65,7 +65,7 @@ def run(ceph_cluster, **kw):
                 scrub_begin_weekday,
                 scrub_end_hour,
                 scrub_end_weekday,
-            ) = rados_obj.add_begin_end_hours(0, 1)
+            ) = rados_obj.add_begin_end_hours(3, 5)
 
             # Scenario to verify that scrub start and end hours are same
             # CEPH-9362
@@ -155,7 +155,6 @@ def run(ceph_cluster, **kw):
                     "osd_scrub_begin_hour", scrub_begin_hour
                 )
                 rados_obj.set_osd_configuration("osd_scrub_end_hour", scrub_end_hour)
-
             # Printing the scrub parameter values
             get_parameter_configuration(mon_obj)
             status = chk_scrub_or_deepScrub_status(rados_obj, test_input, pg_id[-1])
