@@ -25,6 +25,9 @@
 # CEPH-83574331 - Adding new data pools to cephfs which has existing data pool.
 # CEPH-83573428 - cephfs_vol_mgmt_volume_with_exist_names
 # CEPH-83574188 - Testing auto-cleanup cephfs subvolume after creation failure
+# CEPH-83574187: Subvolume metadata creation, delete, and modifying test.
+# CEPH-83571330: Test FS volume deletion when mon_allow_pool_delete is false.
+# CEPH-11333: CephFS volume management - FS life cycle.
 # CEPH-83603354 - volume related scenarios(delete,rename)
 # CEPH-83604097 - Basic info validation after volume creation and deletion
 #===============================================================================================
@@ -346,18 +349,6 @@ tests:
       module: cephfs_vol_management.cephfs_vol_mgmt_volume_scenarios.py
       polarion-id: CEPH-83603354
       desc: volume related scenarios(delete,rename)
-      abort-on-fail: false
-  - test:
-      name: cephfs subvolumegroup scenarios
-      module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_scenarios.py
-      polarion-id: CEPH-83604079
-      desc: cephfs subvolumegroup scenarios
-      abort-on-fail: false
-  - test:
-      name: cephfs subvolume idempoence earmark
-      module: cephfs_vol_management.cephfs_vol_mgmt_subvol_idempotence_earmark.py
-      polarion-id: CEPH-83604184
-      desc: cephfs subvolume idempoence earmark
       abort-on-fail: false
   - test:
       name: Basic info validation after volume creation and deletion
