@@ -4,7 +4,7 @@
 #       - with ack_type none and w/o persistent flag
 #       - with SASL security type i.e., both SASL_PLAINTEXT and SASL_SSL
 #       - with both mechanisms - PLAIN and SCRAM-SHA-256
-
+# global-conf: conf/squid/rgw/tier-0_rgw.yaml
 tests:
   - test:
       abort-on-fail: true

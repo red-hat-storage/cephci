@@ -3,6 +3,7 @@
 #
 # This test suite evaluates the Ingress HAproxy deployment scenario wherein there exists more than one
 # RGW daemons configured with multiple realm, along with zones and zonegroups.
+# global-conf: conf/squid/rgw/tier-1_rgw_multirealm.yaml
 
 tests:
 

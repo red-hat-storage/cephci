@@ -4,6 +4,7 @@
 
 # Requires a 5 node cluster layout having only one node with RGW role.
 
+# global-conf: conf/squid/rgw/tier-0_rgw.yaml
 tests:
   - test:
       abort-on-fail: true
