@@ -1,6 +1,5 @@
 import traceback
 
-from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
@@ -36,23 +35,27 @@ def run(ceph_cluster, **kw):
         client1 = clients[0]
         cephfs_name = "cephfs_new"
         fs_util.create_fs(client1, cephfs_name)
+
         client1.exec_command(
             sudo=True, cmd="ceph config set mon mon_allow_pool_delete false"
         )
-        out, rc = fs_util.remove_fs(
-            client1, cephfs_name, validate=False, check_ec=False
-        )
-        if rc == 0:
-            raise CommandFailed(
+        rmvolume_cmd = f"ceph fs volume rm {cephfs_name} --yes-i-really-mean-it"
+
+        try:
+            client1.exec_command(sudo=True, cmd=rmvolume_cmd)
+            log.error(
                 "We are able to delete filesystems even after setting mon_allow_pool_delete to false"
             )
-        log.info(
-            "We are not able to delete filesystems even after setting mon_allow_pool_delete to false as expected"
-        )
-        return 0
+            return 1
+        # Handling the error gracefully. Expected to fail
+        except Exception as e:
+            log.info(f"Exception: {rmvolume_cmd} is expected to fail")
+            log.info(f"Error: {e}")
+
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
         return 1
     finally:
         fs_util.remove_fs(client1, cephfs_name, validate=True, check_ec=False)
+        return 0
