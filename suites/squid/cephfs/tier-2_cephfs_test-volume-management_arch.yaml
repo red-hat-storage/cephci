@@ -26,7 +26,6 @@
 # CEPH-83573428 - cephfs_vol_mgmt_volume_with_exist_names
 # CEPH-83574188 - Testing auto-cleanup cephfs subvolume after creation failure
 # CEPH-83603354 - volume related scenarios(delete,rename)
-# CEPH-83604097 - Basic info validation after volume creation and deletion
 #===============================================================================================
 tests:
   - test:
