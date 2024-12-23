@@ -18,7 +18,8 @@ def run(ceph_cluster, **kw):
 
     Test Case Flow:
     1. Create a file system with default value
-    2. Validate the volume creation using ceph fs status, ceph fs volume info <vol_name>, ceph fs dump, ceph fs get <vol_name>
+    2. Validate the volume creation using ceph fs status, ceph fs volume info <vol_name>, ceph fs dump,
+        ceph fs get <vol_name>
     3. Create second volume cephfs2
     4. Validate volume is created by following validation step 2
     5. Delete second volume without  "--yes-i-really-mean-it"
@@ -42,7 +43,8 @@ def run(ceph_cluster, **kw):
         for keys_bytes in keys_to_be_converted:
             if keys_bytes in input_dict:
                 input_dict[keys_bytes] = (
-                    f"{round(int(input_dict[keys_bytes]) / (1024 ** 3), 1)}G"  # Convert to GB and round to 1 decimal places
+                    f"{round(int(input_dict[keys_bytes]) / (1024 ** 3), 1)}G"
+                    # Convert to GB and round to 1 decimal places
                 )
         return input_dict
 
@@ -247,7 +249,9 @@ def run(ceph_cluster, **kw):
         # fs_util.remove_fs(client1, fs_name_2)
 
         # # Get ceph fs volume info of specific volume
-        # fs_volume_dict_3 = fs_util.collect_fs_volume_info_for_validation(client1, fs_name_1)
+        # fs_volume_dict_3 = fs_util.collect_fs_volume_info_for_validation(
+        #     client1, fs_name_1
+        # )
         # fs_volume_dict_3 = update_dict_from_b_gb(fs_volume_dict_3, keys_to_convert)
         # log.info(f"Dict: {fs_volume_dict_3}")
 
@@ -259,14 +263,17 @@ def run(ceph_cluster, **kw):
         # fs_get_dict_3 = fs_util.collect_fs_get_for_validation(client1, fs_name_1)
         # log.info(f"Dict: {fs_get_dict_3}")
 
-        # #Get ceph fs status
-        # fs_status_dict_3 = fs_util.collect_fs_status_data_for_validation(client1, fs_name_1)
+        # # Get ceph fs status
+        # fs_status_dict_3 = fs_util.collect_fs_status_data_for_validation(
+        #     client1, fs_name_1
+        # )
         # fs_status_dict_3 = update_dict_from_b_gb(fs_status_dict_3, keys_to_convert)
         # log.info(f"Dict: {fs_status_dict_3}")
 
         # # Excluding the validation of mds_name, data_avail, meta avail
         # # Following it up with dev folks
-        # # To be updated validation list: validation_list = ["fs_status_dict == fs_status_dict_3", "fs_volume_dict == fs_volume_dict_3", "fs_dump_dict == fs_dump_dict_3", "fs_get_dict == fs_get_dict_3"]
+        # # To be updated validation list: validation_list = ["fs_status_dict == fs_status_dict_3",
+        # "fs_volume_dict == fs_volume_dict_3", "fs_dump_dict == fs_dump_dict_3", "fs_get_dict == fs_get_dict_3"]
         # fs_dump_dict.pop("mds_name", None)
         # fs_dump_dict_3.pop("mds_name", None)
         # fs_get_dict.pop("mds_name", None)
@@ -279,7 +286,11 @@ def run(ceph_cluster, **kw):
         # log.info(f"fs_get_dict: {fs_get_dict}")
         # log.info(f"fs_get_dict_3: {fs_get_dict_3}")
 
-        # validation_list = ["fs_volume_dict == fs_volume_dict_3", "fs_dump_dict == fs_dump_dict_3", "fs_get_dict == fs_get_dict_3"]
+        # validation_list = [
+        #     "fs_volume_dict == fs_volume_dict_3",
+        #     "fs_dump_dict == fs_dump_dict_3",
+        #     "fs_get_dict == fs_get_dict_3",
+        # ]
         # for val in validation_list:
         #     if eval(val):
         #         log.info("Values are identical even after adding and deleting a volume")
