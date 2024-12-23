@@ -7,6 +7,7 @@
 # EC pool 4+2 configuration
 
 # The deployment is evaluated by running IOs across the environments.
+# global-conf: conf/squid/rgw/ms-ec-profile-4+2-cluster.yaml
 ---
 tests:
 
