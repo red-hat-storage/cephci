@@ -29,7 +29,6 @@
 # CEPH-83571330: Test FS volume deletion when mon_allow_pool_delete is false.
 # CEPH-11333: CephFS volume management - FS life cycle.
 # CEPH-83603354 - volume related scenarios(delete,rename)
-# CEPH-83604097 - Basic info validation after volume creation and deletion
 #===============================================================================================
 tests:
   - test:
@@ -351,8 +350,8 @@ tests:
       desc: volume related scenarios(delete,rename)
       abort-on-fail: false
   - test:
-      name: Basic info validation after volume creation and deletion
-      module: cephfs_vol_management.cephfs_vol_mgmt_test_volume.py
-      polarion-id: CEPH-83604097
-      desc: Basic info validation after volume creation and deletion
-      abort-on-fail: true
+      name: cephfs subvolumegroup scenarios
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_scenarios.py
+      polarion-id: CEPH-83604079
+      desc: cephfs subvolumegroup scenarios
+      abort-on-fail: false
