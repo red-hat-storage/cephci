@@ -4,7 +4,6 @@
 # This test case is Openstack only and cannot be run in Baremetal env due to test constrains.
 # Stretch mode deployment in BM is run by suite : suites/squid/rados/deploy-stretch-cluster-mode.yaml
 
-# RHOS-d run duration: 300 mins
 tests:
   - test:
       name: Install ceph pre-requisites
@@ -333,17 +332,6 @@ tests:
       comments: Active bug - 2318975
 
   - test:
-      name: OSD and host replacement
-      module: test_stretch_osd_serviceability_scenarios.py
-      polarion-id: CEPH-83575474
-      config:
-        pool_name: test_stretch_pool7
-        stretch_bucket: datacenter
-        tiebreaker_mon_site_name: tiebreaker
-        delete_pool: true
-      desc: Test stretch Cluster osd and Host replacement
-
-  - test:
       name: Netsplit Scenarios data-tiebreaker sites
       module: test_stretch_netsplit_scenarios.py
       polarion-id: CEPH-83574979
@@ -373,3 +361,15 @@ tests:
         stretch_bucket: datacenter
         tiebreaker_mon_site_name: tiebreaker
       desc: Perform post-deployment negative tests on stretch mode
+      comments: -ve scenarios bug - 2293147
+
+  - test:
+      name: OSD and host replacement
+      module: test_stretch_osd_serviceability_scenarios.py
+      polarion-id: CEPH-83575474
+      config:
+        pool_name: test_stretch_pool7
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test stretch Cluster osd and Host replacement
