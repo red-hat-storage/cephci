@@ -7,6 +7,7 @@
 
 # The deployment is evaluated by running IOs across the environments.
 # This particular yaml runs the tests on the primary/master and verifies IOs on the slave/secondary site.
+# global-conf: conf/squid/rgw/rgw_multisite.yaml
 
 tests:
 
