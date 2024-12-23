@@ -75,12 +75,19 @@ def run(ceph_cluster, **kw):
         log.info("Verifying forced recovery and healthy in stretch environment")
 
         pool_name = "stretch_pool_recovery"
-        if not rados_obj.create_pool(pool_name=pool_name, pg_num=16):
+        if not rados_obj.create_pool(pool_name=pool_name):
             log.error("Failed to create the replicated Pool")
             return 1
 
         # getting the acting set for the created pool
         acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
+
+        # Getting the number of objects, to check if writes were successful later post recovery
+        pool_stat_init = rados_obj.get_cephdf_stats(pool_name=pool_name)
+        init_objects = pool_stat_init["stats"]["objects"]
+        log.debug(
+            f"initial number of objects on the pool : {pool_name} is {init_objects}"
+        )
 
         log.info(
             f"Killing 2 OSD's from acting set : {acting_pg_set} to verify recovery"
@@ -91,8 +98,20 @@ def run(ceph_cluster, **kw):
                 log.error(f"Unable to stop the OSD : {osd_id}")
                 return 1
 
-        # Sleeping for 25 seconds ( "osd_heartbeat_grace": "20" ) for osd's to be marked down
-        time.sleep(25)
+        rados_obj.change_recovery_threads(config={}, action="set")
+
+        # Guide link : https://docs.ceph.com/en/reef/rados/configuration/mon-osd-interaction/#monitor-settings
+        log.info(
+            "Updating the behaviour of the test case. It is expected that PGs will enter peered state when there"
+            "is partial site failure. below bugzilla has more details on the behaviour "
+            "Bugzilla : https://bugzilla.redhat.com/show_bug.cgi?id=2328649 "
+        )
+
+        log.info(
+            "'osd_heartbeat_grace': 20 sec, & 'mon_osd_down_out_interval': 10 min "
+            "Sleeping for 10 minutes for osd's to be marked down & out of the cluster, so that recovery starts"
+        )
+        time.sleep(60 * 11)
 
         log.info("Stopped 2 OSD's from acting set, starting to wait for recovery")
 
@@ -100,10 +119,34 @@ def run(ceph_cluster, **kw):
             log.error("Failed to write objects into the Pool")
             return 1
 
+        pool_stat_intrim = rados_obj.get_cephdf_stats(pool_name=pool_name)
+        intrim_objects = pool_stat_intrim["stats"]["objects"]
+        log.debug(
+            f"number of objects on the pool with OSD down & out: {pool_name} is {intrim_objects}"
+        )
+
         log.debug("Triggering forced recovery in stretch mode")
         cmd = "ceph osd force_recovery_stretch_mode --yes-i-really-mean-it"
         rados_obj.run_ceph_command(cmd)
         log.info("Triggered the recovery in stretch mode")
+
+        # Objects should be more than the initial no of objects
+        if int(intrim_objects) <= int(init_objects):
+            log.error(
+                "Write ops should be possible, number of objects in the pool has not changed"
+            )
+            log.info(
+                f"cluster output dumps:\n"
+                f"ceph status : \n{rados_obj.run_ceph_command(cmd='ceph -s')}\n"
+                f"health detail : \n{rados_obj.run_ceph_command(cmd='ceph health detail')}\n"
+                f"mon dump : \n{rados_obj.run_ceph_command(cmd='ceph mon dump')}\n"
+                f"ceph report: \n {rados_obj.run_ceph_command(cmd='ceph report')}\n"
+                f"osd tree : \n{rados_obj.run_ceph_command(cmd='ceph osd df tree')}\n"
+            )
+            raise Exception(f"Pool {pool_name} has {intrim_objects} objs")
+        log.info(
+            f"Successfully wrote {int(intrim_objects) - int(init_objects)} on pool {pool_name} in degraded mode\n"
+        )
 
         log.debug("Starting the stopped OSD's")
         for osd_id in stop_osds:
@@ -122,6 +165,8 @@ def run(ceph_cluster, **kw):
         cmd = "ceph osd force_healthy_stretch_mode --yes-i-really-mean-it"
         rados_obj.run_ceph_command(cmd)
         rados_obj.delete_pool(pool=pool_name)
+
+        rados_obj.change_recovery_threads(config={}, action="rm")
 
         log.info("Cluster has successfully recovered and is in healthy state")
         return 0

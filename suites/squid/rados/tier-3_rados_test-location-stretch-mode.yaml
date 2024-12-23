@@ -298,6 +298,28 @@ tests:
       desc: Test the cluster when the tiebreaker site is rebooted
 
   - test:
+      name: Netsplit Scenarios data-tiebreaker sites
+      module: test_stretch_netsplit_scenarios.py
+      polarion-id: CEPH-83574979
+      config:
+        pool_name: test_stretch_pool7
+        netsplit_site: tiebreaker
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test stretch Cluster netsplit scenario between data site and tiebreaker site
+
+  - test:
+      name: test stretch Cluster maintenance mode - data site
+      module: test_stretch_site_maintenance_modes.py
+      polarion-id: CEPH-83574976
+      config:
+        pool_name: test_stretch_pool1
+        affected_site: DC1
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Test the cluster when the Data site is moved to maintenance mode
+
+  - test:
       name: Mon replacement on Data site
       module: test_stretch_mon_replacements.py
       polarion-id: CEPH-83574971
@@ -333,6 +355,16 @@ tests:
       comments: Active bug - 2318975
 
   - test:
+      name: Negative scenarios - post-deployment
+      module: test_stretch_negative_scenarios.py
+      polarion-id: CEPH-83584499
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+      desc: Perform post-deployment negative tests on stretch mode
+      comments: -ve scenarios bug - 2293147
+
+  - test:
       name: OSD and host replacement
       module: test_stretch_osd_serviceability_scenarios.py
       polarion-id: CEPH-83575474
@@ -343,33 +375,3 @@ tests:
         delete_pool: true
       desc: Test stretch Cluster osd and Host replacement
 
-  - test:
-      name: Netsplit Scenarios data-tiebreaker sites
-      module: test_stretch_netsplit_scenarios.py
-      polarion-id: CEPH-83574979
-      config:
-        pool_name: test_stretch_pool7
-        netsplit_site: tiebreaker
-        tiebreaker_mon_site_name: tiebreaker
-        delete_pool: true
-      desc: Test stretch Cluster netsplit scenario between data site and tiebreaker site
-
-  - test:
-      name: test stretch Cluster maintenance mode - data site
-      module: test_stretch_site_maintenance_modes.py
-      polarion-id: CEPH-83574976
-      config:
-        pool_name: test_stretch_pool1
-        affected_site: DC1
-        tiebreaker_mon_site_name: tiebreaker
-        delete_pool: true
-      desc: Test the cluster when the Data site is moved to maintenance mode
-
-  - test:
-      name: Negative scenarios - post-deployment
-      module: test_stretch_negative_scenarios.py
-      polarion-id: CEPH-83584499
-      config:
-        stretch_bucket: datacenter
-        tiebreaker_mon_site_name: tiebreaker
-      desc: Perform post-deployment negative tests on stretch mode

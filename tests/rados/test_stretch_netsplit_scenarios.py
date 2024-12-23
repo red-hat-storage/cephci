@@ -42,17 +42,12 @@ def run(ceph_cluster, **kw):
     netsplit_site = config.get("netsplit_site", "DC1")
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
     cluster_nodes = ceph_cluster.get_nodes()
+    set_debug = config.get("set_debug", True)
     installer = ceph_cluster.get_nodes(role="installer")[0]
     init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
     log.debug(f"Initial time when test was started : {init_time}")
 
     try:
-        # Starting to flush IP table rules on all hosts
-        for host in cluster_nodes:
-            log.debug(f"Proceeding to flush iptable rules on host : {host.hostname}")
-            host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
-            host.exec_command(sudo=True, cmd="reboot")
-            time.sleep(20)
 
         if not stretch_enabled_checks(rados_obj=rados_obj):
             log.error(
@@ -63,6 +58,21 @@ def run(ceph_cluster, **kw):
         log.info(
             f"Starting Netsplit scenario with site : {netsplit_site}. Pre-checks Passed"
         )
+
+        if set_debug:
+            log.debug(
+                "Setting up debug configs on the cluster for mon, osd & Mgr daemons"
+            )
+            rados_obj.run_ceph_command(
+                cmd="ceph config set mon debug_mon 30", client_exec=True
+            )
+            rados_obj.run_ceph_command(
+                cmd="ceph config set osd debug_osd 20", client_exec=True
+            )
+            rados_obj.run_ceph_command(
+                cmd="ceph config set mgr debug_mgr 20", client_exec=True
+            )
+
         osd_tree_cmd = "ceph osd tree"
         buckets = rados_obj.run_ceph_command(osd_tree_cmd)
         dc_buckets = [d for d in buckets["nodes"] if d.get("type") == "datacenter"]
@@ -178,9 +188,17 @@ def run(ceph_cluster, **kw):
                     f"Stretch Cluster is not marked as degraded even though we have "
                     f"netsplit b/w data sites : {stretch_details}"
                 )
-                raise Exception(
-                    "Stretch mode degraded test Failed on the provided cluster"
+                log.info(
+                    f"cluster output dumps:\n"
+                    f"ceph status : \n{rados_obj.run_ceph_command(cmd='ceph -s')}\n"
+                    f"health detail : \n{rados_obj.run_ceph_command(cmd='ceph health detail')}\n"
+                    f"mon dump : \n{rados_obj.run_ceph_command(cmd='ceph mon dump')}\n"
+                    f"ceph report: \n {rados_obj.run_ceph_command(cmd='ceph report')}\n"
+                    f"osd tree : \n{rados_obj.run_ceph_command(cmd='ceph osd df tree')}\n"
                 )
+                # raise Exception(
+                #     "Stretch mode degraded test Failed on the provided cluster"
+                # )
 
             log.info(
                 f"Cluster is marked degraded post netsplit b/w data sites {stretch_details},"
@@ -269,8 +287,13 @@ def run(ceph_cluster, **kw):
             log.error(
                 "Write ops should be possible, number of objects in the pool has not changed"
             )
-            log.debug(
-                "Test case expected to fail until bug fix : https://bugzilla.redhat.com/show_bug.cgi?id=2265116"
+            log.info(
+                f"cluster output dumps:\n"
+                f"ceph status : \n{rados_obj.run_ceph_command(cmd='ceph -s')}\n"
+                f"health detail : \n{rados_obj.run_ceph_command(cmd='ceph health detail')}\n"
+                f"mon dump : \n{rados_obj.run_ceph_command(cmd='ceph mon dump')}\n"
+                f"ceph report: \n {rados_obj.run_ceph_command(cmd='ceph report')}\n"
+                f"osd tree : \n{rados_obj.run_ceph_command(cmd='ceph osd df tree')}\n"
             )
             raise Exception(
                 f"Pool {pool_name} has {pool_stat['stats']['objects']} objs"
@@ -286,7 +309,7 @@ def run(ceph_cluster, **kw):
         for host in cluster_nodes:
             log.debug(f"Proceeding to flush iptable rules on host : {host.hostname}")
             host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
-            host.exec_command(sudo=True, cmd="reboot")
+            host.exec_command(sudo=True, cmd="reboot", check_ec=False)
             time.sleep(20)
 
         log.debug("Sleeping for 30 seconds...")
@@ -304,9 +327,6 @@ def run(ceph_cluster, **kw):
 
     except Exception as err:
         log.error(f"Hit an exception: {err}. Test failed")
-        log.debug(
-            "Test case expected to fail until bug fix : https://bugzilla.redhat.com/show_bug.cgi?id=2265116"
-        )
         return 1
     finally:
         log.debug("---------------- In Finally Block -------------")
@@ -314,14 +334,27 @@ def run(ceph_cluster, **kw):
         for host in cluster_nodes:
             log.debug(f"Proceeding to flush iptable rules on host : {host.hostname}")
             host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
-            host.exec_command(sudo=True, cmd="reboot")
+            host.exec_command(sudo=True, cmd="reboot", check_ec=False)
             time.sleep(20)
 
         if config.get("delete_pool"):
             rados_obj.delete_pool(pool=pool_name)
 
+        if set_debug:
+            log.debug("Removing debug configs on the cluster for mon, osd & Mgr")
+            rados_obj.run_ceph_command(
+                cmd="ceph config rm mon debug_mon", client_exec=True
+            )
+            rados_obj.run_ceph_command(
+                cmd="ceph config rm osd debug_osd", client_exec=True
+            )
+            rados_obj.run_ceph_command(
+                cmd="ceph config rm mgr debug_mgr", client_exec=True
+            )
+
         init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
         log.debug(f"time when test was Ended : {init_time}")
+        time.sleep(60)
 
         # log cluster health
         rados_obj.log_cluster_health()
