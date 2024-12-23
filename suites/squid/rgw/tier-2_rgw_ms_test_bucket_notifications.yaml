@@ -2,7 +2,9 @@
 # Objective: Test bucket notifications with kafka endpoint
 #       - with ack_type broker/none
 #       - w/o persistent flag
-# global-conf: conf/squid/rgw/tier-0_rgw.yaml
+#
+# global-conf: conf/squid/rgw/rgw_multisite.yaml
+
 tests:
 
   # Cluster deployment stage
