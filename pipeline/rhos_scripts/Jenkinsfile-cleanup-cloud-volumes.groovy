@@ -10,7 +10,7 @@ node("rhel-8-medium") {
         checkout(
                 scm: [
                     $class: 'GitSCM',
-                    branches: [[name: "origin/master"]],
+                    branches: [[name: "origin/main"]],
                     extensions: [[
                         $class: 'CleanBeforeCheckout',
                         deleteUntrackedNestedRepositories: true
