@@ -1,3 +1,4 @@
+# global-conf: conf/squid/rgw/rgw_ms_archive.yaml
 tests:
 
   # Cluster deployment stage

@@ -7,6 +7,7 @@
 
 # The deployment is evaluated by running IOs across the environments.
 # feature ga'd in 6.1
+# global-conf: conf/squid/rgw/rgw_ms_archive.yaml
 tests:
 
   # Cluster deployment stage
