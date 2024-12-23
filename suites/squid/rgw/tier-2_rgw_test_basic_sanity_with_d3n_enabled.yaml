@@ -1,4 +1,5 @@
 # Objective: Test basic sanity feature with d3n-cache enabled
+# global-conf: conf/squid/rgw/tier-0_rgw.yaml
 tests:
   - test:
       abort-on-fail: true

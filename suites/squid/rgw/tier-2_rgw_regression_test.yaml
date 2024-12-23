@@ -4,6 +4,7 @@
 # https://github.com/red-hat-storage/ceph-qe-scripts/tree/master/rgw
 # each script under the above repo has a yaml ( config defined ) which is actually a test
 # We are calling the script and associated yaml here.
+# global-conf: conf/squid/rgw/tier-0_rgw.yaml
 
 tests:
   - test:
