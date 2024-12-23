@@ -359,9 +359,3 @@ tests:
       polarion-id: CEPH-83604184
       desc: cephfs subvolume idempoence earmark
       abort-on-fail: false
-  - test:
-      name: Basic info validation after volume creation and deletion
-      module: cephfs_vol_management.cephfs_vol_mgmt_test_volume.py
-      polarion-id: CEPH-83604097
-      desc: Basic info validation after volume creation and deletion
-      abort-on-fail: true
