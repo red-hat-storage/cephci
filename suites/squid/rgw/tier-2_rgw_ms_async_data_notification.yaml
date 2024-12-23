@@ -6,6 +6,7 @@
 # cluster whereas the sec zone is part of the sec datacenter (cluster).
 
 # The deployment is evaluated by running IOs across the environments.
+# global-conf: conf/squid/rgw/rgw_multisite.yaml
 tests:
 
   # Cluster deployment stage

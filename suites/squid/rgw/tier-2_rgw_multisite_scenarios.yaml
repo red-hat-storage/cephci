@@ -9,6 +9,7 @@
 # The deployment is evaluated by disabling sync and running IOs across the environments.
 # This particular yaml runs the tests on the primary and verifies no objects syncs on the
 # secondary site and vice versa
+# global-conf: conf/squid/rgw/rgw_multisite.yaml
 ---
 
 tests:
