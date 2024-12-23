@@ -5342,9 +5342,9 @@ os.system('sudo systemctl start  network')
             If success, returns the value of the target_key
             If no key found, return None
         Usage:
-            fetch_value_from_json_output(search_list=[{node1: "node1", node2: "node2"}], 
+            fetch_value_from_json_output(search_list=[{node1: "node1", node2: "node2"}],
                                         match_key="name", match_value="cephfs1", target_key="status")
-            Explanation: This will basically try to fetch the list where the value of "name" matches with 
+            Explanation: This will basically try to fetch the list where the value of "name" matches with
                         ".*cephfs1.*" from the search_list and gives us the value of key "status" from the list
         """
         if all(value is not None for value in kwargs.values()):
@@ -5652,7 +5652,7 @@ os.system('sudo systemctl start  network')
                     # Compare list contents
                     if all(sorted(v) == sorted(values[0]) for v in values):
                         log.info(
-                            f"Key '{key}' validated across {len(dicts_with_key)} 
+                            f"Key '{key}' validated across {len(dicts_with_key)} \
                             dictionaries with the list value {values[0]}"
                         )
                     else:
