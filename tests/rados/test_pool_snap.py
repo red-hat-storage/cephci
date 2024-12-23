@@ -21,6 +21,7 @@ def run(ceph_cluster, **kw):
         - Pacific: BZ-2272361
         - Quincy: BZ-2272362
         - Reef: BZ-2263169
+        - Squid: BZ-2326892
     Test to verify object snap deletion when parent pool snapshot is deleted.
     1. Create a replicated pool with default config
     2. Use rados put to write a single object to the pool
