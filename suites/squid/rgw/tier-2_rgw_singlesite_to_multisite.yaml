@@ -3,6 +3,7 @@
 # ceph-pri is master/primary site
 # ceph-sec is slave/secondary site
 # CEPH-83575355 - [single-site to multi-site conversion] Test no recovering shards are seen ( Bug 2026101)
+# global-conf: conf/squid/rgw/rgw_multisite.yaml
 
 tests:
 

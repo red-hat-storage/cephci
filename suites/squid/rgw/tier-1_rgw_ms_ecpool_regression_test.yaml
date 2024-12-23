@@ -11,6 +11,7 @@
 # secondary site.
 
 # In addition to the above, the data bucket is configured to use EC
+# global-conf: conf/squid/rgw/ms-ec-profile-4+2-cluster.yaml
 ---
 
 tests:
