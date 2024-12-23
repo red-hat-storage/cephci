@@ -1,5 +1,6 @@
 # This suite executes Tier 4 RGW tests
 # global-conf: conf/squid/rgw/tier-0_rgw.yaml
+
 tests:
   - test:
       abort-on-fail: true
