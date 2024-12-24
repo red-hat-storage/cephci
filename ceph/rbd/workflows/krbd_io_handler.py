@@ -196,6 +196,8 @@ def krbd_io_handler(**kw):
                         cleanup_config.update(
                             {"device-type": config.get("device_type", "nbd")}
                         )
+                        if config.get("encryption_config"):
+                            cleanup_config.update({"options": options})
                     return_flag = device_cleanup(**cleanup_config)
     kw["config"]["device_names"] = device_names
     return return_flag, ""

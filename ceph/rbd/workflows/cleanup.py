@@ -144,6 +144,8 @@ def device_cleanup(rbd, client, **kw):
                 "image-snap-or-device-spec": kw["device_name"],
                 "device-type": kw.get("device_type", "nbd"),
             }
+            if kw.get("options"):
+                map_config.update({"options": kw.get("options")})
             _, err = rbd.device.unmap(**map_config)
 
         else:
