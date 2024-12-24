@@ -1,9 +1,10 @@
-from cluster_conf import collect_conf, write_output
 from docopt import docopt
-from utils.configs import get_cloud_credentials, get_configs
-from utils.utility import set_logging_env
 
+from cephci.cluster_conf import collect_conf, write_output
+from cephci.utils.configs import get_cloud_credentials, get_configs
+from cephci.utils.utility import set_logging_env
 from cli.cloudproviders import CloudProvider
+from cli.cloudproviders.beaker import Beaker
 from cli.cluster.node import Node
 from cli.cluster.volume import Volume
 from cli.exceptions import ConfigError
@@ -74,6 +75,13 @@ def provision_osp_volume(name, volcount, volsize):
     return volumes
 
 
+def provision_cluster(cluster):
+    """Provision beaker nodes"""
+    # Create xml data for creating job
+    job_xml = generate_beaker_job_xml(cluster)
+    Beaker().submit_job_xml("https://beaker.engineering.redhat.com", job_xml)
+
+
 def provision_node(name, cloud, config, node, timeout=600, interval=10):
     """Provision node on cloud"""
     # Provision OSP volumes
@@ -122,23 +130,26 @@ def provision(
         name = cluster.get("name")
 
         LOG.info(f"Provisioning cluster '{name}'")
-        for key in cluster.keys():
-            if "node" not in key:
-                continue
+        if str(cloud) == "beaker":
+            provision_cluster(cluster)
+        else:
+            for key in cluster.keys():
+                if "node" not in key:
+                    continue
 
-            # Create node name
-            node_name = ""
-            if str(cloud) == "openstack":
-                node_name = f"{name}-{prefix}-{key}"
-            elif str(cloud) == "baremetal":
-                node_name = cluster.get(key).get("hostname")
+                # Create node name
+                node_name = ""
+                if str(cloud) == "openstack":
+                    node_name = f"{name}-{prefix}-{key}"
+                elif str(cloud) == "baremetal":
+                    node_name = cluster.get(key).get("hostname")
 
-            # Get node details
-            node = cluster.get(key)
-            if not networks:
-                configs["networks"] = node.get("networks")
+                # Get node details
+                node = cluster.get(key)
+                if not networks:
+                    configs["networks"] = node.get("networks")
 
-            provision_node(node_name, cloud, configs, node, timeout, interval)
+                provision_node(node_name, cloud, configs, node, timeout, interval)
 
         LOG.info(f"Cluster '{name}' provisioned successfully")
 
@@ -220,3 +231,54 @@ if __name__ == "__main__":
 
     # write output to yaml
     write_output(cluster_conf, data) if cluster_conf else None
+
+
+def generate_beaker_job_xml(cluster):
+    whiteboard = "ceph_ci_jenkins"
+    distro_family = "RedHatEnterpriseLinux9"
+    distro_variant = "BaseOS"
+    distro_name = "RHEL-9.1.0"
+    distro_arch = "x86_64"
+    vm_pool = "rhsqa-ci-vm-pool"
+    hypervisor = "KVM"
+    system_type = "Machine"
+    reserve_time = "86400"
+    node_data = ""
+
+    for key in cluster.keys():
+        if "role" in cluster[key]:
+            if "client" in (cluster[key]["role"]):
+                node_type = "CLIENT"
+            else:
+                node_type = "SERVER"
+            node_data += f"""<recipe whiteboard="" role="RECIPE_MEMBERS" ks_meta="" kernel_options=""
+            kernel_options_post=""> <autopick random="false"/> <watchdog panic="ignore"/> <packages/> <ks_appends/>
+            <repos/> <distroRequires> <and> <distro_family op="=" value="{distro_family}"/>
+                  <distro_variant op="=" value="{distro_variant}"/>
+                  <distro_name op="=" value="{distro_name}"/>
+                  <distro_arch op="=" value="{distro_arch}"/>
+                </and>
+              </distroRequires>
+              <hostRequires>
+               <and>
+                    <pool op="=" value="{vm_pool}" />
+                    <hypervisor op="=" value="{hypervisor}" />
+                    <system_type op="=" value="{system_type}" />
+                </and>
+             </hostRequires>
+            <partitions/>
+            <task name="/distribution/check-install" role="STANDALONE"/>
+              <task name="/distribution/reservesys" role="{node_type}">
+                <params>
+                  <param name="RESERVETIME" value="{reserve_time}"/>
+                </params>
+              </task>
+            </recipe>"""
+
+    job_xml = f"""<job retention_tag="scratch">
+          <whiteboard>{whiteboard}</whiteboard>
+          <recipeSet priority="High">
+            {node_data}
+          </recipeSet>
+        </job>"""
+    return job_xml

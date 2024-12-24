@@ -1,4 +1,5 @@
 from cli.cloudproviders.baremetal import Baremetal
+from cli.cloudproviders.beaker import Beaker
 from cli.cloudproviders.openstack import Openstack
 from cli.exceptions import ConfigError
 from utility.log import Log
@@ -19,6 +20,8 @@ class CloudProvider:
         elif self._type == "baremetal":
             self._cloud = Baremetal(**config)
 
+        elif self._type == "beaker":
+            self._cloud = Beaker(**config)
         else:
             raise ConfigError(f"Unsupported cloud provider '{cloud}'")
 
