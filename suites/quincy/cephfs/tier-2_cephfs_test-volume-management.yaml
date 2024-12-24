@@ -1,13 +1,42 @@
 ---
+#===============================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_cephfs_test-volume-management.yaml
+# Conf file : conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml
+# Test-Case Covered:
+# CEPH-83574164 : Create cephfs subvolumegroup with desired data pool_layout
+# CEPH-83574193 - cephfs subvolume size expansion test
+# CEPH-83574166 - Create cephfs subvolumegroup with specific uid,gid test  //TO DO
+# CEPH-83574182 - Delete subvolume name that does not exist
+# CEPH-83574169 - Remove subvolume group name does not exist with force option
+# CEPH-83574168 - Delete_non_exist_subvol_group
+# CEPH-83573637 - Verify if the FS data can be moved from an existing Replicated Datapool to EC datapool
+# CEPH-83574158 - arbitary pool removal on volume deletion test
+# CEPH-83573428 - cephfs_vol_mgmt_create_vol_component_exist_name
+# CEPH-83574162 - cephfs_vol_mgmt_non_exist_subvol_group_deletetion
+# CEPH-83573528 - cephfs_vol_mgmt_pool_name_option_test
+# CEPH-83574161 - Checking default subvolume group gid and uid
+# CEPH-83574181 - Checking default subvolume gid and uid
+# CEPH-83574163 - cephfs_vol_mgmt_invalid_pool_layout
+# CEPH-83574190 - Volume default and different permission test
+# CEPH-83574192 - Subvolume creation with invalid pool_layout
+# CEPH-83574187 - Subvolume creation with isolated_namespace option
+# CEPH-83574165	- Create cephfs subvolumegroup with desired permissions test
+# CEPH-83574331 - Adding new data pools to cephfs which has existing data pool.
+# CEPH-83573428 - cephfs_vol_mgmt_volume_with_exist_names
+# CEPH-83574188 - Testing auto-cleanup cephfs subvolume after creation failure
+# CEPH-83574187: Subvolume metadata creation, delete, and modifying test.
+# CEPH-83571330: Test FS volume deletion when mon_allow_pool_delete is false.
+# CEPH-11333: CephFS volume management - FS life cycle.
+# CEPH-83603354 - volume related scenarios(delete,rename)
+#===============================================================================================
 tests:
-  -
-    test:
-      abort-on-fail: true
-      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
-      name: "setup install pre-requisistes"
-  -
-    test:
+      abort-on-fail: true
+  - test:
       name: cluster deployment
       desc: Execute the cluster deployment workflow.
       module: test_cephadm.py
@@ -21,6 +50,7 @@ tests:
               base_cmd_args:
                 verbose: true
               args:
+                registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
@@ -105,14 +135,14 @@ tests:
                 placement:
                   label: mds
           - config:
-              args:
+              command: shell
+              args: # arguments to ceph orch
                 - ceph
                 - fs
                 - set
                 - cephfs
                 - max_mds
                 - "2"
-              command: shell
       destroy-cluster: false
       abort-on-fail: true
   -
@@ -176,12 +206,6 @@ tests:
       module: test_client.py
       name: "configure client"
   - test:
-      name: File and Dir Layout Lifecycle Operations
-      module: cephfs_file_and_dir_layout.file_dir_layout_lifecycle_ops.py
-      polarion-id: CEPH-11334
-      desc: File and Directory Layout Lifecycle Operations
-      abort-on-fail: false
-  - test:
       name: subvolumegroup creation on desired data pool
       module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_pool_layout.py
       polarion-id: CEPH-83574164
@@ -212,10 +236,10 @@ tests:
       desc: delete_non_exist_subvol_group
       abort-on-fail: false
   - test:
-      name: Create a subvolume in a non-existent subvolume group
+      name: delete_non_exist_subvol_group
       module: cephfs_vol_management.cephfs_vol_mgmt_non_exist_subvol_group.py
       polarion-id: CEPH-83574162
-      desc: Create a subvolume in a non-existent subvolume group
+      desc: delete_non_exist_subvol_group
       abort-on-fail: false
   - test:
       name: Verify data movement bw FS created on Replicated Pool and EC Pool
@@ -242,10 +266,10 @@ tests:
       desc: cephfs_vol_mgmt_pool_name_option_test
       abort-on-fail: false
   - test:
-      name: Checking default subvolume gid and uid
+      name: Checking default subvolume group gid and uid
       module: cephfs_vol_management.cephfs_vol_mgmt_subvolume_gid_uid.py
       polarion-id: CEPH-83574181
-      desc: Checking default subvolume gid and uid
+      desc: Checking default subvolume group gid and uid
       abort-on-fail: false
   - test:
       name: Checking default subvolume group gid and uid
@@ -320,159 +344,14 @@ tests:
       desc: File system life cycle
       abort-on-fail: false
   - test:
-      name: Test fs volume creation, run IO & deletion in loop for 5 times
-      module: cephfs_vol_management.cephfs_vol_mgmt_fs_create_delete_loop.py
-      polarion-id: CEPH-83604070
-      desc: Test fs volume creation, run IO & deletion in loop for 5 times
+      name: volume related scenarios(delete,rename)
+      module: cephfs_vol_management.cephfs_vol_mgmt_volume_scenarios.py
+      polarion-id: CEPH-83603354
+      desc: volume related scenarios(delete,rename)
       abort-on-fail: false
   - test:
-      abort-on-fail: true
-      desc: "test cephfs nfs export path"
-      module: cephfs_nfs.nfs_export_path.py
-      name: "cephfs nfs export path"
-      polarion-id: "CEPH-83574028"
-  - test:
+      name: cephfs subvolumegroup scenarios
+      module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_scenarios.py
+      polarion-id: CEPH-83604079
+      desc: cephfs subvolumegroup scenarios
       abort-on-fail: false
-      desc: "test cephfs nfs snapshot clone operations"
-      module: cephfs_nfs.nfs_snaphshot_clone.py
-      name: "cephfs nfs snapshot clone operations"
-      polarion-id: "CEPH-83574024"
-  - test:
-      abort-on-fail: false
-      desc: "test cephfs nfs subvolume & subvolumegroup operations"
-      module: cephfs_nfs.nfs_subvolume_subvolumegroup.py
-      name: "cephfs nfs subvolume & subvolumegroup operations"
-      polarion-id: "CEPH-83574027"
-  - test:
-      abort-on-fail: false
-      desc: "test cephfs nfs read only export"
-      module: cephfs_nfs.read_only_nfs_export.py
-      name: "cephfs nfs read only export"
-      polarion-id: "CEPH-83574003"
-  - test:
-      abort-on-fail: false
-      desc: "test recreation of cephfs nfs cluster with same name"
-      module: cephfs_nfs.recreate_same_name_nfs.py
-      name: "recreate same name nfs cluster"
-      polarion-id: "CEPH-83574015"
-  - test:
-      abort-on-fail: false
-      desc: "test creation of 2 node nfs cluster"
-      module: cephfs_nfs.2_node_nfs.py
-      name: "2 node nfs cluster"
-      polarion-id: "CEPH-83574022"
-  - test:
-      abort-on-fail: false
-      desc: "test zipping & unzipping files on nfs export continuously"
-      module: cephfs_nfs.zip_unzip_files_nfs.py
-      name: "zipping & unzipping files on nfs export"
-      polarion-id: "CEPH-83574026"
-  - test:
-      abort-on-fail: false
-      desc: "test cephfs nfs export for cephfs subvolume"
-      module: cephfs_nfs.subvolume_export.py
-      name: "cephfs nfs export for subvolume"
-      polarion-id: "CEPH-83573993"
-  - test:
-      abort-on-fail: false
-      desc: "Create cephfs nfs export on non-existing directory"
-      module: cephfs_nfs.nfs_non_exist_export_path.py
-      name: "Create cephfs nfs export on non-existing directory"
-      polarion-id: "CEPH-83573669"
-  - test:
-      abort-on-fail: false
-      desc: "Export and import data between NFS and CephFS"
-      module: cephfs_nfs.move_data_bw_nfs_and_cephfs_mounts.py
-      name: "Move Data bw nfs and cephfs exports"
-      polarion-id: "CEPH-11309"
-  - test:
-      abort-on-fail: false
-      desc: "Test data integrity between cephfs & nfs mounts"
-      module: cephfs_nfs.test_data_integrity_nfs_cephfs_mounts.py
-      name: "data integrity between cephfs & nfs mounts"
-      polarion-id: "CEPH-11312"
-  - test:
-      abort-on-fail: false
-      desc: "Create cephfs nfs export on existing path"
-      module: cephfs_nfs.existing_path_nfs_export.py
-      name: "existing path cephfs nfs export"
-      polarion-id: "CEPH-83573995"
-  - test:
-      abort-on-fail: false
-      desc: "Run IOs by mounting same subvolume with all the three mounts"
-      module: cephfs_nfs.nfs_fuse_kernel_same_subvolume.py
-      name: "Mount same volume on fuse,kernel and nfs and runIOs"
-      polarion-id: "CEPH-11310"
-  - test:
-      abort-on-fail: false
-      desc: "Backup and restore data using existing NFS backup tools"
-      module: cephfs_nfs.data_backup_restore_bw_nfs_and_local_mounts.py
-      name: "backup and restore data bw nfs exports and local dir"
-      polarion-id: "CEPH-11314"
-  - test:
-      abort-on-fail: false
-      desc: "Verifying ceph nfs ls export with --detailed option and info with cluster_id"
-      module: cephfs_nfs.nfs_info_cluster_id_and_ls_export_detailed.py
-      name: "nfs ls export verification and info with cluster_id"
-      polarion-id: "CEPH-83573992"
-      comments: "No Clarity on the implementation"
-  - test:
-      abort-on-fail: false
-      desc: "Apply various number of hosts to nfs cluster and verify the changes"
-      module: cephfs_nfs.nfs_update_cluster_node_changes.py
-      name: "nfs cluster host changes and verification"
-      polarion-id: "CEPH-83574013"
-  - test:
-      abort-on-fail: false
-      desc: "test cephfs nfs with io and network failures"
-      module: cephfs_nfs.nfs_io_network_failures.py
-      name: "cephfs nfs with io and network failures"
-      polarion-id: "CEPH-83574020"
-  - test:
-      abort-on-fail: false
-      desc: "test cephfs nfs mount with fstab entry"
-      module: cephfs_nfs.nfs_mount_with_fstab.py
-      name: "cephfs nfs mount with fstab entry"
-      polarion-id: "CEPH-83574025"
-  - test:
-      abort-on-fail: false
-      desc: "test cephfs nfs RO and RW export"
-      module: cephfs_nfs.nfs_ro_rw_access.py
-      name: "cephfs nfs RO and RW export"
-      polarion-id: "CEPH-83574001"
-  - test:
-      abort-on-fail: false
-      desc: "test cephfs nfs RO and RW export"
-      module: cephfs_nfs.nfs_export_config.py
-      name: "cephfs nfs export creation using config file"
-      polarion-id: "CEPH-83574008"
-  - test:
-      abort-on-fail: false
-      desc: "test cephfs nfs config reset"
-      module: cephfs_nfs.nfs_config_reset.py
-      name: "cephfs nfs export creation using config file"
-      polarion-id: "CEPH-83573999"
-  - test:
-      abort-on-fail: false
-      desc: "modifying_nfs_cluster_invalid_value"
-      module: cephfs_nfs.modifying_nfs_cluster_invalid_value.py
-      name: "modifying_nfs_cluster_invalid_value"
-      polarion-id: "CEPH-83574014"
-  - test:
-      abort-on-fail: false
-      desc: "nfs_file_transfer_bw_nfs_and_localfs"
-      module: cephfs_nfs.test_cephfs_nfs_transfer_file_bw_nfs_and_localfs.py
-      name: "nfs_file_transfer_bw_nfs_and_localfs"
-      polarion-id: "CEPH-83575825"
-  - test:
-      abort-on-fail: false
-      desc: "nfs_file_attributes_retention_bw_nfs_and_localfs"
-      module: cephfs_nfs.test_cephfs_nfs_file_attributes_retention.py
-      name: "nfs_file_attributes_retention_bw_nfs_and_localfs"
-      polarion-id: "CEPH-83575937"
-  - test:
-      abort-on-fail: false
-      desc: "nfs_multiple_export_using_single_conf"
-      module: cephfs_nfs.nfs_multiple_export_using_single_conf.py
-      name: "nfs_multiple_export_using_single_conf"
-      polarion-id: "CEPH-83575082"
