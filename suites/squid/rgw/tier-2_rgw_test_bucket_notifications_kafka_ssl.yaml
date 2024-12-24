@@ -3,6 +3,7 @@
 #       - with ack_type broker/none
 ##       - w/o persistent flag
 #       - with SSL security type
+# global-conf: conf/squid/rgw/tier-0_rgw.yaml
 
 tests:
   - test:

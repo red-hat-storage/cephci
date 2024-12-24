@@ -1,5 +1,6 @@
 # This suites perform disabling and re enabling re-sharding feature and verifying DBR behavior
 # Verfies bucket generation
+# global-conf: conf/squid/rgw/rgw_multisite.yaml
 tests:
 
   # Cluster deployment stage

@@ -1,5 +1,7 @@
 # Test suite for cloud transition workflow
 
+# global-conf: conf/squid/rgw/cloud_transition.yaml
+
 tests:
 
   # Cluster deployment stage

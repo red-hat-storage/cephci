@@ -13,6 +13,7 @@
 
 # In addition to the above, the data bucket is configured to use EC 2+2
 # Sync IO rgws & Client IO rgws are sepearated
+# global-conf: conf/squid/rgw/3-way-ms-ec-profile-2+2@4nodes.yaml
 ---
 
 tests:
