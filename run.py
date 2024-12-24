@@ -28,6 +28,7 @@ from ceph.utils import (
     create_ibmc_ceph_nodes,
 )
 from cephci.cluster_info import get_ceph_var_logs
+from cephci.provision import provision
 from cli.performance.memory_and_cpu_utils import (
     start_logging_processes,
     stop_logging_process,
@@ -172,6 +173,7 @@ def create_nodes(
     run_id,
     cloud_type="openstack",
     instances_name=None,
+    platform=None,
     enable_eus=False,
 ):
     """Creates the system under test environment."""
@@ -201,6 +203,8 @@ def create_nodes(
             )
         elif "baremetal" in cloud_type:
             ceph_vmnodes = create_baremetal_ceph_nodes(cluster)
+        elif "beaker" in cloud_type:
+            ceph_vmnodes = provision(cloud_type, run_id, conf["globals"], platform)
         else:
             log.error(f"Unknown cloud type: {cloud_type}")
             raise AssertionError("Unsupported test environment.")
@@ -613,6 +617,7 @@ def run(args):
                 run_id,
                 cloud_type,
                 instances_name,
+                platform=platform,
                 enable_eus=enable_eus,
             )
         except Exception as err:
