@@ -90,3 +90,26 @@ tests:
         fio:
           size: 100M
       polarion-id: CEPH-83584070
+
+  - test:
+      desc: Live migration of RAW format images with encryption
+      config:
+        encryption_type:
+          - luks1
+          - luks2
+        rep_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        ec_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        fio:
+          size: 10M
+          fs: ext4
+          io: True
+          mount: True
+          nounmap: True
+          device_map: True
+      module: test_rbd_migrate_encryption.py
+      name: Live migration of RAW format images with encryption
+      polarion-id: CEPH-83596444
