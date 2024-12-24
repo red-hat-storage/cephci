@@ -102,6 +102,7 @@ tests:
           pool_name: scrub_pool
           pg_num: 1
         scenario: "default"
+        debug_enable: False
       delete_pools:
         - scrub_pool
 
@@ -116,6 +117,7 @@ tests:
           pool_name: scrub_pool
           pg_num: 1
         scenario: "begin_end_time_equal"
+        debug_enable: False
       delete_pools:
         - scrub_pool
   - test:
@@ -129,6 +131,7 @@ tests:
           pool_name: scrub_pool
           pg_num: 1
         scenario: "beginTime gt endTime"
+        debug_enable: False
       delete_pools:
         - scrub_pool
   - test:
@@ -142,6 +145,7 @@ tests:
           pool_name: scrub_pool
           pg_num: 1
         scenario: "beginTime gt endTime lt currentTime"
+        debug_enable: False
       delete_pools:
         - scrub_pool
   - test:
@@ -155,6 +159,7 @@ tests:
           pool_name: scrub_pool
           pg_num: 1
         scenario: "beginTime and endTime gt currentTime"
+        debug_enable: False
       delete_pools:
         - scrub_pool
   - test:
@@ -168,6 +173,7 @@ tests:
           pool_name: scrub_pool
           pg_num: 1
         scenario: "decreaseTime"
+        debug_enable: False
       delete_pools:
         - scrub_pool
   - test:
@@ -181,5 +187,6 @@ tests:
           pool_name: scrub_pool
           pg_num: 1
         scenario: "unsetScrub"
+        debug_enable: False
       delete_pools:
         - scrub_pool
