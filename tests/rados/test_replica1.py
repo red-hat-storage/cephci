@@ -89,7 +89,7 @@ def run(ceph_cluster, **kw):
 
             # divide OSDs into different device classes(replicated)
             replicated_osd = " ".join(
-                [osd_id for osd_id in osd_list if int(osd_id) % 2 != 0]
+                [str(osd_id) for osd_id in osd_list if int(osd_id) % 2 != 0]
             )
             cephadm.shell(
                 [f"ceph osd crush set-device-class replicated {replicated_osd}"]
