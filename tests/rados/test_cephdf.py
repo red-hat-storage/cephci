@@ -354,9 +354,13 @@ def run(ceph_cluster, **kw):
             for node in ["node12", "node13"]:
                 # create 10G LVMs on backup nodes
                 node_obj = node12_obj if node == "node12" else node13_obj
-                empty_devices = rados_obj.get_available_devices(
-                    node_name=node_obj.hostname, device_type="hdd"
-                )
+                for _ in range(3):
+                    empty_devices = rados_obj.get_available_devices(
+                        node_name=node_obj.hostname, device_type="hdd"
+                    )
+                    if empty_devices:
+                        break
+                    time.sleep(15)
                 if len(empty_devices) < 1:
                     log.error(
                         f"Need at least 1 spare disk available on host {node_obj.hostname}"
