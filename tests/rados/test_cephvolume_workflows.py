@@ -52,11 +52,9 @@ def run(ceph_cluster, **kw):
     volumeobject = CephVolumeWorkflows(node=cephadm)
 
     try:
-
         if config.get("zap_with_destroy_flag") or config.get(
             "zap_without_destroy_flag"
         ):
-
             options_list = [
                 ["device"],
                 ["osd_id"],
@@ -70,7 +68,6 @@ def run(ceph_cluster, **kw):
                 options_list = [option + ["--destroy"] for option in options_list]
 
             for option in options_list:
-
                 if (
                     config.get("zap_without_destroy_flag")
                     and len(option) == 1
@@ -193,7 +190,6 @@ def run(ceph_cluster, **kw):
                 )
 
                 if config.get("zap_without_destroy_flag"):
-
                     log.info(
                         f"Proceeding to check if file system is removed from OSD {osd_id}"
                     )
@@ -320,7 +316,7 @@ def run(ceph_cluster, **kw):
                         host=osd_host,
                     )
 
-                wait_for_osd_daemon_state(osd_host, osd_id, "up")
+                wait_for_osd_daemon_state(rados_obj.client, osd_id, "up")
 
                 log.info(
                     f"Successfully added back osd {osd_id} to cluster\n"
