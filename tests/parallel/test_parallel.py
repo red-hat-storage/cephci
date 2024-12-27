@@ -4,9 +4,9 @@ import glob
 import importlib
 import logging
 import os
+import random
 import string
 from multiprocessing import Manager
-from random import random
 from time import sleep
 
 from ceph.ceph import CommandFailed
@@ -147,6 +147,13 @@ def execute(test, args, results, parallel_tcs):
         # Merging configurations safely
         test_config = args.get("config", {}).copy()
         test_config.update(test.get("config", {}))
+        if "clusters" in test:
+            clusters_config = test.get("clusters", {})
+            for cluster_name, cluster_data in clusters_config.items():
+                # Extract and merge the cluster-specific configurations into the root
+                if "config" in cluster_data:
+                    test_config.update(cluster_data["config"])
+        test_logger.info(test_config)
         tc["name"] = test.get("name")
         tc["desc"] = test.get("desc")
         tc["log-link"] = log_url
