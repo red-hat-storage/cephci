@@ -340,7 +340,9 @@ def apply_selinux_label(client, label, path):
         None
     """
     try:
-        client.exec_command(sudo=True, cmd=f"chcon -R --type={label} {path}")
+        client.exec_command(
+            sudo=True, cmd=f"chcon -R --type={label} {path}", timeout=600
+        )
         log.info(f"Applied SELinux label {label} to {path}")
     except Exception as e:
         log.error(f"Failed to apply SELinux label {label} to {path}: {e}")
