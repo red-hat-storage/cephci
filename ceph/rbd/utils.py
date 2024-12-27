@@ -69,7 +69,9 @@ def get_md5sum_rbd_image(**kw):
             log.error(f"Export failed for image {kw.get('image_spec')}")
             return None
     return exec_cmd(
-        output=True, cmd="md5sum {}".format(kw.get("file_path")), node=kw.get("client")
+        output=True,
+        cmd=f"md5sum {kw['file_path']} && rm -f {kw['file_path']}",
+        node=kw.get("client"),
     ).split()[0]
 
 
