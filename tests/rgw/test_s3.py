@@ -351,6 +351,7 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
     """
     uid = binascii.hexlify(os.urandom(32)).decode()
     display_name = f"{user_prefix}-user"
+    log.info(f" the display name is {display_name} ")
     log.info("Creating user: {display_name}".format(display_name=display_name))
     if display_name == "iamrootalt-user":
         cmd = (
@@ -371,7 +372,7 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
 
     out, err = node.exec_command(sudo=True, cmd=cmd)
     user_info = json.loads(out)
-
+    log.info(f" the user info for {display_name} is {user_info} ")
     data[user_prefix] = {
         "id": user_info["keys"][0]["user"],
         "access_key": user_info["keys"][0]["access_key"],
@@ -379,7 +380,7 @@ def create_s3_user(node: CephNode, user_prefix: str, data: Dict) -> None:
         "name": user_info["display_name"],
         "email": user_info["email"],
     }
-    if display_name == "iamrootalt-user" or "iamroot-user":
+    if display_name in ("iamrootalt-user", "iamroot-user"):
         data[user_prefix] = {
             "id": user_info["keys"][0]["user"],
             "access_key": user_info["keys"][0]["access_key"],
@@ -429,8 +430,9 @@ def create_s3_conf(
     create_s3_user(node=rgw_node, user_prefix="alt", data=data)
     create_s3_user(node=rgw_node, user_prefix="tenant", data=data)
     create_s3_user(node=rgw_node, user_prefix="iam", data=data)
-    create_s3_user(node=rgw_node, user_prefix="iamroot", data=data)
-    create_s3_user(node=rgw_node, user_prefix="iamrootalt", data=data)
+    if build.split(".")[0] >= "8":
+        create_s3_user(node=rgw_node, user_prefix="iamroot", data=data)
+        create_s3_user(node=rgw_node, user_prefix="iamrootalt", data=data)
 
     if kms_keyid:
         data["main"]["kms_keyid"] = kms_keyid
