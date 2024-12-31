@@ -3,6 +3,8 @@
 #       - with ack_type broker/none
 #       - w/o persistent flag
 #
+# global-conf: conf/squid/rgw/rgw_multisite.yaml
+
 tests:
 
   # Cluster deployment stage
