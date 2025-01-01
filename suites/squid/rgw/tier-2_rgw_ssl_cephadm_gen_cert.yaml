@@ -122,7 +122,7 @@ tests:
                         nodes:
                           - node5
       desc: RHCS cluster deployment and rgw deployment with ssl cert generation
-      polarion-id: CEPH-83575222
+      polarion-id: CEPH-83604472
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster and rgw with ssl gen-cert
