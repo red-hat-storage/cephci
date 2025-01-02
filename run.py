@@ -811,6 +811,9 @@ def run(args):
             if osp_cred:
                 config["osp_cred"] = osp_cred
 
+            if inventory:
+                config["inventory"] = inventory
+
             # if Kernel Repo is defined in ENV then set the value in config
             if os.environ.get("KERNEL-REPO-URL") is not None:
                 config["kernel-repo"] = os.environ.get("KERNEL-REPO-URL")

@@ -48,6 +48,7 @@ Below configs are needed in order to run the tests
 import yaml
 
 from utility import utils
+import os
 from utility.log import Log
 from utility.utils import (
     configure_kafka_security,
@@ -79,7 +80,7 @@ def run(ceph_cluster, **kw):
     """
     config = kw.get("config")
     log.info("Running RGW test version: %s", config.get("test-version", "v2"))
-
+  
     rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
     client_ceph_object = ceph_cluster.get_ceph_object("client")
     run_io_verify = config.get("run_io_verify", False)
@@ -116,14 +117,23 @@ def run(ceph_cluster, **kw):
     # install extra package which are test specific
     if extra_pkgs:
         log.info(f"got extra pkgs: {extra_pkgs}")
+        inventory_data = config.get("inventory")
+        pkgs=[]
         if isinstance(extra_pkgs, dict):
-            _pkgs = extra_pkgs.get(int(distro_version_id[0]))
-            pkgs = " ".join(_pkgs)
-        else:
-            pkgs = " ".join(extra_pkgs)
+            distro_version = int(distro_version_id[0])
+            _pkgs = extra_pkgs.get(distro_version,[])
+            for pkg in _pkgs:
+                pkg_info = inventory_data.get("extra-packages", {}).get(pkg, {}).get("url", "")
+                pkgs.append(pkg_info)
 
+        elif isinstance(extra_pkgs, list):
+             for pkg in extra_pkgs:
+                pkg_info = inventory_data.get("extra-packages", {}).get(pkg, {}).get("url", "")
+                pkgs.append(pkg_info)
+        
+        pkgs_str = " ".join(pkgs)
         exec_from.exec_command(
-            sudo=True, cmd=f"yum install -y {pkgs}", long_running=True
+            sudo=True, cmd=f"yum install -y {pkgs_str}", long_running=True
         )
 
     log.info("Flushing iptables")

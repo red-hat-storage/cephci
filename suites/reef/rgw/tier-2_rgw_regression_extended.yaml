@@ -78,7 +78,7 @@ tests:
       config:
         run-on-rgw: true
         extra-pkgs:
-          - wget https://download.oracle.com/java/23/latest/jdk-23_linux-x64_bin.rpm
+          - jdk
         install_start_kafka: true
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
