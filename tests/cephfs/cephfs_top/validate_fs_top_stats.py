@@ -365,6 +365,8 @@ def run(ceph_cluster, **kw):
         )
         fs_util.remove_fs(client1, fs_name)
         log.info("Successfully unmounted the clients")
+        log.info("Disable mgr stats")
+        client1.exec_command(sudo=True, cmd="ceph mgr module disable stats")
         client1.exec_command(
             sudo=True, cmd="mv /etc/fstab.backup /etc/fstab", check_ec=False
         )

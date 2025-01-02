@@ -291,6 +291,8 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
+        log.info("Disable mgr stats")
+        client1.exec_command(sudo=True, cmd="ceph mgr module disable stats")
         fs_util.client_clean_up(
             "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_1
         )
