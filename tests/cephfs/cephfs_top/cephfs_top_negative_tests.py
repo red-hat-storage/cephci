@@ -561,6 +561,8 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         crash_status_after = fs_util_v1.get_crash_ls_new(client)
+        log.info("Disable mgr stats")
+        client.exec_command(sudo=True, cmd="ceph mgr module disable stats")
         log.info(f"Crash status after Test: {crash_status_before}")
         if crash_status_before != crash_status_after:
             assert (
