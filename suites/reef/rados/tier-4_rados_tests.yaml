@@ -194,6 +194,15 @@ tests:
         cephdf_max_avail_osd_expand: true
 
   - test:
+      name: Verify MAX_AVAIL variance when OSDs are removed
+      desc: MAX_AVAIL value update correctly when OSDs are removed
+      module: test_cephdf.py
+      polarion-id: CEPH-83604474
+      config:
+        cephdf_max_avail_osd_rm: false
+      comments: bug to be fixed - BZ-2277178
+
+  - test:
       name: Compression algorithms - modes
       module: rados_prep.py
       polarion-id: CEPH-83571670
