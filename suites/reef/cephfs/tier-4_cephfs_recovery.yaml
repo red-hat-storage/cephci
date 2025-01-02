@@ -233,3 +233,4 @@ tests:
       module: cephfs_journal_tool.cephfs_journal_tool_event_mode.py
       name: journal_tool_event_mode
       polarion-id: "CEPH-83595482"
+      comments: "BZ 2335321"
