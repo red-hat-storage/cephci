@@ -1,5 +1,6 @@
 import random
 import string
+import time
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -65,8 +66,26 @@ def run(ceph_cluster, **kw):
             [client1],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
-            extra_params=f",fs={fs_name}",
+            extra_params=f", fs={fs_name}",
         )
+        # down all the osd nodes
+        mdss = ceph_cluster.get_ceph_objects("mds")
+        mds_nodes_names = []
+        for mds in mdss:
+            out, ec = mds.exec_command(
+                sudo=True, cmd="systemctl list-units | grep -o 'ceph-.*mds.*\\.service'"
+            )
+            mds_nodes_names.append((mds, out.strip()))
+        log.info(f"NODES_MDS_info :{mds_nodes_names}")
+        for mds in mds_nodes_names:
+            mds[0].exec_command(sudo=True, cmd=f"systemctl stop {mds[1]}")
+        time.sleep(10)
+        log.info(mds_nodes_names)
+        log.info("All the mds nodes are down")
+        health_output = client1.exec_command(sudo=True, cmd="ceph -s")
+        log.info(health_output[0])
+        if "offline" not in health_output[0]:
+            return 1
         log.info("Testing Event Get")
         client1.exec_command(
             sudo=True,
@@ -94,6 +113,7 @@ def run(ceph_cluster, **kw):
         out1, ec1 = client1.exec_command(
             sudo=True,
             cmd=f"cephfs-journal-tool --rank {fs_name}:0 event get json --path output.json",
+            timeout=600,
         )
         if "Wrote" not in ec1:
             log.error(out1)
@@ -202,6 +222,13 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
+        # start mds
+        for mds in mds_nodes_names:
+            mds_node = mds[0]
+            mds_name = mds[1]
+            # reset failed counter
+            mds_node.exec_command(sudo=True, cmd=f"systemctl reset-failed {mds_name}")
+            mds_node.exec_command(sudo=True, cmd=f"systemctl restart {mds_name}")
         # Cleanup
         fs_util.client_clean_up(
             "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_1
