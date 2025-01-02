@@ -1,6 +1,6 @@
 tests:
 
-  # Setup the cluster
+  #Setup the cluster
   - test:
       abort-on-fail: true
       module: install_prereq.py
@@ -63,7 +63,7 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
-      desc: Install rbd-nbd and remove any epel packages
+      desc: Install rbd-nbd, qemu-img and remove any epel packages
       module: exec.py
       name: Install rbd-nbd
       config:
@@ -71,6 +71,7 @@ tests:
         commands:
           - "rm -rf /etc/yum.repos.d/epel*"
           - "dnf install rbd-nbd -y"
+          - "dnf install qemu-img -y"
 
   - test:
       name: Test image migration with external qcow data format
@@ -90,3 +91,49 @@ tests:
         fio:
           size: 100M
       polarion-id: CEPH-83584070
+
+  - test:
+      desc: Live migration of RAW format images with encryption
+      config:
+        encryption_type:
+          - luks1
+          - luks2
+        rep_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        ec_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        fio:
+          size: 10M
+          fs: ext4
+          io: true
+        testconfig:
+          id: CEPH-83596444
+          name: Live migration of raw format images with encryption
+      module: test_rbd_live_migrate_encryption.py
+      name: Live migration of RAW format images with encryption
+      polarion-id: CEPH-83596444
+
+  - test:
+      desc: Live migration of qcow2 format images with encryption
+      config:
+        encryption_type:
+          - luks1
+          - luks2
+        rep_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        ec_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        fio:
+          size: 10M
+          fs: ext4
+          io: true
+        testconfig:
+          id: CEPH-83596588
+          name: Live migration of qcow2 format images with encryption
+      module: test_rbd_live_migrate_encryption.py
+      name: Live migration of qcow2 format images with encryption
+      polarion-id: CEPH-83596588
