@@ -1,0 +1,103 @@
+tests:
+  - test:
+      name: Setup pre-requisites
+      desc: Setup packages and configuration for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              service: cephadm
+              command: bootstrap
+              args:
+                mon-ip: node1
+          - config:
+              service: host
+              command: add_hosts
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              service: osd
+              command: apply
+              args:
+                all-available-devices: true
+          - config:
+              service: rgw
+              command: apply
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: shell
+              args:
+                - "ceph fs volume create cephfs"
+          - config:
+              service: mds
+              command: apply
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+          - config:
+              command: shell
+              args:
+                - "ceph osd pool create rbd"
+          - config:
+              command: shell
+              args:
+                - "rbd pool init rbd"
+      abort-on-fail: true
+
+  - test:
+      name: Configure client
+      desc: Configure the RGW & RBD clients
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - jq
+          - fio
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+
+  - test:
+      name: Configure client
+      desc: Configure the RGW & RBD clients
+      module: test_client.py
+      config:
+        command: add
+        id: client.2
+        node: node7
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - jq
+          - fio
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
