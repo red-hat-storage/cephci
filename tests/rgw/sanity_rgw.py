@@ -124,14 +124,14 @@ def run(ceph_cluster, **kw):
             for pkg in _pkgs:
                 pkg_info = (
                     inventory_data.get("extra-packages", {}).get(pkg, {}).get("url", "")
-                    )
+                )
                 pkgs.append(pkg_info)
 
         elif isinstance(extra_pkgs, list):
             for pkg in extra_pkgs:
                 pkg_info = (
                     inventory_data.get("extra-packages", {}).get(pkg, {}).get("url", "")
-                    )
+                )
                 pkgs.append(pkg_info)
 
         pkgs_str = " ".join(pkgs)
