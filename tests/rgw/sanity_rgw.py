@@ -48,7 +48,6 @@ Below configs are needed in order to run the tests
 import yaml
 
 from utility import utils
-import os
 from utility.log import Log
 from utility.utils import (
     configure_kafka_security,
@@ -80,7 +79,7 @@ def run(ceph_cluster, **kw):
     """
     config = kw.get("config")
     log.info("Running RGW test version: %s", config.get("test-version", "v2"))
-  
+
     rgw_ceph_object = ceph_cluster.get_ceph_object("rgw")
     client_ceph_object = ceph_cluster.get_ceph_object("client")
     run_io_verify = config.get("run_io_verify", False)
