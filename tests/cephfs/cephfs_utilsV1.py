@@ -3942,14 +3942,19 @@ os.system('sudo systemctl start  network')
             sudo=True,
             cmd=f"ceph fs status {fs_name} -f json | jq '.mdsmap[] | select(.rank == {rank}) | .name'",
         )
+        log.info(f"Executing MDS name with rank command: {ranked_mds}")
         ranked_mds = ranked_mds.replace('"', "").replace("\n", "")
         client_id_cmd = (
             f"ceph tell mds.{ranked_mds} session ls | jq '.[] | select(.client_metadata.mount_point"
             f' != null and (.client_metadata.mount_point | contains("{mounted_dir}"))) | .id\''
         )
+        log.info(f"Executing Client ID Command : {client_id_cmd}")
         client_id, _ = client.exec_command(sudo=True, cmd=client_id_cmd)
         client_id = client_id.replace('"', "").replace("\n", "")
-        log.info(f"Client ID : {client_id} for Mounted Directory : {mounted_dir}")
+        if client_id == "":
+            log.error(f"Client not found for Mounted Directory : {mounted_dir}")
+            return 1
+        log.info(f"Client ID :[{client_id}] for Mounted Directory : [{mounted_dir}]")
         cmd = f""" ceph tell mds.{ranked_mds} counter dump 2>/dev/null | \
             jq -r '. | to_entries | map(select(.key | match("mds_client_metrics"))) | \
             .[].value[] | select(.labels.client != null and (.labels.client | contains("{client_id}"))
@@ -3959,6 +3964,9 @@ os.system('sudo systemctl start  network')
         log.info(
             f"Metrics for MDS : {ranked_mds} Mounted Directory: {mounted_dir} and Client : {client_id} is {metrics_out}"
         )
+        if metrics_out == "":
+            log.error(f"Metrics not found for MDS : {ranked_mds}")
+            return 1
         metrics_out = json.loads(str(metrics_out))
 
         return metrics_out
