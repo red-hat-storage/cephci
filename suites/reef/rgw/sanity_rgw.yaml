@@ -162,7 +162,7 @@ tests:
         run-on-rgw: true
         install_common: false
         extra-pkgs:
-          - wget https://download.oracle.com/java/23/latest/jdk-23_linux-x64_bin.rpm
+          - jdk
         install_start_kafka: true
         script-name: test_bucket_notifications.py
         config-file-name: test_empty_bucket_notification_kafka_broker.yaml
@@ -245,8 +245,7 @@ tests:
         script-name: test_rgw_mfa.py
         config-file-name: test_rgw_mfa.yaml
         extra-pkgs:
-          9:
-            - https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
+            - oathtool
   - test:
       name: Bucket link and unlink
       desc: Bucket move between tenanted and non tenanted users
