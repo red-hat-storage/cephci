@@ -1,10 +1,10 @@
 globals:
     openstack-credentials:
-        username: 'bcfc557975374e0fb004f0714dc5948a'
-        password: '2t7jcMy6zuUjVfl4cr6wv94wGLGnF64WRglgQM14BdQUmzxiFuNKjWXA7lsfmmC3VgkBe1IJQq5MxNI-s3lkiw'
+        username: '<user_name>'
+        password: '<user_password>'
         auth-url: 'https://rhos-d.infra.prod.upshift.rdu2.redhat.com:13000'
-        auth-version: '3.x_appcred'
-        tenant-name: 'ceph-core'
+        auth-version: '3.x_password'
+        tenant-name: 'ceph-ci'
         service-region: 'regionOne'
         domain: 'redhat.com'
         tenant-domain-id: '62cf1b5ec006489db99e2b0ebfb55f57'
