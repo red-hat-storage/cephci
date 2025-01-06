@@ -11,31 +11,31 @@ globals:
           - mon
 
       node2:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mgr
           - osd
           - mon
 
       node3:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mon
           - osd
 
       node4:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mon
           - osd
           - rgw
 
       node5:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - osd
           - rgw
@@ -55,30 +55,30 @@ globals:
           - mon
 
       node2:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mgr
           - osd
           - mon
 
       node3:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mon
           - osd
 
       node4:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - osd
           - rgw
 
       node5:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - osd
           - rgw

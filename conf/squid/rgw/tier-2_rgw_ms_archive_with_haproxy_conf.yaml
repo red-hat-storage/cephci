@@ -6,7 +6,7 @@ globals:
       name: ceph-pri
 
       node1:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - _admin
@@ -16,7 +16,7 @@ globals:
           - osd
 
       node2:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - mgr
@@ -24,7 +24,7 @@ globals:
           - osd
 
       node3:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - mon
@@ -32,7 +32,7 @@ globals:
           - rgw
 
       node4:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - osd
@@ -43,7 +43,7 @@ globals:
   - ceph-cluster:
       name: ceph-sec
       node1:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - _admin
@@ -53,7 +53,7 @@ globals:
           - osd
 
       node2:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - mgr
@@ -61,7 +61,7 @@ globals:
           - osd
 
       node3:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - mon
@@ -69,7 +69,7 @@ globals:
           - rgw
 
       node4:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - osd
@@ -78,7 +78,7 @@ globals:
   - ceph-cluster:
       name: ceph-arc
       node1:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - _admin
@@ -88,7 +88,7 @@ globals:
           - osd
 
       node2:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - mgr
@@ -96,7 +96,7 @@ globals:
           - osd
 
       node3:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - mon
@@ -104,7 +104,7 @@ globals:
           - rgw
 
       node4:
-        disk-size: 20
+        disk-size: 15
         no-of-volumes: 3
         role:
           - osd

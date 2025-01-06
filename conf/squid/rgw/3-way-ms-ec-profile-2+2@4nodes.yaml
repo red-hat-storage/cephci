@@ -5,8 +5,8 @@ globals:
       name: ceph-pri
 
       node1:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - _admin
           - installer
@@ -15,8 +15,8 @@ globals:
           - osd
 
       node2:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mgr
           - mon
@@ -24,16 +24,16 @@ globals:
 
 
       node3:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mon
           - osd
           - rgw
 
       node4:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - osd
           - rgw
@@ -42,8 +42,8 @@ globals:
       name: ceph-sec
 
       node1:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - _admin
           - installer
@@ -52,24 +52,24 @@ globals:
           - osd
 
       node2:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mgr
           - mon
           - osd
 
       node3:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mon
           - osd
           - rgw
 
       node4:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - osd
           - rgw
@@ -80,8 +80,8 @@ globals:
       name: ceph-ter
 
       node1:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - _admin
           - installer
@@ -90,24 +90,24 @@ globals:
           - osd
 
       node2:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mgr
           - mon
           - osd
 
       node3:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mon
           - osd
           - rgw
 
       node4:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - osd
           - rgw

@@ -431,7 +431,7 @@ tests:
       polarion-id: CEPH-83575227
 
 
-  # Test work flow
+  Test work flow
 
   - test:
       clusters:
@@ -524,7 +524,7 @@ tests:
       module: exec.py
       name: set sse-s3 vault configs on multisite
 
-#Performing IOs via the tertiary zone
+# Performing IOs via the tertiary zone
 
   - test:
       clusters:
@@ -552,7 +552,7 @@ tests:
             config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
             run-on-haproxy: true
             monitor-consistency-bucket-stats: true
-            # verify-io-on-site: ["ceph-sec"] as there is an io file issue, once its fixed need to uncomment
+            verify-io-on-site: ["ceph-sec"] as there is an io file issue, once its fixed need to uncomment
 
   - test:
       clusters:

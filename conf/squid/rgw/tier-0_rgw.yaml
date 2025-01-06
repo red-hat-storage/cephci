@@ -4,8 +4,8 @@ globals:
       name: ceph
 
       node1:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - _admin
           - installer
@@ -14,23 +14,23 @@ globals:
           - osd
 
       node2:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mgr
           - mon
           - osd
 
       node3:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - mon
           - osd
 
       node4:
-        disk-size: 20
-        no-of-volumes: 4
+        disk-size: 15
+        no-of-volumes: 3
         role:
           - osd
 
