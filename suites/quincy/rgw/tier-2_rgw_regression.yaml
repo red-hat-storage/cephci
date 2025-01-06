@@ -576,8 +576,7 @@ tests:
         script-name: test_rgw_mfa.py
         config-file-name: test_rgw_mfa.yaml
         extra-pkgs:
-          9:
-            - https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
+            - oathtool
 
   - test:
       name: multipart versioned object deletion with mfa token
