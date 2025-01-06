@@ -71,8 +71,10 @@ def run(ceph_cluster, **kw):
                 "run the tests"
             )
             return 1
-        mon_obj.set_config(section="osd", name="debug_osd", value="20/20")
-        mon_obj.set_config(section="mgr", name="debug_mgr", value="20/20")
+        if config.get("debug_enable"):
+            mon_obj.set_config(section="osd", name="debug_osd", value="20/20")
+            mon_obj.set_config(section="mgr", name="debug_mgr", value="20/20")
+
         pg_id, inconsistent_obj_count = pg_info
         log.info(
             f"The inconsistent object count is- {inconsistent_obj_count} on pg -{pg_id}"

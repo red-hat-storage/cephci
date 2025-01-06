@@ -170,9 +170,10 @@ tests:
           plugin: jerasure
           disable_pg_autoscale: true
         inconsistent_obj_count: 4
+        debug_enable: False
         delete_pool:
           - ecpool
-      comments: Active bug 2277111
+      comments: Active bugs 2277111,2335727 and 2335762
 
   - test:
       name: Inconsistent objects in replicated pool functionality check
@@ -186,6 +187,7 @@ tests:
           pg_num: 1
           disable_pg_autoscale: true
         inconsistent_obj_count: 4
+        debug_enable: False
         delete_pool:
           - replicated_pool
       comments: Active bug 2316244
