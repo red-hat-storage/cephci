@@ -72,7 +72,7 @@ tests:
       config:
         run-on-rgw: true
         extra-pkgs:
-          - wget https://download.oracle.com/java/23/latest/jdk-23_linux-x64_bin.rpm
+          - jdk
         install_start_kafka: true
         configure_kafka_security: true
         script-name: test_bucket_notifications.py
