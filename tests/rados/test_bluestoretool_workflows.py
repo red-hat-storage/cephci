@@ -464,27 +464,28 @@ def run(ceph_cluster, **kw):
             log.info(out)
             assert "success" in out
 
-            # Execute ceph-bluestore-tool qfsck --path <osd_path>
-            osd_id = random.choice(osd_list)
-            log.info(
-                f"\n --------------------"
-                f"\n Running quick consistency check for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.run_quick_consistency_check(osd_id=osd_id)
-            log.info(out)
-            assert "success" in out
+            if rhbuild.split(".")[0] >= "6":
+                # Execute ceph-bluestore-tool qfsck --path <osd_path>
+                osd_id = random.choice(osd_list)
+                log.info(
+                    f"\n --------------------"
+                    f"\n Running quick consistency check for OSD {osd_id}"
+                    f"\n --------------------"
+                )
+                out = bluestore_obj.run_quick_consistency_check(osd_id=osd_id)
+                log.info(out)
+                assert "success" in out
 
-            # Execute ceph-bluestore-tool allocmap --path <osd_path>
-            osd_id = random.choice(osd_list)
-            log.info(
-                f"\n --------------------"
-                f"\n Fetching allocmap for OSD {osd_id}"
-                f"\n ---------------------"
-            )
-            out = bluestore_obj.fetch_allocmap(osd_id=osd_id)
-            log.info(out)
-            assert "success" in out
+                # Execute ceph-bluestore-tool allocmap --path <osd_path>
+                osd_id = random.choice(osd_list)
+                log.info(
+                    f"\n --------------------"
+                    f"\n Fetching allocmap for OSD {osd_id}"
+                    f"\n ---------------------"
+                )
+                out = bluestore_obj.fetch_allocmap(osd_id=osd_id)
+                log.info(out)
+                assert "success" in out
 
             # Execute ceph-bluestore-tool repair --path <osd_path>
             osd_id = random.choice(osd_list)
