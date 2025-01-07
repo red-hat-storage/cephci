@@ -137,3 +137,25 @@ tests:
       module: test_rbd_live_migrate_encryption.py
       name: Live migration of qcow2 format images with encryption
       polarion-id: CEPH-83596588
+
+  - test:
+      desc: Rollback after Failed Migration with encryption
+      config:
+        encryption_type:
+          - luks1
+          - luks2
+        rep_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        ec_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        fio:
+          size: 1G
+          fs: ext4
+          io: true
+      module: test_rbd_abort_migration_encryption.py
+      name: >
+            Rollback after Failed Migration using migration
+            abort for encrypted images
+      polarion-id: CEPH-83595961
