@@ -1,0 +1,114 @@
+# Conf for 2+2 EC profile on 4 nodes for 3 way active-active rgw-multisite
+# suite file : suites/squid/common/regression/4_3way_rgw_ms_ecpool.yaml
+---
+globals:
+  - ceph-cluster:
+      name: ceph-pri
+
+      node1:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - osd
+          - rgw
+          - client
+
+  - ceph-cluster:
+      name: ceph-sec
+
+      node1:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - osd
+          - rgw
+          - client
+
+  - ceph-cluster:
+      name: ceph-ter
+
+      node1:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+          - osd
+
+      node2:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        disk-size: 40
+        no-of-volumes: 6
+        role:
+          - osd
+          - rgw
+          - client
