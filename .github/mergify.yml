@@ -5,12 +5,12 @@ pull_request_rules:
       - label!=DNM
       - label!=work-in-progress
       - base=main
-      - "approved-reviews-by=@red-hat-storage/cephci-top-level-reviewers"
+      - branch-protection-review-decision=approved
       - "check-success=tox (3.9.18)"
       - check-success=WIP
     actions:
-      merge:
-        method: merge
+      queue:
+        merge_method: merge
   - name: ask to resolve conflict
     conditions:
       - conflict
