@@ -60,7 +60,7 @@ def run(ceph_cluster, **kw):
         )
         cluster_id = f"test-nfs_{rand}"
         path = "/"
-        export_id = "1"
+
         fs_name = "cephfs" if not erasure else "cephfs-ec"
         fs_details = fs_util.get_fs_info(client1, fs_name)
 
@@ -70,7 +70,7 @@ def run(ceph_cluster, **kw):
         user_id = (
             f"nfs.{cluster_id}.{fs_name}"
             if int(build.split(".")[0]) == 7
-            else f"nfs.{cluster_id}.{export_id}"
+            else f"nfs.{cluster_id}"
         )
 
         passed = []
