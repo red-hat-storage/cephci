@@ -7,6 +7,7 @@ from tests.nfs.nfs_test_multiple_filesystem_exports import create_nfs_export
 from utility.log import Log
 log = Log(__name__)
 
+
 def run(ceph_cluster, **kw):
     """Verify readdir ops
     Args:
@@ -74,7 +75,7 @@ def run(ceph_cluster, **kw):
         sleep(3)
 
         if operation == "override_earmark":
-            earmark2= "smb"
+            earmark2 = "smb"
             fs_util.set_subvolume_earmark(client=clients[0],
                                           vol_name=fs_name,
                                           subvol_name=subvolume_name,
@@ -102,15 +103,15 @@ def run(ceph_cluster, **kw):
 
         except Exception as e:
             # The export should fail earmark has already been set by smb
-            if ("earmark has already been set by smb" in e.args[0] and
-                    operation in ["override_earmark","wrong_earmark"]):
+            if ("earmark has already been set by smb" in e.args[0] and operation in
+                    ["override_earmark", "wrong_earmark"]):
                 log.info(f"expected, failed earmark has already been set by smb {e}")
                 return 0
             else:
                 log.error(f"Unexpected {e}")
 
     except Exception as e:
-        log.error(f"unable to create nfs cluster {nfs_name}")
+        log.error(f"unable to create nfs cluster {nfs_name} with error {e}")
         return 1
     finally:
         log.info("Cleaning up in progress")
