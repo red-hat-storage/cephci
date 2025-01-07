@@ -48,14 +48,12 @@ def run(**kwargs):
         parallel_tests = kwargs["parallel"]
         parallel_tcs = manager.list()
         max_time = kwargs.get("config", {}).get("max_time", None)
-        wait_till_complete = kwargs.get("config", {}).get("wait_till_complete", True)
         cancel_pending = kwargs.get("config", {}).get("cancel_pending", False)
         parallel_log.info(kwargs)
 
         with parallel(
             thread_pool=False,
             timeout=max_time,
-            shutdown_wait=wait_till_complete,
             shutdown_cancel_pending=cancel_pending,
         ) as p:
             for test in parallel_tests:
