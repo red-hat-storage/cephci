@@ -25,6 +25,7 @@ class CephFSSystemUtils(object):
         Args:
             ceph_cluster (ceph.ceph.Ceph): ceph cluster
         """
+        self.ceph_cluster = ceph_cluster
         self.mons = ceph_cluster.get_ceph_objects("mon")
         self.mgrs = ceph_cluster.get_ceph_objects("mgr")
         self.mdss = ceph_cluster.get_ceph_objects("mds")
@@ -273,3 +274,99 @@ class CephFSSystemUtils(object):
                 time.sleep(retry_interval)  # Retry after the specified interval
 
         return False
+
+    def log_rotate_size(self, client, size_str="200M"):
+        """
+        This mutility will enable log rotation when debug log file size reached the limit mentioned in 'size_str'
+        Required_param : size_str, it should be size with units recognised by Ceph Cluster such as,
+        200M , 500M, 1G ...
+        """
+        out, rc = client.exec_command(sudo=True, cmd="ceph fsid -f json")
+        fsid_out = json.loads(out)
+        fsid = fsid_out["fsid"]
+        mds_nodes = self.ceph_cluster.get_ceph_objects("mds")
+        mgr_nodes = self.ceph_cluster.get_ceph_objects("mgr")
+        osd_nodes = self.ceph_cluster.get_ceph_objects("osd")
+        mon_nodes = self.ceph_cluster.get_ceph_objects("mon")
+        log_rotate_file = f"/etc/logrotate.d/ceph-{fsid}"
+        log_rotate_file_bkp = f"/etc/logrotate.d/ceph-{fsid}.backup"
+        log_rotate_tmp = "/home/cephuser/log_rotate_tmp"
+        crontab_str = f"2 * * * * /usr/sbin/logrotate {log_rotate_file} >/dev/null 2>&1"
+        log_complete = []
+        for log_node_list in [mds_nodes, mgr_nodes, osd_nodes, mon_nodes]:
+            for log_node in log_node_list:
+                if log_node.node.hostname not in log_complete:
+                    # on each node
+                    cmd = f"cp {log_rotate_file} {log_rotate_file_bkp}"
+                    out, _ = log_node.exec_command(sudo=True, cmd=cmd)
+                    cmd = rf"sed '/compress/i \    \size {size_str}' {log_rotate_file} > {log_rotate_tmp}"
+                    out, _ = log_node.exec_command(sudo=True, cmd=cmd)
+                    cmd = f"yes | cp {log_rotate_tmp} {log_rotate_file}"
+                    out, _ = log_node.exec_command(sudo=True, cmd=cmd)
+                    cmd = f"echo {crontab_str} > /home/cephuser/log_cron_file"
+                    out, _ = log_node.exec_command(sudo=True, cmd=cmd)
+                    cmd = "crontab /home/cephuser/log_cron_file"
+                    out, _ = log_node.exec_command(sudo=True, cmd=cmd)
+                    log_complete.append(log_node.node.hostname)
+        return 0
+
+    def log_parser(self, client, expect_list, unexpect_list, daemon="mds"):
+        """
+        This utility parsers through daemon debug logs mentioned in daemon_list and checks for
+        expected and unexpected strings in logs.
+        If expected strings found and unexpected strings not found, return pass as 0
+        If unexpected strrings found and expected strings not found, return fail as 1
+        Example usage:
+        expect_list = ['issue_new_caps','get_allowed_caps','sending MClientCaps','client_caps(revoke']
+        unexpect_list = ['Exception','assert']
+        log_parser(expect_list,unexpect_list)
+        """
+        out, rc = client.exec_command(sudo=True, cmd="ceph fsid -f json")
+        fsid_out = json.loads(out)
+        fsid = fsid_out["fsid"]
+        daemon_nodes = self.ceph_cluster.get_ceph_objects(daemon)
+        log_path = f"/var/log/ceph/{fsid}"
+        results = {"expect": {}, "unexpect": {}}
+        for node in daemon_nodes:
+            for search_str in expect_list:
+                cmd = f"grep {search_str} {log_path}/*{daemon}*"
+                try:
+                    out = node.exec_command(sudo=True, cmd=cmd)
+                    if len(out) > 0:
+                        log.info(
+                            f"Found {search_str} in {daemon} log in {log_path} on {node.node.hostname}:\n {out}"
+                        )
+                        results["expect"].update({search_str: node})
+                except BaseException as ex:
+                    log.info(ex)
+            for search_str in unexpect_list:
+                cmd = f"grep {search_str} {log_path}/*{daemon}*"
+                try:
+                    out, _ = node.exec_command(sudo=True, cmd=cmd)
+                    if len(out) > 0:
+                        log.error(
+                            f"Found {search_str} in {daemon} log in {log_path} on {node.node.hostname}:\n {out}"
+                        )
+                        results["unexpect"].update({search_str: node})
+                except BaseException as ex:
+                    log.info(ex)
+        expect_not_found = []
+        unexpect_found = []
+        for exp_str in expect_list:
+            if exp_str not in results["expect"]:
+                expect_not_found.append(exp_str)
+        for unexp_str in unexpect_list:
+            if unexp_str in results["expect"]:
+                unexpect_found.append(unexp_str)
+        test_status = 0
+        if len(expect_not_found):
+            log.error(
+                f"Some of expected strings not found in debug logs for daemon {daemon}:{expect_not_found}"
+            )
+            test_status = 1
+        if len(unexpect_found):
+            log.error(
+                f"Some of unexpected strings found in debug logs for daemon {daemon}:{unexpect_found}"
+            )
+            test_status = 1
+        return test_status
