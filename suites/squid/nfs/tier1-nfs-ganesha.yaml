@@ -144,6 +144,51 @@ tests:
         clients: 1
 
   - test:
+      name: Delete the old earmark and set the "nfs". Create NFS export out of it
+      desc: Delete the old earmark and set the "nfs". Create NFS export out of it
+      module: test_earmark_feature.py
+      #      polarion-id:
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        earmark: smb
+        operation: rename_earmark
+
+  - test:
+      name: creating volume and setting earmark
+      desc: creating volume and setting earmark
+      module: test_earmark_feature.py
+      #      polarion-id:
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        earmark: nfs
+        operation: verify_earmark
+
+  - test:
+      name: Override the earmark and try to create nfs export. It should fail
+      desc: Override the earmark and try to create nfs export. It should fail
+      module: test_earmark_feature.py
+      #      polarion-id:
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        earmark: nfs
+        operation: override_earmark
+
+  - test:
+      name: Set the earmark as "smb" and try to use the same subvolume for nfs export
+      desc: Set the earmark as "smb" and try to use the same subvolume for nfs export
+      module: test_earmark_feature.py
+      #      polarion-id:
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        nfs_version: 4.1
+        earmark: smb
+        operation: wrong_earmark
+
+  - test:
       name: Verify owner of a symbolic link and the owner of the target file can be different users
       module: nfs_verify_symbolic_links_users.py
       desc: Verify owner of a symbolic link and the owner of the target file can be different users
