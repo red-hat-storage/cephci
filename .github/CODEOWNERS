@@ -1,24 +1,29 @@
 # These owners will be the default owners for everything in this repo.
 # all changes.
-*                   @red-hat-storage/cephci-top-reviewers
+*                   @red-hat-storage/ceph-qe-ci @red-hat-storage/ceph-qe-admin
 
 # for RGW
-rgw/                @red-hat-storage/teams/cephci-rgw
+rgw/                @mkasturi18 @ckulal @TejasC88
 
 # for RBD team 
-rbd/                @red-hat-storage/teams/cephci-block
-rbd_mirror/         @red-hat-storage/teams/cephci-block
+rbd/                @Manohar-Murthy
+rbd_mirror/         @Manohar-Murthy
+
+# for NVMe-oF
+nvmeof/             @Manohar-Murthy @HaruChebrolu
 
 # for RADOS
-rados/              @ed-hat-storage/teams/cephci-rados
+rados/              @neha-gangadhar @pdhiran
 
 # for FS
-cephfs/             @red-hat-storage/teams/cephci-fs
+cephfs/             @neha-gangadhar @AmarnatReddy @Manimaran-MM
+
+# smb
+smb/                @vdas-redhat @pranavprakash20
 
 # for DMFG
-ansible/            @red-hat-storage/teams/cephci-dm
-upgrades/           @red-hat-storage/teams/cephci-dm
-dashboard/          @red-hat-storage/teams/cephci-dm
-cephadm/            @red-hat-storage/teams/cephci-dm
-ceph_ansisble/      @red-hat-storage/teams/cephci-dm  
-ceph_installer/     @red-hat-storage/teams/cephci-dm
+ceph_volume/        @vdas-redhat @pranavprakash20
+cephadm/            @vdas-redhat @pranavprakash20
+mgr/                @vdas-redhat @pranavprakash20
+nfs/                @vdas-redhat @pranavprakash20
+upgrades/           @vdas-redhat @pranavprakash20
