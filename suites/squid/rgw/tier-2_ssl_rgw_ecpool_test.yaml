@@ -11,6 +11,7 @@
 #          secret-id: <secret-id>
 #          prefix: /v1/<path>
 #
+# global-conf: conf/squid/rgw/ec-profile-4+2-cluster.yaml
 ---
 tests:
   - test:

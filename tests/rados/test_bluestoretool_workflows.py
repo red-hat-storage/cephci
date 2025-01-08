@@ -51,6 +51,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     bluestore_obj = BluestoreToolWorkflows(node=cephadm)
+    bluestore_obj_live = BluestoreToolWorkflows(node=cephadm, nostop=True)
     client = ceph_cluster.get_nodes(role="client")[0]
     bench_obj = RadosBench(mon_node=cephadm, clients=client)
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
@@ -463,27 +464,28 @@ def run(ceph_cluster, **kw):
             log.info(out)
             assert "success" in out
 
-            # Execute ceph-bluestore-tool qfsck --path <osd_path>
-            osd_id = random.choice(osd_list)
-            log.info(
-                f"\n --------------------"
-                f"\n Running quick consistency check for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.run_quick_consistency_check(osd_id=osd_id)
-            log.info(out)
-            assert "success" in out
+            if rhbuild.split(".")[0] >= "6":
+                # Execute ceph-bluestore-tool qfsck --path <osd_path>
+                osd_id = random.choice(osd_list)
+                log.info(
+                    f"\n --------------------"
+                    f"\n Running quick consistency check for OSD {osd_id}"
+                    f"\n --------------------"
+                )
+                out = bluestore_obj.run_quick_consistency_check(osd_id=osd_id)
+                log.info(out)
+                assert "success" in out
 
-            # Execute ceph-bluestore-tool allocmap --path <osd_path>
-            osd_id = random.choice(osd_list)
-            log.info(
-                f"\n --------------------"
-                f"\n Fetching allocmap for OSD {osd_id}"
-                f"\n ---------------------"
-            )
-            out = bluestore_obj.fetch_allocmap(osd_id=osd_id)
-            log.info(out)
-            assert "success" in out
+                # Execute ceph-bluestore-tool allocmap --path <osd_path>
+                osd_id = random.choice(osd_list)
+                log.info(
+                    f"\n --------------------"
+                    f"\n Fetching allocmap for OSD {osd_id}"
+                    f"\n ---------------------"
+                )
+                out = bluestore_obj.fetch_allocmap(osd_id=osd_id)
+                log.info(out)
+                assert "success" in out
 
             # Execute ceph-bluestore-tool repair --path <osd_path>
             osd_id = random.choice(osd_list)
@@ -552,9 +554,19 @@ def run(ceph_cluster, **kw):
             assert "device size" in out and "Expanding" in out
 
             # Execute ceph-bluestore-tool show-label
+            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
-                f"\n Dump label content for block device for OSD {osd_id}"
+                f"\n Dump label content for block device for live OSD {osd_id}"
+                f"\n --------------------"
+            )
+            out = bluestore_obj_live.show_label(osd_id=osd_id)
+            log.info(out)
+            assert f"/var/lib/ceph/osd/ceph-{osd_id}/" in out
+
+            log.info(
+                f"\n --------------------"
+                f"\n Dump label content for block device for stopped OSD {osd_id}"
                 f"\n --------------------"
             )
             out = bluestore_obj.show_label(osd_id=osd_id)
@@ -601,6 +613,8 @@ def run(ceph_cluster, **kw):
                 f"that can start up a BlueStore OSD for OSD {osd_id}"
                 f"\n --------------------"
             )
+            out = bluestore_obj_live.generate_prime_osd_dir(osd_id=osd_id, device=dev)
+            log.info(out)
             out = bluestore_obj.generate_prime_osd_dir(osd_id=osd_id, device=dev)
             log.info(out)
 
