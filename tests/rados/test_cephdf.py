@@ -4,8 +4,13 @@ Tests included:
 1. Verification of ceph df output upon creation & deletion of objects
 2. MAX_AVAIL value should not change to an invalid value
    upon addition of osd with weight 0
+3. MAX AVAIL is displayed correctly for all the pools when OSD size is increased
+4. MAX AVAIL is displayed correctly for all the pools when few OSDs are removed
 """
 
+import datetime
+import math
+import random
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -536,5 +541,145 @@ def run(ceph_cluster, **kw):
         log.info(
             "ceph df MAX AVAIL stats verification upon expansion of OSD size"
             "completed successfully"
+        )
+        return 0
+
+    if config.get("cephdf_max_avail_osd_rm"):
+        desc = (
+            "\n#CEPH-83604474"
+            "\nQuincy: BZ-2277857"
+            "\nReef: BZ-2277178"
+            "\nSquid: BZ-2275995"
+            "\nThis test is to verify that ceph df MAX AVAIL is displayed correctly for all the pools"
+            " when 25% of OSDs are removed from the cluster"
+            "\nSteps- \n"
+            "1. Creating a replicated and EC pool with default config\n"
+            "2. Log pool stats and verify max_avail \n"
+            "3. Remove 25% of OSDs from each OSD host\n"
+            "4. Log pool stats and verify max_avail  \n"
+            "5. Re-deploy OSDs\n"
+            "6. Log pool stats and verify max_avail  \n"
+        )
+
+        log.info(desc)
+        df_config = config.get("cephdf_max_avail_osd_rm")
+        pool_name = "test-osd-rm-ec"
+
+        try:
+            # create default pool with given name
+            rados_obj.create_erasure_pool(pool_name=pool_name)
+
+            init_osd_count = len(rados_obj.get_osd_list(status="up"))
+
+            initial_pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+            log.info(f"{pool_name} pool stat: {initial_pool_stat}")
+
+            # execute max_avail check across the cluster
+            rados_obj.change_recovery_threads(config=config, action="set")
+            if not wait_for_clean_pg_sets(rados_obj, timeout=900):
+                log.error("Cluster cloud not reach active+clean state within 900 secs")
+                raise Exception("Cluster cloud not reach active+clean state")
+
+            if not rados_obj.verify_max_avail():
+                log.error("MAX_AVAIL deviates on the cluster more than expected")
+                raise Exception("MAX_AVAIL deviates on the cluster more than expected")
+            log.info("MAX_AVAIL on the cluster are as per expectation")
+
+            # set osd service to unmanaged
+            utils.set_osd_devices_unmanaged(ceph_cluster, "1", unmanaged=True)
+
+            # get OSD hosts
+            osd_hosts = ceph_cluster.get_nodes(role="osd")
+
+            # remove OSDs from the cluster
+            for host in osd_hosts:
+                osd_list = rados_obj.collect_osd_daemon_ids(osd_node=host)
+                osd_rm_count = math.ceil(len(osd_list) * 0.25)
+                osds_rm = random.choices(osd_list, k=osd_rm_count)
+                for osd_id in osds_rm:
+                    log.info(f"Removing OSD {osd_id} on host {host.hostname}")
+                    dev_path = get_device_path(host=host, osd_id=osd_id)
+                    assert utils.set_osd_out(ceph_cluster, osd_id=osd_id)
+                    utils.osd_remove(ceph_cluster, osd_id=osd_id)
+                    time.sleep(5)
+                    assert utils.zap_device(
+                        ceph_cluster, host=host.hostname, device_path=dev_path
+                    )
+                    assert wait_for_device_rados(
+                        host=host, osd_id=osd_id, action="remove", timeout=1000
+                    )
+
+            if not wait_for_clean_pg_sets(rados_obj, timeout=900):
+                log.error("Cluster cloud not reach active+clean state within 900 secs")
+                raise Exception("Cluster cloud not reach active+clean state")
+
+            _pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+            log.info(f"{pool_name} pool stat: {_pool_stat}")
+
+            # execute max_avail check across the cluster after OSDs removal
+            if not rados_obj.verify_max_avail():
+                log.error("MAX_AVAIL deviates on the cluster more than expected")
+                raise Exception("MAX_AVAIL deviates on the cluster more than expected")
+            log.info("MAX_AVAIL on the cluster are as per expectation")
+
+            # set osd service to unmanaged False
+            utils.set_osd_devices_unmanaged(ceph_cluster, "1", unmanaged=False)
+            # wait for OSDs to get deployed, i.e. current UP OSD count == init UP OSD count
+            endtime = datetime.datetime.now() + datetime.timedelta(seconds=600)
+            while datetime.datetime.now() < endtime:
+                curr_osd_up = len(
+                    rados_obj.run_ceph_command(cmd="ceph osd tree up", client_exec=True)
+                )
+                if curr_osd_up != init_osd_count:
+                    log.error(
+                        "Current UP OSDs yet to reach original value, sleeping for 60 secs"
+                    )
+                    time.sleep(60)
+                    if datetime.datetime.now() > endtime:
+                        raise Exception(
+                            "Removed OSDs were not added back to the cluster within 10 mins"
+                        )
+                    continue
+                log.info(
+                    f"Current UP count [{curr_osd_up}] == Original UP OSD count [{init_osd_count}]"
+                )
+                break
+
+            if not wait_for_clean_pg_sets(rados_obj, timeout=900):
+                log.error("Cluster cloud not reach active+clean state within 900 secs")
+                raise Exception("Cluster cloud not reach active+clean state")
+
+            _pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+            log.info(f"{pool_name} pool stat: {_pool_stat}")
+
+            # execute max_avail check across the cluster after OSDs addition
+            if not rados_obj.verify_max_avail():
+                log.error("MAX_AVAIL deviates on the cluster more than expected")
+                raise Exception("MAX_AVAIL deviates on the cluster more than expected")
+            log.info("MAX_AVAIL on the cluster are as per expectation")
+
+        except Exception as AE:
+            log.error(f"Failed with exception: {AE.__doc__}")
+            log.exception(AE)
+            return 1
+        finally:
+            log.info("\n ************* Executing finally block **********\n")
+            rados_obj.delete_pool(pool=pool_name)
+            if not wait_for_clean_pg_sets(rados_obj, timeout=900):
+                log.error("Cluster cloud not reach active+clean state")
+                return 1
+            rados_obj.change_recovery_threads(config=config, action="rm")
+            # set osd service to managed
+            utils.set_osd_devices_unmanaged(ceph_cluster, "1", unmanaged=False)
+
+            # log cluster health
+            rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
+
+        log.info(
+            "ceph df MAX AVAIL stats verification upon OSDs removal completed successfully"
         )
         return 0
