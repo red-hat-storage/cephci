@@ -9,8 +9,8 @@ pull_request_rules:
       - "check-success=tox (3.9.18)"
       - check-success=WIP
     actions:
-      queue:
-        merge_method: merge
+      merge:
+        method: merge
   - name: ask to resolve conflict
     conditions:
       - conflict
