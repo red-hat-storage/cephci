@@ -4986,7 +4986,6 @@ os.system('sudo systemctl start  network')
         fs_name,
         clients,
         mount_paths,
-        mount_type,
         max_mds_value,
     ):
         """
