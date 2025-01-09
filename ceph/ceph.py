@@ -1719,13 +1719,26 @@ class CephNode(object):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        del d["vm_node"]
-        del d["rssh"]
-        del d["ssh"]
-        del d["rssh_transport"]
-        del d["ssh_transport"]
-        del d["root_connection"]
-        del d["connection"]
+        if d.get("vm_node"):
+            del d["vm_node"]
+
+        if d.get("rssh"):
+            del d["rssh"]
+
+        if d.get("ssh"):
+            del d["ssh"]
+
+        if d.get("rssh_transport"):
+            del d["rssh_transport"]
+
+        if d.get("ssh_transport"):
+            del d["ssh_transport"]
+
+        if d.get("ssh_transport"):
+            del d["root_connection"]
+
+        if d.get("connection"):
+            del d["connection"]
 
         return d
 
