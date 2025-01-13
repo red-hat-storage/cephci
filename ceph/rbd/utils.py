@@ -35,16 +35,19 @@ def value(key, dictionary):
     return str(list(find(key, dictionary))[0])
 
 
-def copy_file(file_name, src, dest):
+def copy_file(file_name, src, dest, dest_file_name=None):
     """Copies the given file from src node to dest node
 
     Args:
         file_name: Full path of the file to be copied
         src: Source CephNode object
         dest: Destination CephNode object
+        dest_file_name: Destination file name
     """
     contents, err = src.exec_command(sudo=True, cmd="cat {}".format(file_name))
-    key_file = dest.remote_file(sudo=True, file_name=file_name, file_mode="w")
+    key_file = dest.remote_file(
+        sudo=True, file_name=dest_file_name or file_name, file_mode="w"
+    )
     key_file.write(contents)
     key_file.flush()
 
@@ -201,3 +204,42 @@ def convert_size(size_bytes):
     p = math.pow(1024, i)
     s = round(size_bytes / p)
     return "%s%s" % (s, size_name[i])
+
+
+def configure_common_client_node(client1, client2):
+    """
+    Configure the common client node as client1 to access both clusters.
+    Args:
+        client1: Cluster1 client node object
+        client2: Cluster2 client node object
+    """
+
+    # Ensure /etc/ceph directory exists and is writable on client1
+    client1.exec_command(cmd="sudo mkdir -p /etc/ceph && sudo chmod 777 /etc/ceph")
+
+    # Copy cluster2 configuration and keyring files to client1
+    cluster2_files = [
+        ("/etc/ceph/ceph.conf", "/etc/ceph/cluster2.conf"),
+        (
+            "/etc/ceph/ceph.client.admin.keyring",
+            "/etc/ceph/cluster2.client.admin.keyring",
+        ),
+    ]
+    for file, dest_path in cluster2_files:
+        copy_file(file_name=file, src=client2, dest=client1, dest_file_name=dest_path)
+
+    client1.exec_command(sudo=True, cmd="chmod 644 /etc/ceph/*")
+
+    # verify cluster accessibility for both clusters
+    for cluster_name in ["ceph", "cluster2"]:
+        out, err = client1.exec_command(
+            cmd=f"ceph -s --cluster {cluster_name}", output=True
+        )
+        log.info(f"Cluster {cluster_name} status: {out}")
+        if err:
+            raise Exception(
+                f"Unable to access cluster {cluster_name} from common client node"
+            )
+            return 1
+    log.info("Common client node configured successfully.")
+    return 0
