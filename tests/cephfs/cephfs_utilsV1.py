@@ -5702,3 +5702,40 @@ os.system('sudo systemctl start  network')
                         log.error(f"Key '{key}' mismatch: Values = {values}")
                         return False
         return True
+
+    def rename_volume(self, client, old_name, new_name):
+        log.info(f"[Fail {old_name} before renaming it]")
+        client.exec_command(
+            sudo=True, cmd=f"ceph fs fail {old_name} --yes-i-really-mean-it"
+        )
+        log.info("[Set refuse_client_session to true]")
+        client.exec_command(
+            sudo=True, cmd=f"ceph fs set {old_name} refuse_client_session true"
+        )
+        log.info("[Rename the volume]")
+        rename_cmd = f"ceph fs rename {old_name} {new_name} --yes-i-really-mean-it"
+        out, ec = client.exec_command(sudo=True, cmd=rename_cmd)
+        if "renamed." not in ec:
+            log.error(ec)
+            log.error(f"Failed to rename the volume: {out}")
+            return 1
+        out, ec = client.exec_command(sudo=True, cmd="ceph fs ls")
+        if new_name not in out:
+            log.error(f"Volume not renamed: {out}")
+            return 1
+        log.info(f"Volume renamed successfully: {out}")
+        log.info("Put it back to previous state")
+        client.exec_command(
+            sudo=True, cmd="ceph fs set " + new_name + " refuse_client_session false"
+        )
+        client.exec_command(sudo=True, cmd=f"ceph fs set {new_name} joinable true")
+        timer = 10
+        while timer > 0:
+            out, ec = client.exec_command(sudo=True, cmd=f"ceph fs status {new_name}")
+            if "active" in out:
+                break
+            time.sleep(5)
+            timer -= 1
+        log.info(f"Volume {new_name} is active now")
+        log.info("Renaming and verification of volume successful")
+        return 0
