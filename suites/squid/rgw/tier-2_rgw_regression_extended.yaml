@@ -312,3 +312,12 @@ tests:
       config:
         script-name: ../aws/test_acl.py
         config-file-name: ../../aws/configs/test_public_read_write_acl.yaml
+
+  - test:
+      name: Test Inditex hotfix bz, CORS presigned put url
+      desc: CORS ACL's prevents access to buckets with presigned PUT URI's with ACL private header
+      polarion-id: CEPH-83604475
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_cors_using_curl.py
+        config-file-name: ../../curl/configs/test_cors_presigned_put_url_using_curl.yaml
