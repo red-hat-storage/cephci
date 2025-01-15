@@ -225,7 +225,7 @@ class ServiceabilityMethods:
         Returns:
             None | raises exception in case of failure
         """
-        status_cmd = ""
+        status_cmd = "ceph orch osd rm status -f json"
         try:
 
             def wait_osd_operation_status(status_cmd):
@@ -286,7 +286,6 @@ class ServiceabilityMethods:
                     if osd_id in osd_out_list:
                         osd_utils.osd_remove(self.cluster, osd_id=osd_id, zap=True)
                         time.sleep(10)
-                        status_cmd = "ceph orch osd rm status -f json"
                         if wait_osd_operation_status(status_cmd):
                             log.info("The OSD successfully removed")
                         else:
