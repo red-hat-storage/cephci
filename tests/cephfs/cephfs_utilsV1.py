@@ -681,8 +681,7 @@ class FsUtils(object):
         Return:
             returns ceph fs volume info dump in json format
         """
-        if fs_name:
-            fs_info_cmd = f"ceph fs volume info {fs_name} --format json"
+        fs_info_cmd = f"ceph fs volume info {fs_name} --format json"
         if kwargs.get("human_readable"):
             fs_info_cmd += " --human-readable"
 
@@ -5656,7 +5655,7 @@ os.system('sudo systemctl start  network')
         )
         return fs_status_dict
 
-    def collect_fs_volume_info_for_validation(self, client, fs_name):
+    def collect_fs_volume_info_for_validation(self, client, fs_name, **kwargs):
         """
         Gets the output using fs volume info and collected required info
         Args:
@@ -5666,7 +5665,10 @@ os.system('sudo systemctl start  network')
             returns data_avail,data_used,meta_avail,meta_used and mon addrs from ceph fs volume info in dict format
         """
         fs_volume_info_dict = {}
-        fs_vol_info = self.get_fs_info_dump(client, fs_name, human_readable=False)
+
+        fs_vol_info = self.get_fs_info_dump(
+            client, fs_name, human_readable=kwargs.get("human_readable", False)
+        )
         log.debug(f"Output: {fs_vol_info}")
 
         data_avail = self.fetch_value_from_json_output(
