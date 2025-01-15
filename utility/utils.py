@@ -574,7 +574,11 @@ def set_config_param(node):
     rgw_process_name = rgw_process[0].split()[0]
 
     # add the configuration/s to be set on service
-    configs = ["rgw_max_objs_per_shard 5", "rgw_lc_debug_interval 30"]
+    configs = [
+        "rgw_max_objs_per_shard 5",
+        "rgw_lc_debug_interval 30",
+        "rgw_restore_debug_interval 30",
+    ]
     for config_cmd in configs:
         node.exec_command(cmd=f"ceph config set client.{rgw_process_name} {config_cmd}")
 
