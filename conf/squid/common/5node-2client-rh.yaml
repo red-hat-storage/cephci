@@ -8,44 +8,45 @@ globals:
           - mon
           - mgr
           - crash
-          - grafana
-          - prometheus
           - alertmanager
       node2:
         role:
           - mon
           - mgr
-          - osd
+          - crash
           - rgw
           - nfs
-          - crash
+          - osd
         no-of-volumes: 6
         disk-size: 40
       node3:
         role:
           - mon
           - mgr
-          - osd
-          - rgw
           - crash
+          - rgw
+          - nfs
+          - osd
         no-of-volumes: 6
         disk-size: 40
       node4:
         role:
           - mon
           - mgr
+          - crash
+          - grafana
           - mds
           - osd
-          - crash
         no-of-volumes: 6
         disk-size: 40
       node5:
         role:
           - mon
           - mgr
-          - mds
-          - osd
           - crash
+          - mds
+          - prometheus
+          - osd
         no-of-volumes: 6
         disk-size: 40
       node6:
