@@ -38,7 +38,10 @@ def test_cephfs_volume_creation(fs_util, client):
     Unified test suite to validate CephFS volume creation under various scenarios.
     This includes testing valid and invalid names, duplicate names, system limits,
     and placement validation.
+<<<<<<< HEAD
 
+=======
+>>>>>>> 23fa5173 (Common Test file for all volume operations tests)
     Args:
         fs_util (object): Utility object for managing CephFS volumes.
         client (object): Client object to interact with the Ceph cluster.
@@ -52,12 +55,30 @@ def test_cephfs_volume_creation(fs_util, client):
         6. Maximum volume limit.
 
     Cleanup:
+<<<<<<< HEAD
         Ensures proper cleanup of created volumes to prevent residual data.
 
     Returns:
         None
     """
 
+=======
+        Ensures the volume is deleted, even if an exception occurs during the test.
+    =======
+    Test Scenarios:
+        1. Shortest valid volume name.
+        2. Longest valid volume name.
+        3. Invalid volume names (special characters, excessive length).
+        4. Duplicate volume names (idempotent behavior).
+        5. Invalid placement group.
+        6. Maximum volume limit.
+
+    Cleanup:
+        Ensures proper cleanup of created volumes to prevent residual data.
+    Returns:
+        None
+    """
+>>>>>>> 23fa5173 (Common Test file for all volume operations tests)
     # Test 1: Shortest valid volume names
     shortest_valid_names = [
         "a",
@@ -576,7 +597,10 @@ def run(ceph_cluster, **kw):
 
         test_cephfs_volume_creation(fs_util, client1)
         # test_simultaneous_creation(fs_util, client1) # Reserved for future use or Scale Tests
+<<<<<<< HEAD
         # test_max_volumes(fs_util, client1) # Reserved for future use or Scale Tests
+=======
+>>>>>>> 23fa5173 (Common Test file for all volume operations tests)
         test_volume_deletion_with_mon_allow_pool_delete_false(fs_util, client1)
 
     except Exception as e:
