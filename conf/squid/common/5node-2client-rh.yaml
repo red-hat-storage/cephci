@@ -22,7 +22,6 @@ globals:
       node3:
         role:
           - mon
-          - mgr
           - crash
           - rgw
           - nfs
@@ -32,7 +31,6 @@ globals:
       node4:
         role:
           - mon
-          - mgr
           - crash
           - grafana
           - mds
@@ -42,10 +40,9 @@ globals:
       node5:
         role:
           - mon
-          - mgr
           - crash
-          - mds
           - prometheus
+          - mds
           - osd
         no-of-volumes: 6
         disk-size: 40
