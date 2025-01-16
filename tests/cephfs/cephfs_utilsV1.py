@@ -1325,30 +1325,52 @@ class FsUtils(object):
         Returns:
             Returns the cmd_out and cmd_rc for the create command.
         """
+        # Additional configuration for erasure-coded pools
         if erasure:
-            pool_cmd = f"ceph osd pool create {pool_name} {pg_num or ''} {pgp_num or ''} erasure"
-            if kwargs.get("erasure_code_profile"):
-                pool_cmd += f" {kwargs.get('erasure_code_profile')}"
-        else:
-            pool_cmd = f"ceph osd pool create {pool_name} {pg_num or ''} {pgp_num or ''} replicated"
+            log.info(f"Setting allow_ec_overwrites to true for erasure-coded pool: {pool_name}")
+            client.exec_command(
+                sudo=True, cmd=f"ceph osd pool set {pool_name} allow_ec_overwrites true"
+            )
 
+        # Determine pool type
+        pool_type = "erasure" if erasure else "replicated"
+        log.info(f"Creating {pool_type} OSD pool: {pool_name}")
+
+        # Build the pool creation command
+        pool_cmd = f"ceph osd pool create {pool_name} {pg_num} {pgp_num or ''} {pool_type}".strip()
+
+        # Append erasure code profile if specified
+        if erasure and kwargs.get("erasure_code_profile"):
+            pool_cmd += f" {kwargs['erasure_code_profile']}"
+
+        # Append CRUSH rule name if specified
         if kwargs.get("crush_rule_name"):
-            pool_cmd += f" {kwargs.get('crush_rule_name')}"
-        if kwargs.get("expected_num_objects"):
-            pool_cmd += f" {kwargs.get('expected_num_objects')}"
-        if erasure and kwargs.get("autoscale_mode"):
-            pool_cmd += f" --autoscale-mode={kwargs.get('autoscale_mode')}"
+            pool_cmd += f" {kwargs['crush_rule_name']}"
 
+        # Append expected number of objects if specified
+        if kwargs.get("expected_num_objects"):
+            pool_cmd += f" {kwargs['expected_num_objects']}"
+
+        # Set autoscale mode if specified
+        if erasure and kwargs.get("autoscale_mode"):
+            pool_cmd += f" --autoscale-mode={kwargs['autoscale_mode']}"
+
+        # Execute the pool creation command
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=pool_cmd, check_ec=kwargs.get("check_ec", True)
         )
 
+        log.info(f"OSD pool {pool_name} created successfully")
+
+        # Validate pool creation
         if validate:
+            log.info(f"Validating creation of OSD pool: {pool_name}")
             out, rc = client.exec_command(
                 sudo=True, cmd="ceph osd pool ls --format json"
             )
             pool_ls = json.loads(out)
             if pool_name not in pool_ls:
+                log.error(f"Creation of OSD pool {pool_name} failed")
                 raise CommandFailed(f"Creation of OSD pool: {pool_name} failed")
 
         return cmd_out, cmd_rc
@@ -1951,7 +1973,7 @@ class FsUtils(object):
             out, rc = client.exec_command(sudo=True, cmd="ceph fs ls --format json")
             volname_ls = json.loads(out)
             if vol_name in [i["name"] for i in volname_ls]:
-                raise CommandFailed(f"Creation of filesystem: {vol_name} failed")
+                raise CommandFailed(f"Removal of filesystem: {vol_name} failed")
 
             log.info("Validating the deletion of pools")
             outpools, rcpools = client.exec_command(
