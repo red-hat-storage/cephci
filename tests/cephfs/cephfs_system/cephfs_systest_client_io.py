@@ -392,6 +392,7 @@ def io_test_workflow_2(
                 )
         log1.info("Completed test iteration")
         cluster_healthy = is_cluster_healthy(clients[0])
+        log1.info(f"cluster_health{cluster_healthy}")
         if cleanup == 1:
             with parallel() as p:
                 for sv_name in sv_info_objs:
@@ -492,6 +493,7 @@ def io_test_workflow_3(
                         cmd = f"rm -rf {dir_path1}"
                         p.spawn(run_cmd, cmd, client1, log1)
         cluster_healthy = is_cluster_healthy(clients[0])
+        log1.info(f"cluster_health{cluster_healthy}")
     log1.info("io_test_workflow_3 completed")
     return 0
 
@@ -572,6 +574,7 @@ def io_test_workflow_4(
                     log1.info(f"Executing cmd {cmd}")
                     p.spawn(run_cmd, cmd, client, log1)
         cluster_healthy = is_cluster_healthy(clients[0])
+        log1.info(f"cluster_health{cluster_healthy}")
     log1.info("io_test_workflow_4 completed")
     return 0
 
@@ -643,6 +646,7 @@ def io_test_workflow_5(
         log1.info(f"Maximum Fragmentation seen across OSDs : {max(frag_list)}")
         time.sleep(10)
         cluster_healthy = is_cluster_healthy(clients[0])
+        log1.info(f"cluster_health{cluster_healthy}")
     if cleanup == 1:
         with parallel() as p:
             for sv_name in sv_info_objs:
@@ -694,7 +698,8 @@ def io_test_workflow_6(
                     log1.info(ex)
 
                 sv_info_objs.update({sv_name: {"dir_path": dir_path, "client": client}})
-                cmd = f"{smallfile_cmd} --operation create --threads 5 --file-size 1024 --files 1000 --top {dir_path}"
+                cmd = f"{smallfile_cmd} --operation create --threads 5 --file-size 10 --dirs-per-dir 50 "
+                cmd += f"--same-dir false --files 1000000 --top {dir_path}"
                 log1.info(f"Executing cmd {cmd}")
                 p.spawn(run_cmd, cmd, client, log1)
 
@@ -705,7 +710,8 @@ def io_test_workflow_6(
                 cmd = f"find {dir_path} -name *{client.node.hostname}* > {dir_path}/tmp_file"
                 p.spawn(run_cmd, cmd, client, log1)
 
-                cmd = f"{smallfile_cmd} --operation delete --threads 5 --file-size 1024 --files 1000 --top {dir_path}"
+                cmd = f"{smallfile_cmd} --operation delete --threads 5 --file-size 10 --dirs-per-dir 50 "
+                cmd += f"--files 1000000 --top {dir_path}"
                 p.spawn(run_cmd, cmd, client, log1)
         if cleanup == 1:
             with parallel() as p:
@@ -716,6 +722,7 @@ def io_test_workflow_6(
                     log1.info(f"Executing cmd {cmd}")
                     p.spawn(run_cmd, cmd, client, log1)
         cluster_healthy = is_cluster_healthy(clients[0])
+        log1.info(f"cluster_health{cluster_healthy}")
     log1.info("io_test_workflow_6 completed")
     return 0
 
@@ -749,7 +756,8 @@ def io_test_workflow_7(
             client.exec_command(sudo=True, cmd=cmd)
         except BaseException as ex:
             log1.info(ex)
-        cmd = f"{smallfile_cmd} --operation create --threads 10 --file-size 10 --files 10000 --top {dir_path}"
+        cmd = f"{smallfile_cmd} --operation create --threads 5 --file-size 10 --files 1000000 --dirs-per-dir 50 "
+        cmd += f"--same-dir false --top {dir_path}"
         log1.info(f"Executing cmd {cmd}")
         client.exec_command(
             sudo=True,
@@ -796,12 +804,14 @@ def io_test_workflow_7(
                     dir_path = sv_info_objs[sv_name]["dir_path"]
                     client = sv_info_objs[sv_name]["client"]
                     for op in file_ops:
-                        cmd = f"{smallfile_cmd} --operation {op} --threads 10 --file-size 10 --files 10000 "
+                        cmd = f"{smallfile_cmd} --operation {op} --threads 5 --file-size 10 --files 1000000 "
+                        cmd += "--dirs-per-dir 50 --same-dir false "
                         cmd += f"--top {dir_path} --network-sync-dir /var/tmp/smallfile_dir_{rand_str}"
                         p.spawn(run_cmd, cmd, client, log1)
 
             retry_cnt += 1
         cluster_healthy = is_cluster_healthy(clients[0])
+        log1.info(f"cluster_health{cluster_healthy}")
 
     if mds_req_limit.value == 0:
         log1.error("MDS requests count not reach 6k")
@@ -921,6 +931,7 @@ def io_test_workflow_8(
             except BaseException as ex:
                 log.info(ex)
         cluster_healthy = is_cluster_healthy(clients[0])
+        log1.info(f"cluster_health{cluster_healthy}")
     if cleanup == 1:
         with parallel() as p:
             for sv_name in sv_info_objs:
@@ -1025,6 +1036,7 @@ def io_test_workflow_9(run_time, log_path, cleanup, clients, fs_system_utils, sv
             log1.info(ex)
         time.sleep(10)
         cluster_healthy = is_cluster_healthy(clients[0])
+        log1.info(f"cluster_health{cluster_healthy}")
     log1.info(f"cleanup:{cleanup}")
     log1.info("io_test_workflow_9 completed")
     return 0
@@ -1067,7 +1079,7 @@ def io_test_workflow_10(
                 cmd = f"mkdir {dir_path};"
                 cmd += "for i in create read append read delete create overwrite rename delete-renamed mkdir rmdir "
                 cmd += f"create symlink stat chmod ls-l delete cleanup ;do {smallfile_cmd} --operation $i --thread 2 "
-                cmd += f"--file-size 2048 --files 10 --top {dir_path}; done"
+                cmd += f"--file-size 2048 --files 10000 --dirs-per-dir 50 --same-dir false --top {dir_path}; done"
                 log1.info(f"Executing cmd {cmd}")
                 p.spawn(run_cmd, cmd, client, log1)
         if cleanup == 1:
@@ -1079,6 +1091,7 @@ def io_test_workflow_10(
                     cmd = f"rm -rf {dir_path}"
                     p.spawn(run_cmd, cmd, client, log1)
         cluster_healthy = is_cluster_healthy(clients[0])
+        log1.info(f"cluster_health{cluster_healthy}")
     log1.info("io_test_workflow_10 completed")
     return 0
 
@@ -1095,11 +1108,12 @@ def io_test_workflow_11(run_time, log_path, cleanup, clients, fs_system_utils, s
             client = i
             break
     mnt_pt = sv_info[sv_name]["mnt_pt1"]
-    log1.info(
-        f"Run large file download that does read/write locks, Repeat test until {run_time}hrs"
-    )
+
     run_time = 300
-    end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
+    log1.info(
+        f"Run large file download that does read/write locks, Repeat test until {run_time}secs"
+    )
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
     cluster_healthy = 1
     while datetime.datetime.now() < end_time and cluster_healthy:
         rand_str = "".join(
@@ -1121,6 +1135,7 @@ def io_test_workflow_11(run_time, log_path, cleanup, clients, fs_system_utils, s
             cmd = f"rm -rf {dir_path}"
             client.exec_command(sudo=True, cmd=cmd)
         cluster_healthy = is_cluster_healthy(clients[0])
+        log1.info(f"cluster_health{cluster_healthy}")
     log1.info("io_test_workflow_11 completed")
     return 0
 
