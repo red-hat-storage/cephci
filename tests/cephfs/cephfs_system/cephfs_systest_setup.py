@@ -180,14 +180,15 @@ def run(ceph_cluster, **kw):
                             mds_pin_cnt += 1
 
         log.info(f"CephFS System Test config : {cephfs_config}")
-        f = clients[0].remote_file(
-            sudo=True,
-            file_name=f"/home/cephuser/{file}",
-            file_mode="w",
-        )
-        f.write(json.dumps(cephfs_config, indent=4))
-        f.write("\n")
-        f.flush()
+        for client in clients:
+            f = client.remote_file(
+                sudo=True,
+                file_name=f"/home/cephuser/{file}",
+                file_mode="w",
+            )
+            f.write(json.dumps(cephfs_config, indent=4))
+            f.write("\n")
+            f.flush()
 
         log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
 
