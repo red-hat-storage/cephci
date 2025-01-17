@@ -213,9 +213,9 @@ tests:
       module: cephfs_logs_util.py
       name: cephfs-enable-logs
       config:
-       ENABLE_LOGS : 1
-       daemon_list : ['mds','client','osd','mgr','mon']
-       daemon_dbg_level : {'mds':10,'client':10,'osd':5,'mgr':5,'mon':5}
+        ENABLE_LOGS : 1
+        daemon_list : ['mds','client','osd','mgr','mon']
+        daemon_dbg_level : {'mds':10,'client':10,'osd':5,'mgr':5,'mon':5}
   - test:
       abort-on-fail: false
       desc: "Set size limit for log rotation"
@@ -231,8 +231,8 @@ tests:
       module: cephfs_crash_util.py
       name: cephfs-crash-setup
       config:
-       crash_setup : 1
-       daemon_list : ['mds','osd','mgr','mon']
+        crash_setup : 1
+        daemon_list : ['mds','osd','mgr','mon']
 
   - test:
       name: CephFS_System_test_1
@@ -244,6 +244,12 @@ tests:
             desc: Run Client IO workflows
             module: cephfs_system.cephfs_systest_client_io.py
             name: "CephFS System Test Client IO"
+        -
+          test:
+            abort-on-fail: false
+            desc: Run MDS config updates
+            module: cephfs_system.cephfs_config_update.py
+            name: "CephFS MDS config update"
         -
           test:
             abort-on-fail: false
@@ -275,7 +281,7 @@ tests:
             module: cephfs_system.cephfs_systest_client_io.py
             name: "CephFS System Test Client IO 7"
             config:
-            test_name : io_test_workflow_7
+              test_name : io_test_workflow_7
         -
           test:
             abort-on-fail: true
@@ -291,8 +297,8 @@ tests:
       module: cephfs_crash_util.py
       name: cephfs-crash-check
       config:
-       crash_check : 1
-       daemon_list : ['mds','osd','mgr','mon']
+        crash_check : 1
+        daemon_list : ['mds','osd','mgr','mon']
   -
     test:
       abort-on-fail: false
@@ -300,8 +306,8 @@ tests:
       module: cephfs_logs_util.py
       name: cephfs-disable-logs
       config:
-       DISABLE_LOGS : 1
-       daemon_list : ['mds','client','osd','mgr','mon']
+        DISABLE_LOGS : 1
+        daemon_list : ['mds','client','osd','mgr','mon']
   -
     test:
       name: Parse dbg logs for specific strings

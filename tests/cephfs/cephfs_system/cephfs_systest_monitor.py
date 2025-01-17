@@ -32,7 +32,7 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
 
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
-        mem_limit = config.get("mds_mem_limit", 80)
+        mem_limit = config.get("mds_mem_limit", 95)
         cpu_limit = config.get("mds_cpu_limit", 180)
         disk_limit = config.get("disk_limit", 80)
         mds_failover = config.get("mds_failover", 0)
@@ -81,7 +81,7 @@ def run(ceph_cluster, **kw):
                 log.error(
                     f"Cluster monitor returned error, check status : {status_str}"
                 )
-                update_system_status(client, "fail")
+                update_system_status(clients, "fail")
                 return 1
 
             time.sleep(60)
@@ -187,20 +187,21 @@ def get_disk_usage(client, fs_name):
     return max(disk_usage_list)
 
 
-def update_system_status(client, status):
-    file = "cephfs_systest_data.json"
-    f = client.remote_file(
-        sudo=True,
-        file_name=f"/home/cephuser/{file}",
-        file_mode="r",
-    )
-    cephfs_config = json.load(f)
-    cephfs_config.update({"CLUS_MONITOR": status})
-    f = client.remote_file(
-        sudo=True,
-        file_name=f"/home/cephuser/{file}",
-        file_mode="w",
-    )
-    f.write(json.dumps(cephfs_config, indent=4))
-    f.write("\n")
-    f.flush()
+def update_system_status(clients, status):
+    for client in clients:
+        file = "cephfs_systest_data.json"
+        f = client.remote_file(
+            sudo=True,
+            file_name=f"/home/cephuser/{file}",
+            file_mode="r",
+        )
+        cephfs_config = json.load(f)
+        cephfs_config.update({"CLUS_MONITOR": status})
+        f = client.remote_file(
+            sudo=True,
+            file_name=f"/home/cephuser/{file}",
+            file_mode="w",
+        )
+        f.write(json.dumps(cephfs_config, indent=4))
+        f.write("\n")
+        f.flush()

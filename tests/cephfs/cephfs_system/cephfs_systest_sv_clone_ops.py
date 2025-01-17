@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import random
+import string
 import threading
 import time
 import traceback
@@ -182,8 +183,13 @@ def sv_test_workflow_1(
     output = json.loads(out)
     group_name = output[0]["name"]
     sv_rm_list = []
-    for k in range(0, sv_cnt):
-        sv_name = f"systest_sv_{k}"
+    k = 0
+    while k < sv_cnt:
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(3))
+        )
+        sv_name = f"systest_sv_{rand_str}"
         subvolume = {
             "vol_name": fs_name,
             "subvol_name": sv_name,
@@ -192,7 +198,7 @@ def sv_test_workflow_1(
         fs_util.create_subvolume(client, **subvolume, validate=False)
         log1.info(f"Created {sv_name} on {group_name}")
         sv_rm_list.append(sv_name)
-    k += 1
+        k += 1
 
     end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     cluster_healthy = 1
@@ -213,8 +219,11 @@ def sv_test_workflow_1(
                         fs_util.remove_subvolume, client, **subvolume, validate=True
                     )
                     log1.info(f"started {sv_name} remove")
-                    cnt = k + n
-                    sv_name = f"systest_sv_{cnt}"
+                    rand_str = "".join(
+                        random.choice(string.ascii_lowercase + string.digits)
+                        for _ in list(range(3))
+                    )
+                    sv_name = f"systest_sv_{rand_str}"
                     subvolume1 = {
                         "vol_name": fs_name,
                         "subvol_name": sv_name,
@@ -271,8 +280,11 @@ def clone_test_workflow_2(
                     for i in sv_info:
                         sv_name = i
                     snap_name = sv_info[sv_name]["snap_name"]
-
-                    clone_name = f"{sv_name}_clone_{k}"
+                    rand_str = "".join(
+                        random.choice(string.ascii_lowercase + string.digits)
+                        for _ in list(range(3))
+                    )
+                    clone_name = f"{sv_name}_clone_{rand_str}"
                     clone_obj = {
                         "clone_name": clone_name,
                         "sv_name": sv_name,
@@ -307,7 +319,11 @@ def clone_test_workflow_2(
                 "group_name": clone_obj.get("group_name", None),
             }
             rm_cmd_list.append(clone_rm)
-            clone_name = f"{sv_name}_clone_{k}"
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(3))
+            )
+            clone_name = f"{sv_name}_clone_{rand_str}"
             clone_obj_new = {
                 "sv_name": clone_obj["sv_name"],
                 "clone_name": clone_name,
@@ -323,7 +339,6 @@ def clone_test_workflow_2(
                 "target_group_name": clone_obj.get("group_name", None),
             }
             clone_cmd_list.append(clone_create)
-            k += 1
             clone_rm_list.append(clone_obj_new)
         with parallel() as p:
             for clone_rm, clone_create in zip(rm_cmd_list, clone_cmd_list):
