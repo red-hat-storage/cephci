@@ -291,7 +291,9 @@ class CephFSSystemUtils(object):
         log_rotate_file = f"/etc/logrotate.d/ceph-{fsid}"
         log_rotate_file_bkp = f"/etc/logrotate.d/ceph-{fsid}.backup"
         log_rotate_tmp = "/home/cephuser/log_rotate_tmp"
-        crontab_str = f"2 * * * * /usr/sbin/logrotate {log_rotate_file} >/dev/null 2>&1"
+        crontab_str = (
+            f'"2 * * * * /usr/sbin/logrotate {log_rotate_file} >/dev/null 2>&1"'
+        )
         log_complete = []
         for log_node_list in [mds_nodes, mgr_nodes, osd_nodes, mon_nodes]:
             for log_node in log_node_list:
