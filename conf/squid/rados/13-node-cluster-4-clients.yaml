@@ -43,6 +43,8 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node5:
+        networks:
+          - shared_net_15
         role:
           - osd
           - nfs
@@ -66,6 +68,8 @@ globals:
         role:
           - client
       node8:
+        networks:
+          - shared_net_15
         role:
           - mon
           - mgr
@@ -73,6 +77,8 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node9:
+        networks:
+          - shared_net_15
         role:
           - osd
           - mon
@@ -80,12 +86,16 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node10:
+        networks:
+          - shared_net_15
         role:
           - osd
           - nfs
         no-of-volumes: 4
         disk-size: 15
       node11:
+        networks:
+          - shared_net_15
         role:
           - mon
           - mgr
@@ -93,16 +103,22 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node12:
+        networks:
+          - shared_net_15
         role:
           - osd-bak
         no-of-volumes: 4
         disk-size: 15
       node13:
+        networks:
+          - shared_net_15
         role:
           - osd-bak
         no-of-volumes: 4
         disk-size: 15
       node14:
+        networks:
+          - shared_net_15
         role:
           - rgw
           - mds
