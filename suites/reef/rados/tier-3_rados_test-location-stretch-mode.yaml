@@ -1,4 +1,4 @@
-# Use cluster-conf file: conf/reef/rados/stretch-mode-host-location-attrs.yaml
+# conf: 13-node-cluster-4-clients.yaml
 # Stretch mode tests performing site down scenarios
 
 # This test case is Openstack only and cannot be run in Baremetal env due to test constrains.
@@ -140,7 +140,7 @@ tests:
         id: client.1                      # client Id (<type>.<Id>)
         nodes:
           - node7:
-              release: 6
+              release: 7
         install_packages:
           - ceph-common
           - ceph-base
