@@ -4464,16 +4464,18 @@ os.system('sudo systemctl start  network')
                 clients.exec_command(sudo=True, cmd=create_path_cmd)
 
             log.info(f"Path exists or created successfully: {path}")
+            file = "create_files.sh"
+            clients.upload_file(
+                sudo=True,
+                src="tests/cephfs/cephfs_multi_mds/create_files.sh",
+                dst=f"/root/{file}",
+            )
 
-            for i in range(0, num_of_files, batch_size):
-                batch_end = min(i + batch_size, num_of_files)
-                for j in range(i, batch_end):
-                    file_path = os.path.join(path, f"file_{j}.txt")
-                    create_file_cmd = (
-                        f"echo 'Created files {j}' | sudo tee {file_path} > /dev/null"
-                    )
-                    clients.exec_command(sudo=True, cmd=create_file_cmd)
-                log.info(f"Created files {i} to {batch_end - 1}")
+            clients.exec_command(
+                sudo=True,
+                cmd=f"bash /root/{file} {path} {num_of_files} {batch_size}",
+                timeout=3600,
+            )
             log.info(f"Successfully created {num_of_files} files in {path}")
         except Exception as e:
             log.error(f"An error occurred: {e}")
