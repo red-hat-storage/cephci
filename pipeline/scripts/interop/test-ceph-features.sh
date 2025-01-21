@@ -71,7 +71,9 @@ fi
 
 declare -A TEST_SUITES
 
-if [[ $RHCS_VERSION =~ "7." ]]; then
+if [[ $RHCS_VERSION =~ "8." ]]; then
+    TEST_SUITES["suites/squid/interop/test-ceph-sanity.yaml"]="conf/squid/integrations/6node-all-roles.yaml"
+elif [[ $RHCS_VERSION =~ "7." ]]; then
     TEST_SUITES["suites/reef/interop/test-ceph-sanity.yaml"]="conf/reef/integrations/6node-all-roles.yaml"
 elif [[ $RHCS_VERSION =~ "6." ]]; then
     TEST_SUITES["suites/quincy/interop/test-ceph-sanity.yaml"]="conf/quincy/integrations/6node-all-roles.yaml"
