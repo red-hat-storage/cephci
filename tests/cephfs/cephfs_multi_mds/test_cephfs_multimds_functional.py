@@ -593,7 +593,7 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up the system")
         all_paths = kernel_subvol_mount_paths + fuse_subvol_mount_paths
         for path in all_paths:
-            clients[0].exec_command(sudo=True, cmd=f"rm -rf {path}*")
+            clients[0].exec_command(sudo=True, cmd=f"find {path} -type f -delete")
             clients[0].exec_command(sudo=True, cmd=f"umount -l {path}")
             clients[0].exec_command(sudo=True, cmd=f"rm -rf {path}")
         log.info("Delete Subvolumes for both filesystems")
