@@ -213,7 +213,6 @@ tests:
       name: Delete object version with id null
       desc: test_delete_object_version_id_null
       polarion-id: CEPH-83576431
-      comments: Known issue BZ-2303109 targeted to 7.1z
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
