@@ -186,7 +186,7 @@ tests:
         branch: ceph-reef
         kms_keyid: testKey01
       desc: S3tests
-      comments: Known issue BZ-2312113 targeted to 7.1z3
+      comments: Known issue BZ-2312113 targeted to 7.1z4
       destroy-cluster: false
       module: test_s3.py
       name: execute s3tests
