@@ -273,8 +273,6 @@ tests:
       module: exec.py
       name: get shared realm info on secondary
 
-
-
   # Test work flow
 
   - test:

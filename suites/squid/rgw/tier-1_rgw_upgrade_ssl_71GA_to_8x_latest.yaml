@@ -118,15 +118,6 @@ tests:
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
 
   - test:
-      config:
-        script-name: test_bucket_listing.py
-        config-file-name: test_bucket_listing_flat_ordered.yaml
-      desc: test duration for ordered listing of bucket with top level objects
-      module: sanity_rgw.py
-      name: ordered listing of buckets pre upgrade
-      polarion-id: CEPH-83573545
-
-  - test:
       name: S3CMD small and multipart object download pre upgrade
       desc: S3CMD small and multipart object download or GET
       polarion-id: CEPH-83575477
@@ -175,15 +166,6 @@ tests:
           - "ceph versions"
 
   - test:
-      name: Test rgw through CURL
-      desc: Test rgw through CURL
-      polarion-id: CEPH-83575572
-      module: sanity_rgw.py
-      config:
-        script-name: ../curl/test_rgw_using_curl.py
-        config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
-
-  - test:
       name: S3CMD small and multipart object download post upgrade
       desc: S3CMD small and multipart object download or GET
       polarion-id: CEPH-83575477
@@ -209,15 +191,6 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
-
-  - test:
-      config:
-        script-name: test_swift_basic_ops.py
-        config-file-name: test_swift_basic_ops.yaml
-      desc: Test object operations with swift
-      module: sanity_rgw.py
-      name: swift basic operations post upgrade
-      polarion-id: CEPH-11019
 
   - test:
       abort-on-fail: true

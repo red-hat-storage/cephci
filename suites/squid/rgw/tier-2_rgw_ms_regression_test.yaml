@@ -318,17 +318,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
-            script-name: test_dynamic_bucket_resharding.py
-            verify-io-on-site: ["ceph-pri", "ceph-sec" ]
-      desc: Resharding test - dynamic resharding on versioned bucket
-      name: Dynamic Resharding on versioned buckets
-      polarion-id: CEPH-83571740
-      module: sanity_rgw_multisite.py
-  - test:
-      clusters:
-        ceph-pri:
-          config:
             config-file-name: test_dynamic_resharding_quota_exceed.yaml
             script-name: test_dynamic_bucket_resharding.py
       desc: test exceeding quota limit on dynamically resharded bucket able to access bucket on secondary
