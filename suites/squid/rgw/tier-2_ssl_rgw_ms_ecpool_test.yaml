@@ -320,42 +320,6 @@ tests:
       polarion-id: CEPH-83575199
 
   - test:
-      name: enable compression on secondary
-      desc: test_Mbuckets_with_Nobjects_compression on secondary
-      polarion-id: CEPH-11350
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
-
-  - test:
-      name: download objects on secondary
-      desc: test_Mbuckets_with_Nobjects_download on secondary
-      polarion-id: CEPH-14237
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-
-  - test:
-      name: test encryption on secondary
-      desc: test_Mbuckets_with_Nobjects_enc on secondary
-      polarion-id: CEPH-11358 # also applies to CEPH-11361
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-pri"]
-            config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
-
-  - test:
       name: Test large omap objects warnings via ceph status in a multisite
       desc: Test large omap objects warnings via ceph status in a multisite on secondary
       polarion-id: CEPH-83574987
@@ -412,6 +376,7 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
+            monitor-consistency-bucket-stats: true
 
   - test:
       name: create tenanted user

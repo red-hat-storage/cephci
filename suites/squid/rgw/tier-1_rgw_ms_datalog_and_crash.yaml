@@ -351,8 +351,8 @@ tests:
       clusters:
         ceph-pri:
           config:
-            script-name:  test_Mbuckets_with_Nobjects.py
-            config-file-name:  test_datalog_trim_command.yaml
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_datalog_trim_command.yaml
 
   - test:
       name: bucket granular sync policy on bucket with flow directional and storage class
@@ -374,8 +374,8 @@ tests:
       clusters:
         ceph-pri:
           config:
-            script-name:  test_Mbuckets_with_Nobjects.py
-            config-file-name:  test_bucket_sync_cmd_crash.yaml
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_bucket_sync_cmd_crash.yaml
             verify-io-on-site: ["ceph-sec"]
 
   - test:
@@ -386,6 +386,6 @@ tests:
       clusters:
         ceph-sec:
           config:
-            script-name:  test_Mbuckets_with_Nobjects.py
-            config-file-name:  test_bucket_sync_cmd_crash.yaml
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_bucket_sync_cmd_crash.yaml
             verify-io-on-site: ["ceph-pri"]

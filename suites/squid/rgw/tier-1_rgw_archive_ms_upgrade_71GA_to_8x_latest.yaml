@@ -377,6 +377,7 @@ tests:
             command: start
             service: upgrade
             verify_cluster_health: true
+
   - test:
       name: Verify DBR feature enabled on upgraded cluster
       desc: Check DBR feature enabled on upgraded cluster

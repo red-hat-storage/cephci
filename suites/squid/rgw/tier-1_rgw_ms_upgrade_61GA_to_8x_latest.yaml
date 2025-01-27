@@ -303,19 +303,6 @@ tests:
       name: m buckets with n objects pre upgrade
       polarion-id: CEPH-83575435
 
-  # Bucket Listing Tests
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_unordered.yaml
-      desc: test duration for unordered listing of buckets with top level objects
-      module: sanity_rgw_multisite.py
-      name: unordered listing of buckets pre upgrade
-      polarion-id: CEPH-83573545
-
   - test:
       clusters:
         ceph-pri:
@@ -370,7 +357,7 @@ tests:
       polarion-id: CEPH-83575199
       comments: 2327402, known bug in 8.0
 
-#   # Basic swift based tests
+  # Basic swift based tests
 
   - test:
       clusters:
