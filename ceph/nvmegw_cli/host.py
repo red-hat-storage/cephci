@@ -19,6 +19,9 @@ class Host(ExecuteCommandMixin):
     def add(self, **kwargs):
         return self.run_nvme_cli("add", **kwargs)
 
+    def change_key(self, **kwargs):
+        return self.run_nvme_cli("change_key", **kwargs)
+
     def delete(self, **kwargs):
         return self.run_nvme_cli("del", **kwargs)
 
