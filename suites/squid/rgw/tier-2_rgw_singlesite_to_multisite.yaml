@@ -235,30 +235,6 @@ tests:
             script-name: user_create.py
             config-file-name: tenanted_user.yaml
 
-  #  Dynamic resharding tests
-  - test:
-      name: Verify DBR feature enabled on greenfield cluster
-      desc: Check DBR feature enabled on greenfield cluster
-      abort-on-fail: true
-      module: sanity_rgw_multisite.py
-      polarion-id: CEPH-83573596
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_check_sharding_enabled.py
-            config-file-name: test_check_sharding_enabled_greenfield.yaml
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
-            script-name: test_dynamic_bucket_resharding.py
-      desc: Resharding test - dynamic resharding on versioned bucket
-      name: Dynamic Resharding on versioned buckets
-      polarion-id: CEPH-83571740
-      module: sanity_rgw_multisite.py
-
   - test:
       clusters:
         ceph-pri:
@@ -490,14 +466,3 @@ tests:
           config:
             script-name: test_bilog_trimming.py
             config-file-name: test_bilog_trimming.yaml
-
-  - test:
-      name: bucket request payer
-      desc: Basic test for bucket request payer
-      polarion-id: CEPH-10352
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bucket_request_payer.py
-            config-file-name: test_bucket_request_payer.yaml

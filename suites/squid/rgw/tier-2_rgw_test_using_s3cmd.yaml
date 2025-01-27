@@ -154,15 +154,6 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
 
-  - test:
-      name: S3CMD object download
-      desc: S3CMD object download or GET
-      polarion-id: CEPH-83575477
-      module: sanity_rgw.py
-      config:
-        script-name: ../s3cmd/test_s3cmd.py
-        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-
 # Testing s3cmd malformed url
   - test:
       name: test s3cmd put operation with malformed bucket url

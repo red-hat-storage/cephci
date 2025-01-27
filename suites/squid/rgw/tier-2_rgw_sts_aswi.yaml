@@ -204,7 +204,6 @@ tests:
         script-name: test_sts_aswi.py
         config-file-name: test_sts_aswi_verify_role_policy_deny_actions.yaml
 
-
 # STS aswi tests with IBM Security Verify as Identity Provider
 
   - test:

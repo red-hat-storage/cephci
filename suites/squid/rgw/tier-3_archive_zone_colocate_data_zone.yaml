@@ -128,7 +128,6 @@ tests:
       name: deploy cluster
       polarion-id: CEPH-10117
 
-
   - test:
       abort-on-fail: true
       clusters:
@@ -245,7 +244,6 @@ tests:
       module: exec.py
       name: Colocate the archive zone with primary sone cluster
       polarion-id: CEPH-83573389
-
 
   # Test work flow
   - test:
