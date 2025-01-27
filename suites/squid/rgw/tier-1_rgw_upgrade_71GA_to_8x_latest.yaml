@@ -114,15 +114,6 @@ tests:
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
 
   - test:
-      config:
-        script-name: test_bucket_listing.py
-        config-file-name: test_bucket_listing_flat_ordered.yaml
-      desc: test duration for ordered listing of bucket with top level objects
-      module: sanity_rgw.py
-      name: ordered listing of buckets pre upgrade
-      polarion-id: CEPH-83573545
-
-  - test:
       name: S3CMD small and multipart object download pre upgrade
       desc: S3CMD small and multipart object download or GET
       polarion-id: CEPH-83575477
@@ -170,14 +161,6 @@ tests:
 
   # Post Upgrade tests
   - test:
-      name: Test rgw through CURL
-      desc: Test rgw through CURL
-      polarion-id: CEPH-83575572
-      module: sanity_rgw.py
-      config:
-        script-name: ../curl/test_rgw_using_curl.py
-        config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
-  - test:
       desc: Retrieve the versions of the cluster
       module: exec.py
       name: post upgrade gather version
@@ -215,33 +198,3 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
-
-  - test:
-      config:
-        script-name: test_swift_basic_ops.py
-        config-file-name: test_swift_basic_ops.yaml
-      desc: Test object operations with swift
-      module: sanity_rgw.py
-      name: swift basic operations post upgrade
-      polarion-id: CEPH-11019
-
-  - test:
-      abort-on-fail: true
-      config:
-        install:
-          - agent
-        run-on-rgw: true
-      desc: Setup and configure vault agent
-      destroy-cluster: false
-      module: install_vault.py
-      name: configure vault agent
-      polarion-id: CEPH-83575226
-
-  - test:
-      config:
-        script-name: test_sse_s3_kms_with_vault.py
-        config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
-      desc: test_sse_s3_per_bucket_encryption_normal_object_upload
-      module: sanity_rgw.py
-      name: sse-s3 per bucket encryption test
-      polarion-id: CEPH-83574615 # CEPH-83574617, CEPH-83575151

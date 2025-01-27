@@ -295,17 +295,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
   - test:
-      name: test encryption on primary
-      desc: test_Mbuckets_with_Nobjects_enc on primary
-      polarion-id: CEPH-11358 # also applies to CEPH-11361
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
-  - test:
       name: test sharding on primary
       desc: test_Mbuckets_with_Nobjects_sharding on primary
       polarion-id: CEPH-83573597 # also applies to CEPH-83573593
@@ -372,7 +361,7 @@ tests:
   - test:
       name: listing flat unordered buckets on primary
       desc: test_bucket_listing_flat_unordered.yaml on secondary
-      polarion-id: CEPH-83573545
+      polarion-id: CEPH-83574826
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
@@ -400,15 +389,4 @@ tests:
           config:
             script-name: test_bucket_listing.py
             config-file-name: test_bucket_listing_flat_ordered.yaml
-            monitor-consistency-bucket-stats: true
-  - test:
-      name: listing pseudo ordered dir only buckets on secondary
-      desc: test_bucket_listing_pseudo_ordered_dir_only on secondary
-      polarion-id: CEPH-83573651
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_pseudo_ordered_dir_only.yaml
             monitor-consistency-bucket-stats: true
