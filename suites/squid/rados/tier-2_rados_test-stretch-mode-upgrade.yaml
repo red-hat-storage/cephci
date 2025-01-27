@@ -23,7 +23,7 @@ tests:
         base_cmd_args:
           verbose: true
         args:
-          rhcs-version: 6.1
+          rhcs-version: 8.0
           release: rc
           mon-ip: node1
           orphan-initial-daemons: true
