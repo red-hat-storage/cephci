@@ -106,21 +106,22 @@ def install_prereq(
     log.info("cloud config to completed on " + ceph.hostname)
     _is_client = len(ceph.role.role_list) == 1 and "client" in ceph.role.role_list
 
-    # Update certs
-    update_ca_cert(
-        node=ceph,
-        cert_url="https://certs.corp.redhat.com/certs/2015-IT-Root-CA.pem",
-        out_file="RH-IT-Root-CA.crt",
-        check_ec=False,
-    )
+    if cloud_type.lower() == "baremetal":
+        # Update certs
+        update_ca_cert(
+            node=ceph,
+            cert_url="https://certs.corp.redhat.com/certs/Current-IT-Root-CAs.pem",
+            out_file="RH-IT-Root-CA.crt",
+            check_ec=False,
+        )
 
-    # Update CephCI Cert to all nodes. Useful when creating self-signed certificates.
-    update_ca_cert(
-        node=ceph,
-        cert_url="http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem",
-        out_file="cephqe-ca.pem",
-        check_ec=False,
-    )
+        # Update CephCI Cert to all nodes. Useful when creating self-signed certificates.
+        update_ca_cert(
+            node=ceph,
+            cert_url="http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem",
+            out_file="cephqe-ca.pem",
+            check_ec=False,
+        )
     distro_info = ceph.distro_info
     distro_ver = distro_info["VERSION_ID"]
     log.info("distro name: {name}".format(name=distro_info["NAME"]))
