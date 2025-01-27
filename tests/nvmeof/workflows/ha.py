@@ -46,6 +46,7 @@ class HighAvailability:
         self.host = Host(cluster=self.cluster, **{})
         self.nvme_pool = config["rbd_pool"]
         self.clients = []
+        self.initiators = {}
 
         for gateway in gateways:
             gw_node = get_node_by_id(self.cluster, gateway)
@@ -70,6 +71,16 @@ class HighAvailability:
                 LOG.info(f"[{node_id}] {gw.node.hostname} is NVMeoF Gateway node.")
                 return gw
         raise Exception(f"{node_id} doesn't match to any gateways provided...")
+
+    def get_or_create_initiator(self, node_id, nqn):
+        """Get existing NVMeInitiator or create a new one for each (node_id, nqn)."""
+        key = (node_id, nqn)  # Use both as dictionary key
+
+        if key not in self.initiators:
+            node = get_node_by_id(self.cluster, node_id)
+            self.initiators[key] = NVMeInitiator(node, self.gateways[0], nqn)
+
+        return self.initiators[key]
 
     def catogorize(self, gws):
         """Categorize to-be failed and running GWs.
@@ -788,7 +799,7 @@ class HighAvailability:
             lsblk_devs.extend(client.fetch_lsblk_nvme_devices())
 
         LOG.info(
-            f"Expcted NVMe Targets : {set(list(uuids))} Vs LSBLK devices: {set(list(lsblk_devs))}"
+            f"Expected NVMe Targets : {set(list(uuids))} Vs LSBLK devices: {set(list(lsblk_devs))}"
         )
         if sorted(uuids) != sorted(set(lsblk_devs)):
             raise IOError("Few Namespaces are missing!!!")
@@ -804,10 +815,10 @@ class HighAvailability:
             node: node10
         """
         for io_client in io_clients:
-            node = get_node_by_id(self.cluster, io_client["node"])
-            client = NVMeInitiator(node, self.gateways[0])
+            client = self.get_or_create_initiator(io_client["node"], io_client["nqn"])
             client.connect_targets(io_client)
-            self.clients.append(client)
+            if client not in self.clients:
+                self.clients.append(client)
 
     def fetch_namespaces(self, gateway, failed_ana_grp_ids=[]):
         """Fetch all namespaces for failed gateways.
