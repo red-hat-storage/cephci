@@ -1,7 +1,10 @@
+from copy import deepcopy
+
 from ceph.ceph_admin.orch import Orch
 from ceph.iscsi.gateway import Iscsi_Gateway
 from ceph.utils import get_node_by_id
 from tests.iscsi.workflows.initiator import Initiator
+from tests.iscsi.workflows.iscsi_utils import validate_gwcli_configuration
 from utility.log import Log
 from utility.utils import generate_unique_id
 
@@ -31,7 +34,7 @@ class ISCSI:
         iqn = config["iqn"]
         LOG.info(f"Configure IQN target - {iqn}")
         ceph_cluster = config["ceph_cluster"]
-        gw_node.gwcli.target.create(iqn)
+        LOG.info(gw_node.gwcli.target.create(iqn))
 
         # Add gateways
         for gw in config.get("gateways"):
@@ -40,14 +43,16 @@ class ISCSI:
                 "gateway_name": _gw.hostname,
                 "ip_addresses": _gw.ip_address,
             }
-            gw_node.gwcli.target.gateways.create(iqn, **gw_cfg)
+            LOG.info(gw_node.gwcli.target.gateways.create(iqn, **gw_cfg))
 
+        disks = {}
         # Add Hosts and its lun(s)
         if config.get("hosts"):
             for host in config["hosts"]:
                 client_iqn = host["client_iqn"]
                 host_args = {"client_iqn": client_iqn}
-                gw_node.gwcli.target.hosts.create(iqn, **host_args)
+                LOG.info(gw_node.gwcli.target.hosts.create(iqn, **host_args))
+                disks.update({client_iqn: []})
 
                 if host.get("disks"):
                     bdev_configs = host["disks"]
@@ -59,30 +64,41 @@ class ISCSI:
                         size = bdev_cfg["size"]
 
                         for num in range(bdev_cfg["count"]):
+                            disk_name = f"{name}-{num}"
                             args = {
                                 "pool": pool,
-                                "image": f"{name}-{num}",
+                                "image": disk_name,
                                 "size": size,
                             }
                             # Create disk
-                            gw_node.gwcli.disks.create(**args)
+                            LOG.info(gw_node.gwcli.disks.create(**args))
 
                             # Add Disk to target
-                            args = {"disk": f"{pool}/{name}-{num}"}
-                            gw_node.gwcli.target.disks.create(iqn, **args)
+                            img = f"{pool}/{disk_name}"
+                            args = {"disk": img}
+                            LOG.info(gw_node.gwcli.target.disks.add(iqn, **args))
+                            disks[client_iqn].append(img)
 
                             # Attach Disk to client
                             args = {
-                                "disk": f"{pool}/{name}-{num}",
+                                "disk": img,
                                 "size": size,
                                 "action": "add",
                             }
-                            gw_node.gwcli.target.hosts.client.disk(
-                                iqn, client_iqn, **args
+                            LOG.info(
+                                gw_node.gwcli.target.hosts.client.disk(
+                                    iqn, client_iqn, **args
+                                )
                             )
         out, err = gw_node.gwcli.list()
         LOG.error(f"err-{err}")
         LOG.debug(f"Output - {out}")
+
+        # Validate the iSCSI entities
+        if config.get("validate", True):
+            _config = deepcopy(config)
+            _config["disks"] = disks
+            validate_gwcli_configuration(self.cluster, gw_node, _config)
 
     def prepare_initiators(self):
         for initiator in self.config.get("initiators"):

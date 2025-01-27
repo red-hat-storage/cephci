@@ -81,9 +81,9 @@ tests:
             pool: rbd
         install: true
         cleanup:
+          - initiators
           - gateway
           - pool
-          - initiators
         targets:
           - iqn: iscsi-target1
             gateways:

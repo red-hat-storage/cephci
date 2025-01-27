@@ -6,7 +6,14 @@ from datetime import datetime
 from ceph.ceph_admin.orch import Orch
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_iscsi
+from utility.log import Log
 from utility.utils import generate_unique_id
+
+LOG = Log(__name__)
+
+
+class GWCLIConfigError(Exception):
+    pass
 
 
 def deploy_iscsi_service(ceph_cluster, config):
@@ -229,3 +236,50 @@ def format_iscsiadm_output(output):
                 targets[target].append(target_info)
 
     return targets
+
+
+def validate_gwcli_configuration(ceph_cluster, gwcli_node, config):
+    """Validate all entities existence using config export option."""
+    export_cfg, _ = gwcli_node.gwcli.export()
+    LOG.info(export_cfg)
+    export_cfg = json.loads(export_cfg)
+
+    # validate the iSCSI Targets
+    iqn = config["iqn"]
+    if iqn not in export_cfg["targets"]:
+        raise GWCLIConfigError(f"{iqn} Target Not found")
+    target = export_cfg["targets"][iqn]
+    LOG.info(f"[{iqn}] Target has created succesfully... {target}")
+
+    # Validate the iSCSI gateway portals
+    if config.get("gateways"):
+        for gw in config["gateways"]:
+            node = get_node_by_id(ceph_cluster, gw)
+
+            if node.hostname not in target["portals"]:
+                raise GWCLIConfigError(
+                    f"[{iqn}]: {node.hostname} Host not found in target"
+                )
+            LOG.info(
+                f"[{iqn}] Gateway {gw} created successfully.. {target['portals'][node.hostname]}"
+            )
+
+    # Validate the iSCSI target hosts
+    for host in config["hosts"]:
+        client_iqn = host["client_iqn"]
+        if client_iqn not in target["clients"]:
+            raise GWCLIConfigError(f"[{iqn}]: {client_iqn} Host not found in target")
+        LOG.info(
+            f"[{iqn}] - {client_iqn} Host created sucessfully - {target['clients'][client_iqn]}"
+        )
+
+        if host.get("disks"):
+            disks = config.get("disks")
+            _disks = sorted(disks[client_iqn])
+            host_luns = target["clients"][client_iqn]["luns"]
+
+            if _disks != sorted(host_luns):
+                raise GWCLIConfigError(
+                    f"[{iqn}]: Disks didn't match {host_luns} - {disks[client_iqn]}"
+                )
+            LOG.info(f"[{iqn}] - Luns created sucessfully - {host_luns}")
