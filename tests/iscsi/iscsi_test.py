@@ -27,6 +27,12 @@ def teardown(ceph_cluster, iscsi, rbd_obj, config):
         for initiator in iscsi.initiators:
             initiator.cleanup()
 
+    # Delete the Individual iSCSI Targets
+    if "targets" in config["cleanup"]:
+        gwnode = iscsi.gateways[0]
+        for target in config["targets"]:
+            gwnode.gwcli.target.delete(target["iqn"])
+
     # Delete the gateway
     if "gateway" in config["cleanup"]:
         delete_iscsi_service(ceph_cluster, config)

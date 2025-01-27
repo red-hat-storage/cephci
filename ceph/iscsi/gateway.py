@@ -65,6 +65,9 @@ class GWCLI:
     def list(self, **kwargs):
         return self.exec_gw_cli("ls", self.path, **kwargs)
 
+    def export(self):
+        return self.exec_gw_cli("export", self.path)
+
     class Disks:
         path = "/disks"
 
@@ -114,9 +117,11 @@ class GWCLI:
             def __init__(self, parent):
                 self.parent = parent
 
-            def create(self, iqn, **kwargs):
+            def add(self, iqn, **kwargs):
                 return self.parent.exec_gw_cli(
-                    "create", self.path.format(IQN=iqn), **kwargs
+                    "add",
+                    self.path.format(IQN=iqn),
+                    **kwargs,
                 )
 
             def delete(self, iqn, **kwargs):
