@@ -105,6 +105,7 @@ class FsUtils(object):
                 "gcc",
                 "python3-devel",
                 "git",
+                "postgresql postgresql-server postgresql-contrib",
             ]
             if build.endswith("7") or build.startswith("3"):
                 pkgs.extend(
@@ -125,6 +126,23 @@ class FsUtils(object):
             if "smallfile" not in out:
                 client.node.exec_command(
                     cmd="git clone https://github.com/bengland2/smallfile.git"
+                )
+
+            out, rc = client.node.exec_command(
+                sudo=True, cmd="rpm -qa | grep -w 'dbench'", check_ec=False
+            )
+            if "dbench" not in out:
+                log.info("Installing dbench")
+                client.node.exec_command(
+                    sudo=True,
+                    cmd=(
+                        "dnf config-manager "
+                        "--add-repo=https://download.fedoraproject.org/pub/epel/9/Everything/x86_64/"
+                    ),
+                )
+                client.node.exec_command(
+                    sudo=True,
+                    cmd="dnf install dbench -y --nogpgcheck",
                 )
         if (
             hasattr(clients[0].node, "vm_node")
@@ -3180,11 +3198,44 @@ os.system('sudo systemctl start  network')
                 long_running=True,
             )
 
+        def dbench():
+            log.info("IO tool scheduled : dbench")
+            io_params = {
+                "clients": random.choice(
+                    range(8, 33, 8)  # Randomly selects 8, 16, 24, or 32 for clients
+                ),
+                "duration": random.choice(
+                    range(60, 601, 60)
+                ),  # Randomly selects 60, 120, ..., 600 seconds
+                "testdir_prefix": "dbench_io_dir",
+            }
+            if kwargs.get("dbench_params"):
+                dbench_params = kwargs.get("dbench_params")
+                for io_param in io_params:
+                    if dbench_params.get(io_param):
+                        io_params[io_param] = dbench_params[io_param]
+
+            dir_suffix = "".join(
+                [
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in range(4)
+                ]
+            )
+            io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
+            client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
+
+            client.exec_command(
+                sudo=True,
+                cmd=f"dbench {io_params['clients']} -t {io_params['duration']} -D {io_path}",
+                long_running=True,
+            )
+
         io_tool_map = {
             "dd": dd,
             "smallfile": smallfile,
             "wget": wget,
             "file_extract": file_extract,
+            "dbench": dbench,
         }
 
         log.info(f"IO tools planned to run : {io_tools}")
@@ -3656,6 +3707,23 @@ os.system('sudo systemctl start  network')
             raise CommandFailed(f"Ceph Cluster is in {health_status} State")
         log.info("Ceph Cluster is Healthy")
         return health_status
+
+    def monitor_ceph_health(self, client, retry, interval):
+        """
+        Monitors Ceph health and prints ceph status at regular intervals
+        Args:
+            client : client node.
+            retry  : Number of times to retry the command
+            intervals: Time duration between the retries (in seconds)
+        Return:
+            Prints Status of the Ceph Health.
+        """
+        for i in range(1, retry + 1):
+            log.info(f"Running health status: Iteration: {i}")
+            self.get_ceph_health_status(client)
+            fs_status_info = self.get_fs_status_dump(client)
+            log.info(f"FS Status: {fs_status_info}")
+            time.sleep(interval)
 
     @retry(CommandFailed, tries=10, delay=30)
     def wait_for_host_online(self, client1, node):
