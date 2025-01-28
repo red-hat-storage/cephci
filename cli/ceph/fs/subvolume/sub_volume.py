@@ -1,6 +1,8 @@
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
 
+from .earmark import Earmark
+
 
 class SubVolume(Cli):
     """This module provides CLI interface for FS subvolume related operations"""
@@ -8,6 +10,7 @@ class SubVolume(Cli):
     def __init__(self, nodes, base_cmd):
         super(SubVolume, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} subvolume"
+        self.earmark = Earmark(nodes, base_cmd)
 
     def create(self, volume, subvolume, **kwargs):
         """
