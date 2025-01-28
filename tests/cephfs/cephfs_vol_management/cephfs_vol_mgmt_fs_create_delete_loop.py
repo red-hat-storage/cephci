@@ -4,6 +4,7 @@ import string
 import traceback
 
 from ceph.ceph import CommandFailed
+from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
@@ -66,6 +67,11 @@ def run(ceph_cluster, **kw):
         {
             "vol_name": fs_name,
             "subvol_name": f"{subvolume_name}_3",
+            "group_name": subvolume_group_name,
+        },
+        {
+            "vol_name": fs_name,
+            "subvol_name": f"{subvolume_name}_4",
             "group_name": subvolume_group_name,
         },
     ]
@@ -202,6 +208,58 @@ def run(ceph_cluster, **kw):
                 long_running=True,
             )
 
+            # Mounting Subvolume4 on Kernel - Run dbench
+            log.info(f"Mount subvolume {subvolume_name}_4 on Kernel Client")
+            kernel_mount_dir_dbench = f"/mnt/cephfs_kernel{mounting_dir}_4/"
+            mon_node_ips = fs_util.get_mon_node_ips()
+            subvol_path_kernel, rc = client1.exec_command(
+                sudo=True,
+                cmd=f"ceph fs subvolume getpath {fs_name} {subvolume_name}_4 {subvolume_group_name}",
+            )
+            fs_util.kernel_mount(
+                [client1],
+                kernel_mount_dir_dbench,
+                ",".join(mon_node_ips),
+                sub_dir=f"{subvol_path_kernel.strip()}",
+                extra_params=f",fs={fs_name}",
+            )
+
+            with parallel() as p:
+                log.info("Start Writing IO on the subvolume using dbench")
+
+                p.spawn(
+                    fs_util.run_ios_V1,
+                    client=client1,
+                    mounting_dir=kernel_mount_dir_dbench,
+                    io_tools=["dbench"],
+                    dbench_params={"duration": 40},
+                )
+
+                # Spawn the health monitoring task
+                p.spawn(
+                    fs_util.monitor_ceph_health,
+                    client=client1,
+                    retry=4,
+                    interval=10,  # Set the interval for health checks during parallel operation
+                )
+
+            # Get ceph fs dump output
+            fs_dump_dict = fs_util.collect_fs_dump_for_validation(client1, fs_name)
+            log.debug(f"Output of FS dump: {fs_dump_dict}")
+
+            # Get ceph fs get of specific volume
+            fs_get_dict = fs_util.collect_fs_get_for_validation(client1, fs_name)
+            log.debug(f"Output of FS get: {fs_get_dict}")
+
+            # Get ceph fs status
+            fs_status_dict = fs_util.collect_fs_status_data_for_validation(
+                client1, fs_name
+            )
+            log.debug(f"Output of FS status: {fs_status_dict}")
+
+            fs_health_status = fs_util.get_ceph_health_status(client1)
+            log.debug(f"Output of FS Health status: {fs_health_status}")
+
             for subvolume in subvolume_list:
                 subvolume_size_subvol = fs_util.get_subvolume_info(
                     client=client1, **subvolume
@@ -222,6 +280,12 @@ def run(ceph_cluster, **kw):
                 "umount",
                 kernel_clients=[client1],
                 mounting_dir=kernel_mount_dir,
+            )
+
+            fs_util.client_clean_up(
+                "umount",
+                kernel_clients=[client1],
+                mounting_dir=kernel_mount_dir_dbench,
             )
 
             client1.exec_command(sudo=True, cmd=f"rm -rf {nfs_mounting_dir}/*")
