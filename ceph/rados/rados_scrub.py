@@ -1,23 +1,23 @@
 """
-   This module contains the methods required for scrubbing.
+This module contains the methods required for scrubbing.
 
-   1.To set the parameters for scrubbing initially required the
-     cluster time and day details.get_cluster_date method provides
-     the details
+1.To set the parameters for scrubbing initially required the
+  cluster time and day details.get_cluster_date method provides
+  the details
 
-   2.set_osd_configuration method  used to set the configuration
-     parameters on the cluster.
+2.set_osd_configuration method  used to set the configuration
+  parameters on the cluster.
 
-   3.get_osd_configuration  method is used to get the configured parameters
-     on the cluster.
+3.get_osd_configuration  method is used to get the configured parameters
+  on the cluster.
 
-     NOTE: With set_osd_configuration & get_osd_configuration methods can
-          use to set the get the any OSD configuration parameters.
+  NOTE: With set_osd_configuration & get_osd_configuration methods can
+       use to set the get the any OSD configuration parameters.
 
-   4. get_pg_dump  method is used to get the pg dump details from the cluster
+4. get_pg_dump  method is used to get the pg dump details from the cluster
 
-   5. verify_scrub  method used for the verification of scheduled scrub
-      happened or not.
+5. verify_scrub  method used for the verification of scheduled scrub
+   happened or not.
 """
 
 import datetime
