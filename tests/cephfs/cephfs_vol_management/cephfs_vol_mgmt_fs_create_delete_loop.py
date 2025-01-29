@@ -97,7 +97,7 @@ def run(ceph_cluster, **kw):
         try:
             fs_util.prepare_clients(clients, build)
             fs_util.auth_list(clients)
-            client1 = clients[3]
+            client1 = clients[0]
 
             # Creation of FS
             fs_util.create_fs(client1, fs_name)
