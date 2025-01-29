@@ -1,22 +1,22 @@
 """Test case covered -
-    CEPH-9476- Primary cluster permanent failure,
-    Recreate the primary cluster and Re-establish mirror with newly created cluster as Primary.
+CEPH-9476- Primary cluster permanent failure,
+Recreate the primary cluster and Re-establish mirror with newly created cluster as Primary.
 
-    Pre-requisites :
-    1. Cluster must be up and running with capacity to create pool
-    (At least with 64 pgs)
-    2. We need atleast one client node with ceph-common package,
-    conf and keyring files
+Pre-requisites :
+1. Cluster must be up and running with capacity to create pool
+(At least with 64 pgs)
+2. We need atleast one client node with ceph-common package,
+conf and keyring files
 
-    Test case flows:
-    1) After site-a failure, promote site-b cluster as primary
-    2) Create a pool with same name as secondary pool has
-    3) Perform the mirroring bootstrap for cluster peers
-    4) copy and import bootstrap token to peer cluster
-    5) verify peer cluster got added successfully after failback
-    6) verify all the images from secondary mirrored to primary
-    7) Demote initially promoted secondary as primary
-    8) Promote newly created mirrored cluster as primary
+Test case flows:
+1) After site-a failure, promote site-b cluster as primary
+2) Create a pool with same name as secondary pool has
+3) Perform the mirroring bootstrap for cluster peers
+4) copy and import bootstrap token to peer cluster
+5) verify peer cluster got added successfully after failback
+6) verify all the images from secondary mirrored to primary
+7) Demote initially promoted secondary as primary
+8) Promote newly created mirrored cluster as primary
 """
 
 # import datetime

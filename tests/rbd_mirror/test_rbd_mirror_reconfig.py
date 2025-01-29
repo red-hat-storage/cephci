@@ -1,11 +1,11 @@
 """Test case covered -
-    CEPH-9511 - Attempt creating mirror in same cluster. This should be prevented
+CEPH-9511 - Attempt creating mirror in same cluster. This should be prevented
 
-    Test Case Flow:
-    1. Follow the latest official Block device Doc to configure RBD Mirroring
-    2. Attempt creating mirror in same cluster as primary and secondary this should be prevented
-    3. CLI should not provide any option to specify same cluster source and target
-    or it detects the condition where source and target cluster for the mirror same and prints an error message.
+Test Case Flow:
+1. Follow the latest official Block device Doc to configure RBD Mirroring
+2. Attempt creating mirror in same cluster as primary and secondary this should be prevented
+3. CLI should not provide any option to specify same cluster source and target
+or it detects the condition where source and target cluster for the mirror same and prints an error message.
 """
 
 from ceph.parallel import parallel
