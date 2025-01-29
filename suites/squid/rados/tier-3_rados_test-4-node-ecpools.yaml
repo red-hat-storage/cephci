@@ -479,7 +479,7 @@ tests:
 #        pool-2-type: erasure
 #        pool-1-conf: sample-pool-1
 #        pool-2-conf: sample-pool-5
-#        pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
+#        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
 #      desc: Migrating data between different pools. Scenario-2. RE -> EC
 
   - test:
@@ -491,7 +491,7 @@ tests:
         pool-2-type: replicated
         pool-1-conf: sample-pool-5
         pool-2-conf: sample-pool-3
-        pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-3. EC -> RE
 
   - test:
@@ -503,7 +503,7 @@ tests:
         pool-2-type: erasure
         pool-1-conf: sample-pool-6
         pool-2-conf: sample-pool-5
-        pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-4. Ec -> EC
 
 ## Blocked due to BZ 2172795. Bugzilla fixed.
@@ -516,7 +516,7 @@ tests:
 #          pool_configs:
 #            - type: erasure
 #              conf: sample-pool-5
-#          pool_configs_path: "conf/reef/rados/test-confs/pool-configurations.yaml"
+#          pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
 #      desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
 
 #  - test:
