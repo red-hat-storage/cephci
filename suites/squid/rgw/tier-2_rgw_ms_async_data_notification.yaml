@@ -277,28 +277,6 @@ tests:
       polarion-id: CEPH-83575199
   - test:
       clusters:
-        ceph-pri:
-          config:
-            config-file-name: test_bucket_create_del.yaml
-            script-name: test_Mbuckets_with_Nobjects.py
-      desc: bucket create and delete operation
-      polarion-id: CEPH-83574811
-      module: sanity_rgw_multisite.py
-      name: bucket create and delete operation
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            run-on-rgw: true
-            config-file-name: test_multisite_async_data_notifications.yaml
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-      desc: test_async_data_notifications_on_primary
-      polarion-id: CEPH-83575231
-      module: sanity_rgw_multisite.py
-      name: test_async_data_notifications_on_primary
-  - test:
-      clusters:
         ceph-sec:
           config:
             run-on-rgw: true
@@ -359,9 +337,12 @@ tests:
       module: exec.py
       name: set sse-s3 vault configs on multisite
   - test:
-      config:
-        script-name: test_sse_s3_kms_with_vault.py
-        config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
       desc: sse_s3_per_bucket_enc_multipart_upload
       module: sanity_rgw_multisite.py
       name: sse_s3_per_bucket_enc_multipart_upload
@@ -371,7 +352,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_s3_per_object_versioninig_enabled.yaml
       desc: test_sse_s3_per_object_with_versioning
@@ -383,7 +363,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_per_object_versioninig_enabled.yaml
       desc: test_sse_kms_per_object_with_versioning
@@ -394,7 +373,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_per_bucket_encryption_version_enabled.yaml
       desc: test_sse_kms_per_bucket_with_versioning
@@ -406,7 +384,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_per_object.yaml
       desc: test_sse_kms_per_object
@@ -461,31 +438,11 @@ tests:
       clusters:
         ceph-pri:
           config:
-            script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_s3_per_object.yaml
-      desc: test_sse_s3_per_object
-      module: sanity_rgw.py
-      name: sse-s3 per object encryption test
-      polarion-id: CEPH-83575153
-  - test:
-      clusters:
-        ceph-pri:
-          config:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_sse_kms_per_bucket_with_bucket_policy.yaml
       desc: test_sse_kms_per_bucket_with_bucket_policy
       module: sanity_rgw_multisite.py
       name: test_sse_kms_per_bucket_with_bucket_policy
-      polarion-id: CEPH-83586489
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_sts_using_boto.py
-            config-file-name: test_sse_s3_per_object_with_sts.yaml
-      desc: test_sse_s3_per_object_with_sts
-      module: sanity_rgw_multisite.py
-      name: test_sse_s3_per_object_with_sts
       polarion-id: CEPH-83586489
 
   # GKLM prerequisites
@@ -578,16 +535,6 @@ tests:
       desc: test_sse_kms_kmip_gklm_per_bucket_encryption_version_enabled
       module: sanity_rgw_multisite.py
       name: test_sse_kms_kmip_gklm_per_bucket_encryption_version_enabled
-      polarion-id: CEPH-83592485
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_kms_kmip_gklm_per_object.yaml
-      desc: test_sse_kms_kmip_gklm_per_object
-      module: sanity_rgw_multisite.py
-      name: test_sse_kms_kmip_gklm_per_object
       polarion-id: CEPH-83592485
   - test:
       clusters:

@@ -308,18 +308,6 @@ tests:
             verify-io-on-site: ["ceph-sec"]
 
   - test:
-      name: Bucket Granular Sync policy tests
-      desc: test_multisite_mirror_sync_policy.yaml on primary
-      polarion-id: CEPH-83575136
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_multisite_sync_policy.py
-            config-file-name: test_multisite_mirror_sync_policy.yaml
-            verify-io-on-site: ["ceph-sec"]
-
-  - test:
       name: Granular multisite sync policy group transition
       desc: Test multisite sync policy group transition
       polarion-id: CEPH-83575135

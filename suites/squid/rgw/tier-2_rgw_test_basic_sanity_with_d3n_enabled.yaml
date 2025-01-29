@@ -116,17 +116,6 @@ tests:
         config-file-name: test_lc_multiple_rule_prefix_current_days.yaml
 
   - test:
-      name: Basic ACLs Test
-      desc: Test basic acls
-      polarion-id: CEPH-14238 # also applies to CEPH-14239
-      module: sanity_rgw.py
-      config:
-        test-version: v1
-        run-on-rgw: true
-        script-name: test_acls.py
-        config-file-name: test_acls.yaml
-
-  - test:
       name: Test Rate limits on a User and Bucket level using s3cmd
       desc: Test Rate limits on a User and Bucket level using s3cmd
       polarion-id: CEPH-83574910

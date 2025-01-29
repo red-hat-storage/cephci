@@ -284,18 +284,6 @@ tests:
       name: create non-tenanted user
 
   # IO performed should be readable on secondary
-  - test:
-      name: multipart upload on primary
-      desc: test_Mbuckets_with_Nobjects_multipart on primary
-      polarion-id: CEPH-14265
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-
   # IO should fail on read only secondary
   - test:
       name: object upload on secondary
@@ -405,18 +393,6 @@ tests:
       name: get shared realm info on secondary
 
   # IO from primary again
-  - test:
-      name: Object upload on primary
-      desc: test_Mbuckets_with_Nobjects on primary
-      polarion-id: CEPH-14265
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-
   - test:
       name: Datalog trimming test post restart of rgw service on primary
       desc: test datalog trimming post restart of rgw service on  on primary

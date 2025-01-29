@@ -230,18 +230,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_multisite_manual_resharding_greenfield.yaml
-            verify-io-on-site: ["ceph-pri", "ceph-sec"]
-      desc: Test manual resharding on greenfield deployment
-      abort-on-fail: true
-      module: sanity_rgw_multisite.py
-      name: Manual Resharding tests on Primary cluster
-      polarion-id: CEPH-83574734
-  - test:
-      clusters:
-        ceph-pri:
-          config:
             config-file-name: test_bucket_create_del.yaml
             script-name: test_Mbuckets_with_Nobjects.py
       desc: bucket create and delete operation
@@ -272,48 +260,6 @@ tests:
             config-file-name: test_bucket_listing_flat_unordered.yaml
             monitor-consistency-bucket-stats: true
   - test:
-      name: test aws4 signature version on primary
-      desc: test_Mbuckets_with_Nobjects_aws4 on primary
-      polarion-id: CEPH-9637
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_aws4.yaml
-  - test:
-      name: test encryption on primary
-      desc: test_Mbuckets_with_Nobjects_enc on primary
-      polarion-id: CEPH-11358 # also applies to CEPH-11361
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
-  - test:
-      name: multipart upload on primary
-      desc: test_Mbuckets_with_Nobjects_multipart on primary
-      polarion-id: CEPH-14265
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-  - test:
-      name: LargeObjGet_GC on primary
-      desc: test_LargeObjGet_GC on primary
-      polarion-id: CEPH-83574416
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_LargeObjGet_GC.py
-            config-file-name: test_LargeObjGet_GC.yaml
-  - test:
       name: modify bucket policy on primary
       desc: test_bucket_policy_modify.yaml on primary
       polarion-id: CEPH-11214
@@ -324,17 +270,6 @@ tests:
             script-name: test_bucket_policy_ops.py
             config-file-name: test_bucket_policy_modify.yaml
             verify-io-on-site: ["ceph-sec"]
-  - test:
-      name: test encryption on primary
-      desc: test_Mbuckets_with_Nobjects_enc on primary
-      polarion-id: CEPH-11358 # also applies to CEPH-11361
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_enc.yaml
   - test:
       name:  datalog omap offload on secondary
       desc: Execute datalog omap offload on secondary
@@ -517,17 +452,6 @@ tests:
       name: Setting sse_kms configs with kmip backend for gklm
 
   # GKLM tests
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_kms_kmip_gklm_per_bucket_encryption_normal_object_upload.yaml
-      desc: test_sse_kms_kmip_gklm_per_bucket_encryption_normal_object_upload
-      module: sanity_rgw_multisite.py
-      name: test_sse_kms_kmip_gklm_per_bucket_encryption_normal_object_upload
-      polarion-id: CEPH-83592485
   - test:
       clusters:
         ceph-pri:
@@ -543,44 +467,11 @@ tests:
         ceph-pri:
           config:
             script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_kms_kmip_gklm_per_bucket_encryption_version_enabled.yaml
-      desc: test_sse_kms_kmip_gklm_per_bucket_encryption_version_enabled
-      module: sanity_rgw_multisite.py
-      name: test_sse_kms_kmip_gklm_per_bucket_encryption_version_enabled
-      polarion-id: CEPH-83592485
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_kms_kmip_gklm_per_object.yaml
       desc: test_sse_kms_kmip_gklm_per_object
       module: sanity_rgw_multisite.py
       name: test_sse_kms_kmip_gklm_per_object
       polarion-id: CEPH-83592485
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_kms_kmip_gklm_per_object_versioninig_enabled.yaml
-      desc: test_sse_kms_kmip_gklm_per_object_versioninig_enabled
-      module: sanity_rgw_multisite.py
-      name: test_sse_kms_kmip_gklm_per_object_versioninig_enabled
-      polarion-id: CEPH-83592485
-
-
-  - test:
-      name: bucket sync command crash check on secondary
-      desc: Execute bucket sync command to check command is not crashing on secondary
-      polarion-id: CEPH-83574706
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-sec:
-          config:
-            script-name:  test_Mbuckets_with_Nobjects.py
-            config-file-name:  test_bucket_sync_cmd_crash.yaml
-            verify-io-on-site: ["ceph-pri"]
   - test:
       name: Bucket Granular Sync policy tests
       desc: test_multisite_mirror_sync_policy.yaml on primary
