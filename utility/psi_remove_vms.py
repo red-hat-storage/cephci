@@ -1,14 +1,14 @@
 """
-    Utility to cleanup instances in RHOS-D environment that have crossed the maximum
-    allowed duration and instances that are in error status. There are multiple
-    projects/tenants under CephQE purview and each of them have a different configuration.
+Utility to cleanup instances in RHOS-D environment that have crossed the maximum
+allowed duration and instances that are in error status. There are multiple
+projects/tenants under CephQE purview and each of them have a different configuration.
 
-    For example, ceph-jenkins has the least allowable time as the intent is to enable
-    the pipeline is executed under a stable environment. The durations for each project
-    are
-        ceph-jenkins        3 days
-        ceph-ci             1 week
-        ceph-core           1 weeks
+For example, ceph-jenkins has the least allowable time as the intent is to enable
+the pipeline is executed under a stable environment. The durations for each project
+are
+    ceph-jenkins        3 days
+    ceph-ci             1 week
+    ceph-core           1 weeks
 """
 
 import smtplib

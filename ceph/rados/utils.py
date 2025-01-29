@@ -1,9 +1,9 @@
 """
-   This module contains the wrapper functions to perform general ceph cluster modification operations.
-    1. Remove OSD
-    2. Add OSD
-    3. Set osd out
-    3. Zap device path
+This module contains the wrapper functions to perform general ceph cluster modification operations.
+ 1. Remove OSD
+ 2. Add OSD
+ 3. Set osd out
+ 3. Zap device path
 """
 
 from json import loads

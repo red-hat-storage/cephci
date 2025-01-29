@@ -1,23 +1,23 @@
 """Perform cluster-related operations along with
-    immutable object cache test parallel.
+immutable object cache test parallel.
 
-    Pre-requisites :
-    We need atleast one client node with ceph-common and fio packages,
-    conf and keyring files
+Pre-requisites :
+We need atleast one client node with ceph-common and fio packages,
+conf and keyring files
 
-    Test cases covered -
-    CEPH-83574132 - Immutable object cache with cluster operations.
+Test cases covered -
+CEPH-83574132 - Immutable object cache with cluster operations.
 
-    Test Case Flow -
+Test Case Flow -
 
-    1)Create multiple rbd pool and multiple images using rbd commands
-    2)Write some data to the images using FIO
-    3)Create multiple clones images in different pools from the multiple parent image created
-    4)Read the cloned images of different pools in parallel and check the cache status
-    5) Restart the Mon, OSD, and cluster target and parallelly run the IO and cache status
-    6) Remove mon and add mon back to cluster with parallelly run the IO and cache status
-    8) check ceph health status
-    9) Perform test on both Replicated and EC pool
+1)Create multiple rbd pool and multiple images using rbd commands
+2)Write some data to the images using FIO
+3)Create multiple clones images in different pools from the multiple parent image created
+4)Read the cloned images of different pools in parallel and check the cache status
+5) Restart the Mon, OSD, and cluster target and parallelly run the IO and cache status
+6) Remove mon and add mon back to cluster with parallelly run the IO and cache status
+8) check ceph health status
+9) Perform test on both Replicated and EC pool
 """
 
 import time

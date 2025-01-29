@@ -1,16 +1,16 @@
 """Test case covered -
-    CEPH-9520 - When a both Pool and image based mirroring is established,
-    verify if change of any image features in primary site should reflect
-    on remote site upon modification.
+CEPH-9520 - When a both Pool and image based mirroring is established,
+verify if change of any image features in primary site should reflect
+on remote site upon modification.
 
-    Test Case Flow:
-    1. Create a pool on both clusters.
-    2. Configure mirroring (peer bootstrap) between two clusters.
-    3. Enable pool mode journal based mirroring on the pool respectively.
-    4. Verify if change of any image features in primary site gets mirrored in secondary site.
-    5. Enable image mode snapshot based mirroring on the pool respectively.
-    6. Verify if change of any image features in primary site gets mirrored in secondary site.
-    7. perform test on both replicated and EC pool
+Test Case Flow:
+1. Create a pool on both clusters.
+2. Configure mirroring (peer bootstrap) between two clusters.
+3. Enable pool mode journal based mirroring on the pool respectively.
+4. Verify if change of any image features in primary site gets mirrored in secondary site.
+5. Enable image mode snapshot based mirroring on the pool respectively.
+6. Verify if change of any image features in primary site gets mirrored in secondary site.
+7. perform test on both replicated and EC pool
 """
 
 import datetime
