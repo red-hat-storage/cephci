@@ -1,4 +1,4 @@
-""" Module to verify scenarios related to BlueStore config changes"""
+"""Module to verify scenarios related to BlueStore config changes"""
 
 import time
 
