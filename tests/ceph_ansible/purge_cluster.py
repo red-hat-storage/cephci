@@ -1,4 +1,4 @@
-""" Purges the Ceph the cluster"""
+"""Purges the Ceph the cluster"""
 
 import datetime
 import re

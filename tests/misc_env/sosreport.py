@@ -1,4 +1,4 @@
-""" Collecting logs using sosreport from all nodes in cluster Except Client Node."""
+"""Collecting logs using sosreport from all nodes in cluster Except Client Node."""
 
 import re
 
