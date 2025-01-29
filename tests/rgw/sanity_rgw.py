@@ -101,8 +101,6 @@ def run(ceph_cluster, **kw):
         else config.get("run-on-haproxy", False)
     )
 
-    distro_version_id = rgw_node.distro_info["VERSION_ID"]
-
     if run_on_rgw:
         exec_from = rgw_node
         append_param = ""
@@ -116,14 +114,13 @@ def run(ceph_cluster, **kw):
     # install extra package which are test specific
     if extra_pkgs:
         log.info(f"got extra pkgs: {extra_pkgs}")
-        if isinstance(extra_pkgs, dict):
-            _pkgs = extra_pkgs.get(int(distro_version_id[0]))
-            pkgs = " ".join(_pkgs)
-        else:
-            pkgs = " ".join(extra_pkgs)
+        package_path = "/root/rgw_rpms"
+        pkgs_str = ""
+        for pkg in extra_pkgs:
+            pkgs_str += f"{package_path}/{pkg}.rpm "
 
         exec_from.exec_command(
-            sudo=True, cmd=f"yum install -y {pkgs}", long_running=True
+            sudo=True, cmd=f"yum install -y {pkgs_str}", long_running=True
         )
 
     log.info("Flushing iptables")
