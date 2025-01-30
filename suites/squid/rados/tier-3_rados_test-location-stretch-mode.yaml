@@ -137,7 +137,11 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node7
+        nodes:
+          - node7
+          - node15
+          - node16
+          - node17
         install_packages:
           - ceph-common
           - ceph-base
