@@ -416,6 +416,7 @@ class RadosOrchestrator:
                 - rados_write_duration -> duration of write operation (int)
                 - byte_size -> size of objects to be written (str)
                     eg : 10KB, default - 4096KB
+                - num_threads -> Number of threads to be used(int)
                 - max_objs -> max number of objects to be written (int)
                 - verify_stats -> arg to control whether obj stats need to
                   be verified after write (bool) | default: True
@@ -427,6 +428,7 @@ class RadosOrchestrator:
         """
         duration = kwargs.get("rados_write_duration", 200)
         byte_size = kwargs.get("byte_size", 4096)
+        num_threads = kwargs.get("num_threads")
         max_objs = kwargs.get("max_objs")
         verify_stats = kwargs.get("verify_stats", True)
         check_ec = kwargs.get("check_ec", True)
@@ -436,6 +438,8 @@ class RadosOrchestrator:
         if nocleanup:
             cmd = f"{cmd} --no-cleanup"
         org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
+        if num_threads:
+            cmd = f"{cmd} -t {num_threads}"
         if max_objs:
             cmd = f"{cmd} --max-objects {max_objs}"
         if kwargs.get("background"):
@@ -1173,6 +1177,21 @@ class RadosOrchestrator:
             self.node.shell([cmd])
         except Exception:
             log.error("Error while enabling config to log into file")
+            return False
+        return True
+
+    def disable_file_logging(self) -> bool:
+        """
+        Disable the cluster logging
+        Returns: True -> pass, False -> fail
+        """
+        try:
+            cmd = "ceph config set global log_to_file false"
+            self.node.shell([cmd])
+            cmd = "ceph config set global mon_cluster_log_to_file false"
+            self.node.shell([cmd])
+        except Exception:
+            log.error("Error while disabling config to log into file")
             return False
         return True
 
