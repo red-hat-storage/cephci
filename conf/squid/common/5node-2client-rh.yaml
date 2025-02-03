@@ -35,6 +35,7 @@ globals:
           - grafana
           - mds
           - osd
+          - iscsi-gw
         no-of-volumes: 6
         disk-size: 40
       node5:
@@ -44,6 +45,7 @@ globals:
           - prometheus
           - mds
           - osd
+          - iscsi-gw
         no-of-volumes: 6
         disk-size: 40
       node6:
