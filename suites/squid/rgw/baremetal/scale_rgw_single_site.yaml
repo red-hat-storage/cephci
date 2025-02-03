@@ -82,8 +82,8 @@ tests:
           - node5
           - node6
         rgw_endpoints:
-          - "node1:80"
-          - "node2:80"
+          - "node1:8080"
+          - "node2:8080"
       desc: "Configure HAproxy"
       module: haproxy.py
       name: "Configure HAproxy"
