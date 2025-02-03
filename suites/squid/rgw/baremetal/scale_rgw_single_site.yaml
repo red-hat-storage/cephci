@@ -146,3 +146,12 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_disable_and_enable_dynamic_resharding_with_10k_bucket.yaml
         timeout: 9000
+  - test:
+      name: Test bucket listing not cause abnormal client IO
+      desc: Test bucket listing not cause abnormal client IO
+      polarion-id: CEPH-83605383
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_fake_mp.yaml
+      comments: Bug 2329090
