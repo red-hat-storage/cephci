@@ -634,6 +634,14 @@ class CephfsMirroringUtils(object):
             json.JSONDecodeError: If there's an error decoding JSON from the Ceph mirror status response.
         """
         log.info("Get peer mirror status")
+        daemon_names = self.get_daemon_name(self.source_clients[0])
+
+        asok_files = self.get_asok_file(cephfs_mirror_node, fsid, daemon_names)
+        log.info(f"Admin Socket file of cephfs-mirror daemon : {asok_files}")
+        filesystem_id = self.get_filesystem_id_by_name(self.source_clients[0], fs_name)
+        log.info(f"filesystem id of {fs_name} is : {filesystem_id}")
+        peer_uuid = self.get_peer_uuid_by_name(self.source_clients[0], fs_name)
+        log.info(f"peer uuid of {fs_name} is : {peer_uuid}")
         for node, asok in asok_file.items():
             asok[0].exec_command(
                 sudo=True, cmd="dnf install -y ceph-common --nogpgcheck"
