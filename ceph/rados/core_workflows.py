@@ -18,6 +18,7 @@ from collections import namedtuple
 
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
+from utility import utils
 from utility.log import Log
 
 log = Log(__name__)
@@ -4695,4 +4696,96 @@ EOF"""
                 )
                 return False
         log.info(f" All {service_type} Service in unmanaged={unmanaged} state. Pass")
+        return True
+
+    def run_background_iops(self, ceph_client, duration=600):
+        """
+        Method to trigger background IOPS on the cluster for a specific
+        duration using desired client
+        Note: Currently supports only RGW clientr
+        Args:
+            ceph_client: rgw | cephfs | rbd
+            duration: time for which I/Os should run (in secs)
+        returns:
+            Pass -> True, Fail -> false
+        """
+        # To-do: add support for cephfs and rbd
+        log.info(f"Starting background IOs with {ceph_client} client")
+        config = dict()
+        try:
+            if ceph_client == "rgw":
+                # choose RGW node
+                rgw_node = self.ceph_cluster.get_nodes(role="rgw")[0]
+                rgw_node_ip = rgw_node.ip_address
+
+                # rgw qe scripts
+                config["git-url"] = (
+                    "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+                )
+                home_dir_path = "/home/cephuser"
+                test_folder = "rgw-ms-tests"
+                test_folder_path = f"{home_dir_path}/{test_folder}"
+
+                # flushing iptables
+                log.info("flushing iptables")
+                self.client.exec_command(
+                    cmd="sudo iptables -F", check_ec=False, sudo=True
+                )
+
+                # setup necessary directory
+                out, _ = self.client.exec_command(
+                    cmd=f"ls -l {test_folder_path}", check_ec=False, sudo=True
+                )
+                if not out:
+                    self.client.exec_command(
+                        cmd=f"sudo mkdir -p {test_folder_path}", sudo=True
+                    )
+
+                # clone qe script repo
+                out, _ = self.client.exec_command(
+                    cmd=f"ls -l {test_folder_path}/ceph-qe-scripts",
+                    check_ec=False,
+                    sudo=True,
+                )
+                if not out:
+                    utils.clone_the_repo(config, self.client, test_folder_path)
+
+                # setup venv for running rgw scripts
+                out, _ = self.client.exec_command(cmd="ls -l venv", check_ec=False)
+                if not out:
+                    setup_cmds = [
+                        "python3 -m venv venv",
+                        "venv/bin/pip install --upgrade pip",
+                        f"venv/bin/pip install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt",
+                    ]
+                    for _cmd in setup_cmds:
+                        self.client.exec_command(cmd=_cmd, sudo=True)
+                cfg_path = (
+                    "/home/cephuser/rgw-ms-tests/ceph-qe-scripts/rgw/v2/tests/"
+                    + "s3_swift/multisite_configs/test_Mbuckets_with_Nobjects.yaml"
+                )
+
+                script_path = (
+                    "/home/cephuser/rgw-ms-tests/ceph-qe-scripts/rgw/v2/tests/"
+                    + "s3_swift/test_Mbuckets_with_Nobjects.py"
+                )
+
+                python_path = "/home/cephuser/venv/bin/python"
+
+                # Trial run 1 - Time taken to write 1000 objects in 2 buckets: 45 mins
+                # Trial run 2 - Time taken to write 250 objects in 2 buckets: 6 mins
+                # In 60 secs we will write approx 35-40 objects
+                obj_count = int(40 * duration / 60)
+                # modify object count to 1000
+                _cmd = f"sed -i 's/objects_count: [0-9]*/objects_count: {obj_count}/g' {cfg_path}"
+                self.client.exec_command(cmd=_cmd, sudo=True)
+
+                run_cmd = f"sudo {python_path} {script_path} -c {cfg_path} --rgw-node {rgw_node_ip} &> /dev/null &"
+                self.client.exec_command(cmd=run_cmd, sudo=True, check_ec=False)
+                # blind sleep to let rgw ios start
+                time.sleep(120)
+        except Exception as e:
+            log.error(f"Execution failed with exception: {e.__doc__}")
+            log.exception(e)
+            return False
         return True
