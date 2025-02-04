@@ -34,6 +34,7 @@ from cli.performance.memory_and_cpu_utils import (
     upload_mem_and_cpu_logger_script,
 )
 from utility import sosreport
+from utility import subcommands
 from utility.log import Log
 from utility.polarion import post_to_polarion
 from utility.retry import retry
@@ -90,6 +91,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
         [--skip-sos-report]
+        [--skip-subcommands]
         [--skip-tc <items>]
         [--monitor-performance]
         [--disable-console-log]
@@ -153,6 +155,7 @@ Options:
                                     rhel images for Interop runs
   --skip-sos-report                 Enables to collect sos-report on test suite failures
                                     [default: false]
+  --skip-subcommands                to capture the cli commands output                  
   --skip-tc <items>                 skip test case provided in comma seperated fashion
   --monitor-performance             Monitor performance and CPU usage on all/required nodes
                                     for every test and collects data to specified dir
@@ -486,6 +489,7 @@ def run(args):
     enable_eus = args.get("--enable-eus")
     skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms")
     skip_sos_report = args.get("--skip-sos-report")
+    skip_subcommands = args.get("--skip-subcommands")
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
@@ -961,6 +965,10 @@ def run(args):
         if "/ceph/cephci-jenkins" in run_dir
         else run_dir
     )
+    print("*" * 50)
+    print(url_base)
+    print("*" * 50)
+
     log.info("\nAll test logs located here: {base}".format(base=url_base))
 
     log.close_and_remove_filehandlers()
@@ -985,6 +993,10 @@ def run(args):
         "instance-name": instances_name,
         "invoked-by": trigger_user,
     }
+
+    print("***" * 50)
+    print(test_run_metadata)
+    print("***" * 50)
 
     if xunit_results:
         create_xunit_results(suite_name, tcs, test_run_metadata)
@@ -1029,6 +1041,33 @@ def run(args):
             # This can be Removed as sos report will have this details as well
             get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
+
+    if not skip_subcommands:
+        log.info("SUBCOMMMANDS started ")
+        # Split the original path into components
+        parts = url_base.split("/")
+
+        try:
+            # Find the index after 'ceph-builds'
+            index = parts.index("ceph-builds")
+        except ValueError:
+            raise ValueError("The path does not contain 'ceph-builds'")
+
+        # Extract relevant parts and filter out 'logs'
+        relevant_parts = parts[index + 1 :]
+        filtered_parts = [part for part in relevant_parts if part not in ("logs", "")]
+
+        # Construct the new path
+        new_path = "/" + "/".join(filtered_parts)
+
+        # Base URL
+        base_url = "http://magna002.ceph.redhat.com/cephci-jenkins/results"
+
+        # Combine to get final URL
+        final_url = base_url + new_path
+        print("The Final URL", final_url)
+        subcommands.run(final_url, "rgw")
+        log.info("subcommands runned sucessfully")
 
     return jenkins_rc
 
