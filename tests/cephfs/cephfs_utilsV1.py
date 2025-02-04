@@ -105,7 +105,6 @@ class FsUtils(object):
                 "gcc",
                 "python3-devel",
                 "git",
-                "postgresql postgresql-server postgresql-contrib",
             ]
             if build.endswith("7") or build.startswith("3"):
                 pkgs.extend(
@@ -3251,6 +3250,7 @@ os.system('sudo systemctl start  network')
                 ),  # Randomly selects 60, 120, ..., 600 seconds
                 "testdir_prefix": "postgres_io_dir",
                 "db_name": "",
+                "container_name": "postgres-container",
             }
 
             if kwargs.get("postgresIO_params"):
@@ -3271,7 +3271,7 @@ os.system('sudo systemctl start  network')
             # Initialize mode
             client.exec_command(
                 sudo=True,
-                cmd=f"pgbench -i --scale={io_params['scale']} -U postgres -d {io_params['db_name']}",
+                cmd=f"podman exec -it {io_params['container_name']} bash -c 'pgbench -i --scale={io_params['scale']} -U pguser -d {io_params['db_name']}'",
                 long_running=True,
             )
 
@@ -3279,10 +3279,11 @@ os.system('sudo systemctl start  network')
             client.exec_command(
                 sudo=True,
                 cmd=(
-                    f"pgbench -c {io_params['clients']} "
+                    f"podman exec -it {io_params['container_name']} bash -c "
+                    f"'pgbench -c {io_params['clients']} "
                     f"-j {io_params['workers']} "
                     f"-T {io_params['duration']} "
-                    f"-U postgres -d {io_params['db_name']}"
+                    f"-U postgres -d {io_params['db_name']}'"
                 ),
                 long_running=True,
             )
@@ -3603,7 +3604,7 @@ os.system('sudo systemctl start  network')
         # Setup Crefi pre-requisites : pyxattr
         node.exec_command(sudo=True, cmd="pip3 install pyxattr", long_running=True)
 
-    def setup_postgresql_IO(self, client, mount_dir, db_name):
+    def setup_postgresql_IO(self, client, mount_dir, container_name, db_name):
         """
         Setup Steps:
         1. Create the PostgreSQL data directory as Mount dir
@@ -3612,8 +3613,17 @@ os.system('sudo systemctl start  network')
         4. Create DB
         """
 
-        log.info("Stopping PostgresSQL")
-        client.exec_command(sudo=True, cmd="systemctl stop postgresql", check_ec=False)
+        # Checking if postgres container already running
+        out, _ = client.exec_command(
+            sudo=True, cmd=f"podman ps -a --filter name={container_name}"
+        )
+        log.debug(out)
+
+        if container_name in out:
+            log.info(
+                "PostgreSQL already running. Removing existing container before starting new one"
+            )
+            self.cleanup_container(client, container_name)
 
         log.info("Setting up PostgresSQL")
         client.exec_command(sudo=True, cmd=f"mkdir -p {mount_dir}")
@@ -3622,52 +3632,56 @@ os.system('sudo systemctl start  network')
         client.exec_command(sudo=True, cmd=f"chown -R postgres:postgres {mount_dir}")
         client.exec_command(sudo=True, cmd=f"chmod 700 {mount_dir}")
 
-        try:
-            log.debug("Initialise the Postgres Service")
-            client.exec_command(
-                sudo=True, cmd=f"sudo -u postgres /usr/bin/initdb -D {mount_dir}"
-            )
-        except Exception as e:
-            log.info(
-                f"Initialising the Postgres Service failed: {e}. Applying the Recovery.."
-            )
-            client.exec_command(sudo=True, cmd=f"rm -rf {mount_dir}/*")
-            client.exec_command(
-                sudo=True, cmd=f"sudo -u postgres /usr/bin/initdb -D {mount_dir}"
-            )
-
-        config_file = "/usr/lib/systemd/system/postgresql.service"
-        env_var = f"Environment=PGDATA={mount_dir}"
-
-        # Updates the postgres config to point to the correct backend dir
-        update_dir_command = (
-            f"sudo sed -i '/^Environment=PGDATA/c\\{env_var}' {config_file} || "
-            f"echo '{env_var}' | sudo tee -a {config_file} > /dev/null"
+        rhel_version, _ = client.node.exec_command(
+            sudo=True,
+            cmd=(f"rpm -E %rhel"),
         )
-        client.exec_command(sudo=True, cmd=update_dir_command)
 
-        client.exec_command(sudo=True, cmd="systemctl daemon-reload")
+        if int(rhel_version.strip()) >= 8:
+            rh_registry_postgresql = (
+                f"registry.redhat.io/rhel{rhel_version.strip()}/postgresql-16"
+            )
+            log.debug(f"RH Postgresql Registry: {rh_registry_postgresql}")
+        else:
+            log.error(
+                "Postgresql support is not available for RHEL version lesser than 8"
+            )
 
-        client.exec_command(sudo=True, cmd="sestatus")
-        client.exec_command(sudo=True, cmd="setenforce 0")
-        client.exec_command(sudo=True, cmd="systemctl restart postgresql")
-        client.exec_command(sudo=True, cmd=f"chcon -R -t postgresql_db_t {mount_dir}")
+        client.exec_command(
+            sudo=True,
+            cmd=(
+                f"podman run -d --name {container_name} "
+                f"-e POSTGRESQL_USER=pguser "
+                f"-e POSTGRESQL_PASSWORD=pgpassword "
+                f"-e POSTGRESQL_DATABASE={db_name} "
+                f"-v {mount_dir}:/var/lib/pgsql/data:Z "
+                f"-p 5432:5432 "
+                f"{rh_registry_postgresql}"
+            ),
+        )
 
-        client.exec_command(sudo=True, cmd="setenforce 1")
-        client.exec_command(sudo=True, cmd="systemctl restart postgresql")
-
-        out, _ = client.exec_command(sudo=True, cmd="systemctl status postgresql")
+        out, _ = client.exec_command(
+            sudo=True, cmd=f"podman ps -a --filter name={container_name}"
+        )
         log.debug(out)
-        if "active (running)" in out:
+
+        # Check if the container is running
+        if container_name in out:
             log.info("PostgreSQL is running")
         else:
             log.error("PostgreSQL is not running")
 
-        log.info(f"Creating the DB - {db_name}")
-        client.exec_command(
-            sudo=True, cmd=f"sudo -u postgres psql -c 'CREATE DATABASE {db_name};'"
-        )
-        log.info("DB creation is successful")
+    def cleanup_container(self, client, container_name):
+        """
+        Used to stop and remove any running containers
+        Currently used to clean up PostgreSQL containers
+        Args:
+            container_name: Container name to be deleted
+        """
+
+        client.exec_command(sudo=True, cmd=f"podman stop {container_name}")
+        client.exec_command(sudo=True, cmd=f"podman rm {container_name}")
+        log.info(f"Cleanup of container {container_name} is successful")
 
     def generate_all_combinations(
         self, client, ioengine, mount_dir, workloads, sizes, iodepth_values, numjobs
