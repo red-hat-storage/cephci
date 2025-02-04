@@ -1044,29 +1044,7 @@ def run(args):
 
     if not skip_subcommands:
         log.info("SUBCOMMMANDS started ")
-        # Split the original path into components
-        parts = url_base.split("/")
-
-        try:
-            # Find the index after 'ceph-builds'
-            index = parts.index("ceph-builds")
-        except ValueError:
-            raise ValueError("The path does not contain 'ceph-builds'")
-
-        # Extract relevant parts and filter out 'logs'
-        relevant_parts = parts[index + 1 :]
-        filtered_parts = [part for part in relevant_parts if part not in ("logs", "")]
-
-        # Construct the new path
-        new_path = "/" + "/".join(filtered_parts)
-
-        # Base URL
-        base_url = "http://magna002.ceph.redhat.com/cephci-jenkins/results"
-
-        # Combine to get final URL
-        final_url = base_url + new_path
-        print("The Final URL", final_url)
-        subcommands.run(final_url, "rgw")
+        subcommands.run(url_base, "rgw")
         log.info("subcommands runned sucessfully")
 
     return jenkins_rc
