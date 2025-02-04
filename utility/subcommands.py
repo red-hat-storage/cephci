@@ -1,7 +1,3 @@
-import argparse
-import requests
-from bs4 import BeautifulSoup
-from urllib.parse import urljoin
 import json
 import os
 import re
@@ -22,7 +18,6 @@ Options:
 """
 
 global_output_hashes = set()
-log_links_dict = {}
 
 
 def compute_output_hash(output):
@@ -109,54 +104,7 @@ def extract_radosgw_admin_commands(log_lines):
     return {"outputs": results}
 
 
-def fetch_log_links(url, base_url=None, allow=True):
-    if base_url is None:
-        base_url = url
-    if url not in log_links_dict:
-        log_links_dict[url] = []
-    try:
-        response = requests.get(url)
-        response.raise_for_status()
-        soup = BeautifulSoup(response.text, "html.parser")
-        for a_tag in soup.find_all("a", href=True):
-            href = a_tag["href"]
-            absolute_url = urljoin(url, href)
-            if href.endswith(".log"):
-                log_links_dict[url].append({"opt_in": absolute_url})
-            elif href.endswith("/") and allow:
-                fetch_log_links(absolute_url, base_url, False)
-    except requests.RequestException as e:
-        print(f"Error fetching {url}: {e}")
-
-
-def process_log_file(file_url, complete_url, remote_base_dir, subcomponent_filter):
-    try:
-        response = requests.get(file_url)
-        response.raise_for_status()
-        log_lines = response.text.splitlines()
-        extracted_data = extract_radosgw_admin_commands(log_lines)
-        for entry in extracted_data["outputs"]:
-            save_to_json(
-                entry["command"],
-                entry["output"],
-                complete_url,
-                remote_base_dir,
-                subcomponent_filter,
-            )
-    except requests.RequestException as e:
-        print(f"Failed to download {file_url}: {e}")
-
-
-def process_all_log_files(url, remote_base_dir, subcomponent_filter):
-    fetch_log_links(url)
-    for directories in log_links_dict:
-        for log_file in log_links_dict[directories]:
-            process_log_file(
-                log_file["opt_in"], url, remote_base_dir, subcomponent_filter
-            )
-
-
-def save_to_json(command, output, complete_url, remote_base_dir, subcomponent_filter):
+def save_to_json(command, output, complete_url, subcomponent_filter):
     global global_output_hashes
     output_hash = compute_output_hash(output)
 
@@ -165,22 +113,16 @@ def save_to_json(command, output, complete_url, remote_base_dir, subcomponent_fi
     global_output_hashes.add(output_hash)
 
     current_dir = os.getcwd()
+    print("Current working directory:", current_dir)
 
+    # If in Jenkins, store remotely
     if "jenkins" in current_dir:
+        remote_base_dir = "http://magna002.ceph.redhat.com/cephci-jenkins/cephci-command-results/"
         url_parts = complete_url.strip("/").split("/")
-        # Correct indices for transformed URL structure
-        openstack_version = url_parts[7]  # RH
-        rhel_version = url_parts[8]  # 8.0
-        ceph_version = url_parts[10]  # 19.2.0-73
-        subfolder = url_parts[9]  # Test
+        openstack_version, rhel_version, subfolder, ceph_version = url_parts[5:9]
 
         remote_dir = os.path.join(
-            remote_base_dir,
-            openstack_version,
-            rhel_version,
-            ceph_version,
-            subcomponent_filter,
-            subfolder,
+            remote_base_dir, openstack_version, rhel_version, ceph_version, subcomponent_filter, subfolder
         )
         os.makedirs(remote_dir, exist_ok=True)
 
@@ -194,25 +136,20 @@ def save_to_json(command, output, complete_url, remote_base_dir, subcomponent_fi
                     try:
                         data = json.load(remote_file)
                     except json.JSONDecodeError:
-                        data = {"ceph_version": ceph_version, "outputs": []}
+                        data = {"outputs": []}
             else:
-                data = {"ceph_version": ceph_version, "outputs": []}
+                data = {"outputs": []}
 
-            if not any(
-                entry["output_hash"] == output_hash for entry in data["outputs"]
-            ):
-                data["outputs"].append(
-                    {
-                        "command": command,
-                        "output": output,
-                        "output_hash": output_hash,
-                    }
-                )
+            if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
+                data["outputs"].append({"command": command, "output": output, "output_hash": output_hash})
                 with open(remote_file_path, "w") as remote_file:
                     json.dump(data, remote_file, indent=4)
+                
+                print(f"Saved output for {subcommand} to remote directory: {remote_file_path}")
 
+    # If local, store locally in the specified folder
     else:
-        local_dir = "/Users/suriya/Desktop/subcommandsoutput/output11"
+        local_dir = "/Users/suriya/Desktop/subcommandsoutput/output30"
         os.makedirs(local_dir, exist_ok=True)
 
         match = re.search(r"radosgw-admin (\w+)", command)
@@ -229,29 +166,43 @@ def save_to_json(command, output, complete_url, remote_base_dir, subcomponent_fi
             else:
                 data = {"outputs": []}
 
-            if not any(
-                entry["output_hash"] == output_hash for entry in data["outputs"]
-            ):
-                data["outputs"].append(
-                    {
-                        "command": command,
-                        "output": output,
-                        "output_hash": output_hash,
-                    }
-                )
+            if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
+                data["outputs"].append({"command": command, "output": output, "output_hash": output_hash})
                 with open(local_file_path, "w") as local_file:
                     json.dump(data, local_file, indent=4)
+                
+                print(f"Saved output for {subcommand} to local directory: {local_file_path}")
+
+def get_log_files_from_directory(directory):
+    log_files = []
+    for root, dirs, files in os.walk(directory):
+        for file in files:
+            if file.endswith('.log'):
+                log_files.append(os.path.join(root, file))
+    return log_files
+
+
+def process_log_file(file_path, complete_url, subcomponent_filter):
+    try:
+        with open(file_path, "r") as file:
+            log_lines = file.readlines()
+            extracted_data = extract_radosgw_admin_commands(log_lines)
+            for entry in extracted_data["outputs"]:
+                save_to_json(entry["command"], entry["output"], complete_url, subcomponent_filter)
+    except Exception as e:
+        print(f"Failed to process {file_path}: {e}")
 
 
 def run(complete_url: str, subcomponent_filter: str):
-    remote_base_dir = (
-        "http://magna002.ceph.redhat.com/cephci-jenkins/cephci-command-results/"
-    )
-    process_all_log_files(complete_url, remote_base_dir, subcomponent_filter)
+    # Get all log files from the provided directory
+    log_files = get_log_files_from_directory(complete_url)
+    for file_path in log_files:
+        process_log_file(file_path, complete_url, subcomponent_filter)
 
 
 if __name__ == "__main__":
     arguments = docopt(doc)
     complete_url = arguments["--url"]
     subcomponent_filter = arguments["--filter"]
+
     run(complete_url, subcomponent_filter)
