@@ -91,14 +91,14 @@ def run(ceph_cluster, **kw):
             long_running=True,
         )
         fs_volume_info_dict = fs_util.collect_fs_volume_info_for_validation(
-            client1, volume_name, human_readable=True
+            client1, volume_name, human_readable=False
         )
 
         assert (
-            fs_volume_info_dict["data_used"].strip() != "0"
+            fs_volume_info_dict["data_used"] != 0
         ), "Used size should reflect data written"
         log.info(
-            f"Verified: Data write reflected in used size. {fs_volume_info_dict['data_used'].strip()}"
+            f"Verified: Data write reflected in used size. {fs_volume_info_dict['data_used']}"
         )
 
         log.info("Step 4: Create Subvolume Group and Add Subvolumes")
@@ -126,13 +126,13 @@ def run(ceph_cluster, **kw):
             long_running=True,
         )
         volume_info = fs_util.collect_fs_volume_info_for_validation(
-            client1, volume_name, human_readable=True
+            client1, volume_name, human_readable=False
         )
-        data_pool_used_kernel = volume_info["data_used"].strip()
+        data_pool_used_kernel = volume_info["data_used"]
         log.info(volume_info)
         assert (
-            data_pool_used_kernel > fs_volume_info_dict["data_used"].strip()
-        ), f"Used size should reflect data written {fs_volume_info_dict['data_used'].strip()}"
+            data_pool_used_kernel > fs_volume_info_dict["data_used"]
+        ), f"Used size should reflect data written {fs_volume_info_dict['data_used']}"
 
         log.info("Step 5: Delete Subvolumes and Validate Usage During Deletion")
         fs_util.remove_subvolume(client1, volume_name, subvolume_name, validate=False)
