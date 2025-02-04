@@ -104,6 +104,8 @@ def extract_radosgw_admin_commands(log_lines):
     return {"outputs": results}
 
 
+import os
+
 def save_to_json(command, output, complete_url, subcomponent_filter):
     global global_output_hashes
     output_hash = compute_output_hash(output)
@@ -115,63 +117,54 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
     current_dir = os.getcwd()
     print("Current working directory:", current_dir)
 
-    # If in Jenkins, store remotely
     if "jenkins" in current_dir:
-        remote_base_dir = "http://magna002.ceph.redhat.com/cephci-jenkins/cephci-command-results/"
+        remote_base_dir = "/home/jenkins/cephci-jenkins/cephci-command-results/"
         url_parts = complete_url.strip("/").split("/")
         openstack_version, rhel_version, subfolder, ceph_version = url_parts[5:9]
 
         remote_dir = os.path.join(
             remote_base_dir, openstack_version, rhel_version, ceph_version, subcomponent_filter, subfolder
         )
-        os.makedirs(remote_dir, exist_ok=True)
+        
+        print(f"Trying to save to remote directory: {remote_dir}")
+        
+        # Check if the directory exists, and if not, create it
+        if not os.path.exists(remote_dir):
+            print(f"Directory does not exist, creating: {remote_dir}")
+            try:
+                os.makedirs(remote_dir, exist_ok=True)
+            except Exception as e:
+                print(f"Failed to create remote directory: {e}")
+                return  # Stop here if we can't create the directory
 
         match = re.search(r"radosgw-admin (\w+)", command)
         if match:
             subcommand = match.group(1)
             remote_file_path = os.path.join(remote_dir, f"{subcommand}_outputs.json")
 
-            if os.path.exists(remote_file_path):
-                with open(remote_file_path, "r") as remote_file:
-                    try:
-                        data = json.load(remote_file)
-                    except json.JSONDecodeError:
-                        data = {"outputs": []}
-            else:
-                data = {"outputs": []}
+            print(f"Attempting to save file: {remote_file_path}")
 
-            if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
-                data["outputs"].append({"command": command, "output": output, "output_hash": output_hash})
-                with open(remote_file_path, "w") as remote_file:
-                    json.dump(data, remote_file, indent=4)
-                
-                print(f"Saved output for {subcommand} to remote directory: {remote_file_path}")
+            try:
+                if os.path.exists(remote_file_path):
+                    with open(remote_file_path, "r") as remote_file:
+                        try:
+                            data = json.load(remote_file)
+                        except json.JSONDecodeError:
+                            data = {"outputs": []}
+                else:
+                    data = {"outputs": []}
 
-    # If local, store locally in the specified folder
-    else:
-        local_dir = "/Users/suriya/Desktop/subcommandsoutput/output30"
-        os.makedirs(local_dir, exist_ok=True)
+                if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
+                    data["outputs"].append({"command": command, "output": output, "output_hash": output_hash})
+                    with open(remote_file_path, "w") as remote_file:
+                        json.dump(data, remote_file, indent=4)
 
-        match = re.search(r"radosgw-admin (\w+)", command)
-        if match:
-            subcommand = match.group(1)
-            local_file_path = os.path.join(local_dir, f"{subcommand}_outputs.json")
+                    print(f"Saved output for {subcommand} to remote directory: {remote_file_path}")
+                else:
+                    print(f"Duplicate output detected. Not saving {subcommand}_outputs.json")
 
-            if os.path.exists(local_file_path):
-                with open(local_file_path, "r") as local_file:
-                    try:
-                        data = json.load(local_file)
-                    except json.JSONDecodeError:
-                        data = {"outputs": []}
-            else:
-                data = {"outputs": []}
-
-            if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
-                data["outputs"].append({"command": command, "output": output, "output_hash": output_hash})
-                with open(local_file_path, "w") as local_file:
-                    json.dump(data, local_file, indent=4)
-                
-                print(f"Saved output for {subcommand} to local directory: {local_file_path}")
+            except Exception as e:
+                print(f"Error saving file: {e}")
 
 def get_log_files_from_directory(directory):
     log_files = []
