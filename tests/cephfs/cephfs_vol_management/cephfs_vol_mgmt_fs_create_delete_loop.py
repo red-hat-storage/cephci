@@ -6,6 +6,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.cephfs_IO_lib import FSIO
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
 
@@ -34,6 +35,7 @@ def run(ceph_cluster, **kw):
     log.info(f"Running CephFS tests {tc}")
     test_data = kw.get("test_data")
     fs_util = FsUtils(ceph_cluster, test_data=test_data)
+    fs_io = FSIO(ceph_cluster)
     config = kw.get("config")
     clients = ceph_cluster.get_ceph_objects("client")
     build = config.get("build", config.get("rhbuild"))
@@ -272,7 +274,7 @@ def run(ceph_cluster, **kw):
                 log.info("Start Writing IO on the subvolume using dbench")
 
                 p.spawn(
-                    fs_util.run_ios_V1,
+                    fs_io.run_ios_V1,
                     client=client1,
                     mounting_dir=kernel_mount_dir_dbench,
                     io_tools=["dbench"],
@@ -328,7 +330,7 @@ def run(ceph_cluster, **kw):
                 log.info("Start Writing IO on the subvolume using dbench")
 
                 p.spawn(
-                    fs_util.run_ios_V1,
+                    fs_io.run_ios_V1,
                     client=client1,
                     mounting_dir=fuse_dbench_mount_dir,
                     io_tools=["dbench"],
@@ -384,7 +386,7 @@ def run(ceph_cluster, **kw):
 
             db_name = fs_name + "_db_kernel"
             container_name = "postgres-container"
-            fs_util.setup_postgresql_IO(
+            fs_io.setup_postgresql_IO(
                 client1, kernel_mount_dir_pgsql, container_name, db_name
             )
 
@@ -392,7 +394,7 @@ def run(ceph_cluster, **kw):
                 log.info("Start Writing IO on the subvolume using postgresql")
 
                 p.spawn(
-                    fs_util.run_ios_V1,
+                    fs_io.run_ios_V1,
                     client=client1,
                     mounting_dir=kernel_mount_dir_pgsql,
                     io_tools=["postgresIO"],
@@ -428,7 +430,7 @@ def run(ceph_cluster, **kw):
             fs_health_status = fs_util.get_ceph_health_status(client1)
             log.debug(f"Output of FS Health status: {fs_health_status}")
 
-            fs_util.cleanup_container(client1, container_name)
+            fs_io.cleanup_container(client1, container_name)
 
             # Mounting Subvolume7 on FUSE - Run postgres IO
             log.info(
@@ -452,7 +454,7 @@ def run(ceph_cluster, **kw):
 
             db_name = fs_name + "_db_fuse"
             container_name = "postgres-container"
-            fs_util.setup_postgresql_IO(
+            fs_io.setup_postgresql_IO(
                 client1, fuse_mount_dir_pgsql, container_name, db_name
             )
 
@@ -460,7 +462,7 @@ def run(ceph_cluster, **kw):
                 log.info("Start Writing IO on the subvolume using postgresql")
 
                 p.spawn(
-                    fs_util.run_ios_V1,
+                    fs_io.run_ios_V1,
                     client=client1,
                     mounting_dir=fuse_mount_dir_pgsql,
                     io_tools=["postgresIO"],
@@ -496,7 +498,7 @@ def run(ceph_cluster, **kw):
             fs_health_status = fs_util.get_ceph_health_status(client1)
             log.debug(f"Output of FS Health status: {fs_health_status}")
 
-            fs_util.cleanup_container(client1, container_name)
+            fs_io.cleanup_container(client1, container_name)
 
             for subvolume in subvolume_list:
                 subvolume_size_subvol = fs_util.get_subvolume_info(
