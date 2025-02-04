@@ -3663,6 +3663,7 @@ os.system('sudo systemctl start  network')
             ),
         )
 
+        time.sleep(5)
         out, _ = client.exec_command(
             sudo=True, cmd=f"podman ps -a --filter name={container_name}"
         )
