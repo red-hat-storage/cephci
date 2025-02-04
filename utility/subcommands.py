@@ -122,7 +122,8 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
         match = re.search(r"radosgw-admin (\w+)", command)
         if match:
             subcommand = match.group(1)
-            remote_file_path = os.path.join(os.getcwd(), f"{subcommand}_outputs.json")
+            remote_file_path = os.path.join(base_dir, *target_structure, f"{subcommand}_outputs.json")
+            print(f"Generated remote file path: {remote_file_path}")
             try:
                 if os.path.exists(remote_file_path):
                     with open(remote_file_path, "r") as remote_file:
