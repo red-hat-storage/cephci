@@ -50,6 +50,7 @@ def reconstruct_json(lines):
 
 
 def extract_radosgw_admin_commands(log_lines):
+    """Extracts radosgw-admin commands and their output from logs."""
     results = []
     existing_hashes = set()
     current_command, current_output_lines = None, []
@@ -90,16 +91,9 @@ def extract_radosgw_admin_commands(log_lines):
 
     return {"outputs": results}
 
-def ensure_directory_structure(base_path, sub_dirs):
-    current_path = base_path
-    for sub_dir in sub_dirs:
-        current_path = os.path.join(current_path, sub_dir)
-        if not os.path.exists(current_path):
-            os.makedirs(current_path)
-        os.chdir(current_path)
-
 
 def save_to_json(command, output, complete_url, subcomponent_filter):
+    """Saves extracted command output to a structured JSON file."""
     global global_output_hashes
     output_hash = compute_output_hash(output)
 
@@ -110,20 +104,26 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
     current_dir = os.getcwd()
     print(f"Current working directory: {current_dir}")
 
-    # If in Jenkins, store remotely
     if "jenkins" in current_dir:
-        base_dir = "http://magna002.ceph.redhat.com/cephci-jenkins/cephci-command-results"
         url_parts = complete_url.strip("/").split("/")
-        openstack_version, rhel_version, subfolder, ceph_version = url_parts[5:9]
+        
+        try:
+            openstack_version, rhel_version, subfolder, ceph_version = url_parts[5:9]
+        except IndexError:
+            print("Error: URL does not contain enough segments.")
+            return
 
-        target_structure = [openstack_version, rhel_version, ceph_version, subcomponent_filter, subfolder]
-        ensure_directory_structure(base_dir, target_structure)
+        remote_base_dir = "/home/jenkins/magna002/cephci-jenkins/cephci-command-results"
+
+        # Ensure each directory in the hierarchy exists
+        target_path = os.path.join(remote_base_dir, openstack_version, rhel_version, ceph_version, subcomponent_filter, subfolder)
+        os.makedirs(target_path, exist_ok=True)
 
         match = re.search(r"radosgw-admin (\w+)", command)
         if match:
             subcommand = match.group(1)
-            remote_file_path = f"/home/jenkins/magna002/cephci-jenkins/cephci-command-results/{'/'.join(target_structure)}/{subcommand}_outputs.json"
-            print(f"Generated remote file path: {remote_file_path}")
+            remote_file_path = os.path.join(target_path, f"{subcommand}_outputs.json")
+
             try:
                 if os.path.exists(remote_file_path):
                     with open(remote_file_path, "r") as remote_file:
@@ -143,17 +143,16 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
 
             except Exception as e:
                 print(f"Error saving file in remote directory: {e}")
-    # If local, store in a specific local directory
-    else:
-        local_dir = "/Users/suriya/Desktop/subcommandsoutput/output30"
-        os.makedirs(local_dir, exist_ok=True)
 
-        os.chdir(local_dir)  # Move into the target directory
+    else:
+        local_base_dir = os.path.join(current_dir, "subcommandsoutput")
+        target_path = os.path.join(local_base_dir, subcomponent_filter)
+        os.makedirs(target_path, exist_ok=True)
 
         match = re.search(r"radosgw-admin (\w+)", command)
         if match:
             subcommand = match.group(1)
-            local_file_path = os.path.join(local_dir, f"{subcommand}_outputs.json")
+            local_file_path = os.path.join(target_path, f"{subcommand}_outputs.json")
 
             try:
                 if os.path.exists(local_file_path):
@@ -177,6 +176,7 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
 
 
 def get_log_files_from_directory(directory):
+    """Returns a list of all .log files in a given directory."""
     log_files = []
     for root, _, files in os.walk(directory):
         for file in files:
@@ -186,6 +186,7 @@ def get_log_files_from_directory(directory):
 
 
 def process_log_file(file_path, complete_url, subcomponent_filter):
+    """Processes a log file to extract and store command outputs."""
     try:
         with open(file_path, "r") as file:
             log_lines = file.readlines()
@@ -197,6 +198,7 @@ def process_log_file(file_path, complete_url, subcomponent_filter):
 
 
 def run(complete_url: str, subcomponent_filter: str):
+    """Main function to process all log files in a given directory."""
     log_files = get_log_files_from_directory(complete_url)
     for file_path in log_files:
         process_log_file(file_path, complete_url, subcomponent_filter)
