@@ -3271,7 +3271,10 @@ os.system('sudo systemctl start  network')
             # Initialize mode
             client.exec_command(
                 sudo=True,
-                cmd=f"podman exec -it {io_params['container_name']} bash -c 'pgbench -i --scale={io_params['scale']} -U pguser -d {io_params['db_name']}'",
+                cmd=(
+                    f"podman exec -it {io_params['container_name']} bash -c "
+                    f"'pgbench -i --scale={io_params['scale']} -U pguser -d {io_params['db_name']}'"
+                ),
                 long_running=True,
             )
 
@@ -3634,7 +3637,7 @@ os.system('sudo systemctl start  network')
 
         rhel_version, _ = client.node.exec_command(
             sudo=True,
-            cmd=(f"rpm -E %rhel"),
+            cmd=("rpm -E %rhel"),
         )
 
         if int(rhel_version.strip()) >= 8:
