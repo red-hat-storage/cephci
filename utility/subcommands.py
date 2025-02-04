@@ -122,7 +122,7 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
         match = re.search(r"radosgw-admin (\w+)", command)
         if match:
             subcommand = match.group(1)
-            remote_file_path = os.path.join(base_dir, *target_structure, f"{subcommand}_outputs.json")
+            remote_file_path = f"/home/jenkins/magna002/cephci-jenkins/cephci-command-results/{'/'.join(target_structure)}/{subcommand}_outputs.json"
             print(f"Generated remote file path: {remote_file_path}")
             try:
                 if os.path.exists(remote_file_path):
