@@ -253,12 +253,105 @@ class FSIO(object):
                 long_running=True,
             )
 
+        def dbench():
+            log.info("IO tool scheduled : dbench")
+            io_params = {
+                "clients": random.choice(
+                    range(8, 33, 8)  # Randomly selects 8, 16, 24, or 32 for clients
+                ),
+                "duration": random.choice(
+                    range(60, 601, 60)
+                ),  # Randomly selects 60, 120, ..., 600 seconds
+                "testdir_prefix": "dbench_io_dir",
+            }
+            if kwargs.get("dbench_params"):
+                dbench_params = kwargs.get("dbench_params")
+                for io_param in io_params:
+                    if dbench_params.get(io_param):
+                        io_params[io_param] = dbench_params[io_param]
+
+            dir_suffix = "".join(
+                [
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in range(4)
+                ]
+            )
+            io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
+            client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
+
+            client.exec_command(
+                sudo=True,
+                cmd=f"dbench {io_params['clients']} -t {io_params['duration']} -D {io_path}",
+                long_running=True,
+            )
+
+        def postgresIO():
+            log.info("IO tool scheduled : PostgresIO")
+
+            io_params = {
+                "scale": random.choice(
+                    range(
+                        40, 101, 10
+                    )  # The size of the database(test data) increases linearly with the scale factor
+                ),
+                "workers": random.choice(range(4, 17, 4)),
+                "clients": random.choice(
+                    range(8, 56, 8)  # Randomly selects 8, 16, 24, 32,.. for clients
+                ),
+                "duration": random.choice(
+                    range(60, 601, 60)
+                ),  # Randomly selects 60, 120, ..., 600 seconds
+                "testdir_prefix": "postgres_io_dir",
+                "db_name": "",
+                "container_name": "postgres-container",
+            }
+
+            if kwargs.get("postgresIO_params"):
+                postgresIO_params = kwargs.get("postgresIO_params")
+                for io_param in io_params:
+                    if postgresIO_params.get(io_param):
+                        io_params[io_param] = postgresIO_params[io_param]
+
+            dir_suffix = "".join(
+                [
+                    random.choice(string.ascii_lowercase + string.digits)
+                    for _ in range(4)
+                ]
+            )
+            io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
+            client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
+
+            # Initialize mode
+            client.exec_command(
+                sudo=True,
+                cmd=(
+                    f"podman exec -it {io_params['container_name']} bash -c "
+                    f"'pgbench -i --scale={io_params['scale']} -U pguser -d {io_params['db_name']}'"
+                ),
+                long_running=True,
+            )
+
+            # Creating tables and populating data based on the scale factor
+            client.exec_command(
+                sudo=True,
+                cmd=(
+                    f"podman exec -it {io_params['container_name']} bash -c "
+                    f"'pgbench -c {io_params['clients']} "
+                    f"-j {io_params['workers']} "
+                    f"-T {io_params['duration']} "
+                    f"-U postgres -d {io_params['db_name']}'"
+                ),
+                long_running=True,
+            )
+
         io_tool_map = {
             "dd": dd,
             "smallfile": smallfile,
             "wget": wget,
             "file_extract": file_extract,
             "iozone": iozone,
+            "dbench": dbench,
+            "postgresIO": postgresIO,
         }
 
         log.info(f"IO tools planned to run : {io_tools}")
@@ -275,3 +368,98 @@ class FSIO(object):
                     p.spawn(io_tool)
             i += 1
             time.sleep(30)
+
+    def setup_postgresql_IO(self, client, mount_dir, container_name, db_name):
+        """
+        Setup Steps:
+        1. Create the PostgreSQL data directory as Mount dir
+        2. Set permissions and owners for Mount dir
+        3. Initialise the Postgres Service
+        4. Create DB
+        """
+
+        # Remove if postgres container already running
+        client.exec_command(sudo=True, cmd=f"podman rm -f {container_name}")
+
+        log.info("Setting up PostgresSQL")
+        client.exec_command(sudo=True, cmd=f"mkdir -p {mount_dir}")
+
+        log.debug(f"Setting up postgres persmission and user for the dir {mount_dir}")
+        client.exec_command(sudo=True, cmd=f"chown -R postgres:postgres {mount_dir}")
+        client.exec_command(sudo=True, cmd=f"chmod 700 {mount_dir}")
+
+        rhel_version, _ = client.node.exec_command(
+            sudo=True,
+            cmd=("rpm -E %rhel"),
+        )
+
+        if int(rhel_version.strip()) >= 8:
+            rh_registry_postgresql = (
+                f"registry.redhat.io/rhel{rhel_version.strip()}/postgresql-16"
+            )
+            log.debug(f"RH Postgresql Registry: {rh_registry_postgresql}")
+        else:
+            log.error(
+                "Postgresql support is not available for RHEL version lesser than 8"
+            )
+
+        client.exec_command(
+            sudo=True,
+            cmd=(
+                f"podman run -d --name {container_name} "
+                f"-e POSTGRESQL_USER=pguser "
+                f"-e POSTGRESQL_PASSWORD=pgpassword "
+                f"-e POSTGRESQL_DATABASE={db_name} "
+                f"-v {mount_dir}:/var/lib/pgsql/data:Z "
+                f"-p 5432:5432 "
+                f"{rh_registry_postgresql}"
+            ),
+        )
+
+        if not self.wait_until_container_running(client, container_name):
+            log.error("PostgreSQL failed to start")
+
+    def cleanup_container(self, client, container_name):
+        """
+        Used to stop and remove any running containers
+        Currently used to clean up PostgreSQL containers
+        Args:
+            container_name: Container name to be deleted
+        """
+
+        client.exec_command(sudo=True, cmd=f"podman stop {container_name}")
+        client.exec_command(sudo=True, cmd=f"podman rm {container_name}")
+        log.info(f"Cleanup of container {container_name} is successful")
+
+    def wait_until_container_running(
+        self, client, container_name, timeout=180, interval=5
+    ):
+        """
+        Checks if the specified Podman container is running within a given timeout.
+
+        :param client: Remote client object
+        :param container_name: Name of the container
+        :param timeout: Maximum time to wait in seconds (default: 180)
+        :param interval: Interval between retries in seconds (default: 5)
+        :return: boolean (True if container is running, False if timeout reached)
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info(f"Waiting for container '{container_name}' to be in running state")
+
+        while datetime.datetime.now() < end_time:
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=f"podman ps --filter name={container_name} --filter status=running --format '{{{{.Names}}}}'",
+            )
+            log.info(f"Podman output: {out.strip()}")
+
+            if container_name in out.strip():
+                log.info("PostgreSQL is running")
+                return True
+
+            time.sleep(interval)
+
+        log.error(
+            f"Container '{container_name}' did not reach running state within {timeout} seconds"
+        )
+        return False
