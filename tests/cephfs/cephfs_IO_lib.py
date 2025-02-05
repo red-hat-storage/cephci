@@ -378,17 +378,8 @@ class FSIO(object):
         4. Create DB
         """
 
-        # Checking if postgres container already running
-        out, _ = client.exec_command(
-            sudo=True, cmd=f"podman ps -a --filter name={container_name}"
-        )
-        log.debug(out)
-
-        if container_name in out:
-            log.info(
-                "PostgreSQL already running. Removing existing container before starting new one"
-            )
-            self.cleanup_container(client, container_name)
+        # Remove if postgres container already running
+        client.exec_command(sudo=True, cmd=f"podman rm -f {container_name}")
 
         log.info("Setting up PostgresSQL")
         client.exec_command(sudo=True, cmd=f"mkdir -p {mount_dir}")
@@ -425,17 +416,8 @@ class FSIO(object):
             ),
         )
 
-        time.sleep(5)
-        out, _ = client.exec_command(
-            sudo=True, cmd=f"podman ps -a --filter name={container_name}"
-        )
-        log.debug(out)
-
-        # Check if the container is running
-        if container_name in out:
-            log.info("PostgreSQL is running")
-        else:
-            log.error("PostgreSQL is not running")
+        if not self.wait_until_container_running(client, container_name):
+            log.error("PostgreSQL failed to start")
 
     def cleanup_container(self, client, container_name):
         """
@@ -448,3 +430,36 @@ class FSIO(object):
         client.exec_command(sudo=True, cmd=f"podman stop {container_name}")
         client.exec_command(sudo=True, cmd=f"podman rm {container_name}")
         log.info(f"Cleanup of container {container_name} is successful")
+
+    def wait_until_container_running(
+        self, client, container_name, timeout=180, interval=5
+    ):
+        """
+        Checks if the specified Podman container is running within a given timeout.
+
+        :param client: Remote client object
+        :param container_name: Name of the container
+        :param timeout: Maximum time to wait in seconds (default: 180)
+        :param interval: Interval between retries in seconds (default: 5)
+        :return: boolean (True if container is running, False if timeout reached)
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        log.info(f"Waiting for container '{container_name}' to be in running state")
+
+        while datetime.datetime.now() < end_time:
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=f"podman ps --filter name={container_name} --filter status=running --format '{{{{.Names}}}}'",
+            )
+            log.info(f"Podman output: {out.strip()}")
+
+            if container_name in out.strip():
+                log.info("PostgreSQL is running")
+                return True
+
+            time.sleep(interval)
+
+        log.error(
+            f"Container '{container_name}' did not reach running state within {timeout} seconds"
+        )
+        return False
