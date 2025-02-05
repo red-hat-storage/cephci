@@ -3,7 +3,7 @@
 */
 // Global variables section
 def sharedLib
-
+def user_csv_url = "${params.Users_Csv_Url}"
 node("rhel-9-medium") {
     try {
         stage('prepareNode') {
@@ -36,7 +36,7 @@ node("rhel-9-medium") {
         }
         stage('retrieveQuota') {
             println("Fetch quota and Send Email")
-            cmd = ".venv/bin/python ${env.WORKSPACE}/utility/psi_quota.py --osp-cred ${env.HOME}/osp-cred-ci-2.yaml"
+            cmd = ".venv/bin/python ${env.WORKSPACE}/utility/psi_quota.py --osp-cred ${env.HOME}/osp-cred-ci-2.yaml --rhosd-user-csv ${user_csv_url}"
 
             rc = sh(script: "${cmd}", returnStatus: true)
             if (rc != 0) {
