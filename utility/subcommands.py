@@ -170,7 +170,7 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
                 print(f"Error saving file in local directory: {e}")
 
         # Copy the entire local output directory to the remote path
-        copy_to_remote(local_base_dir)
+        copy_to_remote(local_path, subcomponent_filter)
     else:
         local_dir = os.path.join(current_dir, "subcommandsoutput")
         os.makedirs(local_dir, exist_ok=True)
