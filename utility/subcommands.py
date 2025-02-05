@@ -8,8 +8,8 @@ doc = """
 Standard script to fetch and process log files from a given URL.
 
 Usage:
-    subcommands.py --url <complete_url> --filter <subcomponent_filter>
-    subcommands.py (-h | --help)
+    shanky.py --url <complete_url> --filter <subcomponent_filter>
+    shanky.py (-h | --help)
 
 Options:
     -h --help                  Shows the command usage
@@ -92,6 +92,13 @@ def extract_radosgw_admin_commands(log_lines):
     return {"outputs": results}
 
 
+def ensure_directory_with_permissions(path):
+    """Creates the directory if it doesn't exist and sets full permissions."""
+    if not os.path.exists(path):
+        os.makedirs(path, exist_ok=True)
+        os.chmod(path, 0o777)  # Grant full read/write permissions
+
+
 def save_to_json(command, output, complete_url, subcomponent_filter):
     """Saves extracted command output to a structured JSON file."""
     global global_output_hashes
@@ -115,9 +122,9 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
 
         remote_base_dir = "/home/jenkins/magna002/cephci-jenkins/cephci-command-results"
 
-        # Ensure each directory in the hierarchy exists
+        # Construct target path and ensure directory permissions
         target_path = os.path.join(remote_base_dir, openstack_version, rhel_version, ceph_version, subcomponent_filter, subfolder)
-        os.makedirs(target_path, exist_ok=True)
+        ensure_directory_with_permissions(target_path)
 
         match = re.search(r"radosgw-admin (\w+)", command)
         if match:
@@ -147,7 +154,7 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
     else:
         local_base_dir = os.path.join(current_dir, "subcommandsoutput")
         target_path = os.path.join(local_base_dir, subcomponent_filter)
-        os.makedirs(target_path, exist_ok=True)
+        ensure_directory_with_permissions(target_path)
 
         match = re.search(r"radosgw-admin (\w+)", command)
         if match:
@@ -180,8 +187,9 @@ def get_log_files_from_directory(directory):
     log_files = []
     for root, _, files in os.walk(directory):
         for file in files:
-            if file.endswith(".log"):
-                log_files.append(os.path.join(root, file))
+            file_path = os.path.join(root, file)
+            if file.endswith(".log") and os.path.isfile(file_path):
+                log_files.append(file_path)
     return log_files
 
 
