@@ -78,7 +78,7 @@ def run(ceph_cluster, **kw):
                 osd_id=osd_id, pgid="meta", obj="osd_superblock", key="osd_superblock"
             )
             log.info(f"osd_superblock OMAP data: \n {out}")
-        except UnicodeDecodeError:
+        except Exception:
             log.info("OMAP content not in utf-8 encoding, skipping logging")
 
         # create a garbage file to corrupt osd_superblock object
