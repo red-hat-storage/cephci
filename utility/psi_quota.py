@@ -1,3 +1,4 @@
+import csv
 import json
 import os
 import shlex
@@ -7,6 +8,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from typing import Dict
 
+import requests
 import yaml
 from docopt import docopt
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -18,12 +20,13 @@ doc = """
 Utility to notify resource usage in RHOS-D.
 
     Usage:
-        psi_quota.py --osp-cred <cred-file>
+        psi_quota.py --osp-cred <cred-file> --rhosd-user-csv <rhod_users.csv>
         psi_quota.py (-h | --help)
 
     Options:
-        -h --help           Shows the command usage
-        --osp-cred <file>   API Credential file to access RHOS cloud.
+        -h --help                  Shows the command usage
+        --osp-cred <file>           API Credential file to access RHOS cloud.
+        --rhosd-user-csv <file>     URL to CSV file containing user data.
 """
 
 
@@ -230,6 +233,33 @@ def get_complete_quota(instance_detail, os_cred, project_name):
     return quota_stats
 
 
+def get_user_names(csv_url):
+    print(f"Fetching user list from: {csv_url}")  # Debugging statement
+
+    # Ensure the URL is valid
+    if not csv_url.startswith("http"):
+        raise ValueError(f"Invalid URL provided: {csv_url}")
+
+    # Fetch the CSV content from the URL
+    response = requests.get(csv_url, verify=False)
+    response.raise_for_status()  # Ensure the request was successful
+
+    # Convert CSV content to dictionary
+    user_dict = {}
+    lines = response.text.strip().split("\n")
+    reader = csv.reader(lines)
+
+    next(reader)  # Skip header row if present
+    for row in reader:
+        if len(row) >= 2:  # Ensure valid row structure
+            user_id, username = row[0].strip(), row[1].strip()
+            user_dict[user_id] = (
+                username if username else "Unknown"
+            )  # Handle missing names
+
+    return user_dict
+
+
 def send_email(html):
     """Sends Email with all the quota details."""
     msg = MIMEMultipart("alternative")
@@ -259,11 +289,14 @@ def send_email(html):
 def run(args: Dict) -> None:
     """Generates Report with the usage details of RHOS-D environment."""
     osp_cred_file = args["--osp-cred"]
+    rhosd_users_url = args["--rhosd-user-csv"]
     osp_cred = load_file(osp_cred_file)
     glbs = osp_cred.get("globals")
     os_cred = glbs.get("openstack-credentials")
     projects = ["ceph-jenkins", "ceph-ci", "ceph-core", "ceph-sys-test", "ceph-perf"]
     quota_details = []
+    user_names = get_user_names(rhosd_users_url)
+    print(user_names)
     for project in projects:
         os_cred["project"] = project
         try:
@@ -303,6 +336,13 @@ def run(args: Dict) -> None:
     final_details["user_stats"] = sorted(
         final_details["user_stats"], key=lambda d: d["RAM Used in GB"], reverse=True
     )
+    user_names = get_user_names(rhosd_users_url)
+    for user in final_details["user_stats"]:
+        user_id = user["User"]  # Assuming "User" key holds the ID
+        username = user_names.get(user_id, user_id)  # If not found, keep user_id
+        user["User"] = (
+            username if username != "Unknown" else user_id
+        )  # Keep ID if Unknown
 
     template = jinja_env.get_template("quota-template-stats.html")
     html = template.render(quota=final_details, pro_range=[70, 50], user_range=[20, 10])
