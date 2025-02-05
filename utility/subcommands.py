@@ -2,14 +2,15 @@ import json
 import os
 import re
 import hashlib
+import subprocess
 from docopt import docopt
 
 doc = """
 Standard script to fetch and process log files from a given URL.
 
 Usage:
-    shanky.py --url <complete_url> --filter <subcomponent_filter>
-    shanky.py (-h | --help)
+    subcommands.py --url <complete_url> --filter <subcomponent_filter>
+    subcommands.py (-h | --help)
 
 Options:
     -h --help                  Shows the command usage
@@ -92,11 +93,17 @@ def extract_radosgw_admin_commands(log_lines):
     return {"outputs": results}
 
 
-def ensure_directory_with_permissions(path):
-    """Creates the directory if it doesn't exist and sets full permissions."""
-    if not os.path.exists(path):
-        os.makedirs(path, exist_ok=True)
-        os.chmod(path, 0o777)  # Grant full read/write permissions
+def copy_to_remote(local_path):
+    """Copies output files to the remote path using subprocess.Popen."""
+    remote_path = "/home/jenkins/magna002/cephci-jenkins/cephci-command-results/"
+    
+    print(f"Copying files from {local_path} to {remote_path}...")
+    
+    try:
+        subprocess.Popen(["sudo", "cp",local_path, remote_path])
+        print("Successfully copied files to the remote path!")
+    except Exception as e:
+        print(f"Error copying files to remote path: {e}")
 
 
 def save_to_json(command, output, complete_url, subcomponent_filter):
@@ -110,76 +117,41 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
 
     current_dir = os.getcwd()
     print(f"Current working directory: {current_dir}")
+    
+    # Define the local storage path
+    local_base_dir = os.path.join("/Users/suriya/Documents", "achu", "output")
+    target_path = os.path.join(local_base_dir, subcomponent_filter)
+    print("the output stored",target_path)
+    
+    os.makedirs(target_path, exist_ok=True)
 
-    if "jenkins" in current_dir:
-        url_parts = complete_url.strip("/").split("/")
-        
+    match = re.search(r"radosgw-admin (\w+)", command)
+    if match:
+        subcommand = match.group(1)
+        local_file_path = os.path.join(target_path, f"{subcommand}_outputs.json")
+
         try:
-            openstack_version, rhel_version, subfolder, ceph_version = url_parts[5:9]
-        except IndexError:
-            print("Error: URL does not contain enough segments.")
-            return
+            if os.path.exists(local_file_path):
+                with open(local_file_path, "r") as local_file:
+                    try:
+                        data = json.load(local_file)
+                    except json.JSONDecodeError:
+                        data = {"outputs": []}
+            else:
+                data = {"outputs": []}
 
-        remote_base_dir = "/home/jenkins/magna002/cephci-jenkins/cephci-command-results"
+            if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
+                data["outputs"].append({"command": command, "output": output, "output_hash": output_hash})
+                with open(local_file_path, "w") as local_file:
+                    json.dump(data, local_file, indent=4)
 
-        # Construct target path and ensure directory permissions
-        target_path = os.path.join(remote_base_dir, openstack_version, rhel_version, ceph_version, subcomponent_filter, subfolder)
-        ensure_directory_with_permissions(target_path)
+                print(f"Saved output for {subcommand} to local directory: {local_file_path}")
 
-        match = re.search(r"radosgw-admin (\w+)", command)
-        if match:
-            subcommand = match.group(1)
-            remote_file_path = os.path.join(target_path, f"{subcommand}_outputs.json")
+        except Exception as e:
+            print(f"Error saving file in local directory: {e}")
 
-            try:
-                if os.path.exists(remote_file_path):
-                    with open(remote_file_path, "r") as remote_file:
-                        try:
-                            data = json.load(remote_file)
-                        except json.JSONDecodeError:
-                            data = {"outputs": []}
-                else:
-                    data = {"outputs": []}
-
-                if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
-                    data["outputs"].append({"command": command, "output": output, "output_hash": output_hash})
-                    with open(remote_file_path, "w") as remote_file:
-                        json.dump(data, remote_file, indent=4)
-
-                    print(f"Saved output for {subcommand} to remote directory: {remote_file_path}")
-
-            except Exception as e:
-                print(f"Error saving file in remote directory: {e}")
-
-    else:
-        local_base_dir = os.path.join(current_dir, "subcommandsoutput")
-        target_path = os.path.join(local_base_dir, subcomponent_filter)
-        ensure_directory_with_permissions(target_path)
-
-        match = re.search(r"radosgw-admin (\w+)", command)
-        if match:
-            subcommand = match.group(1)
-            local_file_path = os.path.join(target_path, f"{subcommand}_outputs.json")
-
-            try:
-                if os.path.exists(local_file_path):
-                    with open(local_file_path, "r") as local_file:
-                        try:
-                            data = json.load(local_file)
-                        except json.JSONDecodeError:
-                            data = {"outputs": []}
-                else:
-                    data = {"outputs": []}
-
-                if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
-                    data["outputs"].append({"command": command, "output": output, "output_hash": output_hash})
-                    with open(local_file_path, "w") as local_file:
-                        json.dump(data, local_file, indent=4)
-
-                    print(f"Saved output for {subcommand} to local directory: {local_file_path}")
-
-            except Exception as e:
-                print(f"Error saving file in local directory: {e}")
+    # Copy the entire local output directory to the remote path
+    copy_to_remote(local_base_dir)
 
 
 def get_log_files_from_directory(directory):
@@ -187,9 +159,8 @@ def get_log_files_from_directory(directory):
     log_files = []
     for root, _, files in os.walk(directory):
         for file in files:
-            file_path = os.path.join(root, file)
-            if file.endswith(".log") and os.path.isfile(file_path):
-                log_files.append(file_path)
+            if file.endswith(".log"):
+                log_files.append(os.path.join(root, file))
     return log_files
 
 
