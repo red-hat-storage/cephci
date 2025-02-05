@@ -92,20 +92,38 @@ def extract_radosgw_admin_commands(log_lines):
 
     return {"outputs": results}
 
-
-def copy_to_remote(local_path):
+def copy_to_remote(local_path, subcomponent_filter):
     """Copies output files to the remote path using subprocess.Popen."""
-    remote_path = "/home/jenkins/magna002/cephci-jenkins/cephci-command-results/"
-    
-    print(f"Copying files from {local_path} to {remote_path}...")
-    
+    remote_base_path = "/home/jenkins/magna002/cephci-jenkins/cephci-command-results/"
+
+    # Get the current working directory
+    current_dir = os.getcwd()
+    print(f"Current working directory: {current_dir}")
+
+    # Extract parts from the current directory
+    parts = current_dir.split("/")
     try:
+        openstack_version = parts[6]
+        rhel_version = parts[7]
+        ceph_version_full = parts[9]
+        subfolder = parts[8]
+    except ValueError:
+        print("Error: 'RH' not found in the current directory path.")
+        return
+
+    # Build the remote path
+    remote_path = os.path.join(remote_base_path,openstack_version,rhel_version,ceph_version_full,subcomponent_filter,subfolder)
+    print(f"Creating remote path {remote_path} and copying files from {local_path}...")
+
+    try:
+        # Create the remote directory structure
         subprocess.Popen(["sudo", "mkdir", "-p", remote_path])
-        subprocess.Popen(["sudo", "cp",local_path, remote_path])
-        print("Successfully copied files to the remote path!")
+
+        # Copy files to the constructed remote path
+        subprocess.Popen(["sudo", "cp", local_path, remote_path])
+        print("Successfully created remote path and copied files!")
     except Exception as e:
         print(f"Error copying files to remote path: {e}")
-
 
 def save_to_json(command, output, complete_url, subcomponent_filter):
     """Saves extracted command output to a structured JSON file."""
