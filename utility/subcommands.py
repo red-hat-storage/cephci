@@ -60,6 +60,16 @@ def extract_radosgw_admin_commands(log_lines):
     
     return {"outputs": results}
 
+def create_remote_directory(path):
+    """Ensure the remote directory exists with proper permissions."""
+    try:
+        os.makedirs(path, exist_ok=True)
+        os.chmod(path, 0o775)  # Give read/write/execute permissions to the owner and group
+    except PermissionError as e:
+        print(f"Permission error while creating {path}: {e}")
+        return False
+    return True
+
 def save_to_remote(command, output, subcomponent_filter):
     """Save extracted command outputs directly to the remote path."""
     output_hash = compute_output_hash(output)
@@ -73,8 +83,9 @@ def save_to_remote(command, output, subcomponent_filter):
         base_dir = os.path.join("/home/jenkins/magna002/cephci-jenkins/cephci-command-results/",openstack_version,rhel_version,ceph_version_full,subcomponent_filter,subfolder)
     else:
         base_dir = os.path.join(current_dir, "subcommandsoutput", "rgw")
-
-    os.makedirs(base_dir, exist_ok=True)
+    if not create_remote_directory(base_dir):
+        print(f"Skipping saving due to permission issue: {base_dir}")
+        return
     
     match = re.search(r"radosgw-admin (\w+)", command)
     if match:
