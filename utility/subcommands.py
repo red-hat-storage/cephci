@@ -92,38 +92,32 @@ def extract_radosgw_admin_commands(log_lines):
 
     return {"outputs": results}
 
+
 def copy_to_remote(local_path, subcomponent_filter):
     """Copies output files to the remote path using subprocess.Popen."""
-    remote_base_path = "/home/jenkins/magna002/cephci-jenkins/cephci-command-results/"
-
-    # Get the current working directory
-    current_dir = os.getcwd()
-    print(f"Current working directory: {current_dir}")
-
-    # Extract parts from the current directory
-    parts = current_dir.split("/")
+    parts = local_path.split("/")
     try:
-        openstack_version = parts[6]
-        rhel_version = parts[7]
-        ceph_version_full = parts[9]
-        subfolder = parts[8]
-    except ValueError:
-        print("Error: 'RH' not found in the current directory path.")
-        return
+        index_rh = parts.index("RH")
+        structured_parts = [
+            parts[index_rh + 1],  # 8.0
+            parts[index_rh + 2],  # rhel-9.5
+            parts[index_rh + 4],  # 19.2.0-73
+            subcomponent_filter,  # Dynamic part based on argument
+            parts[index_rh + 3],  # Test
+        ]
+        remote_path = os.path.join(
+            "/home/jenkins/magna002/cephci-jenkins/cephci-command-results/", *structured_parts
+        )
+        
+        print(f"Copying files from {local_path} to {remote_path}...")
 
-    # Build the remote path
-    remote_path = os.path.join(remote_base_path,openstack_version,rhel_version,ceph_version_full,subcomponent_filter,subfolder)
-    print(f"Creating remote path {remote_path} and copying files from {local_path}...")
+        os.makedirs(remote_path, exist_ok=True)
+        subprocess.run(["sudo", "cp", "-r", local_path, remote_path], check=True)
+        print("Successfully copied files to the remote path!")
 
-    try:
-        # Create the remote directory structure
-        subprocess.Popen(["sudo", "mkdir", "-p", remote_path])
-
-        # Copy files to the constructed remote path
-        subprocess.Popen(["sudo", "cp", local_path, remote_path])
-        print("Successfully created remote path and copied files!")
     except Exception as e:
         print(f"Error copying files to remote path: {e}")
+
 
 def save_to_json(command, output, complete_url, subcomponent_filter):
     """Saves extracted command output to a structured JSON file."""
@@ -138,10 +132,8 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
     print(f"Current working directory: {current_dir}")
     
     if "jenkins" in current_dir:
-        local_base_dir = os.path.join(current_dir, "rgw", "outputs")
+        local_base_dir = os.path.join(current_dir, subcomponent_filter, "outputs")
         target_path = os.path.join(local_base_dir, subcomponent_filter)
-        print("the output stored",target_path)
-        
         os.makedirs(target_path, exist_ok=True)
 
         match = re.search(r"radosgw-admin (\w+)", command)
@@ -169,38 +161,9 @@ def save_to_json(command, output, complete_url, subcomponent_filter):
             except Exception as e:
                 print(f"Error saving file in local directory: {e}")
 
-        # Copy the entire local output directory to the remote path
-        copy_to_remote(local_path, subcomponent_filter)
-    else:
-        local_dir = os.path.join(current_dir, "subcommandsoutput")
-        os.makedirs(local_dir, exist_ok=True)
+        # Copy to the remote path
+        copy_to_remote(local_base_dir, subcomponent_filter)
 
-        os.chdir(local_dir)
-
-        match = re.search(r"radosgw-admin (\w+)", command)
-        if match:
-            subcommand = match.group(1)
-            local_file_path = os.path.join(local_dir, f"{subcommand}_outputs.json")
-
-            try:
-                if os.path.exists(local_file_path):
-                    with open(local_file_path, "r") as local_file:
-                        try:
-                            data = json.load(local_file)
-                        except json.JSONDecodeError:
-                            data = {"outputs": []}
-                else:
-                    data = {"outputs": []}
-
-                if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
-                    data["outputs"].append({"command": command, "output": output, "output_hash": output_hash})
-                    with open(local_file_path, "w") as local_file:
-                        json.dump(data, local_file, indent=4)
-
-                    print(f"Saved output for {subcommand} to local directory: {local_file_path}")
-
-            except Exception as e:
-                print(f"Error saving file in local directory: {e}")
 
 def get_log_files_from_directory(directory):
     """Returns a list of all .log files in a given directory."""
