@@ -2,7 +2,7 @@ import json
 import os
 import pickle
 import re
-
+from utility import subcommands
 import yaml
 from docopt import docopt
 
@@ -167,6 +167,7 @@ def get_ceph_var_logs(cluster, log_dir):
     """
     download_dir = os.path.join(log_dir, "ceph_logs")
     os.makedirs(download_dir, exist_ok=True)
+    subcommands.run(download_dir,"rgw")
     for node in cluster.get_nodes():
         tar_file = f"{node.hostname}-cephlog.tar"
         node.exec_command(cmd=f"tar -cvzf {tar_file} {CEPH_VAR_LOG_DIR}", sudo=True)
