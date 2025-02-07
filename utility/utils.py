@@ -2467,3 +2467,18 @@ print(port)
 
 def log_json_dump(data):
     return json.dumps(data, indent=4)
+
+
+def get_registry_info(registry):
+    """Get Registry details from cephci configuration yaml file.
+
+    Args:
+        registry: registry name
+    """
+    try:
+        __regs = get_cephci_config()["registries"]
+        return __regs[registry]
+    except KeyError:
+        raise KeyError(
+            "CephCI configuration yaml file does not have 'registries' section"
+        )
