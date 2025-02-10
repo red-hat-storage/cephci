@@ -253,16 +253,16 @@ def run(ceph_cluster, **kw):
                 log.debug(f"The log lines for the OSD: {target_osd} is :{log_veri}")
 
                 # If _open_super_meta min_alloc_size is found in the logs, print the log lines
-                if f"_open_super_meta min_alloc_size {hex(4096)}" in log_veri:
+                if f"_open_super_meta min_alloc_size {hex(alloc_size)}" in log_veri:
                     log.info(
-                        f"Found '_open_super_meta min_alloc_size {hex(4096)}' in the logs for OSD {target_osd}"
+                        f"Found '_open_super_meta min_alloc_size {hex(alloc_size)}' in the logs for OSD {target_osd}"
                     )
                 else:
                     log.error(
                         f"Error: '_open_super_meta min_alloc_size' not found in the logs for OSD {target_osd}"
                     )
                     raise Exception(
-                        f"Desired log '_open_super_meta min_alloc_size {hex(4096)}'"
+                        f"Desired log '_open_super_meta min_alloc_size {hex(alloc_size)}'"
                         "not found for OSD {target_osd}"
                     )
 
