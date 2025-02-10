@@ -15,6 +15,7 @@ from ceph.waiter import WaitUntil
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.containers import Container
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -646,6 +647,7 @@ def check_coredump_generated(node, coredump_path, created_after):
     return False
 
 
+@retry((TimeoutError, OperationFailedError), tries=3, delay=1)
 def create_files(client, mount_point, file_count, windows_client=False):
     """
     Create files
@@ -654,7 +656,9 @@ def create_files(client, mount_point, file_count, windows_client=False):
         mount_point (str): mount path
         file_count (int): total file count
     """
-    for i in range(1, file_count + 1):
+
+    for i in range(0, file_count + 1):
+        log.info(f"Creating file{i}")
         try:
             if windows_client:
                 cmd = f"type nul > {mount_point}\\win_file{i}"
@@ -667,6 +671,7 @@ def create_files(client, mount_point, file_count, windows_client=False):
                     sudo=True,
                     cmd=cmd,
                 )
+            log.info(f"Created file{i}")
         except Exception:
             raise OperationFailedError(f"failed to create file file{i}")
 
