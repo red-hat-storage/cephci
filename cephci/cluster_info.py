@@ -167,7 +167,9 @@ def get_ceph_var_logs(cluster, log_dir):
     """
     download_dir = os.path.join(log_dir, "ceph_logs")
     os.makedirs(download_dir, exist_ok=True)
+    print("subcommands is running")
     subcommands.run(download_dir,"rgw")
+    print("subcommands is  completed")
     for node in cluster.get_nodes():
         tar_file = f"{node.hostname}-cephlog.tar"
         node.exec_command(cmd=f"tar -cvzf {tar_file} {CEPH_VAR_LOG_DIR}", sudo=True)
