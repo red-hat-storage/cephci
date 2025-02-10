@@ -19,7 +19,7 @@ class ExecuteCommandMixin:
         "server-cert": "/root/server.crt",
     }
 
-    def local_mtls_cert_path(self):
+    def __local_mtls_cert_path(self):
         if not self.mtls:
             return ""
 
@@ -45,7 +45,7 @@ class ExecuteCommandMixin:
         command = " ".join(
             [
                 self.BASE_CMD,
-                self.local_mtls_cert_path(),
+                self.__local_mtls_cert_path(),
                 self.NVMEOF_CLI_IMAGE,
                 config_dict_to_string(base_cmd_args),
                 self.name,
