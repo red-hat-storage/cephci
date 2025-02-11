@@ -43,6 +43,8 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node5:
+        networks:
+          - shared_net_15
         role:
           - osd
           - nfs
@@ -58,14 +60,13 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node7:
-        image-name:
-          openstack: RHEL-9.4.0-x86_64-ga-latest
-          ibmc: rhel-91-server-released
         networks:
           - shared_net_2
         role:
           - client
       node8:
+        networks:
+          - shared_net_15
         role:
           - mon
           - mgr
@@ -73,6 +74,8 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node9:
+        networks:
+          - shared_net_15
         role:
           - osd
           - mon
@@ -80,12 +83,16 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node10:
+        networks:
+          - shared_net_15
         role:
           - osd
           - nfs
         no-of-volumes: 4
         disk-size: 15
       node11:
+        networks:
+          - shared_net_15
         role:
           - mon
           - mgr
@@ -93,16 +100,22 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node12:
+        networks:
+          - shared_net_15
         role:
           - osd-bak
         no-of-volumes: 4
         disk-size: 15
       node13:
+        networks:
+          - shared_net_15
         role:
           - osd-bak
         no-of-volumes: 4
         disk-size: 15
       node14:
+        networks:
+          - shared_net_15
         role:
           - rgw
           - mds

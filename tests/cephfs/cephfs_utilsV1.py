@@ -126,6 +126,27 @@ class FsUtils(object):
                 client.node.exec_command(
                     cmd="git clone https://github.com/bengland2/smallfile.git"
                 )
+            if "iozone" not in out:
+                cmd = "cd /home/cephuser;wget http://www.iozone.org/src/current/iozone3_506.tar;"
+                cmd += "tar xvf iozone3_506.tar;cd iozone3_506/src/current/;make;make linux"
+                client.node.exec_command(cmd=cmd)
+            out, rc = client.node.exec_command(
+                sudo=True, cmd="rpm -qa | grep -w 'dbench'", check_ec=False
+            )
+            if "dbench" not in out:
+                log.info("Installing dbench")
+                client.node.exec_command(
+                    sudo=True,
+                    cmd=(
+                        "rhel_version=$(rpm -E %rhel) && "
+                        "dnf config-manager --add-repo="
+                        "https://download.fedoraproject.org/pub/epel/${rhel_version}/Everything/x86_64/"
+                    ),
+                )
+                client.node.exec_command(
+                    sudo=True,
+                    cmd="dnf install dbench -y --nogpgcheck",
+                )
         if (
             hasattr(clients[0].node, "vm_node")
             and clients[0].node.vm_node.node_type == "baremetal"
@@ -662,8 +683,7 @@ class FsUtils(object):
         Return:
             returns ceph fs volume info dump in json format
         """
-        if fs_name:
-            fs_info_cmd = f"ceph fs volume info {fs_name} --format json"
+        fs_info_cmd = f"ceph fs volume info {fs_name} --format json"
         if kwargs.get("human_readable"):
             fs_info_cmd += " --human-readable"
 
@@ -3657,6 +3677,23 @@ os.system('sudo systemctl start  network')
         log.info("Ceph Cluster is Healthy")
         return health_status
 
+    def monitor_ceph_health(self, client, retry, interval):
+        """
+        Monitors Ceph health and prints ceph status at regular intervals
+        Args:
+            client : client node.
+            retry  : Number of times to retry the command
+            intervals: Time duration between the retries (in seconds)
+        Return:
+            Prints Status of the Ceph Health.
+        """
+        for i in range(1, retry + 1):
+            log.info(f"Running health status: Iteration: {i}")
+            self.get_ceph_health_status(client)
+            fs_status_info = self.get_fs_status_dump(client)
+            log.info(f"FS Status: {fs_status_info}")
+            time.sleep(interval)
+
     @retry(CommandFailed, tries=10, delay=30)
     def wait_for_host_online(self, client1, node):
         out, rc = client1.exec_command(sudo=True, cmd="ceph orch host ls -f json")
@@ -3942,14 +3979,19 @@ os.system('sudo systemctl start  network')
             sudo=True,
             cmd=f"ceph fs status {fs_name} -f json | jq '.mdsmap[] | select(.rank == {rank}) | .name'",
         )
+        log.info(f"Executing MDS name with rank command: {ranked_mds}")
         ranked_mds = ranked_mds.replace('"', "").replace("\n", "")
         client_id_cmd = (
             f"ceph tell mds.{ranked_mds} session ls | jq '.[] | select(.client_metadata.mount_point"
             f' != null and (.client_metadata.mount_point | contains("{mounted_dir}"))) | .id\''
         )
+        log.info(f"Executing Client ID Command : {client_id_cmd}")
         client_id, _ = client.exec_command(sudo=True, cmd=client_id_cmd)
         client_id = client_id.replace('"', "").replace("\n", "")
-        log.info(f"Client ID : {client_id} for Mounted Directory : {mounted_dir}")
+        if client_id == "":
+            log.error(f"Client not found for Mounted Directory : {mounted_dir}")
+            return 1
+        log.info(f"Client ID :[{client_id}] for Mounted Directory : [{mounted_dir}]")
         cmd = f""" ceph tell mds.{ranked_mds} counter dump 2>/dev/null | \
             jq -r '. | to_entries | map(select(.key | match("mds_client_metrics"))) | \
             .[].value[] | select(.labels.client != null and (.labels.client | contains("{client_id}"))
@@ -3959,6 +4001,9 @@ os.system('sudo systemctl start  network')
         log.info(
             f"Metrics for MDS : {ranked_mds} Mounted Directory: {mounted_dir} and Client : {client_id} is {metrics_out}"
         )
+        if metrics_out == "":
+            log.error(f"Metrics not found for MDS : {ranked_mds}")
+            return 1
         metrics_out = json.loads(str(metrics_out))
 
         return metrics_out
@@ -4456,16 +4501,18 @@ os.system('sudo systemctl start  network')
                 clients.exec_command(sudo=True, cmd=create_path_cmd)
 
             log.info(f"Path exists or created successfully: {path}")
+            file = "create_files.sh"
+            clients.upload_file(
+                sudo=True,
+                src="tests/cephfs/cephfs_multi_mds/create_files.sh",
+                dst=f"/root/{file}",
+            )
 
-            for i in range(0, num_of_files, batch_size):
-                batch_end = min(i + batch_size, num_of_files)
-                for j in range(i, batch_end):
-                    file_path = os.path.join(path, f"file_{j}.txt")
-                    create_file_cmd = (
-                        f"echo 'Created files {j}' | sudo tee {file_path} > /dev/null"
-                    )
-                    clients.exec_command(sudo=True, cmd=create_file_cmd)
-                log.info(f"Created files {i} to {batch_end - 1}")
+            clients.exec_command(
+                sudo=True,
+                cmd=f"bash /root/{file} {path} {num_of_files} {batch_size}",
+                timeout=3600,
+            )
             log.info(f"Successfully created {num_of_files} files in {path}")
         except Exception as e:
             log.error(f"An error occurred: {e}")
@@ -4986,7 +5033,6 @@ os.system('sudo systemctl start  network')
         fs_name,
         clients,
         mount_paths,
-        mount_type,
         max_mds_value,
     ):
         """
@@ -5457,7 +5503,7 @@ os.system('sudo systemctl start  network')
         )
         return fs_status_dict
 
-    def collect_fs_volume_info_for_validation(self, client, fs_name):
+    def collect_fs_volume_info_for_validation(self, client, fs_name, **kwargs):
         """
         Gets the output using fs volume info and collected required info
         Args:
@@ -5467,7 +5513,10 @@ os.system('sudo systemctl start  network')
             returns data_avail,data_used,meta_avail,meta_used and mon addrs from ceph fs volume info in dict format
         """
         fs_volume_info_dict = {}
-        fs_vol_info = self.get_fs_info_dump(client, fs_name, human_readable=False)
+
+        fs_vol_info = self.get_fs_info_dump(
+            client, fs_name, human_readable=kwargs.get("human_readable", False)
+        )
         log.debug(f"Output: {fs_vol_info}")
 
         data_avail = self.fetch_value_from_json_output(
@@ -5670,3 +5719,40 @@ os.system('sudo systemctl start  network')
                         log.error(f"Key '{key}' mismatch: Values = {values}")
                         return False
         return True
+
+    def rename_volume(self, client, old_name, new_name):
+        log.info(f"[Fail {old_name} before renaming it]")
+        client.exec_command(
+            sudo=True, cmd=f"ceph fs fail {old_name} --yes-i-really-mean-it"
+        )
+        log.info("[Set refuse_client_session to true]")
+        client.exec_command(
+            sudo=True, cmd=f"ceph fs set {old_name} refuse_client_session true"
+        )
+        log.info("[Rename the volume]")
+        rename_cmd = f"ceph fs rename {old_name} {new_name} --yes-i-really-mean-it"
+        out, ec = client.exec_command(sudo=True, cmd=rename_cmd)
+        if "renamed." not in ec:
+            log.error(ec)
+            log.error(f"Failed to rename the volume: {out}")
+            return 1
+        out, ec = client.exec_command(sudo=True, cmd="ceph fs ls")
+        if new_name not in out:
+            log.error(f"Volume not renamed: {out}")
+            return 1
+        log.info(f"Volume renamed successfully: {out}")
+        log.info("Put it back to previous state")
+        client.exec_command(
+            sudo=True, cmd="ceph fs set " + new_name + " refuse_client_session false"
+        )
+        client.exec_command(sudo=True, cmd=f"ceph fs set {new_name} joinable true")
+        timer = 10
+        while timer > 0:
+            out, ec = client.exec_command(sudo=True, cmd=f"ceph fs status {new_name}")
+            if "active" in out:
+                break
+            time.sleep(5)
+            timer -= 1
+        log.info(f"Volume {new_name} is active now")
+        log.info("Renaming and verification of volume successful")
+        return 0

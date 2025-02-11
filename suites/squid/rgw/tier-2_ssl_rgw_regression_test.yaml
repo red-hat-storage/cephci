@@ -292,16 +292,6 @@ tests:
         config-file-name: test_rgw_enable_lc_threads.yaml
 
   - test:
-      name: Test single delete marker for versioned object using LC
-      desc: Test single delete marker for versioned object using LC
-      polarion-id: CEPH-83574806
-      module: sanity_rgw.py
-      config:
-        run-on-rgw: true
-        script-name: test_bucket_lifecycle_object_expiration_transition.py
-        config-file-name: test_lc_multiple_delete_marker.yaml
-
-  - test:
       name: Test NFS cluster and export create
       desc: Test NFS cluster and export create
       polarion-id: CEPH-83574597
@@ -370,7 +360,7 @@ tests:
       config:
         run-on-rgw: true
         extra-pkgs:
-          - wget https://download.oracle.com/java/23/latest/jdk-23_linux-x64_bin.rpm
+          - jdk
         install_start_kafka: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml

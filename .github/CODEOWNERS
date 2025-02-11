@@ -8,6 +8,7 @@ rgw/                @mkasturi18 @ckulal @TejasC88
 # for RBD team 
 rbd/                @Manohar-Murthy
 rbd_mirror/         @Manohar-Murthy
+iscsi/              @Manohar-Murthy @HaruChebrolu
 
 # for NVMe-oF
 nvmeof/             @Manohar-Murthy @HaruChebrolu

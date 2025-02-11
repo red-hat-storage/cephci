@@ -709,8 +709,7 @@ tests:
         script-name: test_rgw_mfa.py
         config-file-name: test_rgw_mfa.yaml
         extra-pkgs:
-          8:
-            - https://dl.fedoraproject.org/pub/epel/8/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el8.x86_64.rpm
+            - oathtool
 
   - test:
       name: multipart versioned object deletion with mfa token
@@ -922,7 +921,7 @@ tests:
   #     desc: Test LC transition with rule by lc process
   #     polarion-id: CEPH-83574044
   #     module: sanity_rgw.py
-  #     comments: known issue (BZ-2315885) targeted to 7.1z3
+  #     comments: known issue (BZ-2315885) targeted to 7.1z4
   #     config:
   #       script-name: test_bucket_lifecycle_object_expiration_transition.py
   #       config-file-name: test_lc_transition_with_lc_process.yaml

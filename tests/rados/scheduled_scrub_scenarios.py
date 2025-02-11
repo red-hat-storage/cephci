@@ -1,6 +1,6 @@
 """
-   This module contains the methods required to check the scheduled scrubbing scenarios.
-   Based on the test cases setting the scrub parameters and verifying the functionality.
+This module contains the methods required to check the scheduled scrubbing scenarios.
+Based on the test cases setting the scrub parameters and verifying the functionality.
 """
 
 import os

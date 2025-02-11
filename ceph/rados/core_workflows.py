@@ -416,6 +416,7 @@ class RadosOrchestrator:
                 - rados_write_duration -> duration of write operation (int)
                 - byte_size -> size of objects to be written (str)
                     eg : 10KB, default - 4096KB
+                - num_threads -> Number of threads to be used(int)
                 - max_objs -> max number of objects to be written (int)
                 - verify_stats -> arg to control whether obj stats need to
                   be verified after write (bool) | default: True
@@ -427,6 +428,7 @@ class RadosOrchestrator:
         """
         duration = kwargs.get("rados_write_duration", 200)
         byte_size = kwargs.get("byte_size", 4096)
+        num_threads = kwargs.get("num_threads")
         max_objs = kwargs.get("max_objs")
         verify_stats = kwargs.get("verify_stats", True)
         check_ec = kwargs.get("check_ec", True)
@@ -436,6 +438,8 @@ class RadosOrchestrator:
         if nocleanup:
             cmd = f"{cmd} --no-cleanup"
         org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
+        if num_threads:
+            cmd = f"{cmd} -t {num_threads}"
         if max_objs:
             cmd = f"{cmd} --max-objects {max_objs}"
         if kwargs.get("background"):
@@ -1176,6 +1180,21 @@ class RadosOrchestrator:
             return False
         return True
 
+    def disable_file_logging(self) -> bool:
+        """
+        Disable the cluster logging
+        Returns: True -> pass, False -> fail
+        """
+        try:
+            cmd = "ceph config set global log_to_file false"
+            self.node.shell([cmd])
+            cmd = "ceph config set global mon_cluster_log_to_file false"
+            self.node.shell([cmd])
+        except Exception:
+            log.error("Error while disabling config to log into file")
+            return False
+        return True
+
     def get_ec_profiles(self) -> list:
         """
         Fetches all the EC profiles present on the cluster
@@ -1421,50 +1440,44 @@ class RadosOrchestrator:
         )
         host.exec_command(sudo=True, cmd=cmd)
         # verifying the osd state
-        if action in ["start", "stop"]:
-            start_time = datetime.datetime.now()
-            timeout_time = start_time + datetime.timedelta(seconds=timeout)
+        start_time = datetime.datetime.now()
+        timeout_time = start_time + datetime.timedelta(seconds=timeout)
 
-            while datetime.datetime.now() <= timeout_time:
-                osd_status, status_desc = self.get_daemon_status(
-                    daemon_type="osd", daemon_id=target
-                )
-                log.info(f"osd_status: {osd_status}, status_desc: {status_desc}")
-                if (osd_status == 0 or status_desc == "stopped") and action == "stop":
-                    break
-                elif (
-                    osd_status == 1 or status_desc == "running"
-                ) and action == "start":
-                    break
-                time.sleep(20)
-
-            if action == "stop" and osd_status != 0:
-                log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
-                pass_status = False
-            if action == "start" and osd_status != 1:
-                log.error(
-                    f"Failed to start the OSD.{target} service on {host.hostname}"
-                )
-                pass_status = False
-            if not pass_status:
-                log.error(
-                    f"Collecting the journalctl logs for OSD.{target} service on {host.hostname} for the failure"
-                )
-                end_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
-                osd_log_lines = self.get_journalctl_log(
-                    start_time=init_time,
-                    end_time=end_time,
-                    daemon_type="osd",
-                    daemon_id=str(target),
-                )
-                log.error(
-                    f"\n\n ------------ Log lines from journalctl ---------------- \n"
-                    f"{osd_log_lines}\n\n"
-                )
-                return False
-        else:
-            # Baremetal systems take some time for daemon restarts. changing sleep accordingly
+        while datetime.datetime.now() <= timeout_time:
+            osd_status, status_desc = self.get_daemon_status(
+                daemon_type="osd", daemon_id=target
+            )
+            log.info(f"osd_status: {osd_status}, status_desc: {status_desc}")
+            if (osd_status == 0 or status_desc == "stopped") and action == "stop":
+                break
+            elif (osd_status == 1 or status_desc == "running") and (
+                action == "start" or action == "restart"
+            ):
+                break
             time.sleep(20)
+
+        if action == "stop" and osd_status != 0:
+            log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
+            pass_status = False
+        if (action == "start" or action == "restart") and osd_status != 1:
+            log.error(f"Failed to start the OSD.{target} service on {host.hostname}")
+            pass_status = False
+        if not pass_status:
+            log.error(
+                f"Collecting the journalctl logs for OSD.{target} service on {host.hostname} for the failure"
+            )
+            end_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+            osd_log_lines = self.get_journalctl_log(
+                start_time=init_time,
+                end_time=end_time,
+                daemon_type="osd",
+                daemon_id=str(target),
+            )
+            log.error(
+                f"\n\n ------------ Log lines from journalctl ---------------- \n"
+                f"{osd_log_lines}\n\n"
+            )
+            return False
         return True
 
     def fetch_host_node(self, daemon_type: str, daemon_id: str = None) -> object:

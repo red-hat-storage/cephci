@@ -1,4 +1,4 @@
-""" Test module to verify replica-1 non-resilient pool functionalities"""
+"""Test module to verify replica-1 non-resilient pool functionalities"""
 
 import time
 from copy import deepcopy

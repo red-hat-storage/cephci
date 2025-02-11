@@ -49,6 +49,18 @@ tests:
                 root: default
                 datacenter: DC2
             - service_type: mon
+              spec:
+                crush_locations:
+                  node1:
+                    - datacenter=tiebreaker
+                  node2:
+                    - datacenter=DC1
+                  node3:
+                    - datacenter=DC1
+                  node5:
+                    - datacenter=DC2
+                  node6:
+                    - datacenter=DC2
               placement:
                 label: mon
             - service_type: mgr
@@ -130,9 +142,7 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        nodes:
-          - node8:
-              release: 6
+        nodes: node8
         install_packages:
           - ceph-common
           - ceph-base
