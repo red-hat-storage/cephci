@@ -85,6 +85,7 @@ class FsUtils(object):
                     client=self.clients[0]
                 )  # daemons_value will use the default value
 
+    @retry(CommandFailed, tries=3, delay=60)
     def prepare_clients(self, clients, build):
         """
         Installs all the required rpms and clones the tools required for running Tests on clients
