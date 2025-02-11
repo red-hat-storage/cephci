@@ -1,6 +1,5 @@
 """
- BZ#2330755: Verification of  deep scrub taking too long under mclock I/O scheduler .
-
+BZ#2330755: Verification of  deep scrub taking too long under mclock I/O scheduler .
 """
 
 import datetime
