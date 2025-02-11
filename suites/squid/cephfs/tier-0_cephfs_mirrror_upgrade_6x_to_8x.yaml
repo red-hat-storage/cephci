@@ -152,16 +152,6 @@ tests:
       module: test_client.py
       name: configure client
   - test:
-      abort-on-fail: true
-      desc: Configure CephFS Mirroring
-      clusters:
-        ceph1:
-          config:
-            name: Validate the Synchronisation is successful upon enabling fs mirroring
-      module: cephfs_mirror_upgrade.configure_cephfs_mirroring.py
-      name: Validate the Synchronisation is successful upon enabling fs mirroring.
-      polarion-id: CEPH-83574099
-  - test:
       abort-on-fail: false
       desc: "Validate snapshot synchronisation perf improvements"
       clusters:
@@ -175,6 +165,17 @@ tests:
       name: Validate snapshot synchronisation perf improvements
       polarion-id: "CEPH-83595260"
   - test:
+      abort-on-fail: true
+      desc: Configure CephFS Mirroring
+      clusters:
+        ceph1:
+          config:
+            name: Validate the Synchronisation is successful upon enabling fs mirroring
+      module: cephfs_mirror_upgrade.configure_cephfs_mirroring.py
+      name: Validate the Synchronisation is successful upon enabling fs mirroring.
+      polarion-id: CEPH-83574099
+
+  - test:
       name: Upgrade along with IOs
       module: test_parallel.py
       parallel:
@@ -183,7 +184,7 @@ tests:
             config:
               timeout: 30
               client_upgrade: 1
-              client_upgrade_node: 'node8'
+              client_upgrade_node: 'node7'
             desc: Runs IOs in parallel with upgrade process
             module: cephfs_upgrade.cephfs_io.py
             name: "creation of Prerequisites for Upgrade"
@@ -208,7 +209,7 @@ tests:
                   verify_cluster_health: false
             destroy-cluster: false
       desc: Running upgrade, mds Failure and i/o's parallelly
-      abort-on-fail: true
+      abort-on-fail: false
   - test:
       abort-on-fail: false
       desc: Validate the Synchronisation is successful upon upgrade
