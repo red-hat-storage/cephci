@@ -6,6 +6,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmeof.initiator import Initiator
+from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
@@ -63,7 +64,8 @@ def run_io(ceph_cluster, ns_uuid, io):
 
 def configure_subsystems(config, _cls, command):
     max_ns = config["args"].pop("max-namespaces")
-    for num in range(1, config["args"].pop("subsystems") + 1):
+
+    def configure_subsystem(num):
         config["args"].update(
             {
                 "subsystem": f"nqn.2016-06.io.spdk:cnode{num}",
@@ -73,7 +75,12 @@ def configure_subsystems(config, _cls, command):
         )
         subsystem_func = fetch_method(_cls, command)
         subsystem_func(**config)
-    config["args"].clear()
+        config["args"].clear()
+
+    # Create subsystems in parallel
+    with parallel() as p:
+        for num in range(1, config["args"].pop("subsystems") + 1):
+            p.spawn(configure_subsystem, num)
 
 
 def configure_listeners(config, _cls, command, ceph_cluster):
@@ -82,29 +89,38 @@ def configure_listeners(config, _cls, command, ceph_cluster):
     nodes = config["args"].pop("nodes")
     group = config["args"].pop("group", None)
     LOG.info(nodes)
+
+    def configure_listener(num, listener_node):
+        subnqn = (
+            f"nqn.2016-06.io.spdk:cnode{num}{f'.{group}' if group is not None else ''}"
+        )
+        config["args"].update(
+            {
+                "subsystem": subnqn,
+                "host-name": listener_node.hostname,
+                "traddr": listener_node.ip_address,
+                "trsvcid": port,
+            }
+        )
+        config["base_cmd_args"] = {"server-address": listener_node.ip_address}
+        listener_func = fetch_method(_cls, command)
+        listener_func(**config)
+        config["args"].clear()
+
+    # configure listeners in parallel
     for node in nodes:
         LOG.info(node)
         listener_node = get_node_by_id(ceph_cluster, node)
-        for num in range(1, subsystems + 1):
-            subnqn = f"nqn.2016-06.io.spdk:cnode{num}{f'.{group}' if group is not None else ''}"
-            config["args"].update(
-                {
-                    "subsystem": subnqn,
-                    "host-name": listener_node.hostname,
-                    "traddr": listener_node.ip_address,
-                    "trsvcid": port,
-                }
-            )
-            config["base_cmd_args"] = {"server-address": listener_node.ip_address}
-            listener_func = fetch_method(_cls, command)
-            listener_func(**config)
-            config["args"].clear()
+        with parallel() as p:
+            for num in range(1, subsystems + 1):
+                p.spawn(configure_listener, num, listener_node)
 
 
 def configure_hosts(config, _cls, command):
     hostnqn = config["args"].pop("hostnqn", None) or "'*'"
     group = config["args"].pop("group", None)
-    for num in range(1, config["args"].pop("subsystems") + 1):
+
+    def configure_host(num):
         subnqn = (
             f"nqn.2016-06.io.spdk:cnode{num}{f'.{group}' if group is not None else ''}"
         )
@@ -118,68 +134,118 @@ def configure_hosts(config, _cls, command):
         host_access_func(**config)
         config["args"].clear()
 
+    # Configure hosts for subsystems in parallel
+    with parallel() as p:
+        for num in range(1, config["args"].pop("subsystems") + 1):
+            p.spawn(configure_host, num)
+
+
+def set_qos(namespaces_sub, sub_num, group, _cls):
+    for num in range(1, namespaces_sub + 1):
+        subnqn = f"nqn.2016-06.io.spdk:cnode{sub_num}{f'.{group}' if group is not None else ''}"
+        qos_config = {
+            "args": {
+                "nsid": num,
+                "subsystem": subnqn,
+                "rw-ios-per-second": 1500,
+                "rw-megabytes-per-second": 6,
+                "r-megabytes-per-second": 3,
+                "w-megabytes-per-second": 3,
+            },
+        }
+        qos_func = fetch_method(_cls, "set_qos")
+        qos_func(**qos_config)
+        LOG.info(f"Applied QoS for NSID {num}")
+        LOG.info(f"Updating QoS values for NSID {num}")
+        qos_config = {
+            "args": {
+                "nsid": num,
+                "subsystem": subnqn,
+                "rw-ios-per-second": 150,
+                "rw-megabytes-per-second": 59,
+                "r-megabytes-per-second": 59,
+                "w-megabytes-per-second": 59,
+            },
+        }
+        qos_func = fetch_method(_cls, "set_qos")
+        qos_func(**qos_config)
+        LOG.info(f"Updated QoS values for NSID {num}")
+
 
 def configure_namespaces(
     config, _cls, command, ceph_cluster, node, init_config, rbd_obj, io_param
 ):
+    # ns_info = []
     subsystems = config["args"].pop("subsystems")
     namespaces = config["args"].pop("namespaces")
-    image_size = config["args"].pop("image_size")
+    image_size = config["args"].pop("image_size", None)
     group = config["args"].pop("group", None)
-    pool = config["args"].pop("pool")
+    pool = config["args"].pop("pool", None)
     namespaces_sub = int(namespaces / subsystems)
-
-    for sub_num in range(1, subsystems + 1):
-        init_config.update(
-            {
-                "subnqn": f"nqn.2016-06.io.spdk:cnode{sub_num}{f'.{group}' if group is not None else ''}"
-            }
-        )
-        initiators(ceph_cluster, node, init_config)
-        name = generate_unique_id(length=4)
-        LOG.info(sub_num)
-        LOG.info(subsystems)
-
-        for num in range(1, namespaces_sub + 1):
-            rbd_obj.create_image(pool, f"{name}-image{num}", image_size)
-            LOG.info(num)
-            LOG.info(namespaces)
-            config["args"].clear()
-            subnqn = f"nqn.2016-06.io.spdk:cnode{sub_num}{f'.{group}' if group is not None else ''}"
-            config = {
-                "base_cmd_args": {"format": "json"},
-                "args": {
-                    "rbd-image": f"{name}-image{num}",
-                    "rbd-pool": pool,
-                    "subsystem": subnqn,
-                },
-            }
-
-            namespace_func = fetch_method(_cls, command)
-            _, namespaces = namespace_func(**config)
-            nsid = json.loads(namespaces)["nsid"]
-
-            _config = {
-                "base_cmd_args": {"format": "json"},
-                "args": {
-                    "nsid": nsid,
-                    "subsystem": subnqn,
-                },
-            }
-            namespace_list = fetch_method(_cls, "list")
-            _, namespace = namespace_list(**_config)
-            ns_uuid = json.loads(namespace)["namespaces"][0]["uuid"]
-
-            for io in io_param:
-                run_io(ceph_cluster, ns_uuid, io)
-
-            mem_usage, _ = node.exec_command(
-                cmd="ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
-                sudo=True,
+    if command == "add":
+        for sub_num in range(1, subsystems + 1):
+            init_config.update(
+                {
+                    "subnqn": f"nqn.2016-06.io.spdk:cnode{sub_num}{f'.{group}' if group is not None else ''}"
+                }
             )
-            LOG.info(mem_usage)
-            top_usage, _ = node.exec_command(cmd="top -b | head -n 20", sudo=True)
-            LOG.info(top_usage)
+            initiators(ceph_cluster, node, init_config)
+            name = generate_unique_id(length=4)
+            LOG.info(sub_num)
+            LOG.info(subsystems)
+
+            def configure_namespace(num, config):
+                rbd_obj.create_image(pool, f"{name}-image{num}", image_size)
+                LOG.info(num)
+                config["args"].clear()
+                subnqn = f"nqn.2016-06.io.spdk:cnode{sub_num}{f'.{group}' if group is not None else ''}"
+                config = {
+                    "base_cmd_args": {"format": "json"},
+                    "args": {
+                        "rbd-image": f"{name}-image{num}",
+                        "rbd-pool": pool,
+                        "subsystem": subnqn,
+                        "force": True,
+                    },
+                }
+
+                namespace_func = fetch_method(_cls, command)
+                _, namespaces = namespace_func(**config)
+                nsid = json.loads(namespaces)["nsid"]
+
+                _config = {
+                    "base_cmd_args": {"format": "json"},
+                    "args": {
+                        "subsystem": subnqn,
+                    },
+                }
+                namespace_list = fetch_method(_cls, "list")
+                _, namespace = namespace_list(**_config)
+                ns_uuid = json.loads(namespace)["namespaces"][0]["uuid"]
+                # ns_info.append({"subnqn": subnqn, "nsid": nsid, "ns_uuid": ns_uuid})
+
+                for io in io_param:
+                    run_io(ceph_cluster, ns_uuid, io)
+
+                mem_usage, _ = node.exec_command(
+                    cmd="ps -eo pid,ppid,cmd,comm,%mem,%cpu --sort=-%mem | head -20",
+                    sudo=True,
+                )
+                LOG.info(mem_usage)
+                top_usage, _ = node.exec_command(cmd="top -b | head -n 20", sudo=True)
+                LOG.info(top_usage)
+
+            # Configure namespaces in parallel
+            for num in range(1, namespaces_sub + 1):
+                with parallel() as p:
+                    p.spawn(configure_namespace, num, config)
+
+    # Apply QoS to all created namespaces
+    if command == "set_qos":
+        with parallel() as p:
+            for sub_num in range(1, subsystems + 1):
+                p.spawn(set_qos, namespaces_sub, sub_num, group, _cls)
+    # return ns_info
 
 
 def execute_and_log_results(node, rbd_pool):
@@ -219,6 +285,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             NVMeGWCLI.NVMEOF_CLI_IMAGE = value
             break
     nvmegwcli = NVMeGWCLI(node, port)
+    # ns_info = []
 
     try:
         steps = config.get("steps", [])
@@ -231,7 +298,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             command = cfg.pop("command")
 
             _cls = fetch_method(nvmegwcli, service)
-
             if service == "subsystem":
                 configure_subsystems(cfg, _cls, command)
             elif service == "listener":

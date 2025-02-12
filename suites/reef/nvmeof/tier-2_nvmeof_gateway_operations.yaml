@@ -250,7 +250,10 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
                 nsid: 1
-                rw-ios-per-second: 10
+                rw-ios-per-second: 150
+                rw-megabytes-per-second: 19
+                r-megabytes-per-second: 19
+                w-megabytes-per-second: 19
           - config:
               service: namespace
               command: set_qos             # namespace set_qos
