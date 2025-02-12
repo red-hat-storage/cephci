@@ -345,3 +345,14 @@ tests:
       polarion-id: CEPH-83581990
       module: sanity_rgw_multisite.py
       name: Test LC on active for objects size expiration
+
+  - test:
+      clusters:
+         ceph-arc:
+          config:
+            script-name: test_dynamic_bucket_resharding.py
+            config-file-name: test_resharding_disable_in_archive_zone.yaml
+      desc: Test DBR feature disabel at archive zone
+      polarion-id: CEPH-83573390
+      module: sanity_rgw_multisite.py
+      name: Test DBR feature disabel at archive zone
