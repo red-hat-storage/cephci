@@ -29,6 +29,7 @@ tests:
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
               - config:
                   command: add_hosts
                   service: host
@@ -74,6 +75,7 @@ tests:
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
               - config:
                   command: add_hosts
                   service: host
