@@ -182,8 +182,8 @@ def run(ceph_cluster, **kw):
 
     if test_config["config"]:
         log.info("creating custom config")
-        f_name = test_folder + config_dir + config_file_name
-        remote_fp = exec_from.remote_file(file_name=f_name, file_mode="w")
+        f_name = f"/home/cephuser/{test_folder}" + config_dir + config_file_name
+        remote_fp = exec_from.remote_file(file_name=f_name, file_mode="w", sudo=True)
         remote_fp.write(yaml.dump(test_config, default_flow_style=False))
 
     cmd_env = " ".join(config.get("env-vars", []))
