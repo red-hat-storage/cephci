@@ -127,10 +127,7 @@ class FsUtils(object):
                 client.node.exec_command(
                     cmd="git clone https://github.com/bengland2/smallfile.git"
                 )
-            if "iozone" not in out:
-                cmd = "cd /home/cephuser;wget http://www.iozone.org/src/current/iozone3_506.tar;"
-                cmd += "tar xvf iozone3_506.tar;cd iozone3_506/src/current/;make;make linux"
-                client.node.exec_command(cmd=cmd)
+
             out, rc = client.node.exec_command(
                 sudo=True, cmd="rpm -qa | grep -w 'dbench'", check_ec=False
             )
