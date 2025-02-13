@@ -201,11 +201,6 @@ class FSIO(object):
                  11=pwritev/Re-pwritev, 12=preadv/Re-preadv))
             """
             log.info("IO tool scheduled : IOZONE")
-            out, _ = client.node.exec_command(cmd="ls /home/cephuser/")
-            if "iozone" not in out:
-                cmd = "cd /home/cephuser;wget http://www.iozone.org/src/current/iozone3_506.tar;"
-                cmd += "tar xvf iozone3_506.tar;cd iozone3_506/src/current/;make;make linux"
-                client.node.exec_command(cmd=cmd)
             io_params = {
                 "file_name": None,  # default None, else list of filenames required to test ['file1','file2']
                 "io_type": ["all"],
