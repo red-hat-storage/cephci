@@ -160,7 +160,7 @@ class SpecStorage(Cli):
             f" -r {self.install_dest}/{self.config}"
             f" -s {benchmark}-{self.outputlog}-{last_path_component}"
         )
-        return self.execute(sudo=True, long_running=True, cmd=cmd)
+        return self.execute(sudo=True, long_running=True, cmd=cmd, timeout=5400)
 
     def append_to_csv(self, output_file, metrics):
         fieldnames = list(metrics.keys())
