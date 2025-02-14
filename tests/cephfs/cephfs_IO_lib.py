@@ -220,7 +220,7 @@ class FSIO(object):
                     if iozone_params.get(io_param):
                         io_params[io_param] = iozone_params[io_param]
 
-            iozone_path = "/home/cephuser/iozone3_506/src/current/iozone"
+            iozone_path = "iozone"
             iozone_cmd = f"{iozone_path} -a"
             if io_params["throughput_test"]:
                 iozone_cmd = f"{iozone_path} -t {io_params['threads']}"

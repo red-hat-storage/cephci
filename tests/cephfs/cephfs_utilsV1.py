@@ -85,7 +85,6 @@ class FsUtils(object):
                     client=self.clients[0]
                 )  # daemons_value will use the default value
 
-    @retry(CommandFailed, tries=3, delay=60)
     def prepare_clients(self, clients, build):
         """
         Installs all the required rpms and clones the tools required for running Tests on clients
@@ -128,9 +127,15 @@ class FsUtils(object):
                     cmd="git clone https://github.com/bengland2/smallfile.git"
                 )
             if "iozone" not in out:
-                cmd = "cd /home/cephuser;wget http://www.iozone.org/src/current/iozone3_506.tar;"
-                cmd += "tar xvf iozone3_506.tar;cd iozone3_506/src/current/;make;make linux"
-                client.node.exec_command(cmd=cmd)
+                cmd_list = [
+                    "cd /home/cephuser;wget http://www.iozone.org/src/current/iozone3_506.tar;",
+                    "cd /home/cephuser;tar xvf iozone3_506.tar",
+                    "sudo yum install make -y --nogpgcheck",
+                    "cd /home/cephuser/iozone3_506/src/current/;make;make linux",
+                    "export PATH=$PATH:/home/cephuser/iozone3_506/src/current/",
+                ]
+                for cmd in cmd_list:
+                    client.node.exec_command(cmd=cmd)
             out, rc = client.node.exec_command(
                 sudo=True, cmd="rpm -qa | grep -w 'dbench'", check_ec=False
             )
