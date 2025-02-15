@@ -3,7 +3,6 @@
 #
 # This test suite evaluates the Ingress HAproxy deployment scenario wherein there exists more than one
 # RGW daemons configured with multiple realm, along with zones and zonegroups.
-# global-conf: conf/squid/rgw/tier-1_rgw_multirealm.yaml
 
 tests:
 
@@ -60,8 +59,11 @@ tests:
                   service_id: rgw.realm1
                   placement:
                     nodes:
-                      - node5
                       - node6
+                      - node5
+                      - node4
+                      - node3
+                      - node2
                   spec:
                     rgw_frontend_port: 8080
           - config:
@@ -72,8 +74,11 @@ tests:
                   service_id: rgw.realm2
                   placement:
                     nodes:
-                      - node5
                       - node6
+                      - node5
+                      - node4
+                      - node3
+                      - node2
                   spec:
                     rgw_frontend_port: 8081
       desc: RHCS cluster deployment using cephadm.
@@ -160,8 +165,11 @@ tests:
                   service_id: rgw.realm1
                   placement:
                     nodes:
+                      - node5
+                      - node6
                       - node3
                       - node4
+                      - node2
                   spec:
                     backend_service: rgw.rgw.realm1
                     virtual_ip: 10.0.195.174/24 # floating ip1 in rhos-01
@@ -188,6 +196,9 @@ tests:
                     nodes:
                       - node5
                       - node6
+                      - node3
+                      - node4
+                      - node2
                   spec:
                     backend_service: rgw.rgw.realm2
                     virtual_ip: 10.0.195.111/24 # floating ip2 in rhos-01
@@ -230,6 +241,42 @@ tests:
       name: disable sync between zones
       polarion-id: CEPH-83581229
 
+# configuring HAproxy on the client node 'node4' and port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph:
+          config:
+            haproxy_clients:
+              - node7
+            rgw_endpoints:
+              - node4:80
+              - node3:80
+              - node5:80
+              - node6:80
+              - node2:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+# configuring HAproxy on the io node 'node4' and port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph:
+          config:
+            haproxy_clients:
+              - node7
+            rgw_endpoints:
+              - node4:81
+              - node3:81
+              - node5:81
+              - node6:81
+              - node2:81
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
   - test:
       name: Test the byte ranges with get object
       desc: Test the byte ranges with get_object
@@ -239,3 +286,4 @@ tests:
         test-version: v2
         script-name: test_byte_range.py
         config-file-name: test_byte_range.yaml
+        run-on-haproxy: true
