@@ -552,7 +552,7 @@ tests:
             run-on-haproxy: true
             monitor-consistency-bucket-stats: true
             # verify-io-on-site: ["ceph-sec"] as there is an io file issue, once its fixed need to uncomment
-  
+
   - test:
       name: S3CMD object download on tertiary
       desc: S3CMD object download or GET on the tertiary cluster
