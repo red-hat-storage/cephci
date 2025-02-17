@@ -552,6 +552,20 @@ tests:
             run-on-haproxy: true
             monitor-consistency-bucket-stats: true
             # verify-io-on-site: ["ceph-sec"] as there is an io file issue, once its fixed need to uncomment
+  
+  - test:
+      name: S3CMD object download on tertiary
+      desc: S3CMD object download or GET on the tertiary cluster
+      polarion-id: CEPH-83575477
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-ter:
+          config:
+            script-name: ../s3cmd/test_s3cmd.py
+            config-file-name: ../../s3cmd/configs/test_get_s3cmd_tertiary.yaml
+            run-on-haproxy: true
+            monitor-consistency-bucket-stats: true
+  
   - test:
       clusters:
         ceph-pri:
