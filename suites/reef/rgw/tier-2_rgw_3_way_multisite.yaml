@@ -565,7 +565,7 @@ tests:
             config-file-name: ../../s3cmd/configs/test_get_s3cmd_tertiary.yaml
             run-on-haproxy: true
             monitor-consistency-bucket-stats: true
-  
+
   - test:
       clusters:
         ceph-pri:
