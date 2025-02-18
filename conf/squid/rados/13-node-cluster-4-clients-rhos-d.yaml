@@ -46,6 +46,8 @@ globals:
         networks:
           - provider_net_cci_15
         role:
+          - mon
+          - mgr
           - osd
           - nfs
         no-of-volumes: 4
@@ -94,8 +96,6 @@ globals:
         networks:
           - provider_net_cci_15
         role:
-          - mon
-          - mgr
           - osd
         no-of-volumes: 4
         disk-size: 15
