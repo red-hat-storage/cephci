@@ -49,7 +49,6 @@ def run(**kwargs):
         parallel_tcs = manager.list()
         max_time = kwargs.get("config", {}).get("max_time", None)
         cancel_pending = kwargs.get("config", {}).get("cancel_pending", False)
-        parallel_log.info(kwargs)
 
         with parallel(
             thread_pool=False,
@@ -151,7 +150,6 @@ def execute(test, args, results, parallel_tcs):
                 # Extract and merge the cluster-specific configurations into the root
                 if "config" in cluster_data:
                     test_config.update(cluster_data["config"])
-        test_logger.info(test_config)
         tc["name"] = test.get("name")
         tc["desc"] = test.get("desc")
         tc["log-link"] = log_url
