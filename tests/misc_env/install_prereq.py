@@ -423,6 +423,15 @@ def registry_login(ceph, distro_ver):
     auths_dict = {"auths": auths}
     ceph.exec_command(sudo=True, cmd="mkdir -p ~/.docker")
     ceph.exec_command(cmd="mkdir -p ~/.docker")
+    ceph.exec_command(
+        cmd=(
+            "echo -e '\\n[[registry]]\\n"
+            'location = "registry-proxy.engineering.redhat.com"\\n'
+            "insecure = true\\n"
+            "ibm-build = true' | sudo tee -a /etc/containers/registries.conf"
+        )
+    )
+
     auths_file_sudo = ceph.remote_file(
         sudo=True, file_name="/root/.docker/config.json", file_mode="w"
     )
