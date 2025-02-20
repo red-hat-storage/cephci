@@ -2,13 +2,9 @@ import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
-from tests.rados.rados_test_util import (
-    create_pools,
-    get_slow_requests_log,
-    write_to_pools,
-)
+from tests.rados.rados_test_util import create_pools, get_slow_requests_log
 from utility.log import Log
-from utility.utils import should_not_be_empty
+from utility.utils import method_should_succeed, should_not_be_empty
 
 log = Log(__name__)
 
@@ -35,10 +31,20 @@ def run(ceph_cluster, **kw):
         start_time, err = installer.exec_command(
             cmd="sudo date -u '+%Y-%m-%d %H:%M:%S'"
         )
+        osd_nodes = ceph_cluster.get_nodes(role="osd")
 
         pool = create_pools(config, rados_obj, client_node)
         should_not_be_empty(pool, "Failed to retrieve pool details")
-        write_to_pools(config, rados_obj, client_node)
+        pools = config.get("create_pools")
+        for each_pool in pools:
+            cr_pool = each_pool["create_pool"]
+            osd_services = rados_obj.list_orch_services(service_type="osd")
+            for service in osd_services:
+                client_node.exec_command(cmd=f"ceph orch restart {service}", sudo=True)
+            for node in osd_nodes:
+                log.info(f"Rebooting node : {node.hostname}")
+                node.exec_command(sudo=True, cmd="reboot", check_ec=False)
+            method_should_succeed(rados_obj.bench_write, **cr_pool)
         rados_obj.change_recovery_threads(config=pool, action="set")
 
         end_time, err = installer.exec_command(cmd="sudo date -u '+%Y-%m-%d %H:%M:%S'")
