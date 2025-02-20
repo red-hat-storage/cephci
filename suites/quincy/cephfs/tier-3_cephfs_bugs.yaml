@@ -21,6 +21,7 @@
   # CEPH-83583721 - Validate the details of all MDS servers are displayed with command `ceph mds metadata`.
   # CEPH-83583723 - Ensure deletion of clones are allowed when the clones are stuck and in pending state
   # CEPH-83589266 - Validate Ceph commands when ceph file system is in failed state
+  # CEPH-83609202 - Verify data scan works on missing non-immediate dir frags and FS recovery suceeds
 #=======================================================================================================================
 ---
 tests:
@@ -263,4 +264,10 @@ tests:
       module: cephfs_bugs.test_mds_dir_max_commit_size.py
       polarion-id: CEPH-83600107
       desc: mds_dir_max_commit_size
+      abort-on-fail: false
+  - test:
+      name: fs_recovery_dir_rm
+      module: cephfs_bugs.test_fs_recovery_dir_rm.py
+      polarion-id: CEPH-83609202
+      desc: fs_recovery_dir_rm
       abort-on-fail: false
