@@ -206,19 +206,19 @@ def run(**kw):
     lib_dir = TEST_DIR[test_version]["lib"]
     timeout = config.get("timeout", 3600)
     # install extra package which are test specific
-    distro_version_id = primary_rgw_node.distro_info["VERSION_ID"]
     if extra_pkgs:
         log.info(f"got extra pkgs: {extra_pkgs}")
-        if isinstance(extra_pkgs, dict):
-            _pkgs = extra_pkgs.get(int(distro_version_id[0]))
-            pkgs = " ".join(_pkgs)
-        else:
-            pkgs = " ".join(extra_pkgs)
-
-        exec_from.exec_command(
-            sudo=True, cmd=f"yum install -y {pkgs}", long_running=True
-        )
-
+        package_path = "/root/rgw_rpms"
+        for pkg in extra_pkgs:
+            exit_status = exec_from.exec_command(
+                sudo=True,
+                cmd=f"yum install -y {package_path}/{pkg}.rpm",
+                long_running=True,
+            )
+            if exit_status != 0:
+                exec_from.exec_command(
+                    sudo=True, cmd=f"yum install -y {pkg}", long_running=True
+                )
     log.info("flushing iptables")
     exec_from.exec_command(cmd="sudo iptables -F", check_ec=False)
 
