@@ -40,7 +40,7 @@ def run(ceph_cluster, **kw):
         nodes_list = ceph_cluster.get_nodes()
         host_list = [node.hostname for node in nodes_list[1:5]]
         hosts = " ".join(host_list[:2])
-        fs_name = "cephfs_df_fs"
+        fs_name = "cephfs4"
         client1.exec_command(
             sudo=True,
             cmd=f"ceph fs volume create {fs_name} --placement='2 {hosts}'",
@@ -52,33 +52,35 @@ def run(ceph_cluster, **kw):
                 client=client1, process_name=fs_name, host=host
             ):
                 raise CommandFailed(f"Failed to start MDS on particular nodes {host}")
+        new_fs_name = "cephfs_df_fs_renamed_1"
+        fs_util.rename_volume(client1, fs_name, new_fs_name)
         log.info("increase the mds for the filesystem")
         hosts = " ".join(host_list)
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph orch apply mds {fs_name} --placement='4 {hosts}'",
+            cmd=f"ceph orch apply mds {new_fs_name} --placement='4 {hosts}'",
             check_ec=False,
         )
         for host in host_list:
             if not fs_util.wait_for_mds_deamon(
-                client=client1, process_name=fs_name, host=host
+                client=client1, process_name=new_fs_name, host=host
             ):
                 raise CommandFailed(f"Failed to start MDS on particular nodes {host}")
         log.info("Decrease the mds for the filesystem")
         hosts = " ".join(host_list[2:])
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph orch apply mds {fs_name} --placement='2 {hosts}'",
+            cmd=f"ceph orch apply mds {new_fs_name} --placement='2 {hosts}'",
             check_ec=False,
         )
         for host in host_list[2:]:
             if not fs_util.wait_for_mds_deamon(
-                client=client1, process_name=fs_name, host=host
+                client=client1, process_name=new_fs_name, host=host
             ):
                 raise CommandFailed(f"Failed to start MDS on particular nodes {host}")
         for host in host_list[:2]:
             if not fs_util.wait_for_mds_deamon(
-                client=client1, process_name=fs_name, host=host, ispresent=False
+                client=client1, process_name=new_fs_name, host=host, ispresent=False
             ):
                 raise CommandFailed(f"Failed to stop MDS on particular nodes {host}")
 
@@ -93,4 +95,5 @@ def run(ceph_cluster, **kw):
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
-        fs_util.remove_fs(client1, "cephfs_df_fs")
+        fs_util.rename_volume(client1, new_fs_name, "cephfs4")
+        fs_util.remove_fs(client1, "cephfs4")

@@ -3,7 +3,6 @@ import secrets
 import string
 import time
 import traceback
-
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
@@ -63,6 +62,8 @@ def run(ceph_cluster, **kw):
             nfs_server_name = nfs_server[0].node.hostname
             log.info("Create ceph nfs cluster")
             nfs_client[0].exec_command(sudo=True, cmd="ceph mgr module enable nfs")
+            rename_fs = "cephfs4"
+            fs_util.rename_volume(nfs_client[0], fs_name, rename_fs)
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server_name}"
             )
@@ -74,6 +75,7 @@ def run(ceph_cluster, **kw):
             else:
                 raise CommandFailed("Failed to create nfs cluster")
             log.info("Create cephfs nfs export")
+
             if "5.0" in rhbuild:
                 nfs_client[0].exec_command(
                     sudo=True,
@@ -84,7 +86,7 @@ def run(ceph_cluster, **kw):
                 nfs_client[0].exec_command(
                     sudo=True,
                     cmd=f"ceph nfs export create cephfs {nfs_name} "
-                    f"{nfs_export_name} {fs_name} path={path}",
+                    f"{nfs_export_name} {rename_fs} path={path}",
                 )
 
             log.info("Verify ceph nfs export is created")
@@ -110,6 +112,7 @@ def run(ceph_cluster, **kw):
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd=f"mkdir {nfs_mounting_dir}{dir_name}"
             )
+            # pdb.set_trace()
             nfs_client[0].exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
@@ -229,3 +232,5 @@ def run(ceph_cluster, **kw):
         log.error(e)
         log.error(traceback.format_exc())
         return 1
+    finally:
+        fs_util.rename_volume(nfs_client[0], rename_fs, fs_name)
