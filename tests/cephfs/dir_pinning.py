@@ -55,7 +55,9 @@ def run(ceph_cluster, **kw):
         tc = "11227"
         dir_name = "dir"
         log.info(f"Running cephfs {tc} test case")
-        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_name_old = "cephfs_new"
+        fs_name = "renamed_fs5"
+        fs_util_v1.rename_volume(client1[0], fs_name_old, fs_name)
         fs_details = fs_util_v1.get_fs_info(clients[0], fs_name)
 
         if not fs_details:
@@ -372,8 +374,8 @@ def run(ceph_cluster, **kw):
         return 0
 
     except CommandFailed as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         log.info("Cleaning up!-----")
         if client3[0].pkg_type != "deb" and client4[0].pkg_type != "deb":
             rc_client = fs_util_v1.client_clean_up(
@@ -393,6 +395,8 @@ def run(ceph_cluster, **kw):
             log.info("Cleaning up successfull")
         return 1
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
+    finally:
+        fs_util_v1.rename_volume(client1[0], fs_name, "cephfs_new")

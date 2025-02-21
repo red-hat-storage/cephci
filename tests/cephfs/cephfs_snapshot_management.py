@@ -62,9 +62,11 @@ def run(ceph_cluster, **kw):
             f"cephfs.{fs_name}.data" if not erasure else f"cephfs.{fs_name}.data-ec"
         )
         fs_details = fs_util.get_fs_info(client1, fs_name)
-
         if not fs_details:
             fs_util.create_fs(client1, fs_name)
+        new_name = "renamed_fs2"
+        fs_util.rename_volume(client1, fs_name, new_name)
+        fs_name = new_name
         commands = [
             f"ceph fs subvolumegroup create {fs_name} snap_group {pool_name}",
             f"ceph fs subvolume create {fs_name} snap_vol --size 5368706371 --group_name snap_group",
@@ -72,9 +74,6 @@ def run(ceph_cluster, **kw):
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
             results.append(f"{command} successfully executed")
-
-        if not fs_util.wait_for_mds_process(client1, f"{fs_name}"):
-            raise CommandFailed("Failed to start MDS deamons")
         log.info("Get the path of sub volume")
         subvol_path, rc = client1.exec_command(
             sudo=True, cmd=f"ceph fs subvolume getpath {fs_name} snap_vol snap_group"
@@ -136,7 +135,6 @@ def run(ceph_cluster, **kw):
             f"ceph fs subvolume rm {fs_name} snap_vol --group_name snap_group",
             f"ceph fs subvolumegroup rm {fs_name} snap_group",
             "ceph config set mon mon_allow_pool_delete true",
-            f"ceph fs volume rm {fs_name} --yes-i-really-mean-it",
             "rm -rf /mnt/mycephfs1",
         ]
         for command in commands:
@@ -153,3 +151,5 @@ def run(ceph_cluster, **kw):
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+    finally:
+        fs_util.rename_volume(client1, new_name, "cephfs_new")

@@ -56,7 +56,9 @@ def run(ceph_cluster, **kw):
         if "4." in rhbuild:
             fs_name = "cephfs_new"
         else:
-            fs_name = "cephfs" if not erasure else "cephfs-ec"
+            fs_name_old = "cephfs_new"
+            fs_name = "renamed_fs7"
+            fs_util.rename_volume(client1, fs_name_old, fs_name)
             fs_details = fs_util.get_fs_info(client1, fs_name)
 
             if not fs_details:
@@ -126,15 +128,16 @@ def run(ceph_cluster, **kw):
                 return 1
 
     except CommandFailed as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
     finally:
         log.info("Cleaning up")
+        fs_util.rename_volume(client1, fs_name, "cephfs_new")
         mount_dir_2 = "/mnt/" + "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )

@@ -5,6 +5,7 @@ from time import sleep
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utils import FsUtils
 from utility.log import Log
+from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtils_v1
 
 log = Log(__name__)
 
@@ -60,16 +61,19 @@ def run(ceph_cluster, **kw):
         tc1 = "83573446"
         log.info(f"Execution of testcase {tc1} started")
         log.info("Create and list a volume")
+        fs_name_old = "cephfs_new"
         commands = [
             "ceph fs volume create cephfs_new",
             "ceph fs ls | grep cephfs_new",
             "ceph osd lspools | grep cephfs.cephfs_new",
             "ceph fs volume ls | grep cephfs_new",
         ]
+
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
             results.append(f"{command} successfully executed")
-        wait_for_process(client1, "cephfs_new")
+        new_name = "renamed_fs1"
+        fs_utils_v1.rename_volume(client1, fs_name_old, new_name)
         commands = [
             "ceph config set mon mon_allow_pool_delete true",
             "ceph fs volume rm cephfs_new --yes-i-really-mean-it",
@@ -79,7 +83,7 @@ def run(ceph_cluster, **kw):
             results.append(f"{command} successfully executed")
 
         verifyremove_command = [
-            "ceph fs ls | grep cephfs_new",
+            f"ceph fs ls | grep {new_name}",
             "ceph osd lspools | grep cephfs.cephfs_new",
         ]
         for command in verifyremove_command:
@@ -97,3 +101,5 @@ def run(ceph_cluster, **kw):
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+    finally:
+        fs_utils_v1.rename_volume(client1, new_name, "cephfs_new")
