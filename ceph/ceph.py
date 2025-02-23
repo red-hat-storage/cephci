@@ -1573,7 +1573,7 @@ class CephNode(object):
             channel = ssh().get_transport().open_session(timeout=timeout)
             channel.settimeout(timeout)
 
-            logger.info(f"Execute {cmd} on {self.ip_address}")
+            logger.info("Execute %s on %s", cmd, self.ip_address)
             _exec_start_time = datetime.datetime.now()
             channel.exec_command(cmd)
 
@@ -1604,7 +1604,10 @@ class CephNode(object):
 
             _time = (datetime.datetime.now() - _exec_start_time).total_seconds()
             logger.info(
-                f"Execution of {cmd} on {self.ip_address} took {_time} seconds."
+                "Execution of %s on %s took %s seconds",
+                cmd,
+                self.ip_address,
+                str(_time),
             )
 
             # Check for data residues in the channel streams. This is required for the following reasons
@@ -1617,18 +1620,16 @@ class CephNode(object):
             except CommandFailed:
                 logger.debug("Encountered a timeout during read post execution.")
             except BaseException as be:
-                logger.debug(
-                    f"Encountered an unknown exception during last read.\n {be}"
-                )
+                logger.debug("Encountered an unknown exception during last read.\n", be)
 
             _exit = channel.recv_exit_status()
             return _out, _err, _exit, _time
         except socket.timeout as terr:
-            logger.error(f"{cmd} failed to execute within {timeout} seconds.")
+            logger.error("%s failed to execute within %d seconds.", cmd, timeout)
             raise SocketTimeoutException(terr)
         except TimeoutException as tex:
             channel.close()
-            logger.error(f"{cmd} failed to execute within {timeout}s.")
+            logger.error("%s failed to execute within %ds.", cmd, timeout)
             raise CommandFailed(tex)
         except BaseException as be:  # noqa
             logger.exception(be)
