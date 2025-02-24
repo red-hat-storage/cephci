@@ -390,3 +390,56 @@ class Rbd(Cli):
         cmd = f"{self.base_cmd} du {image_spec} {build_cmd_from_args(**kw_copy)}"
 
         return self.execute_as_sudo(cmd=cmd)
+
+    def lock_ls(self, **kw):
+        """
+        This method is used to get list of locked rbd images
+        Args:
+          kw(dict): Key/value pairs that needs to be provided to the installer
+          Example:
+            Supported keys:
+                image-spec(str) : [<pool-name>/[<namespace>/]]<image-name>
+        """
+        kw_copy = deepcopy(kw)
+        image_spec = kw_copy.pop("image-spec", "")
+        cmd = f"{self.base_cmd} lock ls {image_spec} {build_cmd_from_args(**kw_copy)}"
+
+        return self.execute_as_sudo(cmd=cmd)
+
+    def lock_rm(self, **kw):
+        """
+        This method is used to remove lock from rbd image
+        Args:
+          kw(dict): Key/value pairs that needs to be provided to the installer
+          Example:
+            Supported keys:
+                lock-spec(str) : locker_id locker_name
+        """
+        kw_copy = deepcopy(kw)
+        lock_spec = kw_copy.pop("lock-spec", "")
+        cmd = f"{self.base_cmd} lock rm {build_cmd_from_args(**kw_copy)} {lock_spec}"
+
+        return self.execute_as_sudo(cmd=cmd)
+
+    def blocklist_ls(self, **kw):
+        """
+        This method is used to list blocklisted clients
+        """
+        cmd = "ceph osd blocklist ls"
+
+        return self.execute_as_sudo(cmd=cmd)
+
+    def blocklist_rm(self, **kw):
+        """
+        This method is used to remove specific ip from blocklisted entries
+        Args:
+          kw(dict): Key/value pairs that needs to be provided to the installer
+          Example:
+            Supported keys:
+                ip_spec(str) : blocklist ip in form "10.0.67.42:0/3439165164"
+        """
+        kw_copy = deepcopy(kw)
+        blocklist_ip_spec = kw_copy.pop("ip-spec", "")
+        cmd = f"ceph osd blocklist rm {blocklist_ip_spec}"
+
+        return self.execute_as_sudo(cmd=cmd)
