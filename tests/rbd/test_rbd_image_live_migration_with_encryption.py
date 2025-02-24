@@ -247,13 +247,17 @@ def migrate_check_consistency(rbd, pool, image, **kw):
         out[0].split("\n")[2].split(" ")[2] + " " + out[0].split("\n")[2].split(" ")[3]
     )
 
-    out = rbd.lock_rm(
+    out, err = rbd.lock_rm(
         **{
             "lock-spec": f"'{locker_id}' {locker_name}",
             "image": image,
             "pool": pool,
         }
     )
+    if err:
+        log.error(f"Lock remove failed for {pool}/{image}")
+    else:
+        log.info(f"Lock removed for {pool}/{image}")
 
     out = rbd.blocklist_ls()
     ip_dict = {}
@@ -307,17 +311,11 @@ def migrate_check_consistency(rbd, pool, image, **kw):
 
     # Prepare Migration
     target_image = "target_image_" + random_string(len=3)
-    out, err = rbd.migration.prepare(
+    rbd.migration.prepare(
         source_spec=f"{pool}/{image}",
         dest_spec=f"{target_pool}/{target_image}",
         client_node=kw["client"],
     )
-
-    if err:
-        log.error(f"Migration prepare failed with error {err}")
-        return 1
-    else:
-        log.info("Successfully prepared for migration")
 
     # Verify prepare migration status
     if verify_migration_state(
@@ -336,11 +334,6 @@ def migrate_check_consistency(rbd, pool, image, **kw):
         dest_spec=f"{target_pool}/{target_image}",
         client_node=kw["client"],
     )
-    if err:
-        log.error(f"Migration execute failed with error {err}")
-        return 1
-    else:
-        log.info("Successfully executed migration")
 
     # verify execute migration status
     if verify_migration_state(
@@ -359,11 +352,6 @@ def migrate_check_consistency(rbd, pool, image, **kw):
         dest_spec=f"{target_pool}/{target_image}",
         client_node=kw["client"],
     )
-    if err:
-        log.error(f"Migration Commit failed with error {err}")
-        return 1
-    else:
-        log.info("Successfully committed migration")
 
     # verify commit migration status
     if verify_migration_state(
@@ -415,11 +403,13 @@ def migrate_check_consistency(rbd, pool, image, **kw):
     if md5_before_migration != md5_after_migration:
         log.error(f"Data Integrity check failed for {target_pool}/{target_image}")
         return 1
+    else:
+        log.info(f"Data Integrity check passed for {target_pool}/{target_image}")
 
 
 def run(**kw):
     """
-    This test verifies Live migration of qcow2 format images with encryption
+    This test verifies Live migration of rbd images with encryption
     Args:
         kw: test data
     Returns:
@@ -435,11 +425,10 @@ def run(**kw):
         rbd_obj = initial_rbd_config(**kw)
         pool_types = rbd_obj.get("pool_types")
         kw.update({"cleanup_files": []})
-        func = migration_encrypted_rbd_images
 
         if rbd_obj:
             log.info("Executing test on Replicated and EC pool")
-            if func(rbd_obj, client, **kw):
+            if migration_encrypted_rbd_images(rbd_obj, client, **kw):
                 return 1
             log.info("Test rbd image live migration with encryption is successful")
 

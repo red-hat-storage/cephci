@@ -421,7 +421,7 @@ class Rbd(Cli):
 
         return self.execute_as_sudo(cmd=cmd)
 
-    def blocklist_ls(self, **kw):
+    def blocklist_ls(self):
         """
         This method is used to list blocklisted clients
         """
