@@ -151,7 +151,7 @@ tests:
           num_pools: 1
           do_not_create_image: true
         fio:
-          size: 10M
+          size: 1G
           fs: ext4
           io: true
       module: test_rbd_image_live_migration_with_encryption.py

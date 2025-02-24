@@ -419,7 +419,7 @@ def migrate_check_consistency(rbd, pool, image, **kw):
 
 def run(**kw):
     """
-    This test verifies Live migration of qcow2 format images with encryption
+    This test verifies Live migration of rbd images with encryption
     Args:
         kw: test data
     Returns:
@@ -435,11 +435,10 @@ def run(**kw):
         rbd_obj = initial_rbd_config(**kw)
         pool_types = rbd_obj.get("pool_types")
         kw.update({"cleanup_files": []})
-        func = migration_encrypted_rbd_images
 
         if rbd_obj:
             log.info("Executing test on Replicated and EC pool")
-            if func(rbd_obj, client, **kw):
+            if migration_encrypted_rbd_images(rbd_obj, client, **kw):
                 return 1
             log.info("Test rbd image live migration with encryption is successful")
 
