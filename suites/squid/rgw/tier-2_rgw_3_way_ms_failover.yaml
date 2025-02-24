@@ -1,0 +1,595 @@
+# Test suite for RGW active active multi-site deployment scenario.
+
+# master zone - pri
+# secondary zone - sec
+# tertiary zone - ter
+
+# The deployment is evaluated by running IOs across the environments
+# Sync rgws & Client IO rgws are sepearated
+# global-conf: conf/squid/rgw/3-way_ms_4nodes_1client_cluster.yaml
+---
+
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.pri.io
+                      spec:
+                        disable_multisite_sync_traffic: true
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: primary
+                        rgw_frontend_port: 80
+                      placement:
+                        nodes:
+                          - node3
+                          - node4
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.pri.sync
+                      spec:
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: primary
+                        rgw_frontend_port: 81
+                      placement:
+                        nodes:
+                          - node3
+                          - node4
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.sec.io
+                      spec:
+                        disable_multisite_sync_traffic: true
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: secondary
+                        rgw_frontend_port: 80
+                      placement:
+                        nodes:
+                          - node3
+                          - node4
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.sec.sync
+                      spec:
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: secondary
+                        rgw_frontend_port: 81
+                      placement:
+                        nodes:
+                          - node3
+                          - node4
+        ceph-ter:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.ter.io
+                      spec:
+                        disable_multisite_sync_traffic: true
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: tertiary
+                        rgw_frontend_port: 80
+                      placement:
+                        nodes:
+                          - node3
+                          - node4
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.ter.sync
+                      spec:
+                        rgw_realm: india
+                        rgw_zonegroup: shared
+                        rgw_zone: tertiary
+                        rgw_frontend_port: 81
+                      placement:
+                        nodes:
+                          - node3
+                          - node4
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+      polarion-id: CEPH-10117
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.1
+            node: node5
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-sec:
+          config:
+            command: add
+            id: client.1
+            node: node5
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-ter:
+          config:
+            command: add
+            id: client.1
+            node: node5
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+# # configuring HAproxy for IO RGW daemons on port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - node5
+            rgw_endpoints:
+              - node3:80
+              - node4:80
+      desc: "Configure HAproxy for IO rgws"
+      module: haproxy.py
+      name: "Configure HAproxy for IO rgws"
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin realm create --rgw-realm india --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node3}:81,http://{node_ip:node4}:81 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node3}:81,http://{node_ip:node4}:81 --master --default"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph orch restart {service_name:shared.pri.io}"
+              - "ceph orch restart {service_name:shared.pri.sync}"
+      desc: Setting up only primary site first
+      module: exec.py
+      name: setup only primary site
+      polarion-id: CEPH-83608639
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph -s"
+              - "radosgw-admin sync status"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+              - "ceph osd dump"
+              - "ceph orch ls"
+      desc: Retrieve the configured environment details
+      module: exec.py
+      name: get shared realm info on primary
+      polarion-id: CEPH-83575227
+
+  - test:
+      name: create user
+      desc: create tenanted user
+      polarion-id: CEPH-83575199
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: tenanted_user.yaml
+
+  - test:
+      name: download objects on primary
+      desc: test_Mbuckets_with_Nobjects_download on primary
+      polarion-id: CEPH-14237
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "sleep 120"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node3}:81 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node3}:81 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node3}:81,http://{node_ip:node4}:81 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph orch restart {service_name:shared.sec.io}"
+              - "ceph orch restart {service_name:shared.sec.sync}"
+              - "sleep 120"
+      desc: Setting up 2-way RGW multisite replication betwwen primary and secondary environment
+      module: exec.py
+      name: Setting up 2-way RGW multisite replication betwwen primary and secondary environment
+      polarion-id: CEPH-83608639
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+              - "ceph osd dump"
+              - "ceph orch ls"
+      desc: Retrieve the configured environment details
+      module: exec.py
+      name: get shared realm info on primary
+      polarion-id: CEPH-83608639
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+              - "ceph osd dump"
+              - "ceph orch ls"
+      desc: Retrieve the configured environment details
+      module: exec.py
+      name: get shared realm info on secondary
+      polarion-id: CEPH-83608639
+
+
+  # Test work flow
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-sec
+      desc: create non-tenanted user
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user
+      polarion-id: CEPH-83575199
+
+# configuring HAproxy for IO RGW daemons on port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            haproxy_clients:
+              - node5
+            rgw_endpoints:
+              - node3:80
+              - node4:80
+      desc: "Configure HAproxy for IO rgws"
+      module: haproxy.py
+      name: "Configure HAproxy for IO rgws"
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            config-file-name: test_user_bucket_create.yaml
+            script-name: test_Mbuckets_with_Nobjects.py
+            verify-io-on-site: ["ceph-sec"]
+      desc: user and bucket create operation
+      polarion-id: CEPH-83574811
+      module: sanity_rgw_multisite.py
+      name: user and bucket create operation
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --master
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph orch restart {service_name:shared.sec.io}"
+              - "ceph orch restart {service_name:shared.sec.sync}"
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph orch restart {service_name:shared.pri.io}"
+              - "ceph orch restart {service_name:shared.pri.sync}"
+              - "sleep 120"
+      desc: promote secondary as master
+      name: promote secondary as master
+      module: exec.py
+      polarion-id: CEPH-83608639
+
+  - test:
+      name: suspend bucket versioning on primary
+      desc: test_versioning_objects_suspend on secondary
+      polarion-id: CEPH-14263
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_versioning_with_objects.py
+            config-file-name: test_versioning_objects_suspend.yaml
+            verify-io-on-site: ["ceph-pri"]
+
+  - test:
+      name: multipart upload on primary
+      desc: test_Mbuckets_with_Nobjects_multipart on primary
+      polarion-id: CEPH-14265
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            verify-io-on-site: ["ceph-sec"]
+            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+            run-on-haproxy: true
+            monitor-consistency-bucket-stats: true
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zonegroup remove --rgw-zone primary --rgw-zonegroup shared"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "sleep 120"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+              - "ceph osd dump"
+              - "ceph orch ls"
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+              - "ceph osd dump"
+              - "ceph orch ls"
+      desc: bring primary down by removing it from the multisite configuration & update period
+      name: remove primary from multisite configuration
+      module: exec.py
+      polarion-id: CEPH-83608639
+
+  - test:
+      name: replace bucket policy on secondary
+      desc: test_bucket_policy_replace on secondary
+      polarion-id: CEPH-11215
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_bucket_policy_ops.py
+            config-file-name: test_bucket_policy_replace.yaml
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-ter:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-sec#node3}:81 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-sec#node3}:81 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone tertiary --endpoints http://{node_ip:node3}:81,http://{node_ip:node4}:81 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph orch restart {service_name:shared.ter.io}"
+              - "ceph orch restart {service_name:shared.ter.sync}"
+              - "sleep 120"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+              - "ceph osd dump"
+              - "ceph orch ls"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+              - "ceph osd dump"
+              - "ceph orch ls"
+      desc: Setting up 2-way RGW multisite replication betwwen secondary and tertiary environment
+      module: exec.py
+      name: Setting up 2-way RGW multisite replication betwwen secondary and tertiary environment
+      polarion-id: CEPH-83608639
+
+# configuring HAproxy for IO RGW daemons on port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-ter:
+          config:
+            haproxy_clients:
+              - node5
+            rgw_endpoints:
+              - node3:80
+              - node4:80
+      desc: "Configure HAproxy for IO rgws"
+      module: haproxy.py
+      name: "Configure HAproxy for IO rgws"
+
+  - test:
+      clusters:
+        ceph-ter:
+          config:
+            script-name: test_swift_basic_ops.py
+            config-file-name: test_swift_object_expire_op.yaml
+            verify-io-on-site: ["ceph-sec"]
+      desc: test object expiration with swift
+      module: sanity_rgw_multisite.py
+      name: swift object expiration on tertiary
+      polarion-id: CEPH-9718
