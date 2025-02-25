@@ -12,6 +12,7 @@ from ceph.ceph_admin.common import fetch_method
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmegw_cli.common import find_gateway_hostname
 from ceph.utils import get_node_by_id
+from tests.nvmeof.workflows.nvme_utils import validate_nvme_metadata
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -54,6 +55,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     config = deepcopy(kwargs["config"])
     node = get_node_by_id(ceph_cluster, config["node"])
     port = config.get("port", 5500)
+    pool = config.get("pool")
+    group = config.get("gw_group", "")
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
@@ -65,7 +68,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     try:
         steps = config.get("steps", [])
         for step in steps:
-            cfg = step["config"]
+            cfg = deepcopy(step["config"])
             service = cfg.pop("service")
             command = cfg.pop("command")
 
@@ -79,6 +82,16 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 cfg["base_cmd_args"] = {"server-address": gw_node.ip_address}
             func = fetch_method(_cls, command)
             func(**cfg)
+
+            # Validate NVMe metadata in OMAP
+            if "validate" in cfg:
+                if cfg["validate"].get("omap"):
+                    validate_nvme_metadata(
+                        cluster=ceph_cluster,
+                        config=step["config"],
+                        pool=pool,
+                        group=group,
+                    )
     except BaseException as be:  # noqa
         LOG.error(be, exc_info=True)
         return 1
