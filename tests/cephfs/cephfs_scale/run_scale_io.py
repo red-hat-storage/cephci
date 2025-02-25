@@ -6,6 +6,7 @@ import traceback
 import tests.cephfs.cephfs_scale.cleanup as cleanup
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_scale.cephfs_scale_utils import CephfsScaleUtils
+from tests.cephfs.cephfs_system.cephfs_system_utils import CephFSSystemUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.log import Log
 
@@ -43,6 +44,7 @@ def run(ceph_cluster, **kw):
     try:
         fs_util_v1 = FsUtilsV1(ceph_cluster)
         fs_scale_utils = CephfsScaleUtils(ceph_cluster)
+        fs_system_utils = CephFSSystemUtils(ceph_cluster)
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
@@ -117,47 +119,20 @@ def run(ceph_cluster, **kw):
             )
             return 1
 
-        log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
-        if io_type == "largefile":
-            log_dir = f"{log_base_dir}/{io_type}_write_{mount_type}_{client_count}_cl_{subvolume_count}_subv_100GB_file"
-            os.mkdir(log_dir)
-            log.info(f"Log Dir : {log_dir}")
-        elif io_type == "smallfile":
-            log_dir = (
-                f"{log_base_dir}/{io_type}_w_{mount_type}_{client_count}_cl_{subvolume_count}_subv_"
-                f"{io_operation}_ops_{io_threads}_th_{io_files}_files_{io_file_size}_size"
-            )
-            os.mkdir(log_dir)
-            log.info(f"Log Dir : {log_dir}")
-        elif io_type == "fio":
-            log_dir = (
-                f"{log_base_dir}/{io_type}_{mount_type}_{client_count}_cl_{subvolume_count}_subv_"
-                f"{fio_operation}_ops_{fio_depth}_depth_{fio_block_size}_bs_{fio_file_size}_size"
-            )
-            os.mkdir(log_dir)
-            log.info(f"Log Dir : {log_dir}")
-
-        log.info("Redirect top output of all MDS nodes to a file")
-        fs_scale_utils.get_ceph_mds_top_output(ceph_cluster, log_dir)
-
-        log.info("Enale debug logs for all MDS daemons")
-        fs_util_v1.enable_mds_logs(clients[0], default_fs)
-
-        mds_list = fs_scale_utils.get_daemon_names(clients[0], "mds")
-        cmd_list = [
-            "ceph crash ls",
-            "ceph fs status",
-            "ceph fs dump",
-            "ceph -s",
-            "ceph df",
-        ]
-        for daemon in mds_list:
-            cmd_list.append(f"ceph tell {daemon} perf dump --format json")
-        log.info(f"Ceph commands to run at an interval : {cmd_list}")
-
-        log.info("Start logging the Ceph Cluster Cluster status to a log dir")
-        fs_scale_utils.start_logging(clients[0], cmd_list, log_dir)
-        fs_scale_utils.start_mds_logging(ceph_cluster, log_dir)
+        log_dir = fs_scale_utils.setup_log_dir(
+            io_type,
+            mount_type,
+            client_count,
+            subvolume_count,
+            io_operation,
+            io_threads,
+            io_files,
+            io_file_size,
+            fio_operation,
+            fio_depth,
+            fio_block_size,
+            fio_file_size,
+        )
 
         log.info("Creating a Subvolume Group")
         subvolumegroup = {
@@ -176,6 +151,10 @@ def run(ceph_cluster, **kw):
             subvolume_name,
             subvolume_group_name,
             mount_type,
+        )
+
+        fs_scale_utils.collect_logs(
+            ceph_cluster, clients, default_fs, fs_util_v1, log_dir
         )
 
         log.info("Start Running IO's in parallel on all Clients")
@@ -235,11 +214,10 @@ def run(ceph_cluster, **kw):
             )
             log.info(f"Metrics of all Runs : {metrics}")
 
-        log.info("Collect MDS Logs from all MDS Daemons")
-        compressed_logs = fs_scale_utils.collect_and_compress_mds_logs(
+        collected_logs = fs_scale_utils.collect_and_compress_logs(
             clients[0], fs_util_v1, log_dir
         )
-        log.info(f"Compressed log files: {compressed_logs}")
+        log.info(f"Logs captures : {collected_logs}")
 
         return 0
     except Exception as e:
@@ -247,9 +225,19 @@ def run(ceph_cluster, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        log.info("Stop logging the Ceph Cluster Cluster status to a log dir")
-        fs_scale_utils.stop_logging()
-        fs_scale_utils.stop_mds_logging()
+        try:
+            log.info("Stop logging the Ceph Cluster Cluster status to a log dir")
+            fs_scale_utils.stop_all_logging()
+            daemon_list = ["mds", "osd", "mgr", "mon"]
+            log_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
+            log.info(f"log path:{log_dir}")
+            log.info(f"Check for crash from : {daemon_list}")
+            fs_system_utils.crash_check(
+                clients[0], crash_copy=1, daemon_list=daemon_list
+            )
+        except Exception as e:
+            log.error(f"Error in crash validation block: {e}")
+
         if config.get("cleanup", True):
             try:
                 log.info("Starting cleanup process.")

@@ -1055,7 +1055,8 @@ class FsUtils(object):
             kernel_cmd = (
                 f"mount -t ceph {mon_node_ip}:{kwargs.get('sub_dir', '/')} {mount_point} "
                 f"-o name={kwargs.get('new_client_hostname', client.node.hostname)},"
-                f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
+                f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret,"
+                f"noshare"
             )
 
             if kwargs.get("extra_params"):
@@ -1086,7 +1087,8 @@ class FsUtils(object):
                 fstab_entry = (
                     f"{mon_node_ip}:{kwargs.get('sub_dir', '/')}    {mount_point}    ceph    "
                     f"name={kwargs.get('new_client_hostname', client.node.hostname)},"
-                    f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
+                    f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret,"
+                    f"noshare"
                 )
                 if kwargs.get("extra_params"):
                     fstab_entry += f"{kwargs.get('extra_params')}"
