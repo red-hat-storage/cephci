@@ -18,6 +18,13 @@ class Namespace(ExecuteCommandMixin):
     def mtls(self, value):
         self._mtls = value
 
+    def set_qos(self, **kwargs):
+        """Set QoS for namespace."""
+        return self.run_nvme_cli("set_qos", **kwargs)
+
+    def change_key(self, **kwargs):
+        return self.run_nvme_cli("change_key", **kwargs)
+
     def add(self, **kwargs):
         """Adds namespace for subsystem."""
         return self.run_nvme_cli("add", **kwargs)
@@ -53,7 +60,3 @@ class Namespace(ExecuteCommandMixin):
     def resize(self, **kwargs):
         """Resize namespace under subsystem."""
         return self.run_nvme_cli("resize", **kwargs)
-
-    def set_qos(self, **kwargs):
-        """Set QOS for a namespace."""
-        return self.run_nvme_cli("set_qos", **kwargs)

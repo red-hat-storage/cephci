@@ -25,9 +25,7 @@ class NVMeCLI(Cli):
 
     def gen_dhchap_key(self, **kwargs):
         """Generates the TLS key.
-
         Example::
-
             kwargs:
                 subsystem: NQN of subsystem
         """
