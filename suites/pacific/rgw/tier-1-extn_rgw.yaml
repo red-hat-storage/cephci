@@ -315,3 +315,12 @@ tests:
           - "mkdir /mnt/nfs1"
           - "mount -t nfs -o nfsvers=4,noauto,soft,sync,proto=tcp {node_ip:node5}:/ /mnt/nfs1"
       module: exec.py
+
+  - test:
+      name: Test swift bulk upload with tar format
+      desc: Test swift bulk upload with tar format
+      polarion-id: CEPH-83607707
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_bulk_upload.py
+        config-file-name: test_swift_bulk_upload.yaml

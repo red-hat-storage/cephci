@@ -19,11 +19,12 @@ class Host(ExecuteCommandMixin):
     def add(self, **kwargs):
         return self.run_nvme_cli("add", **kwargs)
 
+    def change_key(self, **kwargs):
+        """Change DHCHAP key for host"""
+        return self.run_nvme_cli("change_key", **kwargs)
+
     def delete(self, **kwargs):
         return self.run_nvme_cli("del", **kwargs)
 
     def list(self, **kwargs):
         return self.run_nvme_cli("list", **kwargs)
-
-    def change_key(self, **kwargs):
-        return self.run_nvme_cli("change_key", **kwargs)

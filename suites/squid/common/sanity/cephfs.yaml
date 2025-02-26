@@ -1,0 +1,24 @@
+tests:
+  - test:
+      name: Test CephFs default values for MDs
+      desc: Deploy MDs with default values using CephAdm
+      polarion-id: CEPH-83574284
+      module: mds_default_values.py
+
+  - test:
+      name: Test CephFs basic operations
+      desc: CephFs basic operations
+      polarion-id: CEPH-11293
+      module: cephfs_basic_tests.py
+
+  - test:
+      name: Test NFS Ganesha with cephfs
+      desc: Configure nfs-ganesha on nfs server and IOs operations
+      polarion-id: CEPH-83574439
+      module: nfs-ganesha_basics.py
+
+  - test:
+      name: Test Increase and Decrease of MDs
+      desc: MDs deployment using CephAdm and increase/decrease number of MDs
+      polarion-id: CEPH-83574286
+      module: mds_inc_dec.py

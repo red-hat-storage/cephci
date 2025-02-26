@@ -424,17 +424,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_ordered_versionsing.yaml
-      desc: test the duration for ordered listing of versioned buckets
-      module: sanity_rgw_multisite.py
-      name: ordered listing of versioned buckets post upgrade
-      polarion-id: CEPH-83573545
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
             script-name: test_swift_basic_ops.py
             config-file-name: test_swift_object_expire_op.yaml
             verify-io-on-site: ["ceph-sec"]

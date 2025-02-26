@@ -44,6 +44,17 @@ def run(ceph_cluster, **kwargs) -> int:
     verify_image = bool(config.get("verify_cluster_health", False))
     orch = Orch(cluster=ceph_cluster, **config)
 
+    # Clean up the ceph-qe-scripts to prepare for the execution of RGW singlesite and multisite test suites.
+    cleanup_dir = "/home/cephuser/"
+    cleanup_dir_cmd = (
+        f"find {cleanup_dir} -type d \\( "
+        f"-name rgw-tests -o -name rgw-ms-tests -o -name venv \\) "
+        f"-exec rm -r {{}} +"
+    )
+
+    for node in ceph_cluster.get_nodes():
+        node.exec_command(sudo=True, cmd=cleanup_dir_cmd, check_ec=False)
+
     client = ceph_cluster.get_nodes(role="client")[0]
     clients = ceph_cluster.get_nodes(role="client")
     executor = None

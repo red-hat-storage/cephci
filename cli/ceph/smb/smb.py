@@ -3,6 +3,7 @@ from cli.utilities.utils import build_cmd_from_args
 
 from .apply import Apply
 from .cluster import Cluster
+from .dump import Dump
 from .share import Share
 
 
@@ -15,6 +16,7 @@ class Smb(Cli):
         self.cluster = Cluster(nodes, self.base_cmd)
         self.share = Share(nodes, self.base_cmd)
         self.apply = Apply(nodes, self.base_cmd)
+        self.dump = Dump(nodes, self.base_cmd)
 
     def show(self, resource_names, **kw):
         """

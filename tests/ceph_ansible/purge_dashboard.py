@@ -1,4 +1,4 @@
-""" Module to purge ceph dashboard."""
+"""Module to purge ceph dashboard."""
 
 import json
 

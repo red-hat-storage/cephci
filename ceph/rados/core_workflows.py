@@ -18,6 +18,7 @@ from collections import namedtuple
 
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
+from utility import utils
 from utility.log import Log
 
 log = Log(__name__)
@@ -416,6 +417,7 @@ class RadosOrchestrator:
                 - rados_write_duration -> duration of write operation (int)
                 - byte_size -> size of objects to be written (str)
                     eg : 10KB, default - 4096KB
+                - num_threads -> Number of threads to be used(int)
                 - max_objs -> max number of objects to be written (int)
                 - verify_stats -> arg to control whether obj stats need to
                   be verified after write (bool) | default: True
@@ -427,6 +429,7 @@ class RadosOrchestrator:
         """
         duration = kwargs.get("rados_write_duration", 200)
         byte_size = kwargs.get("byte_size", 4096)
+        num_threads = kwargs.get("num_threads")
         max_objs = kwargs.get("max_objs")
         verify_stats = kwargs.get("verify_stats", True)
         check_ec = kwargs.get("check_ec", True)
@@ -436,6 +439,8 @@ class RadosOrchestrator:
         if nocleanup:
             cmd = f"{cmd} --no-cleanup"
         org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
+        if num_threads:
+            cmd = f"{cmd} -t {num_threads}"
         if max_objs:
             cmd = f"{cmd} --max-objects {max_objs}"
         if kwargs.get("background"):
@@ -1176,6 +1181,21 @@ class RadosOrchestrator:
             return False
         return True
 
+    def disable_file_logging(self) -> bool:
+        """
+        Disable the cluster logging
+        Returns: True -> pass, False -> fail
+        """
+        try:
+            cmd = "ceph config set global log_to_file false"
+            self.node.shell([cmd])
+            cmd = "ceph config set global mon_cluster_log_to_file false"
+            self.node.shell([cmd])
+        except Exception:
+            log.error("Error while disabling config to log into file")
+            return False
+        return True
+
     def get_ec_profiles(self) -> list:
         """
         Fetches all the EC profiles present on the cluster
@@ -1421,50 +1441,44 @@ class RadosOrchestrator:
         )
         host.exec_command(sudo=True, cmd=cmd)
         # verifying the osd state
-        if action in ["start", "stop"]:
-            start_time = datetime.datetime.now()
-            timeout_time = start_time + datetime.timedelta(seconds=timeout)
+        start_time = datetime.datetime.now()
+        timeout_time = start_time + datetime.timedelta(seconds=timeout)
 
-            while datetime.datetime.now() <= timeout_time:
-                osd_status, status_desc = self.get_daemon_status(
-                    daemon_type="osd", daemon_id=target
-                )
-                log.info(f"osd_status: {osd_status}, status_desc: {status_desc}")
-                if (osd_status == 0 or status_desc == "stopped") and action == "stop":
-                    break
-                elif (
-                    osd_status == 1 or status_desc == "running"
-                ) and action == "start":
-                    break
-                time.sleep(20)
-
-            if action == "stop" and osd_status != 0:
-                log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
-                pass_status = False
-            if action == "start" and osd_status != 1:
-                log.error(
-                    f"Failed to start the OSD.{target} service on {host.hostname}"
-                )
-                pass_status = False
-            if not pass_status:
-                log.error(
-                    f"Collecting the journalctl logs for OSD.{target} service on {host.hostname} for the failure"
-                )
-                end_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
-                osd_log_lines = self.get_journalctl_log(
-                    start_time=init_time,
-                    end_time=end_time,
-                    daemon_type="osd",
-                    daemon_id=str(target),
-                )
-                log.error(
-                    f"\n\n ------------ Log lines from journalctl ---------------- \n"
-                    f"{osd_log_lines}\n\n"
-                )
-                return False
-        else:
-            # Baremetal systems take some time for daemon restarts. changing sleep accordingly
+        while datetime.datetime.now() <= timeout_time:
+            osd_status, status_desc = self.get_daemon_status(
+                daemon_type="osd", daemon_id=target
+            )
+            log.info(f"osd_status: {osd_status}, status_desc: {status_desc}")
+            if (osd_status == 0 or status_desc == "stopped") and action == "stop":
+                break
+            elif (osd_status == 1 or status_desc == "running") and (
+                action == "start" or action == "restart"
+            ):
+                break
             time.sleep(20)
+
+        if action == "stop" and osd_status != 0:
+            log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
+            pass_status = False
+        if (action == "start" or action == "restart") and osd_status != 1:
+            log.error(f"Failed to start the OSD.{target} service on {host.hostname}")
+            pass_status = False
+        if not pass_status:
+            log.error(
+                f"Collecting the journalctl logs for OSD.{target} service on {host.hostname} for the failure"
+            )
+            end_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+            osd_log_lines = self.get_journalctl_log(
+                start_time=init_time,
+                end_time=end_time,
+                daemon_type="osd",
+                daemon_id=str(target),
+            )
+            log.error(
+                f"\n\n ------------ Log lines from journalctl ---------------- \n"
+                f"{osd_log_lines}\n\n"
+            )
+            return False
         return True
 
     def fetch_host_node(self, daemon_type: str, daemon_id: str = None) -> object:
@@ -4676,4 +4690,96 @@ EOF"""
                 )
                 return False
         log.info(f" All {service_type} Service in unmanaged={unmanaged} state. Pass")
+        return True
+
+    def run_background_iops(self, ceph_client, duration=600):
+        """
+        Method to trigger background IOPS on the cluster for a specific
+        duration using desired client
+        Note: Currently supports only RGW clientr
+        Args:
+            ceph_client: rgw | cephfs | rbd
+            duration: time for which I/Os should run (in secs)
+        returns:
+            Pass -> True, Fail -> false
+        """
+        # To-do: add support for cephfs and rbd
+        log.info(f"Starting background IOs with {ceph_client} client")
+        config = dict()
+        try:
+            if ceph_client == "rgw":
+                # choose RGW node
+                rgw_node = self.ceph_cluster.get_nodes(role="rgw")[0]
+                rgw_node_ip = rgw_node.ip_address
+
+                # rgw qe scripts
+                config["git-url"] = (
+                    "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+                )
+                home_dir_path = "/home/cephuser"
+                test_folder = "rgw-ms-tests"
+                test_folder_path = f"{home_dir_path}/{test_folder}"
+
+                # flushing iptables
+                log.info("flushing iptables")
+                self.client.exec_command(
+                    cmd="sudo iptables -F", check_ec=False, sudo=True
+                )
+
+                # setup necessary directory
+                out, _ = self.client.exec_command(
+                    cmd=f"ls -l {test_folder_path}", check_ec=False, sudo=True
+                )
+                if not out:
+                    self.client.exec_command(
+                        cmd=f"sudo mkdir -p {test_folder_path}", sudo=True
+                    )
+
+                # clone qe script repo
+                out, _ = self.client.exec_command(
+                    cmd=f"ls -l {test_folder_path}/ceph-qe-scripts",
+                    check_ec=False,
+                    sudo=True,
+                )
+                if not out:
+                    utils.clone_the_repo(config, self.client, test_folder_path)
+
+                # setup venv for running rgw scripts
+                out, _ = self.client.exec_command(cmd="ls -l venv", check_ec=False)
+                if not out:
+                    setup_cmds = [
+                        "python3 -m venv venv",
+                        "venv/bin/pip install --upgrade pip",
+                        f"venv/bin/pip install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt",
+                    ]
+                    for _cmd in setup_cmds:
+                        self.client.exec_command(cmd=_cmd, sudo=True)
+                cfg_path = (
+                    "/home/cephuser/rgw-ms-tests/ceph-qe-scripts/rgw/v2/tests/"
+                    + "s3_swift/multisite_configs/test_Mbuckets_with_Nobjects.yaml"
+                )
+
+                script_path = (
+                    "/home/cephuser/rgw-ms-tests/ceph-qe-scripts/rgw/v2/tests/"
+                    + "s3_swift/test_Mbuckets_with_Nobjects.py"
+                )
+
+                python_path = "/home/cephuser/venv/bin/python"
+
+                # Trial run 1 - Time taken to write 1000 objects in 2 buckets: 45 mins
+                # Trial run 2 - Time taken to write 250 objects in 2 buckets: 6 mins
+                # In 60 secs we will write approx 35-40 objects
+                obj_count = int(40 * duration / 60)
+                # modify object count to 1000
+                _cmd = f"sed -i 's/objects_count: [0-9]*/objects_count: {obj_count}/g' {cfg_path}"
+                self.client.exec_command(cmd=_cmd, sudo=True)
+
+                run_cmd = f"sudo {python_path} {script_path} -c {cfg_path} --rgw-node {rgw_node_ip} &> /dev/null &"
+                self.client.exec_command(cmd=run_cmd, sudo=True, check_ec=False)
+                # blind sleep to let rgw ios start
+                time.sleep(120)
+        except Exception as e:
+            log.error(f"Execution failed with exception: {e.__doc__}")
+            log.exception(e)
+            return False
         return True

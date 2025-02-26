@@ -11,6 +11,7 @@ from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from tests.cephfs.snapshot_clone.cg_snap_utils import CG_Snap_Utils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -191,7 +192,8 @@ def client_caps_mds_failover_test(client, fs_name, fs_util, subvol_path):
     log.info("Perform MDS failover")
     mds_failover(fs_util, client, fs_name)
     log.info("Capture Caps info after mds failover")
-    out, _ = client.exec_command(sudo=True, cmd="ceph tell mds.0 client ls --f json")
+    retry_exec_command = retry(CommandFailed, tries=3, delay=30)(client.exec_command)
+    out, _ = retry_exec_command(sudo=True, cmd="ceph tell mds.0 client ls --f json")
     client_ls = json.loads(out)
     for i in range(0, len(client_ls)):
         if client_id == client_ls[i]["id"]:
@@ -464,7 +466,7 @@ def run(ceph_cluster, **kw):
         if test_fail > 0:
             log.error("FAIL:Client Caps Validation Test Failed")
             return 1
-        log.error("PASS:Client Caps Validation Test Passed")
+        log.info("PASS:Client Caps Validation Test Passed")
         return 0
 
     except Exception as e:

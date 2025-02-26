@@ -506,8 +506,7 @@ tests:
         script-name: test_rgw_mfa.py
         config-file-name: test_rgw_mfa_multipart.yaml
         extra-pkgs:
-          9:
-            - https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
+            - oathtool
 
   - test:
       name: incorrect syntax for mfa resync commnad appropriate usage message is displayed
@@ -599,3 +598,23 @@ tests:
         run-on-rgw: true
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_rate_limit.yaml
+
+  - test:
+      name: Test CRLF Injection
+      desc: Test CRLF Injection
+      polarion-id: CEPH-83574745
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../curl/test_cors_using_curl.py
+        config-file-name: ../../curl/configs/test_crlf_injection_curl.yaml
+
+  - test:
+      name: LC process with versioning suspended bucket
+      desc: LC process with versioning suspended bucket
+      polarion-id: CEPH-83574809
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_process_with_versioning_suspended.yaml

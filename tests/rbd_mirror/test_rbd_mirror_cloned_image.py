@@ -1,14 +1,14 @@
 """Test case covered - CEPH-83576099
 
-    Test Case Flow:
-    1. Configure snapshot based mirroring between two clusters
-    2. create snapshots of an image
-    3. protect the snapshot of an image
-    4. clone the snapshot to new image
-    5. Tried to enable cloned images for snapshot-based mirroring it should not allow
-    6. Flatten the cloned image
-    7. Enable snapshot based mirroring for the flattened child image
-    8. Perform test steps for both Replicated and EC pool
+Test Case Flow:
+1. Configure snapshot based mirroring between two clusters
+2. create snapshots of an image
+3. protect the snapshot of an image
+4. clone the snapshot to new image
+5. Tried to enable cloned images for snapshot-based mirroring it should not allow
+6. Flatten the cloned image
+7. Enable snapshot based mirroring for the flattened child image
+8. Perform test steps for both Replicated and EC pool
 """
 
 from tests.rbd.rbd_utils import Rbd

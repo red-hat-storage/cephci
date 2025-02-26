@@ -1,21 +1,21 @@
 """Test case covered -
-    CEPH-83574134 - Configure immutable object cache daemon
-    and validate client RBD objects
+CEPH-83574134 - Configure immutable object cache daemon
+and validate client RBD objects
 
-    Pre-requisites :
-    1. Cluster must be up and running with capacity to create pool
-    2. We need atleast one client node with ceph-common package,
-       conf and keyring files
+Pre-requisites :
+1. Cluster must be up and running with capacity to create pool
+2. We need atleast one client node with ceph-common package,
+   conf and keyring files
 
-    Test Case Flow:
-    1. Create RBD based pool and an Image
-    2. Enable the immutable cache client settings
-    3. Install the ceph-immutable-object-cache package
-    4. Create a unique Ceph user ID, the keyring
-    5. Enable the ceph-immutable-object-cache daemon with created client
-    6. Write some data to the image using FIO
-    7. Perform snapshot,protect and clone of rbd images
-    8. Read the cloned images from the cache path
+Test Case Flow:
+1. Create RBD based pool and an Image
+2. Enable the immutable cache client settings
+3. Install the ceph-immutable-object-cache package
+4. Create a unique Ceph user ID, the keyring
+5. Enable the ceph-immutable-object-cache daemon with created client
+6. Write some data to the image using FIO
+7. Perform snapshot,protect and clone of rbd images
+8. Read the cloned images from the cache path
 """
 
 import time

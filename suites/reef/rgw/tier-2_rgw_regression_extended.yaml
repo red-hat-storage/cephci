@@ -78,7 +78,7 @@ tests:
       config:
         run-on-rgw: true
         extra-pkgs:
-          - wget https://download.oracle.com/java/23/latest/jdk-23_linux-x64_bin.rpm
+          - jdk
         install_start_kafka: true
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
@@ -215,7 +215,7 @@ tests:
       desc: Test LC transition with rule by lc process
       polarion-id: CEPH-83574044
       module: sanity_rgw.py
-      comments: known issue (BZ-2315885) targeted to 7.1z3
+      comments: known issue (BZ-2315885) targeted to 7.1z4
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_with_lc_process.yaml
@@ -243,7 +243,7 @@ tests:
       config:
         branch: ceph-reef
       desc: Run the external S3test suites.
-      comments: Known issue BZ-2312113 targeted to 7.1z3
+      comments: Known issue BZ-2312113 targeted to 7.1z4
       destroy-cluster: false
       module: test_s3.py
       name: execute s3tests
@@ -282,3 +282,77 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_bi_put_with_incomplete_multipart_upload.yaml
+
+  - test:
+      name: Test anonymous PUT to bucket with public-read-write ACL
+      desc: Test anonymous PUT to bucket with public-read-write ACL
+      polarion-id: CEPH-83604473
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_acl.py
+        config-file-name: ../../aws/configs/test_public_read_write_acl.yaml
+
+  - test:
+      name: Test Inditex hotfix bz, CORS presigned put url
+      desc: CORS ACL's prevents access to buckets with presigned PUT URI's with ACL private header
+      polarion-id: CEPH-83604475
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_cors_using_curl.py
+        config-file-name: ../../curl/configs/test_cors_presigned_put_url_using_curl.yaml
+
+  - test:
+      name: Test Tags added during multipart upload are retrievable
+      desc: Test Tags added during multipart upload are retrievable
+      polarion-id: CEPH-83604857
+      comments: Known issue BZ-2336077 targeted to 7.1z4
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_multipart_upload_with_tagging.yaml
+
+
+  # test customer RFE: Public access block
+
+  - test:
+      name: test public access block pre bucket policy
+      desc: test public access block pre bucket policy
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_pre_bucket_policy.yaml
+  - test:
+      name: test public access block post bucket policy
+      desc: test public access block post bucket policy
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_post_bucket_policy.yaml
+  - test:
+      name: test public access block - BlockPublicAcls
+      desc: test public access block - BlockPublicAcls
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_acl.yaml
+      comments: known issue - Bug 2344639
+  - test:
+      name: test public access block - IgnorePublicAcls
+      desc: test public access block - IgnorePublicAcls
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_ignore_acl.yaml
+  - test:
+      name: test public access block - RestrictPublicBuckets
+      desc: test public access block - RestrictPublicBuckets
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_restricted_public_buckets.yaml
+      comments: known issue - Bug 2344730

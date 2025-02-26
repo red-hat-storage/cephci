@@ -47,7 +47,7 @@ class MonElectionStrategies:
         Returns: True -> Pass, False -> fail
         """
         cmd = f" ceph mon add disallowed_leader {mon}"
-        self.rados_obj.node.shell([cmd])
+        self.rados_obj.node.shell([cmd], pretty_print=True)
 
         # Checking if the mon is successfully added to list
         if mon not in self.get_disallowed_mon_list():
@@ -65,7 +65,7 @@ class MonElectionStrategies:
         Returns: True -> Pass, False -> fail
         """
         cmd = f" ceph mon rm disallowed_leader {mon}"
-        self.rados_obj.node.shell([cmd])
+        self.rados_obj.node.shell([cmd], pretty_print=True)
 
         # Checking if the mon is successfully removed to list
         if mon in self.get_disallowed_mon_list():

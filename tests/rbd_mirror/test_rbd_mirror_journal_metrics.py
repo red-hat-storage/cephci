@@ -1,19 +1,19 @@
 """Test case covered -
-    CEPH-83575564 - Performance counter metrics for journal based
-    mirroring.
+CEPH-83575564 - Performance counter metrics for journal based
+mirroring.
 
-    Pre-requisites :
-    1. Two Clusters must be up and running to create pool
-    2. We need atleast one client node with ceph-common package,
-       conf and keyring files on each node.
+Pre-requisites :
+1. Two Clusters must be up and running to create pool
+2. We need atleast one client node with ceph-common package,
+   conf and keyring files on each node.
 
-    Test Case Flow:
-        1. Create a pool on both clusters.
-        2. Create an Image on primary mirror cluster in same pool.
-        3. Configure mirroring (peer bootstrap) between two clusters.
-        4. Enable pool journal based mirroring on the pool respectively.
-        5. Start running IOs on the primary image.
-        6. Verify journal mirror based performance counter metrics.
+Test Case Flow:
+    1. Create a pool on both clusters.
+    2. Create an Image on primary mirror cluster in same pool.
+    3. Configure mirroring (peer bootstrap) between two clusters.
+    4. Enable pool journal based mirroring on the pool respectively.
+    5. Start running IOs on the primary image.
+    6. Verify journal mirror based performance counter metrics.
 """
 
 from ceph.rbd.workflows.rbd_mirror_metrics import create_symlink_and_get_metrics

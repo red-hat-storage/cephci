@@ -172,23 +172,9 @@ tests:
             config-file-name: test_Mbuckets_with_Nobjects_compression_haproxy.yaml
             run-on-haproxy: true
       desc: test M buckets compression on haproxy node
-      polarion-id: CEPH-83575199
+      polarion-id: CEPH-83575435
       module: sanity_rgw_multisite.py
       name: test M buckets compression on haproxy node
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            set-env: true
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_multipart_haproxy.yaml
-            run-on-haproxy: true
-            timeout: 5000
-      desc: test M buckets multipart uploads on haproxy node
-      module: sanity_rgw_multisite.py
-      name: test M buckets multipart uploads on haproxy node
-      polarion-id: CEPH-83575433
 
 #Convert single site to multisite with default configuration
   - test:
@@ -244,19 +230,6 @@ tests:
       polarion-id: CEPH-83575473
       module: sanity_rgw_multisite.py
       name: test rgw restore index tool on versioned bucket
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            config-file-name: test_Mbuckets_with_Nobjects_no_reshard_haproxy.yaml
-            script-name: test_Mbuckets_with_Nobjects.py
-            run-on-haproxy: true
-            timeout: 5000
-      desc: Execute M buckets with N objects on primary and verify on secondary cluster
-      polarion-id: CEPH-83575575
-      module: sanity_rgw_multisite.py
-      name: m buckets with n objects
 
   - test:
       name: RGW multipart object expiration through lc

@@ -1,20 +1,20 @@
 """Test case covered -
-    CEPH-9507 - Create a mirror image, when secondary cluster
-    doesn't have enough space left to mirror the image copy
+CEPH-9507 - Create a mirror image, when secondary cluster
+doesn't have enough space left to mirror the image copy
 
-    Pre-requisites :
-    1. Two Clusters must be up and running to create pool
-    2. We need atleast one client node with ceph-common package,
-       conf and keyring files on each node.
+Pre-requisites :
+1. Two Clusters must be up and running to create pool
+2. We need atleast one client node with ceph-common package,
+   conf and keyring files on each node.
 
-    Test Case Flow:
-        1. Create a pool on both clusters.
-        2. Create an Image on primary mirror cluster in same pool.
-        3. Configure mirroring (peer bootstrap) between two clusters.
-        4. Enable image mode snapshot based mirroring on the pool respectively.
-        5. Start running IOs on the primary image.
-        6. keep on running IOs till secondary cluster becomes full
-        7. verify after secondary becomes full, mirroring should fail
+Test Case Flow:
+    1. Create a pool on both clusters.
+    2. Create an Image on primary mirror cluster in same pool.
+    3. Configure mirroring (peer bootstrap) between two clusters.
+    4. Enable image mode snapshot based mirroring on the pool respectively.
+    5. Start running IOs on the primary image.
+    6. keep on running IOs till secondary cluster becomes full
+    7. verify after secondary becomes full, mirroring should fail
 """
 
 from ceph.parallel import parallel
