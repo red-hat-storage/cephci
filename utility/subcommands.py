@@ -1,4 +1,3 @@
-
 import json
 import os
 import re
@@ -72,7 +71,7 @@ def save_to_remote(command, output, subcomponent_filter):
     ceph_version_full = url_parts[9]
     subfolder = url_parts[8]
     if "jenkins" in current_dir:
-        base_dir = os.path.join("http://magna002.ceph.redhat.com/cephci-jenkins/results",openstack_version,rhel_version,ceph_version_full,subcomponent_filter,subfolder)
+        base_dir = os.path.join(current_dir,openstack_version,rhel_version,ceph_version_full,subcomponent_filter,subfolder)
     else:
         base_dir = os.path.join(current_dir, "subcommandsoutput", "rgw")
     
@@ -97,8 +96,9 @@ def save_to_remote(command, output, subcomponent_filter):
 
 def get_log_files_from_directory(directory):
     """Retrieve all log file paths from a given directory."""
+    if not isinstance(directory, str):
+        raise TypeError("Expected a string path for directory")
     return [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files if file.endswith(".log")]
-
 def process_log_file(file_path, subcomponent_filter):
     """Process a log file to extract relevant radosgw-admin commands."""
     try:
