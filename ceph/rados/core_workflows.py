@@ -4784,3 +4784,62 @@ EOF"""
             log.exception(e)
             return False
         return True
+
+    def get_host_label(self, host_name):
+        """
+        Method is used to get the labels list of the host
+        Args:
+            host_name: Host name
+
+        Returns: List of labels of the host
+        """
+
+        cmd_get_labels = f"ceph orch host ls --host_pattern {host_name}"
+        host_output = self.run_ceph_command(cmd=cmd_get_labels)
+        return host_output[0]["labels"]
+
+    def remove_host_label(self, host_name, label):
+        """
+        Method is used to remove the labels from the host
+
+        Args:
+            host_name: host name
+            label:  label name
+
+        Returns:
+            True-> The label is successfully deleted
+            False -> The label is not deleted
+        """
+        cmd_rm_label = f"ceph orch host label rm  {host_name} {label}"
+        self.client.exec_command(cmd=cmd_rm_label, sudo=True)
+        time.sleep(10)
+        label_list = self.get_host_label(host_name)
+        if label not in label_list:
+            log.info(f"The {label} removed from the {host_name} node ")
+            return True
+        else:
+            log.error(f"The {label} not removed from the {host_name} node ")
+            return False
+
+    def add_host_label(self, host_name, label):
+        """
+        Method is used to add the labels from the host
+
+        Args:
+            host_name: host name
+            label:  label name
+
+        Returns:
+            True-> The label is successfully added
+            False -> The label is not added
+        """
+        cmd_add_label = f"ceph orch host label add  {host_name} {label}"
+        self.client.exec_command(cmd=cmd_add_label, sudo=True)
+        time.sleep(10)
+        label_list = self.get_host_label(host_name)
+        if label in label_list:
+            log.info(f"The {label} added to the {host_name} node ")
+            return True
+        else:
+            log.error(f"The {label} not added to the {host_name} node ")
+            return False
