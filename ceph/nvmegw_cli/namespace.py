@@ -20,6 +20,9 @@ class Namespace(ExecuteCommandMixin):
         """Set QoS for namespace."""
         return self.run_nvme_cli("set_qos", **kwargs)
 
+    def change_key(self, **kwargs):
+        return self.run_nvme_cli("change_key", **kwargs)
+
     def add(self, **kwargs):
         """Adds namespace for subsystem."""
         return self.run_nvme_cli("add", **kwargs)
