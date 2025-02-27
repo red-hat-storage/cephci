@@ -339,6 +339,18 @@ tests:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_multipart_transition_notifications.yaml
 
+
+  # this test is destructive, pls add the testcases above this
+  - test:
+      name: test if rgw crashes with kafka broker configured with acl authorizer
+      desc: test if rgw crashes with kafka topic name compare, with kafka broker configured with acl authorizer
+      polarion-id: CEPH-83607419
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_multipart_with_kafka_acl_config_set.yaml
+
   - test:
       name: check-ceph-health
       module: exec.py
