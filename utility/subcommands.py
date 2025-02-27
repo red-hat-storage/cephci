@@ -81,8 +81,8 @@ DOC = """
 Standard script to fetch and process log files from a given directory.
 
 Usage:
-    local.py --logdir <log_directory> --filter <subcomponent_filter> --outdir <output_directory>
-    local.py (-h | --help)
+    subcommands.py --logdir <log_directory> --filter <subcomponent_filter> --outdir <output_directory>
+    subcommands.py (-h | --help)
 
 Options:
     -h --help                      Show this help message
