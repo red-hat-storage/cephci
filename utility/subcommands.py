@@ -1,4 +1,76 @@
+"""
+This script is designed to process local log files, extract specific command outputs, and save them in structured JSON format. It ensures efficient log parsing, prevents duplicate storage, and organizes outputs based on subcomponents.
 
+### **Features:**
+1. **Recursive Log Retrieval:**  
+   - The script scans the specified directory to find `.log` files for processing.  
+
+2. **Command Extraction:**  
+   - Identifies and extracts `radosgw-admin` commands from log files.  
+   - Parses corresponding command outputs and structures them in JSON format.  
+
+3. **Output Storage:**  
+   - Saves extracted data into organized JSON files based on subcommands.  
+   - Ensures no duplicate entries using hash-based validation.  
+
+4. **Automatic Directory & File Handling:**  
+   - Creates necessary directories and JSON files if they don’t exist.  
+   - Organizes extracted outputs by subcomponent filters.  
+
+5. **Duplicate Detection:**  
+   - Computes SHA-256 hashes for command outputs to prevent redundant storage.  
+
+6. **Error Handling:**  
+   - Manages file I/O operations and JSON parsing errors gracefully.  
+
+### **How the Script Works:**
+1. **Fetching Log Files:**  
+   - The `get_log_files_from_directory` function scans the given directory and collects all `.log` files.  
+
+2. **Processing Log Files:**  
+   - The `process_log_file` function reads each `.log` file, extracts `radosgw-admin` commands, and processes outputs.  
+
+3. **Command Extraction & Deduplication:**  
+   - The `extract_radosgw_admin_commands` function:  
+     - Identifies `radosgw-admin` commands within log lines.  
+     - Extracts and reconstructs command outputs.  
+     - Uses SHA-256 hashes to detect and prevent duplicate entries.  
+
+4. **Saving Outputs:**  
+   - The `save_to_remote` function:  
+     - Creates the required directory structure.  
+     - Saves extracted command outputs into JSON files categorized by subcommands.  
+     - Checks for duplicates before appending new entries.  
+
+5. **Execution Flow:**  
+   - The `run` function:  
+     - Retrieves `.log` files from the specified directory.  
+     - Processes each file, extracting relevant commands and saving outputs.  
+
+### **Key Functions:**
+- `get_log_files_from_directory(directory)`: Retrieves all `.log` files from a directory.  
+- `process_log_file(file_path, subcomponent_filter, output_directory)`: Processes each log file for command extraction.  
+- `extract_radosgw_admin_commands(log_lines)`: Extracts `radosgw-admin` commands and reconstructs outputs.  
+- `compute_output_hash(output)`: Computes a unique SHA-256 hash for deduplication.  
+- `save_to_remote(command, output, subcomponent_filter, output_directory)`: Saves extracted command data into structured JSON files.  
+- `run(log_directory, subcomponent_filter, output_directory)`: Orchestrates log file processing and output storage.  
+
+### **Prerequisites:**
+1. Install the following Python libraries:  
+   - `json`  
+   - `os`  
+   - `re`  
+   - `hashlib`  
+   - `docopt`  
+
+2. Ensure the log directory is accessible and contains `.log` files.  
+
+---
+
+### **Folder Structure:**
+The script organizes extracted outputs into the specified output directory as follows:  
+
+"""
 import json
 import os
 import re
