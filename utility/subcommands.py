@@ -55,18 +55,6 @@ This script is designed to process local log files, extract specific command out
 - `save_to_remote(command, output, subcomponent_filter, output_directory)`: Saves extracted command data into structured JSON files.  
 - `run(log_directory, subcomponent_filter, output_directory)`: Orchestrates log file processing and output storage.  
 
-### **Prerequisites:**
-1. Install the following Python libraries:  
-   - `json`  
-   - `os`  
-   - `re`  
-   - `hashlib`  
-   - `docopt`  
-
-2. Ensure the log directory is accessible and contains `.log` files.  
-
----
-
 ### **Folder Structure:**
 The script organizes extracted outputs into the specified output directory as follows:  
 
