@@ -72,7 +72,7 @@ def save_to_remote(command, output, subcomponent_filter):
     subfolder = url_parts[8]
     
     if "jenkins" in current_dir:
-        base_dir = os.path.join(current_dir, openstack_version, rhel_version, ceph_version_full, subcomponent_filter, subfolder)
+        base_dir = os.path.join("http://magna002.ceph.redhat.com/cephci-jenkins/results", openstack_version, rhel_version, ceph_version_full, subcomponent_filter, subfolder)
     else:
         base_dir = os.path.join(current_dir, "subcommandsoutput", "rgw")
 
