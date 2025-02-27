@@ -229,7 +229,7 @@ def run(args: Dict) -> int:
 
         results = dict()
 
-        tenants = ["ceph-ci", "ceph-core", "ceph-jenkins", "ceph-perf"]
+        tenants = ["ceph-ci", "ceph-core", "ceph-jenkins", "ceph-perf", "ceph-sys-test"]
         for tenant in tenants:
             driver_ = get_driver(Provider.OPENSTACK)
             osp_driver = driver_(
