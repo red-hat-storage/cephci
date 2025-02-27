@@ -1,35 +1,35 @@
+
 import json
 import os
 import re
 import hashlib
-
 from docopt import docopt
 
-# Command-line documentation
 DOC = """
-Standard script to fetch and process log files from a given URL.
+Standard script to fetch and process log files from a given directory.
 
 Usage:
-    subcommands.py --logdir <complete_url> --filter <subcomponent_filter> 
-    subcommands.py (-h | --help)
+    local.py --logdir <log_directory> --filter <subcomponent_filter> --outdir <output_directory>
+    local.py (-h | --help)
 
 Options:
     -h --help                      Show this help message
-    --url <complete_url>           Complete URL to start fetching logs from
+    --logdir <log_directory>       Directory containing log files
     --filter <subcomponent_filter> Filter logs by subcomponent (e.g., rgw, rbd, rados)
+    --outdir <output_directory>    Directory where output JSON files will be stored
 """
 
 def compute_output_hash(output):
-    """Compute a SHA-256 hash for the given output."""
     return hashlib.sha256(json.dumps(output, sort_keys=True).encode("utf-8")).hexdigest()
 
 def clean_log_line(line):
+ 
     line = re.sub(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} - cephci - ceph:\d+ - (INFO|DEBUG|ERROR) -\s*", "", line).strip()
     line = re.sub(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} (INFO|DEBUG|ERROR):?\s*", "", line).strip()
     return line if line else None
 
 def reconstruct_json(lines):
-    """Attempt to reconstruct JSON from log lines."""
+
     cleaned_lines = [clean_log_line(line) for line in lines if clean_log_line(line)]
     try:
         return json.loads("\n".join(cleaned_lines))
@@ -37,7 +37,7 @@ def reconstruct_json(lines):
         return cleaned_lines
 
 def extract_radosgw_admin_commands(log_lines):
-    """Extract radosgw-admin commands and their outputs from log files."""
+  
     results, existing_hashes = [], set()
     current_command, current_output_lines = None, []
     
@@ -60,32 +60,21 @@ def extract_radosgw_admin_commands(log_lines):
     
     return {"outputs": results}
 
-
-def save_to_remote(command, output, subcomponent_filter):
-    """Save extracted command outputs directly to the remote path."""
+def save_to_remote(command, output, subcomponent_filter, output_directory):
+    """Save extracted command outputs to the specified output directory."""
     output_hash = compute_output_hash(output)
-    current_dir = os.getcwd()
-    url_parts = current_dir.split("/")
-    openstack_version = url_parts[6]
-    rhel_version = url_parts[7]
-    ceph_version_full = url_parts[9]
-    subfolder = url_parts[8]
-    
-    if "jenkins" in current_dir:
-        base_dir = os.path.join("http://magna002.ceph.redhat.com/cephci-jenkins/results", openstack_version, rhel_version, ceph_version_full, subcomponent_filter, subfolder)
-    else:
-        base_dir = os.path.join(current_dir, "subcommandsoutput", "rgw")
+    base_dir = os.path.join(output_directory, subcomponent_filter)
 
     # Ensure the directory exists
     os.makedirs(base_dir, exist_ok=True)
 
-    match = re.search(r"radosgw-admin (\w+)", command)
-    if match:
-        subcommand = match.group(1)
+    subcommand_match = re.search(r"radosgw-admin (\w+)", command)
+    if subcommand_match:
+        subcommand = subcommand_match.group(1)
         file_path = os.path.join(base_dir, f"{subcommand}_outputs.json")
 
         try:
-            # Ensure the file exists before reading
+            # Ensure the file exists and initialize if necessary
             if not os.path.exists(file_path):
                 with open(file_path, "w") as file:
                     json.dump({"outputs": []}, file)
@@ -106,29 +95,35 @@ def save_to_remote(command, output, subcomponent_filter):
 
         except Exception as e:
             print(f"Error saving file: {e}")
-
+            
 def get_log_files_from_directory(directory):
-    """Retrieve all log file paths from a given directory."""
+
     if not isinstance(directory, str):
         raise TypeError("Expected a string path for directory")
     return [os.path.join(root, file) for root, _, files in os.walk(directory) for file in files if file.endswith(".log")]
-def process_log_file(file_path, subcomponent_filter):
-    """Process a log file to extract relevant radosgw-admin commands."""
+
+def process_log_file(file_path, subcomponent_filter, output_directory):
+
     try:
         with open(file_path, "r") as file:
             log_lines = file.readlines()
             extracted_data = extract_radosgw_admin_commands(log_lines)
             for entry in extracted_data["outputs"]:
-                save_to_remote(entry["command"], entry["output"], subcomponent_filter)
+                save_to_remote(entry["command"], entry["output"], subcomponent_filter, output_directory)
     except Exception as e:
         print(f"Failed to process {file_path}: {e}")
 
-def run(complete_url, subcomponent_filter):
-    """Main function to process log files from a given URL."""
-    log_files = get_log_files_from_directory(complete_url)
+def run(log_directory, subcomponent_filter, output_directory):
+ 
+    if not isinstance(log_directory, str) or not os.path.isdir(log_directory):
+        raise ValueError("Invalid log directory provided.")
+    if not isinstance(output_directory, str):
+        raise ValueError("Invalid output directory provided.")
+    
+    log_files = get_log_files_from_directory(log_directory)
     for file_path in log_files:
-        process_log_file(file_path, subcomponent_filter)
+        process_log_file(file_path, subcomponent_filter, output_directory)
 
 if __name__ == "__main__":
     arguments = docopt(DOC)
-    run(arguments["--logdir"], arguments["--filter"])
+    run(arguments["--logdir"], arguments["--filter"], arguments["--outdir"])
