@@ -19,7 +19,7 @@ tests:
         verify_cluster_health: true
         steps:
           - config:
-              rhcs-version: 7.0
+              rhcs-version: 7.1
               release: rc
               command: bootstrap
               orphan-initial-daemons: true

@@ -242,7 +242,7 @@ tests:
         verify_daemons: true
         verify_cluster_usage: true
       abort-on-fail: true
-      comments: "upgrade bug from 6.x to 7.x wrt warning : 2243570"
+      comments: "upgrade bug from 5.x to 7.x wrt warning : 2243570"
 
   # Running basic rbd and rgw tests after upgrade
   - test:
