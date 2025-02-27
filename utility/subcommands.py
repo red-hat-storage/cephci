@@ -70,27 +70,40 @@ def save_to_remote(command, output, subcomponent_filter):
     rhel_version = url_parts[7]
     ceph_version_full = url_parts[9]
     subfolder = url_parts[8]
+    
     if "jenkins" in current_dir:
-        base_dir = os.path.join(current_dir,openstack_version,rhel_version,ceph_version_full,subcomponent_filter,subfolder)
+        base_dir = os.path.join(current_dir, openstack_version, rhel_version, ceph_version_full, subcomponent_filter, subfolder)
     else:
         base_dir = os.path.join(current_dir, "subcommandsoutput", "rgw")
-    
+
+    # Ensure the directory exists
+    os.makedirs(base_dir, exist_ok=True)
+
     match = re.search(r"radosgw-admin (\w+)", command)
     if match:
         subcommand = match.group(1)
         file_path = os.path.join(base_dir, f"{subcommand}_outputs.json")
-        
+
         try:
-            data = {"outputs": []}
-            if os.path.exists(file_path):
-                with open(file_path, "r") as file:
-                    data = json.load(file)
-            
+            # Ensure the file exists before reading
+            if not os.path.exists(file_path):
+                with open(file_path, "w") as file:
+                    json.dump({"outputs": []}, file)
+
+            # Read existing data
+            with open(file_path, "r") as file:
+                data = json.load(file)
+
+            # Append new entry if it doesn't already exist
             if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
                 data["outputs"].append({"command": command, "output": output, "output_hash": output_hash})
+
+                # Write back to file
                 with open(file_path, "w") as file:
                     json.dump(data, file, indent=4)
+
                 print(f"Saved output for {subcommand} to {file_path}")
+
         except Exception as e:
             print(f"Error saving file: {e}")
 
