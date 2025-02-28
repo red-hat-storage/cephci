@@ -229,7 +229,9 @@ class MgrWorkflows:
             return True
 
         # setting mgr daemon unmanaged to true
-        unmanaged_chk = self.rados_obj.set_unmanaged_flag("mgr")
+        unmanaged_chk = self.rados_obj.set_unmanaged_flag(
+            service_type="mgr", service_name="mgr"
+        )
         if not unmanaged_chk:
             log.error("The unmanaged flag is not set")
             return 1
@@ -269,7 +271,9 @@ class MgrWorkflows:
             time.sleep(30)
 
         # Unsetting mgr daemon
-        managed_chk = self.rados_obj.set_managed_flag("mgr")
+        managed_chk = self.rados_obj.set_managed_flag(
+            service_type="mgr", service_name="mgr"
+        )
         time.sleep(30)
         if not managed_chk:
             log.error("The unmanaged flag is  not unset")
