@@ -4394,20 +4394,21 @@ EOF"""
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id, obj_count
 
-    def set_unmanaged_flag(self, daemon):
+    def set_unmanaged_flag(self, service_type, service_name):
         """
         Method to set the unmanaged flag to a daemon
         Args:
-            daemon : Cluster daemon Example: mgr,mon, osd, rgw
+            service_name : Orch service_name Example: mgr,mon, osd.all-available-devices, rgw.rgws
+            service_type : Cluster  Example: mgr,mon, osd, rgw
         Return:
              True, if unmanaged flag is set
              False, if unmanaged flag is not set
         """
 
-        cmd_set_unmanaged_flag = f"ceph orch set-unmanaged {daemon}"
+        cmd_set_unmanaged_flag = f"ceph orch set-unmanaged {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_unmanaged_flag)
         base_cmd = "ceph orch ls"
-        cmd = f"{base_cmd} {daemon}"
+        cmd = f"{base_cmd} {service_type} {service_name}"
         duration = 300  # 5 minutes
         start_time = time.time()
         while time.time() - start_time < duration:
@@ -4420,21 +4421,21 @@ EOF"""
         log.error("The unmanaged flag is not set to True  ")
         return False
 
-    def set_managed_flag(self, daemon):
+    def set_managed_flag(self, service_type, service_name):
         """
         Method to unset the unmanaged flag to a daemon
         Args:
-            daemon : Cluster daemon Example: mgr,mon, osd, rgw
+            service_name : Orch service_name Example: mgr,mon, osd.all-available-devices, rgw.rgws
+            service_type : Cluster daemon Example: mgr,mon, osd, rgw
         Return:
             True, if unmanaged flag is unset
             False, if unmanaged flag is not unset
         """
 
-        cmd_set_managed_flag = f"ceph orch set-managed {daemon}"
+        cmd_set_managed_flag = f"ceph orch set-managed {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
-
         base_cmd = "ceph orch ls"
-        cmd = f"{base_cmd} {daemon}"
+        cmd = f"{base_cmd} {service_type} {service_name}"
         duration = 300  # 5 minutes
         start_time = time.time()
         while time.time() - start_time < duration:
