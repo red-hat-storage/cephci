@@ -965,10 +965,6 @@ def run(args):
         if "/ceph/cephci-jenkins" in run_dir
         else run_dir
     )
-    print("*" * 50)
-    print(url_base)
-    print("*" * 50)
-
     log.info("\nAll test logs located here: {base}".format(base=url_base))
 
     log.close_and_remove_filehandlers()
@@ -994,9 +990,6 @@ def run(args):
         "invoked-by": trigger_user,
     }
 
-    print("***" * 50)
-    print(test_run_metadata)
-    print("***" * 50)
 
     if xunit_results:
         create_xunit_results(suite_name, tcs, test_run_metadata)
