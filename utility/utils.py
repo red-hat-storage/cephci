@@ -2181,7 +2181,7 @@ def validate_conf(conf):
                 nodes_id.append(ceph_cluster[node].get("id") or f"{node}")
         else:
             nodes_id = [
-                node.get("id") or f"node{idx+1}" for idx, node in enumerate(nodes)
+                node.get("id") or f"node{idx + 1}" for idx, node in enumerate(nodes)
             ]
         log.info(f"List of Node IDs : {nodes_id}")
         if not (len(nodes_id) == len(set(nodes_id))):
@@ -2482,3 +2482,22 @@ def get_registry_info(registry):
         raise KeyError(
             "CephCI configuration yaml file does not have 'registries' section"
         )
+
+
+def get_custom_config_value(test_data, key_name):
+    """
+    Retrieve the custom configuration value based on the specified key name.
+
+    Args:
+        test_data (dict): The test data containing configuration.
+        key_name (str): The key to look for in the configuration.
+
+    Returns:
+        bool, dict, list, str: The configuration value in the required format.
+    """
+    if "custom-config" in test_data and isinstance(test_data["custom-config"], list):
+        for config in test_data["custom-config"]:
+            key, value = config.split("=")
+            if key == key_name:
+                return value.strip()
+    return False
