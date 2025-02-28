@@ -33,7 +33,7 @@ from cli.performance.memory_and_cpu_utils import (
     stop_logging_process,
     upload_mem_and_cpu_logger_script,
 )
-from utility import sosreport
+from utility import sosreport, subcommands
 from utility.log import Log
 from utility.polarion import post_to_polarion
 from utility.retry import retry
@@ -1030,6 +1030,8 @@ def run(args):
             get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
 
+    if build == rc:
+        subcommands.run(run_dir, "rgw", url_base)
     return jenkins_rc
 
 
