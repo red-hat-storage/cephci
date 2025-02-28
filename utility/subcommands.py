@@ -146,9 +146,7 @@ def extract_radosgw_admin_commands(log_lines):
 def save_to_remote(command, output, subcomponent_filter, output_directory):
     """Save extracted command outputs to the specified output directory."""
     output_hash = compute_output_hash(output)
-    current_dir = os.getcwd()
-    if "jenkins" in current_dir:
-        base_dir = os.path.join(output_directory, "cephci-commands-results")
+    base_dir = os.path.join(output_directory, "cephci-commands-results")
     # Ensure the directory exists
     os.makedirs(base_dir, exist_ok=True)
 
