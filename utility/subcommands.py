@@ -62,10 +62,11 @@ The script organizes extracted outputs into the specified output directory as fo
 
 """
 
+import hashlib
 import json
 import os
 import re
-import hashlib
+
 from docopt import docopt
 
 DOC = """

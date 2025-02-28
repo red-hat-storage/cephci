@@ -33,8 +33,7 @@ from cli.performance.memory_and_cpu_utils import (
     stop_logging_process,
     upload_mem_and_cpu_logger_script,
 )
-from utility import sosreport
-from utility import subcommands
+from utility import sosreport, subcommands
 from utility.log import Log
 from utility.polarion import post_to_polarion
 from utility.retry import retry
