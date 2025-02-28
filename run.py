@@ -155,7 +155,7 @@ Options:
                                     rhel images for Interop runs
   --skip-sos-report                 Enables to collect sos-report on test suite failures
                                     [default: false]
-  --skip-subcommands                to capture the cli commands output                  
+  --skip-subcommands                to capture the cli commands output
   --skip-tc <items>                 skip test case provided in comma seperated fashion
   --monitor-performance             Monitor performance and CPU usage on all/required nodes
                                     for every test and collects data to specified dir
@@ -990,8 +990,6 @@ def run(args):
         "invoked-by": trigger_user,
     }
 
-
-
     if xunit_results:
         create_xunit_results(suite_name, tcs, test_run_metadata)
 
@@ -1037,7 +1035,7 @@ def run(args):
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
 
     if not skip_subcommands:
-        subcommands.run(run_dir, "rgw",url_base)
+        subcommands.run(run_dir, "rgw", url_base)
 
     return jenkins_rc
 
