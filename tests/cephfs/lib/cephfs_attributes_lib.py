@@ -13,13 +13,14 @@ log = Log(__name__)
 class CephFSAttributeUtilities:
     def __init__(self, ceph_cluster):
         self.ceph_cluster = ceph_cluster
-        self.mons = ceph_cluster.get_ceph_objects("mon")
-        self.mgrs = ceph_cluster.get_ceph_objects("mgr")
-        self.osds = ceph_cluster.get_ceph_objects("osd")
-        self.mdss = ceph_cluster.get_ceph_objects("mds")
-        self.clients = ceph_cluster.get_ceph_objects("client")
-        self.installer = ceph_cluster.get_nodes(role="installer")[0]
         self.fs_util = FsUtils(ceph_cluster)
+
+        self.mons = self.fs_util.mons
+        self.mgrs = self.fs_util.mgrs
+        self.osds = self.fs_util.osds
+        self.mdss = self.fs_util.mdss
+        self.clients = self.fs_util.clients
+        self.installer = self.fs_util.installer
 
     def set_attributes(self, directory, **kwargs):
         """
