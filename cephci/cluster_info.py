@@ -2,7 +2,6 @@ import json
 import os
 import pickle
 import re
-from utility import subcommands
 import yaml
 from docopt import docopt
 
