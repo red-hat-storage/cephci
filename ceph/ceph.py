@@ -1,5 +1,6 @@
 """This module implements the required foundation data structures for testing."""
 
+import codecs
 import datetime
 import json
 import pickle
@@ -1172,21 +1173,26 @@ def read_stream(channel, end_time, timeout, stderr=False, log=True):
     Raises:
       TimeoutException: if reading from the channel exceeds the allocated time.
     """
-    _output = ""
+    _output = bytearray()
     _stream = channel.recv_stderr if stderr else channel.recv
-    _data = _stream(2048)
+    _decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
+    _data = _stream(2048)
     while _data:
-        _output += _data.decode("utf-8")
+        _output.extend(_data)
         if log:
             for _ln in _data.splitlines():
                 _log = logger.error if stderr else logger.debug
-                _log(_ln.decode("utf-8"))
+                _log(_decoder.decode(_ln, final=False))
 
         check_timeout(end_time, timeout)
         _data = _stream(2048)
 
-    return _output
+    try:
+        return _decoder.decode(_output, final=True)  # Final decode
+    except UnicodeDecodeError as e:
+        logger.error(f"Decoding failed: {e}. Replacing invalid characters.")
+        return _output.decode("utf-8", errors="replace")  # Fallback to safe decode
 
 
 class RolesContainer(object):

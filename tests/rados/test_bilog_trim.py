@@ -48,29 +48,8 @@ def run(ceph_cluster, **kw):
     rgw_node = ceph_cluster.get_nodes(role="rgw")[0]
 
     try:
-        # to-do: Write a module to trigger background RGW IOs
-        """
         # start background IOs using RGW
-        log.info("Starting background IOs with RGW client")
-        cfg_path = (
-            "/home/cephuser/rgw-ms-tests/ceph-qe-scripts/rgw/v2/tests/"
-            + "s3_swift/multisite_configs/test_Mbuckets_with_Nobjects.yaml"
-        )
-
-        script_path = (
-            "/home/cephuser/rgw-ms-tests/ceph-qe-scripts/rgw/v2/tests/"
-            + "s3_swift/test_Mbuckets_with_Nobjects.py"
-        )
-
-        rgw_node_ip = rgw_node.ip_address
-
-        # modify object count to 1000
-        _cmd = f"sed -i 's/100/1000/g' {cfg_path}"
-        rados_obj.client.exec_command(cmd=_cmd, sudo=True)
-
-        run_cmd = f"sudo venv/bin/python {script_path} -c {cfg_path} --rgw-node {rgw_node_ip} &> /dev/null &"
-        rados_obj.client.exec_command(cmd=run_cmd, sudo=True, check_ec=False)
-        """
+        rados_obj.run_background_iops(ceph_client="rgw", duration=600)
 
         # set noout flag
         if not rados_utils.configure_osd_flag(ceph_cluster, action="set", flag="noout"):

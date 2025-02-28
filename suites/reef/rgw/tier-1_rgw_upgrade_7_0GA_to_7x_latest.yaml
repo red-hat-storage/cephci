@@ -122,3 +122,21 @@ tests:
       config:
         script-name: ../curl/test_rgw_using_curl.py
         config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
+
+  - test:
+      name: test storage policy to use customized placement for S3
+      desc: Test storage policy to use customized placement for S3
+      polarion-id: CEPH-9337
+      module: sanity_rgw.py
+      config:
+        script-name: test_storage_policy.py
+        config-file-name: test_storage_policy_s3.yaml
+
+  - test:
+      name: test storage policy to use customized placement for Swift
+      desc: Test storage policy to use customized placement for Swift
+      polarion-id: CEPH-9336
+      module: sanity_rgw.py
+      config:
+        script-name: test_storage_policy.py
+        config-file-name: test_storage_policy_swift.yaml

@@ -8,6 +8,7 @@ import traceback
 from tests.cephfs.cephfs_scale.cephfs_scale_utils import CephfsScaleUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
 
 global log
@@ -31,6 +32,7 @@ def run(ceph_cluster, **kw):
     try:
         fs_util_v1 = FsUtilsV1(ceph_cluster)
         fs_scale_utils = CephfsScaleUtils(ceph_cluster)
+        snap_util = SnapUtils(ceph_cluster)
         config = kw.get("config")
         cephfs_config = {}
         build = config.get("build", config.get("rhbuild"))
@@ -73,6 +75,8 @@ def run(ceph_cluster, **kw):
             cmd += "ceph config set mds mds_export_ephemeral_random_max 0.75"
             client1.exec_command(sudo=True, cmd=cmd)
 
+        snap_util.enable_snap_schedule(client1)
+        snap_util.allow_minutely_schedule(client1)
         for i in cephfs_config:
             mds_pin_cnt = 1
             fs_details = fs_util_v1.get_fs_info(client1, fs_name=i)
@@ -126,6 +130,24 @@ def run(ceph_cluster, **kw):
                             cmd=cmd,
                         )
                         mnt_path = subvol_path.strip()
+                        log.info(
+                            f"Creating snap-schedule with retention for subvolume {sv_name} in group {j}"
+                        )
+                        snap_test_params = {
+                            "subvol_name": sv_name,
+                            "fs_name": i,
+                            "client": client1,
+                            "path": "/",
+                            "validate": False,
+                        }
+                        if "default" not in j:
+                            snap_test_params.update({"group_name": j})
+                        sched_list = ["10m", "1h"]
+                        for sched_val in sched_list:
+                            snap_test_params.update({"sched": sched_val})
+                            snap_util.create_snap_schedule(snap_test_params)
+                        snap_test_params.update({"retention": "6m4h"})
+                        snap_util.create_snap_retention(snap_test_params)
                         mount_params = {
                             "fs_util": fs_util_v1,
                             "mnt_path": mnt_path,

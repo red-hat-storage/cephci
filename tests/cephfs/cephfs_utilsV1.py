@@ -105,7 +105,6 @@ class FsUtils(object):
                 "gcc",
                 "python3-devel",
                 "git",
-                "postgresql postgresql-server postgresql-contrib",
             ]
             if build.endswith("7") or build.startswith("3"):
                 pkgs.extend(
@@ -128,9 +127,15 @@ class FsUtils(object):
                     cmd="git clone https://github.com/bengland2/smallfile.git"
                 )
             if "iozone" not in out:
-                cmd = "cd /home/cephuser;wget http://www.iozone.org/src/current/iozone3_506.tar;"
-                cmd += "tar xvf iozone3_506.tar;cd iozone3_506/src/current/;make;make linux"
-                client.node.exec_command(cmd=cmd)
+                cmd_list = [
+                    "cd /home/cephuser;wget http://www.iozone.org/src/current/iozone3_506.tar;",
+                    "cd /home/cephuser;tar xvf iozone3_506.tar",
+                    "sudo yum install make -y --nogpgcheck",
+                    "cd /home/cephuser/iozone3_506/src/current/;make;make linux",
+                    "export PATH=$PATH:/home/cephuser/iozone3_506/src/current/",
+                ]
+                for cmd in cmd_list:
+                    client.node.exec_command(cmd=cmd)
             out, rc = client.node.exec_command(
                 sudo=True, cmd="rpm -qa | grep -w 'dbench'", check_ec=False
             )
@@ -1050,7 +1055,8 @@ class FsUtils(object):
             kernel_cmd = (
                 f"mount -t ceph {mon_node_ip}:{kwargs.get('sub_dir', '/')} {mount_point} "
                 f"-o name={kwargs.get('new_client_hostname', client.node.hostname)},"
-                f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
+                f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret,"
+                f"noshare"
             )
 
             if kwargs.get("extra_params"):
@@ -1081,7 +1087,8 @@ class FsUtils(object):
                 fstab_entry = (
                     f"{mon_node_ip}:{kwargs.get('sub_dir', '/')}    {mount_point}    ceph    "
                     f"name={kwargs.get('new_client_hostname', client.node.hostname)},"
-                    f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
+                    f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret,"
+                    f"noshare"
                 )
                 if kwargs.get("extra_params"):
                     fstab_entry += f"{kwargs.get('extra_params')}"
@@ -3201,99 +3208,11 @@ os.system('sudo systemctl start  network')
                 long_running=True,
             )
 
-        def dbench():
-            log.info("IO tool scheduled : dbench")
-            io_params = {
-                "clients": random.choice(
-                    range(8, 33, 8)  # Randomly selects 8, 16, 24, or 32 for clients
-                ),
-                "duration": random.choice(
-                    range(60, 601, 60)
-                ),  # Randomly selects 60, 120, ..., 600 seconds
-                "testdir_prefix": "dbench_io_dir",
-            }
-            if kwargs.get("dbench_params"):
-                dbench_params = kwargs.get("dbench_params")
-                for io_param in io_params:
-                    if dbench_params.get(io_param):
-                        io_params[io_param] = dbench_params[io_param]
-
-            dir_suffix = "".join(
-                [
-                    random.choice(string.ascii_lowercase + string.digits)
-                    for _ in range(4)
-                ]
-            )
-            io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
-            client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
-
-            client.exec_command(
-                sudo=True,
-                cmd=f"dbench {io_params['clients']} -t {io_params['duration']} -D {io_path}",
-                long_running=True,
-            )
-
-        def postgresIO():
-            log.info("IO tool scheduled : PostgresIO")
-
-            io_params = {
-                "scale": random.choice(
-                    range(
-                        40, 101, 10
-                    )  # The size of the database(test data) increases linearly with the scale factor
-                ),
-                "workers": random.choice(range(4, 17, 4)),
-                "clients": random.choice(
-                    range(8, 56, 8)  # Randomly selects 8, 16, 24, 32,.. for clients
-                ),
-                "duration": random.choice(
-                    range(60, 601, 60)
-                ),  # Randomly selects 60, 120, ..., 600 seconds
-                "testdir_prefix": "postgres_io_dir",
-                "db_name": "",
-            }
-
-            if kwargs.get("postgresIO_params"):
-                postgresIO_params = kwargs.get("postgresIO_params")
-                for io_param in io_params:
-                    if postgresIO_params.get(io_param):
-                        io_params[io_param] = postgresIO_params[io_param]
-
-            dir_suffix = "".join(
-                [
-                    random.choice(string.ascii_lowercase + string.digits)
-                    for _ in range(4)
-                ]
-            )
-            io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
-            client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
-
-            # Initialize mode
-            client.exec_command(
-                sudo=True,
-                cmd=f"pgbench -i --scale={io_params['scale']} -U postgres -d {io_params['db_name']}",
-                long_running=True,
-            )
-
-            # Creating tables and populating data based on the scale factor
-            client.exec_command(
-                sudo=True,
-                cmd=(
-                    f"pgbench -c {io_params['clients']} "
-                    f"-j {io_params['workers']} "
-                    f"-T {io_params['duration']} "
-                    f"-U postgres -d {io_params['db_name']}"
-                ),
-                long_running=True,
-            )
-
         io_tool_map = {
             "dd": dd,
             "smallfile": smallfile,
             "wget": wget,
             "file_extract": file_extract,
-            "dbench": dbench,
-            "postgresIO": postgresIO,
         }
 
         log.info(f"IO tools planned to run : {io_tools}")
@@ -3602,72 +3521,6 @@ os.system('sudo systemctl start  network')
 
         # Setup Crefi pre-requisites : pyxattr
         node.exec_command(sudo=True, cmd="pip3 install pyxattr", long_running=True)
-
-    def setup_postgresql_IO(self, client, mount_dir, db_name):
-        """
-        Setup Steps:
-        1. Create the PostgreSQL data directory as Mount dir
-        2. Set permissions and owners for Mount dir
-        3. Initialise the Postgres Service
-        4. Create DB
-        """
-
-        log.info("Stopping PostgresSQL")
-        client.exec_command(sudo=True, cmd="systemctl stop postgresql", check_ec=False)
-
-        log.info("Setting up PostgresSQL")
-        client.exec_command(sudo=True, cmd=f"mkdir -p {mount_dir}")
-
-        log.debug(f"Setting up postgres persmission and user for the dir {mount_dir}")
-        client.exec_command(sudo=True, cmd=f"chown -R postgres:postgres {mount_dir}")
-        client.exec_command(sudo=True, cmd=f"chmod 700 {mount_dir}")
-
-        try:
-            log.debug("Initialise the Postgres Service")
-            client.exec_command(
-                sudo=True, cmd=f"sudo -u postgres /usr/bin/initdb -D {mount_dir}"
-            )
-        except Exception as e:
-            log.info(
-                f"Initialising the Postgres Service failed: {e}. Applying the Recovery.."
-            )
-            client.exec_command(sudo=True, cmd=f"rm -rf {mount_dir}/*")
-            client.exec_command(
-                sudo=True, cmd=f"sudo -u postgres /usr/bin/initdb -D {mount_dir}"
-            )
-
-        config_file = "/usr/lib/systemd/system/postgresql.service"
-        env_var = f"Environment=PGDATA={mount_dir}"
-
-        # Updates the postgres config to point to the correct backend dir
-        update_dir_command = (
-            f"sudo sed -i '/^Environment=PGDATA/c\\{env_var}' {config_file} || "
-            f"echo '{env_var}' | sudo tee -a {config_file} > /dev/null"
-        )
-        client.exec_command(sudo=True, cmd=update_dir_command)
-
-        client.exec_command(sudo=True, cmd="systemctl daemon-reload")
-
-        client.exec_command(sudo=True, cmd="sestatus")
-        client.exec_command(sudo=True, cmd="setenforce 0")
-        client.exec_command(sudo=True, cmd="systemctl restart postgresql")
-        client.exec_command(sudo=True, cmd=f"chcon -R -t postgresql_db_t {mount_dir}")
-
-        client.exec_command(sudo=True, cmd="setenforce 1")
-        client.exec_command(sudo=True, cmd="systemctl restart postgresql")
-
-        out, _ = client.exec_command(sudo=True, cmd="systemctl status postgresql")
-        log.debug(out)
-        if "active (running)" in out:
-            log.info("PostgreSQL is running")
-        else:
-            log.error("PostgreSQL is not running")
-
-        log.info(f"Creating the DB - {db_name}")
-        client.exec_command(
-            sudo=True, cmd=f"sudo -u postgres psql -c 'CREATE DATABASE {db_name};'"
-        )
-        log.info("DB creation is successful")
 
     def generate_all_combinations(
         self, client, ioengine, mount_dir, workloads, sizes, iodepth_values, numjobs

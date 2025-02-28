@@ -6,6 +6,7 @@ It contains all the re-useable functions related to cephfs scale tests
 
 import gzip
 import json
+import logging
 import os
 import random
 import re
@@ -20,6 +21,8 @@ from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
 log = Log(__name__)
+logger = logging.getLogger("run_log")
+
 
 logging_thread = None
 mds_logging_thread = None
@@ -129,7 +132,7 @@ class CephfsScaleUtils(object):
                     )
                     log.info(
                         f"Mounted subvolume {subvolume['subvol_name']} on Fuse at "
-                        f"{fuse_mounting_dir} for {clients[i]}"
+                        f"{fuse_mounting_dir} for {clients[i].node.hostname}"
                     )
 
             if mount_type == "kernel":
@@ -158,7 +161,7 @@ class CephfsScaleUtils(object):
                     )
                     log.info(
                         f"Mounted subvolume {subvolume['subvol_name']} on kernel at "
-                        f"{kernel_mounting_dir} for {clients[i]}"
+                        f"{kernel_mounting_dir} for {clients[i].node.hostname}"
                     )
             start_idx = end_idx
 
@@ -289,7 +292,7 @@ class CephfsScaleUtils(object):
             log.info(f"Top output of ceph-mds on {mds_hostnames} is {top_out[0]}")
             log.info(f"rss Value of ceph-mds on {mds_hostnames} is {top_out_rss_value}")
 
-    def run_mds_commands_periodically(self, ceph_cluster, log_dir, interval=120):
+    def run_mds_commands_periodically(self, ceph_cluster, log_dir, interval=300):
         """
         Run the get_ceph_mds_top_output function periodically.
 
@@ -330,7 +333,7 @@ class CephfsScaleUtils(object):
         client,
         cmd_list,
         log_dir,
-        interval=60,
+        interval=300,
     ):
         """
         Run the provided commands periodically.
@@ -633,3 +636,91 @@ class CephfsScaleUtils(object):
         except Exception as e:
             log.info(f"Error in extract_metrics: {e}")
             return None
+
+    def setup_log_dir(
+        self,
+        io_type,
+        mount_type,
+        client_count,
+        subvolume_count,
+        io_operation=None,
+        io_threads=None,
+        io_files=None,
+        io_file_size=None,
+        fio_operation=None,
+        fio_depth=None,
+        fio_block_size=None,
+        fio_file_size=None,
+    ):
+        """
+        Creates a log directory based on the I/O type and parameters.
+        Returns the path to the log directory.
+        """
+        base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
+        os.makedirs(f"{base_dir}/scale_logs", exist_ok=True)
+        log_base_dir = f"{base_dir}/scale_logs"
+
+        if io_type == "largefile":
+            log_dir = f"{log_base_dir}/{io_type}_wr_{mount_type}_{client_count}_cl_{subvolume_count}_sv_100GB_file"
+        elif io_type == "smallfile":
+            log_dir = (
+                f"{log_base_dir}/{io_type}_wr_{mount_type}_{client_count}_cl_{subvolume_count}_sv_"
+                f"{io_operation}_ops_{io_threads}_th_{io_files}_files_{io_file_size}_size"
+            )
+        elif io_type == "fio":
+            log_dir = (
+                f"{log_base_dir}/{io_type}_{mount_type}_{client_count}_cl_{subvolume_count}_subv_"
+                f"{fio_operation}_ops_{fio_depth}_depth_{fio_block_size}_bs_{fio_file_size}_size"
+            )
+        else:
+            raise ValueError(f"Unsupported io_type: {io_type}")
+
+        os.makedirs(log_dir, exist_ok=True)
+        log.info(f"Log Dir : {log_dir}")
+
+        return log_dir
+
+    def collect_logs(self, ceph_cluster, clients, default_fs, fs_util_v1, log_dir):
+        """
+        Collects logs from the Ceph MDS nodes, enables debug logs, and starts logging.
+        """
+        log.info("Redirecting top output of all MDS nodes to a file")
+        self.get_ceph_mds_top_output(ceph_cluster, log_dir)
+
+        log.info("Enabling debug logs for all MDS daemons")
+        fs_util_v1.enable_mds_logs(clients[0], default_fs)
+
+        mds_list = self.get_daemon_names(clients[0], "mds")
+        cmd_list = [
+            "ceph crash ls",
+            "ceph fs status",
+            "ceph fs dump",
+            "ceph -s",
+            "ceph df",
+        ]
+
+        for daemon in mds_list:
+            cmd_list.append(f"ceph tell {daemon} perf dump --format json")
+        log.info(f"These ceph commands will run at an interval: {cmd_list}")
+
+        log.info("Starting logging of Ceph Cluster status to log directory")
+        self.start_logging(clients[0], cmd_list, log_dir)
+        self.start_mds_logging(ceph_cluster, log_dir)
+
+    def stop_all_logging(self):
+        """
+        Stops logging for Ceph cluster and MDS daemons.
+        """
+        log.info("Stopping logging of Ceph Cluster status")
+        self.stop_logging()
+        self.stop_mds_logging()
+
+    def collect_and_compress_logs(self, clients, fs_util_v1, log_dir):
+        """
+        Collects and compresses MDS logs.
+        """
+        log.info("Collecting MDS Logs from all MDS Daemons")
+        compressed_logs = self.collect_and_compress_mds_logs(
+            clients, fs_util_v1, log_dir
+        )
+        return compressed_logs

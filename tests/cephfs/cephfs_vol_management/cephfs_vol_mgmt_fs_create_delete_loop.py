@@ -5,6 +5,7 @@ import traceback
 
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
+from tests.cephfs.cephfs_IO_lib import FSIO
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
 from utility.log import Log
@@ -34,6 +35,7 @@ def run(ceph_cluster, **kw):
     log.info(f"Running CephFS tests {tc}")
     test_data = kw.get("test_data")
     fs_util = FsUtils(ceph_cluster, test_data=test_data)
+    fs_io = FSIO(ceph_cluster)
     config = kw.get("config")
     clients = ceph_cluster.get_ceph_objects("client")
     build = config.get("build", config.get("rhbuild"))
@@ -82,6 +84,11 @@ def run(ceph_cluster, **kw):
         {
             "vol_name": fs_name,
             "subvol_name": f"{subvolume_name}_6",
+            "group_name": subvolume_group_name,
+        },
+        {
+            "vol_name": fs_name,
+            "subvol_name": f"{subvolume_name}_7",
             "group_name": subvolume_group_name,
         },
     ]
@@ -267,7 +274,7 @@ def run(ceph_cluster, **kw):
                 log.info("Start Writing IO on the subvolume using dbench")
 
                 p.spawn(
-                    fs_util.run_ios_V1,
+                    fs_io.run_ios_V1,
                     client=client1,
                     mounting_dir=kernel_mount_dir_dbench,
                     io_tools=["dbench"],
@@ -323,7 +330,7 @@ def run(ceph_cluster, **kw):
                 log.info("Start Writing IO on the subvolume using dbench")
 
                 p.spawn(
-                    fs_util.run_ios_V1,
+                    fs_io.run_ios_V1,
                     client=client1,
                     mounting_dir=fuse_dbench_mount_dir,
                     io_tools=["dbench"],
@@ -363,7 +370,7 @@ def run(ceph_cluster, **kw):
                 "\n---------------***************------------------------"
             )
             log.info(f"Mount subvolume {subvolume_name}_6 on Kernel Client")
-            kernel_mount_dir_pgsql = f"/mnt/cephfs_kernel{mounting_dir}_6/"
+            kernel_mount_dir_pgsql = f"/mnt/cephfs_kernel{mounting_dir}_6"
             mon_node_ips = fs_util.get_mon_node_ips()
             subvol_path_kernel, rc = client1.exec_command(
                 sudo=True,
@@ -378,17 +385,24 @@ def run(ceph_cluster, **kw):
             )
 
             db_name = fs_name + "_db_kernel"
-            fs_util.setup_postgresql_IO(client1, kernel_mount_dir_pgsql, db_name)
+            container_name = "postgres-container"
+            fs_io.setup_postgresql_IO(
+                client1, kernel_mount_dir_pgsql, container_name, db_name
+            )
 
             with parallel() as p:
                 log.info("Start Writing IO on the subvolume using postgresql")
 
                 p.spawn(
-                    fs_util.run_ios_V1,
+                    fs_io.run_ios_V1,
                     client=client1,
                     mounting_dir=kernel_mount_dir_pgsql,
                     io_tools=["postgresIO"],
-                    postgresIO_params={"duration": 10, "db_name": db_name},
+                    postgresIO_params={
+                        "duration": 10,
+                        "db_name": db_name,
+                        "container_name": container_name,
+                    },
                 )
 
                 # Spawn the health monitoring task
@@ -416,6 +430,76 @@ def run(ceph_cluster, **kw):
             fs_health_status = fs_util.get_ceph_health_status(client1)
             log.debug(f"Output of FS Health status: {fs_health_status}")
 
+            fs_io.cleanup_container(client1, container_name)
+
+            # Mounting Subvolume7 on FUSE - Run postgres IO
+            log.info(
+                "\n"
+                "\n---------------***************------------------------"
+                "\n  Step 7: Mounting Subvolume7 on FUSE - PostgresIO  "
+                "\n---------------***************------------------------"
+            )
+            log.info(f"Mount subvolume {subvolume_name}_7 on Fuse Client")
+
+            fuse_mount_dir_pgsql = f"/mnt/cephfs_fuse{mounting_dir}_7"
+            subvol_path_fuse, rc = client1.exec_command(
+                sudo=True,
+                cmd=f"ceph fs subvolume getpath {fs_name} {subvolume_name}_7 {subvolume_group_name}",
+            )
+            fs_util.fuse_mount(
+                [client1],
+                fuse_mount_dir_pgsql,
+                extra_params=f" -r {subvol_path_fuse.strip()} --client_fs {fs_name}",
+            )
+
+            db_name = fs_name + "_db_fuse"
+            container_name = "postgres-container"
+            fs_io.setup_postgresql_IO(
+                client1, fuse_mount_dir_pgsql, container_name, db_name
+            )
+
+            with parallel() as p:
+                log.info("Start Writing IO on the subvolume using postgresql")
+
+                p.spawn(
+                    fs_io.run_ios_V1,
+                    client=client1,
+                    mounting_dir=fuse_mount_dir_pgsql,
+                    io_tools=["postgresIO"],
+                    postgresIO_params={
+                        "duration": 10,
+                        "db_name": db_name,
+                        "container_name": container_name,
+                    },
+                )
+
+                # Spawn the health monitoring task
+                p.spawn(
+                    fs_util.monitor_ceph_health,
+                    client=client1,
+                    retry=2,
+                    interval=5,  # Set the interval for health checks during parallel operation
+                )
+
+            # Get ceph fs dump output
+            fs_dump_dict = fs_util.collect_fs_dump_for_validation(client1, fs_name)
+            log.debug(f"Output of FS dump: {fs_dump_dict}")
+
+            # Get ceph fs get of specific volume
+            fs_get_dict = fs_util.collect_fs_get_for_validation(client1, fs_name)
+            log.debug(f"Output of FS get: {fs_get_dict}")
+
+            # Get ceph fs status
+            fs_status_dict = fs_util.collect_fs_status_data_for_validation(
+                client1, fs_name
+            )
+            log.debug(f"Output of FS status: {fs_status_dict}")
+
+            fs_health_status = fs_util.get_ceph_health_status(client1)
+            log.debug(f"Output of FS Health status: {fs_health_status}")
+
+            fs_io.cleanup_container(client1, container_name)
+
             for subvolume in subvolume_list:
                 subvolume_size_subvol = fs_util.get_subvolume_info(
                     client=client1, **subvolume
@@ -431,6 +515,7 @@ def run(ceph_cluster, **kw):
             for mount_dir in [
                 fuse_mount_dir,
                 fuse_dbench_mount_dir,
+                fuse_mount_dir_pgsql,
             ]:
                 fs_util.client_clean_up(
                     "umount", fuse_clients=[client1], mounting_dir=mount_dir
