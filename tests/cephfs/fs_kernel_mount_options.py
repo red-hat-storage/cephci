@@ -34,12 +34,6 @@ def run(ceph_cluster, **kw):
         log.info(f"MetaData Information {log.metadata} in {__name__}")
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
-        erasure = (
-            FsUtils.get_custom_config_value(test_data, "erasure")
-            if test_data
-            else False
-        )
-
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
@@ -204,7 +198,9 @@ def run(ceph_cluster, **kw):
         umount_fs(clients[0], kernel_mounting_dir)
 
         log.info("mount with recovery_session Options")
-        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        fs_name_old = "cephfs_new"
+        default_fs = "renamed_fs8"
+        fs_util.rename_volume(clients[0], fs_name_old, default_fs)
         fs_details = fs_util.get_fs_info(clients[0], default_fs)
 
         if not fs_details:
@@ -295,3 +291,4 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean Up in progess")
         fs_util.remove_subvolume(clients[0], **subvolume)
+        fs_util.rename_volume(clients[0], default_fs, "cephfs_new")

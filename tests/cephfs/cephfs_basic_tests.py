@@ -27,14 +27,27 @@ def run(ceph_cluster, **kw):
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
         )
+        client1 = clients[0]
+        out, ec = client1.exec_command(sudo=True, cmd="ceph fs ls | awk {' print $2'} ")
+        fs_name = out.rstrip()
+        fs_name = fs_name.strip(",")
+        new_fs = "cephfs2"
+        fs_util.rename_volume(clients[0], fs_name, new_fs)
         fuse_mounting_dir = f"/mnt/cephfs_fuse{mounting_dir}/"
-        fs_util.fuse_mount(clients, fuse_mounting_dir)
+        fs_util.fuse_mount(
+            clients, fuse_mounting_dir, extra_params=f"--client_fs {new_fs}"
+        )
 
         mount_test_case(clients, fuse_mounting_dir)
 
         kernel_mounting_dir = f"/mnt/cephfs_kernel{mounting_dir}/"
         mon_node_ips = fs_util.get_mon_node_ips()
-        fs_util.kernel_mount(clients, kernel_mounting_dir, ",".join(mon_node_ips))
+        fs_util.kernel_mount(
+            clients,
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=f",fs={new_fs}",
+        )
 
         mount_test_case(clients, kernel_mounting_dir)
 
@@ -61,9 +74,11 @@ def run(ceph_cluster, **kw):
         return 0
 
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
+    finally:
+        fs_util.rename_volume(clients[0], new_fs, fs_name)
 
 
 def mount_test_case(clients, mounting_dir):

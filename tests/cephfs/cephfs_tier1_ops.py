@@ -70,7 +70,10 @@ def run(ceph_cluster, **kw):
             return 1
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
-        default_fs = "cephfs"
+        default_fs = "cephfs_new"
+        new_name = "renamed_fs3"
+        fs_util.rename_volume(clients[0], default_fs, new_name)
+        default_fs = new_name
         if build.startswith("4"):
             # create EC pool
             list_cmds = [
@@ -149,6 +152,7 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
+            extra_params=f", fs = {default_fs}",
         )
 
         subvol_path, rc = clients[0].exec_command(
@@ -158,7 +162,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [clients[0]],
             fuse_mounting_dir_1,
-            extra_params=f" -r {subvol_path.strip()}",
+            extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
 
         log.info(
@@ -176,6 +180,7 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir_2,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",fs={default_fs}",
         )
 
         subvol_path, rc = clients[1].exec_command(
@@ -186,7 +191,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [clients[1]],
             fuse_mounting_dir_2,
-            extra_params=f" -r {subvol_path.strip()}",
+            extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
 
         log.info(
@@ -360,7 +365,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [clients[1]],
             fuse_mounting_dir_5,
-            extra_params=f" -r {subvol_path.strip()}",
+            extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
         clients[1].exec_command(
             sudo=True,
@@ -507,9 +512,11 @@ def run(ceph_cluster, **kw):
             fs_util.remove_subvolumegroup(clients[0], **subvolumegroup)
         return 0
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
+    finally:
+        fs_util.rename_volume(clients[0], new_name, "cephfs_new")
 
 
 def run_ios(client, mounting_dir):
