@@ -84,7 +84,7 @@ class NVMeCLI(Cli):
             kwargs:
                 output-format: json             # output format
         """
-        device = kwargs.get("device", "")
+        device = kwargs.pop("device", "")
         return self.execute(
             cmd=f"nvme list-subsys {device} {config_dict_to_string(kwargs)}", sudo=True
         )
