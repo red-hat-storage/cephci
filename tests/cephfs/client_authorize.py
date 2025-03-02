@@ -84,16 +84,13 @@ def run(ceph_cluster, **kw):
 
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
-        erasure = (
-            FsUtils.get_custom_config_value(test_data, "erasure")
-            if test_data
-            else False
-        )
         client = ceph_cluster.get_ceph_objects("client")
         mon_node_ip = fs_util.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
         fs_count = 1
-        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_name_old = "cephfs_new"
+        fs_name = "renamed_fs4"
+        fs_util.rename_volume(client[0], fs_name_old, fs_name)
         fs_details = fs_util.get_fs_info(client[0], fs_name)
 
         if not fs_details:
@@ -442,10 +439,12 @@ def run(ceph_cluster, **kw):
         return 0
 
     except CommandFailed as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
+    finally:
+        fs_util.rename_volume(client[0], fs_name, "cephfs_new")
