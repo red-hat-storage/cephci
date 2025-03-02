@@ -162,7 +162,7 @@ tests:
         tiebreaker_mon_site_name: tiebreaker
         negative_scenarios: False
       desc: Enables connectivity mode and deploys cluster with Stretch rule with tiebreaker node
-      comments: -ve scenarios bug - 2293147
+      comments: Pre-deployment -ve scenarios commented due to bug - 2293147
       abort-on-fail: true
 
 
@@ -311,7 +311,7 @@ tests:
       name: Netsplit Scenarios data-data sites
       module: test_stretch_netsplit_scenarios.py
       polarion-id: CEPH-83574979
-      comments: Active bug - 2318975
+      comments: Active bug with netsplit scenarios - 2318975
       config:
         pool_name: test_stretch_pool8
         netsplit_site: DC1
@@ -349,7 +349,6 @@ tests:
         stretch_bucket: datacenter
         tiebreaker_mon_site_name: tiebreaker
       desc: Perform post-deployment negative tests on stretch mode
-      comments: -ve scenarios bug - 2293147
 
   - test:
       name: OSD and host replacement

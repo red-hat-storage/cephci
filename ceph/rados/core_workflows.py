@@ -2347,22 +2347,27 @@ class RadosOrchestrator:
             bool. Pass -> True, Fail -> False
         """
 
-        # Creating test pool to check the effect of Netsplit scenarios on the Pool IO
-        if not self.create_pool(pool_name=pool_name):
-            log.error(f"Failed to create pool : {pool_name}")
-            return False
+        # Checking if test pool exists. if not, creating a new pool and continuing workflow
+        pools = self.list_pools()
+        if pool_name not in pools:
+            if not self.create_pool(pool_name=pool_name):
+                log.error("Failed to create pool : " + pool_name)
+                return False
 
-        rules = f"""id {rule_id}
+        out = self.run_ceph_command(cmd="ceph osd crush rule ls", client_exec=True)
+        if rule_name not in out:
+            log.debug("Creating new rule for 3 AZ pools. Rule name : " + rule_name)
+            rules = f"""id {rule_id}
 type replicated
 step take default
 step choose firstn {num_sites} type {peer_bucket_barrier}
 step chooseleaf firstn {num_copies_per_site} type host
 step emit"""
-        log.debug(f"Rule to be added :\n {rules}\n")
+            log.debug(f"Rule to be added :\n {rules}\n")
 
-        if not self.add_custom_crush_rules(rule_name=rule_name, rules=rules):
-            log.error("Failed to add the new crush rule")
-            return False
+            if not self.add_custom_crush_rules(rule_name=rule_name, rules=rules):
+                log.error("Failed to add the new crush rule")
+                return False
 
         size = num_sites * num_copies_per_site
         min_size = math.ceil(size / 2)
