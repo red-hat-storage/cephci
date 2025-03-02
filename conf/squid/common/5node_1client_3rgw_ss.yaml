@@ -1,0 +1,48 @@
+# System Under Test environment configuration for Tier 1 RGW - CephADM test suite
+# suite: suites/squid/common/regression/2_ss_rgw_ecpool_multirealm.yaml
+# suite file : suites/squid/common/regression/1_ss_ssl_rgw.yaml
+
+globals:
+  - ceph-cluster:
+      name: ceph
+
+      node1:
+        role:
+          - _admin
+          - installer
+          - mgr
+          - mon
+
+      node2:
+        no-of-volumes: 6
+        disk-size: 40
+        role:
+          - mgr
+          - mon
+          - osd
+
+      node3:
+        no-of-volumes: 6
+        disk-size: 40
+        role:
+          - mon
+          - osd
+          - rgw
+
+      node4:
+        no-of-volumes: 6
+        disk-size: 40
+        role:
+          - osd
+          - rgw
+
+      node5:
+        no-of-volumes: 6
+        disk-size: 40
+        role:
+          - osd
+          - rgw
+
+      node6:
+        role:
+          - client
