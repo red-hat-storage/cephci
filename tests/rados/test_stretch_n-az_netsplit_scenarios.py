@@ -260,8 +260,6 @@ def run(ceph_cluster, **kw):
             host.exec_command(sudo=True, cmd="reboot")
 
         rados_obj.rados_pool_cleanup()
-        cmd = f"ceph osd crush rule rm {rule_name}"
-        rados_obj.client.exec_command(cmd=cmd, sudo=True)
 
         init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
         log.debug(f"time when test was Ended : {init_time}")
