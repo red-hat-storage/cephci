@@ -546,6 +546,17 @@ tests:
       module: sanity_rgw_multisite.py
       name: test_sse_kms_kmip_gklm_per_object_versioninig_enabled
       polarion-id: CEPH-83592485
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            run-on-rgw: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard_rgw_accounts.yaml
+      desc: RGW accounts with sse-s3, bucket notifications and, dynamic_reshard
+      module: sanity_rgw_multisite.py
+      name: RGW accounts with sse-s3, bucket notifications and, dynamic_reshard
+      polarion-id: CEPH-83591687
 
 # please include test cases before below rename testcase as the process is disruptive currently
   - test:
@@ -559,3 +570,4 @@ tests:
       name: Perform zonegroup rename in master
       polarion-id: CEPH-10740
       comments: known issue (BZ2210695) targeted to 8.0
+
