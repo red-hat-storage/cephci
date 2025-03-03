@@ -165,7 +165,16 @@ tests:
       module: sanity_rgw.py
       name: Test cloud transition retain headobject
       polarion-id: CEPH-83575276
-
+  - test:
+      name: rgw user adoption to account and ownership change with IOs in progress
+      desc: rgw user adoption to account and ownership change with IOs in progress
+      polarion-id: CEPH-83591675
+      module: sanity_rgw.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_rgw_account_management.py
+            config-file-name: test_account_ownership_change_user_adoption.yaml
   - test:
       abort-on-fail: true
       clusters:
