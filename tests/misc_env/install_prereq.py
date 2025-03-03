@@ -16,7 +16,7 @@ from cli.utilities.utils import (
     reboot_node,
 )
 from utility.log import Log
-from utility.utils import get_cephci_config
+from utility.utils import get_cephci_config, is_unsecured_registry
 
 log = Log(__name__)
 
@@ -75,11 +75,16 @@ def run(**kw):
     fips_mode = config.get("enable_fips_mode", False)
 
     cloud_type = config.get("cloud-type", "openstack")
+
+    # Extract test_data from kw
+    test_data = kw.get("test_data", None)
+
     with parallel() as p:
         for ceph in ceph_nodes:
             p.spawn(
                 install_prereq,
                 ceph,
+                test_data,
                 skip_subscription,
                 repo,
                 enable_eus,
@@ -94,6 +99,7 @@ def run(**kw):
 
 def install_prereq(
     ceph,
+    test_data=None,  # Default value for test_data
     skip_subscription=False,
     repo=False,
     enable_eus=False,
@@ -223,7 +229,7 @@ def install_prereq(
         ceph.exec_command(cmd="sudo yum clean all")
         config_ntp(ceph, cloud_type)
 
-    registry_login(ceph, distro_ver)
+    registry_login(ceph, distro_ver, test_data)
     update_iptables(ceph)
 
     if not fips_mode:
@@ -379,7 +385,7 @@ def enable_rhel_eus_rpms(ceph, distro_ver):
     ceph.exec_command(sudo=True, cmd="yum clean all", long_running=True)
 
 
-def registry_login(ceph, distro_ver):
+def registry_login(ceph, distro_ver, test_data=None):
     """
     Login to the given Container registries provided in the configuration.
 
@@ -423,6 +429,17 @@ def registry_login(ceph, distro_ver):
     auths_dict = {"auths": auths}
     ceph.exec_command(sudo=True, cmd="mkdir -p ~/.docker")
     ceph.exec_command(cmd="mkdir -p ~/.docker")
+
+    if is_unsecured_registry(test_data):
+        ceph.exec_command(
+            cmd=(
+                "echo -e '\\n[[registry]]\\n"
+                'location = "registry-proxy.engineering.redhat.com"\\n'
+                "insecure = true'"
+                " | sudo tee -a /etc/containers/registries.conf"
+            )
+        )
+
     auths_file_sudo = ceph.remote_file(
         sudo=True, file_name="/root/.docker/config.json", file_mode="w"
     )
