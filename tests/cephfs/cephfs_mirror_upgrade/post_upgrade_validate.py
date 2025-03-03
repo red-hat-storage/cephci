@@ -7,6 +7,7 @@ from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -76,7 +77,10 @@ def run(ceph_cluster, **kw):
             source_clients[0], source_fs
         )
         log.info("Add files into the path and create snapshot on each path")
-        fs_mirroring_utils.add_files_and_validate(
+        retry_add_files_and_validatet = retry(CommandFailed, tries=3, delay=30)(
+            fs_mirroring_utils.add_files_and_validatet
+        )
+        retry_add_files_and_validatet(
             source_clients,
             kernel_mounting_dir_1,
             subvol1_path,

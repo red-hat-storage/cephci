@@ -50,7 +50,8 @@ def run(ceph_cluster, **kw):
         ran_string = "".join(random.choices("abcdefghijklmnopqrstuvwxyz", k=5))
         start_volume = f"cephfs1_{ran_string}"
         fs_util.create_fs(client1, start_volume)
-        log.info(client1.exec_command(sudo=True, cmd="ceph fs ls"))
+        out, rc = client1.exec_command(sudo=True, cmd="ceph fs ls -f json-pretty")
+        log.info("List of file systems: %s", out)
         volume_name_list = []
         # Try to delete the volume with mon_allow_pool_delete to false
         log.info(
