@@ -1035,7 +1035,6 @@ def run(args):
 
     if not skip_subcommands:
         subcommands.run(run_dir, "rgw", url_base)
-
     return jenkins_rc
 
 
