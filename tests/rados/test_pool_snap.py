@@ -39,6 +39,7 @@ def run(ceph_cluster, **kw):
     """
     log.info(run.__doc__)
     config = kw["config"]
+    rhbuild = config.get("rhbuild")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
@@ -184,11 +185,12 @@ def run(ceph_cluster, **kw):
                 "Completed reproducing issue with unfixed build, test will resume after upgrade"
             )
         if config.get("verify_fix"):
-            # check if test pool exists on the cluster
-            if rados_obj.get_pool_details(pool=_pool_name):
-                log.info(
-                    f"Pool {_pool_name} exists, proceeding with force removal of snaps"
-                )
+            if rhbuild.split(".")[0] < "8":
+                # check if test pool exists on the cluster
+                if rados_obj.get_pool_details(pool=_pool_name):
+                    log.info(
+                        f"Pool {_pool_name} exists, proceeding with force removal of snaps"
+                    )
                 log.info("Force remove the undeleted lingering object snaps for obj1")
                 _cmd = f"ceph osd pool force-remove-snap {_pool_name}"
                 out, err = rados_obj.client.exec_command(cmd=_cmd, sudo=True)
@@ -213,8 +215,8 @@ def run(ceph_cluster, **kw):
                     "0 snaps" in out
                 ), f"pool snapshots for {_pool_name} should have been 0"
 
-                # remove all rados pools and perform the test steps again
-                rados_obj.rados_pool_cleanup()
+            # remove all rados pools and perform the test steps again
+            rados_obj.rados_pool_cleanup()
 
             log.info(
                 "\n\n -----------------------------------------"
