@@ -2097,6 +2097,11 @@ class RadosOrchestrator:
 
         for node in data["nodes"]:
             if node["type"] == "osd":
+                # skip OSDs which have weight 0 or 0 PGs
+                # these OSDs are not considered for MAX_AVAIL calc
+                # as they are un-utilized
+                if node["crush_weight"] == 0 or node["pgs"] == 0:
+                    continue
                 total_osds += 1
                 if node["kb_used"] > most_used_kb:
                     most_used_kb = node["kb_used"]
