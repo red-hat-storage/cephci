@@ -2860,11 +2860,12 @@ EOF"""
         log.error(f"Pool ID {pool_id} not found in 'ceph pg dump pools' output")
         raise KeyError(f"Pool ID {pool_id} not found in 'ceph pg dump pools' output")
 
-    def restart_daemon_services(self, daemon: str):
+    def restart_daemon_services(self, daemon: str, timeout: int = 300):
         """Module to restart all Orchestrator services belonging to the input
         daemon.
         Args:
             daemon (str): name of daemon whose service has to be restarted
+            timeout(int): wait time for daemons to start
         Returns:
             True -> Orch service restarted successfully.
 
@@ -2889,7 +2890,7 @@ EOF"""
         for service in daemon_services:
             self.client.exec_command(cmd=f"ceph orch restart {service}", sudo=True)
 
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         # wait for each daemon to restart
         for service in daemon_services:
             while datetime.datetime.now() <= end_time:
@@ -2922,7 +2923,7 @@ EOF"""
             else:
                 log.error(
                     f"All the daemons part of the service {service} did not restart within "
-                    f"timeout of 5 mins"
+                    f"timeout of {timeout} secs"
                 )
                 return False
 
@@ -4431,7 +4432,6 @@ EOF"""
 
         cmd_set_managed_flag = f"ceph orch set-managed {daemon}"
         self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
-
         base_cmd = "ceph orch ls"
         cmd = f"{base_cmd} {daemon}"
         duration = 300  # 5 minutes
