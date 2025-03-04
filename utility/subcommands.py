@@ -83,13 +83,12 @@ Options:
     --outdir <output_directory>    Directory where output JSON files will be stored
 """
 
+
 def compute_output_hash(output):
     """
     Computes a SHA-256 hash for the given output data.
-    
     Args:
         output (dict): The output data to hash.
-    
     Returns:
         str: The computed hash value as a hexadecimal string.
     """
@@ -97,13 +96,12 @@ def compute_output_hash(output):
         json.dumps(output, sort_keys=True).encode("utf-8")
     ).hexdigest()
 
+
 def clean_log_line(line):
     """
     Cleans log lines by removing timestamps and log level prefixes.
-    
     Args:
         line (str): A single line from the log file.
-    
     Returns:
         str or None: The cleaned log line or None if empty.
     """
@@ -117,13 +115,12 @@ def clean_log_line(line):
     ).strip()
     return line if line else None
 
+
 def reconstruct_json(lines):
     """
     Reconstructs JSON data from cleaned log lines.
-    
     Args:
         lines (list): A list of cleaned log lines.
-    
     Returns:
         dict or list: The reconstructed JSON data if valid, otherwise a list of cleaned lines.
     """
@@ -133,13 +130,12 @@ def reconstruct_json(lines):
     except json.JSONDecodeError:
         return cleaned_lines
 
+
 def extract_radosgw_admin_commands(log_lines):
     """
     Extracts `radosgw-admin` commands and their corresponding outputs from log files.
-    
     Args:
         log_lines (list): A list of log file lines.
-    
     Returns:
         dict: Extracted commands and their outputs, preventing duplicates using SHA-256 hashes.
     """
@@ -171,10 +167,10 @@ def extract_radosgw_admin_commands(log_lines):
 
     return {"outputs": results}
 
+
 def save_to_remote(command, output, subcomponent_filter, output_directory):
     """
     Saves extracted command outputs to structured JSON files, avoiding duplicates.
-    
     Args:
         command (str): The extracted `radosgw-admin` command.
         output (dict): The parsed output of the command.
@@ -194,10 +190,8 @@ def save_to_remote(command, output, subcomponent_filter, output_directory):
             if not os.path.exists(file_path):
                 with open(file_path, "w") as file:
                     json.dump({"outputs": []}, file)
-            
             with open(file_path, "r") as file:
                 data = json.load(file)
-            
             if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
                 data["outputs"].append(
                     {"command": command, "output": output, "output_hash": output_hash}
@@ -207,13 +201,12 @@ def save_to_remote(command, output, subcomponent_filter, output_directory):
         except Exception as e:
             print(f"Error saving file: {e}")
 
+
 def get_log_files_from_directory(directory):
     """
     Retrieves all `.log` files from a given directory.
-    
     Args:
         directory (str): The directory to scan.
-    
     Returns:
         list: List of file paths to `.log` files.
     """
@@ -226,10 +219,10 @@ def get_log_files_from_directory(directory):
         if file.endswith(".log")
     ]
 
+
 def process_log_file(file_path, subcomponent_filter, output_directory):
     """
     Processes a single log file for command extraction and saves the outputs.
-    
     Args:
         file_path (str): The path to the log file.
         subcomponent_filter (str): The subcomponent filter.
@@ -246,10 +239,10 @@ def process_log_file(file_path, subcomponent_filter, output_directory):
     except Exception as e:
         print(f"Failed to process {file_path}: {e}")
 
+
 def run(log_directory, subcomponent_filter, output_directory):
     """
     Orchestrates log file processing and output storage.
-    
     Args:
         log_directory (str): Directory containing log files.
         subcomponent_filter (str): Subcomponent filter for logs.
@@ -258,7 +251,8 @@ def run(log_directory, subcomponent_filter, output_directory):
     log_files = get_log_files_from_directory(log_directory)
     for file_path in log_files:
         process_log_file(file_path, subcomponent_filter, output_directory)
-    print("Successfully stored cephcli commands")    
+    print("Successfully stored cephcli commands")
+
 
 if __name__ == "__main__":
     arguments = docopt(DOC)
