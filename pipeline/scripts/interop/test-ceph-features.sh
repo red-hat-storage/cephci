@@ -98,6 +98,7 @@ for suite in "${!TEST_SUITES[@]}" ; do
       --skip-subscription \
       --rhbuild ${RHCS_VERSION} \
       --platform ${CEPH_PLATFORM} \
+      --custom-config insecure-registry=true \
       --build ${BUILD_TYPE} \
       --suite ${TEST_SUITE} \
       --global-conf ${TEST_CONFIG} \
