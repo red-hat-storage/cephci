@@ -182,25 +182,27 @@ class SensitiveLogFilter(logging.Filter):
         "token",
     ]
 
-    def redact_iter(self, data):
+    def redact_list(self, data):
         """Redact values in the iterator."""
         for i, v in enumerate(data):
-            if isinstance(data[i], (tuple, list)):
-                self.redact_iter(data[i])
-            elif isinstance(data[i], dict):
-                self.redact_dict(data[i])
-            elif isinstance(data[i], (str, bytearray, bytes)):
+            if isinstance(v, list):
+                data[i] = self.redact_list(v)
+            elif isinstance(v, dict):
+                data[i] = self.redact_dict(v)
+            elif isinstance(v, (str, bytearray, bytes)):
                 data[i] = self.redact_str(v)
 
     def redact_dict(self, data):
         """Redact values based on keys"""
         for _key in data.keys():
-            if isinstance(data[_key], dict):
-                self.redact_dict(data[_key])
-            elif isinstance(data[_key], (tuple, list)):
-                data[_key] = self.redact_iter(data[_key])
-            elif _key in self.excluded_words:
+            if _key in self.excluded_words:
                 data[_key] = "<masked>"
+            elif isinstance(data[_key], dict):
+                self.redact_dict(data[_key])
+            elif isinstance(data[_key], list):
+                self.redact_list(data[_key])
+            elif isinstance(data[_key], (str, bytearray, bytes)):
+                data[_key] = self.redact_str(data[_key])
 
     def redact_str(self, data):
         """Redact strings containing sensitive keys."""
@@ -224,9 +226,12 @@ class SensitiveLogFilter(logging.Filter):
             self.redact_dict(msg)
             return msg
 
-        if isinstance(msg, (list, tuple)):
-            self.redact_iter(msg)
+        if isinstance(msg, list):
+            self.redact_list(msg)
             return msg
+
+        if isinstance(msg, tuple):
+            return tuple(self.redact(arg) for arg in msg)
 
         if isinstance(msg, (str, bytearray, bytes)):
             msg = msg if isinstance(msg, str) else str(msg, "utf-8")
