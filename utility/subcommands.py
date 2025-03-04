@@ -192,7 +192,9 @@ def save_to_remote(command, output, subcomponent_filter, output_directory):
                     json.dump({"outputs": []}, file)
             with open(file_path, "r") as file:
                 data = json.load(file)
-            if not any(entry["output_hash"] == output_hash for entry in data["outputs"]):
+            if not any(
+                entry["output_hash"] == output_hash for entry in data["outputs"]
+            ):
                 data["outputs"].append(
                     {"command": command, "output": output, "output_hash": output_hash}
                 )
@@ -234,7 +236,10 @@ def process_log_file(file_path, subcomponent_filter, output_directory):
             extracted_data = extract_radosgw_admin_commands(log_lines)
             for entry in extracted_data["outputs"]:
                 save_to_remote(
-                    entry["command"], entry["output"], subcomponent_filter, output_directory
+                    entry["command"],
+                    entry["output"],
+                    subcomponent_filter,
+                    output_directory,
                 )
     except Exception as e:
         print(f"Failed to process {file_path}: {e}")
