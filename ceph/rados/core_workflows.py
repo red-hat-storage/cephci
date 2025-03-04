@@ -1880,7 +1880,7 @@ class RadosOrchestrator:
         )
         orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
         log.debug(orch_ps_out)
-        return orch_ps_out["status"], orch_ps_out["status_desc"]
+        return orch_ps_out["status"], orch_ps_out["status_desc"] if orch_ps_out else ()
 
     def daemon_check_post_tests(
         self, pre_test_orch_ps: dict, pre_crash_report: list = None
