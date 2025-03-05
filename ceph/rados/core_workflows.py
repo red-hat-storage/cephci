@@ -1880,7 +1880,7 @@ class RadosOrchestrator:
         )
         orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
         log.debug(orch_ps_out)
-        return orch_ps_out["status"], orch_ps_out["status_desc"]
+        return orch_ps_out["status"], orch_ps_out["status_desc"] if orch_ps_out else ()
 
     def daemon_check_post_tests(
         self, pre_test_orch_ps: dict, pre_crash_report: list = None
@@ -4720,9 +4720,9 @@ EOF"""
                 rgw_node_ip = rgw_node.ip_address
 
                 # rgw qe scripts
-                config["git-url"] = (
-                    "https://github.com/red-hat-storage/ceph-qe-scripts.git"
-                )
+                config[
+                    "git-url"
+                ] = "https://github.com/red-hat-storage/ceph-qe-scripts.git"
                 home_dir_path = "/home/cephuser"
                 test_folder = "rgw-ms-tests"
                 test_folder_path = f"{home_dir_path}/{test_folder}"
