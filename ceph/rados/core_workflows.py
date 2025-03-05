@@ -2098,6 +2098,11 @@ class RadosOrchestrator:
 
         for node in data["nodes"]:
             if node["type"] == "osd":
+                # skip OSDs which have weight 0 or 0 PGs
+                # these OSDs are not considered for MAX_AVAIL calc
+                # as they are un-utilized
+                if node["crush_weight"] == 0 or node["pgs"] == 0:
+                    continue
                 total_osds += 1
                 if node["kb_used"] > most_used_kb:
                     most_used_kb = node["kb_used"]
@@ -2861,11 +2866,12 @@ EOF"""
         log.error(f"Pool ID {pool_id} not found in 'ceph pg dump pools' output")
         raise KeyError(f"Pool ID {pool_id} not found in 'ceph pg dump pools' output")
 
-    def restart_daemon_services(self, daemon: str):
+    def restart_daemon_services(self, daemon: str, timeout: int = 300):
         """Module to restart all Orchestrator services belonging to the input
         daemon.
         Args:
             daemon (str): name of daemon whose service has to be restarted
+            timeout(int): wait time for daemons to start
         Returns:
             True -> Orch service restarted successfully.
 
@@ -2890,7 +2896,7 @@ EOF"""
         for service in daemon_services:
             self.client.exec_command(cmd=f"ceph orch restart {service}", sudo=True)
 
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         # wait for each daemon to restart
         for service in daemon_services:
             while datetime.datetime.now() <= end_time:
@@ -2923,7 +2929,7 @@ EOF"""
             else:
                 log.error(
                     f"All the daemons part of the service {service} did not restart within "
-                    f"timeout of 5 mins"
+                    f"timeout of {timeout} secs"
                 )
                 return False
 

@@ -192,15 +192,19 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
-        mon_obj.remove_config(section="mgr", name="debug_mgr")
-        mon_obj.remove_config(section="mgr", name="debug_cephsqlite")
-        rados_obj.rm_client_blocklisting(ip=f"{cephsqlite_addr}/{cephsqlite_nonce}")
-        # log cluster health
-        rados_obj.log_cluster_health()
-        # check for crashes after test execution
-        if rados_obj.check_crash_status():
-            log.error("Test failed due to crash at the end of test")
-            return 1
+        if rhbuild.split(".")[0] > 5:
+            mon_obj.remove_config(section="mgr", name="debug_mgr")
+            mon_obj.remove_config(section="mgr", name="debug_cephsqlite")
+            if "cephsqlite_addr" in locals() or "cephsqlite_addr" in globals():
+                rados_obj.rm_client_blocklisting(
+                    ip=f"{cephsqlite_addr}/{cephsqlite_nonce}"
+                )
+            # log cluster health
+            rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
     log.info("Verification of Database reconnection for libcephsqlite completed")
     return 0
