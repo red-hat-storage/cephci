@@ -120,7 +120,9 @@ def run(ceph_cluster, **kw) -> int:
             while datetime.datetime.now() < timeout_time:
                 try:
                     for node in osd_nodes:
-                        assert rados_obj.check_host_status(hostname=node.hostname)
+                        assert rados_obj.check_host_status(
+                            hostname=node.hostname, status="offline"
+                        )
                     log.info("Rebooted hosts are up")
                     break
                 except AssertionError:
