@@ -2,6 +2,7 @@ import logging
 import logging.handlers
 import os
 import re
+from copy import deepcopy
 from typing import Dict
 
 from .config import TestMetaData
@@ -223,12 +224,14 @@ class SensitiveLogFilter(logging.Filter):
         excluded fields.
         """
         if isinstance(msg, dict):
-            self.redact_dict(msg)
-            return msg
+            data = deepcopy(msg)
+            self.redact_dict(data)
+            return data
 
         if isinstance(msg, list):
-            self.redact_list(msg)
-            return msg
+            data = deepcopy(msg)
+            self.redact_list(data)
+            return data
 
         if isinstance(msg, tuple):
             return tuple(self.redact(arg) for arg in msg)
