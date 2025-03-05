@@ -1534,6 +1534,164 @@ def run(ceph_cluster, **kw):
             log.error("Tests related to EC profiles failed.")
             return 1
 
+    if config.get("enable_3AZ_stretch_pools"):
+        """
+        Workflow to enable 3 AZ stretch mode on all the pools on the cluster or on the pool names passed
+        """
+        try:
+            test_conf = config.get("enable_3AZ_stretch_pools")
+            pool_name = test_conf.get("pool_name", "test_3az_stretch_io")
+            stretch_bucket = test_conf.get("stretch_bucket", "datacenter")
+            rule_name = test_conf.get("rule_name", "3az_rule")
+            pool_list = test_conf.get("pool_list", None)
+
+            log.info(
+                "Checking the state of PGs on the cluster before trying to enable stretch pools"
+            )
+            if not rados_obj.run_pool_sanity_check():
+                log.error(
+                    "Cluster PGs not in active + clean state before starting the tests"
+                )
+                raise Exception("Post execution checks failed on the Stretch cluster")
+
+            # log cluster health
+            rados_obj.log_cluster_health()
+            osd_tree_cmd = "ceph osd tree"
+            buckets = rados_obj.run_ceph_command(osd_tree_cmd)
+            dc_buckets = [
+                d for d in buckets["nodes"] if d.get("type") == stretch_bucket
+            ]
+            dc_names = [name["name"] for name in dc_buckets]
+
+            log.debug("DCs present on the cluster are : %s ", dc_names)
+            all_hosts = rados_obj.get_multi_az_stretch_site_hosts(
+                num_data_sites=len(dc_names), stretch_bucket=stretch_bucket
+            )
+            for site in dc_names:
+                hosts_info = (
+                    f"Hosts present in Datacenter : {site} : {getattr(all_hosts, site)}"
+                )
+                log.info(hosts_info)
+
+            if pool_name:
+                rados_obj.create_pool(pool_name=pool_name)
+                rados_obj.bench_write(pool_name=pool_name, rados_write_duration=30)
+                time.sleep(10)
+
+            if not pool_list:
+                pool_list = rados_obj.list_pools()
+                log.info(
+                    "Pool name not passed for enabling stretch mode."
+                    "enabling stretch mode on all the pools of cluster"
+                )
+
+            for pool in pool_list:
+                if not rados_obj.create_n_az_stretch_pool(
+                    pool_name=pool,
+                    rule_name=rule_name,
+                    rule_id=101,
+                    peer_bucket_barrier=stretch_bucket,
+                    num_sites=3,
+                    num_copies_per_site=2,
+                    total_buckets=3,
+                    req_peering_buckets=2,
+                ):
+                    log.error(
+                        "Unable to Create/Enable stretch mode on the pool :" + pool
+                    )
+                    raise Exception("Unable to enable stretch pool")
+
+            # Sleeping for 10 seconds for pool to be populated in the cluster
+            time.sleep(10)
+
+            # Verification if the stretch pools were enabled on pool
+            for pool in pool_list:
+                try:
+                    log.debug("Checking if the stretch mode op the pool : " + pool)
+                    cmd = f"ceph osd pool stretch show {pool}"
+                    out = rados_obj.run_ceph_command(cmd=cmd)
+                    log.debug(
+                        "Stretch pool details on pool : %s : \n %s \n ", pool, out
+                    )
+                except Exception as err:
+                    raise Exception(
+                        "stretch mode not enabled on the pool : %s. \n Error message : %s \n",
+                        pool,
+                        err,
+                    )
+
+            flag = wait_for_clean_pg_sets(rados_obj)
+            if not flag:
+                log.error(
+                    "The cluster did not reach active + Clean state after enabling stretch pools"
+                )
+                raise Exception(
+                    "The cluster did not reach active + Clean state after enabling stretch pools"
+                )
+
+            if not rados_obj.run_pool_sanity_check():
+                log.error(
+                    "Checks failed post enabling stretch pools mode on the pools of cluster"
+                )
+                raise Exception(
+                    "Post execution checks failed on the Stretch pools cluster"
+                )
+
+            # Collecting the init no of objects on the pool, before site down
+            pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+            init_objects = pool_stat["stats"]["objects"]
+            log.debug(
+                "initial number of objects on the pool : %s is %s",
+                pool_name,
+                init_objects,
+            )
+
+            # perform rados put to check if write ops is possible
+            pool_obj.do_rados_put(
+                client=client_node, pool=pool_name, nobj=200, timeout=50
+            )
+
+            log.debug(
+                "sleeping for 20 seconds for the objects to be displayed in ceph df"
+            )
+            time.sleep(20)
+
+            # Getting the number of objects post write, to check if writes were successful
+            pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+            log.debug(pool_stat)
+
+            # Objects should be more than the initial no of objects
+            if pool_stat["stats"]["objects"] <= init_objects:
+                log.error(
+                    "Write ops should be possible, number of objects in the pool has not changed"
+                )
+                raise Exception(
+                    "Pool %s has %s objs", pool_name, pool_stat["stats"]["objects"]
+                )
+            log.info(
+                "Successfully wrote %s on pool %s post enabling stretch pools\n",
+                pool_stat["stats"]["objects"],
+                pool_name,
+            )
+            log.info("Completed enabling stretch mode on the provided pools. Pass")
+
+        except Exception as e:
+            log.error("Failed with exception:" + e.__doc__)
+            log.exception(e)
+            return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+            # log cluster health
+            rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
+        log.info("Completed enabling stretch mode on all the pools of cluster")
+        return 0
+
 
 def stop_osd_check_warn(rados_obj, osd_pick, pool_name, pgid):
     """Method to check health warning upon OSD failure
