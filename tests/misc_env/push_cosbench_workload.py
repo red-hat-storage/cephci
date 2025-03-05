@@ -95,7 +95,7 @@ symm_workload = """<?xml version="1.0" encoding="UTF-8" ?>
 </workload>"""
 
 cleanup_workload = """<?xml version="1.0" encoding="UTF-8" ?>
-<workload name="fillCluster" description="RGW testing">
+<workload name="cleanupCluster" description="RGW testing">
   <storage type="s3" config="timeout=900000;accesskey=x;secretkey=y;endpoint=workload_endpoint;path_style_access=true"/>
   <auth type="none"/>
   <workflow>
@@ -216,6 +216,13 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     )
     workload_conf = workload_conf.replace(
         'work name="hybrid" workers="1"', f'work name="hybrid" workers="{workers}"'
+    )
+    workload_conf = workload_conf.replace(
+        'work name="fill with runtime" workers="1"',
+        f'work name="fill with runtime" workers="{workers}"',
+    )
+    workload_conf = workload_conf.replace(
+        'work type="cleanup" workers="1"', f'work type="cleanup" workers="{workers}"'
     )
 
     workload_file_name = f"{workload_type}-workload.xml"
