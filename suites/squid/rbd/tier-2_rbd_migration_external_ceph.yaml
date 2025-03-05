@@ -134,14 +134,15 @@ tests:
           - "ceph config set mon mon_allow_pool_delete true"
 
   - test:
-      desc: Install rbd-nbd and remove any epel packages
+      desc: Install rbd-nbd, qemu-img and remove any epel packages
       module: exec.py
-      name: Install rbd-nbd
+      name: Install RBD packages
       config:
         sudo: true
         commands:
           - "rm -rf /etc/yum.repos.d/epel*"
-          - "dnf install rbd-nbd -y"
+          - "dnf install rbd-nbd -y --nogpgcheck"
+          - "dnf install qemu-img -y --nogpgcheck"
 
   - test:
       name: Test image migration with external ceph cluster
@@ -167,3 +168,28 @@ tests:
               test_ops_parallely: true
               io_size: 1G
       polarion-id: CEPH-83597689
+
+  - test:
+      name: Test image migration with external ceph cluster for qcow data
+      desc: live migration with external ceph qcow data format
+      module: test_rbd_migration_external_qcow_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+      polarion-id: CEPH-83597837
