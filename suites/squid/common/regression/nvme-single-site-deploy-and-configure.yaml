@@ -1,0 +1,172 @@
+# Test suite deploy and configure single site cluster
+# global-conf: conf/squid/common/13node-4client-single-site-regression.yaml
+
+tests:
+  - test:
+      name: Setup pre-requisites
+      desc: Setup packages and configuration for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              service: cephadm
+              command: bootstrap
+              args:
+                mon-ip: node1
+          - config:
+              service: host
+              command: add_hosts
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              service: osd
+              command: apply
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - "ceph fs volume create cephfs"
+          - config:
+              service: mds
+              command: apply
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+          - config:
+              command: shell
+              args:
+                - "ceph osd pool create rbd"
+          - config:
+              command: shell
+              args:
+                - "rbd pool init rbd"
+      abort-on-fail: true
+
+  - test:
+      name: Configure client
+      desc: Configure the RGW & RBD clients
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node18
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - jq
+          - fio
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+
+  - test:
+      name: Configure client
+      desc: Configure the RGW & RBD clients
+      module: test_client.py
+      config:
+        command: add
+        id: client.2
+        node: node19
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - jq
+          - fio
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+
+  - test:
+      name: Configure client
+      desc: Configure the RGW & RBD clients
+      module: test_client.py
+      config:
+        command: add
+        id: client.3
+        node: node20
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - jq
+          - fio
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+
+  - test:
+      name: Configure client
+      desc: Configure the RGW & RBD clients
+      module: test_client.py
+      config:
+        command: add
+        id: client.4
+        node: node21
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+          - jq
+          - fio
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+  
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd
+          - config:
+              command: shell
+              args:
+                - ceph osd pool application enable rbd rbd
+          - config:
+              command: shell
+              args:
+                - rbd create -s 1G image1
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  label: nvmeof-gw
+              pos_args:
+                - rbd
+                - gw_group1
+      desc: NVMeoF Gateway deployment using cephadm
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy nvmeof gateway
