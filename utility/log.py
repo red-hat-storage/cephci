@@ -227,25 +227,25 @@ class SensitiveLogFilter(logging.Filter):
         the method encounters a dict, the keys of the dict are scanned for
         excluded fields.
         """
-        if isinstance(msg, dict):
-            data = deepcopy(msg)
+        data = deepcopy(msg)
+
+        if isinstance(data, dict):
             self.redact_dict(data)
             return data
 
-        if isinstance(msg, list):
-            data = deepcopy(msg)
+        if isinstance(data, list):
             self.redact_list(data)
             return data
 
-        if isinstance(msg, tuple):
-            return tuple(self.redact(arg) for arg in msg)
+        if isinstance(data, tuple):
+            return tuple(self.redact(arg) for arg in data)
 
-        if isinstance(msg, (str, bytearray, bytes)):
-            msg = msg if isinstance(msg, str) else str(msg, "utf-8")
-            return self.redact_str(msg)
+        if isinstance(data, (str, bytearray, bytes)):
+            data = data if isinstance(data, str) else str(data, "utf-8")
+            return self.redact_str(data)
 
         # Basic types that require no processing
-        return msg
+        return data
 
     def filter(self, record):
         """Modifies the log record.
