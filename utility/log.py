@@ -187,9 +187,11 @@ class SensitiveLogFilter(logging.Filter):
         """Redact values in the iterator."""
         for i, v in enumerate(data):
             if isinstance(v, list):
-                data[i] = self.redact_list(v)
+                self.redact_list(data[i])
             elif isinstance(v, dict):
-                data[i] = self.redact_dict(v)
+                self.redact_dict(data[i])
+            elif isinstance(v, tuple):
+                data[i] = self.redact(v)
             elif isinstance(v, (str, bytearray, bytes)):
                 data[i] = self.redact_str(v)
 
@@ -202,6 +204,8 @@ class SensitiveLogFilter(logging.Filter):
                 self.redact_dict(data[_key])
             elif isinstance(data[_key], list):
                 self.redact_list(data[_key])
+            elif isinstance(data[_key], tuple):
+                data[_key] = self.redact(data[_key])
             elif isinstance(data[_key], (str, bytearray, bytes)):
                 data[_key] = self.redact_str(data[_key])
 
