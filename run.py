@@ -90,7 +90,6 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
         [--skip-sos-report]
-        [--skip-subcommands]
         [--skip-tc <items>]
         [--monitor-performance]
         [--disable-console-log]
@@ -154,7 +153,6 @@ Options:
                                     rhel images for Interop runs
   --skip-sos-report                 Enables to collect sos-report on test suite failures
                                     [default: false]
-  --skip-subcommands                to capture the cli commands output
   --skip-tc <items>                 skip test case provided in comma seperated fashion
   --monitor-performance             Monitor performance and CPU usage on all/required nodes
                                     for every test and collects data to specified dir
@@ -488,7 +486,6 @@ def run(args):
     enable_eus = args.get("--enable-eus")
     skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms")
     skip_sos_report = args.get("--skip-sos-report")
-    skip_subcommands = args.get("--skip-subcommands")
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
@@ -1033,7 +1030,7 @@ def run(args):
             get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
 
-    if not skip_subcommands:
+    if build == rc:
         subcommands.run(run_dir, "rgw", url_base)
     return jenkins_rc
 
