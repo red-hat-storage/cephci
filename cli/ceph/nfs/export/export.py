@@ -1,6 +1,8 @@
 from cli import Cli
 from utility.log import Log
 
+from .qos import Qos
+
 log = Log(__name__)
 
 
@@ -8,6 +10,7 @@ class Export(Cli):
     def __init__(self, nodes, base_cmd):
         super(Export, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} export"
+        self.qos = Qos(nodes, self.base_cmd)
 
     def create(
         self,
