@@ -221,4 +221,13 @@ tests:
         pg_num_max: 1
       delete_pool:
         - scrub_pool
+  - test:
+      name: Verification of the scrub and deep-scrub functionality on PG
+      desc: BZ#2241025- Verification of Scrub and Deep-Scrub Operations on Placement Groups
+      module: test_noscrub_nodeepscrub_check.py
+      polarion-id: CEPH-83594004
+      config:
+        pool_name: scrub_pool
+      delete_pool:
+        - scrub_pool
 
