@@ -79,14 +79,14 @@ class FscryptUtils(object):
 
         """
         go_cmds = "wget https://go.dev/dl/go1.23.6.linux-amd64.tar.gz;"
-        go_cmds += "tar -C /usr/local -xzf go1.23.6.linux-amd64.tar.gz"
+        go_cmds += "tar -C /usr/local -xzf go1.23.6.linux-amd64.tar.gz;sleep 5"
+        fscrypt_cmds = "cd /home/cephuser/fscrypt;make;sudo make install"
         cmd_list = [
             "cd /home/cephuser;git clone https://github.com/google/fscrypt",
             "sudo yum install -y pam-devel",
             "yum install -y m4",
             f"cd /home/cephuser;{go_cmds}",
-            "export PATH=$PATH:/usr/local/go/bin",
-            "cd /home/cephuser/fscrypt;make;sudo make install",
+            f"export PATH=$PATH:/usr/local/go/bin;sleep 2;{fscrypt_cmds}",
         ]
         for cmd in cmd_list:
             try:
@@ -476,6 +476,205 @@ class FscryptUtils(object):
         }
         entity_id = metadata_ops_obj[op_name]()
         return entity_id
+
+    def validate_fscrypt(self, client, encrypt_mode, encrypt_path):
+        """
+        This method is required to validate file ops that should suceed in lock and in unlock mode
+        Params:
+        Required:
+        client - A client object to run ceph cmds
+        encrypt_mode - lock or unlock
+        encrypt_path - encrypted path in mountpoint to be verified
+        return 0 if validation suceeds for given encrypt mode else return 1
+        """
+        file_ops = [
+            "name_content_read",
+            "create",
+            "file_open",
+            "write_overwrite",
+            "truncate",
+            "append",
+            "rename",
+        ]
+        all_file_ops = file_ops.copy()
+        all_file_ops.append("delete")
+        ops = {
+            "lock": {"not_allowed": file_ops, "allowed": ["delete"]},
+            "unlock": {"not_allowed": [], "allowed": all_file_ops},
+        }
+        ops_to_test = ops[encrypt_mode]
+        lock_str = "Required key not available"
+        cmd = f"find {encrypt_path} -maxdepth 1 -type f"
+        out, _ = client.exec_command(sudo=True, cmd=cmd)
+        test_files = out.strip()
+        test_files_list = test_files.split("\n")
+
+        def name_content_read():
+            cmd = f"find {encrypt_path} -type f"
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+            files_list = out.split("\n")
+            sample_cnt = min(5, len(files_list))
+            files_list_1 = random.sample(files_list, sample_cnt)
+            cmd = f"find {encrypt_path} -type d"
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+            dir_list = out.split("\n")
+            sample_cnt = min(5, len(dir_list))
+            dir_list_1 = random.sample(dir_list, sample_cnt)
+            dir_list.pop(0)
+            file_read = 0
+            file_locked = 0
+            try:
+                for file_path in files_list_1:
+                    if file_path:
+                        cmd = f"dd if={file_path} bs=4k count=2 > /var/tmp/tmp_read.log"
+                        client.exec_command(
+                            sudo=True,
+                            cmd=cmd,
+                        )
+                file_read = 1
+            except BaseException as ex:
+                log.info(ex)
+                if lock_str in str(ex):
+                    file_locked = 1
+            encrypted_files = []
+            encrypted_dirs = []
+            file_dir_names_encrypted = 0
+            for file_path in files_list_1:
+                cmd = f"basename {file_path}| wc -c"
+                out, _ = client.exec_command(sudo=True, cmd=cmd)
+                charcount = out.strip()
+                if charcount == 44:
+                    encrypted_files.append(file_path)
+            for dir_path in dir_list_1:
+                cmd = f"basename {dir_path}| wc -c"
+                out, _ = client.exec_command(sudo=True, cmd=cmd)
+                if charcount == 44:
+                    encrypted_dirs.append(dir_path)
+            if len(encrypted_files) == len(files_list_1) and len(encrypted_dirs) == len(
+                dir_list_1
+            ):
+                file_dir_names_encrypted = 1
+            if encrypt_mode == "lock":
+                if (file_locked and (file_read == 0)) and file_dir_names_encrypted:
+                    return 0
+                else:
+                    return 1
+            elif encrypt_mode == "unlock":
+                if ((file_locked == 0) and file_read) and (
+                    file_dir_names_encrypted == 0
+                ):
+                    return 0
+                else:
+                    return 1
+
+        def file_create():
+            cmd = f"echo cephfs_fscrypt_testing > {encrypt_path}/testfile"
+            try:
+                client.exec_command(sudo=True, cmd=cmd)
+            except BaseException as ex:
+                log.info(ex)
+                return 1
+            return 0
+
+        def file_open():
+            file_to_open = random.choice(test_files_list)
+            try:
+                fh_fscrypt = open(file_to_open, "r")
+                fh_fscrypt.readlines()
+                fh_fscrypt.close()
+            except BaseException as ex:
+                log.info(ex)
+                return 1
+            return 0
+
+        def write_overwrite():
+            file_to_overwrite = random.choice(test_files_list)
+            cmd = f"cp /var/log/messages > {file_to_overwrite}"
+            try:
+                client.exec_command(sudo=True, cmd=cmd)
+            except BaseException as ex:
+                log.info(ex)
+                return 1
+            return 0
+
+        def truncate():
+            file_to_truncate = random.choice(test_files_list)
+            cmd = f"truncate -s -1M {file_to_truncate}"
+            try:
+                client.exec_command(sudo=True, cmd=cmd)
+            except BaseException as ex:
+                log.info(ex)
+                return 1
+            return 0
+
+        def append():
+            file_to_append = random.choice(test_files_list)
+            cmd = f"echo cephfs_fscrypt_testing >> {file_to_append}"
+            try:
+                client.exec_command(sudo=True, cmd=cmd)
+            except BaseException as ex:
+                log.info(ex)
+                return 1
+            return 0
+
+        def rename():
+            file_to_rename = random.choice(test_files_list)
+            file_to_rename_1 = random.choice(test_files_list)
+            try:
+                client.exec_command(
+                    sudo=True, cmd=f"mv {file_to_rename} {encrypt_path}/renamed_file"
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"mv {file_to_rename_1} {encrypt_path}/../renamed_file",
+                )
+            except BaseException as ex:
+                log.info(ex)
+                return 1
+            return 0
+
+        def delete():
+            file_to_del = random.choice(test_files_list)
+            try:
+                client.exec_command(sudo=True, cmd=f"rm -f {file_to_del}")
+            except BaseException as ex:
+                log.info(ex)
+                return 1
+            return 0
+
+        failed_ops = []
+        ops_func = {
+            "name_content_read": name_content_read(),
+            "create": file_create(),
+            "file_open": file_open(),
+            "write_overwrite": write_overwrite(),
+            "truncate": truncate(),
+            "append": append(),
+            "rename": rename(),
+            "delete": delete(),
+        }
+        for file_op in all_file_ops:
+            test_status = ops_func[file_op]
+            if test_status == 1 and "name_content_read" in file_op:
+                failed_ops.append(file_op)
+            elif test_status == 1 and file_op in ops_to_test["allowed"]:
+                failed_ops.append(file_op)
+            elif test_status == 0 and file_op in ops_to_test["not_allowed"]:
+                failed_ops.append(file_op)
+        if len(failed_ops) > 0:
+            log.error(
+                "Some of the File ops failed in %s which was not expected:%s",
+                encrypt_mode,
+                failed_ops,
+            )
+        return_val = 1 if len(failed_ops) > 0 else 0
+        return return_val
 
     # HELPER ROUTINES #
 
