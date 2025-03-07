@@ -366,3 +366,29 @@ tests:
             module: push_cosbench_workload.py
             name: push cosbench cleanup workload from secondary
             polarion-id: CEPH-83575074
+
+  - test:
+      name: Parallel sync error check
+      desc: Parallel sync error check
+      module: test_parallel.py
+      parallel:
+        - test:
+            clusters:
+              ceph-pri:
+                config:
+                  script-name: ../s3cmd/test_s3cmd.py
+                  config-file-name: ../../s3cmd/multisite_configs/test_sync_error_list.yaml
+            desc: sync error check in primary
+            module: sanity_rgw_multisite.py
+            name: sync error check in primary
+            polarion-id: CEPH-83572752
+        - test:
+            clusters:
+              ceph-sec:
+                config:
+                  script-name: ../s3cmd/test_s3cmd.py
+                  config-file-name: ../../s3cmd/multisite_configs/test_sync_error_list.yaml
+            desc: sync error check in secondary
+            module: sanity_rgw_multisite.py
+            name: sync error check in secondary
+            polarion-id: CEPH-83572752
