@@ -366,3 +366,33 @@ tests:
             module: push_cosbench_workload.py
             name: push cosbench cleanup workload from secondary
             polarion-id: CEPH-83575074
+
+  - test:
+      name: upload of objects
+      desc: upload of objects
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            bucket_prefix: reg-cosbench-bkt-downup-
+            number_of_buckets: 1
+            number_of_objects: 2000000
+      desc: upload 2M object to regular bucket
+      module: push_cosbench_workload.py
+      name: upload 2M object to regular bucket
+      polarion-id: CEPH-83575113
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_sync_post_destruptive_services.py
+            config-file-name: test_sync_consistent_post_service_down_up.yaml
+      desc: Test sync consistent post RGW service down and bringing it up
+      module: sanity_rgw_multisite.py
+      name: Test sync consistent post RGW service down and bringing it up
+      polarion-id: CEPH-83575113
