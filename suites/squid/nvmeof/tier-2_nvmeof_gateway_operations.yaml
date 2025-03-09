@@ -203,6 +203,11 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
           - config:
+              service: gateway
+              command: listener_info             # List ana states for subsystem
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+          - config:
               service: host
               command: delete           # access host del
               args:
@@ -239,7 +244,7 @@ tests:
                 size: 1G
           - config:
               service: namespace
-              command: add              # Namespace add
+              command: add              # Namespace add with trash-image enabled
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 rbd-image: image4
@@ -248,11 +253,24 @@ tests:
                 load-balancing-group: 2
                 rbd-create-image: true
                 size: 1G
+                rbd-trash-image-on-delete: true
           - config:
               service: namespace
-              command: list             # namespace list
+              command: list             # namespace list using subsystem NQN
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: list             # namespace list using nsid 
+              args:
+                nsid: 4
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: list             # namespace list for all subsystems
               base_cmd_args:
                 format: json
           - config:
@@ -435,7 +453,10 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 1
-                rw-ios-per-second: 10
+                rw-ios-per-second: 150
+                rw-megabytes-per-second: 19
+                r-megabytes-per-second: 19
+                w-megabytes-per-second: 19
           - config:
               service: namespace
               command: set_qos             # namespace set_qos
