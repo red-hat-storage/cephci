@@ -74,7 +74,7 @@ def run(ceph_cluster, **kw):
                 # Creating rados bench objects
                 if not rados_obj.bench_write(
                     pool_name=pool_name,
-                    byte_size="1000KB",
+                    byte_size="500KB",
                     max_objs=50,
                     rados_write_duration=30,
                     verify_stats=False,
