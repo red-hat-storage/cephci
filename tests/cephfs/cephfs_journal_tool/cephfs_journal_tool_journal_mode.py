@@ -66,21 +66,23 @@ def run(ceph_cluster, **kw):
             ",".join(mon_node_ips),
             extra_params=f",fs={fs_name}",
         )
-        # down all the osd nodes
+        # getting the mds name
         mdss = ceph_cluster.get_ceph_objects("mds")
-        mds_list = []
+        mds_nodes_names = []
         for mds in mdss:
-            daemon_name = fs_util.deamon_op(mds, "mds", "stop")
-            fs_util.check_deamon_status(mds, "mds", "inactive")
-            mds_list.append((mds, daemon_name))
-        log.info("All the mds nodes are down")
-        log.info(mds_list)
+            out, ec = mds.exec_command(
+                sudo=True, cmd="systemctl list-units | grep -o 'ceph-.*mds.*\\.service'"
+            )
+            mds_nodes_names.append((mds, out.strip()))
+        log.info(f"NODES_MDS_info :{mds_nodes_names}")
+        for mds in mds_nodes_names:
+            mds[0].exec_command(sudo=True, cmd=f"systemctl stop {mds[1]}")
         time.sleep(10)
+        log.info("All the mds nodes are down")
         health_output = client1.exec_command(sudo=True, cmd="ceph -s")
         log.info(health_output[0])
         if "offline" not in health_output[0]:
             return 1
-
         # run  "cephfs-journal-tool --rank [fs_name]:0 journal inspect" command
         inspect_out, ec_1 = client1.exec_command(
             sudo=True, cmd=f"cephfs-journal-tool --rank {fs_name}:0 journal inspect"
@@ -163,11 +165,12 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         # start mds
-        for mds in mds_list:
-            fs_util.deamon_op(mds[0], "mds", "reset-failed", service_name=mds[1])
-            daemon_name = fs_util.deamon_op(mds[0], "mds", "start", service_name=mds[1])
-            time.sleep(10)
-            fs_util.check_deamon_status(mds[0], "active", daemon_name)
+        for mds in mds_nodes_names:
+            mds_node = mds[0]
+            mds_name = mds[1]
+            # reset failed counter
+            mds_node.exec_command(sudo=True, cmd=f"systemctl reset-failed {mds_name}")
+            mds_node.exec_command(sudo=True, cmd=f"systemctl restart {mds_name}")
 
         time.sleep(10)
         health_output = client1.exec_command(sudo=True, cmd="ceph -s")

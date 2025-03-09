@@ -9,6 +9,7 @@ import re
 import time
 from threading import Thread
 
+from ceph import utils
 from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -16,6 +17,7 @@ from ceph.rados.mgr_workflows import MgrWorkflows
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
+from utility.utils import method_should_succeed
 
 log = Log(__name__)
 
@@ -51,11 +53,12 @@ def run(ceph_cluster, **kw):
         log.error("Failed to create the  Pool")
         return 1
 
-    rados_obj.bench_write(pool_name=pool_name, byte_size="5M", rados_write_duration=180)
+    rados_obj.bench_write(pool_name=pool_name, byte_size="5M", rados_write_duration=60)
     mgr_daemon = Thread(
         target=background_mgr_task, kwargs={"mgr_object": mgr_obj}, daemon=True
     )
     wait_for_clean_pg_sets(rados_obj)
+
     # Printing the hosts in cluster
     cmd_host_ls = "ceph orch host ls"
     out = rados_obj.run_ceph_command(cmd=cmd_host_ls)
@@ -108,37 +111,47 @@ def run(ceph_cluster, **kw):
     out = rados_obj.run_ceph_command(cmd=cmd_host_ls)
     log.info(f"The node details in the cluster -{out} ")
     drain_host = None
-    # Check any nodes that has _no_schedule label
-    for node in out:
-        if "_no_schedule" in node["labels"]:
-            drain_host = node["hostname"]
-            log.info(f"The {drain_host} is identified to drain from the cluster")
-            break
-    # Select the node with OSD nodes weight/re-weights are 0 if none of the hosts have the _no_schedule label.
-    if drain_host is None:
-        osd_down_node_list = get_zero_osd_weight_list(rados_obj)
-        if len(osd_down_node_list) == 0:
-            log.info("None of the OSD weight and reweight are 0")
-        else:
-            drain_host, _ = list(osd_down_node_list.items())[0]
-            log.info(f"The drain operation is performing on {drain_host} node")
-    # Pick any random OSD node if none of hosts have the _no_schedule label and all OSDs are up.
-    if drain_host is None:
-        osd_hosts = rados_obj.get_osd_hosts()
-        log.info(f"The osd nodes list are-{osd_hosts}")
-        drain_host = random.choice(osd_hosts)
 
-    init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
-    log.info(f"The test execution  started at - {init_time} ")
     try:
+        # Check any nodes that has _no_schedule label
+        for node in out:
+            if "_no_schedule" in node["labels"]:
+                drain_host = node["hostname"]
+                log.info(f"The {drain_host} is identified to drain from the cluster")
+                break
+        # Select the node with OSD nodes weight/re-weights are 0 if none of the hosts have the _no_schedule label.
+        if drain_host is None:
+            osd_down_node_list = get_zero_osd_weight_list(rados_obj)
+            if len(osd_down_node_list) == 0:
+                log.info("None of the OSD weight and reweight are 0")
+            else:
+                drain_host, _ = list(osd_down_node_list.items())[0]
+                log.info(f"The drain operation is performing on {drain_host} node")
+        # Pick any random OSD node if none of hosts have the _no_schedule label and all OSDs are up.
+        if drain_host is None:
+            osd_hosts = rados_obj.get_osd_hosts()
+            log.info(f"The osd nodes list are-{osd_hosts}")
+            drain_host = random.choice(osd_hosts)
+
+        init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        log.info(f"The test execution  started at - {init_time} ")
         osd_count_before_test = get_node_osd_list(rados_obj, ceph_nodes, drain_host)
         log.info(
             f"The OSDs in the drain node before starting the test- {osd_count_before_test} "
         )
         rados_obj.set_service_managed_type("osd", unmanaged=True)
+        # Re-producing the bug by running  mgr start and removing OSD parallely
         time.sleep(10)
         mgr_daemon.start()
-        service_obj.remove_custom_host(host_node_name=drain_host)
+        if bug_exists:
+            log.info("Reproducing  the bug")
+            rm_host = utils.get_node_by_id(ceph_cluster, drain_host)
+            log.info(
+                f"Identified host : {rm_host.hostname} to be removed from the cluster"
+            )
+            host_drain(cephadm, remove_osd_node=rm_host.hostname)
+        else:
+            service_obj.remove_custom_host(host_node_name=drain_host)
         time.sleep(300)
         end_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
         log.info(f"The test execution  ends at - {end_time}")
@@ -161,7 +174,15 @@ def run(ceph_cluster, **kw):
             "Adding the node by providing the deploy_osd as False, because the script is not setting the "
             "--unmanaged=true.Once the node is added back to the cluster the OSDs get configured automatically"
         )
-        service_obj.add_new_hosts(add_nodes=[drain_host], deploy_osd=False)
+        # Check if labels exist for the node
+        host_labels = rados_obj.get_host_label(drain_host)
+        for label_name in host_labels:
+            if label_name == "_no_schedule" or label_name == "_no_conf_keyring":
+                log.error(
+                    f" The {label_name}  not removed from the {drain_host}.This is the product bug(BZ#2328605)"
+                )
+                return 1
+        service_obj.add_new_hosts(add_nodes=[drain_host], deploy_osd=True)
         end_time = datetime.datetime.now() + datetime.timedelta(minutes=5)
         osd_add_chk_flag = False
         while datetime.datetime.now() <= end_time:
@@ -177,11 +198,8 @@ def run(ceph_cluster, **kw):
         if not osd_add_chk_flag:
             log.error("All the OSDs are not added to the node")
             return 1
-    except CommandFailed as err:
-        log.error(f"Failed with exception: {err.__doc__}")
-        log.exception(err)
+    except CommandFailed:
         exceptional_flag = True
-
         time.sleep(400)
         end_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
         if verify_mgr_traceback_log(
@@ -242,12 +260,12 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
-
         rados_obj.set_service_managed_type("osd", unmanaged=False)
         time.sleep(10)
         if replicated_config.get("delete_pool"):
             rados_obj.delete_pool(pool=pool_name)
-        time.sleep(5)
+        log.info("Wait for the cluster into active+clean state")
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=3600)
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
@@ -358,3 +376,28 @@ def get_zero_osd_weight_list(rados_obj):
         if not value:
             del zero_osd_weight_nodes[key]
     return zero_osd_weight_nodes
+
+
+def host_drain(cephadm, remove_osd_node):
+    """
+    The method used to drain the OSD node. This method is a workaround  to reproduce the BZ#2305677.
+    Args:
+        cephadm: cephadm object
+        remove_osd_node: The OSD node selected to drain from the cluster
+    Returns:
+         True -> Reproduced the BZ#2305677.
+         False -> Unable to reproduce the BZ#2305677
+
+    """
+    drain_cmd = f"ceph orch host drain {remove_osd_node} --force --zap-osd-devices "
+    cephadm.shell([drain_cmd])
+    status_cmd = "ceph orch osd rm status -f json"
+    try:
+        for i in range(10):
+            cephadm.shell([status_cmd])
+            time.sleep(3)
+    except Exception as error:
+        log.info(f"Reproduced the bug during drain operations: {error}")
+        raise CommandFailed
+    log.info("Unable to reproduce the bug")
+    return False

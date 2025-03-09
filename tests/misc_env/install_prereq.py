@@ -16,7 +16,7 @@ from cli.utilities.utils import (
     reboot_node,
 )
 from utility.log import Log
-from utility.utils import get_cephci_config
+from utility.utils import get_cephci_config, is_unsecured_registry
 
 log = Log(__name__)
 
@@ -75,11 +75,16 @@ def run(**kw):
     fips_mode = config.get("enable_fips_mode", False)
 
     cloud_type = config.get("cloud-type", "openstack")
+
+    # Extract test_data from kw
+    test_data = kw.get("test_data", None)
+
     with parallel() as p:
         for ceph in ceph_nodes:
             p.spawn(
                 install_prereq,
                 ceph,
+                test_data,
                 skip_subscription,
                 repo,
                 enable_eus,
@@ -94,6 +99,7 @@ def run(**kw):
 
 def install_prereq(
     ceph,
+    test_data=None,  # Default value for test_data
     skip_subscription=False,
     repo=False,
     enable_eus=False,
@@ -106,21 +112,22 @@ def install_prereq(
     log.info("cloud config to completed on " + ceph.hostname)
     _is_client = len(ceph.role.role_list) == 1 and "client" in ceph.role.role_list
 
-    # Update certs
-    update_ca_cert(
-        node=ceph,
-        cert_url="https://certs.corp.redhat.com/certs/2015-IT-Root-CA.pem",
-        out_file="RH-IT-Root-CA.crt",
-        check_ec=False,
-    )
+    if cloud_type.lower() == "baremetal":
+        # Update certs
+        update_ca_cert(
+            node=ceph,
+            cert_url="https://certs.corp.redhat.com/certs/Current-IT-Root-CAs.pem",
+            out_file="RH-IT-Root-CA.crt",
+            check_ec=False,
+        )
 
-    # Update CephCI Cert to all nodes. Useful when creating self-signed certificates.
-    update_ca_cert(
-        node=ceph,
-        cert_url="http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem",
-        out_file="cephqe-ca.pem",
-        check_ec=False,
-    )
+        # Update CephCI Cert to all nodes. Useful when creating self-signed certificates.
+        update_ca_cert(
+            node=ceph,
+            cert_url="http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem",
+            out_file="cephqe-ca.pem",
+            check_ec=False,
+        )
     distro_info = ceph.distro_info
     distro_ver = distro_info["VERSION_ID"]
     log.info("distro name: {name}".format(name=distro_info["NAME"]))
@@ -222,7 +229,7 @@ def install_prereq(
         ceph.exec_command(cmd="sudo yum clean all")
         config_ntp(ceph, cloud_type)
 
-    registry_login(ceph, distro_ver)
+    registry_login(ceph, distro_ver, test_data)
     update_iptables(ceph)
 
     if not fips_mode:
@@ -378,7 +385,7 @@ def enable_rhel_eus_rpms(ceph, distro_ver):
     ceph.exec_command(sudo=True, cmd="yum clean all", long_running=True)
 
 
-def registry_login(ceph, distro_ver):
+def registry_login(ceph, distro_ver, test_data=None):
     """
     Login to the given Container registries provided in the configuration.
 
@@ -422,6 +429,17 @@ def registry_login(ceph, distro_ver):
     auths_dict = {"auths": auths}
     ceph.exec_command(sudo=True, cmd="mkdir -p ~/.docker")
     ceph.exec_command(cmd="mkdir -p ~/.docker")
+
+    if is_unsecured_registry(test_data):
+        ceph.exec_command(
+            cmd=(
+                "echo -e '\\n[[registry]]\\n"
+                'location = "registry-proxy.engineering.redhat.com"\\n'
+                "insecure = true'"
+                " | sudo tee -a /etc/containers/registries.conf"
+            )
+        )
+
     auths_file_sudo = ceph.remote_file(
         sudo=True, file_name="/root/.docker/config.json", file_mode="w"
     )

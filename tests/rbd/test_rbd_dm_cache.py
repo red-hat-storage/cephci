@@ -1,23 +1,23 @@
 """Test case covered -
-    CEPH-83575581 - Verify the usage of ceph RBD images as
-    dm-cache and dm-write cache from LVM side to enhance cache mechanism.
+CEPH-83575581 - Verify the usage of ceph RBD images as
+dm-cache and dm-write cache from LVM side to enhance cache mechanism.
 
-    Pre-requisites :
-    1. Cluster must be up and running with capacity to create pool
-    2. We need atleast one client node with ceph-common package,
-       conf and keyring files
+Pre-requisites :
+1. Cluster must be up and running with capacity to create pool
+2. We need atleast one client node with ceph-common package,
+   conf and keyring files
 
-    Test Case Flow:
-    1. Create RBD based pool and an Image
-    2. get rbd based image disk using rbd map
-    3. Create physical volume for RBD based disk
-    4. Create volume group for RBD based disk
-    5. Create cache disk, meta disk and data disk for the volume group
-    6. make disk as dm-cache and dm-write cache based type of cache specified
-    7. Create Xfs file system on metadata parted disk for file system purpose
-    8. mount some files on cache disk and write some I/O on it.
-    9. create snapshot of cache disk image
-    10. check ceph health status
+Test Case Flow:
+1. Create RBD based pool and an Image
+2. get rbd based image disk using rbd map
+3. Create physical volume for RBD based disk
+4. Create volume group for RBD based disk
+5. Create cache disk, meta disk and data disk for the volume group
+6. make disk as dm-cache and dm-write cache based type of cache specified
+7. Create Xfs file system on metadata parted disk for file system purpose
+8. mount some files on cache disk and write some I/O on it.
+9. create snapshot of cache disk image
+10. check ceph health status
 """
 
 from tests.rbd.rbd_utils import initial_rbd_config

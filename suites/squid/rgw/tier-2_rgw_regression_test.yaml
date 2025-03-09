@@ -4,6 +4,7 @@
 # https://github.com/red-hat-storage/ceph-qe-scripts/tree/master/rgw
 # each script under the above repo has a yaml ( config defined ) which is actually a test
 # We are calling the script and associated yaml here.
+# global-conf: conf/squid/rgw/tier-0_rgw.yaml
 
 tests:
   - test:
@@ -109,25 +110,6 @@ tests:
       module: test_client.py
       name: configure client
       polarion-id: CEPH-83573758
-
-  # Basic Bucket Operation Tests
-  - test:
-      name: compresstion_with_zstd_type
-      desc: test compresstion with zstd type
-      polarion-id: CEPH-11350
-      module: sanity_rgw.py
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
-
-  - test:
-      name: compresstion_with_snappy_type
-      desc: test compresstion with snappy type
-      polarion-id: CEPH-11350
-      module: sanity_rgw.py
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_compression_snappy.yaml
 
   # Swift basic operation
 
@@ -335,15 +317,6 @@ tests:
 
   # Bucket Lifecycle Tests
   - test:
-      name: object expiration for versioned buckets with filter Prefix test multiple rules.
-      desc: Test object expiration for versioned buckets with filter 'Prefix', test multiple rules.
-      polarion-id: CEPH-11177 # also applies to CEPH-11182, CEPH-11188 and CEPH-11187
-      module: sanity_rgw.py
-      config:
-        script-name: test_bucket_lifecycle_object_expiration_transition.py
-        config-file-name: test_lc_multiple_rule_prefix_current_days.yaml
-
-  - test:
       name: object expiration with expiration set to Date
       desc: Test object expiration with expiration set to Date
       polarion-id: CEPH-11185
@@ -497,8 +470,7 @@ tests:
         script-name: test_rgw_mfa.py
         config-file-name: test_rgw_mfa_multipart.yaml
         extra-pkgs:
-          9:
-            - https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
+            - oathtool
 
   - test:
       name: incorrect syntax for mfa resync commnad appropriate usage message is displayed
@@ -580,18 +552,6 @@ tests:
         script-name: user_create.py
         config-file-name: test_user_modify_with_placementid.yaml
 
-  # rate limits tests with s3cmd
-  - test:
-      name: Test Rate limits on a User and Bucket level using s3cmd
-      desc: Test Rate limits on a User and Bucket level using s3cmd
-      polarion-id: CEPH-83574910
-      module: sanity_rgw.py
-      config:
-        run-on-rgw: true
-        script-name: ../s3cmd/test_rate_limit.py
-        config-file-name: ../../s3cmd/configs/test_rate_limit.yaml
-      comments: known issue BZ 2301986
-
   # Checksum and CORS tests
   - test:
       name: Test Checksum on all supported algorithms
@@ -622,3 +582,24 @@ tests:
         run-on-rgw: true
         script-name: ../curl/test_cors_using_curl.py
         config-file-name: ../../curl/configs/test_cors_using_curl.yaml
+
+  - test:
+      name: Test CRLF Injection
+      desc: Test CRLF Injection
+      polarion-id: CEPH-83574745
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../curl/test_cors_using_curl.py
+        config-file-name: ../../curl/configs/test_crlf_injection_curl.yaml
+
+  - test:
+      name: LC process with versioning suspended bucket
+      desc: LC process with versioning suspended bucket
+      polarion-id: CEPH-83574809
+      module: sanity_rgw.py
+      comments: Known issue BZ-2319199(targeted to 8.1) BZ-2336609(targeted to 8.0z2)
+      config:
+        test-version: v2
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_process_with_versioning_suspended.yaml

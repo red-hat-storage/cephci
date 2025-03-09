@@ -171,6 +171,22 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
   - test:
+      name: Header validation of Bucket Lifecycle expiration with date
+      desc: Test header validation bucket lifecycle expiration with date
+      polarion-id: CEPH-83573254
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_date_expire_header.yaml
+  - test:
+      name: Header validation of Bucket Lifecycle expiration with days
+      desc: Test header validation bucket lifecycle expiration with days
+      polarion-id: CEPH-83573254
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_days_expire_header.yaml
+  - test:
       name: Indexless buckets
       desc: Indexless (blind) buckets
       polarion-id: CEPH-10354 # also applies to CEPH-10357

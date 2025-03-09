@@ -1,5 +1,6 @@
 """This module implements the required foundation data structures for testing."""
 
+import codecs
 import datetime
 import json
 import pickle
@@ -1172,21 +1173,26 @@ def read_stream(channel, end_time, timeout, stderr=False, log=True):
     Raises:
       TimeoutException: if reading from the channel exceeds the allocated time.
     """
-    _output = ""
+    _output = bytearray()
     _stream = channel.recv_stderr if stderr else channel.recv
-    _data = _stream(2048)
+    _decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
 
+    _data = _stream(2048)
     while _data:
-        _output += _data.decode("utf-8")
+        _output.extend(_data)
         if log:
             for _ln in _data.splitlines():
                 _log = logger.error if stderr else logger.debug
-                _log(_ln.decode("utf-8"))
+                _log(_decoder.decode(_ln, final=False))
 
         check_timeout(end_time, timeout)
         _data = _stream(2048)
 
-    return _output
+    try:
+        return _decoder.decode(_output, final=True)  # Final decode
+    except UnicodeDecodeError as e:
+        logger.error(f"Decoding failed: {e}. Replacing invalid characters.")
+        return _output.decode("utf-8", errors="replace")  # Fallback to safe decode
 
 
 class RolesContainer(object):
@@ -1567,7 +1573,7 @@ class CephNode(object):
             channel = ssh().get_transport().open_session(timeout=timeout)
             channel.settimeout(timeout)
 
-            logger.info(f"Execute {cmd} on {self.ip_address}")
+            logger.info("Execute %s on %s", cmd, self.ip_address)
             _exec_start_time = datetime.datetime.now()
             channel.exec_command(cmd)
 
@@ -1598,7 +1604,10 @@ class CephNode(object):
 
             _time = (datetime.datetime.now() - _exec_start_time).total_seconds()
             logger.info(
-                f"Execution of {cmd} on {self.ip_address} took {_time} seconds."
+                "Execution of %s on %s took %s seconds",
+                cmd,
+                self.ip_address,
+                str(_time),
             )
 
             # Check for data residues in the channel streams. This is required for the following reasons
@@ -1611,18 +1620,16 @@ class CephNode(object):
             except CommandFailed:
                 logger.debug("Encountered a timeout during read post execution.")
             except BaseException as be:
-                logger.debug(
-                    f"Encountered an unknown exception during last read.\n {be}"
-                )
+                logger.debug("Encountered an unknown exception during last read.\n", be)
 
             _exit = channel.recv_exit_status()
             return _out, _err, _exit, _time
         except socket.timeout as terr:
-            logger.error(f"{cmd} failed to execute within {timeout} seconds.")
+            logger.error("%s failed to execute within %d seconds.", cmd, timeout)
             raise SocketTimeoutException(terr)
         except TimeoutException as tex:
             channel.close()
-            logger.error(f"{cmd} failed to execute within {timeout}s.")
+            logger.error("%s failed to execute within %ds.", cmd, timeout)
             raise CommandFailed(tex)
         except BaseException as be:  # noqa
             logger.exception(be)
@@ -1719,13 +1726,26 @@ class CephNode(object):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        del d["vm_node"]
-        del d["rssh"]
-        del d["ssh"]
-        del d["rssh_transport"]
-        del d["ssh_transport"]
-        del d["root_connection"]
-        del d["connection"]
+        if d.get("vm_node"):
+            del d["vm_node"]
+
+        if d.get("rssh"):
+            del d["rssh"]
+
+        if d.get("ssh"):
+            del d["ssh"]
+
+        if d.get("rssh_transport"):
+            del d["rssh_transport"]
+
+        if d.get("ssh_transport"):
+            del d["ssh_transport"]
+
+        if d.get("ssh_transport"):
+            del d["root_connection"]
+
+        if d.get("connection"):
+            del d["connection"]
 
         return d
 

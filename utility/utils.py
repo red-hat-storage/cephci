@@ -575,6 +575,10 @@ def set_config_param(node):
 
     # add the configuration/s to be set on service
     configs = ["rgw_max_objs_per_shard 5", "rgw_lc_debug_interval 30"]
+    ceph_version = node.exec_command(cmd="sudo ceph version")
+    ceph_version = ceph_version[0].split()[2].split(".")[0]
+    if int(ceph_version) >= int(19):
+        configs += ["rgw_restore_debug_interval 30"]
     for config_cmd in configs:
         node.exec_command(cmd=f"ceph config set client.{rgw_process_name} {config_cmd}")
 
@@ -2463,3 +2467,51 @@ print(port)
 
 def log_json_dump(data):
     return json.dumps(data, indent=4)
+
+
+def get_registry_info(registry):
+    """Get Registry details from cephci configuration yaml file.
+
+    Args:
+        registry: registry name
+    """
+    try:
+        __regs = get_cephci_config()["registries"]
+        return __regs[registry]
+    except KeyError:
+        raise KeyError(
+            "CephCI configuration yaml file does not have 'registries' section"
+        )
+
+
+def is_unsecured_registry(test_data):
+    """
+    Returns a boolean based on custom config values set for 'insecure-registry' and 'ibm-build'
+
+    Args:
+        test_data (dict): The test data containing configuration.
+
+    Returns:
+        bool: if build is RH and 'insecure-registry' is set to True  function returns True else returns False.
+    """
+
+    if "custom-config" in test_data and isinstance(test_data["custom-config"], list):
+        ibm_build_value = None
+        insecure_registry_value = False  # Default to False if not found
+
+        for config in test_data["custom-config"]:
+            key, value = config.split("=")
+
+            # Check for the 'ibm-build' key
+            if key == "ibm-build":
+                ibm_build_value = value.strip().lower() in ("true", "yes")
+
+            # Check for the 'insecure-registry' key
+            if key == "insecure-registry":
+                insecure_registry_value = value.strip().lower() in ("true", "yes")
+
+        # If 'ibm-build' is not set or False and 'insecure-registry' is True, return True
+        if ibm_build_value is None or not ibm_build_value:
+            return insecure_registry_value  # Return boolean value for insecure-registry
+
+    return False  # Default return value if conditions are not met

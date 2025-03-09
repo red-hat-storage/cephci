@@ -1,5 +1,6 @@
 # Suite contains tests related to CIDR blocklisting of ceph clients
 # This is Openstack only test suite.
+# conf: 13-node-cluster-4-clients.yaml
 
 tests:
   - test:
@@ -96,7 +97,7 @@ tests:
               command: add
               id: client.1                      # client Id (<type>.<Id>)
               nodes:
-                  - node8:
+                  - node15:
                       release: 5
                   - node7:
                       release: 5
@@ -117,7 +118,7 @@ tests:
               command: add
               id: client.2                     # client Id (<type>.<Id>)
               nodes:
-                - node9:
+                - node16:
                     release: 6
               install_packages:
                 - ceph-common
@@ -135,7 +136,7 @@ tests:
             config:
               command: add
               id: client.3                      # client Id (<type>.<Id>)
-              node: node10                       # client node
+              node: node17                       # client node
               install_packages:
                 - ceph-common
               copy_admin_keyring: true          # Copy admin keyring to node

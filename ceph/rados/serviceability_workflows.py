@@ -49,6 +49,7 @@ class ServiceabilityMethods:
         crush_bucket_type: str = None,
         crush_bucket_val: str = None,
         deploy_osd: bool = True,
+        osd_label: str = "osd-bak",
     ):
         """
         Module to add a new host to an existing deployment.
@@ -62,7 +63,8 @@ class ServiceabilityMethods:
             crush_bucket_type(str): Name of the crush bucket to add during host addition.
                                     Eg: datacenter, zone, host etc...
             crush_bucket_val(str): Value of the crush bucket to add during host addition.
-            deploy_osd(bool): Flag to control ODS deployment
+            deploy_osd(bool): Flag to control OSD deployment
+            osd_label(str): Placement label for OSD deployment
         Returns:
             None | Raises exception in case of failure.
 
@@ -114,7 +116,7 @@ class ServiceabilityMethods:
                                         "service_type": "osd",
                                         "service_id": "new_osds",
                                         "encrypted": "true",
-                                        "placement": {"label": "osd-bak"},
+                                        "placement": {"label": osd_label},
                                         "spec": {"data_devices": {"all": "true"}},
                                     }
                                 ],
@@ -225,7 +227,7 @@ class ServiceabilityMethods:
         Returns:
             None | raises exception in case of failure
         """
-        status_cmd = ""
+        status_cmd = "ceph orch osd rm status -f json"
         try:
 
             def wait_osd_operation_status(status_cmd):
@@ -286,7 +288,6 @@ class ServiceabilityMethods:
                     if osd_id in osd_out_list:
                         osd_utils.osd_remove(self.cluster, osd_id=osd_id, zap=True)
                         time.sleep(10)
-                        status_cmd = "ceph orch osd rm status -f json"
                         if wait_osd_operation_status(status_cmd):
                             log.info("The OSD successfully removed")
                         else:
@@ -331,12 +332,12 @@ class ServiceabilityMethods:
                         self.cluster, host=rm_host.hostname, device_path=dev_path
                     )
             # Check that the OSD daemons are exists in the host
-            daemon_check = self.rados_obj.check_daemon_exists_on_host(
-                host=host_node_name, daemon_type=None
-            )
-            if not daemon_check:
-                log.info(f" The node {host_node_name} is already drained.")
-                return None
+            # daemon_check = self.rados_obj.check_daemon_exists_on_host(
+            #     host=host_node_name, daemon_type=None
+            # )
+            # if not daemon_check:
+            #     log.info(f" The node {host_node_name} is already drained.")
+            #     return None
 
             time.sleep(5)
             rm_cmd = f"ceph orch host rm {rm_host.hostname} --force"

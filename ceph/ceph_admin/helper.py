@@ -726,6 +726,41 @@ class GenerateServiceSpec:
 
         return template.render(spec=spec)
 
+    def generate_iscsi_spec(self, spec):
+        """
+        Return spec content for iscsi service
+
+        Args:
+            spec (Dict): iscsi service spec config
+
+        Returns:
+            service_spec (Str)
+
+        Example::
+
+            spec:
+              - service_type: iscsi
+                service_id: rbd
+                unmanaged: boolean    # true or false
+                placement:
+                  host_pattern: "*"   # either hosts or host_pattern
+                  nodes:
+                    - node2
+                    - node3
+                  label: iscsi
+                spec:
+                  pool: pool-name
+                  trusted_ip_list: ip1,ip2
+
+        :Note: make sure pool is already created.
+        """
+        template = self._get_template("iscsi")
+        node_names = spec["placement"].pop("nodes", None)
+        if node_names:
+            spec["placement"]["hosts"] = self.get_hostnames(node_names)
+
+        return template.render(spec=spec)
+
     def _get_render_method(self, service_type):
         """
         Return render definition based on service_type
@@ -746,6 +781,7 @@ class GenerateServiceSpec:
             "snmp-destination": self.generate_snmp_dest_conf,
             "ingress": self.generate_ingress_spec,
             "nvmeof": self.generate_nvmeof_spec,
+            "iscsi": self.generate_iscsi_spec,
         }
 
         try:

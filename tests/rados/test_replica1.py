@@ -1,4 +1,4 @@
-""" Test module to verify replica-1 non-resilient pool functionalities"""
+"""Test module to verify replica-1 non-resilient pool functionalities"""
 
 import time
 from copy import deepcopy
@@ -32,6 +32,8 @@ def run(ceph_cluster, **kw):
     rbd_obj = Rbd(**kw)
     repli_pools = []
     zone_unique = generate_unique_id(length=4)
+    replicated_osds = ""
+    osd_zone_map = {}
 
     def set_eio_flag(_pool: str, val: str):
         log.info(f"Setting eio flag for pool {_pool} to {val}")
@@ -70,29 +72,29 @@ def run(ceph_cluster, **kw):
             # remove the device class for all the OSDs
             assert crush_obj.remove_device_class(osd_list=osd_list)
 
-            # divide OSDs into different device classes(zones) and their respective
-            # hosts into unique zones
+            # divide OSDs into different device classes and their respective
+            # hosts into unique bucket zones
+            osd_hosts = ceph_cluster.get_nodes(role="osd")
+            for host in osd_hosts:
+                zone_name = f"{host.id}-{zone_unique}"
+                cephadm.shell([f"ceph osd crush add-bucket {zone_name} zone"])
+                cephadm.shell([f"ceph osd crush move {zone_name} root=default"])
+                cephadm.shell([f"ceph osd crush move {host.hostname} zone={zone_name}"])
+                host_osds = rados_obj.collect_osd_daemon_ids(osd_node=host)
+                for osd in host_osds:
+                    osd_zone_map[osd] = zone_name
+
             for osd_id in osd_list:
                 if int(osd_id) % 2 == 0:
-                    zone_name = f"zone{osd_id}-{zone_unique}"
                     cephadm.shell(
-                        [f"ceph osd crush set-device-class zone{osd_id} {osd_id}"]
+                        [f"ceph osd crush set-device-class device{osd_id} {osd_id}"]
                     )
-                    cephadm.shell([f"ceph osd crush add-bucket {zone_name} zone"])
-                    cephadm.shell([f"ceph osd crush move {zone_name} root=default"])
-                    osd_node = rados_obj.fetch_host_node(
-                        daemon_type="osd", daemon_id=osd_id
-                    )
-                    cephadm.shell(
-                        [f"ceph osd crush move {osd_node.hostname} zone={zone_name}"]
-                    )
+                else:
+                    replicated_osds += f" {osd_id}"
 
-            # divide OSDs into different device classes(replicated)
-            replicated_osd = " ".join(
-                [osd_id for osd_id in osd_list if int(osd_id) % 2 != 0]
-            )
+            # set device class for remaining OSDs to 'replicated'
             cephadm.shell(
-                [f"ceph osd crush set-device-class replicated {replicated_osd}"]
+                [f"ceph osd crush set-device-class replicated {replicated_osds}"]
             )
 
             # generate replicated crush rule to append cluster crush rule
@@ -104,17 +106,22 @@ def run(ceph_cluster, **kw):
             step emit"""
             assert crush_obj.add_crush_rule(rule_name=rule_name, rules=zone_rules)
 
-            # generate zone level crush rules to append cluster crush rule
+            # generate device-class level crush rules to append cluster crush rule
             for osd_id in osd_list:
                 if int(osd_id) % 2 == 0:
-                    rule_name = f"zone{osd_id}"
-                    zone_rules = f"""        id 5{osd_id}
+                    rule_name = f"device{osd_id}"
+                    rule_id = f"5{osd_id}"
+                    step_take = osd_zone_map[osd_id]
+                    if int(osd_id) > 9:
+                        rule_id = f"7{str(osd_id)[-1]}"
+                        step_take = "default"
+                    device_rules = f"""        id {rule_id}
                     type replicated
-                    step take default class zone{osd_id}
+                    step take {step_take} class device{osd_id}
                     step chooseleaf firstn 0 type host
                     step emit"""
                     assert crush_obj.add_crush_rule(
-                        rule_name=rule_name, rules=zone_rules
+                        rule_name=rule_name, rules=device_rules
                     )
 
             # set general replicated crush rule to all existing pools
@@ -134,10 +141,10 @@ def run(ceph_cluster, **kw):
             for osd_id in osd_list:
                 if int(osd_id) % 2 == 0:
                     pool_cfg = {
-                        "pool_name": f"replica1_zone{osd_id}",
+                        "pool_name": f"replica1_device{osd_id}",
                         "pg_num": 1,
                         "pgp_num": 1,
-                        "crush_rule": f"zone{osd_id}",
+                        "crush_rule": f"device{osd_id}",
                         "disable_pg_autoscale": True,
                     }
                     assert rados_obj.create_pool(**pool_cfg)
@@ -226,7 +233,7 @@ def run(ceph_cluster, **kw):
             eio_flag = pool_prop["eio"]
 
             # default value of eio flag should be false
-            # {"pool":"replica1_zone4","pool_id":10,"eio":false}
+            # {"pool":"replica1_device4","pool_id":10,"eio":false}
             if eio_flag:
                 log.error(
                     f"Default value of EIO flag for replica-1 pool {pool_name} expected to be false"

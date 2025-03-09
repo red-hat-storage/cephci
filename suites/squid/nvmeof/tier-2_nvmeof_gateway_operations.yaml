@@ -109,6 +109,7 @@ tests:
         node: node6
         pool: rbd
         port: 5500
+        gw_group: gw-group1
         steps:
           - config:
               service: gateway
@@ -146,6 +147,8 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1
                 serial-number: 1
+              validate:
+                omap: true
           - config:
               service: subsystem
               command: add              # Subsystem add without groupName
@@ -153,6 +156,8 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 serial-number: 2
                 no-group-append: true
+              validate:
+                omap: true
           - config:
               service: gateway
               command: info             # gateway info
@@ -176,6 +181,8 @@ tests:
                 host-name: node6
                 trsvcid: 5001
                 traddr: node6
+              validate:
+                omap: true
               base_cmd_args:
                 format: json
           - config:
@@ -184,19 +191,13 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
           - config:
-              service: listener
-              command: delete             # listener del
-              args:
-                subsystem: nqn.2016-06.io.spdk:cnode2
-                host-name: node6
-                trsvcid: 5001
-                traddr: node6
-          - config:
               service: host
               command: add              # add Host access
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 host: '"*"'
+              validate:
+                omap: true
           - config:
               service: host
               command: list             # List access hosts
@@ -213,6 +214,8 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 host: '"*"'
+              validate:
+                omap: true
           - config:
               service: namespace
               command: add              # Namespace add
@@ -221,6 +224,8 @@ tests:
                 rbd-image: image1
                 rbd-pool: rbd
                 nsid: 1
+              validate:
+                omap: true
           - config:
               service: namespace
               command: add              # Namespace add
@@ -231,6 +236,8 @@ tests:
                 nsid: 2
                 rbd-create-image: true
                 size: 10G
+              validate:
+                omap: true
           - config:
               service: namespace
               command: add              # Namespace add
@@ -242,6 +249,8 @@ tests:
                 load-balancing-group: 1
                 rbd-create-image: true
                 size: 1G
+              validate:
+                omap: true
           - config:
               service: namespace
               command: add              # Namespace add with trash-image enabled
@@ -254,6 +263,8 @@ tests:
                 rbd-create-image: true
                 size: 1G
                 rbd-trash-image-on-delete: true
+              validate:
+                omap: true
           - config:
               service: namespace
               command: list             # namespace list using subsystem NQN
@@ -263,7 +274,7 @@ tests:
                 format: json
           - config:
               service: namespace
-              command: list             # namespace list using nsid 
+              command: list             # namespace list using nsid
               args:
                 nsid: 4
               base_cmd_args:
@@ -280,6 +291,8 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 1
                 rw-ios-per-second: 10
+              validate:
+                omap: true
           - config:
               service: namespace
               command: set_qos             # namespace set_qos
@@ -287,6 +300,8 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 1
                 rw-ios-per-second: 20
+              validate:
+                omap: true
           - config:
               service: namespace
               command: resize              # Namespace resize
@@ -327,29 +342,48 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 1
+              validate:
+                omap: true
           - config:
               service: namespace
               command: delete           # namespace delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 2
+              validate:
+                omap: true
           - config:
               service: namespace
               command: delete           # namespace delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 3
+              validate:
+                omap: true
           - config:
               service: namespace
               command: delete           # namespace delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 4
+                i-am-sure: true
+              validate:
+                omap: true
+          - config:
+              service: listener
+              command: delete             # listener del
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                host-name: node6
+                trsvcid: 5001
+                traddr: node6
           - config:
               service: subsystem
               command: delete           # subsystem delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
+              validate:
+                omap: true
           - config:
               service: gateway
               command: info
@@ -368,6 +402,8 @@ tests:
                 host-name: node6
                 trsvcid: 5001
                 traddr: node6
+              validate:
+                omap: true
               base_cmd_args:
                 format: json
           - config:
@@ -376,19 +412,13 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
           - config:
-              service: listener
-              command: delete             # listener del
-              args:
-                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
-                host-name: node6
-                trsvcid: 5001
-                traddr: node6
-          - config:
               service: host
               command: add              # add Host access
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 host: '"*"'
+              validate:
+                omap: true
           - config:
               service: host
               command: list             # List access hosts
@@ -400,6 +430,8 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 host: '"*"'
+              validate:
+                omap: true
           - config:
               service: namespace
               command: add              # Namespace add
@@ -408,6 +440,8 @@ tests:
                 rbd-image: image1
                 rbd-pool: rbd
                 nsid: 1
+              validate:
+                omap: true
           - config:
               service: namespace
               command: add              # Namespace add
@@ -418,6 +452,8 @@ tests:
                 nsid: 2
                 rbd-create-image: true
                 size: 10G
+              validate:
+                omap: true
           - config:
               service: namespace
               command: add              # Namespace add
@@ -429,6 +465,8 @@ tests:
                 load-balancing-group: 1
                 rbd-create-image: true
                 size: 1G
+              validate:
+                omap: true
           - config:
               service: namespace
               command: add              # Namespace add
@@ -440,6 +478,8 @@ tests:
                 load-balancing-group: 2
                 rbd-create-image: true
                 size: 1G
+              validate:
+                omap: true
           - config:
               service: namespace
               command: list             # namespace list
@@ -457,6 +497,8 @@ tests:
                 rw-megabytes-per-second: 19
                 r-megabytes-per-second: 19
                 w-megabytes-per-second: 19
+              validate:
+                omap: true
           - config:
               service: namespace
               command: set_qos             # namespace set_qos
@@ -464,6 +506,8 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 1
                 rw-ios-per-second: 20
+              validate:
+                omap: true
           - config:
               service: namespace
               command: resize              # Namespace resize
@@ -471,6 +515,8 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 2
                 size: 15G
+              validate:
+                omap: true
           - config:
               service: namespace
               command: change_load_balancing_group              # Namespace change_load_balancing_group
@@ -478,6 +524,8 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 3
                 load-balancing-group: 2
+              validate:
+                omap: true
           - config:
               service: namespace
               command: change_load_balancing_group              # Namespace change_load_balancing_group
@@ -485,6 +533,8 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 4
                 load-balancing-group: 1
+              validate:
+                omap: true
           - config:
               service: namespace
               command: list             # namespace list
@@ -504,29 +554,47 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 1
+              validate:
+                omap: true
           - config:
               service: namespace
               command: delete           # namespace delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 2
+              validate:
+                omap: true
           - config:
               service: namespace
               command: delete           # namespace delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 3
+              validate:
+                omap: true
           - config:
               service: namespace
               command: delete           # namespace delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 4
+              validate:
+                omap: true
+          - config:
+              service: listener
+              command: delete             # listener del
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                host-name: node6
+                trsvcid: 5001
+                traddr: node6
           - config:
               service: subsystem
               command: delete           # subsystem delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+              validate:
+                omap: true
           - config:
               service: gateway
               command: info

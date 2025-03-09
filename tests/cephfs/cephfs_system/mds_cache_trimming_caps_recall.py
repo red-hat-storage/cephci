@@ -285,6 +285,9 @@ def run(ceph_cluster, **kw):
         set_verify_mds_config(client, "629145600")
         log.info("Setup test configuration")
         setup_params = test_setup(fs_util_v1, ceph_cluster, client)
+        if setup_params == 1:
+            log.error("Test setup failed")
+            return 1
         fs_name = setup_params["default_fs"]
         sv_list = setup_params["sv_list"]
         mnt_params = {
