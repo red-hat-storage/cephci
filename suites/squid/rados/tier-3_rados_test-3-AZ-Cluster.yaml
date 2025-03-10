@@ -210,6 +210,30 @@ tests:
       desc: Enable 3 AZ stretch mode on new pools of the cluster post upgrade
 
   - test:
+      name: Site-down Scenarios
+      module: test_stretch_n_az_site_down_scenarios.py
+      polarion-id: CEPH-83609869
+      config:
+        pool_name: test_stretch_pool6
+        stretch_bucket: datacenter
+        rule_name: 3az_rule
+      desc: Test stretch site down scenarios in 3 AZ cluster
+
+  - test:
+      name: Maintenance mode Scenarios
+      module: test_stretch_n_az_site_down_scenarios.py
+      polarion-id: CEPH-83609871
+      config:
+        pool_name: test_stretch_pool7
+        stretch_bucket: datacenter
+        rule_name: 3az_rule
+        scenarios_to_run:
+          - scenario-8
+          - scenario-9
+          - scenario-10
+      desc: Test stretch site maintenance mode scenarios in 3 AZ cluster
+
+  - test:
       name: Netsplit Scenarios data-data sites
       module: test_stretch_n-az_netsplit_scenarios.py
       polarion-id: CEPH-83609870
