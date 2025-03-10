@@ -278,7 +278,7 @@ def run(ceph_cluster, **kw):
                     client=client1,
                     mounting_dir=kernel_mount_dir_dbench,
                     io_tools=["dbench"],
-                    dbench_params={"duration": 40},
+                    dbench_params={"duration": 20},
                 )
 
                 # Spawn the health monitoring task
@@ -334,7 +334,7 @@ def run(ceph_cluster, **kw):
                     client=client1,
                     mounting_dir=fuse_dbench_mount_dir,
                     io_tools=["dbench"],
-                    dbench_params={"duration": 40},
+                    dbench_params={"duration": 20},
                 )
 
                 # Spawn the health monitoring task
