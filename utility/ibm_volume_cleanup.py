@@ -1,5 +1,5 @@
 """
-    Utility to cleanup orphan volumes from IBM environment
+Utility to cleanup orphan volumes from IBM environment
 """
 
 import sys

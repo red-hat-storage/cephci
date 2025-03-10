@@ -1,12 +1,14 @@
 import random
 import string
 import traceback
+from distutils.version import LooseVersion
 from itertools import product
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -43,13 +45,14 @@ def run(ceph_cluster, **kw):
         fs_mirroring_utils = CephfsMirroringUtils(
             ceph_cluster_dict.get("ceph1"), ceph_cluster_dict.get("ceph2")
         )
+
         build = config.get("build", config.get("rhbuild"))
         source_clients = ceph_cluster_dict.get("ceph1").get_ceph_objects("client")
         target_clients = ceph_cluster_dict.get("ceph2").get_ceph_objects("client")
         cephfs_mirror_node = ceph_cluster_dict.get("ceph1").get_ceph_objects(
             "cephfs-mirror"
         )
-
+        ceph_version = get_ceph_version_from_cluster(source_clients[0])
         log.info("checking Pre-requisites")
         if not source_clients or not target_clients:
             log.info(
@@ -90,7 +93,7 @@ def run(ceph_cluster, **kw):
         )
         permission_list = ["r", "rw", "rwp"]
         for permission in permission_list:
-            perform_fs_mirroring_operations(
+            status = perform_fs_mirroring_operations(
                 fs_mirroring_utils,
                 target_fs,
                 target_user,
@@ -98,8 +101,14 @@ def run(ceph_cluster, **kw):
                 source_fs,
                 source_clients,
                 target_site_name,
+                ceph_version,
                 permissions=permission,
             )
+            if status:
+                raise CommandFailed(
+                    f"Bootstrap token has been created with permissions {permission}"
+                )
+
         log.info("Scenario 2: Update user auths and try to create bootstrap token")
         log.info("Create a user on target cluster for peer connection")
         target_user_for_peer = fs_mirroring_utils.create_authorize_user(
@@ -133,10 +142,16 @@ def run(ceph_cluster, **kw):
                 sudo=True, cmd=f"ceph auth get client.{target_user}"
             )
             log.info(out)
-            command = (
-                f"ceph fs snapshot mirror peer_bootstrap create "
-                f"{target_fs} client.{target_user} {target_site_name} -f json"
-            )
+            if LooseVersion(ceph_version) >= LooseVersion("19.1.1"):
+                command = (
+                    f"ceph fs snapshot mirror peer_bootstrap create "
+                    f"{target_fs} client.{target_user} {target_site_name} -n client.{target_user} -f json"
+                )
+            else:
+                command = (
+                    f"ceph fs snapshot mirror peer_bootstrap create "
+                    f"{target_fs} client.{target_user} {target_site_name} -f json"
+                )
             out, rc = target_clients[0].exec_command(
                 sudo=True, cmd=command, check_ec=False
             )
@@ -504,6 +519,7 @@ def perform_fs_mirroring_operations(
     source_fs,
     source_clients,
     target_site_name,
+    ceph_version,
     permissions="r",
 ):
     try:
@@ -515,22 +531,31 @@ def perform_fs_mirroring_operations(
         log.info(f"Enable cephfs mirroring module on the {source_fs}")
         fs_mirroring_utils.enable_snapshot_mirroring(source_fs, source_clients[0])
 
-        command = (
-            f"ceph fs snapshot mirror peer_bootstrap create "
-            f"{target_fs} client.{target_user} {target_site_name} -f json"
-        )
+        if LooseVersion(ceph_version) >= LooseVersion("19.1.1"):
+            command = (
+                f"ceph fs snapshot mirror peer_bootstrap create "
+                f"{target_fs} client.{target_user} {target_site_name} -n client.{target_user} -f json"
+            )
+        else:
+            command = (
+                f"ceph fs snapshot mirror peer_bootstrap create "
+                f"{target_fs} client.{target_user} {target_site_name} -f json"
+            )
         out, rc = target_clients[0].exec_command(sudo=True, cmd=command, check_ec=False)
 
         if not rc:
             log.error(
                 f"Bootstrap token has been created with permissions {permissions}"
             )
+            return 1
+        return 0
     except Exception as e:
         log.error(e)
         log.error(traceback.format_exc())
         raise CommandFailed(
             f"Bootstrap token has been created with permissions {permissions}"
         )
+        return 1
     finally:
         target_clients[0].exec_command(
             sudo=True, cmd=f"ceph auth del client.{target_user}", check_ec=False

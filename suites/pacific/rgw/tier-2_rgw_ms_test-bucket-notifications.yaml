@@ -29,6 +29,7 @@ tests:
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
               - config:
                   command: add_hosts
                   service: host
@@ -74,6 +75,7 @@ tests:
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
               - config:
                   command: add_hosts
                   service: host
@@ -286,7 +288,7 @@ tests:
       config:
         run-on-rgw: true
         extra-pkgs:
-          - wget https://download.oracle.com/java/23/latest/jdk-23_linux-x64_bin.rpm
+          - jdk
         install_start_kafka: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_copy.yaml

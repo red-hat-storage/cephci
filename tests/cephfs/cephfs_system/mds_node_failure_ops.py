@@ -65,6 +65,7 @@ def run(ceph_cluster, **kw):
             else False
         )
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
+
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
         osp_cred = config.get("osp_cred")
@@ -81,6 +82,8 @@ def run(ceph_cluster, **kw):
             fs_util_v1.create_fs(clients[0], fs_name)
         host_list = [mdsnode.node.hostname for mdsnode in mds_nodes]
         hosts = " ".join(host_list)
+        mds_nodes = fs_util_v1.get_mds_nodes(clients[0])
+        log.info(f"Operations will be done on this nodes:{mds_nodes}")
         clients[0].exec_command(
             sudo=True,
             cmd=f"ceph orch apply mds {fs_name} --placement='3 {hosts}'",

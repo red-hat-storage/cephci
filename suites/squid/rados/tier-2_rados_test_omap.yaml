@@ -157,12 +157,8 @@ tests:
       module: test_rados_preempt_scrub.py
       polarion-id: CEPH-83572916
       config:
-        verify_osd_preempt:
-          configurations:
-            pool-1:
-              pool_name: preempt_pool
-              pool_type: replicated
-              pg_num: 16
+        pool_name: preempt_pool
+        pg_num: 1
         delete_pool: true
 
   - test:

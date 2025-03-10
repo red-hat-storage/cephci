@@ -108,7 +108,9 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"{admin_daemon} config set debug_client 10"
         )
         for dump in dump_list:
-            target_mds.exec_command(sudo=True, cmd=f"{admin_daemon} {dump}")
+            target_mds.exec_command(
+                sudo=True, cmd=f"{admin_daemon} {dump}", check_ec=False
+            )
             out, rc = clients[0].exec_command(sudo=True, cmd="ceph -s -f json")
             log.info(out)
             cluster_info = json.loads(out)

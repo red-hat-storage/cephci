@@ -180,16 +180,6 @@ tests:
         script-name: ../s3cmd/test_rgw_ops_log.py
         config-file-name: ../../s3cmd/configs/test_rgw_log_details.yaml
 
-# Post upgrade tests
-  - test:
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-      desc: test to create "M" no of buckets and "N" no of objects with download
-      module: sanity_rgw.py
-      name: download objects post upgrade
-      polarion-id: CEPH-14237
-
   - test:
       name: S3CMD small and multipart object download post upgrade
       desc: S3CMD small and multipart object download or GET

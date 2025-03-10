@@ -88,3 +88,15 @@ root-ca-location: <URL to base location of rootCA cert>
 #         rhel-8
 #         - <appstream>
 #         - <base-os>
+
+
+# Container Registry information
+# ===============================
+# registries:
+#   regsitry-1:
+#     user: user1
+#     password: password1
+#   registry-2:
+#     user: user2
+#     password: password2
+#   ...

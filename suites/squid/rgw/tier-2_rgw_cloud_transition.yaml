@@ -1,5 +1,7 @@
 # Test suite for cloud transition workflow
 
+# global-conf: conf/squid/rgw/cloud_transition.yaml
+
 tests:
 
   # Cluster deployment stage
@@ -286,3 +288,13 @@ tests:
       module: exec.py
       name: Remove Cloudtier placement
       polarion-id: CEPH-83575281
+  - test:
+      name: rgw user adoption to account and ownership change with IOs in progress
+      desc: rgw user adoption to account and ownership change with IOs in progress
+      polarion-id: CEPH-83591675
+      module: sanity_rgw.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_rgw_account_management.py
+            config-file-name: test_account_ownership_change_user_adoption.yaml

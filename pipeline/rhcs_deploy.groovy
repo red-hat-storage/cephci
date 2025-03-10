@@ -27,6 +27,13 @@ def argsMap = [
         "suite": "suites/reef/integrations/ocs.yaml",
         "platform": "rhel-9",
         "rgwSecure": "suites/reef/integrations/ocs_rgw_ssl.yaml",
+    ],
+    "8": [
+        "inventory": "conf/inventory/rhel-9.5-server-x86_64-xlarge.yaml",
+        "globalConf": "conf/squid/integrations/7_node_ceph.yaml",
+        "suite": "suites/squid/integrations/ocs.yaml",
+        "platform": "rhel-9",
+        "rgwSecure": "suites/squid/integrations/ocs_rgw_ssl.yaml",
     ]
 ]
 def ciMap = [:]
@@ -41,7 +48,7 @@ node ("rhel-9-medium || ceph-qe-ci") {
         checkout(
             scm: [
                 $class: 'GitSCM',
-                branches: [[name: 'origin/master']],
+                branches: [[name: 'origin/main']],
                 extensions: [[
                     $class: 'CleanBeforeCheckout',
                     deleteUntrackedNestedRepositories: true

@@ -1,4 +1,5 @@
 import json
+import tempfile
 
 from cli.rbd.rbd import Rbd
 from utility.log import Log
@@ -6,7 +7,7 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def verify_migration_state(action, image_spec, **kw):
+def verify_migration_state(action, image_spec, cluster_name="ceph", **kw):
     """verify the migration status at each action.
 
     This method will verify the migration state for an image for
@@ -24,7 +25,11 @@ def verify_migration_state(action, image_spec, **kw):
     """
     rbd = Rbd(kw["client"])
     log.info("verifying migration state")
-    status_config = {"image-spec": image_spec, "format": "json"}
+    status_config = {
+        "image-spec": image_spec,
+        "cluster": cluster_name,
+        "format": "json",
+    }
     out, err = rbd.status(**status_config)
     log.info(out)
     status = json.loads(out)
@@ -39,3 +44,32 @@ def verify_migration_state(action, image_spec, **kw):
     except Exception as error:
         log.error(error)
         return 1
+
+
+def prepare_migration_source_spec(
+    cluster_name, client, pool_name, image_name, snap_name
+):
+    """
+    Create a native source spec file for migration.
+    Args:
+        cluster_name: Name of the source cluster
+        pool_name: Name of the source pool
+        image_name: Name of the source image
+        snap_name: Name of the snapshot
+    Returns:
+        Path to the native spec file
+    """
+    native_spec = {
+        "cluster_name": cluster_name,
+        "type": "native",
+        "pool_name": pool_name,
+        "image_name": image_name,
+        "snap_name": snap_name,
+    }
+
+    temp_file = tempfile.NamedTemporaryFile(dir="/tmp", suffix=".json")
+    spec_file = client.remote_file(sudo=True, file_name=temp_file.name, file_mode="w")
+    spec_file.write(json.dumps(native_spec, indent=4))
+    spec_file.flush()
+
+    return temp_file.name

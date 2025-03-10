@@ -1,26 +1,26 @@
 """Test case covered -
-    CEPH-83581376 - verify the performance with immutable cache
-    and without immutable cache for IO operations
+CEPH-83581376 - verify the performance with immutable cache
+and without immutable cache for IO operations
 
-    Pre-requisites :
-    1. Cluster must be up and running with capacity to create pool
-    2. We need atleast one client node with ceph-common package,
-       conf and keyring files
+Pre-requisites :
+1. Cluster must be up and running with capacity to create pool
+2. We need atleast one client node with ceph-common package,
+   conf and keyring files
 
-    Test Case Flow:
-    1. Create RBD based pool and an Image
-    2. Enable the immutable cache client settings
-    3. Install the ceph-immutable-object-cache package
-    4. Create a unique Ceph user ID, the keyring
-    5. Enable the ceph-immutable-object-cache daemon with created client
-    6. Write some data to the image using FIO
-    7. Perform snapshot,protect and clone of rbd images
-    8. Read the data from cloned images first time with map, mount, unmount
-    9. Read the data from cloned images second time with map, mount, unmount
-    10. note down the time differnce of first read and second read make sure
-    second read should be less time compare to first read in cache
-    11. Repeat the above operations without immutable cache
-    12.check the performance make sure cache gives good performance
+Test Case Flow:
+1. Create RBD based pool and an Image
+2. Enable the immutable cache client settings
+3. Install the ceph-immutable-object-cache package
+4. Create a unique Ceph user ID, the keyring
+5. Enable the ceph-immutable-object-cache daemon with created client
+6. Write some data to the image using FIO
+7. Perform snapshot,protect and clone of rbd images
+8. Read the data from cloned images first time with map, mount, unmount
+9. Read the data from cloned images second time with map, mount, unmount
+10. note down the time differnce of first read and second read make sure
+second read should be less time compare to first read in cache
+11. Repeat the above operations without immutable cache
+12.check the performance make sure cache gives good performance
 """
 
 from test_rbd_immutable_cache import configure_immutable_cache

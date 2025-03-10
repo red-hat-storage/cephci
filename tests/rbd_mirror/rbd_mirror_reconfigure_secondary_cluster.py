@@ -1,20 +1,20 @@
 """Test case covered -
-    CEPH-9477- Secondary cluster permanent failure,
-    Recreate the secondary cluster and Re-establish mirror with newly created cluster as secondary.
+CEPH-9477- Secondary cluster permanent failure,
+Recreate the secondary cluster and Re-establish mirror with newly created cluster as secondary.
 
-    Pre-requisites :
-    1. Cluster must be up and running with capacity to create pool
-    (At least with 64 pgs)
-    2. We need atleast one client node with ceph-common package,
-    conf and keyring files
+Pre-requisites :
+1. Cluster must be up and running with capacity to create pool
+(At least with 64 pgs)
+2. We need atleast one client node with ceph-common package,
+conf and keyring files
 
-    Test case flows:
-    1) After site-b failure, bring up new cluster for secondary
-    2) Create a pool with same name as secondary pool
-    3) Perform the mirroring bootstrap for cluster peers
-    4) copy and import bootstrap token to peer cluster
-    5) verify peer cluster got added successfully after failover
-    6) verify all the images from primary mirrored to secondary
+Test case flows:
+1) After site-b failure, bring up new cluster for secondary
+2) Create a pool with same name as secondary pool
+3) Perform the mirroring bootstrap for cluster peers
+4) copy and import bootstrap token to peer cluster
+5) verify peer cluster got added successfully after failover
+6) verify all the images from primary mirrored to secondary
 """
 
 import ast

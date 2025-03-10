@@ -1,19 +1,19 @@
 """Test case covered -
-    CEPH-83574644 - Validate "rbd_compression_hint" config
-    settings on globally, Pool level, and image level.
+CEPH-83574644 - Validate "rbd_compression_hint" config
+settings on globally, Pool level, and image level.
 
-    Pre-requisites :
-    1. Cluster must be up and running with capacity to create pool
-    2. We need atleast one client node with ceph-common package,
-       conf and keyring files
+Pre-requisites :
+1. Cluster must be up and running with capacity to create pool
+2. We need atleast one client node with ceph-common package,
+   conf and keyring files
 
-    Test Case Flow:
-    1. Create a pool and an Image, write some data on it
-    2. set bluestore_compression_mode to passive to enable rbd_compression_hint feature
-    3. Set compression_algorithm, compression_mode and compression_ratio for the pool
-    4. verify "rbd_compression_hint" to "compressible" on global, pool and image level
-    5. verify "rbd_compression_hint" to "incompressible" on global, pool and image level
-    6. Repeat the above steps for ecpool
+Test Case Flow:
+1. Create a pool and an Image, write some data on it
+2. set bluestore_compression_mode to passive to enable rbd_compression_hint feature
+3. Set compression_algorithm, compression_mode and compression_ratio for the pool
+4. verify "rbd_compression_hint" to "compressible" on global, pool and image level
+5. verify "rbd_compression_hint" to "incompressible" on global, pool and image level
+6. Repeat the above steps for ecpool
 """
 
 import json

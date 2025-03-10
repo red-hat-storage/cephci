@@ -17,7 +17,7 @@ node("rhel-9-medium || ceph-qe-ci") {
             checkout(
                 scm: [
                     $class: 'GitSCM',
-                    branches: [[name: 'origin/master']],
+                    branches: [[name: 'origin/main']],
                     extensions: [[
                         $class: 'CleanBeforeCheckout',
                         deleteUntrackedNestedRepositories: true

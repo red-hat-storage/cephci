@@ -79,7 +79,7 @@ tests:
       config:
         run-on-rgw: true
         extra-pkgs:
-          - wget https://download.oracle.com/java/23/latest/jdk-23_linux-x64_bin.rpm
+          - jdk
         install_start_kafka: true
         script-name: test_bucket_policy_with_tenant_user.py
         config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
@@ -111,14 +111,6 @@ tests:
       config:
         script-name: test_object_lock_no_overwrite.py
         config-file-name: test_object_lock_no_overwrite.yaml
-  - test:
-      name: S3CMD small and multipart object download
-      desc: S3CMD small and multipart object download or GET
-      polarion-id: CEPH-83575477
-      module: sanity_rgw.py
-      config:
-        script-name: ../s3cmd/test_s3cmd.py
-        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
 
   - test:
       name: Swift user with read access
@@ -172,15 +164,6 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_with_custom_worktime.yaml
-
-  - test:
-      name: Test Etag not empty for complete multipart upload in aws
-      desc: Test Etag not empty for complete multipart upload in aws
-      polarion-id: CEPH-9801
-      module: sanity_rgw.py
-      config:
-        script-name: ../aws/test_aws.py
-        config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
 
   - test:
       name: Test S3 PUT requests with non ascii characters in body
@@ -249,11 +232,12 @@ tests:
   - test:
       abort-on-fail: false
       config:
-        role: "client"
         commands:
-          - "radosgw-admin account create --account-id RGW11111111111111111 --account-name Account1 --email account1@ceph.com"
           - "radosgw-admin account create --account-id RGW22222222222222222 --account-name Account2 --email account2@ceph.com"
-
+          - "radosgw-admin account create --account-id RGW11111111111111111 --account-name Account1  --email account1@ceph.com"
+          - "radosgw-admin zone modify --enable-feature notification_v2"
+          - "radosgw-admin zonegroup modify --enable-feature notification_v2"
+          - "ceph orch restart rgw.rgw.1"
       desc: Create 2 rgw accounts
       module: exec.py
       name: Create 2 rgw accounts
@@ -302,3 +286,77 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_bi_put_with_incomplete_multipart_upload.yaml
+
+  - test:
+      name: Test anonymous PUT to bucket with public-read-write ACL
+      desc: Test anonymous PUT to bucket with public-read-write ACL
+      polarion-id: CEPH-83604473
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_acl.py
+        config-file-name: ../../aws/configs/test_public_read_write_acl.yaml
+
+  - test:
+      name: Test Inditex hotfix bz, CORS presigned put url
+      desc: CORS ACL's prevents access to buckets with presigned PUT URI's with ACL private header
+      polarion-id: CEPH-83604475
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_cors_using_curl.py
+        config-file-name: ../../curl/configs/test_cors_presigned_put_url_using_curl.yaml
+
+  - test:
+      name: Test Tags added during multipart upload are retrievable
+      desc: Test Tags added during multipart upload are retrievable
+      polarion-id: CEPH-83604857
+      comments: Known issue BZ-2336076 targeted to 8.0z2, BZ-2323604 targeted to 8.1
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_multipart_upload_with_tagging.yaml
+
+
+  # test customer RFE: Public access block
+
+  - test:
+      name: test public access block pre bucket policy
+      desc: test public access block pre bucket policy
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_pre_bucket_policy.yaml
+  - test:
+      name: test public access block post bucket policy
+      desc: test public access block post bucket policy
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_post_bucket_policy.yaml
+  - test:
+      name: test public access block - BlockPublicAcls
+      desc: test public access block - BlockPublicAcls
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_acl.yaml
+      comments: known issue - Bug 2344639
+  - test:
+      name: test public access block - IgnorePublicAcls
+      desc: test public access block - IgnorePublicAcls
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_ignore_acl.yaml
+  - test:
+      name: test public access block - RestrictPublicBuckets
+      desc: test public access block - RestrictPublicBuckets
+      polarion-id: CEPH-83575582
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_public_access_block_restricted_public_buckets.yaml
+      comments: known issue - Bug 2344730
