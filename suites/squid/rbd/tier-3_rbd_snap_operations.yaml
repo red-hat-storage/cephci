@@ -79,7 +79,7 @@ tests:
         sudo: true
         commands:
           - "rm -rf /etc/yum.repos.d/epel*"
-          - "dnf install rbd-nbd -y"
+          - "dnf install rbd-nbd -y --nogpgcheck"
 
   - test:
       desc: Run all image snap operations in scale
