@@ -385,7 +385,8 @@ class FSIO(object):
         client.exec_command(sudo=True, cmd=f"mkdir -p {mount_dir}")
 
         log.debug(f"Setting up postgres persmission and user for the dir {mount_dir}")
-        client.exec_command(sudo=True, cmd=f"chown -R postgres:postgres {mount_dir}")
+        # Setting the postgres UID "26" instead of postgres
+        client.exec_command(sudo=True, cmd=f"chown -R 26:26 {mount_dir}")
         client.exec_command(sudo=True, cmd=f"chmod 700 {mount_dir}")
 
         rhel_version, _ = client.node.exec_command(
