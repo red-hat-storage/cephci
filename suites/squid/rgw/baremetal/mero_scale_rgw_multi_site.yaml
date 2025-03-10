@@ -392,3 +392,31 @@ tests:
             module: sanity_rgw_multisite.py
             name: sync error check in secondary
             polarion-id: CEPH-83572752
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            bucket_prefix: reg-cosbench-bkt-downup-
+            number_of_buckets: 1
+            number_of_objects: 2000000
+      desc: upload 2M object to regular bucket
+      module: push_cosbench_workload.py
+      name: Test upload 2M object to regular bucket
+      polarion-id: CEPH-83575113
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_sync_post_destruptive_services.py
+            config-file-name: test_sync_consistent_post_service_down_up.yaml
+      desc: sync consistent post RGW service down and bringing it up
+      module: sanity_rgw_multisite.py
+      name: Test sync consistent post RGW service down and bringing it up
+      polarion-id: CEPH-83575113
