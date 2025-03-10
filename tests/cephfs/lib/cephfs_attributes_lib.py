@@ -389,13 +389,6 @@ class CephFSAttributeUtilities(object):
 
         log.info("JSON dump: %s", cleaned_output)
         # Extract 'path' and 'alternate_name' as a dictionary
-        #############
-        # alternate_name_dict = {
-        #     dentry.get("path", ""): dentry.get("alternate_name", "")
-        #     for dirfrag in json_data[0].get("dirfrags", [])
-        #     for dentry in dirfrag.get("dentries", [])
-        # }
-        #############
         alternate_name_dict = {
             dentry.get("path", ""): dentry.get("alternate_name", "")
             for inode in json_data
