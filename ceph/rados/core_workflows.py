@@ -428,7 +428,7 @@ class RadosOrchestrator:
         Returns: True -> pass, False -> fail
         """
         duration = kwargs.get("rados_write_duration", 200)
-        byte_size = kwargs.get("byte_size", 4096)
+        byte_size = str(kwargs.get("byte_size", 4096)).upper()
         num_threads = kwargs.get("num_threads")
         max_objs = kwargs.get("max_objs")
         verify_stats = kwargs.get("verify_stats", True)
@@ -451,34 +451,55 @@ class RadosOrchestrator:
         try:
             self.node.shell([cmd], check_status=check_ec, timeout=_timeout)
             if max_objs and verify_stats:
-                time.sleep(90)
-                new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
-                    "objects"
-                ]
-                log.info(
-                    f"Objs in the {pool_name} before IOPS: {org_objs} "
-                    f"| Objs in the pool post IOPS: {new_objs} "
-                    f"| Expected {org_objs + max_objs} or {org_objs + max_objs + 1}"
-                )
-                assert (new_objs == org_objs + max_objs) or (
-                    new_objs == org_objs + max_objs + 1
-                )
+                exp_objs = org_objs + max_objs
+                assert self.verify_pool_stats(pool_name=pool_name, exp_objs=exp_objs)
             else:
                 time.sleep(15)
                 new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
                     "objects"
                 ]
-                log.info(
-                    f"Objs in the {pool_name} before IOPS: {org_objs} "
-                    f"| Objs in the pool post IOPS: {new_objs} "
-                    f"| Expected {new_objs} > 0"
-                )
+                log_info_msg = f"Objs in the {pool_name} before IOPS: {org_objs} \
+                    | Objs in the pool post IOPS: {new_objs} \
+                    | Expected {new_objs} > 0 | Expected {new_objs} > {org_objs}"
+                log.info(log_info_msg)
                 assert new_objs > 0
+                assert new_objs > org_objs
             return True
         except Exception as err:
             log.error(f"Error running rados bench write on pool : {pool_name}")
             log.error(err)
             return False
+
+    def verify_pool_stats(self, pool_name, exp_objs: int, timeout=180) -> bool:
+        """
+        Method to verify pool stats
+        Args:
+            pool_name: pool on which the operation will be performed ( str )
+            exp_objs -> expected objects on the pool (int)
+            timeout (int) -> user defined timeout for verify pool stats
+        Returns: True -> pass, False -> fail
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        while end_time > datetime.datetime.now():
+            new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
+            log_debug_msg = f"| Objs in the pool post IOPS: {new_objs} | Expected {exp_objs} or {exp_objs + 1}"
+            log.debug(log_debug_msg)
+            if (new_objs == exp_objs) or (new_objs == exp_objs + 1):
+                log.info("Stats in the pool are as expected")
+                break
+
+            log_debug_msg = (
+                f"Stats in the pool are yet to match expected object count {exp_objs}"
+            )
+            log.debug(log_debug_msg)
+            log.debug("Retrying check after 15 seconds")
+            time.sleep(5)
+        else:
+            log_error_msg = f"Stats in the pool did not match the expected object count {exp_objs} \
+                within timeout {timeout}"
+            log.error(log_error_msg)
+            return False
+        return True
 
     def bench_read(self, pool_name: str, **kwargs) -> bool:
         """
