@@ -37,7 +37,7 @@ def run(ceph_cluster, **kw):
             "\n---------------***************-----------------------------"
         )
 
-        fs_name = "case-sensitivity-functional-1"
+        fs_name = "case-sensitivity-functional-2"
         fs_util.create_fs(client1, fs_name)
         fs_util.wait_for_mds_process(client1, fs_name)
 
@@ -179,13 +179,24 @@ def run(ceph_cluster, **kw):
             assert attr_util.get_charmap(client1, dir_step_5a).get("encoding") == "utf8"
 
             attr_util.delete_directory(client1, dir_step_5a, recursive=True)
+            attr_util.delete_directory(client1, dir_step_5, recursive=True)
 
     except Exception as e:
         log.error("Test execution failed: {}".format(str(e)))
         log.error(traceback.format_exc())
+        return 1
 
     finally:
+        log.info(
+            "\n"
+            "\n---------------***************----------------------------------------"
+            "\n                 Cleanup                                              "
+            "\n---------------***************----------------------------------------"
+        )
         fs_util.client_clean_up(
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )
         fs_util.remove_fs(client1, fs_name)
+
+    log.info("Fucnctional Case Sensitive use cases completed")
+    return 0

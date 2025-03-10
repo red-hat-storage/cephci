@@ -89,9 +89,15 @@ def run(ceph_cluster, **kw):
         assert attr_util.get_charmap(client1, child_dir).get("normalization") == "nfkd"
         assert attr_util.get_charmap(client1, child_dir).get("encoding") == "utf8"
 
+        log.info("Capture the mds states after rebooting")
+        mds_info_after_for_fs1 = fs_util.get_mds_states_active_standby_replay(
+            fs_name, client1
+        )
+        log.info(f"MDS Info for {fs_name} After Reboot: {mds_info_after_for_fs1}")
+
         log.info("Validating alternate name for %s", rel_child_dir)
-        alter_dict = attr_util.fetch_alternate_name(client1, fs_name, "/")
-        if not attr_util.validate_alternate_name(alter_dict, rel_child_dir):
+        alter_dict_1 = attr_util.fetch_alternate_name(client1, fs_name, "/")
+        if not attr_util.validate_alternate_name(alter_dict_1, rel_child_dir):
             log.error("Validation failed for alternate name")
 
         log.info("Passed: Attribute persisted after MDS reboot")
@@ -120,9 +126,13 @@ def run(ceph_cluster, **kw):
     except Exception as e:
         log.error("Test execution failed: {}".format(str(e)))
         log.error(traceback.format_exc())
+        return 1
 
     finally:
         fs_util.client_clean_up(
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )
         fs_util.remove_fs(client1, fs_name)
+
+    log.info("Disruptive Case Sensitive use cases completed")
+    return 0

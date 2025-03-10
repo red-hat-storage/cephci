@@ -147,13 +147,18 @@ def run(ceph_cluster, **kw):
             assert attr_util.get_charmap(client1, dir_step_3a).get("encoding") == "utf8"
 
             attr_util.delete_directory(client1, dir_step_3a, recursive=True)
+            attr_util.delete_directory(client1, dir_step_3, recursive=True)
 
     except Exception as e:
         log.error("Test execution failed: {}".format(str(e)))
         log.error(traceback.format_exc())
+        return 1
 
     finally:
         fs_util.client_clean_up(
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )
         fs_util.remove_fs(client1, fs_name)
+
+    log.info("Negative Case Sensitive use cases completed")
+    return 0
