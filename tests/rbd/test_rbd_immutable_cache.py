@@ -72,7 +72,7 @@ def configure_immutable_cache(rbd_obj, client_node, user_name):
 
         # Install ceph-immutable-object-cache package
         client_node.exec_command(
-            cmd="dnf install ceph-immutable-object-cache -y", sudo=True
+            cmd="dnf install ceph-immutable-object-cache -y --nogpgcheck", sudo=True
         )
 
         # Generate keyring and create keyring file
