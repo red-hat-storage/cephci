@@ -16,14 +16,17 @@ class Gateway(ExecuteCommandMixin):
     def mtls(self, value):
         self._mtls = value
 
+    def get_log_level(self, **kwargs):
+        return self.run_nvme_cli("get_log_level", **kwargs)
+
     def info(self, **kwargs):
         return self.run_nvme_cli("info", **kwargs)
 
-    def version(self, **kwargs):
-        return self.run_nvme_cli("version", **kwargs)
+    def listener_info(self, **kwargs):
+        return self.run_nvme_cli("listener_info", **kwargs)
 
     def set_log_level(self, **kwargs):
         return self.run_nvme_cli("set_log_level", **kwargs)
 
-    def get_log_level(self, **kwargs):
-        return self.run_nvme_cli("get_log_level", **kwargs)
+    def version(self, **kwargs):
+        return self.run_nvme_cli("version", **kwargs)
