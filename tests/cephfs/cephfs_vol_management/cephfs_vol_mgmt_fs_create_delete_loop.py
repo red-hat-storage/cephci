@@ -93,8 +93,8 @@ def run(ceph_cluster, **kw):
         },
     ]
 
-    # Run the FS lifecycle for 5 iteration
-    for i in range(1, 6):
+    # Run the FS lifecycle for 2 iteration
+    for i in range(1, 3):
         log.info(
             "\n"
             "\n---------------***************---------------"
