@@ -3,7 +3,12 @@
 *                   @red-hat-storage/ceph-qe-ci @red-hat-storage/ceph-qe-admin
 
 # for RGW
-rgw/                @mkasturi18 @ckulal @TejasC88
+rgw/                                         @mkasturi18 @ckulal @TejasC88
+tests/misc_env/cosbench.py                   @mkasturi18 @ckulal @TejasC88
+tests/misc_env/configure-tc.py               @mkasturi18 @ckulal @TejasC88
+tests/misc_env/haproxy.py                    @mkasturi18 @ckulal @TejasC88
+tests/misc_env/install_vault.py              @mkasturi18 @ckulal @TejasC88
+tests/misc_env/push_cosbench_workload.py     @mkasturi18 @ckulal @TejasC88
 
 # for RBD team 
 rbd/                @Manohar-Murthy
