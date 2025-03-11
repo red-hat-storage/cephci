@@ -555,6 +555,33 @@ tests:
                   Expiration:
                     Date: "2019-02-17"
 
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph orch host label add mero011  ha_io"
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph orch host label add mero003  ha_io"
+      desc: Add label to the loadbalancer for IO
+      name: Add label to the loadbalancer for IO
+      module: exec.py
+
+  - test:
+      name: rgw account at scale 3 buckets, 3.6M objects
+      desc: rgw account at scale 3 buckets, 3.6M objects
+      polarion-id: CEPH-83591689
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name:  test_rgw_account_management.py
+            config-file-name: test_rgw_accounts_at_scale.yaml
+            timeout: 36000
 
 # Please keep below(distruptive) testcases at the end of the suites only
   - test:
