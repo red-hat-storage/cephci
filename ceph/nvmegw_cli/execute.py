@@ -28,6 +28,16 @@ class ExecuteCommandMixin:
             _path += f" -v /etc/mtls/{cert}:/root/{cert}:z "
 
         return _path
+    
+    def local_encryption_key(self):
+        if not self.encryption:
+            return ""
+        
+        _path = str()
+        for cert in ["encryption.key"]:
+            _path += f" -v /etc/ceph/{cert}:/{cert}:z "
+
+        return _path
 
     def run_nvme_cli(self, action, **kwargs):
         LOG.info(f"NVMe CLI command : {self.name} {action}")
@@ -46,6 +56,7 @@ class ExecuteCommandMixin:
             [
                 self.BASE_CMD,
                 self.local_mtls_cert_path(),
+                self.local_encryption_key(),
                 self.NVMEOF_CLI_IMAGE,
                 config_dict_to_string(base_cmd_args),
                 self.name,

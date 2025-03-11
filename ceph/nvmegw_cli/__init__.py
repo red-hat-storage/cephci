@@ -14,18 +14,19 @@ from cli.utilities.containers import Registry
 
 
 class NVMeGWCLI(ExecuteCommandMixin):
-    def __init__(self, node, port=5500, mtls=False) -> None:
+    def __init__(self, node, port=5500, mtls=False, encryption=False) -> None:
         self.node = node
         self.port = port
         self._mtls = mtls
-        self.connection = Connection(node, port, mtls)
-        self.gateway = Gateway(node, port, mtls)
-        self.host = Host(node, port, mtls)
-        self.loglevel = LogLevel(node, port, mtls)
-        self.listener = Listener(node, port, mtls)
-        self.namespace = Namespace(node, port, mtls)
-        self.subsystem = Subsystem(node, port, mtls)
-        self.version = Version(node, port, mtls)
+        self._encryption = encryption
+        self.connection = Connection(node, port, mtls, encryption)
+        self.gateway = Gateway(node, port, mtls, encryption)
+        self.host = Host(node, port, mtls, encryption)
+        self.loglevel = LogLevel(node, port, mtls, encryption)
+        self.listener = Listener(node, port, mtls, encryption)
+        self.namespace = Namespace(node, port, mtls, encryption)
+        self.subsystem = Subsystem(node, port, mtls, encryption)
+        self.version = Version(node, port, mtls, encryption)
 
         self.name = " "
         for clas in [
@@ -79,6 +80,15 @@ class NVMeGWCLI(ExecuteCommandMixin):
     def mtls(self, value):
         self._mtls = value
         self.setter("mtls", value)
+        
+    @property
+    def encryption(self):
+        return self._encryption
+
+    @encryption.setter
+    def encryption(self, value):
+        self._encryption = value
+        self.setter("encryption", value)
 
     def fetch_gateway(self):
         """Return Gateway info"""

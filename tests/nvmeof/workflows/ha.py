@@ -40,6 +40,7 @@ class HighAvailability:
         self.config = config
         self.gateways = []
         self.mtls = config.get("mtls")
+        self.encryption = config.get("encryption", False)
         self.gateway_group = config.get("gw_group", "")
         self.orch = Orch(cluster=self.cluster, **{})
         self.daemon = Daemon(cluster=self.cluster, **{})
@@ -50,7 +51,7 @@ class HighAvailability:
 
         for gateway in gateways:
             gw_node = get_node_by_id(self.cluster, gateway)
-            self.gateways.append(NVMeGateway(gw_node, self.mtls))
+            self.gateways.append(NVMeGateway(gw_node, self.mtls, self.encryption))
 
         self.ana_ids = [i.ana_group_id for i in self.gateways]
         self.fail_ops = {
@@ -81,6 +82,25 @@ class HighAvailability:
             self.initiators[key] = NVMeInitiator(node, self.gateways[0], nqn)
 
         return self.initiators[key]
+    
+    def create_dhchap_key(self, config):
+        """Generate DHCHAP key for each initiator and store it."""
+        nqn = config["nqn"]
+
+        for host_config in config["hosts"]:
+            node_id = host_config["node"]
+            initiator = self.get_or_create_initiator(node_id, nqn)
+
+            # Generate key for subsystem NQN
+            key, _ = initiator.gen_dhchap_key(n=config["nqn"])
+            LOG.info(f"{key.strip()} is generated for {nqn} and {node_id}")
+
+            initiator.key = key.strip()
+            config["dhchap-key"] = key.strip()
+            initiator.auth_mode = (
+                "bidirectional" if config.get("inband_auth") else "unidirectional"
+            )
+            self.clients.append(initiator)
 
     def catogorize(self, gws):
         """Categorize to-be failed and running GWs.

@@ -57,6 +57,24 @@ def create_nvme_certificates(node, **kwargs):
     return server_cert_gen.save_files(key, cert, dest_path)
 
 
+def create_nvme_inband_auth_encryptionkeys(node, **kwargs):
+
+    _nodes = kwargs.get("nodes", [])
+    dest_path = "/etc/ceph"
+
+    node_ips = [i.ip_address for i in _nodes]
+    _nodes.append(node)
+
+    for node in _nodes:
+        node.exec_command(cmd=f"mkdir -p {dest_path}", sudo=True)
+
+    server_cert_gen = CertificateGenerator(_nodes, "encryption.key", ips=node_ips)
+    server_cert_gen.generate_key()
+
+    server_cert_gen.generate_certificate()
+    return server_cert_gen.save_files("encryption.key", "encryption.crt", dest_path)  
+
+
 class GenerateServiceSpec:
     """Creates the spec yaml file for deploying services and daemons using cephadm."""
 
