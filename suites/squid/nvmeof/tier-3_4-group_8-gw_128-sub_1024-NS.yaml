@@ -271,6 +271,13 @@ tests:
                 namespaces: 1024
                 image_size: 1T
                 pool: rbd1
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                group: group1
+                namespaces: 1024
         initiators:
             listener_port: 4420
             node: node37
@@ -328,6 +335,13 @@ tests:
                 image_size: 1T
                 group: group2
                 pool: rbd2
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                group: group2
+                namespaces: 1024
         initiators:
             listener_port: 4420
             node: node38
@@ -385,6 +399,13 @@ tests:
                 image_size: 1T
                 group: group3
                 pool: rbd3
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                group: group3
+                namespaces: 1024
         initiators:
             listener_port: 4420
             node: node39
@@ -442,6 +463,13 @@ tests:
                 image_size: 1T
                 group: group4
                 pool: rbd4
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                group: group4
+                namespaces: 1024
         initiators:
             listener_port: 4420
             node: node40

@@ -175,6 +175,12 @@ tests:
                 namespaces: 1024
                 image_size: 1T
                 pool: rbd
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                namespaces: 1024
         initiators:
             listener_port: 4420
             node: node11

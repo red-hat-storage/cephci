@@ -129,9 +129,9 @@ tests:
               service: listener
               command: add
               args:
+                group: group1
                 subsystems: 128
                 port: 4420
-                group: group1
                 nodes:
                   - node3
                   - node4
