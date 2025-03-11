@@ -191,6 +191,21 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
           - config:
+              service: gateway
+              command: listener_info             # List ana states for subsystem
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+          - config:
+              service: listener
+              command: delete             # listener del
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                host-name: node6
+                trsvcid: 5001
+                traddr: node6
+              validate:
+                omap: true
+          - config:
               service: host
               command: add              # add Host access
               args:
@@ -201,11 +216,6 @@ tests:
           - config:
               service: host
               command: list             # List access hosts
-              args:
-                subsystem: nqn.2016-06.io.spdk:cnode2
-          - config:
-              service: gateway
-              command: listener_info             # List ana states for subsystem
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
           - config:
@@ -259,7 +269,7 @@ tests:
                 omap: true
           - config:
               service: namespace
-              command: list             # namespace list
+              command: list             # namespace list per subsystem NQN
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
               base_cmd_args:
@@ -324,18 +334,6 @@ tests:
                 format: json
           - config:
               service: namespace
-              command: list             # namespace list using nsid
-              args:
-                nsid: 4
-              base_cmd_args:
-                format: json
-          - config:
-              service: namespace
-              command: list             # namespace list for all subsystems
-              base_cmd_args:
-                format: json
-          - config:
-              service: namespace
               command: get_io_stats             # namespace get_io_stats
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
@@ -371,16 +369,6 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 4
                 i-am-sure: true
-              validate:
-                omap: true
-          - config:
-              service: listener
-              command: delete             # listener del
-              args:
-                subsystem: nqn.2016-06.io.spdk:cnode2
-                host-name: node6
-                trsvcid: 5001
-                traddr: node6
               validate:
                 omap: true
           - config:
@@ -487,6 +475,19 @@ tests:
                 omap: true
           - config:
               service: namespace
+              command: add              # Namespace add with trash-image enabled
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                rbd-image: image6
+                rbd-pool: rbd
+                nsid: 5
+                rbd-create-image: true
+                size: 1G
+                rbd-trash-image-on-delete: true
+              validate:
+                omap: true
+          - config:
+              service: namespace
               command: list             # namespace list using subsystem NQN
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
@@ -662,6 +663,14 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 4
+              validate:
+                omap: true
+          - config:
+              service: namespace
+              command: delete           # namespace delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 5
                 i-am-sure: true
               validate:
                 omap: true
