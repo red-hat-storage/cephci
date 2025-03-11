@@ -1,4 +1,3 @@
-import datetime
 import json
 import random
 import re
@@ -13,6 +12,7 @@ import dateutil.parser as parser
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster
@@ -26,6 +26,7 @@ def run(ceph_cluster, **kw):
     Verify .snap across kernel, fuse and nfs mounts(future-ready) for snaps created by schedule.
 
     Type - Functional
+
     Workflow1 - snap_sched_vol: Verify Snapshot schedule on volume.Validate snaphots in .snap across
     mount types - kernel,fuse,nfs
     Steps:
@@ -34,9 +35,11 @@ def run(ceph_cluster, **kw):
     3. Verify scheduled snapshtos are getting created.
     4. Validate snapshot schedule by checking if snapshots are created as per schedule.
     5. Verify snap list across all mount types - kernel,nfs,fuse
+
     Workflow2 - snap_sched_subvol: Verify Snapshot schedule on subvolume.Validate snaphots in .snap across
     mount types - kernel,fuse,nfs
     Steps : Repeat workflow1 steps on subvolume
+
     Workflow3 - snap_retention_vol: Verify Snapshot Retention on volume
     Steps:
     1. Create Snapshot schedule on ceph FS volume. Verify snapshot schedule created and active
@@ -86,6 +89,7 @@ def run(ceph_cluster, **kw):
     try:
         test_data = kw.get("test_data")
         fs_util_v1 = FsUtilsv1(ceph_cluster, test_data=test_data)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         erasure = (
             FsUtilsv1.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -205,18 +209,9 @@ def run(ceph_cluster, **kw):
             log.info(
                 f"Verify Ceph Status is healthy before starting test {test_case_name}"
             )
-            ceph_healthy = 0
-            end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
-            while (datetime.datetime.now() < end_time) and (ceph_healthy == 0):
-                try:
-                    fs_util_v1.get_ceph_health_status(client1)
-                    ceph_healthy = 1
-                except Exception as ex:
-                    log.info(ex)
-                    log.info("Wait for few secs and recheck ceph status")
-                    time.sleep(5)
-            if ceph_healthy == 0:
-                assert False, "Ceph remains unhealthy even after wait for 300secs"
+            wait_time_secs = 300
+            if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
+                assert False, "Cluster health is not OK even after waiting for sometime"
             cleanup_params = run_snap_test(snap_test_params)
             log.info(f"post_test_params:{cleanup_params}")
             snap_test_params["export_created"] = cleanup_params["export_created"]
