@@ -942,6 +942,77 @@ class HighAvailability:
             initiators for gateway {gateway.daemon_name}"
         )
 
+    def validate_namespace_masking(
+        self,
+        nsid,
+        subnqn,
+        namespaces_sub,
+        hostnqn_dict,
+        ns_visibility,
+        command,
+        expected_visibility,
+    ):
+        """Validate that the namespace visibility is correct."""
+
+        if command == "add_host":
+            LOG.info(command)
+            num_namespaces_per_node = namespaces_sub // len(hostnqn_dict)
+
+            # Determine the initiator node responsible for this nsid based on the calculated range
+            node_index = (nsid - 1) // num_namespaces_per_node
+            expected_host = list(hostnqn_dict.values())[node_index]
+
+            # Log the visibility of the namespace
+            if expected_host in ns_visibility:
+                LOG.info(
+                    f"Validated - Namespace {nsid} of {subnqn} has the correct nqn {ns_visibility}"
+                )
+            else:
+                LOG.error(
+                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Expected {expected_host}, but got {ns_visibility}"
+                )
+                raise Exception(
+                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Expected {expected_host}, but got {ns_visibility}"
+                )
+
+        elif command == "del_host":
+            LOG.info(command)
+            num_namespaces_per_node = namespaces_sub // len(hostnqn_dict)
+
+            # Determine the initiator node responsible for this nsid based on the calculated range
+            node_index = (nsid - 1) // num_namespaces_per_node
+            expected_host = list(hostnqn_dict.values())[node_index]
+
+            # Log the visibility of the namespace
+            if expected_host not in ns_visibility:
+                LOG.info(
+                    f"Validated - Namespace {nsid} of {subnqn} does not has {expected_host}"
+                )
+            else:
+                LOG.error(
+                    f"Namespace {nsid} of {subnqn} has {ns_visibility} which was removed"
+                )
+                raise Exception(
+                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Not expecting {ns_visibility} in {expected_host}"
+                )
+
+        else:
+            # Validate visibility based on the expected value (for non-add/del host commands)
+            ns_visibility = str(ns_visibility)
+            LOG.info(command)
+            if ns_visibility.lower() == expected_visibility.lower():
+                LOG.info(
+                    f"Validated - Namespace {nsid} has correct visibility: {ns_visibility}"
+                )
+            else:
+                LOG.info("esle")
+                LOG.error(
+                    f"NS {nsid} of {subnqn} has wrong visibility.Expected {expected_visibility} got{ns_visibility}"
+                )
+                raise Exception(
+                    f"NS {nsid} of {subnqn} has wrong visibility.Expected {expected_visibility} got {ns_visibility}"
+                )
+
     def run(self):
         """Execute the HA failover and failback with IO validation."""
         fail_methods = self.config["fault-injection-methods"]
