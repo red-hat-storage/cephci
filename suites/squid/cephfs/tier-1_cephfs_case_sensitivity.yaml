@@ -2,9 +2,9 @@
 #===============================================================================================
 # Tier-level: 1
 # Test-Suite: tier-1_cephfs_case_sensitivity
-# Conf file : conf/squid/cephfs/tier_1_fs.yaml
+# Conf file : conf/squid/cephfs/tier-1_fs.yaml
 # Test-Case Covered:
-#	CEPH-83606639 Verify Case Sensitivity Functionality
+# CEPH-83606639 Verify Case Sensitivity Functionality
 #===============================================================================================
 tests:
   - test:
