@@ -38,7 +38,7 @@ class Namespace(ExecuteCommandMixin):
         """Delete a namespace from a subsystem."""
         return self.run_nvme_cli("del", **kwargs)
 
-    def delete_host(self, **kwargs):
+    def del_host(self, **kwargs):
         """Delete host from a namespace."""
         return self.run_nvme_cli("del_host", **kwargs)
 

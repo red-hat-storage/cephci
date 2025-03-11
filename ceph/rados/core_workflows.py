@@ -602,7 +602,10 @@ class RadosOrchestrator:
         status_report = self.run_ceph_command(cmd="ceph report", client_exec=True)
         ceph_health_status = list(status_report["health"]["checks"].keys())
         if warning in ceph_health_status:
-            log.info(f"warning: {warning}  present on the cluster")
+            log.info(
+                f"warning: {warning}  present on the cluster"
+                f"all Generated warnings : {ceph_health_status}"
+            )
             log.info(
                 f"Warning: {warning} generated on the cluster : {ceph_health_status}"
             )
@@ -725,9 +728,13 @@ class RadosOrchestrator:
         """
         The method is used to collect the various OSD daemons present on a particular node
         :param osd_node: name of the OSD node on which osd daemon details are collected (ceph.ceph.CephNode): ceph node
+                        or host-name in string can also be sent
         :return: list of OSD ID's
         """
-        cmd = f"sudo ceph osd ls-tree {osd_node.hostname}"
+        if isinstance(osd_node, str):
+            cmd = f"sudo ceph osd ls-tree {osd_node}"
+        else:
+            cmd = f"sudo ceph osd ls-tree {osd_node.hostname}"
         return self.run_ceph_command(cmd=cmd)
 
     def enable_balancer(self, **kwargs) -> bool:
@@ -1880,7 +1887,7 @@ class RadosOrchestrator:
         )
         orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
         log.debug(orch_ps_out)
-        return orch_ps_out["status"], orch_ps_out["status_desc"]
+        return orch_ps_out["status"], orch_ps_out["status_desc"] if orch_ps_out else ()
 
     def daemon_check_post_tests(
         self, pre_test_orch_ps: dict, pre_crash_report: list = None
@@ -2673,7 +2680,7 @@ EOF"""
         if orch_ls_op:
             return [service["service_name"] for service in orch_ls_op]
 
-    def check_host_status(self, hostname, status: str = None) -> bool:
+    def check_host_status(self, hostname, status: str) -> bool:
         """
         Checks the status of host(offline or online) using
         ceph orch host ls and return boolean
@@ -2685,13 +2692,13 @@ EOF"""
         """
         host_cmd = f"ceph orch host ls --host_pattern {hostname}"
         out = self.run_ceph_command(cmd=host_cmd, client_exec=True)
-        host_status = out[0]["status"].lower().strip()
-        log.info(f"Status of the host is {host_status}")
-        if status:
+        if out:
+            host_status = out[0]["status"].lower().strip()
+            log.info("Status of the host : %s is %s", hostname, host_status)
             return True if status.lower() == host_status else False
-        elif "offline" in host_status:
+        else:
+            log.info("Host : %s is not part of the cluster", hostname)
             return False
-        return True
 
     def run_concurrent_io(self, pool_name: str, obj_name: str, obj_size: int):
         """
@@ -3910,7 +3917,7 @@ EOF"""
             log.error(f"Unable to start the OSD : {target_osd}")
             return None
         log.info(f"Performing the deep-scrub on the pg-{pg_id}")
-        if not self.start_check_deep_scrub_complete(pg_id=pg_id):
+        if not self.start_check_deep_scrub_complete(pg_id=pg_id, wait_time=1000):
             log.debug(f"deep-scrubbing could not be completed on PG : {pg_id}")
             raise Exception("PG not deep-scrubbed error")
         log.debug(f"Completed deep-scrubbing the pg : {pg_id}")
@@ -4524,7 +4531,7 @@ EOF"""
                         osd_dict[key].append(entry["id"])
             log.info(f"List of {key} OSDs: {osd_dict[key]}")
 
-        return osd_dict[status]
+        return osd_dict[status.lower()]
 
     def get_osd_details(self, osd_id: int):
         """

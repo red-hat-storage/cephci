@@ -35,6 +35,8 @@ class ServiceabilityMethods:
         self.config = config
         self.cephadm = CephAdmin(cluster=self.cluster, **self.config)
         self.rados_obj = RadosOrchestrator(node=self.cephadm)
+        self.client = self.rados_obj.client
+        self.rhbuild = self.rados_obj.rhbuild
 
     def get_host_count(self):
         return len(self.rados_obj.run_ceph_command(cmd="ceph orch host ls"))
@@ -148,212 +150,106 @@ class ServiceabilityMethods:
         Returns:
             None | raises exception in case of failure
         """
-        # get initial count of hosts in the cluster
-        host_count_pre = self.get_host_count()
-        # Removing an OSD host and checking status
-        rm_host = utils.get_node_by_id(self.cluster, host_node_name)
-        log.info(f"Identified host : {rm_host.hostname} to be removed from the cluster")
-
-        # get list of osd_id on the host to be removed
-        rm_osd_list = self.rados_obj.collect_osd_daemon_ids(osd_node=rm_host)
-        log.info(f"list of osds on {rm_host.hostname}: {rm_osd_list}")
-
-        # Starting to drain an offline host.
-        log.info("Starting to drain an offline host")
-        self.cephadm.shell([f"ceph orch host drain {rm_host.hostname} --force"])
-
-        # Sleeping for 2 seconds for removal to have started
-        time.sleep(2)
-        log.debug(f"Started drain operation on node : {rm_host.hostname}")
-
-        status_cmd = "ceph orch osd rm status -f json"
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=7200)
-        flag = False
-        while end_time > datetime.datetime.now():
-            out, err = self.cephadm.shell([status_cmd])
-            try:
-                drain_ops = json.loads(out)
-                for entry in drain_ops:
-                    if entry["drain_done_at"] is None or entry["draining"]:
-                        log.debug(
-                            f"Drain operations are going on host {rm_host.hostname} \nOperations: {entry}"
-                        )
-                        raise Exception(
-                            f"drain process for OSD {entry['osd_id']} is still going on"
-                        )
-                    log.info(f"Drain operation completed for OSD {entry['osd_id']}")
-                log.info(f"Drain operations completed on host : {rm_host.hostname}")
-                flag = True
-                break
-            except json.JSONDecodeError:
-                log.info(f"Drain operations completed on host : {rm_host.hostname}")
-                flag = True
-                break
-            except Exception as error:
-                if end_time < datetime.datetime.now():
-                    log.error(f"Hit issue during drain operations: {error}")
-                    raise Exception(error)
-                log.info("Sleeping for 120 seconds and checking again....")
-                time.sleep(120)
-
-        if not flag:
-            log.error(
-                "Drain operation not completed on the cluster even after 7200 seconds"
+        try:
+            # Removing an offline host and checking status
+            rm_host = utils.get_node_by_id(self.cluster, host_node_name)
+            log.info(
+                "Identified host : %s to be removed from the cluster" % rm_host.hostname
             )
+
+            # cursory check to ensure input node is actually offline
+            if self.rados_obj.check_host_status(hostname=rm_host.hostname):
+                err_msg = (
+                    f"Input host {rm_host.hostname} is not in Offline state. Exiting"
+                )
+                log.error(err_msg)
+                raise Exception(err_msg)
+
+            log.info("Removing offline host %s from the cluster" % rm_host.hostname)
+            self.remove_custom_host(host_node_name=host_node_name, offline=True)
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
             raise
-        # remove the offline host so that drain operation gets completed
-        log.info(f"Removing host {rm_host.hostname} from the cluster")
-        self.cephadm.shell([f"ceph orch host rm {rm_host.hostname} --force --offline"])
-        time.sleep(10)
-        if not host_count_pre > self.get_host_count():
-            log.error("Host count in the cluster has not reduced")
-            out, err = self.cephadm.shell(
-                [f"ceph orch host ls --host_pattern {rm_host.hostname}"]
-            )
-            if "0 hosts in cluster" not in out or rm_host.hostname in out:
-                log.error(f"{rm_host.hostname} is still part of the cluster")
-            raise Exception("Host count in the cluster has not reduced")
         log.info(
-            f"Completed drain and removal operation on the host. {rm_host.hostname}"
+            "Completed drain and removal operation for the offline host "
+            + rm_host.hostname
         )
 
-    def remove_custom_host(self, host_node_name: str):
+    def remove_custom_host(self, host_node_name: str, offline=False):
         """
         Method to remove a specific online host from the cluster
         Args:
             host_node_name: node name of the host to be removed
             If hostname of machine to be removed is ceph-radosqe-l0wj0b-node7, then
             input should be 'node7'
+            offline: flag to reuse the method for an offline host
         Returns:
             None | raises exception in case of failure
         """
-        status_cmd = "ceph orch osd rm status -f json"
         try:
-
-            def wait_osd_operation_status(status_cmd):
-                status_flag = False
-                txt_osd_removed_logic = """
-                      The logic used to verify the OSD is removed or not is-
-                      case1: If the ceph is still in process of removing the OSD the command generated
-                      the proper json output.The json.loads method loads the output without any failure.
-                      case2: If the OSDs are removed from the node then the command wont generate any output.
-                      In this case the json.loads method throws the JSONDecodeError exception.This is the
-                      confirmation that the OSDs removal are completed. """
-                end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
-                log.debug(f"{txt_osd_removed_logic}")
-                while end_time > datetime.datetime.now():
-                    out, err = self.cephadm.shell([status_cmd])
-                    try:
-                        drain_ops = json.loads(out)
-                        for entry in drain_ops:
-                            log.debug(
-                                f"OSD remove operation is in progress {osd_id}\nOperations: {entry}"
-                            )
-                    except json.JSONDecodeError:
-                        log.info(f"The OSD removal is completed on OSD : {osd_id}")
-                        status_flag = True
-                        break
-                    except Exception as error:
-                        log.error(f"Hit issue during drain operations: {error}")
-                        raise Exception(error)
-                    log.debug("Sleeping for 10 seconds and checking again....")
-                    time.sleep(10)
-                return status_flag
-
-            daemon_check = self.rados_obj.check_daemon_exists_on_host(
-                host=host_node_name, daemon_type=None
-            )
-
-            if not daemon_check:
-                log.info(f" The node {host_node_name} is already drained.")
-                return None
             # Removing an OSD host and checking status
             rm_host = utils.get_node_by_id(self.cluster, host_node_name)
             log.info(
-                f"Identified host : {rm_host.hostname} to be removed from the cluster"
+                "Identified host : %s to be removed from the cluster" % rm_host.hostname
             )
 
-            # Get list of osd_id on the host to be removed
+            # get list of osd_id on the host to be removed
             rm_osd_list = self.rados_obj.collect_osd_daemon_ids(osd_node=rm_host)
             log.info(
-                f"The osd id  list to be removed from the {rm_host} is  {rm_osd_list}"
+                "The OSD list to be removed from the host %s is %s"
+                % (rm_host.hostname, rm_osd_list)
             )
-            # Get the OSD out list and remove before drain the node
-            osd_out_list = self.rados_obj.get_osd_list(status="out")
-            log.info(
-                f"The out osd id  list to be removed from the {rm_host} is  {osd_out_list}"
-            )
-            if osd_out_list:
-                for osd_id in rm_osd_list:
-                    if osd_id in osd_out_list:
-                        osd_utils.osd_remove(self.cluster, osd_id=osd_id, zap=True)
-                        time.sleep(10)
-                        if wait_osd_operation_status(status_cmd):
-                            log.info("The OSD successfully removed")
-                        else:
-                            log.error(
-                                "OSD removal not completed on the cluster even after 600 seconds"
-                            )
-                            raise Exception("OSD not removed error")
-                        rm_osd_list.remove(osd_id)
-            dev_path_list = []
-            if rm_osd_list:
-                for osd_id in rm_osd_list:
-                    dev_path_list.append(
-                        rados_utils.get_device_path(host=rm_host, osd_id=osd_id)
-                    )
-                    osd_utils.set_osd_out(self.cluster, osd_id=osd_id)
-                    time.sleep(30)
-                    osd_utils.osd_remove(self.cluster, osd_id=osd_id)
-                time.sleep(30)
 
-            # Starting to drain the host
-            drain_cmd = (
-                f"ceph orch host drain {rm_host.hostname} --force --zap-osd-devices "
-            )
-            self.cephadm.shell([drain_cmd])
+            if not offline:
+                daemon_check = self.rados_obj.check_daemon_exists_on_host(
+                    host=rm_host.hostname, daemon_type=None
+                )
+                host_labels = self.rados_obj.get_host_label(host_name=rm_host.hostname)
+                if not daemon_check or "_no_schedule" in host_labels:
+                    log.info("The node %s is already drained" % rm_host.hostname)
+                else:
+                    # Starting to drain an online host.
+                    log.info("Starting to drain host " + rm_host.hostname)
+                    if not self.drain_host(host_obj=rm_host):
+                        log.error(
+                            "Drain operation not completed on the cluster even after 3600 seconds"
+                        )
+                        raise Exception(
+                            "Drain operation not completed on the cluster even after 3600 seconds"
+                        )
 
-            # Sleeping for 2 seconds for removal to have started
-            time.sleep(2)
-            log.debug(f"Started drain operation on node : {rm_host.hostname}")
-            if wait_osd_operation_status(status_cmd):
                 log.info(
-                    f"Completed drain operation on the host. {rm_host.hostname}\n Removing host from the cluster"
+                    "Completed drain operation on the host. %s\n Removing host from the cluster"
+                    % rm_host.hostname
                 )
-            else:
-                log.error(
-                    "Drain operation not completed on the cluster even after 600 seconds"
-                )
-                raise Exception("Drain operation-OSD not removed error")
-
-            if dev_path_list:
-                for dev_path in dev_path_list:
-                    assert osd_utils.zap_device(
-                        self.cluster, host=rm_host.hostname, device_path=dev_path
-                    )
-            # Check that the OSD daemons are exists in the host
-            # daemon_check = self.rados_obj.check_daemon_exists_on_host(
-            #     host=host_node_name, daemon_type=None
-            # )
-            # if not daemon_check:
-            #     log.info(f" The node {host_node_name} is already drained.")
-            #     return None
 
             time.sleep(5)
             rm_cmd = f"ceph orch host rm {rm_host.hostname} --force"
+            if offline:
+                rm_cmd += " --offline"
             self.cephadm.shell([rm_cmd])
-            time.sleep(5)
 
-            # Checking if the host still exists on the cluster
-            ls_cmd = "ceph orch host ls"
-            hosts = self.rados_obj.run_ceph_command(cmd=ls_cmd)
-            for host in hosts:
-                if host["hostname"] == rm_host.hostname:
-                    log.error(f"Host : {rm_host.hostname} still present on the cluster")
-                    raise Exception("Host not removed error")
-            log.info(
-                f"Successfully removed host : {rm_host.hostname} from the cluster. Checking status after removal"
-            )
+            # wait for 120 secs for host to be removed from the cluster
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=120)
+            while end_time > datetime.datetime.now():
+                # Checking if the host still exists on the cluster
+                ls_cmd = f"ceph orch host ls --host_pattern {rm_host.hostname}"
+                out = self.rados_obj.run_ceph_command(cmd=ls_cmd, client_exec=True)
+                if not out:
+                    log.info(
+                        "Successfully removed host : %s from the cluster"
+                        % rm_host.hostname
+                    )
+                    break
+                log.info(out)
+                log.error("Host : %s still present on the cluster" % rm_host.hostname)
+                log.info("Sleeping for 30 secs and checking again")
+                time.sleep(30)
+            else:
+                raise Exception(
+                    "Could not remove host %s within timeout" % rm_host.hostname
+                )
         except Exception as e:
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)
@@ -368,6 +264,13 @@ class ServiceabilityMethods:
             None | raises exception in case of failure
         """
         try:
+            # set existing services on the cluster to unmanaged
+            osd_services = self.rados_obj.list_orch_services(service_type="osd")
+            for service in osd_services:
+                self.rados_obj.set_unmanaged_flag(
+                    service_type="osd", service_name=service
+                )
+
             # get list of osd_id on the host to be removed
             rm_osd_list = self.rados_obj.collect_osd_daemon_ids(osd_node=host_obj)
             dev_path_list = []
@@ -376,8 +279,24 @@ class ServiceabilityMethods:
                     rados_utils.get_device_path(host=host_obj, osd_id=osd_id)
                 )
                 osd_utils.set_osd_out(self.cluster, osd_id=osd_id)
-                osd_utils.osd_remove(self.cluster, osd_id=osd_id)
-            time.sleep(30)
+                osd_utils.osd_remove(self.cluster, osd_id=osd_id, zap=True, force=True)
+
+                # wait for 180 secs for OSD to be removed from the cluster
+                end_time = datetime.datetime.now() + datetime.timedelta(seconds=180)
+                while end_time > datetime.datetime.now():
+                    if not self.rados_obj.get_daemon_status(
+                        daemon_type="osd", daemon_id=osd_id
+                    ):
+                        break
+                    log.info(
+                        "OSD %s removal is in-progress. Sleeping for 180 secs" % osd_id
+                    )
+                    time.sleep(120)
+                else:
+                    err_msg = f"Could not remove OSD {osd_id} within 180 secs"
+                    log.error(err_msg)
+                    raise Exception(err_msg)
+
             for dev_path in dev_path_list:
                 assert osd_utils.zap_device(
                     self.cluster, host=host_obj.hostname, device_path=dev_path
@@ -386,3 +305,78 @@ class ServiceabilityMethods:
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)
             raise
+        finally:
+            # set osd services to managed
+            osd_services = self.rados_obj.list_orch_services(service_type="osd")
+            for service in osd_services:
+                self.rados_obj.set_managed_flag(
+                    service_type="osd", service_name=service
+                )
+
+    def drain_host(self, host_obj, zap=True, keep_conf=False):
+        """
+        Method to execution drain on a particular host
+        Args:
+            host_obj: node object of the cluster host
+            zap: flag to control --zap-osd-devices
+            keep_conf: flag to control --keep-conf-keyring
+        Returns:
+            True -> drain successful | Fail -> drain failed
+        """
+        # Starting to drain a host.
+        log.info("Starting to drain host: " + host_obj.hostname)
+        cmd = f"ceph orch host drain {host_obj.hostname} --force"
+
+        if zap:
+            if self.rhbuild.split(".")[0] > "6":
+                cmd = cmd + " --zap-osd-devices"
+            else:
+                self.remove_osds_from_host(host_obj=host_obj)
+        if keep_conf:
+            cmd = cmd + " --keep-conf-keyring"
+
+        # enable faster recovery
+        self.rados_obj.change_recovery_threads(config={}, action="set")
+
+        self.cephadm.shell(args=[cmd])
+        # Sleeping for 2 seconds for drain to have started
+        time.sleep(2)
+        log.debug("Started drain operation on node : " + host_obj.hostname)
+
+        status_cmd = "ceph orch osd rm status"
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+        drain_success = True
+        while end_time > datetime.datetime.now():
+            try:
+                drain_ops = self.rados_obj.run_ceph_command(
+                    cmd=status_cmd, client_exec=True
+                )
+                for entry in drain_ops:
+                    if entry["drain_done_at"] is None or entry["draining"]:
+                        log.info(
+                            "Drain operations are going on host %s \nOperations: %s"
+                            % (host_obj.hostname, entry)
+                        )
+                        log.debug(
+                            "drain process for OSD %s is still going on"
+                            % entry["osd_id"]
+                        )
+                        if end_time < datetime.datetime.now():
+                            log.error(
+                                "Could not drain OSD %s within timeout"
+                                % entry["osd_id"]
+                            )
+                            drain_success = False
+                        log.info("Sleeping for 120 seconds and checking again....")
+                        time.sleep(120)
+                    log.info("Drain operation completed for OSD %s" % entry["osd_id"])
+                log.info("Drain operations completed on host : " + host_obj.hostname)
+                break
+            except json.JSONDecodeError:
+                log.info("Drain operations completed on host : " + host_obj.hostname)
+                break
+
+        # remove recovery thread settings
+        self.rados_obj.change_recovery_threads(config={}, action="rm")
+
+        return drain_success

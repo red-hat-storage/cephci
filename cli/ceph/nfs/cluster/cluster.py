@@ -1,10 +1,13 @@
 from cli import Cli
 
+from .qos import Qos
+
 
 class Cluster(Cli):
     def __init__(self, nodes, base_cmd):
         super(Cluster, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} cluster"
+        self.qos = Qos(nodes, self.base_cmd)
 
     def create(self, name, nfs_server, ha=False, vip=None):
         """
