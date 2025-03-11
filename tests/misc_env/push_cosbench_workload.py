@@ -45,12 +45,13 @@ fill_workload = """<?xml version="1.0" encoding="UTF-8" ?>
 
 <!-- Initialization -->
     <workstage name="init_containers">
-        <work type="init" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count)"/>
+        <work type="init" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count)"
+        retry="object_upload_retry_limit"/>
     </workstage>
 
     <workstage name="preparing_cluster">
         <work type="prepare" workers="1" config="cprefix=bucket_prefix;containers=r(1,bucket_count);oprefix=obj_prefix;
-        objects=r(obj_num_start,objects_count);sizes=h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB"/>
+        objects=r(obj_num_start,objects_count);sizes=object_size_range" retry="object_upload_retry_limit"/>
     </workstage>
   </workflow>
 </workload>"""
@@ -191,7 +192,19 @@ def prepare_workload_config_file(ceph_cluster, client, rgw, controller, config):
     obj_num_start = config.get("object_num_start", 1)
     LOG.info(f"no of objects for an average of sizes in workload: {objects_count}")
     workload_conf = workload_conf.replace("objects_count", f"{objects_count}")
+    objects_size_type = config.get("objects_size_type", "medium")
+    object_size_range = ""
+    if objects_size_type == "small":
+        object_size_range = "h(1|5|25,5|10|50,10|15|25)KB"
+    elif objects_size_type == "medium":
+        object_size_range = "h(1|5|25,5|50|40,50|256|25,256|512|5,512|1024|3,1024|5120|1,5120|51200|1)KB"
+    workload_conf = workload_conf.replace("object_size_range", object_size_range)
     workload_conf = workload_conf.replace("obj_num_start", f"{obj_num_start}")
+
+    object_upload_retry_limit = config.get("object_upload_retry_limit", 1)
+    workload_conf = workload_conf.replace(
+        "object_upload_retry_limit", f"{object_upload_retry_limit}"
+    )
 
     workload_endpoint = "http://localhost:5000"
     if not config.get("drivers"):
