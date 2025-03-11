@@ -1055,7 +1055,8 @@ class FsUtils(object):
             kernel_cmd = (
                 f"mount -t ceph {mon_node_ip}:{kwargs.get('sub_dir', '/')} {mount_point} "
                 f"-o name={kwargs.get('new_client_hostname', client.node.hostname)},"
-                f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
+                f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret,"
+                f"noshare"
             )
 
             if kwargs.get("extra_params"):
@@ -1086,7 +1087,8 @@ class FsUtils(object):
                 fstab_entry = (
                     f"{mon_node_ip}:{kwargs.get('sub_dir', '/')}    {mount_point}    ceph    "
                     f"name={kwargs.get('new_client_hostname', client.node.hostname)},"
-                    f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret"
+                    f"secretfile=/etc/ceph/{kwargs.get('new_client_hostname', client.node.hostname)}.secret,"
+                    f"noshare"
                 )
                 if kwargs.get("extra_params"):
                     fstab_entry += f"{kwargs.get('extra_params')}"
@@ -1194,6 +1196,7 @@ class FsUtils(object):
         return subvolumes
 
     @function_execution_time
+    @retry(CommandFailed, tries=5, delay=20)
     def create_nfs(self, client, nfs_cluster_name, validate=True, **kwargs):
         """
         Create an NFS cluster with the given parameters.
@@ -1216,11 +1219,15 @@ class FsUtils(object):
         )
         if validate:
             out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-            nfscluster_ls = out.split("\n")
-            if nfs_cluster_name not in nfscluster_ls:
-                raise CommandFailed(
-                    f"Creation of NFS cluster: {nfs_cluster_name} failed"
-                )
+        try:
+            nfs_clusters = json.loads(out.strip())  # Ensure proper JSON parsing
+        except json.JSONDecodeError:
+            log.error(f"Failed to parse NFS cluster list output: {out.strip()}")
+            raise CommandFailed("Invalid JSON output from 'ceph nfs cluster ls'")
+
+        if nfs_cluster_name not in nfs_clusters:
+            raise CommandFailed(f"Creation of NFS cluster: {nfs_cluster_name} failed")
+
         return cmd_out, cmd_rc
 
     @function_execution_time
