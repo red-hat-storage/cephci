@@ -198,4 +198,4 @@ tests:
         cephadm: true
         commands:
           - "radosgw-admin bucket rm --bucket test-bucket-1 --purge-data"
-          - "radosgw-admin test-bucket-1 list"
+          - "radosgw-admin bucket list"
