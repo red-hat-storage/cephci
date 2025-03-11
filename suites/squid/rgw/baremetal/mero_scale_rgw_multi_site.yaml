@@ -448,6 +448,7 @@ tests:
             name: sync error check in secondary
             polarion-id: CEPH-83572752
 
+# Please keep below(distruptive) testcases at the end of the suites only
   - test:
       clusters:
         ceph-pri:
@@ -475,3 +476,31 @@ tests:
       module: sanity_rgw_multisite.py
       name: Test sync consistent post RGW service down and bringing it up
       polarion-id: CEPH-83575113
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            bucket_prefix: reg-cosbench-bkt-reboot-
+            number_of_buckets: 1
+            number_of_objects: 1000000
+      desc: upload 1M object to regular bucket
+      module: push_cosbench_workload.py
+      name: Test upload 1M object to regular bucket
+      polarion-id: CEPH-83574448
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_sync_post_destruptive_services.py
+            config-file-name: test_sync_consistent_with_node_reboot.yaml
+      desc: sync consistent post RGW sync node reboot
+      module: sanity_rgw_multisite.py
+      name: Test sync consistent post RGW sync node reboot
+      polarion-id: CEPH-83574448
