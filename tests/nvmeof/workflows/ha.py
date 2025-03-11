@@ -82,6 +82,24 @@ class HighAvailability:
 
         return self.initiators[key]
 
+    def create_dhchap_key(self, config):
+        """Generate DHCHAP key for each initiator and store it."""
+        nqn = config["nqn"]
+
+        for host_config in config["hosts"]:
+            node_id = host_config["node"]
+            initiator = self.get_or_create_initiator(node_id, nqn)
+
+            # Generate key for subsystem NQN
+            key, _ = initiator.gen_dhchap_key(n=config["nqn"])
+            LOG.info(f"{key.strip()} is generated for {nqn} and {node_id}")
+
+            initiator.subsys_key = key.strip()
+            initiator.host_key = key.strip()
+            config["dhchap-key"] = key.strip()
+            initiator.auth_mode = config.get("auth_mode")
+            self.clients.append(initiator)
+
     def catogorize(self, gws):
         """Categorize to-be failed and running GWs.
 
