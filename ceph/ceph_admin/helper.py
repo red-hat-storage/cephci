@@ -16,6 +16,7 @@ from jinja2 import Template
 
 from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids
+from cli.utilities.utils import get_running_containers, restart_container
 from utility.log import Log
 from utility.ssl_certs import CertificateGenerator
 from utility.utils import generate_self_signed_certificate
