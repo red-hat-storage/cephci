@@ -1349,7 +1349,7 @@ class RadosOrchestrator:
         if yes_i_mean_it:
             cmd = cmd + " --yes-i-really-mean-it "
 
-        log.debug(f"Final command to create EC pool : {cmd}")
+        log.debug(f"Final command to create EC Profile : {cmd}")
         try:
             self.run_ceph_command(cmd=cmd)
             time.sleep(5)
@@ -1365,7 +1365,8 @@ class RadosOrchestrator:
             return False
 
         cmd = f"ceph osd erasure-code-profile get {profile_name}"
-        log.info(self.node.shell([cmd]))
+        log.info("Profile created : \n %s", self.run_ceph_command(cmd=cmd))
+        log.debug("EC profile created. Proceeding to create pool")
 
         # Creating the Crush rule for the profile created
         if create_rule:
