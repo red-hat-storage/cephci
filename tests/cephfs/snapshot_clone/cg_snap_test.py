@@ -14,6 +14,7 @@ from pip._internal.exceptions import CommandError
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.snapshot_clone.cephfs_cg_io import CG_snap_IO
 from tests.cephfs.snapshot_clone.cg_snap_utils import CG_Snap_Utils
 from utility.log import Log
@@ -106,12 +107,14 @@ def run(ceph_cluster, **kw):
     Run QS IO validation tool on selected quiesce set
     1.Run multiple parallel quiesce calls to same set
     2.Create snapshots when quiesced, wait for sometime and release quiesce
-    Clean Up:
+
+    Clean Up: Umount mountpoints, destroy subvolumes and subvolumegroup
 
     """
     try:
         test_data = kw.get("test_data")
         fs_util_v1 = FsUtilsv1(ceph_cluster, test_data=test_data)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         erasure = (
             FsUtilsv1.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -237,22 +240,15 @@ def run(ceph_cluster, **kw):
         crash_status_before = fs_util_v1.get_crash_ls_new(client1)
 
         log.info(f"Crash status before Test: {crash_status_before}")
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
-        ceph_healthy = 0
-        while (datetime.datetime.now() < end_time) and (ceph_healthy == 0):
-            try:
-                fs_util_v1.get_ceph_health_status(client1)
-                ceph_healthy = 1
-            except Exception as ex:
-                log.info(ex)
-                time.sleep(5)
-        if ceph_healthy == 0:
-            assert False, "Ceph Cluster remains unhealthy even after 5mins"
+        wait_time_secs = 300
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
+            assert False, "Cluster health is not OK even after waiting for sometime"
         cg_test_params = {
             "ceph_cluster": ceph_cluster,
             "fs_name": default_fs,
             "fs_util": fs_util_v1,
             "cg_snap_util": cg_snap_util,
+            "cephfs_common_utils": cephfs_common_utils,
             "cg_snap_io": cg_snap_io,
             "clients": qs_clients,
             "mgr_node": mgr_node,
@@ -305,11 +301,7 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean Up in progess")
         wait_time_secs = 300
-        if wait_for_healthy_ceph(client1, fs_util_v1, wait_time_secs) == 0:
-            client1.exec_command(
-                sudo=True,
-                cmd="ceph fs status;ceph status -s;ceph health detail",
-            )
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
             assert (
                 False
             ), f"Cluster health is not OK even after waiting for {wait_time_secs}secs"
@@ -2143,6 +2135,7 @@ def cg_snap_interop_1(cg_test_params):
     qs_clients = [client, client1]
     qs_sets = cg_test_params["qs_sets"]
     cg_snap_util = cg_test_params["cg_snap_util"]
+    cephfs_common_utils = cg_test_params["cephfs_common_utils"]
     cg_snap_io = cg_test_params["cg_snap_io"]
     fs_util = cg_test_params["fs_util"]
 
@@ -2164,13 +2157,13 @@ def cg_snap_interop_1(cg_test_params):
         cmd += '"'
         log.info("Adding 7 MDS to cluster")
         out, rc = client.exec_command(sudo=True, cmd=cmd)
-    if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+    if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
         return 1
     client.exec_command(
         sudo=True,
         cmd=f"ceph fs set {fs_name} max_mds 4",
     )
-    if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+    if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
         return 1
     test_fail = 0
     qs_set = random.choice(qs_sets)
@@ -2256,7 +2249,7 @@ def cg_snap_interop_1(cg_test_params):
             )
             time.sleep(10)
 
-            if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+            if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
                 log.error("Ceph cluster is not healthy after MDS failover")
                 return 1
             log.info("Verify quiesce lifecycle can suceed after mds failover")
@@ -2302,7 +2295,7 @@ def cg_snap_interop_1(cg_test_params):
 
             log.info("MDS failover when quiesced: quiesce state is CANCELED")
             time.sleep(10)
-            if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+            if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
                 log.error("Ceph cluster is not healthy after MDS failover")
                 return 1
             log.info("Verify quiesce lifecycle can suceed after mds failover")
@@ -2345,7 +2338,7 @@ def cg_snap_interop_1(cg_test_params):
                 log.error(f"qs set {qs_id_val} not reached RELEASED state")
 
             time.sleep(10)
-            if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+            if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
                 log.error("Ceph cluster is not healthy after MDS failover")
                 return 1
             log.info("Verify quiesce lifecycle can suceed after mds failover")
@@ -2389,13 +2382,9 @@ def cg_snap_interop_1(cg_test_params):
         sudo=True,
         cmd=f"ceph fs set {fs_name} max_mds 2",
     )
-    if wait_for_healthy_ceph(client1, fs_util, 300) == 0:
+    if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
         log.error("Ceph cluster is not healthy after max_mds set to 2")
         test_fail += 1
-        client.exec_command(
-            sudo=True,
-            cmd=f"ceph fs status {fs_name};ceph status -s;ceph health detail",
-        )
     if cg_test_io_status.value == 1:
         log.error(
             f"CG IO test exits with failure during quiesce test on qs_set-{qs_id_val}"
@@ -3071,23 +3060,3 @@ def wait_for_two_active_mds(client1, fs_name, max_wait_time=180, retry_interval=
             time.sleep(retry_interval)  # Retry after the specified interval
 
     return False
-
-
-def wait_for_healthy_ceph(client1, fs_util, wait_time_secs):
-    # Returns 1 if healthy, 0 if unhealthy
-    ceph_healthy = 0
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=wait_time_secs)
-    while ceph_healthy == 0 and (datetime.datetime.now() < end_time):
-        try:
-            fs_util.get_ceph_health_status(client1)
-            ceph_healthy = 1
-        except Exception as ex:
-            log.info(ex)
-            log.info(
-                f"Wait for sometime to check if Cluster health can be OK, current state : {ex}"
-            )
-            time.sleep(5)
-
-    if ceph_healthy == 0:
-        return 0
-    return 1
