@@ -55,13 +55,17 @@ def run(ceph_cluster, **kw):
         for each_pool in pools:
             cr_pool = each_pool["create_pool"]
             if cr_pool.get("pool_type", "replicated") == "erasure":
+                log.debug("Creating EC pool : %s", cr_pool["pool_name"])
                 method_should_succeed(
                     rados_obj.create_erasure_pool, name=cr_pool["pool_name"], **cr_pool
                 )
             else:
+                log.debug("Creating replicated pool : %s", cr_pool["pool_name"])
                 method_should_succeed(rados_obj.create_pool, **cr_pool)
-            method_should_succeed(rados_obj.bench_write, max_objs=500, **cr_pool)
+
+            method_should_succeed(rados_obj.bench_write, max_objs=200, **cr_pool)
         log.info("Completed creating pools and writing test data into the pools")
+
         log.debug(
             "Checking the scores on each pool on the cluster, if the pool is replicated pool"
         )
@@ -84,7 +88,11 @@ def run(ceph_cluster, **kw):
             f"require_min_compat_client before starting the tests is {min_client_version}"
         )
 
-        if negative_scenarios:
+        # Added new check before beginning the -ve scenarios.
+        # Checking if there are any pg_upmap_items in the OSD map, as if there is an item,
+        # Min compact client for cluster cannot be updated unless the entries are removed from the cluster.
+        osd_dump = rados_obj.run_ceph_command(cmd="ceph osd dump")
+        if negative_scenarios and not osd_dump["pg_upmap_items"]:
             log.debug("Starting with -ve scenario in online reads balancer tests")
             failed = False
             try:
@@ -306,7 +314,7 @@ def run(ceph_cluster, **kw):
         log.info("\n\n\nIn the finally block of Online reads balancer tests\n\n\n")
         rados_obj.rados_pool_cleanup()
         rados_obj.enable_balancer(balancer_mode="upmap")
-        time.sleep(60)
+        time.sleep(10)
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
