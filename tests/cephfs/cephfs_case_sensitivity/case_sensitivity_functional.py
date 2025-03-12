@@ -22,7 +22,7 @@ def run(ceph_cluster, **kw):
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
         if len(clients) < 1:
-            log.info(
+            log.error(
                 "This test requires minimum 1 client nodes. This has only {} clients".format(
                     len(clients)
                 )
@@ -117,6 +117,7 @@ def run(ceph_cluster, **kw):
             alter_dict, rel_parent_dir, empty_name=True
         ):
             log.error("Validation failed for alternate name")
+            return 1
 
         attr_util.create_directory(client1, child_dir)
         assert attr_util.get_charmap(client1, child_dir).get("casesensitive") is False
@@ -127,6 +128,7 @@ def run(ceph_cluster, **kw):
         alter_dict = attr_util.fetch_alternate_name(client1, fs_name, "/")
         if not attr_util.validate_alternate_name(alter_dict, rel_child_dir):
             log.error("Validation failed for alternate name")
+            return 1
 
         log.info("Passed: Subdirectory inherited attribute")
 
@@ -150,6 +152,7 @@ def run(ceph_cluster, **kw):
                 log.error(
                     "Charmap expected to fail for new directory when it's parent directory does not have charmap"
                 )
+                return 1
             except ValueError:
                 log.info(
                     "Get Charmap expected to fail when there it's a new folder and "
@@ -181,6 +184,9 @@ def run(ceph_cluster, **kw):
             attr_util.delete_directory(client1, dir_step_5a, recursive=True)
             attr_util.delete_directory(client1, dir_step_5, recursive=True)
 
+        log.info("Fucnctional Case Sensitive use cases completed")
+        return 0
+
     except Exception as e:
         log.error("Test execution failed: {}".format(str(e)))
         log.error(traceback.format_exc())
@@ -197,6 +203,3 @@ def run(ceph_cluster, **kw):
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )
         fs_util.remove_fs(client1, fs_name)
-
-    log.info("Fucnctional Case Sensitive use cases completed")
-    return 0

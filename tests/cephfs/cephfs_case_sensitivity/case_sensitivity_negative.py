@@ -23,7 +23,7 @@ def run(ceph_cluster, **kw):
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
         if len(clients) < 1:
-            log.info(
+            log.error(
                 "This test requires minimum 1 client nodes. This has only {} clients".format(
                     len(clients)
                 )
@@ -67,6 +67,7 @@ def run(ceph_cluster, **kw):
             try:
                 attr_util.set_attributes(client1, dir_with_files, casesensitive=1)
                 log.error("Failed: Attribute was set despite files present")
+                return 1
             except CommandFailed:
                 log.info("Passed: Failed to set attribute as expected")
                 log.info("Deleting the file {}".format(file_name))
@@ -94,6 +95,7 @@ def run(ceph_cluster, **kw):
         try:
             attr_util.create_directory(client1, os.path.join(dir_with_files, "dir1"))
             log.error("Failed: Allowed conflicting directory names")
+            return 1
         except CommandFailed:
             log.info("Passed: Conflict prevented as expected")
             attr_util.delete_directory(
@@ -118,6 +120,7 @@ def run(ceph_cluster, **kw):
                 log.error(
                     "Charmap expected to fail for new directory when it's parent directory does not have charmap"
                 )
+                return 1
             except ValueError:
                 log.info(
                     "Get Charmap expected to fail when there it's a new folder and "
@@ -149,6 +152,9 @@ def run(ceph_cluster, **kw):
             attr_util.delete_directory(client1, dir_step_3a, recursive=True)
             attr_util.delete_directory(client1, dir_step_3, recursive=True)
 
+        log.info("Negative Case Sensitive use cases completed")
+        return 0
+
     except Exception as e:
         log.error("Test execution failed: {}".format(str(e)))
         log.error(traceback.format_exc())
@@ -159,6 +165,3 @@ def run(ceph_cluster, **kw):
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )
         fs_util.remove_fs(client1, fs_name)
-
-    log.info("Negative Case Sensitive use cases completed")
-    return 0
