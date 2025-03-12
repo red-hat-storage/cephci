@@ -19,7 +19,8 @@ iscsi/              @Manohar-Murthy @HaruChebrolu
 nvmeof/             @Manohar-Murthy @HaruChebrolu
 
 # for RADOS
-rados/              @neha-gangadhar @pdhiran
+rados/				             @neha-gangadhar @pdhiran
+utility/generate_frag_objs.py	             @neha-gangadhar @pdhiran
 
 # for FS
 cephfs/             @neha-gangadhar @AmarnatReddy @Manimaran-MM
