@@ -28,18 +28,20 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     pool_obj = PoolFunctions(node=cephadm)
-
     crush_rule = config.get("crush_rule", "rule-86-msr")
     negative_scenarios = config.get("negative_scenarios", False)
     modify_threshold = config.get("modify_threshold", False)
 
     try:
-        min_client_version = rados_obj.run_ceph_command(cmd="ceph osd dump")[
-            "require_min_compat_client"
-        ]
-        log.debug(
-            f"require_min_compat_client before starting the tests is {min_client_version}"
+        min_client_version = rados_obj.run_ceph_command(cmd="ceph osd dump")
+
+        log_msg = (
+            f"require_min_compat_client before starting the tests : \n"
+            f"min_compat_client - {min_client_version['min_compat_client']}\n"
+            f"require_min_compat_client - {min_client_version['require_min_compat_client']}\n"
+            f"require_osd_release - {min_client_version['require_osd_release']}\n"
         )
+        log.info(log_msg)
         pool_name = config.get("pool_name")
         # todo: add -ve scenarios for testing the min_compact_client version on the cluster
         if negative_scenarios:
@@ -94,11 +96,14 @@ def run(ceph_cluster, **kw):
 
             if not failed:
                 log.error(
-                    "MSR pool created without setting min-compat-client on the cluster."
+                    "MSR pool created without setting min-compat-client on the cluster. -ve scenario"
                 )
                 rados_obj.delete_pool(pool_name)
                 raise Exception("MSR pool should not be created Error")
 
+        min_client_version = rados_obj.run_ceph_command(cmd="ceph osd dump")[
+            "require_min_compat_client"
+        ]
         if min_client_version != "squid":
             log.debug(
                 "Setting config to allow clients to create EC MSR rule based pool on the cluster"
@@ -137,14 +142,26 @@ def run(ceph_cluster, **kw):
             "Completed setting the subtree limit and creating the pool. Writing objects "
         )
 
-        rados_obj.bench_write(pool_name=pool_name, verify_stats=False)
+        # Performing writes on pool
+        if not rados_obj.bench_write(
+            pool_name=pool_name, max_objs=200, verify_stats=True
+        ):
+            log.error("Could not perform IO operations")
+            raise Exception("IO could not be completed")
+        time.sleep(10)
 
         log.info("Scenario 1: PG split and merge tests with inactive PG check")
+
+        # Threshold changes needed here as the host contains only 4 nodes, with 6 OSDs each.
+        # This makes the total no of PGs that can be present on pool limited.
+        # So even for less count update, autoscaler should go through the PG count change.
+        # Setting very low threshold of 1.1
         res, inactive_count = pool_obj.run_autoscaler_bulk_test(
             pool=pool_name,
             overwrite_recovery_threads=True,
             test_pg_split=True,
             modify_threshold=modify_threshold,
+            threshold_val=1.1,
         )
         if not res:
             log.error("Failed to scale up the pool with bulk flag. Fail")
@@ -267,7 +284,7 @@ def run(ceph_cluster, **kw):
         # Recovery is not possible here, since there are only 4 Hosts & size is 4,
         # but we can confirm if there was no IO stop issues
         if not rados_obj.bench_write(
-            pool_name=pool_name, max_objs=500, verify_stats=True
+            pool_name=pool_name, max_objs=200, verify_stats=True
         ):
             log.error(
                 "Could not perform IO operations with all OSDs of 1 host OSDs down"
@@ -345,6 +362,21 @@ def run(ceph_cluster, **kw):
         # removal of rados pool
         rados_obj.rados_pool_cleanup()
         time.sleep(30)
+        down_osds = rados_obj.get_osd_list(status="down")
+        for target_osd in down_osds:
+            if not rados_obj.change_osd_state(action="start", target=target_osd):
+                log.error("Unable to start the OSD : target_osd", target_osd)
+                return 1
+            log.debug("Started OSD : %s and waiting for clean PGs", target_osd)
+
+        if down_osds:
+            time.sleep(300)
+        # log cluster health
+        rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
 
         # log cluster health
         rados_obj.log_cluster_health()

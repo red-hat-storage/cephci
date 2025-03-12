@@ -1,7 +1,7 @@
 # Suite contains tests related to CIDR blocklisting of ceph clients
 # This is Openstack only test suite.
 # conf: 13-node-cluster-4-clients.yaml
-
+# RHOS-d run duration: 50 mins + 50 min (slow_ops) + 20 min (recovery_tests)
 tests:
   - test:
       name: setup install pre-requisistes
@@ -82,69 +82,68 @@ tests:
       destroy-cluster: false
       abort-on-fail: true
 
+  - test:
+      name: Configure client 1
+      desc: Configures client.1 admin node on cluster
+      module: test_client.py
+      polarion-id:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        nodes:
+          - node15:
+              release: 6
+          - node7:
+              release: 6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
 
   - test:
-      name: Configure clients
-      desc: Configures multiple client nodes on cluster
-      module: test_parallel.py
-      parallel:
-        - test:
-            name: Configure client 1
-            desc: Configures client.1 admin node on cluster
-            module: test_client.py
-            polarion-id:
-            config:
-              command: add
-              id: client.1                      # client Id (<type>.<Id>)
-              nodes:
-                  - node15:
-                      release: 5
-                  - node7:
-                      release: 5
-              install_packages:
-                - ceph-common
-              copy_admin_keyring: true          # Copy admin keyring to node
-              caps:                             # authorize client capabilities
-                mon: "allow *"
-                osd: "allow *"
-                mds: "allow *"
-                mgr: "allow *"
-        - test:
-            name: Configure client 2
-            desc: Configures client.2 admin node on cluster
-            module: test_client.py
-            polarion-id:
-            config:
-              command: add
-              id: client.2                     # client Id (<type>.<Id>)
-              nodes:
-                - node16:
-                    release: 6
-              install_packages:
-                - ceph-common
-              copy_admin_keyring: true          # Copy admin keyring to node
-              caps: # authorize client capabilities
-                mon: "allow *"
-                osd: "allow *"
-                mds: "allow *"
-                mgr: "allow *"
-        - test:
-            name: Configure client 3
-            desc: Configures client admin node on cluster
-            module: test_client.py
-            polarion-id:
-            config:
-              command: add
-              id: client.3                      # client Id (<type>.<Id>)
-              node: node17                       # client node
-              install_packages:
-                - ceph-common
-              copy_admin_keyring: true          # Copy admin keyring to node
-              caps:                             # authorize client capabilities
-                mon: "allow *"
-                osd: "allow *"
-                mds: "allow *"
-                mgr: "allow *"
+      name: Configure client 2
+      desc: Configures client.2 admin node on cluster
+      module: test_client.py
+      polarion-id:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2                     # client Id (<type>.<Id>)
+        nodes:
+          - node16:
+              release: 7
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Configure client 3
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3                      # client Id (<type>.<Id>)
+        node: node17                       # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
 
   - test:
       name: Enable logging to file
@@ -165,7 +164,7 @@ tests:
           pool-2:
             type: replicated
             conf: sample-pool-2
-        pool_configs_path: "conf/pacific/rados/test-confs/pool-configurations.yaml"
+        pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
       desc: CIDR Blocklisting of ceph rbd clients
 
   - test:
