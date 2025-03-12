@@ -22,7 +22,7 @@ def run(ceph_cluster, **kw):
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
         if len(clients) < 1:
-            log.info(
+            log.error(
                 "This test requires minimum 1 client nodes. This has only {} clients".format(
                     len(clients)
                 )
@@ -66,6 +66,7 @@ def run(ceph_cluster, **kw):
         alter_dict = attr_util.fetch_alternate_name(client1, fs_name, "/")
         if not attr_util.validate_alternate_name(alter_dict, rel_child_dir):
             log.error("Validation failed for alternate name")
+            return 1
 
         log.info(
             "\n"
@@ -99,6 +100,7 @@ def run(ceph_cluster, **kw):
         alter_dict_1 = attr_util.fetch_alternate_name(client1, fs_name, "/")
         if not attr_util.validate_alternate_name(alter_dict_1, rel_child_dir):
             log.error("Validation failed for alternate name")
+            return 1
 
         log.info("Passed: Attribute persisted after MDS reboot")
 
@@ -123,6 +125,9 @@ def run(ceph_cluster, **kw):
 
         log.info("Passed: Attribute persisted after remount")
 
+        log.info("Disruptive Case Sensitive use cases completed")
+        return 0
+
     except Exception as e:
         log.error("Test execution failed: {}".format(str(e)))
         log.error(traceback.format_exc())
@@ -133,6 +138,3 @@ def run(ceph_cluster, **kw):
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )
         fs_util.remove_fs(client1, fs_name)
-
-    log.info("Disruptive Case Sensitive use cases completed")
-    return 0
