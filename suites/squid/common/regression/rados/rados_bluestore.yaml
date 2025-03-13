@@ -1,0 +1,195 @@
+# Suite contains basic tier-2 rados tests around bluestore feature
+# Conf: conf/squid/common/13node-4client-single-site-regression.yaml
+# Deployment: suites/squid/common/regression/single-site-deploy-and-configure.yaml
+
+tests:
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: BlueStore Checksum algorithms
+      module: test_bluestore_configs.py
+      polarion-id: CEPH-83571646
+      config:
+        checksums:
+          - none
+          - crc32c
+          - crc32c_16
+          - crc32c_8
+          - xxhash32
+          - xxhash64
+      desc: Verify the different applicable BlueStore Checksum algorithms
+
+  - test:
+      name: BlueStore cache size tuning
+      module: test_bluestore_configs.py
+      polarion-id: CEPH-83571675
+      config:
+        bluestore_cache: true
+      desc: Verify tuning of BlueStore cache size for HDDs and SSDs
+
+  - test:
+      name: BlueStore Superblock redundancy
+      module: test_bluestore_superblock.py
+      polarion-id: CEPH-83590892
+      desc: Verify OSD recovery when Bluestore superblock is corrupted
+
+  - test:
+      name: OSD Superblock redundancy
+      module: test_osd_superblock.py
+      polarion-id: CEPH-83593841
+      desc: Verify OSD recovery when OSD superblock is corrupted
+
+  - test:
+      name: Bluefs DB utilization
+      desc: DB utilization is under check - bluefs files are not inflated
+      module: test_bluefs_space.py
+      polarion-id: CEPH-83600867
+      config:
+        omap_config:
+          pool_name: re_pool_bluefs_db
+          pg_num: 1
+          pg_num_max: 1
+          obj_start: 0
+          obj_end: 15
+          normal_objs: 400
+          num_keys_obj: 200001
+
+  - test:
+      name: OMAP feature
+      desc: Testing omap features
+      module: test_scrub_omap.py
+      polarion-id: CEPH-83572661
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool-1:
+              pool_name: Test
+              pool_type: replicated
+              pg_num: 1
+          omap_config:
+            obj_start: 0
+            obj_end: 200
+            num_keys_obj: 300000
+        verify_cluster_health: true
+
+  - test:
+      name: Omap creations on objects
+      module: test_omap_entries.py
+      polarion-id: CEPH-83571702
+      config:
+        # Pool created to  verify the Bug#2249003
+        crash_config:
+          pool_name: re_pool_crash
+        # EC pool config is commented out because omaps can be written only on RE pools
+        omap_config:
+          small_omap:
+            pool_name: re_pool_small_omap
+            pg_num: 1
+            pg_num_max: 1
+            large_warn: false
+            obj_start: 0
+            obj_end: 5
+            normal_objs: 400
+            num_keys_obj: 200000
+          large_omap:
+            pool_name: re_pool_large_omap
+            pg_num: 1
+            pg_num_max: 1
+            large_warn: true
+            obj_start: 0
+            obj_end: 5
+            normal_objs: 400
+            num_keys_obj: 200001
+      desc: Large number of omap creation on objects and OSD resiliency
+
+  - test:
+      name: Database reopening by libcephsqlite
+      module: test_libcephsqlite.py
+      polarion-id: CEPH-83583664
+      desc: libcephsqlite reopens database connection upon blocklisting
+
+  - test:
+      name: Change Mon weight for Mgr
+      polarion-id: CEPH-83588304
+      module: test_mon_mgr_weight.py
+      desc: Verify Mgr stability when mon-weight is modified
+
+  - test:
+      name: Ceph MSGRV2 paramter check in 8.x
+      desc: MSGRV2 parameter check in 8.x
+      polarion-id: CEPH-83574890
+      module: test_config_parameter_chk.py
+      config:
+        scenario: msgrv2_6x
+        ini-file: conf/squid/rados/test-confs/rados_config_parameters.ini
+
+  - test:
+      name: Mclock sleep parameter check
+      desc: Mclock sleep parameter check
+      polarion-id: CEPH-83574903
+      module: test_config_parameter_chk.py
+      config:
+        scenario: mclock_sleep
+        ini-file: conf/squid/rados/test-confs/rados_config_parameters.ini
+
+  - test:
+      name: Mclock default,reservation,limit and weight parameter check
+      desc: Mclock default,reservation,limit and weight parameter check
+      polarion-id: CEPH-83574902
+      module: test_config_parameter_chk.py
+      config:
+        scenario: mclock_chg_chk
+        ini-file: conf/squid/rados/test-confs/rados_config_parameters.ini
+
+  - test:
+      name: Check RocksDB compression default value
+      desc: Check that RocksDB compression value is kLZ4Compression
+      polarion-id: CEPH-83582326
+      module: test_config_parameter_chk.py
+      config:
+        scenario: rocksdb_compression
+
+  - test:
+      name: Ceph Volume utility zap test with destroy flag
+      module: test_cephvolume_workflows.py
+      polarion-id:
+      desc: verify ceph-volume lvm zap functionality with destroy flag
+      config:
+        zap_with_destroy_flag: true
+
+  - test:
+      name: Ceph Volume utility zap test without destroy flag
+      module: test_cephvolume_workflows.py
+      polarion-id:
+      desc: verify ceph-volume lvm zap functionality without destroy flag
+      config:
+        zap_without_destroy_flag: true
+
+  - test:
+      name: ceph-bluestore-tool utility
+      module: test_bluestoretool_workflows.py
+      polarion-id: CEPH-83571692
+      desc: Verify ceph-bluestore-tool functionalities
+
+  - test:
+      name: ceph-objectstore-tool utility
+      module: test_objectstoretool_workflows.py
+      polarion-id: CEPH-83581811
+      desc: Verify ceph-objectstore-tool functionalities
+
+  - test:
+      name: Test ceph osd command arguments
+      desc: Provide invalid values as argument to different ceph osd commands
+      module: test_osd_args.py
+      polarion-id: CEPH-10417
+      config:
+        cmd_list:
+          - "reweight-by-pg"
+          - "reweight-by-utilization"
+          - "test-reweight-by-pg"
+          - "test-reweight-by-utilization"
