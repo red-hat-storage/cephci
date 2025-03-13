@@ -48,10 +48,10 @@ class CephFSAttributeUtilities(object):
                         key, supported_attributes
                     )
                 )
-            cmd = "setfattr -n ceph.dir.{} -v {} {}".format(key, value, directory)
+            cmd = "setfattr -n ceph.dir.{} -v {} '{}'".format(key, value, directory)
             log.debug(cmd)
             client.exec_command(sudo=True, cmd=cmd)
-            log.info("Set {} to {} on {}".format(key, value, directory))
+            log.info("Set {} to {} on '{}'".format(key, value, directory))
 
     def get_charmap(self, client, directory):
         """Retrieve charmap attributes and return them as a dictionary.
@@ -75,7 +75,7 @@ class CephFSAttributeUtilities(object):
                 "encoding": "utf8"
             }
         """
-        cmd = "getfattr -n ceph.dir.charmap {} --only-values".format(directory)
+        cmd = "getfattr -n ceph.dir.charmap '{}' --only-values".format(directory)
         out, _ = client.exec_command(sudo=True, cmd=cmd, check_ec=False)
         try:
             # Extract JSON using regex to handle unexpected shell prompt artifacts
@@ -88,7 +88,7 @@ class CephFSAttributeUtilities(object):
                 log.info("Failed to extract JSON from charmap output: {}".format(out))
                 raise ValueError("Invalid charmap output")
         except Exception:
-            log.error("Failed to parse charmap for {}".format(directory))
+            log.error("Failed to parse charmap for '{}'".format(directory))
             return {}
 
     def compare_charmaps(self, client, charmap1, charmap2):
@@ -135,7 +135,7 @@ class CephFSAttributeUtilities(object):
             create_directory("/mnt/cephfs/subdir1/subdir2")
             # This will execute: mkdir -p /mnt/cephfs/subdir1/subdir2
         """
-        cmd = "mkdir {} {}".format("-p" if force else "", path)
+        cmd = "mkdir {} '{}'".format("-p" if force else "", path)
         client.exec_command(sudo=True, cmd=cmd)
         log.info("Created directory: {}".format(path))
 
@@ -146,9 +146,9 @@ class CephFSAttributeUtilities(object):
             count (int, optional): The number of directories to create. Defaults to 1.
 
         Returns:
-            None
+            Full path name
         """
-        special_chars = "@#$%^&*()-_=+[]{}|;:'\",<>?/"
+        special_chars = "@#$%^&*()-_=+[]{|};:,<>?"
         for _ in range(count):
             dir_name = "".join(
                 random.choices(
@@ -158,7 +158,8 @@ class CephFSAttributeUtilities(object):
             )
             full_path = os.path.join(base_path, dir_name)
             self.create_directory(client, full_path)
-            log.info("Created special character directory: {}".format(full_path))
+            log.info("Created special character directory: '{}'".format(full_path))
+            return full_path
 
     def delete_directory(self, client, dir_path, recursive=False):
         """
@@ -171,10 +172,27 @@ class CephFSAttributeUtilities(object):
         Returns:
             bool: True if deletion was successful, False otherwise.
         """
-        cmd = "rm {} {}".format("-rf" if recursive else "-f", dir_path)
+        cmd = "rm {} '{}'".format("-rf" if recursive else "-f", dir_path)
         client.exec_command(sudo=True, cmd=cmd)
-        log.info("Deleted directory: {} (recursive={})".format(dir_path, recursive))
+        log.info("Deleted directory: '{}' (recursive={})".format(dir_path, recursive))
         return True
+
+    def rename_directory(self, client, old_dir, new_dir):
+        """
+        Renames a directory from old_dir to new_dir on a remote client.
+
+        :param client: The remote client object
+        :param old_dir: The current directory path
+        :param new_dir: The new directory path
+        :return: True if successful, False otherwise
+        """
+        cmd = f"mv {old_dir} {new_dir}"
+        try:
+            client.exec_command(sudo=True, cmd=cmd)
+            return True
+        except Exception as e:
+            log.error(f"Failed to rename directory: {e}")
+            return False
 
     def create_file(self, client, file_path, content=None):
         """
@@ -187,12 +205,12 @@ class CephFSAttributeUtilities(object):
         Returns:
             str: The full path of the created file.
         """
-        cmd = "touch {}".format(file_path)
+        cmd = "touch '{}'".format(file_path)
         client.exec_command(sudo=True, cmd=cmd)
         log.info("Created file: {}".format(file_path))
 
         if content:
-            cmd = "echo '{}' > {}".format(content, file_path)
+            cmd = "echo '{}' > '{}'".format(content, file_path)
             client.exec_command(sudo=True, cmd=cmd)
             log.info("Wrote content to file: {}".format(file_path))
 
@@ -208,7 +226,7 @@ class CephFSAttributeUtilities(object):
         Returns:
             bool: True if deletion was successful, False otherwise.
         """
-        cmd = "rm -f {}".format(file_path)
+        cmd = "rm -f '{}'".format(file_path)
         client.exec_command(sudo=True, cmd=cmd)
         log.info("Deleted file: {}".format(file_path))
         return True
@@ -229,7 +247,7 @@ class CephFSAttributeUtilities(object):
 
         for variant in test_variations:
             test_path = os.path.join(base_path, variant)
-            cmd = "ls {}".format(test_path)
+            cmd = "ls '{}'".format(test_path)
             out, rc = client.exec_command(sudo=True, cmd=cmd, check_ec=False)
             log.debug("ls output of {}/{}: {}".format(base_path, dir_name, out))
 
@@ -278,12 +296,12 @@ class CephFSAttributeUtilities(object):
                     )
                 )
 
-            cmd = "setfattr -x ceph.dir.{} {}".format(attribute, directory)
+            cmd = "setfattr -x ceph.dir.{} '{}'".format(attribute, directory)
             log.debug(cmd)
             client.exec_command(sudo=True, cmd=cmd)
             log.info("Removed {} from {}".format(attribute, directory))
 
-    def generate_random_unicode_names(count=1):
+    def generate_random_unicode_names(self, count=1):
         """
         Generate random directory names that change under Unicode normalization.
 
@@ -322,7 +340,7 @@ class CephFSAttributeUtilities(object):
 
         return names
 
-    def validate_normalization(self, client, base_path, dir_name, norm_type):
+    def validate_normalization(self, client, fs_name, base_path, dir_name, norm_type):
         """check if dir names are normalized by the filesystem.
 
         Args:
@@ -333,23 +351,38 @@ class CephFSAttributeUtilities(object):
         Returns:
             bool: True if the filesystem-normalized name matches the expected normalization.
         """
-        cmd = "ls {}/{}".format(base_path, dir_name)
+
+        log.info(
+            "Fetching the active MDS node for file system {fs_name}".format(
+                fs_name=fs_name
+            )
+        )
+        active_mds = self.fs_util.get_active_mdss(client, fs_name)
+        log.info(active_mds)
+        cmd = "ceph tell mds.{active_mds} dump tree '{base_path}' 0 2>/dev/null | jq -r '.[0].dirfrags[0].dentries | map(select(.path == \"{base_path}/{dir_name}\") | .path) | .[]' | awk -F'/' '{{print $NF}}' | lua -e 'for line in io.lines() do for p, c in utf8.codes(line) do io.write((\"\\\\u%04x\"):format(c)) end io.write(\"\\n\") end'".format(
+            active_mds=active_mds[0], base_path=base_path, dir_name=dir_name
+        )
         out, _ = client.exec_command(sudo=True, cmd=cmd)
+        log.info("Unicode Points from MDS: {}".format(out))
 
-        retrieved_names = out.split("\n")
-        normalized_expected = unicodedata.normalize(norm_type, dir_name)
+        # Check if it's normalized
+        is_normal = unicodedata.is_normalized(norm_type, dir_name)
+        log.info("Normalization Check: {}".format(is_normal))
 
-        for name in retrieved_names:
-            normalized_name = unicodedata.normalize(norm_type, name)
-            if normalized_name == normalized_expected:
-                return True  # Match found
+        # Print Unicode code points
+        code_points = "".join(f"\\u{ord(char):04x}" for char in dir_name)
+        log.info("Unicode Points: {}".format(code_points))
 
-        # If no match, log expected vs actual names
-        log.error("Normalization mismatch in {}:".format(dir_name))
-        log.error("Expected (Normalized): {}".format(normalized_expected))
-        log.error("Actual Retrieved Names: {}".format(retrieved_names))
+        if not out.strip() == code_points.strip():
+            log.error(
+                "Normalization unicode points mismatch. Expected: {}, Actual: {}".format(
+                    code_points, out
+                )
+            )
+            return False
 
-        return False
+        log.info("Normalization Validated and it's matching")
+        return True
 
     def fetch_alternate_name(self, client, fs_name, dir_path):
         """
@@ -372,7 +405,7 @@ class CephFSAttributeUtilities(object):
         )
         active_mds = self.fs_util.get_active_mdss(client, fs_name)
         log.info(active_mds)
-        cmd = "ceph tell mds.{active_mds} dump tree {dir_path} 2 -f json".format(
+        cmd = "ceph tell mds.{active_mds} dump tree '{dir_path}' 2 -f json".format(
             active_mds=active_mds[0], dir_path=dir_path
         )
         out, _ = client.exec_command(sudo=True, cmd=cmd)
@@ -403,7 +436,11 @@ class CephFSAttributeUtilities(object):
         return alternate_name_dict
 
     def validate_alternate_name(
-        self, alternate_name_dict, relative_path, empty_name=False
+        self,
+        alternate_name_dict,
+        relative_path,
+        empty_name=False,
+        casesensitive=True,
     ):
         """
         Validates if the base64-decoded alternate name for a given path matches the path itself.
@@ -416,15 +453,37 @@ class CephFSAttributeUtilities(object):
         Returns:
             bool: True if the decoded alternate name matches the given path, False otherwise.
         """
-        log.debug("Validating for the path: %s", relative_path)
-        if alternate_name_dict.get(relative_path) and empty_name is False:
-            alternate_name = alternate_name_dict[relative_path]
+        log.debug("Validating for the path: '%s'", relative_path)
+        casesensitive_rel_path = relative_path
+        if not casesensitive:
+            relative_path = "{}/{}".format(
+                relative_path.split("/")[0], relative_path.split("/")[-1].lower()
+            )
+        relative_path_unicode = self.normalize_unicode(relative_path)
+
+        # Normalize dictionary keys
+        alternate_name_dict = {
+            self.normalize_unicode(k): v for k, v in alternate_name_dict.items()
+        }
+
+        log.debug("Relative Path Unicode: '{}'".format(relative_path_unicode))
+        log.debug("Dict after normalization: {}".format(alternate_name_dict))
+
+        if alternate_name_dict.get(relative_path_unicode) and empty_name is False:
+            alternate_name = alternate_name_dict[relative_path_unicode]
             # Decode the string
             decoded_bytes = base64.b64decode(alternate_name)
 
             # Convert bytes to string
             decoded_str = decoded_bytes.decode("utf-8")
-            log.info("Decoded String: %s", decoded_str)
+            log.info("Decoded String: '%s'", decoded_str)
+
+            if not casesensitive:
+                relative_path = "{}/{}".format(
+                    casesensitive_rel_path.split("/")[0],
+                    casesensitive_rel_path.split("/")[-1],
+                )
+            log.info("Path from the MDS: '%s'", os.path.basename(relative_path).strip())
             if decoded_str.strip() == os.path.basename(relative_path).strip():
                 log.info("Alternate name decoded successfully and matching")
                 return True
@@ -440,3 +499,31 @@ class CephFSAttributeUtilities(object):
             )
         )
         return False
+
+    def normalize_unicode(self, text):
+        return unicodedata.normalize("NFC", text)
+
+    def validate_snapshot_from_mount(self, client, mounting_dir, snap_names):
+        for snap in snap_names:
+            cmd = f"ls {mounting_dir}/.snap | grep -E '^_{snap}_.*' || true"
+            output, _ = client.exec_command(sudo=True, cmd=cmd)
+
+            if output.strip():
+                log.info("Matching files found: %s", output.strip().split("\n"))
+                return True
+            else:
+                log.error("No matching files found.")
+                return False
+
+    def delete_snapshots_from_mount(self, client, mounting_dir, snap_names=None):
+        if snap_names:
+            for snap in snap_names:
+                cmd = f"rm -rf {mounting_dir}/.snap/{snap}"
+                log.info(f"Deleting snapshot: {snap}")
+                client.exec_command(sudo=True, cmd=cmd)
+        else:
+            cmd = f"rm -rf {mounting_dir}/.snap/*"
+            log.info("Deleting all snapshots.")
+            client.exec_command(sudo=True, cmd=cmd)
+
+        log.info("Snapshot deletion process completed.")
