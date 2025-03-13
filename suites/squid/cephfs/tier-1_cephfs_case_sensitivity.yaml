@@ -119,12 +119,12 @@ tests:
   - test:
       name: test cephfs attributes - negative
       module: cephfs_case_sensitivity.case_sensitivity_negative.py
-      polarion-id: CEPH-83606639
+      polarion-id: CEPH-83611927
       desc: Test fs attributes for negative use case
       abort-on-fail: false
   - test:
       name: test cephfs attributes - disruptive
       module: cephfs_case_sensitivity.case_sensitivity_disruptive.py
-      polarion-id: CEPH-83606639
+      polarion-id: CEPH-83611928
       desc: Test fs attributes for disruptive use case
       abort-on-fail: false

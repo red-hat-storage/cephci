@@ -37,7 +37,7 @@ def run(ceph_cluster, **kw):
             "\n---------------***************-----------------------------"
         )
 
-        fs_name = "case-sensitivity-functional-2"
+        fs_name = "case-sensitivity-functional-1"
         fs_util.create_fs(client1, fs_name)
         fs_util.wait_for_mds_process(client1, fs_name)
 
