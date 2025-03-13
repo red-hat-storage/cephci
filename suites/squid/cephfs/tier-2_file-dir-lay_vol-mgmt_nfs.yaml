@@ -488,3 +488,10 @@ tests:
       polarion-id: CEPH-83606764
       desc: Validate the volume info command and ensure the output is accurate.
       abort-on-fail: false
+#  - test:
+#      name: rename scenarios
+#      module: cephfs_vol_management.cephfs_vol_mgmt_rename_scenarios.py
+#      polarion-id: CEPH-83607848
+#      desc: volume rename scenarios
+#      abort-on-fail: false
+#      comments: bz-2352998
