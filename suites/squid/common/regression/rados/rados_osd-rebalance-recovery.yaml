@@ -1,0 +1,358 @@
+# Suite contains tests related to osd re-balance upon OSD addition / removal
+# Conf: conf/squid/common/13node-4client-single-site-regression.yaml
+# Deployment: suites/squid/common/regression/single-site-deploy-and-configure.yaml
+
+
+tests:
+
+  - test:
+      name: osd_memory_target param set at OSD level
+      module: test_osd_memory_target.py
+      desc: Verification of osd_memory_target parameter set at OSD level
+      polarion-id: CEPH-83580882
+      config:
+        osd_level: true
+
+  - test:
+      name: osd_memory_target param set at host level
+      module: test_osd_memory_target.py
+      desc: Verification of osd_memory_target parameter set at host level
+      polarion-id: CEPH-83580881
+      config:
+        host_level: true
+
+  - test:
+      name: ObjectStore block stats verification
+      module: test_objectstore_block.py
+      desc: Reduce data from an object and verify the decrease in blocks
+      polarion-id: CEPH-83571714
+      config:
+        create_pool: true
+        pool_name: test-objectstore
+        write_iteration: 3
+        delete_pool: true
+
+  - test:
+      name: concurrent and parallel IOPS on an object
+      desc: Perform concurrent and parallel IOPs on one object
+      module: test_object_ops.py
+      config:
+        obj_sizes:
+          - 45
+          - 80
+          - 23
+          - 107
+      polarion-id: CEPH-83571710
+
+  - test:
+      name: Inconsistent OSD epoch
+      desc: list-inconsistent requires the correct epoch
+      module: test_inconsistency_osd_epoch.py
+      polarion-id: CEPH-9947
+      config:
+        verify_osd_omap_entries:
+          configurations:
+            pool_name: test_pool_4
+            pool_type: replicated
+          omap_config:
+            obj_start: 0
+            obj_end: 50
+            num_keys_obj: 100
+        delete_pool: true
+
+  - test:
+      name: Verification of dump scrub parameters
+      desc: Verification of forced and scheduled time flags
+      module: test_scrub_parameters.py
+      polarion-id: CEPH-83593830
+      config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_rp_pool
+          pg_num: 1
+        ec_pool:
+          pool_name: scrub_ec_pool
+          k: 2
+          m: 2
+          pg_num: 1
+          plugin: jerasure
+
+  - test:
+      name: OSD behaviour when marked Out
+      module: pool_tests.py
+      polarion-id: CEPH-83591786
+      config:
+        Verify_osd_in_out_behaviour: true
+      desc: Verify OSD behaviour when it is marked in and out of cluster
+
+  - test:
+      name: OSD addition on an unavailable disk
+      desc: Add new OSD on an pre-occupied OSD disk
+      module: test_add_new_osd.py
+      polarion-id: CEPH-83574780
+
+  - test:
+      name: replacement of OSD
+      module: test_osd_replacement.py
+      polarion-id: CEPH-83572702
+      desc: Replace an OSD by retaining its ID
+
+  - test:
+      name: Robust rebalancing in ecpool - osd replacement
+      module: test_osd_rebalance.py
+      desc: Remove and add osd to verify data migration in ec pool
+      polarion-id: CEPH-9212
+      config:
+        create_pools:
+          - create_pool:
+              create: true
+              pool_name: ec_pool_9212
+              pool_type: erasure
+              rados_put: true
+              pg_num: 32
+              pgp_num: 32
+              k: 3
+              m: 2
+              plugin: jerasure
+              crush-failure-domain: host
+        delete_pools:
+          - ec_pool_9212
+
+  - test:
+      name: Taking snaps during rebalance
+      module: test_osd_rebalance_snap.py
+      desc: Taking snaps while data migration is in progress
+      polarion-id: CEPH-9235
+      config:
+        create_pools:
+          - create_pool:
+              snapshot: true
+              num_snaps: 2
+              pool_name: repool_1
+              pg_num: 1
+              rados_put: true
+              byte_size: 1024
+              pool_type: replicated
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+
+        delete_pools:
+          - repool_1
+
+  - test:
+      name: Robust rebalancing - osd replacement
+      module: test_osd_rebalance.py
+      desc: Remove and add osd to verify data migration
+      polarion-id: CEPH-9205
+      config:
+        create_pools:
+          - create_pool:
+              pool_name: pool_p1
+              pg_num: 64
+              max_objs: 500
+              byte_size: 1024
+              pool_type: replicated
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+        delete_pools:
+          - pool_p1
+
+  - test:
+      name: Robust rebalancing - in progress osd replacement
+      module: test_osd_inprogress_rebalance.py
+      desc: Add osd while data migration from the pools are in progress
+      polarion-id: CEPH-9228
+      config:
+        create_pools:
+          - create_pool:
+              pool_name: repool_1
+              pg_num: 32
+              rados_put: true
+              byte_size: 1024
+              pool_type: replicated
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+          - create_pool:
+              pool_name: repool_2
+              pg_num: 32
+              pool_type: replicated
+              size: 2
+              min_size: 2
+              rados_put: true
+              byte_size: 1024
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+          - create_pool:
+              create: true
+              pool_name: ercpool_1
+              pool_type: erasure
+              pg_num: 32
+              k: 8
+              m: 3
+              plugin: jerasure
+              rados_put: true
+          - create_pool:
+              create: true
+              pool_name: ercpool_2
+              pool_type: erasure
+              rados_put: true
+              pg_num: 32
+              pgp_num: 32
+              k: 8
+              m: 4
+              plugin: jerasure
+
+        delete_pools:
+          - repool_1
+          - repool_2
+          - ercpool_1
+          - ercpool_2
+
+  - test:
+      name: Robust rebalancing - osd replacement with many pools
+      module: test_osd_rebalance.py
+      desc: Remove and add osd to verify data migration from the pools which have different replica and pg count
+      polarion-id: CEPH-9210
+      config:
+        create_pools:
+          - create_pool:
+              pool_name: rpool_1
+              pg_num: 32
+              max_objs: 500
+              byte_size: 1024
+              pool_type: replicated
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+          - create_pool:
+              pool_name: rpool_2
+              pg_num: 32
+              pool_type: replicated
+              size: 2
+              min_size: 2
+              max_objs: 500
+              byte_size: 1024
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+          - create_pool:
+              pool_name: rpool_3
+              pg_num: 32
+              max_objs: 500
+              byte_size: 1024
+              pool_type: replicated
+              osd_max_backfills: 16
+              osd_recovery_max_active: 16
+              disable_pg_autoscale: true
+          - create_pool:
+              create: true
+              pool_name: ecpool_1
+              pool_type: erasure
+              pg_num: 32
+              k: 4
+              m: 2
+              plugin: jerasure
+              max_objs: 500
+              rados_read_duration: 30
+          - create_pool:
+              create: true
+              pool_name: ecpool_2
+              pool_type: erasure
+              pg_num: 32
+              k: 4
+              m: 2
+              l: 3
+              plugin: lrc
+              max_objs: 500
+              rados_read_duration: 30
+        delete_pools:
+          - rpool_1
+          - rpool_2
+          - rpool_3
+          - ecpool_1
+          - ecpool_2
+
+# The below test is openstack only, and would need modifications to run on BM.
+# commenting the run of below test in BM pipeline
+  - test:
+      name: Cluster behaviour when OSDs are full
+      desc: Test PG autoscaling and rebalancing when OSDs are near-full, backfill-full and completely full
+      module: test_osd_full.py
+      polarion-id: CEPH-83571715
+      config:
+        pg_autoscaling:
+          pool_config:
+            pool-1:
+              pool_type: replicated
+              pool_name: re_pool_3
+              pg_num: 1
+              disable_pg_autoscale: true
+            # EC pool will be added later
+
+  - test:
+      name: ceph osd df stats
+      module: test_osd_df.py
+      desc: Mark osd out and inspect stats change in ceph osd df
+      polarion-id: CEPH-10787
+      config:
+        run_iteration: 3
+        create_pool: true
+        pool_name: test-osd-df
+        write_iteration: 10
+        delete_pool: true
+
+  - test:
+      name: OSD compaction with failures
+      module: test_osd_compaction.py
+      polarion-id: CEPH-11681
+      config:
+        omap_config:
+          pool_name: re_pool_large_omap
+          large_warn: true
+          obj_start: 0
+          obj_end: 5
+          normal_objs: 400
+          num_keys_obj: 200001
+        bench_config:
+          pool_name: re_pool_bench
+          pg_num: 128
+          pgp_num: 128
+      desc: Perform OSD compaction with & without failures
+
+  - test:
+      name: Failure recovery on Replicated & EC
+      module: test_pool_osd_recovery.py
+      polarion-id: CEPH-11032
+      config:
+        pool_configs:
+          - type: replicated
+            conf: sample-pool-2
+          - type: erasure
+            conf: sample-pool-2
+          - type: replicated
+            conf: sample-pool-1
+          - type: erasure
+            conf: sample-pool-1
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
+        remove_host : node13
+      desc: Failure recovery on Replicated & EC pools upon OSD changes
+
+  - test:
+      name: pg rebalancing upon addition of new OSD
+      desc: Test PG rebalancing upon addition of new OSDs when Cluster is in full state
+      module: test_osd_full.py
+      polarion-id: CEPH-9232
+      config:
+        osd_addition:
+          pool_config:
+            pool-1:
+              pool_type: replicated
+              pool_name: re_pool
+              pg_num: 1
+              disable_pg_autoscale: true
+            # EC pool will be added later
+
+  - test:
+      name: crash warning upon daemon crash
+      module: test_crash_daemon.py
+      polarion-id: CEPH-83573855
+      desc: Verify crash warning in ceph health upon crashing a daemon
+      comments: Active BZ-2253394
