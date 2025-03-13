@@ -179,19 +179,22 @@ class CephFSAttributeUtilities(object):
 
     def rename_directory(self, client, old_dir, new_dir):
         """
-        Renames a directory from old_dir to new_dir on a remote client.
+        Renames a directory on a remote client.
 
-        :param client: The remote client object
-        :param old_dir: The current directory path
-        :param new_dir: The new directory path
-        :return: True if successful, False otherwise
+        Args:
+            client (object): The remote client executing the command.
+            old_dir (str): The current directory path.
+            new_dir (str): The new directory path.
+
+        Returns:
+            bool: True if the directory was successfully renamed, False otherwise.
         """
-        cmd = f"mv {old_dir} {new_dir}"
+        cmd = "mv {} {}".format(old_dir, new_dir)
         try:
             client.exec_command(sudo=True, cmd=cmd)
             return True
         except Exception as e:
-            log.error(f"Failed to rename directory: {e}")
+            log.error("Failed to rename directory: {}".format(e))
             return False
 
     def create_file(self, client, file_path, content=None):
@@ -359,9 +362,17 @@ class CephFSAttributeUtilities(object):
         )
         active_mds = self.fs_util.get_active_mdss(client, fs_name)
         log.info(active_mds)
-        cmd = "ceph tell mds.{active_mds} dump tree '{base_path}' 0 2>/dev/null | jq -r '.[0].dirfrags[0].dentries | map(select(.path == \"{base_path}/{dir_name}\") | .path) | .[]' | awk -F'/' '{{print $NF}}' | lua -e 'for line in io.lines() do for p, c in utf8.codes(line) do io.write((\"\\\\u%04x\"):format(c)) end io.write(\"\\n\") end'".format(
-            active_mds=active_mds[0], base_path=base_path, dir_name=dir_name
-        )
+
+        cmd = (
+            "ceph tell mds.{active_mds} dump tree '{base_path}' 0 2>/dev/null "
+            "| jq -r '.[0].dirfrags[0].dentries | "
+            'map(select(.path == "{base_path}/{dir_name}") | .path) | .[]\' '
+            "| awk -F'/' '{{print $NF}}' "
+            "| lua -e 'for line in io.lines() do "
+            "for p, c in utf8.codes(line) do "
+            'io.write(("\\\\u%04x"):format(c)) end io.write("\\n") end\''
+        ).format(active_mds=active_mds[0], base_path=base_path, dir_name=dir_name)
+
         out, _ = client.exec_command(sudo=True, cmd=cmd)
         log.info("Unicode Points from MDS: {}".format(out))
 
@@ -370,7 +381,7 @@ class CephFSAttributeUtilities(object):
         log.info("Normalization Check: {}".format(is_normal))
 
         # Print Unicode code points
-        code_points = "".join(f"\\u{ord(char):04x}" for char in dir_name)
+        code_points = "".join("\\u{:04x}".format(ord(char)) for char in dir_name)
         log.info("Unicode Points: {}".format(code_points))
 
         if not out.strip() == code_points.strip():
@@ -419,6 +430,7 @@ class CephFSAttributeUtilities(object):
         except json.JSONDecodeError:
             log.error("Failed to decode JSON from the cleaned output")
             log.error(cleaned_output)
+            return False
 
         log.info("JSON dump: %s", cleaned_output)
         # Extract 'path' and 'alternate_name' as a dictionary
@@ -443,18 +455,28 @@ class CephFSAttributeUtilities(object):
         casesensitive=True,
     ):
         """
-        Validates if the base64-decoded alternate name for a given path matches the path itself.
+        Validates whether the base64-decoded alternate name for a given path matches the path itself.
 
         Args:
-            alternate_name_dict (dict): A dictionary containing relative paths as keys and
-                                        their base64-encoded alternate names as values.
+            alternate_name_dict (dict): A dictionary where keys are relative paths (str) and
+                                        values are their base64-encoded alternate names.
             relative_path (str): The relative path to validate.
+            empty_name (bool, optional): If True, expects the alternate name to be empty. Defaults to False.
+            casesensitive (bool, optional): If False, performs case-insensitive validation. Defaults to True.
 
         Returns:
-            bool: True if the decoded alternate name matches the given path, False otherwise.
+            bool:
+                - True if the decoded alternate name matches the given path.
+                - True if `empty_name` is True and no alternate name is found.
+                - False if the alternate name does not match or the path is not found in the dictionary.
         """
         log.debug("Validating for the path: '%s'", relative_path)
         casesensitive_rel_path = relative_path
+
+        # Case-sensitive handling is required because the MDS converts characters
+        # to lowercase when case sensitivity is set to False. However, the
+        # alternate_name retains the original source value. To manage this,
+        # the case-sensitive parameter is passed as input.
         if not casesensitive:
             relative_path = "{}/{}".format(
                 relative_path.split("/")[0], relative_path.split("/")[-1].lower()
@@ -501,11 +523,31 @@ class CephFSAttributeUtilities(object):
         return False
 
     def normalize_unicode(self, text):
+        """
+        Normalizes a given Unicode string to NFC (Normalization Form C).
+
+        Args:
+            text (str): The input string to normalize.
+
+        Returns:
+            str: The normalized string in NFC form.
+        """
         return unicodedata.normalize("NFC", text)
 
     def validate_snapshot_from_mount(self, client, mounting_dir, snap_names):
+        """
+        Validates the existence of specific snapshots in the .snap directory of a mounted CephFS volume.
+
+        Args:
+            client (object): Ceph client node used to execute commands.
+            mounting_dir (str): The directory where CephFS is mounted.
+            snap_names (list): A list of snapshot names to validate.
+
+        Returns:
+            bool: True if at least one matching snapshot is found, False otherwise.
+        """
         for snap in snap_names:
-            cmd = f"ls {mounting_dir}/.snap | grep -E '^_{snap}_.*' || true"
+            cmd = "ls {}/.snap | grep -E '^_{}_.*' || true".format(mounting_dir, snap)
             output, _ = client.exec_command(sudo=True, cmd=cmd)
 
             if output.strip():
@@ -516,13 +558,24 @@ class CephFSAttributeUtilities(object):
                 return False
 
     def delete_snapshots_from_mount(self, client, mounting_dir, snap_names=None):
+        """
+        Deletes specific snapshots or all snapshots from the .snap directory of a mounted CephFS volume.
+
+        Args:
+            client (object): Ceph client node used to execute commands.
+            mounting_dir (str): The directory where CephFS is mounted.
+            snap_names (list, optional): A list of snapshot names to delete. If None, all snapshots will be deleted.
+
+        Returns:
+            None
+        """
         if snap_names:
             for snap in snap_names:
-                cmd = f"rm -rf {mounting_dir}/.snap/{snap}"
-                log.info(f"Deleting snapshot: {snap}")
+                cmd = "rm -rf {}/.snap/{}".format(mounting_dir, snap)
+                log.info("Deleting snapshot: {}".format(snap))
                 client.exec_command(sudo=True, cmd=cmd)
         else:
-            cmd = f"rm -rf {mounting_dir}/.snap/*"
+            cmd = "rm -rf {}/.snap/*".format(mounting_dir)
             log.info("Deleting all snapshots.")
             client.exec_command(sudo=True, cmd=cmd)
 
