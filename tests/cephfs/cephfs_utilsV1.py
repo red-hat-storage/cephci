@@ -105,6 +105,7 @@ class FsUtils(object):
                 "gcc",
                 "python3-devel",
                 "git",
+                "lua",
             ]
             if build.endswith("7") or build.startswith("3"):
                 pkgs.extend(
