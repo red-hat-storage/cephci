@@ -52,15 +52,17 @@ def run(ceph_cluster, **kw):
             section="mon", name="mon_osd_down_out_subtree_limit", value="host"
         )
 
-    if not mon_obj.verify_set_config(
-        section="osd", name="osd_async_recovery_min_cost", value="1099511627776"
-    ):
-        log.error(
-            "osd_async_recovery_min_cost not set on the cluster. setting the same now"
-        )
-        mon_obj.set_config(
-            section="osd", name="osd_async_recovery_min_cost", value="1099511627776"
-        )
+    # commenting the addition of osd_async_recovery_min_cost param on cluster.
+    # Bug Fixed : https://bugzilla.redhat.com/show_bug.cgi?id=2228778
+    # if not mon_obj.verify_set_config(
+    #     section="osd", name="osd_async_recovery_min_cost", value="1099511627776"
+    # ):
+    #     log.error(
+    #         "osd_async_recovery_min_cost not set on the cluster. setting the same now"
+    #     )
+    #     mon_obj.set_config(
+    #         section="osd", name="osd_async_recovery_min_cost", value="1099511627776"
+    #     )
 
     log.debug(
         "Completed setting of the global configs need to run 2+2 tests. Proceeding further"
@@ -77,8 +79,14 @@ def run(ceph_cluster, **kw):
             log.error("Failed to create the EC Pool")
             return 1
 
-        time.sleep(20)
-        rados_obj.bench_write(pool_name=pool_name, verify_stats=False)
+        time.sleep(5)
+        # Performing writes on pool
+        if not rados_obj.bench_write(
+            pool_name=pool_name, max_objs=500, verify_stats=True
+        ):
+            log.error("Could not perform IO operations")
+            raise Exception("IO could not be completed")
+        time.sleep(10)
         log.debug(
             f"Completed creating & Writing objects into the EC pool: {pool_name} for testing"
         )

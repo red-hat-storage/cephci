@@ -22,6 +22,8 @@ tests:
                 verbose: true
               args:
                 mon-ip: node1
+                rhcs-version: 8.0
+                release: rc
 
   - test:
       name: Add host
@@ -108,6 +110,17 @@ tests:
                   service_id: cephfs
                   placement:
                     label: mds
+          # Adding below WA to set bulk flag to false until bug fix : 2308623
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - osd
+                - pool
+                - set
+                - cephfs.cephfs.data
+                - bulk
+                - false
 
   - test:
       name: RGW Service deployment
