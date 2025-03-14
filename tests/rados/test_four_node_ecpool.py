@@ -12,7 +12,6 @@ import datetime
 import time
 
 from ceph.ceph_admin import CephAdmin
-from ceph.ceph_admin.orch import Orch
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
@@ -39,7 +38,6 @@ def run(ceph_cluster, **kw):
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     pool_obj = PoolFunctions(node=cephadm)
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
-    cluster_obj = Orch(cluster=ceph_cluster, **config)
     test_fail = False
 
     if not mon_obj.verify_set_config(
@@ -195,56 +193,7 @@ def run(ceph_cluster, **kw):
         log.info(
             f"All the planned  OSD reboots have completed for host {osd_node.hostname}"
         )
-
-        log.debug("Starting upgrade")
-        try:
-            cluster_obj.set_tool_repo()
-            time.sleep(5)
-            cluster_obj.install()
-            time.sleep(5)
-
-            # Check service versions vs available and target containers
-            cluster_obj.upgrade_check(image=config.get("container_image"))
-
-            ceph_version = rados_obj.run_ceph_command(cmd="ceph version")
-            log.info(f"Current version on the cluster : {ceph_version}")
-
-            # Start Upgrade
-            config.update({"args": {"image": "latest"}})
-            cluster_obj.start_upgrade(config)
-            time.sleep(5)
-
-            inactive_pgs = 0
-            upgrade_complete = False
-            # Monitor upgrade status, till completion, checking if any inactive PGs will be seen on cluster
-            end_time = datetime.datetime.now() + datetime.timedelta(seconds=14400)
-            while end_time > datetime.datetime.now():
-                cmd = "ceph orch upgrade status"
-                out = rados_obj.run_ceph_command(cmd=cmd, client_exec=True)
-                log.debug(f"upgrade in progress. Status : {out}")
-
-                if not out["in_progress"]:
-                    log.info("Upgrade Complete...")
-                    upgrade_complete = True
-                    break
-
-                if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
-                    log.error(
-                        f"Inactive PGs found on pool : {pool_name} during upgrade"
-                    )
-                    inactive_pgs += 1
-
-            if not upgrade_complete:
-                log.error("Upgrade was not completed on the cluster. Fail")
-                raise Exception("Upgrade not complete")
-
-        except Exception as e:
-            log.error(f"Could not upgrade the cluster. error : {e}")
-            raise Exception("Upgrade not done error")
-        if inactive_pgs > 5:
-            log.error("Found inactive PGs on the cluster during upgrade")
-            raise Exception("Inactive PGs during Upgrade error")
-        log.info("Completed upgrade on the cluster. Completed workflow")
+        # Upgrade workflow and the checks moved to dedicated test, which will be called from suite file
 
         # Beginning with OSD stop operations
         log.debug("Stopping 1 OSD from each host. No inactive PGs")
