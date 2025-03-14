@@ -115,13 +115,7 @@ tests:
           - config:
               command: shell
               args: # arguments to ceph orch
-                - ceph
-                - osd
-                - pool
-                - set
-                - cephfs.cephfs.data
-                - bulk
-                - false
+                - "ceph osd pool set cephfs.cephfs.data bulk false"
 
   - test:
       name: RGW Service deployment
