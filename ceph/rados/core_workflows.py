@@ -2589,31 +2589,49 @@ EOF"""
             log.error(err)
             return False
 
-    def check_inactive_pgs_on_pool(self, pool_name) -> bool:
+    def check_inactive_pgs_on_pool(self, pool_name: str = None) -> bool:
         """
-        Method to check if the provided pool has any PGs in inactive state
+        Method to check if the provided pool has any PGs in inactive state.
+        If no pool name is provided, then checks on the entire cluster
 
         Args:
             pool_name: Name of the pool, on which inactive PGs should be checked
 
         Returns: True-> Pass,  false -> Fail
         """
-        log.debug(f"Checking for inactive PGs on pool : {pool_name}")
-        pool_pgids = self.get_pgid(pool_name=pool_name)
-        for pgid in pool_pgids:
-            # Checking the PG state. There Should not be inactive state
-            pg_state = self.get_pg_state(pg_id=pgid)
-            if pg_state:
-                if any("unknown" in key for key in pg_state.split("+")):
-                    log.error(f"PG: {pgid} in inactive state)")
-                    return False
-            else:
-                log.error(f"PG : {pgid} not present on cluster")
-                continue
-        log.info(
-            f"Completed checking for inactive PGs on Pool : {pool_name}. No inactive PGs found"
-        )
-        return True
+        if pool_name:
+            log.debug("Checking for inactive PGs on pool : %s", pool_name)
+            pool_pgids = self.get_pgid(pool_name=pool_name)
+            for pgid in pool_pgids:
+                # Checking the PG state. There Should not be inactive state
+                pg_state = self.get_pg_state(pg_id=pgid)
+                if pg_state:
+                    if any("unknown" in key for key in pg_state.split("+")):
+                        log.error("PG: %s in inactive state)", pgid)
+                        return False
+                else:
+                    log.error("PG : %s not present on cluster", pgid)
+                    continue
+            log.info(
+                "Completed checking for inactive PGs on Pool : %s. No inactive PGs found",
+                pool_name,
+            )
+            return True
+        else:
+            log.debug("Checking for inactive PGs on the cluster")
+            try:
+                status_report = self.run_ceph_command(
+                    cmd="ceph report", client_exec=True
+                )
+                for entry in status_report["num_pg_by_state"]:
+                    if any("unknown" in key for key in entry["state"].split("+")):
+                        log.error("PG in unknown state found: %s", entry["state"])
+                        return False
+                    log.info(" PG States: %s ", status_report["num_pg_by_state"])
+                    return True
+            except Exception as e:
+                log.error("Error occurred while fetching status report: %s", e)
+                return False
 
     def get_osd_hosts(self):
         """
