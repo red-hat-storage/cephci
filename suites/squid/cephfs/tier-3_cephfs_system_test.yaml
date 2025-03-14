@@ -48,18 +48,16 @@ tests:
                   label: mon
               command: apply
               service: mon
-          -
-            config:
-              args:
-                all-available-devices: true
-              command: apply
-              service: osd
-        verify_cluster_health: true
       desc: "Execute the cluster deployment workflow with label placement."
       destroy-cluster: false
       module: test_cephadm.py
       name: "cluster deployment"
       polarion-id: CEPH-83573777
+  - test:
+      name: Configure OSD
+      module: misc_env.homogenous_osd_cluster.py
+      desc: Deploy OSDs on node to setup homogenous cluster.
+      abort-on-fail: true
   -
     test:
       abort-on-fail: true
@@ -195,7 +193,7 @@ tests:
         id: client.10
         install_packages:
           - ceph-common
-        node: rhel994client10
+        node: rhel94client10
       desc: "Configure the Cephfs client system 10"
       destroy-cluster: false
       module: test_client.py
@@ -206,6 +204,15 @@ tests:
       desc: "Setup phase to deploy the required pre-requisites for running the tests."
       module: cephfs_system.cephfs_systest_setup.py
       name: "setup system test configuration"
+  -
+    test:
+      abort-on-fail: false
+      desc: Remove OSD
+      module: cephfs_system.cephfs_systest_disruptive_tests.py
+      name: "Remove OSD"
+      config:
+        test_name: "remove_osd_during_systest"
+        osd_rm_limit: 0
   -
     test:
       abort-on-fail: false
@@ -262,6 +269,12 @@ tests:
             desc: Run MDS ops
             module: cephfs_system.cephfs_systest_mds_ops.py
             name: "CephFS System Test MDS ops"
+        -
+          test:
+            abort-on-fail: false
+            desc: Run Disruptive tests during IO - Add and Remove OSD
+            module: cephfs_system.cephfs_systest_disruptive_tests.py
+            name: "Add and Remove OSD with snapshot create"
         -
           test:
             abort-on-fail: true
