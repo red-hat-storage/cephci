@@ -75,8 +75,10 @@ def run(ceph_cluster, **kw):
             cmd += "ceph config set mds mds_export_ephemeral_random_max 0.75"
             client1.exec_command(sudo=True, cmd=cmd)
 
+        log.info("Enable snap-schedule config")
         snap_util.enable_snap_schedule(client1)
         snap_util.allow_minutely_schedule(client1)
+
         for i in cephfs_config:
             mds_pin_cnt = 1
             fs_details = fs_util_v1.get_fs_info(client1, fs_name=i)
@@ -85,7 +87,7 @@ def run(ceph_cluster, **kw):
                 fs_util_v1.create_fs(client1, i)
                 active_mds_cnt = cephfs_config[i]["mds"]["active"]
                 standby_replay = cephfs_config[i]["mds"]["standby_replay"]
-                cmd = f'ceph orch apply mds {i} --placement="label:mds"'
+                cmd = f'ceph orch apply mds {i} --placement="label:mds";'
                 cmd += f"ceph fs set {i} max_mds {active_mds_cnt};"
                 cmd += f"ceph fs set {i} allow_standby_replay {standby_replay}"
                 client1.exec_command(sudo=True, cmd=cmd)
@@ -187,7 +189,7 @@ def run(ceph_cluster, **kw):
                                     "nfs_server": nfs_server,
                                 }
                             )
-                        elif (ephemeral_pin == 1) and (mds_pin_cnt < 5):
+                        if (ephemeral_pin == 1) and (mds_pin_cnt < 5):
                             log.info(f"Configure MDS pinning : {mds_pin_cnt}")
                             cmd = f"setfattr -n ceph.dir.pin.random -v 0.75 {mounting_dir1}"
                             mnt_client1.exec_command(
