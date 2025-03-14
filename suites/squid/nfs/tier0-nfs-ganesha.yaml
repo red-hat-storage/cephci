@@ -310,3 +310,22 @@ tests:
       config:
         nfs_version: 4.1
         clients: 1
+
+  - test:
+      name: Qos enablement on Cluster level with nfs service restart
+      module: test_nfs_qos_on_cluster_level_enablement.py
+      desc: Verify qos [Pershare,PerClient, PerShare-Perclient] enablement on cluster level
+      polarion-id: CEPH-83611390
+      abort-on-fail: false
+      config:
+        cephfs_volume : cephfs
+        cluster_name : cephfs-nfs
+        max_export_write_bw : 10MB
+        max_export_read_bw : 10MB
+        max_client_write_bw : 10MB
+        max_client_read_bw: 10MB
+        qos_type :
+          - PerShare
+          - PerClient
+          - PerShare_PerClient
+        operation : restart
