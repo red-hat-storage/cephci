@@ -1,5 +1,5 @@
 # Test Suite to test EC 8+6 MSR pool on 4 nodes + replica1 cluster
-# Deployment for all the ceph daemons , with 3 mon, 3 mgr, 24 OSD, 3 MDS, 3 RGW daemons
+# Deployment for all the ceph daemons , with 3 mon, 3 mgr, 24 OSD, 2 MDS, 2 RGW daemons
 globals:
   - ceph-cluster:
       name: ceph
@@ -10,13 +10,12 @@ globals:
             - osd
             - mon
             - mgr
-            - rgw
+            - mds
           no-of-volumes: 6
           disk-size: 15
       node2:
           role:
             - mgr
-            - rgw
             - mon
             - osd
             - mds
@@ -26,7 +25,7 @@ globals:
           disk-size: 15
       node3:
           role:
-            - mds
+            - rgw
             - mon
             - mgr
             - grafana
@@ -37,7 +36,6 @@ globals:
           role:
             - osd
             - rgw
-            - mds
             - node-exporter
             - alertmanager
           no-of-volumes: 6
