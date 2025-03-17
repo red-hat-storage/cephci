@@ -1,6 +1,8 @@
 from cli import Cli
 
+from .group import Group
 from .image import Image
+from .namespace import Namespace
 from .pool import Pool
 from .snapshot import Snapshot
 
@@ -17,3 +19,5 @@ class Mirror(Cli):
         self.image = Image(nodes, self.base_cmd)
         self.pool = Pool(nodes, self.base_cmd)
         self.snapshot = Snapshot(nodes, self.base_cmd)
+        self.namespace = Namespace(nodes, self.base_cmd)
+        self.group = Group(nodes, self.base_cmd)
