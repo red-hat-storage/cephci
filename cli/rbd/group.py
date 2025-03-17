@@ -11,7 +11,7 @@ class Group(Cli):
         self.image = self.Image(parent=self, base_cmd=self.base_cmd)
         self.snap = self.Snap(parent=self, base_cmd=self.base_cmd)
 
-    def create(self, **kw):
+    def create(self, ** kw):
         """
         Creates a group in a given pool/[namespace], if pool is not given then create in default pool i.e rbd.
         Args:
@@ -58,12 +58,14 @@ class Group(Cli):
             Supported keys:
                 pool(str) : name of the pool into which namespace should be stored
                 namespace(str): namespace in the pool
-                pool-spec(str): <pool-name>[/<namespace>]
+                group-spec(str): <pool-name>[/<namespace>]group
                 format(str): json format output of listing namespace
                 See rbd help group ls/list for more supported keys
         """
-        cmd = f"{self.base_cmd} info {build_cmd_from_args(**kw)}"
-
+        kw_copy = deepcopy(kw)
+        
+        group_spec = kw_copy.pop("group-spec", "")
+        cmd = f"{self.base_cmd} info {group_spec} {build_cmd_from_args(**kw)}"
         return self.execute_as_sudo(cmd=cmd)
 
     def remove(self, **kw):

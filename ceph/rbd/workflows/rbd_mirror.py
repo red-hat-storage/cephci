@@ -105,6 +105,23 @@ def wait_for_status(rbd, cluster_name, **kw):
                 )
                 if kw.get("images_pattern") == num_image:
                     return 0
+        elif kw.get("groupspec", False):
+            if kw.get("state_pattern"):
+                out = value(
+                    "state",
+                    json.loads(
+                        rbd.mirror.group.status(**{"groupspec":kw.get("groupspec"), "format":"json"})[
+                            0
+                        ]
+                    ),
+                )
+                log.info(
+                    "State of {} group in {} cluster: {}".format(
+                        kw.get("groupspec"), cluster_name, out
+                    )
+                )
+                if kw.get("state_pattern") in out:
+                    return 0            
         else:
             try:
                 if kw.get("state_pattern"):
@@ -374,20 +391,77 @@ def config_mirror(rbd_primary, rbd_secondary, **kw):
 
     # Waiting for OK pool mirror status to be okay based on user input as in image based
     # mirorring status wouldn't reach OK without enabling mirroing on individual images
-    if is_wait_for_status:
-        wait_for_status(
-            rbd=rbd_primary,
-            cluster_name=primary_cluster_name,
-            poolname=poolname,
-            health_pattern="OK",
-        )
-        wait_for_status(
-            rbd=rbd_secondary,
-            cluster_name=secondary_cluster_name,
-            poolname=poolname,
-            health_pattern="OK",
-        )
+    #if is_wait_for_status:
+        # wait_for_status(
+        #     rbd=rbd_primary,
+        #     cluster_name=primary_cluster_name,
+        #     poolname=poolname,
+        #     health_pattern="OK",
+        # )
+        # wait_for_status(
+        #     rbd=rbd_secondary,
+        #     cluster_name=secondary_cluster_name,
+        #     poolname=poolname,
+        #     health_pattern="OK",
+        # )
+def enable_group_mirroring(primary_config, secondary_config, pool, **pool_config):
+    rbd_primary = primary_config.get("rbd")
 
+    rbd_secondary = secondary_config.get("rbd")
+
+    primary_cluster = primary_config.get("cluster")
+    secondary_cluster = secondary_config.get("cluster")
+    group_kw = {"pool":pool, "group":pool_config.get("group")}
+    
+    if pool_config.get("namespace", "") != "":
+        group_kw.update({"namespace":pool_config.get("namespace")})
+    out = rbd_primary.mirror.group.enable(**group_kw)
+
+    if "cannot enable group mirroring: pool is not in image mirror mode" in out[1].strip():
+        return out[1]
+
+    wait_for_status(
+        rbd=rbd_primary,
+        cluster_name=primary_cluster.name,
+        groupspec=pool_config.get("group-spec",""),
+        state_pattern="up+stopped",
+    )
+    wait_for_status(
+        rbd=rbd_secondary,
+        cluster_name=secondary_cluster.name,
+        groupspec=pool_config.get("group-spec",""),
+        state_pattern="up+replaying",
+    )
+
+def enable_namespace_mirroring(primary_config, secondary_config, pool, **pool_config):
+    rbd_primary = primary_config.get("rbd")
+
+    rbd_secondary = secondary_config.get("rbd")
+
+    primary_cluster = primary_config.get("cluster")
+    secondary_cluster = secondary_config.get("cluster")
+    namespace_kw = {"mode":pool_config.get("mode"), 
+                    "pool":pool, 
+                    "namespace":pool_config.get("namespace"),
+                    "remote-namespace":pool_config.get("remote_namespace")}
+    
+    out = rbd_primary.mirror.namespace.enable(**namespace_kw)
+
+    if "cannot enable mirroring: pool is not in image mirror mode" in out[1].strip():
+        return out[1]
+
+    # wait_for_status(  
+    #     rbd=rbd_primary,
+    #     cluster_name=primary_cluster.name,
+    #     poolname=pool,
+    #     health_pattern="OK",
+    # )
+    # wait_for_status(
+    #     rbd=rbd_secondary,
+    #     cluster_name=secondary_cluster.name,
+    #     poolname=pool,
+    #     health_pattern="OK",
+    # )
 
 def enable_image_mirroring(primary_config, secondary_config, **kw):
     """ """
@@ -491,6 +565,15 @@ def config_mirror_multi_pool(
                 **pool_config,
             )
 
+            # enable namespace level mirroring
+            if pool_config.get("mirror_level", "") in {"group", "namespace"} and pool_config.get("namespace", "") :
+                enable_namespace_mirroring(primary_config, secondary_config, pool, **pool_config)
+
+            # enable group level mirroring
+            if pool_config.get("mirror_level","") == "group" and pool_config.get("group-spec", "") != "" and is_secondary != True:
+                group = pool_config.get("group")
+                enable_group_mirroring(primary_config, secondary_config, pool, **pool_config)
+
             # Enable image level mirroring only when mode is image type
             if (
                 not kw.get("do_not_enable_mirror_on_image")
@@ -508,30 +591,31 @@ def config_mirror_multi_pool(
                 }
                 # for image, image_config in multi_image_config.items():
                 for image, image_config_val in image_config.items():
-                    image_enable_config = {
-                        "pool": pool,
-                        "image": image,
-                        "mirrormode": mirrormode,
-                        "io_total": image_config_val.get("io_total", None),
-                    }
-                    out = enable_image_mirroring(
-                        primary_config, secondary_config, **image_enable_config
-                    )
+                    if pool_config.get("mirror_level","") != "group":
+                        image_enable_config = {
+                            "pool": pool,
+                            "image": image,
+                            "mirrormode": mirrormode,
+                            "io_total": image_config_val.get("io_total", None),
+                        }
+                        out = enable_image_mirroring(
+                            primary_config, secondary_config, **image_enable_config
+                        )
 
-                    if (
-                        pool_config.get("mode") == "pool"
-                        and pool_config.get("mirrormode") == "snapshot"
-                    ):
                         if (
-                            out
-                            and "cannot enable mirroring: pool is not in image mirror mode"
-                            in out.strip()
+                            pool_config.get("mode") == "pool"
+                            and pool_config.get("mirrormode") == "snapshot"
                         ):
-                            output = "Snapshot based mirroring cannot be enabled in pool mode"
-                        elif not is_secondary:
-                            output = (
-                                "Snapshot based mirroring did not fail in pool mode"
-                            )
+                            if (
+                                out
+                                and "cannot enable mirroring: pool is not in image mirror mode"
+                                in out.strip()
+                            ):
+                                output = "Snapshot based mirroring cannot be enabled in pool mode"
+                            elif not is_secondary:
+                                output = (
+                                    "Snapshot based mirroring did not fail in pool mode"
+                                )
 
                     if image_config_val.get(
                         "snap_schedule_levels"
@@ -546,6 +630,13 @@ def config_mirror_multi_pool(
                                 "level": level,
                                 "interval": interval,
                             }
+                            if level == "group":
+                                snap_schedule_config.update({"group":pool_config.get("group")})
+                                if pool_config.get("namespace", "") != "":
+                                    snap_schedule_config.update({"namespace":pool_config.get("namespace")})
+                            #if level =="namespace":
+                                #snap_schedule_config.update({"na":pool_config.get("group")})
+
                             out, err = add_snapshot_scheduling(
                                 rbd_primary, **snap_schedule_config
                             )
@@ -553,7 +644,8 @@ def config_mirror_multi_pool(
                                 log.error(
                                     f"Adding snapshot scheduling failed for image {pool}/{image}"
                                 )
-
+                    if level == "group" or level == "namespace":
+                        break
     # Add back the popped pool test config once configuration is complete
     if pool_test_config:
         pool_config["test_config"] = pool_test_config
