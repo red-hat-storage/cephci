@@ -94,7 +94,9 @@ def run(ceph_cluster, **kw):
         mds_info_after_for_fs1 = fs_util.get_mds_states_active_standby_replay(
             fs_name, client1
         )
-        log.info(f"MDS Info for {fs_name} After Reboot: {mds_info_after_for_fs1}")
+        log.info(
+            "MDS Info for {} After Reboot: {}".format(fs_name, mds_info_after_for_fs1)
+        )
 
         log.info("Validating alternate name for %s", rel_child_dir)
         alter_dict_1 = attr_util.fetch_alternate_name(client1, fs_name, "/")

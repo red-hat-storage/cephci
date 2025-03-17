@@ -120,7 +120,6 @@ def run(ceph_cluster, **kw):
                 log.error(
                     "Charmap expected to fail for new directory when it's parent directory does not have charmap"
                 )
-                return 1
             except ValueError:
                 log.info(
                     "Get Charmap expected to fail when there it's a new folder and "
@@ -152,7 +151,141 @@ def run(ceph_cluster, **kw):
             attr_util.delete_directory(client1, dir_step_3a, recursive=True)
             attr_util.delete_directory(client1, dir_step_3, recursive=True)
 
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\nUsecase 4: Fail to set normalization on a directory with files   "
+            "\n---------------***************-----------------------------------"
+        )
+        dir_with_files = os.path.join(fuse_mounting_dir, "step-4")
+        attr_util.create_directory(client1, dir_with_files)
+        list_filenames = ["file.txt", ".tmp"]
+        for fnames in list_filenames:
+            file_name = attr_util.create_file(
+                client1, os.path.join(dir_with_files, fnames)
+            )
+            try:
+                attr_util.set_attributes(client1, dir_with_files, normalization="nfkc")
+                log.error("Failed: Attribute was set despite files present")
+                return 1
+            except CommandFailed:
+                log.info("Passed: Failed to set attribute as expected")
+                log.info("Deleting the file {}".format(file_name))
+                attr_util.delete_file(client1, file_name)
+                attr_util.set_attributes(client1, dir_with_files, normalization="nfkc")
+                assert (
+                    attr_util.get_charmap(client1, dir_with_files).get("normalization")
+                    == "nfkc"
+                )
+                log.info(
+                    "Passed: Attribute set successfully on emptied directory for {}".format(
+                        dir_with_files
+                    )
+                )
+            finally:
+                attr_util.delete_file(client1, os.path.join(dir_with_files, fnames))
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\nUsecase 5: Fail to create file with unsupported encoding type    "
+            "\n---------------***************-----------------------------------"
+        )
+        dir_with_files = os.path.join(fuse_mounting_dir, "step-5")
+        attr_util.create_directory(client1, dir_with_files)
+        fnames = "file.log"
+        encoding_value = random.choice(["ASCII", "utf16", "utf32"])
+        file_name = attr_util.create_file(client1, os.path.join(dir_with_files, fnames))
+        try:
+            attr_util.set_attributes(client1, dir_with_files, encoding=encoding_value)
+            log.error("Failed: Attribute was set despite files present")
+            return 1
+        except CommandFailed:
+            log.info("Passed: Failed to set attribute as expected")
+            log.info("Deleting the file {}".format(file_name))
+            attr_util.delete_file(client1, file_name)
+            attr_util.set_attributes(client1, dir_with_files, encoding=encoding_value)
+            assert (
+                attr_util.get_charmap(client1, dir_with_files).get("encoding")
+                == encoding_value
+            )
+            try:
+                file_name = attr_util.create_file(
+                    client1, os.path.join(dir_with_files, fnames)
+                )
+                log.error("Failed: Attribute was set despite unsupported value")
+                return 1
+            except CommandFailed:
+                log.info(
+                    "Passed: Failed to create file under unsupported encoding type"
+                )
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n     Usecase 6: Setting invalid value for normalization          "
+            "\n---------------***************-----------------------------------"
+        )
+        dir_6 = os.path.join(fuse_mounting_dir, "step-6")
+        attr_util.create_directory(client1, dir_6)
+        norm_invalid_name = "".join(
+            random.choices(string.ascii_letters, k=random.choice([3, 4]))
+        )
+
+        attr_util.set_attributes(client1, dir_6, normalization=norm_invalid_name)
+        assert (
+            attr_util.get_charmap(client1, dir_6).get("normalization")
+            == norm_invalid_name
+        )
+        try:
+            attr_util.create_special_character_directories(client1, dir_6)
+            log.error("Expected to fail creating directories but successful")
+            return 1
+        except CommandFailed:
+            log.info("Passed: Failed as Expected")
+
         log.info("Negative Case Sensitive use cases completed")
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\nUsecase 7: Fail to remove charmap on a directory with files      "
+            "\n---------------***************-----------------------------------"
+        )
+        dir_with_files = os.path.join(fuse_mounting_dir, "step-7")
+        attr_util.create_directory(client1, dir_with_files)
+        attr_util.set_attributes(
+            client1, dir_with_files, casesensitive=0, normalization="nfkc"
+        )
+        assert (
+            attr_util.get_charmap(client1, dir_with_files).get("casesensitive") is False
+        )
+        assert (
+            attr_util.get_charmap(client1, dir_with_files).get("normalization")
+            == "nfkc"
+        )
+        assert attr_util.get_charmap(client1, dir_with_files).get("encoding") == "utf8"
+
+        supported_attributes = ["casesensitive", "normalization", "encoding", "charmap"]
+        for attribute in supported_attributes:
+            log.info(
+                "Trying to remove attribute {} for the directory {}".format(
+                    attribute, dir_with_files
+                )
+            )
+            file_name = attr_util.create_file(
+                client1, os.path.join(dir_with_files, "file1.log")
+            )
+            try:
+                attr_util.remove_attributes(client1, dir_with_files, attribute)
+                log.error("Failed: Attribute was removed despite files present")
+                return 1
+            except CommandFailed:
+                log.info("Passed: Failed to remove attribute as expected")
+                log.info("Deleting the file {}".format(file_name))
+                attr_util.delete_file(client1, file_name)
+
+        log.info("*** Case Sensitivity: Negative Workflow completed ***")
         return 0
 
     except Exception as e:
