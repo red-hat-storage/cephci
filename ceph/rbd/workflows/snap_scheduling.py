@@ -16,12 +16,19 @@ def add_snapshot_scheduling(rbd, **kw):
     pool = kw.get("pool")
     image = kw.get("image")
     level = kw.get("level")
+    group = kw.get("group", "")
+    namespace = kw.get("namespace", "")
     interval = kw.get("interval")
 
     if level == "cluster":
         out, err = rbd.mirror.snapshot.schedule.add_(interval=interval)
     elif level == "pool":
         out, err = rbd.mirror.snapshot.schedule.add_(pool=pool, interval=interval)
+    elif level == "group":
+        group_kw = {"pool": pool, "interval": interval, "group": group}
+        if namespace:
+            group_kw.update({"namespace": namespace})
+        out, err = rbd.mirror.group.snapshot.schedule.add_(**group_kw)
     else:
         out, err = rbd.mirror.snapshot.schedule.add_(
             pool=pool, image=image, interval=interval
