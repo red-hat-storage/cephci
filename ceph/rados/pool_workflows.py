@@ -228,10 +228,13 @@ class PoolFunctions:
 
         for i in range(nobj):
             log.info(f"running command on {client.hostname}")
+            if nobj > 1:
+                obj_name = f"{obj_name}-{i}"
+
             put_cmd = (
                 f"rados put -p {pool} obj{i} {infile}"
                 if obj_name is None
-                else f"rados put -p {pool} {obj_name}-{i} {infile}"
+                else f"rados put -p {pool} {obj_name} {infile}"
             )
             if offset:
                 put_cmd = f"{put_cmd} --offset {offset}"
