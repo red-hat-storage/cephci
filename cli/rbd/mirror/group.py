@@ -1,8 +1,8 @@
 from copy import deepcopy
 
 from cli import Cli
-from cli.utilities.utils import build_cmd_from_args
 from cli.rbd.mirror.snapshot import Snapshot
+from cli.utilities.utils import build_cmd_from_args
 
 
 class Group(Cli):
@@ -31,7 +31,7 @@ class Group(Cli):
         cmd = f"{self.base_cmd} enable {group_spec} {mirrormode} {build_cmd_from_args(**kw_copy)}"
 
         return self.execute_as_sudo(cmd=cmd)
-    
+
     def disable(self, **kw):
         """Wrapper for rbd mirror group disable.
         Args
@@ -61,7 +61,7 @@ class Group(Cli):
         cmd = f"{self.base_cmd} promote {group_spec} {build_cmd_from_args(**kw_copy)}"
 
         return self.execute_as_sudo(cmd=cmd)
-    
+
     def demote(self, **kw):
         """Wrapper for rbd mirror group demote.
         Args
@@ -75,8 +75,8 @@ class Group(Cli):
         group_spec = kw_copy.pop("group-spec", "")
         cmd = f"{self.base_cmd} demote {group_spec} {build_cmd_from_args(**kw_copy)}"
 
-        return self.execute_as_sudo(cmd=cmd)  
-          
+        return self.execute_as_sudo(cmd=cmd)
+
     def resync(self, **kw):
         """Wrapper for rbd mirror group resync
         Args
@@ -90,8 +90,8 @@ class Group(Cli):
         group_spec = kw_copy.pop("group-spec", "")
         cmd = f"{self.base_cmd} resync {group_spec} {build_cmd_from_args(**kw_copy)}"
 
-        return self.execute_as_sudo(cmd=cmd)      
-      
+        return self.execute_as_sudo(cmd=cmd)
+
     def status(self, **kw):
         """Wrapper for rbd mirror group status.
         Args
@@ -99,11 +99,10 @@ class Group(Cli):
         Example::
         Supported keys:
             group-spec: poolname/[namespace]/groupname
-            See rbd help mirror group resync for more supported keys
+            See rbd help mirror group status for more supported keys
         """
         kw_copy = deepcopy(kw)
         group_spec = kw_copy.pop("groupspec", "")
         cmd = f"{self.base_cmd} status {group_spec} {build_cmd_from_args(**kw_copy)}"
 
         return self.execute_as_sudo(cmd=cmd)
-    

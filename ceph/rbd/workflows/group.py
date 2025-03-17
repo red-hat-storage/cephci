@@ -359,22 +359,22 @@ def create_mirror_group(rbd, client, pool_type, **kw):
     group_created = None
     namespace = None
     for pool, pool_config in multi_pool_config.items():
-        group = "gp_" + pool.split("_")[-1]
-        group_create_kw = {"client": client, "pool": pool, "group": group}
-        grouptype = kw.get("config").get("grouptype", "")
+        group = "group_" + pool.split("_")[-1]
+        group_config = {"client": client, "pool": pool, "group": group}
+        grouptype = kw.get("config").get("grouptype", "single_pool_without_namespace")
         if grouptype in {"single_pool_with_namespace", "multi_pool_with_namespace"}:
             if not kw.get("config", {}).get(pool_type, {}).get("group-namespace"):
+                # Create namespace only on the primary site.
+                # For seconday site, same namespace as in primary is taken
                 if kw.get("is_secondary", False) is False:
-                    namespace = "ns_" + random_string(len=3)
-                    group_create_kw.update({"namespace": namespace})
+                    namespace = "namespace_" + random_string(len=3)
+                    group_config.update({"namespace": namespace})
                     group_spec = f"{pool}/{namespace}/{group}"
                     kw["config"][pool_type].get(pool, {}).update(
                         {"namespace": namespace}
                     )
                 else:
-                    namespace = (
-                        kw["config"][pool_type].get(pool, {}).get("namespace", None)
-                    )
+                    namespace = kw["config"][pool_type][pool]["namespace"]
             else:
                 # Namespace images from the same pool or mutiple pools can be added to a group only if namespaces match
                 # The first namespace created is used as the namespace for the groups as well as pools
@@ -396,7 +396,7 @@ def create_mirror_group(rbd, client, pool_type, **kw):
         if kw.get("is_secondary", False) is False:
             if group_created is not True:
                 # A single group is created that contains images from one pool or from multiple pools
-                rc = create_group_and_verify(**group_create_kw)
+                rc = create_group_and_verify(**group_config)
                 if rc != 0:
                     return rc
                 group_created = True
@@ -410,11 +410,11 @@ def create_mirror_group(rbd, client, pool_type, **kw):
                     kw.get("config", {}).get(pool_type, {}).update(
                         {"group-namespace": namespace}
                     )
-                imagelevel = (
+                mirror_level = (
                     kw.get("config", {}).get(pool_type, {}).get("mirror_level", {})
                 )
                 kw.get("config", {}).get(pool_type, {}).get(pool, {}).update(
-                    {"mirror_level": imagelevel}
+                    {"mirror_level": mirror_level}
                 )
                 kw["config"][pool_type].get(pool, {}).update({"group": group})
 
