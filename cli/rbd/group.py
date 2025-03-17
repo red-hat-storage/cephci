@@ -58,7 +58,7 @@ class Group(Cli):
             Supported keys:
                 pool(str) : name of the pool into which namespace should be stored
                 namespace(str): namespace in the pool
-                group-spec(str): <pool-name>[/<namespace>]group
+                group-spec(str): <pool-name>[/<namespace>]<group-name>
                 format(str): json format output of listing namespace
                 See rbd help group ls/list for more supported keys
         """

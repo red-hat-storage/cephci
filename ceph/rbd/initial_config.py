@@ -469,7 +469,8 @@ def initial_rbd_config(ceph_cluster, **kw):
         ):
             log.error(f"RBD configuration failed for {pool_type}")
             return None
-        if kw.get("config").get(pool_type).get("rbd_mirror_group") is True:
+        # Create a group in case of group level mirroring.
+        if kw.get("config").get(pool_type).get("mirror_level") == "group":
             create_mirror_group(rbd, client, pool_type, **kw)
 
     return {"rbd": rbd, "client": client, "pool_types": pool_types}

@@ -406,72 +406,6 @@ def config_mirror(rbd_primary, rbd_secondary, **kw):
         )
 
 
-def enable_group_mirroring(primary_config, secondary_config, pool, **pool_config):
-    rbd_primary = primary_config.get("rbd")
-
-    rbd_secondary = secondary_config.get("rbd")
-
-    primary_cluster = primary_config.get("cluster")
-    secondary_cluster = secondary_config.get("cluster")
-    group_kw = {"pool": pool, "group": pool_config.get("group")}
-
-    if pool_config.get("namespace", "") != "":
-        group_kw.update({"namespace": pool_config.get("namespace")})
-    out = rbd_primary.mirror.group.enable(**group_kw)
-
-    if (
-        "cannot enable group mirroring: pool is not in image mirror mode"
-        in out[1].strip()
-    ):
-        return out[1]
-
-    wait_for_status(
-        rbd=rbd_primary,
-        cluster_name=primary_cluster.name,
-        groupspec=pool_config.get("group-spec", ""),
-        state_pattern="up+stopped",
-    )
-    wait_for_status(
-        rbd=rbd_secondary,
-        cluster_name=secondary_cluster.name,
-        groupspec=pool_config.get("group-spec", ""),
-        state_pattern="up+replaying",
-    )
-
-
-def enable_namespace_mirroring(primary_config, secondary_config, pool, **pool_config):
-    rbd_primary = primary_config.get("rbd")
-
-    rbd_secondary = secondary_config.get("rbd")
-
-    primary_cluster = primary_config.get("cluster")
-    secondary_cluster = secondary_config.get("cluster")
-    namespace_kw = {
-        "mode": pool_config.get("mode"),
-        "pool": pool,
-        "namespace": pool_config.get("namespace"),
-        "remote-namespace": pool_config.get("remote_namespace"),
-    }
-
-    out = rbd_primary.mirror.namespace.enable(**namespace_kw)
-
-    if "cannot enable mirroring: pool is not in image mirror mode" in out[1].strip():
-        return out[1]
-
-    wait_for_status(
-        rbd=rbd_primary,
-        cluster_name=primary_cluster.name,
-        poolname=pool,
-        health_pattern="OK",
-    )
-    wait_for_status(
-        rbd=rbd_secondary,
-        cluster_name=secondary_cluster.name,
-        poolname=pool,
-        health_pattern="OK",
-    )
-
-
 def enable_image_mirroring(primary_config, secondary_config, **kw):
     """ """
     rbd_primary = primary_config.get("rbd")
@@ -574,43 +508,25 @@ def config_mirror_multi_pool(
                 **pool_config,
             )
 
-            # enable namespace level mirroring
-            if pool_config.get("mirror_level", "") in {
-                "group",
-                "namespace",
-            } and pool_config.get("namespace", ""):
-                enable_namespace_mirroring(
-                    primary_config, secondary_config, pool, **pool_config
-                )
-
-            # enable group level mirroring
-            if (
-                pool_config.get("mirror_level", "") == "group"
-                and pool_config.get("group-spec", "") != ""
-                and is_secondary is not True
-            ):
-                enable_group_mirroring(
-                    primary_config, secondary_config, pool, **pool_config
-                )
-
             # Enable image level mirroring only when mode is image type
-            if (
-                not kw.get("do_not_enable_mirror_on_image")
-                and pool_config.get("mode") == "image"
-            ) or (
-                pool_config.get("mode") == "pool"
-                and pool_config.get("mirrormode") == "snapshot"
-            ):
-                mirrormode = pool_config.get("mirrormode", "")
-                multi_image_config = getdict(pool_config)
-                image_config = {
-                    k: v
-                    for k, v in multi_image_config.items()
-                    if v.get("is_secondary", False) == is_secondary
-                }
-                # for image, image_config in multi_image_config.items():
-                for image, image_config_val in image_config.items():
-                    if pool_config.get("mirror_level", "") != "group":
+            if pool_config.get("mirror_level", "") not in ["group", "namespace"]:
+                if (
+                    not kw.get("do_not_enable_mirror_on_image")
+                    and pool_config.get("mode") == "image"
+                ) or (
+                    pool_config.get("mode") == "pool"
+                    and pool_config.get("mirrormode") == "snapshot"
+                ):
+                    mirrormode = pool_config.get("mirrormode", "")
+                    multi_image_config = getdict(pool_config)
+                    image_config = {
+                        k: v
+                        for k, v in multi_image_config.items()
+                        if v.get("is_secondary", False) == is_secondary
+                    }
+                    # for image, image_config in multi_image_config.items():
+                    for image, image_config_val in image_config.items():
+
                         image_enable_config = {
                             "pool": pool,
                             "image": image,
@@ -636,39 +552,27 @@ def config_mirror_multi_pool(
                                     "Snapshot based mirroring did not fail in pool mode"
                                 )
 
-                    if image_config_val.get(
-                        "snap_schedule_levels"
-                    ) and image_config_val.get("snap_schedule_intervals"):
-                        for level, interval in zip(
-                            image_config_val["snap_schedule_levels"],
-                            image_config_val["snap_schedule_intervals"],
-                        ):
-                            snap_schedule_config = {
-                                "pool": pool,
-                                "image": image,
-                                "level": level,
-                                "interval": interval,
-                            }
-                            if level == "group":
-                                snap_schedule_config.update(
-                                    {"group": pool_config.get("group")}
-                                )
-                                if pool_config.get("namespace", "") != "":
-                                    snap_schedule_config.update(
-                                        {"namespace": pool_config.get("namespace")}
-                                    )
-                            # if level =="namespace":
-                            # snap_schedule_config.update({"na":pool_config.get("group")})
+                        if image_config_val.get(
+                            "snap_schedule_levels"
+                        ) and image_config_val.get("snap_schedule_intervals"):
+                            for level, interval in zip(
+                                image_config_val["snap_schedule_levels"],
+                                image_config_val["snap_schedule_intervals"],
+                            ):
+                                snap_schedule_config = {
+                                    "pool": pool,
+                                    "image": image,
+                                    "level": level,
+                                    "interval": interval,
+                                }
 
-                            out, err = add_snapshot_scheduling(
-                                rbd_primary, **snap_schedule_config
-                            )
-                            if out or err:
-                                log.error(
-                                    f"Adding snapshot scheduling failed for image {pool}/{image}"
+                                out, err = add_snapshot_scheduling(
+                                    rbd_primary, **snap_schedule_config
                                 )
-                    if level == "group" or level == "namespace":
-                        break
+                                if out or err:
+                                    log.error(
+                                        f"Adding snapshot scheduling failed for image {pool}/{image}"
+                                    )
     # Add back the popped pool test config once configuration is complete
     if pool_test_config:
         pool_config["test_config"] = pool_test_config
