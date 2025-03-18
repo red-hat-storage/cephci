@@ -138,6 +138,7 @@ tests:
               service: listener
               command: add
               args:
+                group: group1
                 subsystems: 128
                 port: 4420
                 nodes:
@@ -153,6 +154,7 @@ tests:
               service: host
               command: add
               args:
+                group: group1
                 subsystems: 128
         desc: Configure 8 NVMeOF Gateways with 128 subsystems
         destroy-cluster: false
@@ -172,6 +174,7 @@ tests:
               service: namespace
               command: add
               args:
+                group: group1
                 subsystems: 128
                 namespaces: 1024
                 image_size: 1T
@@ -187,6 +190,27 @@ tests:
       module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Scale to 1024 namespaces with IO on 4GW and 128 subsystems
       polarion-id: CEPH-83583005
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node3
+        rbd_pool: rbd1
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                group: group1
+                namespaces: 1024
+      desc: set QoS to 1024 namespaces
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: set QoS to 1024 namespaces on 2GW and 128 subsystems
+      polarion-id: CEPH-83609775
 
   - test:
       abort-on-fail: false
