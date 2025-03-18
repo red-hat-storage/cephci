@@ -337,8 +337,9 @@ tests:
             commands:
               - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-sec#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --master --default"
-              - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph orch restart {service_name:shared.pri}"
+              - "sleep 30"
+              - "radosgw-admin period update --rgw-realm india --commit"
               - "sleep 120"
       desc: RGW multisite failback
       module: exec.py
