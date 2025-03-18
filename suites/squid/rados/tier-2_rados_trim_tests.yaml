@@ -189,3 +189,4 @@ tests:
           pg_num: 128
           pgp_num: 128
       desc: Perform OSD compaction with & without failures
+      comments: regression Bug in 8.1 - 2351352
