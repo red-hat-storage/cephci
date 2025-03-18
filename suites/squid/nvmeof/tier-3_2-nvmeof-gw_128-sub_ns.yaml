@@ -132,6 +132,7 @@ tests:
               service: listener
               command: add
               args:
+                group: group1
                 subsystems: 128
                 port: 4420
                 nodes:
@@ -141,6 +142,7 @@ tests:
               service: host
               command: add
               args:
+                group: group1
                 subsystems: 128
       desc: Configure 2 NVMeOF Gateways with 128 subsystems
       destroy-cluster: false
@@ -160,6 +162,7 @@ tests:
               service: namespace
               command: add
               args:
+                group: group1
                 subsystems: 128
                 namespaces: 1024
                 image_size: 1T

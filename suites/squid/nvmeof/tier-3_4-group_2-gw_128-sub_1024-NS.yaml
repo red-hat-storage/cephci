@@ -150,6 +150,13 @@ tests:
                 group: group1
                 image_size: 1T
                 pool: rbd1
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                group: group1
+                namespaces: 1024
         initiators:
             listener_port: 4420
             node: node11
@@ -161,6 +168,27 @@ tests:
       module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Scale to 1024 namespaces with IO on 2GW and 128 subsystems
       polarion-id: CEPH-83595512
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node3
+        rbd_pool: rbd1
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                group: group1
+                namespaces: 1024
+      desc: set QoS to 1024 namespaces
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: set QoS to 1024 namespaces on 2GW and 128 subsystems
+      polarion-id: CEPH-83609775
 
   - test:
       abort-on-fail: false
@@ -247,6 +275,27 @@ tests:
   - test:
       abort-on-fail: false
       config:
+        node: node3
+        rbd_pool: rbd1
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                group: group2
+                namespaces: 1024
+      desc: set QoS to 1024 namespaces
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: set QoS to 1024 namespaces on 2GW and 128 subsystems
+      polarion-id: CEPH-83609775
+
+  - test:
+      abort-on-fail: false
+      config:
         verify_cluster_health: true
         steps:
           - config:
@@ -329,6 +378,27 @@ tests:
   - test:
       abort-on-fail: false
       config:
+        node: node3
+        rbd_pool: rbd1
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                group: group3
+                namespaces: 1024
+      desc: set QoS to 1024 namespaces
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: set QoS to 1024 namespaces on 2GW and 128 subsystems
+      polarion-id: CEPH-83609775
+
+  - test:
+      abort-on-fail: false
+      config:
         verify_cluster_health: true
         steps:
           - config:
@@ -407,6 +477,27 @@ tests:
       module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Scale to 1024 namespaces with IO on 2GW and 128 subsystems
       polarion-id: CEPH-83595512
+
+  - test:
+      abort-on-fail: false
+      config:
+        node: node3
+        rbd_pool: rbd1
+        do_not_create_image: true
+        rep-pool-only: true
+        steps:
+          - config:
+              service: namespace
+              command: set_qos
+              args:
+                subsystems: 128
+                group: group4
+                namespaces: 1024
+      desc: set QoS to 1024 namespaces
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_sub_scale.py
+      name: set QoS to 1024 namespaces on 2GW and 128 subsystems
+      polarion-id: CEPH-83609775
 
   - test:
       abort-on-fail: false
