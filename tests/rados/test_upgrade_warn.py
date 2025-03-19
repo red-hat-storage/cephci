@@ -10,12 +10,14 @@ Quincy to reef bug : https://bugzilla.redhat.com/show_bug.cgi?id=2243570
 """
 
 import datetime
+import json
 import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
+from utility.utils import fetch_build_artifacts
 
 log = Log(__name__)
 
@@ -44,6 +46,9 @@ def run(ceph_cluster, **kw):
     """
     log.info(run.__doc__)
     config = kw["config"]
+    args = config.get("args", {})
+    timeout = config.get("timeout", 1800)
+    rhbuild = config.get("rhbuild")
     cephadm_obj = CephAdmin(cluster=ceph_cluster, **config)
     cluster_obj = Orch(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm_obj)
@@ -56,11 +61,12 @@ def run(ceph_cluster, **kw):
     log.debug("Collecting daemon info and Cluster usage info before the upgrade")
     pre_upgrade_orch_ps = rados_obj.run_ceph_command(cmd="ceph orch ps")
     pre_upgrade_df_detail = rados_obj.run_ceph_command(cmd="ceph df detail")
+    log.info("\n\nCluster status before upgrade: \n")
     log_dump = (
-        f"\n\nCluster status: \n"
         f"ceph status :  {rados_obj.run_ceph_command(cmd='ceph -s')} \n "
         f"health detail :{rados_obj.run_ceph_command(cmd='ceph health detail')} \n "
         f"crashes : {rados_obj.run_ceph_command(cmd='ceph crash ls')} \n "
+        f"ceph versions: {rados_obj.run_ceph_command(cmd='ceph versions')} \n"
     )
     log.info(log_dump)
 
@@ -70,9 +76,54 @@ def run(ceph_cluster, **kw):
 
     log.debug("Starting upgrade")
     try:
+        config.update({"args": {"image": "latest"}})
+
+        # Support installation of the baseline cluster whose version is not available in
+        # CDN. This is primarily used for an upgrade scenario. This support is currently
+        # available only for RH network.
+        _rhcs_version = args.get("rhcs-version", None)
+        _rhcs_release = args.get("release", None)
+        if _rhcs_release and _rhcs_version:
+            curr_ver, _ = cephadm_obj.shell(args=["ceph version | awk '{print $3}'"])
+            log.debug(
+                "Upgrading the cluster from ceph version %s to %s-%s "
+                % (curr_ver, _rhcs_version, _rhcs_release)
+            )
+            _platform = "-".join(rhbuild.split("-")[1:])
+            _base_url, _registry, _image_name, _image_tag = fetch_build_artifacts(
+                _rhcs_release, _rhcs_version, _platform
+            )
+
+            # The cluster object is configured so that the values are persistent till
+            # an upgrade occurs. This enables us to execute the test in the right
+            # context.
+            config["base_url"] = _base_url
+            config["container_image"] = f"{_registry}/{_image_name}:{_image_tag}"
+            config["ceph_docker_registry"] = _registry
+            config["ceph_docker_image"] = _image_name
+            config["ceph_docker_image_tag"] = _image_tag
+            ceph_cluster.rhcs_version = _rhcs_version or rhbuild
+            config["rhbuild"] = f"{_rhcs_version}-{_platform}"
+            config["args"]["rhcs-version"] = _rhcs_version
+            config["args"]["release"] = _rhcs_release
+            config["args"]["image"] = config["container_image"]
+
+            # initiate a new object with updated config
+            cluster_obj = Orch(cluster=ceph_cluster, **config)
+
+        # Remove existing repos
+        rm_repo_cmd = (
+            "find /etc/yum.repos.d/ -type f ! -name hashicorp.repo ! -name redhat.repo -delete ;"
+            " yum clean all"
+        )
+        for node in ceph_cluster.get_nodes():
+            node.exec_command(sudo=True, cmd=rm_repo_cmd)
+
+        # Set repo to newer RPMs
         cluster_obj.set_tool_repo()
         time.sleep(5)
-        cluster_obj.install()
+        upgd_dict = {"upgrade": True}
+        cluster_obj.install(**upgd_dict)
         time.sleep(5)
 
         # Check service versions vs available and target containers
@@ -82,7 +133,6 @@ def run(ceph_cluster, **kw):
         log.info(f"Current version on the cluster : {ceph_version}")
 
         # Start Upgrade
-        config.update({"args": {"image": "latest"}})
         cluster_obj.start_upgrade(config)
         time.sleep(5)
 
@@ -90,15 +140,21 @@ def run(ceph_cluster, **kw):
         upgrade_complete = False
         inactive_pgs = 0
         # Monitor upgrade status, till completion, checking for the warning to be generated
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         while end_time > datetime.datetime.now():
             cmd = "ceph orch upgrade status"
-            out = rados_obj.run_ceph_command(cmd=cmd, client_exec=True)
-
-            if not out["in_progress"]:
-                log.info("Upgrade Complete...")
-                upgrade_complete = True
-                break
+            out, _ = rados_obj.client.exec_command(cmd=cmd, sudo=True)
+            try:
+                status = json.loads(out)
+                if not status["in_progress"]:
+                    log.info("Upgrade Complete...")
+                    upgrade_complete = True
+                    break
+            except json.JSONDecodeError:
+                if "no upgrades in progress" in out:
+                    log.info("Upgrade Complete...")
+                    upgrade_complete = True
+                    break
 
             log.debug(f"upgrade in progress. Status : {out}")
 
@@ -201,11 +257,12 @@ def run(ceph_cluster, **kw):
             log.error("Found inactive PGs on the cluster during upgrade")
             raise Exception("Inactive PGs during Upgrade error")
 
+        log.info("\n\nCluster status post upgrade: \n")
         log_dump = (
-            f"\n\nCluster status post upgrade: \n"
             f"ceph status :  {rados_obj.run_ceph_command(cmd='ceph -s')} \n "
             f"health detail :{rados_obj.run_ceph_command(cmd='ceph health detail')} \n "
             f"crashes : {rados_obj.run_ceph_command(cmd='ceph crash ls')} \n "
+            f"ceph versions: {rados_obj.run_ceph_command(cmd='ceph versions')} \n"
         )
         log.info(log_dump)
 

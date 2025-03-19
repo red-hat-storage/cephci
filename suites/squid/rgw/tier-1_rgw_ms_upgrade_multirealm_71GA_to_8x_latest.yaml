@@ -217,6 +217,26 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
+# configuring HAproxy on the client node 'node6' and port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node5:80
+        ceph-sec:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
   - test:
       abort-on-fail: true
       clusters:
@@ -415,6 +435,7 @@ tests:
           config:
             script-name: test_Mbuckets_with_Nobjects.py
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+            run-on-haproxy: true
       desc: test to create "M" no of buckets and "N" no of objects with download
       module: sanity_rgw_multisite.py
       name: download objects post upgrade

@@ -106,7 +106,7 @@ def nfs_test(nfs_req_params):
 
     time.sleep(2)
     log.info("Run IO on new exports in existing nfs server")
-    nfs_mounting_dir = f"{existing_nfs_mount}_new1"
+    nfs_mounting_dir = "/mnt/nfs_new1"
     fs_util.nfs_mount_and_io(
         nfs_client, nfs_server_name, new_export_name, nfs_mounting_dir
     )
@@ -141,7 +141,7 @@ def nfs_test(nfs_req_params):
 
     time.sleep(2)
     log.info("Mount ceph nfs new exports and run IO")
-    nfs_mounting_dir = f"{existing_nfs_mount}_new2"
+    nfs_mounting_dir = "/mnt/nfs_new2"
     fs_util.nfs_mount_and_io(
         nfs_client, nfs_server_name_1, new_export_name, nfs_mounting_dir
     )
@@ -1197,7 +1197,10 @@ def run(ceph_cluster, **kw):
         if test_status == 1:
             assert False, "CG quiesce post upgrade validation failed"
         log.info(" CG quiesce post upgrade validation succeeded \n")
-
+        # Upgrade all clients
+        for client in clients:
+            cmd = "yum install -y --nogpgcheck ceph-common ceph-fuse"
+            client.exec_command(sudo=True, cmd=cmd)
         return 0
 
     except Exception as e:

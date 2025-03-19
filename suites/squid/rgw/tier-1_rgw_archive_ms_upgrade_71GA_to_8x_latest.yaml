@@ -112,7 +112,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    rhcs-version: 6.1
+                    rhcs-version: 7.1
                     release: rc
                     registry-url: registry.redhat.io
                     mon-ip: node1
@@ -225,7 +225,7 @@ tests:
               - "sleep 120"
               - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
               - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
-              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone archive --endpoints http://{node_ip:node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --tier-type=archive"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone archive --endpoints http://{node_ip:node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --tier-type=archive --sync-from-all false --sync-from primary"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.arc} rgw_zonegroup shared"

@@ -137,23 +137,6 @@ class FsUtils(object):
                 ]
                 for cmd in cmd_list:
                     client.node.exec_command(cmd=cmd)
-            out, rc = client.node.exec_command(
-                sudo=True, cmd="rpm -qa | grep -w 'dbench'", check_ec=False
-            )
-            if "dbench" not in out:
-                log.info("Installing dbench")
-                client.node.exec_command(
-                    sudo=True,
-                    cmd=(
-                        "rhel_version=$(rpm -E %rhel) && "
-                        "dnf config-manager --add-repo="
-                        "https://download.fedoraproject.org/pub/epel/${rhel_version}/Everything/x86_64/"
-                    ),
-                )
-                client.node.exec_command(
-                    sudo=True,
-                    cmd="dnf install dbench -y --nogpgcheck",
-                )
         if (
             hasattr(clients[0].node, "vm_node")
             and clients[0].node.vm_node.node_type == "baremetal"
@@ -1122,6 +1105,7 @@ class FsUtils(object):
             *args:
                 umount : if this argument is passed this will unmounts all the devices
             **kwargs:
+                retain_keyring(default: False) : if this argument is set to True, it will not remove the keyring file
 
         Returns:
             0 if all the clean up is passed
@@ -1146,16 +1130,19 @@ class FsUtils(object):
                 client.exec_command(sudo=True, cmd=cmd)
                 log.info("Removing mounting directory:")
                 client.exec_command(sudo=True, cmd=f"rmdir {mounting_dir}")
-                log.info("Removing keyring file:")
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"rm -rf /etc/ceph/ceph.client.{kwargs.get('client_name', client.node.hostname)}.keyring",
-                )
-                log.info("Removing permissions:")
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"ceph auth del client.{kwargs.get('client_name', client.node.hostname)}",
-                )
+
+                # If retain_keyring is not set, remove the keyring file and permissions
+                if not kwargs.get("retain_keyring", False):
+                    log.info("Removing keyring file:")
+                    client.exec_command(
+                        sudo=True,
+                        cmd=f"rm -rf /etc/ceph/ceph.client.{kwargs.get('client_name', client.node.hostname)}.keyring",
+                    )
+                    log.info("Removing permissions:")
+                    client.exec_command(
+                        sudo=True,
+                        cmd=f"ceph auth del client.{kwargs.get('client_name', client.node.hostname)}",
+                    )
                 client.exec_command(
                     cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
                     " -name 'Crefi' -name 'smallfile' -delete",
@@ -1212,6 +1199,8 @@ class FsUtils(object):
             tuple: A tuple containing the Ceph command output and command return code.
         """
         nfs_cmd = f"ceph nfs cluster create {nfs_cluster_name}"
+        if kwargs.get("nfs_server_name"):
+            nfs_cmd += f" {kwargs.get('nfs_server_name')}"
         if kwargs.get("placement"):
             nfs_cmd += f" --placement '{kwargs.get('placement')}'"
 

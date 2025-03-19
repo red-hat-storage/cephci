@@ -83,7 +83,7 @@ tests:
       config:
         spec:
           service_type: osd
-          service_name: osd_hdd
+          service_id: osd_hdd
           placement:
             hosts:
               - node0
@@ -103,7 +103,7 @@ tests:
       config:
         spec:
           service_type: osd
-          service_name: osd_hdd
+          service_id: osd_hdd
           placement:
             hosts:
               - node0
@@ -123,7 +123,7 @@ tests:
       config:
         spec:
           service_type: osd
-          service_name: osd_hdd
+          service_id: osd_hdd
           placement:
             label: "osd"
           spec:
@@ -140,7 +140,7 @@ tests:
       config:
         spec:
           service_type: osd
-          service_name: osd_sdd
+          service_id: osd_sdd
           placement:
             label: "osd"
           crush_device_class: ssd

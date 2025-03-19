@@ -254,6 +254,24 @@ class FSIO(object):
             )
 
         def dbench():
+            log.info("Installing dbench if not already installed")
+            out, _ = client.node.exec_command(
+                sudo=True, cmd="rpm -qa | grep -w 'dbench'", check_ec=False
+            )
+            if "dbench" not in out:
+                log.info("Installing dbench")
+                client.node.exec_command(
+                    sudo=True,
+                    cmd=(
+                        "rhel_version=$(rpm -E %rhel) && "
+                        "dnf config-manager --add-repo="
+                        "https://dl.fedoraproject.org/pub/epel/${rhel_version}/Everything/x86_64/"
+                    ),
+                )
+                client.node.exec_command(
+                    sudo=True,
+                    cmd="dnf install dbench -y --nogpgcheck",
+                )
             log.info("IO tool scheduled : dbench")
             io_params = {
                 "clients": random.choice(

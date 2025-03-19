@@ -1,4 +1,6 @@
 from ceph.rbd.utils import getdict, random_string
+from ceph.rbd.workflows.group import create_mirror_group
+from ceph.rbd.workflows.namespace import create_namespace_in_pool
 from ceph.rbd.workflows.rbd import create_pools_and_images
 from ceph.rbd.workflows.rbd_mirror import config_mirror_multi_pool
 from ceph.utils import get_node_by_id
@@ -97,6 +99,15 @@ def update_config(**kw):
             is_pool_config_updated = [
                 k for k in getdict(rep_pool_config).keys() if k not in ["test_config"]
             ]
+            if config.get("grouptype"):
+                if config.get("grouptype").startswith("single"):
+                    rep_pool_config.update({"num_pools": 1})
+                elif config.get("grouptype").startswith("multi"):
+                    if (
+                        not config.get("num_pools")
+                        or rep_pool_config.get("num_pools") == 1
+                    ):
+                        rep_pool_config.update({"num_pools": 2})
 
             if not is_pool_config_updated and rep_pool_config.get("num_pools"):
                 for i in range(rep_pool_config.get("num_pools")):
@@ -191,6 +202,18 @@ def update_config(**kw):
                         rep_pool_config[pool].update(
                             {"journal_delay": rep_pool_config["journal_delay"]}
                         )
+                    if rep_pool_config.get("mirror_level"):
+                        rep_pool_config[pool].update(
+                            {"mirror_level": rep_pool_config["mirror_level"]}
+                        )
+                    if rep_pool_config.get("namespace_mirror_type"):
+                        rep_pool_config[pool].update(
+                            {
+                                "namespace_mirror_type": rep_pool_config[
+                                    "namespace_mirror_type"
+                                ]
+                            }
+                        )
 
     if not kw.get("config").get("rep-pool-only"):
         pool_types.append("ec_pool_config")
@@ -212,6 +235,16 @@ def update_config(**kw):
             is_pool_config_updated = [
                 k for k in getdict(ec_pool_config).keys() if k not in ["test_config"]
             ]
+            if config.get("grouptype"):
+                if config.get("grouptype").startswith("single"):
+                    ec_pool_config.update({"num_pools": 1})
+                elif config.get("grouptype").startswith("multi"):
+                    if (
+                        not config.get("num_pools")
+                        or ec_pool_config.get("num_pools") == 1
+                    ):
+                        ec_pool_config.update({"num_pools": 2})
+
             if not is_pool_config_updated and ec_pool_config.get("num_pools"):
                 for i in range(ec_pool_config.get("num_pools")):
                     pool = ec_pool_config.get(
@@ -315,6 +348,18 @@ def update_config(**kw):
                     if ec_pool_config.get("journal_delay"):
                         ec_pool_config[pool].update(
                             {"journal_delay": ec_pool_config["journal_delay"]}
+                        )
+                    if ec_pool_config.get("mirror_level"):
+                        ec_pool_config[pool].update(
+                            {"mirror_level": ec_pool_config["mirror_level"]}
+                        )
+                    if ec_pool_config.get("namespace_mirror_type"):
+                        ec_pool_config[pool].update(
+                            {
+                                "namespace_mirror_type": ec_pool_config[
+                                    "namespace_mirror_type"
+                                ]
+                            }
                         )
     return pool_types
 
@@ -457,6 +502,11 @@ def initial_rbd_config(ceph_cluster, **kw):
         ):
             log.error(f"RBD configuration failed for {pool_type}")
             return None
+        # Create a group in case of group level mirroring.
+        if kw.get("config").get(pool_type).get("mirror_level") == "group":
+            create_mirror_group(rbd, client, pool_type, **kw)
+        if kw.get("config").get(pool_type).get("mirror_level") == "namespace":
+            create_namespace_in_pool(rbd, client, pool_type, **kw)
 
     return {"rbd": rbd, "client": client, "pool_types": pool_types}
 

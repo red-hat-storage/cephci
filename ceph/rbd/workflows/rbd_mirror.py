@@ -105,6 +105,23 @@ def wait_for_status(rbd, cluster_name, **kw):
                 )
                 if kw.get("images_pattern") == num_image:
                     return 0
+        elif kw.get("groupspec", False):
+            if kw.get("state_pattern"):
+                out = value(
+                    "state",
+                    json.loads(
+                        rbd.mirror.group.status(
+                            **{"groupspec": kw.get("groupspec"), "format": "json"}
+                        )[0]
+                    ),
+                )
+                log.info(
+                    "State of {} group in {} cluster: {}".format(
+                        kw.get("groupspec"), cluster_name, out
+                    )
+                )
+                if kw.get("state_pattern") in out:
+                    return 0
         else:
             try:
                 if kw.get("state_pattern"):
@@ -334,7 +351,7 @@ def bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw):
         log.error("Peers were not added")
 
 
-def config_mirror(rbd_primary, rbd_secondary, **kw):
+def config_mirror(rbd_primary, rbd_secondary, is_secondary=False, **kw):
     """
     Configure mirroring on RBD clusters based on the parameters provided
     Args:
@@ -362,15 +379,36 @@ def config_mirror(rbd_primary, rbd_secondary, **kw):
         "mode": mode,
         "cluster": ceph_cluster_primary,
     }
-    out = rbd_primary.mirror.pool.enable(**enable_config)
-    log.info(f"Output of RBD mirror pool enable: {out}")
-
-    if "rbd: mirroring is already configured" not in out[0].strip():
-        enable_config.update({"cluster": ceph_cluster_secondary})
-        out = rbd_secondary.mirror.pool.enable(**enable_config)
-        bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw)
+    if (
+        kw.get("namespace_mirror_type")
+        and kw.get("namespace_mirror_type") != "non-default_to_non-default"
+    ):
+        if is_secondary is False:
+            if kw.get("namespace_mirror_type") == "non-default_to_default":
+                # Allow some other namespace to be mirrored to the default namespace of the remote pool
+                enable_config.update({"mode": "init-only"})
+                out = rbd_primary.mirror.pool.enable(**enable_config)
+                log.info(f"Output of RBD mirror pool enable: {out}")
+                enable_config.update({"cluster": ceph_cluster_secondary})
+                enable_config.update({"mode": mode})
+                out = rbd_secondary.mirror.pool.enable(**enable_config)
+                bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw)
+            elif kw.get("namespace_mirror_type") == "default_to_non-default":
+                out = rbd_primary.mirror.pool.enable(**enable_config)
+                # Allow some other namespace to be mirrored to the default namespace of the remote pool
+                enable_config.update({"mode": "init-only"})
+                enable_config.update({"cluster": ceph_cluster_secondary})
+                out = rbd_secondary.mirror.pool.enable(**enable_config)
+                bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw)
     else:
-        log.info(f"RBD Mirroring has already been configured for pool {poolname}")
+        out = rbd_primary.mirror.pool.enable(**enable_config)
+        log.info(f"Output of RBD mirror pool enable: {out}")
+        if "rbd: mirroring is already configured" not in out[0].strip():
+            enable_config.update({"cluster": ceph_cluster_secondary})
+            out = rbd_secondary.mirror.pool.enable(**enable_config)
+            bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw)
+        else:
+            log.info(f"RBD Mirroring has already been configured for pool {poolname}")
 
     # Waiting for OK pool mirror status to be okay based on user input as in image based
     # mirorring status wouldn't reach OK without enabling mirroing on individual images
@@ -481,6 +519,7 @@ def config_mirror_multi_pool(
             config_mirror(
                 rbd_primary,
                 rbd_secondary,
+                is_secondary,
                 primary_client=primary_client,
                 secondary_client=secondary_client,
                 pool_name=pool,
@@ -492,68 +531,70 @@ def config_mirror_multi_pool(
             )
 
             # Enable image level mirroring only when mode is image type
-            if (
-                not kw.get("do_not_enable_mirror_on_image")
-                and pool_config.get("mode") == "image"
-            ) or (
-                pool_config.get("mode") == "pool"
-                and pool_config.get("mirrormode") == "snapshot"
-            ):
-                mirrormode = pool_config.get("mirrormode", "")
-                multi_image_config = getdict(pool_config)
-                image_config = {
-                    k: v
-                    for k, v in multi_image_config.items()
-                    if v.get("is_secondary", False) == is_secondary
-                }
-                # for image, image_config in multi_image_config.items():
-                for image, image_config_val in image_config.items():
-                    image_enable_config = {
-                        "pool": pool,
-                        "image": image,
-                        "mirrormode": mirrormode,
-                        "io_total": image_config_val.get("io_total", None),
+            if pool_config.get("mirror_level", "") not in ["group", "namespace"]:
+                if (
+                    not kw.get("do_not_enable_mirror_on_image")
+                    and pool_config.get("mode") == "image"
+                ) or (
+                    pool_config.get("mode") == "pool"
+                    and pool_config.get("mirrormode") == "snapshot"
+                ):
+                    mirrormode = pool_config.get("mirrormode", "")
+                    multi_image_config = getdict(pool_config)
+                    image_config = {
+                        k: v
+                        for k, v in multi_image_config.items()
+                        if v.get("is_secondary", False) == is_secondary
                     }
-                    out = enable_image_mirroring(
-                        primary_config, secondary_config, **image_enable_config
-                    )
+                    # for image, image_config in multi_image_config.items():
+                    for image, image_config_val in image_config.items():
 
-                    if (
-                        pool_config.get("mode") == "pool"
-                        and pool_config.get("mirrormode") == "snapshot"
-                    ):
+                        image_enable_config = {
+                            "pool": pool,
+                            "image": image,
+                            "mirrormode": mirrormode,
+                            "io_total": image_config_val.get("io_total", None),
+                        }
+                        out = enable_image_mirroring(
+                            primary_config, secondary_config, **image_enable_config
+                        )
+
                         if (
-                            out
-                            and "cannot enable mirroring: pool is not in image mirror mode"
-                            in out.strip()
+                            pool_config.get("mode") == "pool"
+                            and pool_config.get("mirrormode") == "snapshot"
                         ):
-                            output = "Snapshot based mirroring cannot be enabled in pool mode"
-                        elif not is_secondary:
-                            output = (
-                                "Snapshot based mirroring did not fail in pool mode"
-                            )
-
-                    if image_config_val.get(
-                        "snap_schedule_levels"
-                    ) and image_config_val.get("snap_schedule_intervals"):
-                        for level, interval in zip(
-                            image_config_val["snap_schedule_levels"],
-                            image_config_val["snap_schedule_intervals"],
-                        ):
-                            snap_schedule_config = {
-                                "pool": pool,
-                                "image": image,
-                                "level": level,
-                                "interval": interval,
-                            }
-                            out, err = add_snapshot_scheduling(
-                                rbd_primary, **snap_schedule_config
-                            )
-                            if out or err:
-                                log.error(
-                                    f"Adding snapshot scheduling failed for image {pool}/{image}"
+                            if (
+                                out
+                                and "cannot enable mirroring: pool is not in image mirror mode"
+                                in out.strip()
+                            ):
+                                output = "Snapshot based mirroring cannot be enabled in pool mode"
+                            elif not is_secondary:
+                                output = (
+                                    "Snapshot based mirroring did not fail in pool mode"
                                 )
 
+                        if image_config_val.get(
+                            "snap_schedule_levels"
+                        ) and image_config_val.get("snap_schedule_intervals"):
+                            for level, interval in zip(
+                                image_config_val["snap_schedule_levels"],
+                                image_config_val["snap_schedule_intervals"],
+                            ):
+                                snap_schedule_config = {
+                                    "pool": pool,
+                                    "image": image,
+                                    "level": level,
+                                    "interval": interval,
+                                }
+
+                                out, err = add_snapshot_scheduling(
+                                    rbd_primary, **snap_schedule_config
+                                )
+                                if out or err:
+                                    log.error(
+                                        f"Adding snapshot scheduling failed for image {pool}/{image}"
+                                    )
     # Add back the popped pool test config once configuration is complete
     if pool_test_config:
         pool_config["test_config"] = pool_test_config

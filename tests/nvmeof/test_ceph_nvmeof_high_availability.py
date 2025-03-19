@@ -7,6 +7,7 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway HA
 from copy import deepcopy
 
 from ceph.ceph import Ceph
+from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import check_service_exists
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmeof.initiator import Initiator
@@ -26,8 +27,15 @@ from utility.utils import generate_unique_id
 LOG = Log(__name__)
 
 
-def configure_listeners(ha_obj, nodes, config):
-    """Configure Listeners on subsystem."""
+def configure_listeners(ha_obj, nodes, config, action="add"):
+    """Configure Listeners on subsystem.
+
+    Args:
+        ha_obj: HA object
+        nodes: List of GW nodes
+        config: listener config
+        action: listener add, del
+    """
     lb_group_ids = {}
     for node in nodes:
         nvmegwcli = ha_obj.check_gateway(node)
@@ -40,7 +48,8 @@ def configure_listeners(ha_obj, nodes, config):
                 "host-name": hostname,
             }
         }
-        nvmegwcli.listener.add(**listener_config)
+        method = fetch_method(nvmegwcli.listener, action)
+        method(**listener_config)
         lb_group_ids.update({hostname: nvmegwcli.ana_group_id})
     return lb_group_ids
 

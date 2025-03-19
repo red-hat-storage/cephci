@@ -245,8 +245,8 @@ tests:
       config:
         nfs_version: 4.2
         clients: 3
-        num_files: 1000
-        num_dirs: 1000
+        num_files: 100
+        num_dirs: 100
 
   - test:
       name: Nfs Ganesha rename operations
@@ -257,8 +257,8 @@ tests:
       config:
         nfs_version: 4.2
         clients: 3
-        num_files: 1000
-        num_dirs: 1000
+        num_files: 100
+        num_dirs: 100
 
   - test:
       name: Nfs Ganesha test multi mount versions

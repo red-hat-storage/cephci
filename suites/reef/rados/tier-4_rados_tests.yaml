@@ -150,6 +150,13 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
       name: OSD addition on an unavailable disk
       desc: Add new OSD on an pre-occupied OSD disk
       module: test_add_new_osd.py
@@ -211,12 +218,12 @@ tests:
           create: true
           pool_name: re_pool_compress
           pg_num: 32
-          rados_write_duration: 10
+          max_objs: 300
           rados_read_duration: 10
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           configurations:
             - config-1:
                 compression_mode: force
@@ -247,12 +254,12 @@ tests:
           create: true
           pool_name: re_pool_compress
           pg_num: 32
-          rados_write_duration: 10
+          max_objs: 300
           rados_read_duration: 10
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           configurations:
             - config-1:
                 compression_mode: force

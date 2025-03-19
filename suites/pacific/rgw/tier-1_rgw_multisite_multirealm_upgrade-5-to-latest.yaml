@@ -220,6 +220,25 @@ tests:
   - test:
       abort-on-fail: true
       clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node5:80
+        ceph-sec:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
+      abort-on-fail: true
+      clusters:
         ceph-sec:
           config:
             cephadm: true

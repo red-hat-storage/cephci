@@ -97,6 +97,59 @@ tests:
         log_to_file: true
       desc: Change config options to enable logging to file
 
+# RHOS-d run duration: 1 min
+# env: VM + BM
+  - test:
+      name: Ceph balancer plugin
+      module: rados_prep.py
+      polarion-id: CEPH-83573247
+      config:
+        configure_balancer:
+          configure: true
+          balancer_mode: crush-compat
+          target_max_misplaced_ratio: 0.04
+          sleep_interval: 30
+      desc: Ceph balancer plugins CLI validation in crush-compat mode
+
+# RHOS-d run duration: 1 min
+# env: VM + BM
+  - test:
+      name: Ceph balancer test
+      module: rados_prep.py
+      polarion-id: CEPH-83573251
+      config:
+        configure_balancer:
+          configure: true
+          balancer_mode: upmap
+          target_max_misplaced_ratio: 0.05
+          sleep_interval: 60
+      desc: Ceph balancer plugins CLI validation in upmap mode
+
+# RHOS-d run duration: 3 mins
+# env: VM + BM
+  - test:
+      name: Ceph PG Autoscaler
+      module: rados_prep.py
+      polarion-id: CEPH-83573412
+      config:
+        replicated_pool:
+          create: true
+          pool_name: rep_test_pool
+          max_objs: 300
+          rados_read_duration: 10
+          pg_num: 32
+        configure_pg_autoscaler:
+          default_mode: warn
+          mon_target_pg_per_osd: 128
+          pool_config:
+            pool_name: rep_test_pool
+            pg_autoscale_mode: "on"
+            pg_num_min: 16
+            target_size_ratio: 0.4
+        delete_pools:
+          - rep_test_pool
+      desc: Ceph PG autoscaler CLI validation
+
   - test:
       name: Verify scrub logs
       module: test_scrub_log.py
@@ -137,16 +190,16 @@ tests:
               plugin: jerasure
               crush-failure-domain: osd
               target_size_ratio: 0.8
-              rados_write_duration: 50
-              rados_read_duration: 50
+              max_objs: 300
+              rados_read_duration: 10
               delete_pool: true
             pool-2:
               pool_type: replicated
               pool_name: re_pool_1
               pg_num: 32
               target_size_ratio: 0.8
-              rados_write_duration: 50
-              rados_read_duration: 50
+              max_objs: 300
+              rados_read_duration: 10
               delete_pool: true
       desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
 
@@ -193,16 +246,16 @@ tests:
               plugin: jerasure
               crush-failure-domain: osd
               pg_num_min: 16
-              rados_write_duration: 50
-              rados_read_duration: 50
+              max_objs: 300
+              rados_read_duration: 10
               delete_pool: true
             pool-2:
               pool_type: replicated
               pool_name: re_pool_2
               pg_num: 64
               pg_num_min: 32
-              rados_write_duration: 50
-              rados_read_duration: 50
+              max_objs: 300
+              rados_read_duration: 10
               delete_pool: true
       desc: Specifying pool bounds on pool Pgs - Verify pg_num_min
 
@@ -315,7 +368,7 @@ tests:
           pool_config:
             pool-1: test_compression_repool-1
             pool-2: test_compression_repool-2
-            rados_write_duration: 200
+            max_objs: 300
             byte_size: 400KB
             pg_num: 32
           compression_config:
@@ -395,20 +448,20 @@ tests:
               pg_num: 64
               byte_size: 256
               pool_type: replicated
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
           - create_pool:
               pool_name: rpool_2
               pg_num: 128
               pool_type: replicated
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
           - create_pool:
               pool_name: rpool_3
               pg_num: 32
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
               pool_type: replicated
           - create_pool:
@@ -418,8 +471,8 @@ tests:
               pg_num: 32
               k: 2
               m: 2
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
         delete_pools:
           - rpool_1

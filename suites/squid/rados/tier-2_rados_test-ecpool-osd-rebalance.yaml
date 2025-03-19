@@ -91,6 +91,32 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+# RHOS-d run duration: 6 min
+# env: VM + BM
+  - test:
+      name: EC Profile tests
+      module: pool_tests.py
+      polarion-id: CEPH-83596295
+      config:
+        Verify_ec_profile:
+          name: test
+          profile_name: test_profile
+          pool_name: ec_profile_test
+          k: 2
+          m: 2
+          plugin: jerasure
+          max_objs: 300
+          rados_read_duration: 10
+          crush-failure-domain: host
+      desc: Verify the behaviour of EC profiles in ceph
+
+  - test:
       name: Robust rebalancing in ecpool - osd replacement
       module: test_osd_rebalance.py
       desc: Remove and add osd to verify data migration in ec pool
@@ -142,7 +168,7 @@ tests:
           - create_pool:
               pool_name: pool_p1
               pg_num: 64
-              rados_write_duration: 50
+              max_objs: 300
               byte_size: 1024
               pool_type: replicated
               osd_max_backfills: 16
@@ -211,7 +237,7 @@ tests:
           - create_pool:
               pool_name: rpool_1
               pg_num: 32
-              rados_write_duration: 50
+              max_objs: 300
               byte_size: 1024
               pool_type: replicated
               osd_max_backfills: 16
@@ -222,14 +248,14 @@ tests:
               pool_type: replicated
               size: 2
               min_size: 2
-              rados_write_duration: 50
+              max_objs: 300
               byte_size: 1024
               osd_max_backfills: 16
               osd_recovery_max_active: 16
           - create_pool:
               pool_name: rpool_3
               pg_num: 32
-              rados_write_duration: 50
+              max_objs: 300
               byte_size: 1024
               pool_type: replicated
               osd_max_backfills: 16
@@ -243,8 +269,8 @@ tests:
               k: 4
               m: 2
               plugin: jerasure
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
           - create_pool:
               create: true
               pool_name: ecpool_2
@@ -254,8 +280,8 @@ tests:
               m: 2
               l: 3
               plugin: lrc
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
         delete_pools:
           - rpool_1
           - rpool_2

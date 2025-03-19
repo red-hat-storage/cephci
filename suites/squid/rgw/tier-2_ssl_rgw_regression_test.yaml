@@ -59,6 +59,8 @@ tests:
                   service_id: rgw.ssl
                   placement:
                     nodes:
+                      - node3
+                      - node4
                       - node5
                   spec:
                     ssl: true
@@ -344,7 +346,6 @@ tests:
   - test:
       name: Test functionality of user stat reset
       desc: Test functionality of user stat reset
-      comments: Known issue BZ-2167475 targeted to 8.0
       polarion-id: CEPH-83575439
       module: sanity_rgw.py
       config:

@@ -114,6 +114,13 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
+      name: Verify osd heartbeat no reply
+      desc: heartbeat_check log entries should contain hostname:port
+      polarion-id: CEPH-10839
+      module: test_osd_heartbeat.py
+      destroy-cluster: false
+
+  - test:
       name: BlueStore Checksum algorithms
       module: test_bluestore_configs.py
       polarion-id: CEPH-83571646
@@ -161,11 +168,45 @@ tests:
           obj_end: 15
           normal_objs: 400
           num_keys_obj: 200001
+      comments: 8.1 Regression BZ 2351352
+
+  - test:
+      name: Bluestore data compression - set 1
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        scenarios_to_run:
+          - scenario-1
+          - scenario-2
+          - scenario-3
+          - scenario-4
+
+  - test:
+      name: Bluestore data compression - set 2
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        scenarios_to_run:
+          - scenario-5
+          - scenario-6
+          - scenario-7
+
+  - test:
+      name: Bluestore data compression - set 3
+      module: test_bluestore_data_compression.py
+      desc: Positive workflows for bluestore data compression
+      polarion-id: CEPH-83611889
+      config:
+        scenarios_to_run:
+          - scenario-8
+          - scenario-9
 
   - test:
       name: Ceph Volume utility zap test with destroy flag
       module: test_cephvolume_workflows.py
-      polarion-id:
+      polarion-id: CEPH-83603694
       desc: verify ceph-volume lvm zap functionality with destroy flag
       config:
         zap_with_destroy_flag: true
@@ -173,13 +214,7 @@ tests:
   - test:
       name: Ceph Volume utility zap test without destroy flag
       module: test_cephvolume_workflows.py
-      polarion-id:
+      polarion-id: CEPH-83603694
       desc: verify ceph-volume lvm zap functionality without destroy flag
       config:
         zap_without_destroy_flag: true
-
-  - test:
-      name: Bluestore data compression
-      module: test_bluestore_data_compression.py
-      desc: Positive workflows for bluestore data compression
-      polarion-id: CEPH-83611889

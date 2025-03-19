@@ -110,6 +110,17 @@ tests:
       name: configure client
 
   - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
       name: Test non-current deletion via s3cmd
       desc: Test non-current deletion via s3cmd
       polarion-id: CEPH-83573543
@@ -134,6 +145,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
 
   - test:
       name: Swift user with read access
@@ -176,7 +188,6 @@ tests:
       desc: Test Etag not empty for complete multipart upload in aws
       polarion-id: CEPH-9801
       module: sanity_rgw.py
-      comments: known issue (bz-2266793) target to 6.1
       config:
         script-name: ../aws/test_aws.py
         config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml

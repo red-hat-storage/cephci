@@ -202,6 +202,26 @@ tests:
       module: test_client.py
       name: configure client
 
+# configuring HAproxy on the client node 'node6' and port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node5:80
+        ceph-sec:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
   - test:
       abort-on-fail: true
       clusters:
@@ -317,6 +337,7 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+            run-on-haproxy: true
   - test:
       name: multipart upload on primary
       desc: test_Mbuckets_with_Nobjects_multipart on primary

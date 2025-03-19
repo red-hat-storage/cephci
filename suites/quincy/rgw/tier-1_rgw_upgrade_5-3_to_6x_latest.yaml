@@ -77,9 +77,21 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        run-on-haproxy: true
       desc: test to create "M" no of buckets and "N" no of objects with download
       module: sanity_rgw.py
       name: download objects pre upgrade
@@ -93,6 +105,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
 
   - test:
       name: Mbuckets_with_Nobjects with etag verification pre upgrade
@@ -102,6 +115,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests pre upgrade
@@ -111,6 +125,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: Manual Resharding tests pre upgrade
@@ -120,6 +135,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests with version pre upgrade
@@ -129,11 +145,13 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_flat_ordered.yaml
+        run-on-haproxy: true
       desc: test duration for ordered listing of bucket with top level objects
       module: sanity_rgw.py
       name: ordered listing of buckets pre upgrade
@@ -245,6 +263,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        run-on-haproxy: true
       desc: test to create "M" no of buckets and "N" no of objects with download
       module: sanity_rgw.py
       name: download objects post upgrade
@@ -258,6 +277,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
 
   - test:
       name: Mbuckets_with_Nobjects with etag verification post upgrade
@@ -267,6 +287,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests post upgrade
@@ -276,6 +297,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: Manual Resharding tests post upgrade
@@ -285,6 +307,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests with version post upgrade
@@ -294,11 +317,13 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_flat_ordered.yaml
+        run-on-haproxy: true
       desc: test duration for ordered listing of bucket with top level objects
       module: sanity_rgw.py
       name: ordered listing of buckets post upgrade

@@ -92,6 +92,17 @@ tests:
       module: test_client.py
       name: configure client
 
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
   # Testing stage
 
 
@@ -148,6 +159,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_multiple_rules.yaml
+        run-on-haproxy: true
   - test:
       name: Bucket Lifecycle Object_transition_tests multiple pool transition
       desc: Bucket Lifecycle Object_transition_tests multiple pool transition

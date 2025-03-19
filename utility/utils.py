@@ -576,9 +576,10 @@ def set_config_param(node):
     # add the configuration/s to be set on service
     configs = ["rgw_max_objs_per_shard 5", "rgw_lc_debug_interval 30"]
     ceph_version = node.exec_command(cmd="sudo ceph version")
-    ceph_version = ceph_version[0].split()[2].split(".")[0]
-    if int(ceph_version) >= int(19):
-        configs += ["rgw_restore_debug_interval 30"]
+    ceph_version_num = ceph_version[0].split()[2].split(".")[0]
+    if int(ceph_version_num) >= int(19):
+        if "el9cp" in ceph_version[0].split()[2].split("-")[1]:
+            configs += ["rgw_restore_debug_interval 30"]
     for config_cmd in configs:
         node.exec_command(cmd=f"ceph config set client.{rgw_process_name} {config_cmd}")
 

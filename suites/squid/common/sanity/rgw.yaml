@@ -2,6 +2,17 @@
 tests:
 
 # Tests from - suites/squid/rgw/tier-1_rgw.yaml
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node2:80
+          - node3:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
 
   - test:
       name: enable bucket versioning
@@ -48,7 +59,7 @@ tests:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_download.yaml
               install_common: false
-              run-on-rgw: true
+              run-on-haproxy: true
 
         - test:
             name: Test multipart upload of M buckets with N objects

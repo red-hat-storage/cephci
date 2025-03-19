@@ -16,6 +16,7 @@ Module to perform specific functionalities of ceph-bluestore-tool.
  - ceph-bluestore-tool reshard --path osd path --sharding new sharding [ --sharding-ctrl control string ]
  - ceph-bluestore-tool show-sharding --path osd path
  - ceph-bluestore-tool bluefs-stats --path osd path
+ - ceph-bluestore-tool bluefs-log-dump --path osd path
 """
 
 from typing import Dict
@@ -26,6 +27,12 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
 
 log = Log(__name__)
+
+
+class OsdStartFailed(Exception):
+    """Custom exception thrown when OSD Start operation fails"""
+
+    pass
 
 
 class BluestoreToolWorkflows:
@@ -71,13 +78,14 @@ class BluestoreToolWorkflows:
             if not self.nostop:
                 self.rados_obj.change_osd_state(action="stop", target=osd_id)
             out, err = osd_node.exec_command(sudo=True, cmd=_cmd, timeout=timeout)
+            return str(out)
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
             raise
         finally:
             if not self.nostart:
-                self.rados_obj.change_osd_state(action="start", target=osd_id)
-        return str(out)
+                if not self.rados_obj.change_osd_state(action="start", target=osd_id):
+                    raise OsdStartFailed("Failed to start OSD.%d" % osd_id)
 
     def help(self, osd_id: int):
         """Module to run help command with ceph-bluestore-tool to display usage
@@ -315,11 +323,22 @@ class BluestoreToolWorkflows:
         return self.run_cbt_command(cmd=_cmd, osd_id=osd_id)
 
     def show_bluefs_stats(self, osd_id: int):
-        """
+        """Module to fetch the o/p of CBT bluefs-stats
         Args:
-            osd_id:
+            osd_id: OSD ID for which cbt will be executed
         Returns:
             Returns the output of cbt bluefs-stats cmd
         """
         _cmd = "ceph-bluestore-tool bluefs-stats"
+        return self.run_cbt_command(cmd=_cmd, osd_id=osd_id)
+
+    def get_bluefs_log_dump(self, osd_id: int):
+        """Module to fetch the bluefs_log_dump
+        e.g. - cephadm shell --name osd.7 -- ceph-bluestore-tool --path /var/lib/ceph/osd/ceph-7 bluefs-log-dump
+        Args:
+            osd_id: OSD ID for which cbt will be executed
+        Returns:
+            the output of cbt bluefs-log-dump cmd
+        """
+        _cmd = "ceph-bluestore-tool bluefs-log-dump"
         return self.run_cbt_command(cmd=_cmd, osd_id=osd_id)

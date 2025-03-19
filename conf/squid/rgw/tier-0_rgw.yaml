@@ -27,12 +27,14 @@ globals:
         role:
           - mon
           - osd
+          - rgw
 
       node4:
         disk-size: 20
         no-of-volumes: 4
         role:
           - osd
+          - rgw
 
       node5:
         role:

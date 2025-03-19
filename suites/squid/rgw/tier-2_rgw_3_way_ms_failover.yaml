@@ -394,9 +394,7 @@ tests:
       name: get shared realm info on secondary
       polarion-id: CEPH-83608639
 
-
   # Test work flow
-
   - test:
       clusters:
         ceph-pri:
@@ -426,16 +424,17 @@ tests:
       name: "Configure HAproxy for IO rgws"
 
   - test:
+      name: S3CMD object download on primary
+      desc: S3CMD object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            config-file-name: test_user_bucket_create.yaml
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-      desc: user and bucket create operation
-      polarion-id: CEPH-83574811
-      module: sanity_rgw_multisite.py
-      name: user and bucket create operation
+            script-name: ../s3cmd/test_s3cmd.py
+            config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+            run-on-haproxy: true
+            monitor-consistency-bucket-stats: true
 
   - test:
       abort-on-fail: true
@@ -483,7 +482,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-            run-on-haproxy: true
             monitor-consistency-bucket-stats: true
 
   - test:
@@ -584,12 +582,24 @@ tests:
 
   - test:
       clusters:
+        ceph-sec:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-ter
+      desc: create non-tenanted user
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user
+      polarion-id: CEPH-83575199
+
+  - test:
+      name: S3CMD object download on tertiary
+      desc: S3CMD object download or GET on the tertiary cluster
+      polarion-id: CEPH-83575477
+      module: sanity_rgw_multisite.py
+      clusters:
         ceph-ter:
           config:
-            script-name: test_swift_basic_ops.py
-            config-file-name: test_swift_object_expire_op.yaml
-            verify-io-on-site: ["ceph-sec"]
-      desc: test object expiration with swift
-      module: sanity_rgw_multisite.py
-      name: swift object expiration on tertiary
-      polarion-id: CEPH-9718
+            script-name: ../s3cmd/test_s3cmd.py
+            config-file-name: ../../s3cmd/configs/test_get_s3cmd_tertiary.yaml

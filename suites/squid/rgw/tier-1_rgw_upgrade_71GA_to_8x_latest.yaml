@@ -55,12 +55,15 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
       desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
       destroy-cluster: false
       module: test_cephadm.py
       name: Deploy RHCS cluster using cephadm
-
 
   - test:
       abort-on-fail: true
@@ -78,6 +81,19 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node3:80
+          - node4:80
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
       name: Mbuckets_with_Nobjects with etag verification pre upgrade
       desc: test etag verification
       module: sanity_rgw.py
@@ -85,6 +101,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests pre upgrade
@@ -94,6 +111,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: Manual Resharding tests pre upgrade
@@ -103,6 +121,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests with version pre upgrade
@@ -112,6 +131,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: S3CMD small and multipart object download pre upgrade
@@ -121,6 +141,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
 
   # upgrade cluster
   - test:
@@ -132,32 +153,37 @@ tests:
         script-name: ../aws/test_sts_rename_large_object.py
         config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
 
-  # upgrade cluster
   - test:
-      name: Parallel run
-      desc: RGW upgarde and IO parallelly.
-      module: test_parallel.py
-      parallel:
-        - test:
-            desc: test to create "M" no of buckets and "N" no of objects with download
-            module: sanity_rgw.py
-            name: Test download with M buckets with N objects
-            polarion-id: CEPH-14237
-            config:
-              script-name: test_Mbuckets_with_Nobjects.py
-              config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-        - test:
-            name: Upgrade cluster to latest 8.x ceph version
-            desc: Upgrade cluster to latest version
-            module: test_cephadm_upgrade.py
-            polarion-id: CEPH-83573791
-            abort-on-fail: true
-            verify_cluster_health: true
-            config:
-              command: start
-              service: upgrade
-              base_cmd_args:
-                verbose: true
+      desc: test to create "M" no of buckets and "N" no of objects with download
+      module: sanity_rgw.py
+      name: Test download with M buckets with N objects
+      polarion-id: CEPH-14237
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Test large omap creation pre upgrade
+      desc: Test large omap creation pre upgrade
+      polarion-id: CEPH-83591446
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_large_omap.py
+        config-file-name: ../../s3cmd/configs/test_large_omap_clearance_brown_field_pre_upgrade.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Upgrade cluster to latest 8.x ceph version
+      desc: Upgrade cluster to latest version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791
+      verify_cluster_health: true
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
 
   # Post Upgrade tests
   - test:
@@ -168,10 +194,11 @@ tests:
       config:
         cephadm: true
         commands:
+          - "ceph mgr module enable orchestrator" # work aroun for upgrade bz, if not it will afftect other testcase
+          - "sleep 200"
           - "ceph versions"
 
 # Post upgrade tests
-
   - test:
       name: S3CMD small and multipart object download post upgrade
       desc: S3CMD small and multipart object download or GET
@@ -180,6 +207,17 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Test large omap clearance post upgrade
+      desc: Test large omap clearance post upgrade
+      polarion-id: CEPH-83591446
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_large_omap.py
+        config-file-name: ../../s3cmd/configs/test_large_omap_clearance_brown_field_post_upgrade.yaml
+        run-on-haproxy: true
 
   - test:
       name: Manual Resharding tests post upgrade
@@ -189,6 +227,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests with version post upgrade
@@ -198,6 +237,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: test storage policy to use customized placement for S3
