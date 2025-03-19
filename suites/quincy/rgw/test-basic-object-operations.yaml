@@ -77,6 +77,17 @@ tests:
       module: test_client.py
       name: configure client
 
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
   # Testing stage
 
   - test:
@@ -111,7 +122,7 @@ tests:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_download.yaml
               install_common: false
-              run-on-rgw: true
+              run-on-haproxy: true
             desc: test to create "M" no of buckets and "N" no of objects with download
             module: sanity_rgw.py
             name: Test download with M buckets with N objects
