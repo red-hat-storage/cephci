@@ -244,8 +244,6 @@ def run(ceph_cluster, **kw):
         except CommandFailed:
             log.info("Passed: Failed as Expected")
 
-        log.info("Negative Case Sensitive use cases completed")
-
         log.info(
             "\n"
             "\n---------------***************-----------------------------------"
@@ -294,6 +292,12 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
+        log.info(
+            "\n"
+            "\n---------------***************----------------------------------------"
+            "\n                 Cleanup                                              "
+            "\n---------------***************----------------------------------------"
+        )
         fs_util.client_clean_up(
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )
