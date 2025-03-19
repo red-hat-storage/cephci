@@ -247,3 +247,48 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+
+  - test:
+      name: Delete the old earmark and set the "nfs". Create NFS export out of it
+      desc: Delete the old earmark and set the "nfs". Create NFS export out of it
+      module: test_earmark_feature.py
+      polarion-id: CEPH-83604500
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        earmark: smb
+        operation: rename_earmark
+
+  - test:
+      name: creating volume and setting earmark
+      desc: creating volume and setting earmark
+      module: test_earmark_feature.py
+      polarion-id: CEPH-83604497
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        earmark: nfs
+        operation: verify_earmark
+
+  - test:
+      name: Override the earmark and try to create nfs export. It should fail
+      desc: Override the earmark and try to create nfs export. It should fail
+      module: test_earmark_feature.py
+      polarion-id: CEPH-83604499
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        earmark: nfs
+        operation: override_earmark
+
+  - test:
+      name: Set the earmark as "smb" and try to use the same subvolume for nfs export
+      desc: Set the earmark as "smb" and try to use the same subvolume for nfs export
+      module: test_earmark_feature.py
+      polarion-id: CEPH-83604498
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        nfs_version: 4.2
+        earmark: smb
+        operation: wrong_earmark

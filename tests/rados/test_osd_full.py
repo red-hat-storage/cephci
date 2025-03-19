@@ -205,16 +205,10 @@ def run(ceph_cluster, **kw):
                     client=client_node, pool_name=pool_name, **nearfull_config
                 )
 
-                time.sleep(10)  # blind sleep to let all objs show up in ceph df stats
+                assert rados_obj.verify_pool_stats(
+                    pool_name=pool_name, exp_objs=max_obj_nearfull
+                )
                 pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                if pool_stat["stats"]["objects"] != max_obj_nearfull + 1:
-                    log.error(
-                        f"Pool {pool_name} is not having {max_obj_nearfull+1} objects"
-                    )
-                    raise Exception(
-                        f"{pool_name} expected to have {max_obj_nearfull+1} objects,"
-                        f" had {pool_stat['stats']['objects']} objects"
-                    )
 
                 log.info(
                     f"{max_obj_nearfull+1} objects have been written to pool {pool_name}. \n"
@@ -237,25 +231,16 @@ def run(ceph_cluster, **kw):
                     client=client_node, pool_name=pool_name, **backfillfull_config
                 )
 
-                time.sleep(7)  # blind sleep to let all objs show up in ceph df stats
+                _exp_objs = max_obj_nearfull + subseq_obj_backfillfull
+                assert rados_obj.verify_pool_stats(
+                    pool_name=pool_name, exp_objs=_exp_objs
+                )
                 pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                log.debug(pool_stat)
-                if (
-                    pool_stat["stats"]["objects"]
-                    != max_obj_nearfull + subseq_obj_backfillfull + 1
-                ):
-                    log.error(
-                        f"Pool {pool_name} is not having {max_obj_nearfull + subseq_obj_backfillfull + 1} objects"
-                    )
-                    raise Exception(
-                        f"{pool_name} expected to have {max_obj_nearfull + subseq_obj_backfillfull + 1} objects,"
-                        f" had {pool_stat['stats']['objects']} objects"
-                    )
 
                 log.info(
                     f"{subseq_obj_backfillfull} objects have been additionally written to pool {pool_name}. \n"
                     f"Pool has {pool_stat['stats']['objects']} objs | "
-                    f"Expected: {max_obj_nearfull + subseq_obj_backfillfull + 1}"
+                    f"Expected: {_exp_objs + 1}"
                 )
 
                 check_full_warning(type="backfillfull", a_set=acting_set)
@@ -274,15 +259,11 @@ def run(ceph_cluster, **kw):
                     client=client_node, pool_name=pool_name, **osdfull_config
                 )
 
-                time.sleep(7)  # blind sleep to let all objs show up in ceph df stats
+                assert rados_obj.verify_pool_stats(
+                    pool_name=pool_name, exp_objs=total_objs
+                )
                 pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
                 log.debug(pool_stat)
-                if pool_stat["stats"]["objects"] != total_objs:
-                    log.error(f"Pool {pool_name} is not having {total_objs} objects")
-                    raise Exception(
-                        f"{pool_name} expected to have {total_objs} objects,"
-                        f" had {pool_stat['stats']['objects']} objects"
-                    )
 
                 log.info(
                     f"{subseq_obj_backfillfull} objects have been additionally written to pool {pool_name}. \n"
@@ -472,14 +453,10 @@ def run(ceph_cluster, **kw):
                 }
                 bench_obj.write(client=client_node, pool_name=pool_name, **full_config)
 
-                time.sleep(20)  # blind sleep to let all objs show up in ceph df stats
+                assert rados_obj.verify_pool_stats(
+                    pool_name=pool_name, exp_objs=full_objs
+                )
                 pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
-                if pool_stat["stats"]["objects"] != full_objs + 1:
-                    log.error(f"Pool {pool_name} is not having {full_objs+1} objects")
-                    raise Exception(
-                        f"{pool_name} expected to have {full_objs+1} objects,"
-                        f" had {pool_stat['stats']['objects']} objects"
-                    )
 
                 log.info(
                     f"{full_objs+1} objects have been written to pool {pool_name}. \n"

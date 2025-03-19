@@ -105,7 +105,7 @@ def run(ceph_cluster, **kw):
         print("Candidate host for removing / Adding MDS node")
         print(candidate_host)
         target_node = candidate_host[-1]
-        drain_node_cmd = f"cephadm shell ceph orch host drain {target_node}"
+        drain_node_cmd = f"cephadm shell ceph orch host drain {target_node} --force"
         remove_node_cmd = f"cephadm shell ceph orch host rm {target_node}"
         check_node_cmd = f"cephadm shell ceph orch ps {target_node}"
         admin.installer.exec_command(sudo=True, cmd=drain_node_cmd)

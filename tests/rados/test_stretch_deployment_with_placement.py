@@ -91,7 +91,7 @@ def run(ceph_cluster, **kw):
         )
         cmd = "ceph osd tree"
         tree_op, _ = client_node.exec_command(cmd=cmd, sudo=True)
-        datacenters = re.findall(r"\n(-\d+)\s+([\d.]+)\s+datacenter\s+(\w+)", tree_op)
+        datacenters = re.findall(r"\s*(-\d+)\s+([\d.]+)\s+datacenter\s+(\w+)", tree_op)
         weights = [(weight, name) for _, weight, name in datacenters]
         for dc in weights:
             log.debug(f"Datacenter: {dc[0]}, Weight: {dc[1]}")

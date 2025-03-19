@@ -70,5 +70,8 @@ globals:
         no-of-volumes: 4
         disk-size: 15
       node8:
+        image-name:
+          openstack: RHEL-9.4.0-x86_64-ga-latest
+          ibmc: rhel-91-server-released
         role:
           - client

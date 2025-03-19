@@ -91,7 +91,7 @@ tests:
         sudo: true
         commands:
           - "rm -rf /etc/yum.repos.d/epel*"
-          - "dnf install rbd-nbd -y"
+          - "dnf install rbd-nbd -y --nogpgcheck"
 
   - test:
       abort-on-fail: true

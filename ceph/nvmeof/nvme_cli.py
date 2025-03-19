@@ -25,9 +25,6 @@ class NVMeCLI(Cli):
 
     def gen_dhchap_key(self, **kwargs):
         """Generates the TLS key.
-
-        Example::
-
             kwargs:
                 subsystem: NQN of subsystem
         """
@@ -86,7 +83,7 @@ class NVMeCLI(Cli):
             kwargs:
                 output-format: json             # output format
         """
-        device = kwargs.get("device", "")
+        device = kwargs.pop("device", "")
         return self.execute(
             cmd=f"nvme list-subsys {device} {config_dict_to_string(kwargs)}", sudo=True
         )

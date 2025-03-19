@@ -1,7 +1,7 @@
 from cli import Cli
 
-from .sub_volume import SubVolume
 from .sub_volume_group import SubVolumeGroup
+from .subvolume.sub_volume import SubVolume
 from .volume import Volume
 
 

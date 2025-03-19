@@ -174,17 +174,32 @@ def wait_for_device_rados(host, osd_id, action: str, timeout: int = 900) -> bool
     Returns:  True -> pass, False -> fail
     """
     dev_path = None
+    base_cmd = "cephadm shell -- "
+    volume_cmd = f"ceph-volume lvm list {osd_id} --format json"
     end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
     while end_time > datetime.datetime.now():
         flag = True
-
-        base_cmd = "cephadm shell -- "
-        volume_cmd = f"ceph-volume lvm list {osd_id} --format json"
         out, _ = host.exec_command(cmd=f"{base_cmd} {volume_cmd}", sudo=True)
         ceph_volume_dict = json.loads(out)
         log.info(ceph_volume_dict)
 
         if ceph_volume_dict:
+            if not ceph_volume_dict[f"{osd_id}"][0] and action == "add":
+                # rationale: When an OSD is removed, ceph-volume retains its entry
+                # so execution of ceph-volume lvm list for the removed OSD returns
+                # a dictionary with blank data
+                # e.g. - {'18': [None]}
+                # During re-addition of the OSD, verification fails if there is a slight delay
+                # in stats being updated in ceph-volume lvm list
+                # Once OSDs has been redeployed with the same ID, the 'None' entry
+                # is replaced with relevant data
+                log.info(
+                    "OSD %s is yet to be added to the cluster. Sleeping for 30 secs"
+                    % osd_id
+                )
+                time.sleep(30)
+                continue
+
             for item in ceph_volume_dict[f"{osd_id}"]:
                 if "osd-block" in item["lv_name"]:
                     dev_path = item["devices"][0]

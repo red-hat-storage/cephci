@@ -1,10 +1,15 @@
+import json
+
 from cli import Cli
+
+from .qos import Qos
 
 
 class Cluster(Cli):
     def __init__(self, nodes, base_cmd):
         super(Cluster, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} cluster"
+        self.qos = Qos(nodes, self.base_cmd)
 
     def create(self, name, nfs_server, ha=False, vip=None):
         """
@@ -36,3 +41,19 @@ class Cluster(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def ls(self):
+        """
+        List the NFS clusters and return as a Python list
+        """
+        cmd = f"{self.base_cmd} ls"
+        out = self.execute(sudo=True, cmd=cmd)
+
+        # Extract stdout if tuple (output, err)
+        stdout = out[0].strip() if isinstance(out, tuple) else str(out).strip()
+
+        try:
+            # Parse JSON output to Python list
+            return json.loads(stdout)
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Failed to parse cluster list. Output: {stdout}") from e

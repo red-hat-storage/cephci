@@ -1,6 +1,13 @@
-from ceph.utils import get_nodes_by_ids
 from cli.utilities.utils import get_running_containers, restart_container
+import ast
+import json
+
+from ceph.ceph_admin.orch import Orch
+from ceph.utils import get_node_by_id, get_nodes_by_ids
 from tests.cephadm import test_nvmeof
+from utility.log import Log
+
+LOG = Log(__name__)
 
 
 class NVMeDeployArgumentError(Exception):
@@ -29,6 +36,10 @@ def create_nvme_inband_auth_encryptionkeys(node, **kwargs):
             cmd=f"podman cp encryption.key {container_id}:/encryption.key", sudo=True
         )
         restart_container(node, container_id)
+
+
+        class OMAPValidationFailure(Exception):
+    pass
 
 
 def get_nvme_service_name(pool, group=None):
@@ -174,3 +185,78 @@ def delete_nvme_service(ceph_cluster, config):
             },
         }
         test_nvmeof.run(ceph_cluster, **cfg)
+
+
+def fetch_nvme_entity_in_omap(cluster, entity, pool, group=""):
+    """NVMe Entity OMAP Validation."""
+    err = None
+    try:
+        orch = Orch(cluster, **{})
+        out, err = orch.shell(
+            args=[
+                f"rados -p {pool} getomapval nvmeof{f'.{group}' or str()}.state {entity} /tmp/out"
+            ],
+            base_cmd_args={"mount": "/tmp:/tmp"},
+        )
+
+        out, err = orch.installer.exec_command(cmd="cat /tmp/out")
+        if out:
+            LOG.info(f"{out}")
+            return json.loads(out.strip())
+        else:
+            raise OMAPValidationFailure
+    except Exception as e:
+        LOG.error(f"Error : {e}\n{err}")
+    return False
+
+
+def validate_nvme_metadata(cluster, config, pool, group=""):
+    """Validate configured NVMe entity against OMAP."""
+    nvme_entt = config["service"]
+    action = config["command"]
+    deleted_entity = action == "delete"
+    entity = f"{nvme_entt}_{config['args']['subsystem']}"
+
+    if nvme_entt == "subsystem" and not deleted_entity:
+        if not config.get("args", {}).get("no-group-append") and group not in entity:
+            entity += f".{group}"
+
+    elif nvme_entt == "host":
+        host = config["args"]["host"]
+        try:
+            host = ast.literal_eval(host)
+        except (ValueError, SyntaxError):
+            pass
+        entity += f"_{host}"
+
+    elif nvme_entt == "listener":
+        listener = get_node_by_id(cluster, config["args"]["host-name"])
+        entity += f"_{listener.hostname}_TCP_{listener.ip_address}_{config['args']['trsvcid']}"
+
+    elif nvme_entt == "namespace":
+        if action == "set_qos":
+            entity = f"qos_{config['args']['subsystem']}_{config['args']['nsid']}"
+        else:
+            entity += f"_{config['args']['nsid']}"
+
+    out = fetch_nvme_entity_in_omap(cluster, entity, pool, group)
+
+    # deleted_entity represents delete, If deleted_entity, output should be False
+    if deleted_entity:
+        if out:
+            raise OMAPValidationFailure(
+                f"{entity} is still exist in OMAP metadata even after delete."
+            )
+        LOG.info(
+            f"[ OMAP VALIDATION SUCCESSFULL ] - {entity} deleted successfully from NVMeoF OMAP state file."
+        )
+        return True
+
+    if not out:
+        raise OMAPValidationFailure(
+            f"{entity} Not Found in nvmeof state OMAP file.\n{out}."
+        )
+
+    LOG.info(
+        f"[ OMAP VALIDATION SUCCESSFULL ] - {entity} Found in nvmeof state OMAP file.\n{out}."
+    )

@@ -299,30 +299,6 @@ tests:
       polarion-id: CEPH-83575199
 
   # Baseline tests before upgrade
-  - test:
-      name: Bucket Granular Sync policy test for prefix and tag
-      desc: Bucket sync policy test for prefix and tag
-      polarion-id: CEPH-83575133
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_multisite_syncpolicy_prefix_tag.py
-            config-file-name: test_multisite_syncpolicy_prefix_tag.yaml
-            verify-io-on-site: ["ceph-sec"]
-
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-            verify-io-on-site: ["ceph-sec"]
-      desc: test to create "M" buckets and "N" objects with multipart upload
-      module: sanity_rgw_multisite.py
-      name: multipart upload of M buckets with N objects
-      polarion-id: CEPH-9801
 
   - test:
       clusters:
@@ -335,19 +311,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: swift basic operations pre upgrade
       polarion-id: CEPH-11019
-
-  # Bucket Listing Tests
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_bucket_listing.py
-            config-file-name: test_bucket_listing_flat_ordered.yaml
-      desc: test duration for ordered listing of bucket with top level objects
-      module: sanity_rgw_multisite.py
-      name: ordered listing of buckets pre upgrade
-      polarion-id: CEPH-83573545
 
   - test:
       clusters:

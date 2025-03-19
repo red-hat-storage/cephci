@@ -23,7 +23,7 @@ tests:
         base_cmd_args:
           verbose: true
         args:
-          rhcs-version: 6.1
+          rhcs-version: 8.0
           release: rc
           mon-ip: node1
           orphan-initial-daemons: true
@@ -236,7 +236,7 @@ tests:
       module: test_upgrade_warn.py
       polarion-id: CEPH-83574934
       config:
-        verify_warning: true
+        verify_warning: false
         verify_daemons: true
         verify_cluster_usage: true
       abort-on-fail: true

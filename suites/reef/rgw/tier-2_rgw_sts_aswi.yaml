@@ -94,6 +94,15 @@ tests:
                   placement:
                     host_pattern: "*"
 
+  - test:
+      name: test swift stats command for more than 1000 buckets
+      desc: test swift stats command for more than 1000 buckets
+      polarion-id: CEPH-83573506
+      module: sanity_rgw.py
+      config:
+        script-name: swift_stats.py
+        config-file-name: swift_stats.yaml
+
   # STS aswi tests with Keycloak
 
   - test:

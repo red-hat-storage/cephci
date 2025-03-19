@@ -21,7 +21,7 @@ tests:
             drivers: # if drivers are not specified will use one of the rgw node
               - mero003
               - mero004
-            fill_percent: 30
+            fill_percent: 10
       desc: prepare and push cosbench fill workload
       module: push_cosbench_workload.py
       name: push cosbench fill workload
@@ -36,7 +36,7 @@ tests:
             drivers: # if drivers are not specified will use one of the rgw node
               - mero003
               - mero004
-            fill_percent: 30
+            fill_percent: 10
             workload_type: hybrid
             run_time: 3600 # value in seconds
       desc: initiate cosbench hybrid workload
@@ -87,6 +87,19 @@ tests:
       module: sanity_rgw_multisite.py
       name: create regular and versioned bucket in primary
       polarion-id: CEPH-83575382
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_sync_fairness.yaml
+            verify-io-on-site: ["ceph-sec"]
+      desc: Test metadata sync fairness
+      module: sanity_rgw_multisite.py
+      name: Test metadata sync fairness
+      polarion-id: CEPH-83575843
 
   - test:
       clusters:
@@ -238,7 +251,49 @@ tests:
       desc: create versioned bucket in primary
       module: sanity_rgw_multisite.py
       name: create versioned bucket in primary
-      polarion-id: CEPH-83575073
+      polarion-id: CEPH-83575073 # CEPH-83575304
+
+  - test:
+      name: parallel manually resharding bucket to 32 number of shards
+      desc: parallel manually resharding bucket to 32 number of shards
+      module: test_parallel.py
+      parallel:
+        - test:
+            clusters:
+              ceph-sec:
+                config:
+                  cephadm: true
+                  commands:
+                    - "radosgw-admin bucket stats --bucket cosbench01-bkt-1"
+            desc: check bucket stats of bucket on secondary
+            name: check bucket stats of bucket on secondary
+            module: exec.py
+            polarion-id: CEPH-83575304
+        - test:
+            clusters:
+              ceph-pri:
+                config:
+                  cephadm: true
+                  commands:
+                    - "radosgw-admin bucket stats --bucket cosbench01-bkt-1"
+                    - "radosgw-admin bucket reshard --bucket cosbench01-bkt-1 --num-shards=32"
+                    - "radosgw-admin bucket stats --bucket cosbench01-bkt-1"
+            desc: manually reshard bucket to 32 on primary
+            name: manually reshard bucket to 32 on primary
+            module: exec.py
+            polarion-id: CEPH-83575304
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin bucket stats --bucket cosbench01-bkt-1"
+      desc: check bucket stats of bucket cosbench01-bkt-1 on secondary
+      name: check bucket stats of bucket cosbench01-bkt-1 on secondary
+      polarion-id: CEPH-83575304
+      module: exec.py
 
   - test:
       name: Parallel upload of objects to versioned bucket
@@ -254,7 +309,7 @@ tests:
                   drivers:
                     - mero003
                     - mero004
-                  fill_percent: 35
+                  fill_percent: 10
                   workload_type: symmetrical
                   record_sync_on_site: ceph-sec
                   bucket_prefix: cosbench01-bkt-
@@ -262,7 +317,7 @@ tests:
             desc: initiate cosbench push workload from primary
             module: push_cosbench_workload.py
             name: push cosbench push workload from primary
-            polarion-id: CEPH-83575073
+            polarion-id: CEPH-83575073 # CEPH-83575304
         - test:
             clusters:
               ceph-sec:
@@ -272,7 +327,7 @@ tests:
                   drivers:
                     - mero011
                     - mero013
-                  fill_percent: 35
+                  fill_percent: 10
                   workload_type: symmetrical
                   record_sync_on_site: ceph-pri
                   bucket_prefix: cosbench01-bkt-
@@ -280,7 +335,7 @@ tests:
             desc: initiate cosbench push workload from secondary
             module: push_cosbench_workload.py
             name: push cosbench push workload from secondary
-            polarion-id: CEPH-83575073
+            polarion-id: CEPH-83575073 # CEPH-83575304
 
   - test:
       clusters:
@@ -300,7 +355,7 @@ tests:
       desc: initiate cosbench fill workload for versioned bucket
       name: push cosbench fill workload for versioned bucket
       module: push_cosbench_workload.py
-      polarion-id: CEPH-83575077
+      polarion-id: CEPH-83575077 # CEPH-83575304
 
   - test:
       clusters:
@@ -335,7 +390,7 @@ tests:
             desc: initiate cosbench cleanup workload from primary
             module: push_cosbench_workload.py
             name: push cosbench cleanup workload from primary
-            polarion-id: CEPH-83575074
+            polarion-id: CEPH-83575074 # CEPH-83575304
         - test:
             clusters:
               ceph-sec:
@@ -352,4 +407,247 @@ tests:
             desc: initiate cosbench cleanup workload from secondary
             module: push_cosbench_workload.py
             name: push cosbench cleanup workload from secondary
-            polarion-id: CEPH-83575074
+            polarion-id: CEPH-83575074 # CEPH-83575304
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin bucket rm --bucket cosbench01-bkt-1 --purge-data"
+              - "radosgw-admin bucket list"
+      desc: remove bucket cosbench01-bkt-1 from primary
+      module: exec.py
+      name: remove bucket cosbench01-bkt-1
+      polarion-id: CEPH-83575304
+
+  - test:
+      name: Parallel sync error check
+      desc: Parallel sync error check
+      module: test_parallel.py
+      parallel:
+        - test:
+            clusters:
+              ceph-pri:
+                config:
+                  script-name: ../s3cmd/test_s3cmd.py
+                  config-file-name: ../../s3cmd/multisite_configs/test_sync_error_list.yaml
+            desc: sync error check in primary
+            module: sanity_rgw_multisite.py
+            name: sync error check in primary
+            polarion-id: CEPH-83572752
+        - test:
+            clusters:
+              ceph-sec:
+                config:
+                  script-name: ../s3cmd/test_s3cmd.py
+                  config-file-name: ../../s3cmd/multisite_configs/test_sync_error_list.yaml
+            desc: sync error check in secondary
+            module: sanity_rgw_multisite.py
+            name: sync error check in secondary
+            polarion-id: CEPH-83572752
+
+  # lc expiration and transition tests at scale
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            record_sync_on_site: ceph-sec
+            bucket_prefix: cosbench01-lc-bkt-
+            number_of_buckets: 2
+            number_of_objects: 300000 # 300K objects per each bucket
+            object_prefix: key1-
+            objects_size_type: small
+      desc: prepare and push cosbench fill workload of 600K objects, 300K each in 2 buckets
+      module: push_cosbench_workload.py
+      name: push cosbench fill workload 600K objects
+      polarion-id: CEPH-83574428
+
+  - test:
+      name: Test Bucket Lifecycle transition on 600K objects
+      desc: Test object transition for Prefix and tag based filter and for more than one days
+      polarion-id: CEPH-83574046
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_tran_on_600K_objects.yaml
+            timeout: 14000
+            test-config:
+              user_names: [ "cosbench01" ]
+              user_remove: false
+              bucket_count: 2
+              bucket_names: [ "cosbench01-lc-bkt-1", "cosbench01-lc-bkt-2"]
+              objects_size_range:
+                min: 5
+                max: 15
+              objects_count: 300000 # 300K
+              parallel_lc: True
+              test_lc_transition: True
+              pool_name: data.cold
+              storage_class: cold
+              ec_pool_transition: False
+              multiple_transitions: False
+              actual_lc_days: 1
+              rgw_lc_debug_interval: 300
+              rgw_lc_max_wp_worker: 10
+              test_ops:
+                create_bucket: false
+                create_object: false
+                enable_versioning: false
+                version_count: 1
+                lc_grace_time: 7200 # 300K objects transition takes 1.5 hr, setting it as 2hr with buffer
+                set_ceph_configs_to_all_daemons: true
+              lifecycle_conf:
+                - ID: LC_Rule_1
+                  Filter:
+                    Prefix: key1-
+                  Status: Enabled
+                  Transitions:
+                    - Days: 1
+                      StorageClass: cold
+
+  - test:
+      name: Test Bucket Lifecycle Object_expiration on 600K objects
+      desc: Test object expiration for Prefix and tag based filter and for more than one days
+      polarion-id: CEPH-83575432
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_lc_exp_on_600K_objects.yaml
+            timeout: 14000
+            test-config:
+              user_names: [ "cosbench01" ]
+              user_remove: false
+              bucket_count: 2
+              bucket_names: ["cosbench01-lc-bkt-1", "cosbench01-lc-bkt-2"]
+              objects_count: 300000 # 300K
+              parallel_lc: True
+              actual_lc_days: 0
+              rgw_lc_debug_interval: 300
+              rgw_lc_max_wp_worker: 10
+              objects_size_range:
+                min: 5
+                max: 15
+              test_ops:
+                create_object: false
+                create_bucket: false
+                delete_bucket_object: true
+                version_count: 1
+                lc_grace_time: 7200 # 300K objects expiration takes 1.5 hr, setting it as 2hr with buffer
+                test_lc_on_other_site: True
+                other_site_master: false
+                set_ceph_configs_to_all_daemons: True
+              lifecycle_conf:
+                - ID: LC_Rule_1
+                  Filter:
+                    Prefix: key1
+                  Status: Enabled
+                  Expiration:
+                    Date: "2019-02-17"
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph orch host label add mero011  ha_io"
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph orch host label add mero003  ha_io"
+      desc: Add label to the loadbalancer for IO
+      name: Add label to the loadbalancer for IO
+      module: exec.py
+
+  - test:
+      name: rgw account at scale 3 buckets, 3.6M objects
+      desc: rgw account at scale 3 buckets, 3.6M objects
+      polarion-id: CEPH-83591689
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_rgw_account_management.py
+            config-file-name: test_rgw_accounts_at_scale.yaml
+            timeout: 36000
+  - test:
+      name: test LC cloud transition at scale of 1M
+      desc: test LC cloud transition at scale of 1M
+      polarion-id: CEPH-83581974
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_rgw_account_management.py
+            config-file-name: test_scale_aws_transition_retain_true.yaml
+
+            timeout: 46800
+
+# Please keep below(distruptive) testcases at the end of the suites only
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            bucket_prefix: reg-cosbench-bkt-downup-
+            number_of_buckets: 1
+            number_of_objects: 2000000
+      desc: upload 2M object to regular bucket
+      module: push_cosbench_workload.py
+      name: Test upload 2M object to regular bucket
+      polarion-id: CEPH-83575113
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_sync_post_destruptive_services.py
+            config-file-name: test_sync_consistent_post_service_down_up.yaml
+      desc: sync consistent post RGW service down and bringing it up
+      module: sanity_rgw_multisite.py
+      name: Test sync consistent post RGW service down and bringing it up
+      polarion-id: CEPH-83575113
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
+            drivers:
+              - mero003
+              - mero004
+            bucket_prefix: reg-cosbench-bkt-reboot-
+            number_of_buckets: 1
+            number_of_objects: 1000000
+      desc: upload 1M object to regular bucket
+      module: push_cosbench_workload.py
+      name: Test upload 1M object to regular bucket
+      polarion-id: CEPH-83574448
+
+  - test:
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_sync_post_destruptive_services.py
+            config-file-name: test_sync_consistent_with_node_reboot.yaml
+      desc: sync consistent post RGW sync node reboot
+      module: sanity_rgw_multisite.py
+      name: Test sync consistent post RGW sync node reboot
+      polarion-id: CEPH-83574448

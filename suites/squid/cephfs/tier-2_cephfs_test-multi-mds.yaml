@@ -130,7 +130,7 @@ tests:
       abort-on-fail: false
       config:
         num_of_osds: 28
-        num_of_files: 1000
+        num_of_files: 100000
   - test:
       name: Repeated MDS restarts
       module: cephfs_multi_mds.test_cephfs_multimds_repeated_restart_mds.py
