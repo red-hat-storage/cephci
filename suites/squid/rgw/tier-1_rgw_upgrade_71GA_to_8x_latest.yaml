@@ -55,6 +55,10 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node4
+                    - node3
+                    - node5
       desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
       destroy-cluster: false
@@ -85,6 +89,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests pre upgrade
@@ -94,6 +99,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: Manual Resharding tests pre upgrade
@@ -103,6 +109,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests with version pre upgrade
@@ -112,6 +119,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: S3CMD small and multipart object download pre upgrade
@@ -121,6 +129,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
 
   # upgrade cluster
   - test:
@@ -146,6 +155,7 @@ tests:
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+              run-on-haproxy: true
         - test:
             name: Upgrade cluster to latest 8.x ceph version
             desc: Upgrade cluster to latest version
@@ -180,6 +190,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
 
   - test:
       name: Manual Resharding tests post upgrade
@@ -189,6 +200,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests with version post upgrade
@@ -198,6 +210,7 @@ tests:
       config:
         script-name: test_dynamic_bucket_resharding.py
         config-file-name: test_dynamic_resharding_with_version_without_bucket_delete.yaml
+        run-on-haproxy: true
 
   - test:
       name: test storage policy to use customized placement for S3
