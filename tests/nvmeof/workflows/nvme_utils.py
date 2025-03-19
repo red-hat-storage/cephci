@@ -3,6 +3,7 @@ import json
 
 from ceph.ceph_admin.orch import Orch
 from ceph.utils import get_node_by_id, get_nodes_by_ids
+from cli.utilities.utils import get_running_containers, restart_container
 from tests.cephadm import test_nvmeof
 from utility.log import Log
 
@@ -15,6 +16,27 @@ class NVMeDeployArgumentError(Exception):
 
 class NVMeDeployConfigParamRequired(Exception):
     pass
+
+
+def create_nvme_inband_auth_encryptionkeys(node, **kwargs):
+    _nodes = kwargs.get("nodes", [])
+
+    for node in _nodes:
+        node.exec_command(
+            cmd="openssl req -newkey rsa:512 -noenc -noout "
+            "-keyout encryption.key -subj /C=IN/ST=KA/L=XYZ/O=IBM/CN=nvme",
+            sudo=True,
+        )
+
+        # Get container id for nvme daemon
+        container_ids, _ = get_running_containers(
+            sudo=True, node=node, format="{{.ID}}", expr="name=nvmeof"
+        )
+        container_id = container_ids.split("\n")[0]
+        node.exec_command(
+            cmd=f"podman cp encryption.key {container_id}:/encryption.key", sudo=True
+        )
+        restart_container(node, container_id)
 
 
 class OMAPValidationFailure(Exception):
