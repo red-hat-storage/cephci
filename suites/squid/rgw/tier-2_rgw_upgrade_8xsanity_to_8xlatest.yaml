@@ -1,6 +1,6 @@
 #Objective: Testing single site upgrade from RHCS 8.0 sanity latest to 8.x latest build
 #platform : RHEL-9
-#conf: conf/squid/rgw/tier-0_rgw.yaml
+#conf: conf/squid/rgw/tier-0_rgw_with_haproxy.yaml
 
 tests:
   - test:
@@ -55,6 +55,10 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node4
+                    - node3
+                    - node5
       desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
       destroy-cluster: false
@@ -76,6 +80,22 @@ tests:
       name: configure client
       polarion-id: CEPH-83573758
 
+  # configuring HAproxy on the client node 'node4' and port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node4:80
+              - node3:80
+              - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
   - test:
       name: Mbuckets_with_Nobjects with etag verification pre upgrade
       desc: test etag verification
@@ -84,6 +104,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
       desc: test to create "M" no of buckets and "N" no of objects with download
@@ -93,6 +114,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        run-on-haproxy: true
 
   # upgrade cluster
   - test:
@@ -108,6 +130,7 @@ tests:
             config:
               script-name: ../s3cmd/test_s3cmd.py
               config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+              run-on-haproxy: true
         - test:
             name: Upgrade cluster to latest 8.x ceph version
             desc: Upgrade cluster to latest version
@@ -171,3 +194,4 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_multiple_rules.yaml
+        run-on-haproxy: true

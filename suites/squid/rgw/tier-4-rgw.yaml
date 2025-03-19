@@ -52,6 +52,10 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node4
+                    - node3
+                    - node5
       desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
       module: test_cephadm.py
@@ -89,6 +93,22 @@ tests:
                   placement:
                     host_pattern: "*"
 
+  # configuring HAproxy on the client node 'node4' and port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node4:80
+              - node3:80
+              - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
   # Bucket policy tests
 
   - test:
@@ -99,6 +119,8 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_action.yaml
+        run-on-haproxy: true
+
 
   - test:
       name: test bucket policy with invalid conditional in condition blocks
@@ -108,6 +130,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_condition_key.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid effect
@@ -117,6 +140,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_effect.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid key
@@ -126,6 +150,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_key.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid principal
@@ -135,6 +160,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_principal.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid resource
@@ -144,6 +170,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_resource.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid version
@@ -153,6 +180,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_version.yaml
+        run-on-haproxy: true
 
   # Bucket lifecycle tests
 
@@ -164,6 +192,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_conflict_btw_exp_transition.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket lc rule conflict between expiration days
@@ -173,6 +202,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_conflict_exp_days.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket lc rule conflict between transition actions
@@ -182,6 +212,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_conflict_transition_actions.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket lc rules with same ruleid but different rules
@@ -191,6 +222,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_same_rule_id_diff_rules.yaml
+        run-on-haproxy: true
 
   - test:
       name: Test bucket lc reverse transition
@@ -200,6 +232,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_reverse_transition.yaml
+        run-on-haproxy: true
 
   # swift container operation
   - test:
@@ -233,6 +266,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_csv_depth1.yaml
+        run-on-haproxy: true
 
   - test:
       name: test s3select with depth2 queries on csv objects
@@ -242,6 +276,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_csv_depth2.yaml
+        run-on-haproxy: true
 
   - test:
       name: test s3select with depth1 queries on parquet objects
@@ -251,6 +286,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_parquet_depth1.yaml
+        run-on-haproxy: true
 
   - test:
       name: test s3select with depth2 queries on parquet objects
@@ -260,6 +296,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_parquet_depth2.yaml
+        run-on-haproxy: true
 
   - test:
       name: test s3select with depth1 queries on parquet objects
@@ -269,6 +306,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_parquet_depth1.yaml
+        run-on-haproxy: true
 
   - test:
       name: test s3select with depth2 queries on parquet objects
@@ -278,3 +316,4 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_parquet_depth2.yaml
+        run-on-haproxy: true

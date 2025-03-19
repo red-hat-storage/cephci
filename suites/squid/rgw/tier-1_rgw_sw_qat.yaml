@@ -6,7 +6,7 @@
 # - Run Compression and Envryption SSE-KMS tests on the cluster
 
 # RHCS 8.x sanity test suite for RGW daemon.
-# conf : conf/squid/rgw/tier-0_rgw.yaml
+# conf : conf/squid/rgw/tier-0_rgw_with_haproxy.yaml
 # Polarion ID : CEPH-83582013
 tests:
 
@@ -52,6 +52,10 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node4
+                    - node3
+                    - node5
       desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
       polarion-id: CEPH-83573713
@@ -101,6 +105,22 @@ tests:
           - "ceph orch restart {service_name:rgw.1}"
       module: exec.py
 
+  # configuring HAproxy on the client node 'node4' and port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node4:80
+              - node3:80
+              - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
   - test:
       name: compresstion_with_zstd_type
       desc: test compresstion with zstd type
@@ -109,6 +129,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
+        run-on-haproxy: true
 
   - test:
       name: compresstion_with_snappy_type
@@ -118,6 +139,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression_snappy.yaml
+        run-on-haproxy: true
 
   - test:
       name: compresstion_with_Zlib_type
@@ -127,6 +149,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
+        run-on-haproxy: true
 
   - test:
       config:
