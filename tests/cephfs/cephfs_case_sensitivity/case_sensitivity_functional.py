@@ -74,14 +74,16 @@ def run(ceph_cluster, **kw):
 
         subvol_path, rc = client1.exec_command(
             sudo=True,
-            cmd=f"ceph fs subvolume getpath {fs_name} {subvolume_name} {subvolume_group}",
+            cmd="ceph fs subvolume getpath {} {} {}".format(
+                fs_name, subvolume_name, subvolume_group
+            ),
         )
         log.info("Sub volume path for usecase 14: {}".format(subvol_path))
 
         fs_util.fuse_mount(
             [client1],
             fuse_mounting_dir_14,
-            extra_params=f" --client_fs {fs_name} -r {subvol_path.strip()}",
+            extra_params=" --client_fs {} -r {}".format(fs_name, subvol_path.strip()),
         )
 
         # Pre-Req for Usecase 15
@@ -98,7 +100,8 @@ def run(ceph_cluster, **kw):
         fuse_mounting_dir_15 = "/mnt/cephfs_fuse_{}/".format(mounting_dir)
 
         subvol_path_2, rc = client1.exec_command(
-            sudo=True, cmd=f"ceph fs subvolume getpath {fs_name} {subvolume_name_2}"
+            sudo=True,
+            cmd="ceph fs subvolume getpath {} {}".format(fs_name, subvolume_name_2),
         )
 
         log.info("Sub volume path for usecase 15: {}".format(subvol_path_2))
@@ -106,7 +109,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [client1],
             fuse_mounting_dir_15,
-            extra_params=f" --client_fs {fs_name} -r {subvol_path_2.strip()}",
+            extra_params=" --client_fs {} -r {}".format(fs_name, subvol_path_2.strip()),
         )
 
         log.info(
