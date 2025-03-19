@@ -80,7 +80,7 @@ tests:
       module: test_client.py
       name: configure client
       polarion-id: CEPH-83573758
-          
+
   # configuring HAproxy on the client node 'node4' and port '5000'
   - test:
       abort-on-fail: true
