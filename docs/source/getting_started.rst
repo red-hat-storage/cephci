@@ -71,6 +71,14 @@ only required if you plan on posting to that particular service.
         email:
             address: <email-address>
 
+        registries:
+            registry-1:
+              user: user1
+              password: password1
+            registry-2:
+              user: user2
+              password: password2
+
 
 CentralCI Authentication
 ------------------------

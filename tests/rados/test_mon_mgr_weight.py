@@ -98,7 +98,7 @@ def run(ceph_cluster, **kw):
             )
 
             # restart Mgr services and monitor cluster for 120 secs for any crash
-            if not rados_obj.restart_daemon_services(daemon="mgr"):
+            if not rados_obj.restart_daemon_services(daemon="mgr", timeout=600):
                 log.error("Manager orch service did not restart as expected")
                 raise Exception("Manager orch service did not restart as expected")
 

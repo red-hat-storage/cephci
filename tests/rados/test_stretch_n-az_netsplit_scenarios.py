@@ -231,7 +231,7 @@ def run(ceph_cluster, **kw):
                 "Observed that just IP tables flush did not work to bring back the nodes to cluster."
                 f"rebooting the nodes post testing. Rebooting node : {host.hostname}"
             )
-            host.exec_command(sudo=True, cmd="reboot")
+            host.exec_command(sudo=True, cmd="reboot", check_ec=False)
         log.debug("Sleeping for 30 seconds...")
         time.sleep(30)
 
@@ -257,11 +257,9 @@ def run(ceph_cluster, **kw):
                 "Observed that just IP tables flush did not work to bring back the nodes to cluster."
                 f"rebooting the nodes post testing. Rebooting node : {host.hostname}"
             )
-            host.exec_command(sudo=True, cmd="reboot")
+            host.exec_command(sudo=True, cmd="reboot", check_ec=False)
 
         rados_obj.rados_pool_cleanup()
-        cmd = f"ceph osd crush rule rm {rule_name}"
-        rados_obj.client.exec_command(cmd=cmd, sudo=True)
 
         init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
         log.debug(f"time when test was Ended : {init_time}")

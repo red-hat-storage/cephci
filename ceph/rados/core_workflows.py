@@ -18,6 +18,7 @@ from collections import namedtuple
 
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
+from utility import utils
 from utility.log import Log
 
 log = Log(__name__)
@@ -416,6 +417,7 @@ class RadosOrchestrator:
                 - rados_write_duration -> duration of write operation (int)
                 - byte_size -> size of objects to be written (str)
                     eg : 10KB, default - 4096KB
+                - num_threads -> Number of threads to be used(int)
                 - max_objs -> max number of objects to be written (int)
                 - verify_stats -> arg to control whether obj stats need to
                   be verified after write (bool) | default: True
@@ -426,7 +428,8 @@ class RadosOrchestrator:
         Returns: True -> pass, False -> fail
         """
         duration = kwargs.get("rados_write_duration", 200)
-        byte_size = kwargs.get("byte_size", 4096)
+        byte_size = str(kwargs.get("byte_size", 4096)).upper()
+        num_threads = kwargs.get("num_threads")
         max_objs = kwargs.get("max_objs")
         verify_stats = kwargs.get("verify_stats", True)
         check_ec = kwargs.get("check_ec", True)
@@ -436,6 +439,8 @@ class RadosOrchestrator:
         if nocleanup:
             cmd = f"{cmd} --no-cleanup"
         org_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
+        if num_threads:
+            cmd = f"{cmd} -t {num_threads}"
         if max_objs:
             cmd = f"{cmd} --max-objects {max_objs}"
         if kwargs.get("background"):
@@ -446,34 +451,55 @@ class RadosOrchestrator:
         try:
             self.node.shell([cmd], check_status=check_ec, timeout=_timeout)
             if max_objs and verify_stats:
-                time.sleep(90)
-                new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
-                    "objects"
-                ]
-                log.info(
-                    f"Objs in the {pool_name} before IOPS: {org_objs} "
-                    f"| Objs in the pool post IOPS: {new_objs} "
-                    f"| Expected {org_objs + max_objs} or {org_objs + max_objs + 1}"
-                )
-                assert (new_objs == org_objs + max_objs) or (
-                    new_objs == org_objs + max_objs + 1
-                )
+                exp_objs = org_objs + max_objs
+                assert self.verify_pool_stats(pool_name=pool_name, exp_objs=exp_objs)
             else:
                 time.sleep(15)
                 new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
                     "objects"
                 ]
-                log.info(
-                    f"Objs in the {pool_name} before IOPS: {org_objs} "
-                    f"| Objs in the pool post IOPS: {new_objs} "
-                    f"| Expected {new_objs} > 0"
-                )
+                log_info_msg = f"Objs in the {pool_name} before IOPS: {org_objs} \
+                    | Objs in the pool post IOPS: {new_objs} \
+                    | Expected {new_objs} > 0 | Expected {new_objs} > {org_objs}"
+                log.info(log_info_msg)
                 assert new_objs > 0
+                assert new_objs > org_objs
             return True
         except Exception as err:
             log.error(f"Error running rados bench write on pool : {pool_name}")
             log.error(err)
             return False
+
+    def verify_pool_stats(self, pool_name, exp_objs: int, timeout=180) -> bool:
+        """
+        Method to verify pool stats
+        Args:
+            pool_name: pool on which the operation will be performed ( str )
+            exp_objs -> expected objects on the pool (int)
+            timeout (int) -> user defined timeout for verify pool stats
+        Returns: True -> pass, False -> fail
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        while end_time > datetime.datetime.now():
+            new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
+            log_debug_msg = f"| Objs in the pool post IOPS: {new_objs} | Expected {exp_objs} or {exp_objs + 1}"
+            log.debug(log_debug_msg)
+            if (new_objs == exp_objs) or (new_objs == exp_objs + 1):
+                log.info("Stats in the pool are as expected")
+                break
+
+            log_debug_msg = (
+                f"Stats in the pool are yet to match expected object count {exp_objs}"
+            )
+            log.debug(log_debug_msg)
+            log.debug("Retrying check after 15 seconds")
+            time.sleep(5)
+        else:
+            log_error_msg = f"Stats in the pool did not match the expected object count {exp_objs} \
+                within timeout {timeout}"
+            log.error(log_error_msg)
+            return False
+        return True
 
     def bench_read(self, pool_name: str, **kwargs) -> bool:
         """
@@ -597,7 +623,10 @@ class RadosOrchestrator:
         status_report = self.run_ceph_command(cmd="ceph report", client_exec=True)
         ceph_health_status = list(status_report["health"]["checks"].keys())
         if warning in ceph_health_status:
-            log.info(f"warning: {warning}  present on the cluster")
+            log.info(
+                f"warning: {warning}  present on the cluster"
+                f"all Generated warnings : {ceph_health_status}"
+            )
             log.info(
                 f"Warning: {warning} generated on the cluster : {ceph_health_status}"
             )
@@ -720,9 +749,13 @@ class RadosOrchestrator:
         """
         The method is used to collect the various OSD daemons present on a particular node
         :param osd_node: name of the OSD node on which osd daemon details are collected (ceph.ceph.CephNode): ceph node
+                        or host-name in string can also be sent
         :return: list of OSD ID's
         """
-        cmd = f"sudo ceph osd ls-tree {osd_node.hostname}"
+        if isinstance(osd_node, str):
+            cmd = f"sudo ceph osd ls-tree {osd_node}"
+        else:
+            cmd = f"sudo ceph osd ls-tree {osd_node.hostname}"
         return self.run_ceph_command(cmd=cmd)
 
     def enable_balancer(self, **kwargs) -> bool:
@@ -1176,6 +1209,21 @@ class RadosOrchestrator:
             return False
         return True
 
+    def disable_file_logging(self) -> bool:
+        """
+        Disable the cluster logging
+        Returns: True -> pass, False -> fail
+        """
+        try:
+            cmd = "ceph config set global log_to_file false"
+            self.node.shell([cmd])
+            cmd = "ceph config set global mon_cluster_log_to_file false"
+            self.node.shell([cmd])
+        except Exception:
+            log.error("Error while disabling config to log into file")
+            return False
+        return True
+
     def get_ec_profiles(self) -> list:
         """
         Fetches all the EC profiles present on the cluster
@@ -1322,7 +1370,7 @@ class RadosOrchestrator:
         if yes_i_mean_it:
             cmd = cmd + " --yes-i-really-mean-it "
 
-        log.debug(f"Final command to create EC pool : {cmd}")
+        log.debug(f"Final command to create EC Profile : {cmd}")
         try:
             self.run_ceph_command(cmd=cmd)
             time.sleep(5)
@@ -1338,7 +1386,8 @@ class RadosOrchestrator:
             return False
 
         cmd = f"ceph osd erasure-code-profile get {profile_name}"
-        log.info(self.node.shell([cmd]))
+        log.info("Profile created : \n %s", self.run_ceph_command(cmd=cmd))
+        log.debug("EC profile created. Proceeding to create pool")
 
         # Creating the Crush rule for the profile created
         if create_rule:
@@ -1421,50 +1470,44 @@ class RadosOrchestrator:
         )
         host.exec_command(sudo=True, cmd=cmd)
         # verifying the osd state
-        if action in ["start", "stop"]:
-            start_time = datetime.datetime.now()
-            timeout_time = start_time + datetime.timedelta(seconds=timeout)
+        start_time = datetime.datetime.now()
+        timeout_time = start_time + datetime.timedelta(seconds=timeout)
 
-            while datetime.datetime.now() <= timeout_time:
-                osd_status, status_desc = self.get_daemon_status(
-                    daemon_type="osd", daemon_id=target
-                )
-                log.info(f"osd_status: {osd_status}, status_desc: {status_desc}")
-                if (osd_status == 0 or status_desc == "stopped") and action == "stop":
-                    break
-                elif (
-                    osd_status == 1 or status_desc == "running"
-                ) and action == "start":
-                    break
-                time.sleep(20)
-
-            if action == "stop" and osd_status != 0:
-                log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
-                pass_status = False
-            if action == "start" and osd_status != 1:
-                log.error(
-                    f"Failed to start the OSD.{target} service on {host.hostname}"
-                )
-                pass_status = False
-            if not pass_status:
-                log.error(
-                    f"Collecting the journalctl logs for OSD.{target} service on {host.hostname} for the failure"
-                )
-                end_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
-                osd_log_lines = self.get_journalctl_log(
-                    start_time=init_time,
-                    end_time=end_time,
-                    daemon_type="osd",
-                    daemon_id=str(target),
-                )
-                log.error(
-                    f"\n\n ------------ Log lines from journalctl ---------------- \n"
-                    f"{osd_log_lines}\n\n"
-                )
-                return False
-        else:
-            # Baremetal systems take some time for daemon restarts. changing sleep accordingly
+        while datetime.datetime.now() <= timeout_time:
+            osd_status, status_desc = self.get_daemon_status(
+                daemon_type="osd", daemon_id=target
+            )
+            log.info(f"osd_status: {osd_status}, status_desc: {status_desc}")
+            if (osd_status == 0 or status_desc == "stopped") and action == "stop":
+                break
+            elif (osd_status == 1 or status_desc == "running") and (
+                action == "start" or action == "restart"
+            ):
+                break
             time.sleep(20)
+
+        if action == "stop" and osd_status != 0:
+            log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
+            pass_status = False
+        if (action == "start" or action == "restart") and osd_status != 1:
+            log.error(f"Failed to start the OSD.{target} service on {host.hostname}")
+            pass_status = False
+        if not pass_status:
+            log.error(
+                f"Collecting the journalctl logs for OSD.{target} service on {host.hostname} for the failure"
+            )
+            end_time, _ = host.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+            osd_log_lines = self.get_journalctl_log(
+                start_time=init_time,
+                end_time=end_time,
+                daemon_type="osd",
+                daemon_id=str(target),
+            )
+            log.error(
+                f"\n\n ------------ Log lines from journalctl ---------------- \n"
+                f"{osd_log_lines}\n\n"
+            )
+            return False
         return True
 
     def fetch_host_node(self, daemon_type: str, daemon_id: str = None) -> object:
@@ -1866,7 +1909,7 @@ class RadosOrchestrator:
         )
         orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
         log.debug(orch_ps_out)
-        return orch_ps_out["status"], orch_ps_out["status_desc"]
+        return orch_ps_out["status"], orch_ps_out["status_desc"] if orch_ps_out else ()
 
     def daemon_check_post_tests(
         self, pre_test_orch_ps: dict, pre_crash_report: list = None
@@ -2084,6 +2127,11 @@ class RadosOrchestrator:
 
         for node in data["nodes"]:
             if node["type"] == "osd":
+                # skip OSDs which have weight 0 or 0 PGs
+                # these OSDs are not considered for MAX_AVAIL calc
+                # as they are un-utilized
+                if node["crush_weight"] == 0 or node["pgs"] == 0:
+                    continue
                 total_osds += 1
                 if node["kb_used"] > most_used_kb:
                     most_used_kb = node["kb_used"]
@@ -2328,22 +2376,27 @@ class RadosOrchestrator:
             bool. Pass -> True, Fail -> False
         """
 
-        # Creating test pool to check the effect of Netsplit scenarios on the Pool IO
-        if not self.create_pool(pool_name=pool_name):
-            log.error(f"Failed to create pool : {pool_name}")
-            return False
+        # Checking if test pool exists. if not, creating a new pool and continuing workflow
+        pools = self.list_pools()
+        if pool_name not in pools:
+            if not self.create_pool(pool_name=pool_name):
+                log.error("Failed to create pool : " + pool_name)
+                return False
 
-        rules = f"""id {rule_id}
+        out = self.run_ceph_command(cmd="ceph osd crush rule ls", client_exec=True)
+        if rule_name not in out:
+            log.debug("Creating new rule for 3 AZ pools. Rule name : " + rule_name)
+            rules = f"""id {rule_id}
 type replicated
 step take default
 step choose firstn {num_sites} type {peer_bucket_barrier}
 step chooseleaf firstn {num_copies_per_site} type host
 step emit"""
-        log.debug(f"Rule to be added :\n {rules}\n")
+            log.debug(f"Rule to be added :\n {rules}\n")
 
-        if not self.add_custom_crush_rules(rule_name=rule_name, rules=rules):
-            log.error("Failed to add the new crush rule")
-            return False
+            if not self.add_custom_crush_rules(rule_name=rule_name, rules=rules):
+                log.error("Failed to add the new crush rule")
+                return False
 
         size = num_sites * num_copies_per_site
         min_size = math.ceil(size / 2)
@@ -2536,31 +2589,49 @@ EOF"""
             log.error(err)
             return False
 
-    def check_inactive_pgs_on_pool(self, pool_name) -> bool:
+    def check_inactive_pgs_on_pool(self, pool_name: str = None) -> bool:
         """
-        Method to check if the provided pool has any PGs in inactive state
+        Method to check if the provided pool has any PGs in inactive state.
+        If no pool name is provided, then checks on the entire cluster
 
         Args:
             pool_name: Name of the pool, on which inactive PGs should be checked
 
         Returns: True-> Pass,  false -> Fail
         """
-        log.debug(f"Checking for inactive PGs on pool : {pool_name}")
-        pool_pgids = self.get_pgid(pool_name=pool_name)
-        for pgid in pool_pgids:
-            # Checking the PG state. There Should not be inactive state
-            pg_state = self.get_pg_state(pg_id=pgid)
-            if pg_state:
-                if any("unknown" in key for key in pg_state.split("+")):
-                    log.error(f"PG: {pgid} in inactive state)")
-                    return False
-            else:
-                log.error(f"PG : {pgid} not present on cluster")
-                continue
-        log.info(
-            f"Completed checking for inactive PGs on Pool : {pool_name}. No inactive PGs found"
-        )
-        return True
+        if pool_name:
+            log.debug("Checking for inactive PGs on pool : %s", pool_name)
+            pool_pgids = self.get_pgid(pool_name=pool_name)
+            for pgid in pool_pgids:
+                # Checking the PG state. There Should not be inactive state
+                pg_state = self.get_pg_state(pg_id=pgid)
+                if pg_state:
+                    if any("unknown" in key for key in pg_state.split("+")):
+                        log.error("PG: %s in inactive state)", pgid)
+                        return False
+                else:
+                    log.error("PG : %s not present on cluster", pgid)
+                    continue
+            log.info(
+                "Completed checking for inactive PGs on Pool : %s. No inactive PGs found",
+                pool_name,
+            )
+            return True
+        else:
+            log.debug("Checking for inactive PGs on the cluster")
+            try:
+                status_report = self.run_ceph_command(
+                    cmd="ceph report", client_exec=True
+                )
+                for entry in status_report["num_pg_by_state"]:
+                    if any("unknown" in key for key in entry["state"].split("+")):
+                        log.error("PG in unknown state found: %s", entry["state"])
+                        return False
+                    log.info(" PG States: %s ", status_report["num_pg_by_state"])
+                    return True
+            except Exception as e:
+                log.error("Error occurred while fetching status report: %s", e)
+                return False
 
     def get_osd_hosts(self):
         """
@@ -2649,7 +2720,7 @@ EOF"""
         if orch_ls_op:
             return [service["service_name"] for service in orch_ls_op]
 
-    def check_host_status(self, hostname, status: str = None) -> bool:
+    def check_host_status(self, hostname, status: str) -> bool:
         """
         Checks the status of host(offline or online) using
         ceph orch host ls and return boolean
@@ -2661,13 +2732,13 @@ EOF"""
         """
         host_cmd = f"ceph orch host ls --host_pattern {hostname}"
         out = self.run_ceph_command(cmd=host_cmd, client_exec=True)
-        host_status = out[0]["status"].lower().strip()
-        log.info(f"Status of the host is {host_status}")
-        if status:
+        if out:
+            host_status = out[0]["status"].lower().strip()
+            log.info("Status of the host : %s is %s", hostname, host_status)
             return True if status.lower() == host_status else False
-        elif "offline" in host_status:
+        else:
+            log.info("Host : %s is not part of the cluster", hostname)
             return False
-        return True
 
     def run_concurrent_io(self, pool_name: str, obj_name: str, obj_size: int):
         """
@@ -2847,11 +2918,12 @@ EOF"""
         log.error(f"Pool ID {pool_id} not found in 'ceph pg dump pools' output")
         raise KeyError(f"Pool ID {pool_id} not found in 'ceph pg dump pools' output")
 
-    def restart_daemon_services(self, daemon: str):
+    def restart_daemon_services(self, daemon: str, timeout: int = 300):
         """Module to restart all Orchestrator services belonging to the input
         daemon.
         Args:
             daemon (str): name of daemon whose service has to be restarted
+            timeout(int): wait time for daemons to start
         Returns:
             True -> Orch service restarted successfully.
 
@@ -2876,7 +2948,7 @@ EOF"""
         for service in daemon_services:
             self.client.exec_command(cmd=f"ceph orch restart {service}", sudo=True)
 
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         # wait for each daemon to restart
         for service in daemon_services:
             while datetime.datetime.now() <= end_time:
@@ -2909,7 +2981,7 @@ EOF"""
             else:
                 log.error(
                     f"All the daemons part of the service {service} did not restart within "
-                    f"timeout of 5 mins"
+                    f"timeout of {timeout} secs"
                 )
                 return False
 
@@ -3885,7 +3957,7 @@ EOF"""
             log.error(f"Unable to start the OSD : {target_osd}")
             return None
         log.info(f"Performing the deep-scrub on the pg-{pg_id}")
-        if not self.start_check_deep_scrub_complete(pg_id=pg_id):
+        if not self.start_check_deep_scrub_complete(pg_id=pg_id, wait_time=1000):
             log.debug(f"deep-scrubbing could not be completed on PG : {pg_id}")
             raise Exception("PG not deep-scrubbed error")
         log.debug(f"Completed deep-scrubbing the pg : {pg_id}")
@@ -4380,20 +4452,21 @@ EOF"""
         log.info(f"The inconsistent object is created in the pg{pg_id}")
         return pg_id, obj_count
 
-    def set_unmanaged_flag(self, daemon):
+    def set_unmanaged_flag(self, service_type, service_name):
         """
         Method to set the unmanaged flag to a daemon
         Args:
-            daemon : Cluster daemon Example: mgr,mon, osd, rgw
+            service_name : Orch service_name Example: mgr,mon, osd.all-available-devices, rgw.rgws
+            service_type : Cluster  Example: mgr,mon, osd, rgw
         Return:
              True, if unmanaged flag is set
              False, if unmanaged flag is not set
         """
 
-        cmd_set_unmanaged_flag = f"ceph orch set-unmanaged {daemon}"
+        cmd_set_unmanaged_flag = f"ceph orch set-unmanaged {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_unmanaged_flag)
         base_cmd = "ceph orch ls"
-        cmd = f"{base_cmd} {daemon}"
+        cmd = f"{base_cmd} {service_type} {service_name}"
         duration = 300  # 5 minutes
         start_time = time.time()
         while time.time() - start_time < duration:
@@ -4406,21 +4479,21 @@ EOF"""
         log.error("The unmanaged flag is not set to True  ")
         return False
 
-    def set_managed_flag(self, daemon):
+    def set_managed_flag(self, service_type, service_name):
         """
         Method to unset the unmanaged flag to a daemon
         Args:
-            daemon : Cluster daemon Example: mgr,mon, osd, rgw
+            service_name : Orch service_name Example: mgr,mon, osd.all-available-devices, rgw.rgws
+            service_type : Cluster daemon Example: mgr,mon, osd, rgw
         Return:
             True, if unmanaged flag is unset
             False, if unmanaged flag is not unset
         """
 
-        cmd_set_managed_flag = f"ceph orch set-managed {daemon}"
+        cmd_set_managed_flag = f"ceph orch set-managed {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
-
         base_cmd = "ceph orch ls"
-        cmd = f"{base_cmd} {daemon}"
+        cmd = f"{base_cmd} {service_type} {service_name}"
         duration = 300  # 5 minutes
         start_time = time.time()
         while time.time() - start_time < duration:
@@ -4498,7 +4571,7 @@ EOF"""
                         osd_dict[key].append(entry["id"])
             log.info(f"List of {key} OSDs: {osd_dict[key]}")
 
-        return osd_dict[status]
+        return osd_dict[status.lower()]
 
     def get_osd_details(self, osd_id: int):
         """
@@ -4677,3 +4750,154 @@ EOF"""
                 return False
         log.info(f" All {service_type} Service in unmanaged={unmanaged} state. Pass")
         return True
+
+    def run_background_iops(self, ceph_client, duration=600):
+        """
+        Method to trigger background IOPS on the cluster for a specific
+        duration using desired client
+        Note: Currently supports only RGW clientr
+        Args:
+            ceph_client: rgw | cephfs | rbd
+            duration: time for which I/Os should run (in secs)
+        returns:
+            Pass -> True, Fail -> false
+        """
+        # To-do: add support for cephfs and rbd
+        log.info(f"Starting background IOs with {ceph_client} client")
+        config = dict()
+        try:
+            if ceph_client == "rgw":
+                # choose RGW node
+                rgw_node = self.ceph_cluster.get_nodes(role="rgw")[0]
+                rgw_node_ip = rgw_node.ip_address
+
+                # rgw qe scripts
+                config["git-url"] = (
+                    "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+                )
+                home_dir_path = "/home/cephuser"
+                test_folder = "rgw-ms-tests"
+                test_folder_path = f"{home_dir_path}/{test_folder}"
+
+                # flushing iptables
+                log.info("flushing iptables")
+                self.client.exec_command(
+                    cmd="sudo iptables -F", check_ec=False, sudo=True
+                )
+
+                # setup necessary directory
+                out, _ = self.client.exec_command(
+                    cmd=f"ls -l {test_folder_path}", check_ec=False, sudo=True
+                )
+                if not out:
+                    self.client.exec_command(
+                        cmd=f"sudo mkdir -p {test_folder_path}", sudo=True
+                    )
+
+                # clone qe script repo
+                out, _ = self.client.exec_command(
+                    cmd=f"ls -l {test_folder_path}/ceph-qe-scripts",
+                    check_ec=False,
+                    sudo=True,
+                )
+                if not out:
+                    utils.clone_the_repo(config, self.client, test_folder_path)
+
+                # setup venv for running rgw scripts
+                out, _ = self.client.exec_command(cmd="ls -l venv", check_ec=False)
+                if not out:
+                    setup_cmds = [
+                        "python3 -m venv venv",
+                        "venv/bin/pip install --upgrade pip",
+                        f"venv/bin/pip install -r {test_folder}/ceph-qe-scripts/rgw/requirements.txt",
+                    ]
+                    for _cmd in setup_cmds:
+                        self.client.exec_command(cmd=_cmd, sudo=True)
+                cfg_path = (
+                    "/home/cephuser/rgw-ms-tests/ceph-qe-scripts/rgw/v2/tests/"
+                    + "s3_swift/multisite_configs/test_Mbuckets_with_Nobjects.yaml"
+                )
+
+                script_path = (
+                    "/home/cephuser/rgw-ms-tests/ceph-qe-scripts/rgw/v2/tests/"
+                    + "s3_swift/test_Mbuckets_with_Nobjects.py"
+                )
+
+                python_path = "/home/cephuser/venv/bin/python"
+
+                # Trial run 1 - Time taken to write 1000 objects in 2 buckets: 45 mins
+                # Trial run 2 - Time taken to write 250 objects in 2 buckets: 6 mins
+                # In 60 secs we will write approx 35-40 objects
+                obj_count = int(40 * duration / 60)
+                # modify object count to 1000
+                _cmd = f"sed -i 's/objects_count: [0-9]*/objects_count: {obj_count}/g' {cfg_path}"
+                self.client.exec_command(cmd=_cmd, sudo=True)
+
+                run_cmd = f"sudo {python_path} {script_path} -c {cfg_path} --rgw-node {rgw_node_ip} &> /dev/null &"
+                self.client.exec_command(cmd=run_cmd, sudo=True, check_ec=False)
+                # blind sleep to let rgw ios start
+                time.sleep(120)
+        except Exception as e:
+            log.error(f"Execution failed with exception: {e.__doc__}")
+            log.exception(e)
+            return False
+        return True
+
+    def get_host_label(self, host_name):
+        """
+        Method is used to get the labels list of the host
+        Args:
+            host_name: Host name
+
+        Returns: List of labels of the host
+        """
+
+        cmd_get_labels = f"ceph orch host ls --host_pattern {host_name}"
+        host_output = self.run_ceph_command(cmd=cmd_get_labels)
+        return host_output[0]["labels"]
+
+    def remove_host_label(self, host_name, label):
+        """
+        Method is used to remove the labels from the host
+
+        Args:
+            host_name: host name
+            label:  label name
+
+        Returns:
+            True-> The label is successfully deleted
+            False -> The label is not deleted
+        """
+        cmd_rm_label = f"ceph orch host label rm  {host_name} {label}"
+        self.client.exec_command(cmd=cmd_rm_label, sudo=True)
+        time.sleep(10)
+        label_list = self.get_host_label(host_name)
+        if label not in label_list:
+            log.info(f"The {label} removed from the {host_name} node ")
+            return True
+        else:
+            log.error(f"The {label} not removed from the {host_name} node ")
+            return False
+
+    def add_host_label(self, host_name, label):
+        """
+        Method is used to add the labels from the host
+
+        Args:
+            host_name: host name
+            label:  label name
+
+        Returns:
+            True-> The label is successfully added
+            False -> The label is not added
+        """
+        cmd_add_label = f"ceph orch host label add  {host_name} {label}"
+        self.client.exec_command(cmd=cmd_add_label, sudo=True)
+        time.sleep(10)
+        label_list = self.get_host_label(host_name)
+        if label in label_list:
+            log.info(f"The {label} added to the {host_name} node ")
+            return True
+        else:
+            log.error(f"The {label} not added to the {host_name} node ")
+            return False

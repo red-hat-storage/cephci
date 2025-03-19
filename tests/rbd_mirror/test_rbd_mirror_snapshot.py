@@ -1,15 +1,15 @@
 """Test case covered -
-    CEPH-83575375 and CEPH-83575376
+CEPH-83575375 and CEPH-83575376
 
-    Test Case Flow:
-    1. Configure snapshot based mirroring between two clusters
-    2. Add mirror snapshot schedule at cluster and pool level
-    3. create some images and wait for them to mirror to secondary
-    4. Check that mirror snapshots are created for each images
-    5. Create a snapshot mirror schedule and list the snapshots
-    6. View the status of schedule snapshot
-    7. remove the snapshot schedule from cluster and pool level, verify the same
-    8. Perform test steps for both Replicated and EC pool
+Test Case Flow:
+1. Configure snapshot based mirroring between two clusters
+2. Add mirror snapshot schedule at cluster and pool level
+3. create some images and wait for them to mirror to secondary
+4. Check that mirror snapshots are created for each images
+5. Create a snapshot mirror schedule and list the snapshots
+6. View the status of schedule snapshot
+7. remove the snapshot schedule from cluster and pool level, verify the same
+8. Perform test steps for both Replicated and EC pool
 """
 
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config

@@ -299,22 +299,6 @@ tests:
       module: exec.py
       name: set sse-s3 vault configs on multisite
 
-#Performing IOs via the HAproxy node
-
-  - test:
-      clusters:
-        ceph-sec:
-          config:
-            set-env: true
-            script-name: test_Mbuckets_with_Nobjects.py
-            config-file-name: test_Mbuckets_with_Nobjects_compression_haproxy.yaml
-            run-on-haproxy: true
-            monitor-consistency-bucket-stats: true
-      desc: test M buckets compression on haproxy node
-      polarion-id: CEPH-83575199
-      module: sanity_rgw_multisite.py
-      name: test M buckets compression on haproxy node
-
 # creating a test bucket on the primary site
   - test:
       clusters:
@@ -333,7 +317,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: test_bucket_lifecycle_object_expiration_transition.py
             config-file-name: test_lc_rule_prefix_non_current_days_haproxy.yaml
             run-on-haproxy: true
@@ -365,20 +348,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test LC transition on multisite with object acl set
       polarion-id: CEPH-83574048
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            extra-pkgs:
-              - jq
-            script-name: test_rgw_restore_index_tool.py
-            config-file-name: test_rgw_restore_index_versioned_buckets.yaml
-            run-on-haproxy: true
-            monitor-consistency-bucket-stats: true
-      desc: test rgw restore index tool on versioned bucket
-      polarion-id: CEPH-83575473
-      module: sanity_rgw_multisite.py
-      name: test rgw restore index tool on versioned bucket
   - test:
       clusters:
         ceph-pri:

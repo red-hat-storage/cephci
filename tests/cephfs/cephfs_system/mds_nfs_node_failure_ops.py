@@ -35,7 +35,9 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
             break
         client1.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}/run_ios_{iter}")
         fs_util.run_ios(client1, f"{mounting_dir}/run_ios_{iter}/", io_tools=["dd"])
-        client1.exec_command(sudo=True, cmd=f"rm -rf {mounting_dir}/run_ios_{iter}")
+        client1.exec_command(
+            sudo=True, cmd=f"rm -rf {mounting_dir}/run_ios_{iter}", timeout=3600
+        )
         iter = iter + 1
 
 
@@ -158,6 +160,7 @@ def run(ceph_cluster, **kw):
                 timeout=0,
             )
             global stop_flag
+            mds_nodes = fs_util.get_mds_nodes(clients[0])
             for mds in mds_nodes:
                 fs_util.pid_kill(mds, "mds")
 
@@ -190,7 +193,7 @@ def run(ceph_cluster, **kw):
             f"ceph nfs export delete {nfs_name} {nfs_export_name}",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command)
+            client1.exec_command(sudo=True, cmd=command, timeout=3600, check_ec=False)
         client1.exec_command(
             sudo=True, cmd=f"rm -rf {nfs_mounting_dir}/", check_ec=False
         )

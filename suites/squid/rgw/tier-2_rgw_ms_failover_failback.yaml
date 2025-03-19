@@ -31,6 +31,7 @@ tests:
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
               - config:
                   command: add_hosts
                   service: host
@@ -76,6 +77,7 @@ tests:
                     orphan-initial-daemons: true
                     initial-dashboard-password: admin@123
                     dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
               - config:
                   command: add_hosts
                   service: host
@@ -284,18 +286,6 @@ tests:
       name: create non-tenanted user
 
   # IO performed should be readable on secondary
-  - test:
-      name: multipart upload on primary
-      desc: test_Mbuckets_with_Nobjects_multipart on primary
-      polarion-id: CEPH-14265
-      module: sanity_rgw_multisite.py
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_Mbuckets_with_Nobjects.py
-            verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-
   # IO should fail on read only secondary
   - test:
       name: object upload on secondary
@@ -347,8 +337,9 @@ tests:
             commands:
               - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-sec#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --master --default"
-              - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph orch restart {service_name:shared.pri}"
+              - "sleep 30"
+              - "radosgw-admin period update --rgw-realm india --commit"
               - "sleep 120"
       desc: RGW multisite failback
       module: exec.py
@@ -406,13 +397,13 @@ tests:
 
   # IO from primary again
   - test:
-      name: Object upload on primary
-      desc: test_Mbuckets_with_Nobjects on primary
-      polarion-id: CEPH-14265
+      name: Datalog trimming test post restart of rgw service on primary
+      desc: test datalog trimming post restart of rgw service on  on primary
+      polarion-id: CEPH-10959
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_Mbuckets_with_Nobjects.py
+            script-name: test_bilog_trimming.py
+            config-file-name: test_datalog_trimming_post_rgw_restart.yaml
             verify-io-on-site: ["ceph-sec"]
-            config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml

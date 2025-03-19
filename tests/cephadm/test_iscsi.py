@@ -33,5 +33,6 @@ def run(ceph_cluster, **kw):
         method(config)
     finally:
         # Get cluster state
-        get_cluster_state(iscsi)
+        if config.get("no_cluster_state"):
+            get_cluster_state(iscsi)
     return 0

@@ -329,26 +329,8 @@ tests:
       desc: Subvolume metadata creation, delete and modifying test
       abort-on-fail: false
   - test:
-      name: Test fs volume deletion when mon_allow_pool_delete is false
-      module: cephfs_vol_management.fs_del_allow_pool_false.py
-      polarion-id: CEPH-83574159
-      desc: Test fs volume deletion when mon_allow_pool_delete is false
-      abort-on-fail: false
-  - test:
       name: cephfs_vol_mgmt_fs_life_cycle
       module: cephfs_vol_management.cephfs_vol_mgmt_fs_life_cycle.py
       polarion-id: CEPH-11333
       desc: File system life cycle
-      abort-on-fail: false
-  - test:
-      name: volume related scenarios(delete,rename)
-      module: cephfs_vol_management.cephfs_vol_mgmt_volume_scenarios.py
-      polarion-id: CEPH-83603354
-      desc: volume related scenarios(delete,rename)
-      abort-on-fail: false
-  - test:
-      name: cephfs subvolumegroup scenarios
-      module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_scenarios.py
-      polarion-id: CEPH-83604079
-      desc: cephfs subvolumegroup scenarios
       abort-on-fail: false

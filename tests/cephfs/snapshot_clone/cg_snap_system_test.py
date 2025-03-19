@@ -7,6 +7,7 @@ import traceback
 from threading import Thread
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.snapshot_clone.cephfs_cg_io import CG_snap_IO
 from tests.cephfs.snapshot_clone.cg_snap_utils import CG_Snap_Utils
 from utility.log import Log
@@ -29,12 +30,13 @@ def run(ceph_cluster, **kw):
     cancel,reset,include,exclude
 
     Clean Up:
-    1.
+    1. Umount mountpoints, Destroy subvolumes and subvolumegroups.
 
     """
     try:
         fs_util_v1 = FsUtilsv1(ceph_cluster)
         cg_snap_util = CG_Snap_Utils(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         cg_snap_io = CG_snap_IO(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
@@ -110,7 +112,9 @@ def run(ceph_cluster, **kw):
         )
         crash_status_before = fs_util_v1.get_crash_ls_new(client1)
         log.info(f"Crash status before Test: {crash_status_before}")
-        fs_util_v1.get_ceph_health_status(client1)
+        wait_time_secs = 300
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
+            assert False, "Cluster health is not OK even after waiting for sometime"
         sv_mixed_list = []
         qs_cnt -= 1
         for i in range(0, qs_cnt):
@@ -161,25 +165,9 @@ def run(ceph_cluster, **kw):
         log.info("Clean Up in progess")
         crash_status_after = fs_util_v1.get_crash_ls_new(client1)
         log.info(f"Crash status after Test: {crash_status_after}")
-        health_wait = 300
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=health_wait)
-        health_ok = 0
-        wait_time = 0
-        while (datetime.datetime.now() < end_time) and health_ok == 0:
-            try:
-                fs_util_v1.get_ceph_health_status(client1)
-                health_ok = 1
-            except Exception as ex:
-                log.info(
-                    f"Wait for sometime to check if Cluster health can be OK, current state : {ex}"
-                )
-                time.sleep(10)
-                wait_time += 10
-        if health_ok == 0:
-            assert (
-                False
-            ), f"Cluster health is not OK even after waiting for {health_wait}secs"
-        log.info(f"Cluster Health is OK in {wait_time}secs")
+        wait_time_secs = 300
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
+            assert False, "Cluster health is not OK even after waiting for sometime"
 
         if len(crash_status_after) > len(crash_status_before):
             assert False, "Post test validation failed, please check crash report above"

@@ -11,6 +11,7 @@
 #          secret-id: <secret-id>
 #          prefix: /v1/<path>
 #
+# global-conf: conf/squid/rgw/ec-profile-4+2-cluster.yaml
 ---
 tests:
   - test:
@@ -179,6 +180,20 @@ tests:
       module: java_s3tests.py
       name: execute Java Maven test suite
       polarion-id: CEPH-83586289
+  - test:
+      abort-on-fail: false
+      config:
+        commands:
+          - "radosgw-admin account create --account-id RGW22222222222222222 --account-name Account2 --email account2@ceph.com"
+          - "radosgw-admin account create --account-id RGW11111111111111111 --account-name Account1  --email account1@ceph.com"
+          - "radosgw-admin zone modify --enable-feature notification_v2"
+          - "radosgw-admin zonegroup modify --enable-feature notification_v2"
+          - "ceph orch restart rgw.rgw.ssl"
+      desc: Create 2 rgw accounts
+      module: exec.py
+      name: Create 2 rgw accounts
+      polarian-id: CEPH-83591683
+
 
   - test:
       abort-on-fail: false
@@ -186,7 +201,6 @@ tests:
         branch: ceph-squid
         kms_keyid: testKey01
       desc: S3tests
-      comments: Known issue BZ-2312112 targeted to 8.0z2
       destroy-cluster: false
       module: test_s3.py
       name: execute s3tests
@@ -200,3 +214,12 @@ tests:
       config:
         script-name: test_object_level_retention.py
         config-file-name: test_object_level_governance.yaml
+
+  - test:
+      name: Test swift bulk upload with tar format
+      desc: Test swift bulk upload with tar format
+      polarion-id: CEPH-83607707
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_bulk_upload.py
+        config-file-name: test_swift_bulk_upload.yaml

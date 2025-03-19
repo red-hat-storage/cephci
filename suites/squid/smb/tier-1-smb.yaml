@@ -425,3 +425,94 @@ tests:
         smb_shares: [share1, share2]
         path: "/"
         earmark: smb
+
+  - test:
+      name: Verify that the smb cli cluster listing command correctly lists all SMB clusters.
+      desc: Verify that the smb cli cluster listing command correctly lists all SMB clusters.
+      module: smb_cli_support.py
+      polarion-id: CEPH-83605168
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cli_cmd: "cluster ls"
+
+  - test:
+      name: Verify that the smb cli share listing command correctly lists all SMB shares.
+      desc: Verify that the smb cli cluster listing command correctly lists all SMB shares.
+      module: smb_cli_support.py
+      polarion-id: CEPH-83605169
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cli_cmd: "share ls"
+
+  - test:
+      name: Verify that the smb cli show command correctly show SMB resource.
+      desc: Verify that the smb cli show command correctly show SMB resource.
+      module: smb_cli_support.py
+      polarion-id: CEPH-83605170
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cli_cmd: "show"
+        resource_names: "ceph.smb.cluster"
+
+  - test:
+      name: Verify that the smb cli dump cluster-config command correctly give cluster-config.
+      desc: Verify that the smb cli dump cluster-config command correctly give cluster-config.
+      module: smb_cli_support.py
+      polarion-id: CEPH-83605171
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cli_cmd: "dump cluster-config"
+
+  - test:
+      name: Verify that the smb cli dump service-spec command correctly give service-spec details.
+      desc: Verify that the smb cli dump service-spec command correctly give service-spec details.
+      module: smb_cli_support.py
+      polarion-id: CEPH-83605173
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cli_cmd: "dump service-spec"

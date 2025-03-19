@@ -1,21 +1,21 @@
 """Test case covered - CEPH-83590607
 
-    Test Case Flow:
-    1. Set up bidirectional mirroring on a test pool as usual
-    2. Verify that "rbd mirror pool status" reports "health: OK" on both clusters
-    3. Grab service_id and instance_id from "rbd mirror pool status --verbose" output on cluster B
-    4. Grab peer UUID from "rbd mirror pool info" output on cluster B
-    5. Set wrong client id to mirror peer client using
-        "rbd mirror pool peer set <peer UUID from step 4> client client.invalid" command on cluster B
-    6. Wait 30-90 seconds and verify that "rbd mirror pool status" reports "health: ERROR" on cluster B
-       and "health: WARNING" on cluster A
-    7. Reset correct client id to mirror peer client using
-        "rbd mirror pool peer set <peer UUID from step 4> client client.rbd-mirror-peer" command on cluster B
-    8. Wait 30-90 seconds and verify that "rbd mirror pool status" reports "health: OK" on both clusters again
-    9. Grab service_id and instance_id from "rbd mirror pool status --verbose" output on cluster B again
-    10. Verify that service_id from step 3 is equal to the one from step 9
-    11. Verify that instance_id from step 3 is not same than the one from step 9
-    8. Perform test steps for both Replicated and EC pool
+Test Case Flow:
+1. Set up bidirectional mirroring on a test pool as usual
+2. Verify that "rbd mirror pool status" reports "health: OK" on both clusters
+3. Grab service_id and instance_id from "rbd mirror pool status --verbose" output on cluster B
+4. Grab peer UUID from "rbd mirror pool info" output on cluster B
+5. Set wrong client id to mirror peer client using
+    "rbd mirror pool peer set <peer UUID from step 4> client client.invalid" command on cluster B
+6. Wait 30-90 seconds and verify that "rbd mirror pool status" reports "health: ERROR" on cluster B
+   and "health: WARNING" on cluster A
+7. Reset correct client id to mirror peer client using
+    "rbd mirror pool peer set <peer UUID from step 4> client client.rbd-mirror-peer" command on cluster B
+8. Wait 30-90 seconds and verify that "rbd mirror pool status" reports "health: OK" on both clusters again
+9. Grab service_id and instance_id from "rbd mirror pool status --verbose" output on cluster B again
+10. Verify that service_id from step 3 is equal to the one from step 9
+11. Verify that instance_id from step 3 is not same than the one from step 9
+8. Perform test steps for both Replicated and EC pool
 """
 
 import json

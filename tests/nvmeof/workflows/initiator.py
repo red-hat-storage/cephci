@@ -14,7 +14,7 @@ class NVMeInitiator(Initiator):
         self.gateway = gateway
         self.discovery_port = 8009
 
-    def fetch_lsblk_nvme_devices(self):
+    def fetch_lsblk_nvme_devices_dict(self):
         """Validate all devices at client side.
 
         Args:
@@ -26,6 +26,54 @@ class NVMeInitiator(Initiator):
             cmd=" lsblk -I 8,259 -o name,wwn --json", sudo=True
         )
         out = json.loads(out)["blockdevices"]
+        return out
+
+    def fetch_device_for_namespace(self, uuid):
+        """
+        Fetch the device path for the given namespace UUID
+        Args:
+            uuid: Namespace UUID
+        Returns:
+            NVMe device path
+        """
+        out = self.fetch_lsblk_nvme_devices_dict()
+        for device in out:
+            if device.get("wwn", "").removeprefix("uuid.") == uuid:
+                return f"/dev/{device['name']}"
+        return None
+
+    def fetch_anastate(self, device):
+        """
+        Fetch the ANA state of the given device for each gateway
+        Args:
+            device: NVMe device path
+        Returns:
+            ANA state of the device
+        """
+        out, _ = self.list_subsys(**{"device": device, "output-format": "json"})
+        subsystems = json.loads(out)[0].get("Subsystems")
+        paths = {"optimized": [], "inaccessible": []}
+        for subsys in subsystems:
+            for path in subsys.get("Paths"):
+                if path.get("State") == "live" and path.get("ANAState") == "optimized":
+                    paths["optimized"].extend(
+                        [path.get("Address").split("traddr=")[1].split(",")[0]]
+                    )
+                else:
+                    paths["inaccessible"].extend(
+                        [path.get("Address").split("traddr=")[1].split(",")[0]]
+                    )
+        return paths
+
+    def fetch_lsblk_nvme_devices(self):
+        """Validate all devices at client side.
+
+        Args:
+            uuids: List of Namespace UUIDs
+        Returns:
+            boolean
+        """
+        out = self.fetch_lsblk_nvme_devices_dict()
         uuids = sorted(
             [
                 i["wwn"].removeprefix("uuid.")

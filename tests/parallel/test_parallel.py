@@ -4,9 +4,9 @@ import glob
 import importlib
 import logging
 import os
+import random
 import string
 from multiprocessing import Manager
-from random import random
 from time import sleep
 
 from ceph.ceph import CommandFailed
@@ -48,14 +48,12 @@ def run(**kwargs):
         parallel_tests = kwargs["parallel"]
         parallel_tcs = manager.list()
         max_time = kwargs.get("config", {}).get("max_time", None)
-        wait_till_complete = kwargs.get("config", {}).get("wait_till_complete", True)
         cancel_pending = kwargs.get("config", {}).get("cancel_pending", False)
         parallel_log.info(kwargs)
 
         with parallel(
             thread_pool=False,
             timeout=max_time,
-            shutdown_wait=wait_till_complete,
             shutdown_cancel_pending=cancel_pending,
         ) as p:
             for test in parallel_tests:
@@ -147,6 +145,13 @@ def execute(test, args, results, parallel_tcs):
         # Merging configurations safely
         test_config = args.get("config", {}).copy()
         test_config.update(test.get("config", {}))
+        if "clusters" in test:
+            clusters_config = test.get("clusters", {})
+            for cluster_name, cluster_data in clusters_config.items():
+                # Extract and merge the cluster-specific configurations into the root
+                if "config" in cluster_data:
+                    test_config.update(cluster_data["config"])
+        test_logger.info(test_config)
         tc["name"] = test.get("name")
         tc["desc"] = test.get("desc")
         tc["log-link"] = log_url

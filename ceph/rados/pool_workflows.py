@@ -124,10 +124,10 @@ class PoolFunctions:
             f"Writing {(obj_end - obj_start) * num_keys_obj} Key pairs"
             f" to increase the omap entries on pool {pool_name}"
         )
-        script_loc = "https://raw.githubusercontent.com/red-hat-storage/cephci/master/utility/generate_omap_entries.py"
+        lx = "https://raw.githubusercontent.com/red-hat-storage/cephci/refs/heads/main/utility/generate_omap_entries.py"
         client_node.exec_command(
             sudo=True,
-            cmd=f"curl -k {script_loc} -O",
+            cmd=f"curl -k {lx} -O",
         )
         # Setup Script pre-requisites : docopt
         client_node.exec_command(
@@ -228,6 +228,9 @@ class PoolFunctions:
 
         for i in range(nobj):
             log.info(f"running command on {client.hostname}")
+            if nobj > 1:
+                obj_name = f"{obj_name}-{i}"
+
             put_cmd = (
                 f"rados put -p {pool} obj{i} {infile}"
                 if obj_name is None
@@ -770,6 +773,7 @@ class PoolFunctions:
         test_pg_split = kwargs.get("test_pg_split")
         test_pg_merge = kwargs.get("test_pg_merge")
         modify_threshold = kwargs.get("modify_threshold", False)
+        threshold_val = kwargs.get("threshold_val", 1.3)
         timeout = kwargs.get("timeout", 14000)
 
         if overwrite_recovery_threads:
@@ -785,6 +789,7 @@ class PoolFunctions:
             self.rados_obj.set_pool_property(
                 pool=pool, props="pg_autoscale_mode", value="on"
             )
+            time.sleep(10)
 
         init_pg_count = self.rados_obj.get_pool_property(pool=pool, props="pg_num")[
             "pg_num"
@@ -841,7 +846,7 @@ class PoolFunctions:
                         log.info(
                             "Param passed to modify the threshold set. Changing it to 1.3 from 3."
                         )
-                        self.modify_autoscale_threshold(threshold=1.3)
+                        self.modify_autoscale_threshold(threshold=threshold_val)
                         time.sleep(60)
                     else:
                         no_count_change = True

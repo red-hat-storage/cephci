@@ -39,12 +39,14 @@ In version 2, you can choose whether to use threads or processes by
 If one of the spawned functions throws an exception, it will be thrown
 when iterating over the results, or when the with block ends.
 
-At the end of the with block, the main thread waits until all
-spawned functions have completed, or, if one exited with an exception,
-kills the rest and raises the exception.
+When the scope of with block changes, the main thread waits until all
+spawned functions have completed within the given timeout. On timeout,
+all pending threads/processes are issued shutdown command.
 """
 import logging
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from datetime import datetime, timedelta
+from time import sleep
 
 logger = logging.getLogger(__name__)
 
@@ -56,7 +58,6 @@ class parallel:
         self,
         thread_pool=True,
         timeout=None,
-        shutdown_wait=True,
         shutdown_cancel_pending=False,
     ):
         """Object initialization method.
@@ -64,16 +65,22 @@ class parallel:
         Args:
             thread_pool (bool)          Whether to use threads or processes.
             timeout (int | float)       Maximum allowed time.
-            shutdown_wait (bool)        If disabled, it would not wait for executing
-                                        threads/process to complete.
             shutdown_cancel_pending (bool) If enabled, it would cancel pending tasks.
         """
         self._executor = ThreadPoolExecutor() if thread_pool else ProcessPoolExecutor()
         self._timeout = timeout
-        self._shutdown_wait = shutdown_wait
         self._cancel_pending = shutdown_cancel_pending
         self._futures = list()
         self._results = list()
+        self._iter_index = 0
+
+    @property
+    def count(self):
+        return len(self._futures)
+
+    @property
+    def results(self):
+        return self._results
 
     def spawn(self, fun, *args, **kwargs):
         """Triggers the first class method.
@@ -93,30 +100,56 @@ class parallel:
         return self
 
     def __exit__(self, exc_type, exc_value, trackback):
-        _exceptions = []
-        exception_count = 0
+        _not_done = self._futures[:]
+        _end_time = datetime.now() + timedelta(
+            seconds=self._timeout if self._timeout else 3600
+        )
 
-        for _f in as_completed(self._futures, timeout=self._timeout):
-            try:
+        # Wait for all futures to complete within the given time or 1 hour.
+        while datetime.now() < _end_time:
+            # if the list is empty break
+            if len(_not_done) == 0:
+                break
+
+            sleep(2.0)
+            for _f in _not_done:
+                if _f.done():
+                    _not_done.remove(_f)
+
+        # Graceful shutdown of running threads
+        if _not_done:
+            self._executor.shutdown(wait=False, cancel_futures=self._cancel_pending)
+
+        if exc_value is not None:
+            logger.exception(trackback)
+            return False
+
+        # Check for any exceptions and raise
+        # At this point, all threads/processes should have completed or cancelled
+        try:
+            for _f in self._futures:
                 self._results.append(_f.result())
-            except Exception as e:
-                logger.exception(e)
-                _exceptions.append(e)
-                exception_count += 1
+        except Exception:
+            logger.exception("Encountered an exception during parallel execution.")
+            raise
 
-            if exception_count > 0 and not self._shutdown_wait:
-                # At this point we are ignoring results
-                self._executor.shutdown(wait=False, cancel_futures=self._cancel_pending)
-                raise _exceptions[0]
-
-        if len(_exceptions) > 0:
-            raise _exceptions[0]
-
-        return False if exception_count == 0 else True
+        return True
 
     def __iter__(self):
         return self
 
     def __next__(self):
-        for r in self._results:
-            yield r
+        if self.count == 0 or self._iter_index == self.count:
+            self._iter_index = 0  # reset the counter
+            raise StopIteration()
+
+        try:
+            # Keeping timeout consistent when called within the context
+            _timeout = self._timeout if self._timeout else 3600
+            out = self._futures[self._iter_index].result(timeout=_timeout)
+        except Exception as e:
+            logger.exception(e)
+            out = e
+
+        self._iter_index += 1
+        return out

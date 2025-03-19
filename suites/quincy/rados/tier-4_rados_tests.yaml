@@ -189,6 +189,27 @@ tests:
           pool_name: test-max-avail
           obj_nums: 5
           delete_pool: true
+
+# commented until fix merged in 6.1z9
+# https://bugzilla.redhat.com/show_bug.cgi?id=2350187
+#  - test:
+#      name: Verify MAX_AVAIL variance with OSD size change
+#      desc: MAX_AVAIL value update correctly when OSD size changes
+#      module: test_cephdf.py
+#      polarion-id: CEPH-83595780
+#      config:
+#        cephdf_max_avail_osd_expand: true
+#      comments: Active bug - BZ-2350187
+
+  - test:
+      name: Verify MAX_AVAIL variance when OSDs are removed
+      desc: MAX_AVAIL value update correctly when OSDs are removed
+      module: test_cephdf.py
+      polarion-id: CEPH-83604474
+      config:
+        cephdf_max_avail_osd_rm: true
+      comments: bug to be fixed - BZ-2277857
+
   - test:
       name: Compression algorithms - modes
       module: rados_prep.py
@@ -274,7 +295,6 @@ tests:
       config:
         osd_host_fail: True
       desc: Replacement of a failed OSD host with a healthy host
-
 
   - test:
       name: mon system tests

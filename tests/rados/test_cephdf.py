@@ -4,8 +4,13 @@ Tests included:
 1. Verification of ceph df output upon creation & deletion of objects
 2. MAX_AVAIL value should not change to an invalid value
    upon addition of osd with weight 0
+3. MAX AVAIL is displayed correctly for all the pools when OSD size is increased
+4. MAX AVAIL is displayed correctly for all the pools when few OSDs are removed
 """
 
+import datetime
+import math
+import random
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -229,12 +234,20 @@ def run(ceph_cluster, **kw):
             utils.set_osd_devices_unmanaged(ceph_cluster, osd_list[-1], unmanaged=False)
             assert wait_for_device_rados(host=osd_host, osd_id=osd_id, action="add")
             assert utils.set_osd_in(ceph_cluster, all=True)
-            time.sleep(8)  # blind sleep to let osd stats show up
 
-            # ensure weight of newly added OSD is 0
-            zero_weight = rados_obj.get_osd_df_stats(
-                tree=False, filter_by="name", filter=f"osd.{osd_id}"
-            )["nodes"][0]["crush_weight"]
+            for count in range(3):
+                try:
+                    time.sleep(8)  # blind sleep to let osd stats show up
+                    # ensure weight of newly added OSD is 0
+                    zero_weight = rados_obj.get_osd_df_stats(
+                        tree=False, filter_by="name", filter=f"osd.{osd_id}"
+                    )["nodes"][0]["crush_weight"]
+                    break
+                except Exception as E:
+                    log.error(E)
+                    if count < 3:
+                        continue
+                    raise
             assert zero_weight == 0
 
             org_max_avail = initial_pool_stat[0]["stats"]["max_avail"]
@@ -284,6 +297,7 @@ def run(ceph_cluster, **kw):
             return 1
         finally:
             log.info("\n ************* Executing finally block **********\n")
+            cephadm.shell(["ceph config rm osd osd_crush_initial_weight"])
             if "osd_id" in locals() or "osd_id" in globals():
                 rados_obj.reweight_crush_items(name=f"osd.{osd_id}", weight=org_weight)
             if df_config.get("delete_pool"):
@@ -354,9 +368,13 @@ def run(ceph_cluster, **kw):
             for node in ["node12", "node13"]:
                 # create 10G LVMs on backup nodes
                 node_obj = node12_obj if node == "node12" else node13_obj
-                empty_devices = rados_obj.get_available_devices(
-                    node_name=node_obj.hostname, device_type="hdd"
-                )
+                for _ in range(3):
+                    empty_devices = rados_obj.get_available_devices(
+                        node_name=node_obj.hostname, device_type="hdd"
+                    )
+                    if empty_devices:
+                        break
+                    time.sleep(15)
                 if len(empty_devices) < 1:
                     log.error(
                         f"Need at least 1 spare disk available on host {node_obj.hostname}"
@@ -416,10 +434,10 @@ def run(ceph_cluster, **kw):
 
             # expand the OSD LVMs on backup node12
             for lvm in lvm_list["node12"]:
-                _cmd = f"lvextend -L 15G {lvm}"
+                _cmd = f"lvextend -L 14G {lvm}"
                 node12_obj.exec_command(cmd=_cmd, sudo=True)
 
-            log.info("LVM size on node12 increased from 10G to 15G")
+            log.info("LVM size on node12 increased from 10G to 14G")
             node12_osds = rados_obj.collect_osd_daemon_ids(osd_node=node12_obj)
 
             # for each OSD on node 12, execute bluefs-bdev-expand
@@ -427,18 +445,18 @@ def run(ceph_cluster, **kw):
                 out = bluestore_obj.block_device_expand(osd_id=osd_id)
                 log.info(out)
                 assert "device size" in out and "Expanding" in out
-            log.info(f"OSDs {node12_osds} should now be 15G each")
+            log.info(f"OSDs {node12_osds} should now be 14G each")
 
             osd_node12_meta = rados_obj.get_daemon_metadata(
                 daemon_type="osd", daemon_id=node12_osds[0]
             )
             bdev_size = bytes_to_gb(int(osd_node12_meta["bluestore_bdev_size"]))
-            if not bdev_size == 15:
+            if not bdev_size == 14:
                 log.error(
-                    f"{node12_obj.hostname}'s OSD size post expansion does not match expected value of 15"
+                    f"{node12_obj.hostname}'s OSD size post expansion does not match expected value of 14"
                 )
                 log.error(
-                    f"Actual OSD {node12_osds[0]} size: {bdev_size} | Expected 15"
+                    f"Actual OSD {node12_osds[0]} size: {bdev_size} | Expected 14"
                 )
                 raise Exception(f"OSD.{node12_osds[0]} size post expansion incorrect")
 
@@ -532,5 +550,150 @@ def run(ceph_cluster, **kw):
         log.info(
             "ceph df MAX AVAIL stats verification upon expansion of OSD size"
             "completed successfully"
+        )
+        return 0
+
+    if config.get("cephdf_max_avail_osd_rm"):
+        desc = (
+            "\n#CEPH-83604474"
+            "\nQuincy: BZ-2277857"
+            "\nReef: BZ-2277178"
+            "\nSquid: BZ-2275995"
+            "\nThis test is to verify that ceph df MAX AVAIL is displayed correctly for all the pools"
+            " when 25% of OSDs are removed from the cluster"
+            "\nSteps- \n"
+            "1. Creating a replicated and EC pool with default config\n"
+            "2. Log pool stats and verify max_avail \n"
+            "3. Remove 25% of OSDs from each OSD host\n"
+            "4. Log pool stats and verify max_avail  \n"
+            "5. Re-deploy OSDs\n"
+            "6. Log pool stats and verify max_avail  \n"
+        )
+
+        log.info(desc)
+        df_config = config.get("cephdf_max_avail_osd_rm")
+        pool_name = "test-osd-rm-ec"
+
+        try:
+            # create default pool with given name
+            rados_obj.create_erasure_pool(pool_name=pool_name)
+
+            init_osd_count = len(rados_obj.get_osd_list(status="up"))
+
+            initial_pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+            log.info(f"{pool_name} pool stat: {initial_pool_stat}")
+
+            # execute max_avail check across the cluster
+            rados_obj.change_recovery_threads(config=config, action="set")
+            if not wait_for_clean_pg_sets(rados_obj, timeout=900):
+                log.error("Cluster cloud not reach active+clean state within 900 secs")
+                raise Exception("Cluster cloud not reach active+clean state")
+
+            if not rados_obj.verify_max_avail():
+                log.error("MAX_AVAIL deviates on the cluster more than expected")
+                raise Exception("MAX_AVAIL deviates on the cluster more than expected")
+            log.info("MAX_AVAIL on the cluster are as per expectation")
+
+            # set osd service to unmanaged
+            osd_services = rados_obj.list_orch_services(service_type="osd")
+            for service in osd_services:
+                rados_obj.set_unmanaged_flag(service_type="osd", service_name=service)
+
+            # get OSD hosts
+            osd_hosts = ceph_cluster.get_nodes(role="osd")
+
+            # remove OSDs from the cluster
+            for host in osd_hosts:
+                osd_list = rados_obj.collect_osd_daemon_ids(osd_node=host)
+                osd_rm_count = math.ceil(len(osd_list) * 0.25)
+                osds_rm = random.choices(osd_list, k=osd_rm_count)
+                for osd_id in osds_rm:
+                    log.info(f"Removing OSD {osd_id} on host {host.hostname}")
+                    dev_path = get_device_path(host=host, osd_id=osd_id)
+                    assert utils.set_osd_out(ceph_cluster, osd_id=osd_id)
+                    utils.osd_remove(ceph_cluster, osd_id=osd_id)
+                    time.sleep(5)
+                    assert utils.zap_device(
+                        ceph_cluster, host=host.hostname, device_path=dev_path
+                    )
+                    assert wait_for_device_rados(
+                        host=host, osd_id=osd_id, action="remove", timeout=1000
+                    )
+
+            if not wait_for_clean_pg_sets(rados_obj, timeout=900):
+                log.error("Cluster cloud not reach active+clean state within 900 secs")
+                raise Exception("Cluster cloud not reach active+clean state")
+
+            _pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+            log.info(f"{pool_name} pool stat: {_pool_stat}")
+
+            # execute max_avail check across the cluster after OSDs removal
+            if not rados_obj.verify_max_avail():
+                log.error("MAX_AVAIL deviates on the cluster more than expected")
+                raise Exception("MAX_AVAIL deviates on the cluster more than expected")
+            log.info("MAX_AVAIL on the cluster are as per expectation")
+
+            # set osd service to unmanaged False
+            osd_services = rados_obj.list_orch_services(service_type="osd")
+            for service in osd_services:
+                rados_obj.set_managed_flag(service_type="osd", service_name=service)
+            # wait for OSDs to get deployed, i.e. current UP OSD count == init UP OSD count
+            endtime = datetime.datetime.now() + datetime.timedelta(seconds=600)
+            while datetime.datetime.now() < endtime:
+                curr_osd_up = len(rados_obj.get_osd_list(status="up"))
+                if curr_osd_up != init_osd_count:
+                    log.error(
+                        "Current UP OSDs yet to reach original value, sleeping for 60 secs"
+                    )
+                    time.sleep(60)
+                    if datetime.datetime.now() > endtime:
+                        raise Exception(
+                            "Removed OSDs were not added back to the cluster within 10 mins"
+                        )
+                    continue
+                log.info(
+                    f"Current UP count [{curr_osd_up}] == Original UP OSD count [{init_osd_count}]"
+                )
+                break
+
+            if not wait_for_clean_pg_sets(rados_obj, timeout=900):
+                log.error("Cluster cloud not reach active+clean state within 900 secs")
+                raise Exception("Cluster cloud not reach active+clean state")
+
+            _pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+            log.info(f"{pool_name} pool stat: {_pool_stat}")
+
+            # execute max_avail check across the cluster after OSDs addition
+            if not rados_obj.verify_max_avail():
+                log.error("MAX_AVAIL deviates on the cluster more than expected")
+                raise Exception("MAX_AVAIL deviates on the cluster more than expected")
+            log.info("MAX_AVAIL on the cluster are as per expectation")
+
+        except Exception as AE:
+            log.error(f"Failed with exception: {AE.__doc__}")
+            log.exception(AE)
+            return 1
+        finally:
+            log.info("\n ************* Executing finally block **********\n")
+            rados_obj.delete_pool(pool=pool_name)
+            if not wait_for_clean_pg_sets(rados_obj, timeout=900):
+                log.error("Cluster could not reach active+clean state")
+                return 1
+            rados_obj.change_recovery_threads(config=config, action="rm")
+
+            # set osd service to managed
+            osd_services = rados_obj.list_orch_services(service_type="osd")
+            for service in osd_services:
+                rados_obj.set_managed_flag(service_type="osd", service_name=service)
+
+            # log cluster health
+            rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
+
+        log.info(
+            "ceph df MAX AVAIL stats verification upon OSDs removal completed successfully"
         )
         return 0

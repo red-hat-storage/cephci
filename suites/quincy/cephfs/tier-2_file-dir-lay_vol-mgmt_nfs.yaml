@@ -308,12 +308,6 @@ tests:
       desc: Subvolume metadata creation, delete and modifying test
       abort-on-fail: false
   - test:
-      name: Test fs volume deletion when mon_allow_pool_delete is false
-      module: cephfs_vol_management.fs_del_allow_pool_false.py
-      polarion-id: CEPH-83574159
-      desc: Test fs volume deletion when mon_allow_pool_delete is false
-      abort-on-fail: false
-  - test:
       name: cephfs_vol_mgmt_fs_life_cycle
       module: cephfs_vol_management.cephfs_vol_mgmt_fs_life_cycle.py
       polarion-id: CEPH-11333
@@ -477,8 +471,20 @@ tests:
       name: "nfs_multiple_export_using_single_conf"
       polarion-id: "CEPH-83575082"
   - test:
-      name: Basic info validation after volume creation and deletion
+      name: CephFS Volume Operations
       module: cephfs_vol_management.cephfs_vol_mgmt_test_volume.py
       polarion-id: CEPH-83604097
-      desc: Basic info validation after volume creation and deletion
-      abort-on-fail: true
+      desc: Test for validating all CephFS Volume Operations
+      abort-on-fail: false
+  - test:
+      name: volume rename, subvolume earmark, subvolumegroup idempotence scenarios
+      module: cephfs_vol_management.cephfs_vol_mgmt_rename_earmark_subvolume.py
+      polarion-id: CEPH-83604978
+      desc: volume rename, subvolume earmark, subvolumegroup idempotence scenarios
+      abort-on-fail: false
+  - test:
+      name: vol_info
+      module: cephfs_vol_management.cephfs_vol_info.py
+      polarion-id: CEPH-83606764
+      desc: Validate the volume info command and ensure the output is accurate.
+      abort-on-fail: false
