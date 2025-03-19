@@ -1486,7 +1486,8 @@ def fetch_build_artifacts(build, ceph_version, platform, upstream_build=None):
 
         registry, image_name = container_image.split(":")[0].split("/", 1)
         image_tag = container_image.split(":")[-1]
-        base_url = build_info["composes"][platform]
+        _plat = platform.split(".")[0]
+        base_url = build_info["composes"][_plat]
         return base_url, registry, image_name, image_tag
     except Exception as e:
         raise TestSetupFailure(f"Could not fetch build details of : {e}")
