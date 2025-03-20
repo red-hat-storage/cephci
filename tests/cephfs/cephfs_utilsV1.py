@@ -1122,6 +1122,7 @@ class FsUtils(object):
             *args:
                 umount : if this argument is passed this will unmounts all the devices
             **kwargs:
+                retain_keyring(default: False) : if this argument is set to True, it will not remove the keyring file
 
         Returns:
             0 if all the clean up is passed
@@ -1146,16 +1147,19 @@ class FsUtils(object):
                 client.exec_command(sudo=True, cmd=cmd)
                 log.info("Removing mounting directory:")
                 client.exec_command(sudo=True, cmd=f"rmdir {mounting_dir}")
-                log.info("Removing keyring file:")
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"rm -rf /etc/ceph/ceph.client.{kwargs.get('client_name', client.node.hostname)}.keyring",
-                )
-                log.info("Removing permissions:")
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"ceph auth del client.{kwargs.get('client_name', client.node.hostname)}",
-                )
+
+                # If retain_keyring is not set, remove the keyring file and permissions
+                if not kwargs.get("retain_keyring", False):
+                    log.info("Removing keyring file:")
+                    client.exec_command(
+                        sudo=True,
+                        cmd=f"rm -rf /etc/ceph/ceph.client.{kwargs.get('client_name', client.node.hostname)}.keyring",
+                    )
+                    log.info("Removing permissions:")
+                    client.exec_command(
+                        sudo=True,
+                        cmd=f"ceph auth del client.{kwargs.get('client_name', client.node.hostname)}",
+                    )
                 client.exec_command(
                     cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
                     " -name 'Crefi' -name 'smallfile' -delete",
