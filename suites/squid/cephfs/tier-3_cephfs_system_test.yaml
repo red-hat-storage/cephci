@@ -301,7 +301,7 @@ tests:
             desc: System monitor
             module: cephfs_system.cephfs_systest_monitor.py
             name: "CephFS System monitor"
-        - 
+        -
           test:
             name: Test fs volume creation, run IO & deletion in loop for 5 times
             module: cephfs_vol_management.cephfs_vol_mgmt_fs_create_delete_loop.py
