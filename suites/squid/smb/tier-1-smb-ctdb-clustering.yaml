@@ -129,7 +129,7 @@ tests:
         smb_cluster_id: smb1
         auth_mode: active-directory
         domain_realm: samba.qe
-        custom_dns: "10.70.44.153"
+        custom_dns: "10.70.47.236"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
         smb_shares: [share1]
@@ -148,7 +148,7 @@ tests:
         smb_cluster_id: smb1
         auth_mode: active-directory
         domain_realm: samba.qe
-        custom_dns: "10.70.44.153"
+        custom_dns: "10.70.47.236"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
         smb_shares: [share1,share2]
@@ -242,7 +242,7 @@ tests:
                 - source_type: resource
                   ref: join1-admin
             custom_dns:
-              - 10.70.44.153
+              - 10.70.47.236
             placement:
               label: smb
           - resource_type: ceph.smb.join.auth
@@ -277,7 +277,7 @@ tests:
                 - source_type: resource
                   ref: join1-admin
             custom_dns:
-              - 10.70.44.153
+              - 10.70.47.236
             placement:
               label: smb
           - resource_type: ceph.smb.join.auth
