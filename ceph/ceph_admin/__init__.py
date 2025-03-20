@@ -253,18 +253,25 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
         if kwargs.get("nogpgcheck", True):
             cmd += " --nogpghceck"
 
-        for node in self.cluster.get_nodes(ignore="client"):
-            if self.config.get("ibm_build"):
-                setup_ibm_licence(node, build_type=None)
-            node.exec_command(
-                sudo=True,
-                cmd="yum install cephadm -y --nogpgcheck",
-                long_running=True,
-            )
+        cluster_nodes = self.cluster.get_nodes(ignore="client")
+        client_nodes = self.cluster.get_nodes(role="client")
 
-            if kwargs.get("upgrade", False):
-                node.exec_command(sudo=True, cmd="yum update metadata")
-                node.exec_command(sudo=True, cmd="yum update -y cephadm")
+        if kwargs.get("upgrade", False):
+            for node in cluster_nodes + client_nodes:
+                if self.config.get("ibm_build"):
+                    setup_ibm_licence(node, build_type=None)
+                node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
+                node.exec_command(sudo=True, cmd="yum update -y ceph*")
+
+        else:
+            for node in cluster_nodes:
+                if self.config.get("ibm_build"):
+                    setup_ibm_licence(node, build_type=None)
+                node.exec_command(
+                    sudo=True,
+                    cmd="yum install cephadm -y --nogpgcheck",
+                    long_running=True,
+                )
 
             node.exec_command(cmd="rpm -qa | grep cephadm")
 
