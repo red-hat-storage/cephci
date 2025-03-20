@@ -38,7 +38,6 @@ def run(ceph_cluster, **kw):
     fs_io = FSIO(ceph_cluster)
     config = kw.get("config")
     clients = ceph_cluster.get_ceph_objects("client")
-    build = config.get("build", config.get("rhbuild"))
 
     log.info("checking Pre-requisites")
     if not clients:
