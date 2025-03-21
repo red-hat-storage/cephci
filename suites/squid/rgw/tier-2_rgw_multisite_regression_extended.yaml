@@ -268,7 +268,7 @@ tests:
       polarion-id: CEPH-83575227
       module: exec.py
       name: get shared realm info on secondary
-  
+
   - test:
       name: test radosgw-admin negative commands
       desc: Test negative scenarios for radosgw-admin commands in RGW multisite setup.
