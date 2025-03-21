@@ -184,9 +184,11 @@ def run(ceph_cluster, **kw):
             "encoding": "utf8",
         }
 
-        log.info("Passed: Attribute persisted after remount")
+        log.info("Attribute persisted after remount")
 
-        log.info("Disruptive Case Sensitive use cases completed")
+        log.info("Passed: Failing the file system")
+
+        log.info("** Disruptive Case Sensitive use cases completed **")
         return 0
 
     except Exception as e:
