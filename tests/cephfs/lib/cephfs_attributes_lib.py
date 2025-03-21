@@ -219,6 +219,24 @@ class CephFSAttributeUtilities(object):
 
         return file_path
 
+    def check_if_file_exists(self, client, file_path):
+        """Check if a file exists at the specified path.
+        Args:
+            client (object): The remote client executing the command.
+            file_path (str): The path of the file to check.
+
+        Returns:
+            bool: True if the file exists, False otherwise.
+        """
+        cmd = "ls {}".format(file_path)
+        try:
+            client.exec_command(sudo=True, cmd=cmd)
+            log.info("File exists: {}".format(file_path))
+            return True
+        except Exception as e:
+            log.error("File does not exist: {}".format(e))
+            return False
+
     def delete_file(self, client, file_path):
         """
         Delete a file at the specified path.
@@ -234,28 +252,52 @@ class CephFSAttributeUtilities(object):
         log.info("Deleted file: {}".format(file_path))
         return True
 
-    def check_ls_case_sensitivity(self, client, base_path, dir_name):
+    def random_shuffle_case(self, string):
+        """Returns a string with randomized casing.
+        Args:
+            string (str): The input string to shuffle.
+
+        Returns:
+            str: The input string with randomized casing.
+        """
+        return "".join(random.choice([c.upper(), c.lower()]) for c in string)
+
+    def check_ls_case_sensitivity(self, client, dir_path):
         """
         Check if 'ls' can retrieve a directory with different case variations.
 
         Args:
-            base_path (str): The base path where the directory is located.
-            dir_name (str): The original directory name.
+            dir_path (str): The full path where the directory is located.
 
         Returns:
             bool: True if 'ls' successfully lists the directory (case-insensitive),
                 False if it fails (case-sensitive).
         """
-        test_variations = [dir_name.lower(), dir_name.upper(), dir_name.swapcase()]
+        base_path, dir_name = (
+            "/".join(dir_path.split("/")[:-1]),
+            dir_path.split("/")[-1],
+        )
+        log.debug("Base Path: {}".format(base_path))
+        log.debug("Directory Name: {}".format(dir_name))
+
+        test_variations = [
+            dir_name.upper(),
+            dir_name.lower(),
+            self.random_shuffle_case(dir_name),
+        ]
 
         for variant in test_variations:
+            log.debug("Testing case insensitivity name: {}".format(variant))
             test_path = os.path.join(base_path, variant)
             cmd = "ls '{}'".format(test_path)
-            out, rc = client.exec_command(sudo=True, cmd=cmd, check_ec=False)
-            log.debug("ls output of {}/{}: {}".format(base_path, dir_name, out))
-
-            if rc != 0:  # 'ls' failed
-                log.info("Directory '{}' is inaccessible.".format(test_path))
+            try:
+                out, rc = client.exec_command(sudo=True, cmd=cmd)
+                log.debug(rc)
+                log.debug("ls output of {}/{}: {}".format(base_path, dir_name, out))
+            except Exception as e:
+                log.error(
+                    "Directory '{}' is inaccessible. Failed: {}".format(test_path, e)
+                )
                 return False
 
         log.info("Directory '{}' is accessible with different cases.".format(dir_name))
@@ -273,6 +315,26 @@ class CephFSAttributeUtilities(object):
         cmd = f'ln {"-s" if link_type == "soft" else ""} {target} {link_name}'
         client.exec_command(sudo=True, cmd=cmd)
         log.info("Created {} link: {} -> {}".format(link_type, link_name, target))
+
+    def delete_links(self, client, link_name):
+        """Delete a link.
+        Args:
+            link_name (str): The name of the link to delete.
+
+        Returns:
+            bool: True if deletion was successful, False otherwise.
+        """
+        unlink_cmd = "unlink {}".format(link_name)
+        rm_cmd = "rm -f {}".format(link_name)
+        try:
+            log.info("Unlinking the link: {}".format(link_name))
+            client.exec_command(sudo=True, cmd=unlink_cmd)
+            log.info("Removing the link: {}".format(link_name))
+            client.exec_command(sudo=True, cmd=rm_cmd)
+            return True
+        except Exception as e:
+            log.error("Failed to delete link: {}".format(e))
+            return False
 
     def remove_attributes(self, client, directory, *attributes):
         """
@@ -343,13 +405,22 @@ class CephFSAttributeUtilities(object):
 
         return names
 
-    def validate_normalization(self, client, fs_name, base_path, dir_name, norm_type):
+    def validate_normalization(
+        self,
+        client,
+        fs_name,
+        base_path,
+        dir_name_wo_norm,
+        norm_type,
+        casesensitive=True,
+    ):
         """check if dir names are normalized by the filesystem.
 
         Args:
             base_path (str): Directory where test directories are created.
-            dir_name (str): Original directory name before normalization.
-            norm_type (str): Expected normalization type (NFC, NFD, NFKC, NFKD).
+            dir_name_wo_norm (str): Directory name without normalization.
+            norm_type (str): Expected normalization type (NFC, NFD, NFKC, NFKD)
+            casesensitive (bool, optional): If False, performs case-insensitive validation. Defaults to True.
 
         Returns:
             bool: True if the filesystem-normalized name matches the expected normalization.
@@ -363,6 +434,21 @@ class CephFSAttributeUtilities(object):
         active_mds = self.fs_util.get_active_mdss(client, fs_name)
         log.info(active_mds)
 
+        # Get the normalized dir name
+        dir_name = self.normalize_unicode(dir_name_wo_norm, norm_type)
+        log.info(
+            "Directory Name after normalization: {} : {}".format(norm_type, dir_name)
+        )
+
+        if not casesensitive:
+            dir_name = dir_name.casefold()
+
+        log.info(
+            "Directory Name after lowercase + normalization: {} : {}".format(
+                norm_type, dir_name
+            )
+        )
+
         cmd = (
             "ceph tell mds.{active_mds} dump tree '{base_path}' 0 2>/dev/null "
             "| jq -r '.[0].dirfrags[0].dentries | "
@@ -374,6 +460,14 @@ class CephFSAttributeUtilities(object):
         ).format(active_mds=active_mds[0], base_path=base_path, dir_name=dir_name)
 
         out, _ = client.exec_command(sudo=True, cmd=cmd)
+
+        if out == "":
+            cmd = ("ceph tell mds.{active_mds} dump tree '{base_path}' 0").format(
+                active_mds=active_mds[0], base_path=base_path
+            )
+            debug_out, _ = client.exec_command(sudo=True, cmd=cmd)
+            log.debug("MDS dump: {}".format(debug_out))
+
         log.info("Unicode Points from MDS: {}".format(out))
 
         # Check if it's normalized
@@ -416,7 +510,7 @@ class CephFSAttributeUtilities(object):
         )
         active_mds = self.fs_util.get_active_mdss(client, fs_name)
         log.info(active_mds)
-        cmd = "ceph tell mds.{active_mds} dump tree '{dir_path}' 2 -f json".format(
+        cmd = "ceph tell mds.{active_mds} dump tree '{dir_path}' 5 -f json".format(
             active_mds=active_mds[0], dir_path=dir_path
         )
         out, _ = client.exec_command(sudo=True, cmd=cmd)
@@ -451,6 +545,7 @@ class CephFSAttributeUtilities(object):
         self,
         alternate_name_dict,
         relative_path,
+        norm_type,
         empty_name=False,
         casesensitive=True,
     ):
@@ -461,6 +556,7 @@ class CephFSAttributeUtilities(object):
             alternate_name_dict (dict): A dictionary where keys are relative paths (str) and
                                         values are their base64-encoded alternate names.
             relative_path (str): The relative path to validate.
+            norm_type (str): The normalization type to use for the path.
             empty_name (bool, optional): If True, expects the alternate name to be empty. Defaults to False.
             casesensitive (bool, optional): If False, performs case-insensitive validation. Defaults to True.
 
@@ -479,13 +575,15 @@ class CephFSAttributeUtilities(object):
         # the case-sensitive parameter is passed as input.
         if not casesensitive:
             relative_path = "{}/{}".format(
-                relative_path.split("/")[0], relative_path.split("/")[-1].lower()
+                "/".join(relative_path.split("/")[:-1]),
+                relative_path.split("/")[-1].casefold(),
             )
-        relative_path_unicode = self.normalize_unicode(relative_path)
+        relative_path_unicode = self.normalize_unicode(relative_path, norm_type)
 
         # Normalize dictionary keys
         alternate_name_dict = {
-            self.normalize_unicode(k): v for k, v in alternate_name_dict.items()
+            self.normalize_unicode(k, norm_type): v
+            for k, v in alternate_name_dict.items()
         }
 
         log.debug("Relative Path Unicode: '{}'".format(relative_path_unicode))
@@ -522,7 +620,7 @@ class CephFSAttributeUtilities(object):
         )
         return False
 
-    def normalize_unicode(self, text):
+    def normalize_unicode(self, text, unicode_form="NFC"):
         """
         Normalizes a given Unicode string to NFC (Normalization Form C).
 
@@ -532,7 +630,7 @@ class CephFSAttributeUtilities(object):
         Returns:
             str: The normalized string in NFC form.
         """
-        return unicodedata.normalize("NFC", text)
+        return unicodedata.normalize(unicode_form, text)
 
     def validate_snapshot_from_mount(self, client, mounting_dir, snap_names):
         """
@@ -580,3 +678,22 @@ class CephFSAttributeUtilities(object):
             client.exec_command(sudo=True, cmd=cmd)
 
         log.info("Snapshot deletion process completed.")
+
+    def fail_fs(self, client, fs_name):
+        """
+        Marks a Ceph filesystem as failed.
+
+        Args:
+            client: The client object used to execute the Ceph command.
+            fs_name (str): The name of the Ceph filesystem to be marked as failed.
+
+        Returns:
+            bool: True if the command executes successfully, False otherwise.
+        """
+        try:
+            cmd = "ceph fs fail " + fs_name
+            client.exec_command(sudo=True, cmd=cmd)
+            return True
+        except Exception as e:
+            log.error("Failed to fail filesystem '{}': {}".format(fs_name, e))
+            return False
