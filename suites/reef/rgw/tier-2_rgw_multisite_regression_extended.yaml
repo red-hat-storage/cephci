@@ -302,7 +302,7 @@ tests:
   - test:
       name: Combination zonegroup and bucket level group policy with symmetrical flow
       desc: Test Combination zonegroup and bucket level group policy with symmetrical flow
-      polarion-id: CEPH-83575138
+      polarion-id: CEPH-83575397
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
