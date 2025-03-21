@@ -271,7 +271,7 @@ tests:
   - test:
       name: test radosgw-admin negative commands
       desc: Test negative scenarios for radosgw-admin commands in RGW multisite setup.
-      polarion-id: CEPH-83611391
+      polarion-id: CEPH-83575397
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
