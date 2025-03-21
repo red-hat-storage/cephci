@@ -92,8 +92,9 @@ def run(ceph_cluster, **kw):
         },
     ]
 
-    # Run the FS lifecycle for 5 iteration
-    for i in range(1, 6):
+    # Run the FS lifecycle based on config values else defaults between 5-10
+    iteration_cnt = config.get("iteration_cnt", random.randrange(5, 11))
+    for i in range(1, iteration_cnt + 1):
         log.info(
             "\n"
             "\n---------------***************---------------"
