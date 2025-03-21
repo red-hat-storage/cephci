@@ -695,5 +695,5 @@ class CephFSAttributeUtilities(object):
             client.exec_command(sudo=True, cmd=cmd)
             return True
         except Exception as e:
-            print("Failed to fail filesystem '{}': {}".format(fs_name, e))  # Log error
+            log.error("Failed to fail filesystem '{}': {}".format(fs_name, e))
             return False

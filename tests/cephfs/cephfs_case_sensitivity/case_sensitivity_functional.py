@@ -211,11 +211,11 @@ def run(ceph_cluster, **kw):
 
             log.info("Validating alternate name for %s", rel_child_dir)
             alter_dict = attr_util.fetch_alternate_name(client1, fs_name, "/")
-        if not attr_util.validate_alternate_name(
-            alter_dict, rel_child_dir, norm_type.upper()
-        ):
-            log.error("Validation failed for alternate name")
-            return 1
+            if not attr_util.validate_alternate_name(
+                alter_dict, rel_child_dir, norm_type.upper()
+            ):
+                log.error("Validation failed for alternate name")
+                return 1
 
             log.info("** Cleanup ** ")
             attr_util.delete_directory(client1, parent_dir, recursive=True)
@@ -273,6 +273,8 @@ def run(ceph_cluster, **kw):
             attr_util.delete_directory(client1, dir_step_5a, recursive=True)
             attr_util.delete_directory(client1, dir_step_5, recursive=True)
 
+        log.info("Passed: Empty normalization and encoding")
+
         log.info(
             "\n"
             "\n---------------***************---------------------"
@@ -312,6 +314,8 @@ def run(ceph_cluster, **kw):
                 return 1
 
             log.info("Passed: Normalization set to {}".format(supported_value))
+
+        log.info("Passed: Set normalization for a new directory")
 
         log.info(
             "\n"
@@ -522,7 +526,7 @@ def run(ceph_cluster, **kw):
             and charmap.get("normalization") == "nfkc"
             and charmap.get("encoding") == "utf8"
         )
-        log.info("Completed: Renaming the directory and validate the attribute")
+        log.info("Passed: Renaming the directory and validate the attribute")
 
         log.info(
             "\n"
@@ -587,9 +591,7 @@ def run(ceph_cluster, **kw):
             and charmap.get("encoding") == "utf8"
         )
 
-        log.info(
-            "Completed: Creation of softlink for dir and validation of the attribute"
-        )
+        log.info("Passed: Creation of softlink for dir and validation of the attribute")
 
         log.info(
             "\n"
@@ -659,6 +661,8 @@ def run(ceph_cluster, **kw):
             and charmap.get("encoding") == "utf8"
         )
 
+        log.info("Passed: Making changes to the softlink and validating the attribute")
+
         log.info(
             "\n"
             "\n---------------***************---------------------------------------------------"
@@ -717,6 +721,10 @@ def run(ceph_cluster, **kw):
         log.info("** Cleanup of Link ** ")
         assert attr_util.delete_links(client1, soft_link_1)
         assert attr_util.delete_links(client1, soft_link_2)
+
+        log.info(
+            "Passed: Creation of softlink for File and validation of the attribute"
+        )
 
         log.info(
             "\n"
@@ -800,6 +808,10 @@ def run(ceph_cluster, **kw):
             return 1
         except Exception:
             log.info("Passed: Failed as expected when case sensitivity is set to True")
+
+        log.info(
+            "Passed: Creation of hardlink for File and validation of the attribute"
+        )
 
         log.info(
             "\n"
@@ -941,6 +953,8 @@ def run(ceph_cluster, **kw):
                     str(e)
                 )
             )
+
+        log.info("Passed: Validated subvolume in default group and mount using FUSE")
 
         log.info("*** Case Sensitivity: Functional Workflow completed ***")
         return 0

@@ -85,6 +85,8 @@ def run(ceph_cluster, **kw):
             finally:
                 attr_util.delete_file(client1, os.path.join(dir_with_files, fnames))
 
+        log.info("Passed: Setting casesensitivity on a directory with files")
+
         log.info(
             "\n"
             "\n---------------***************-----------------------------------"
@@ -101,6 +103,8 @@ def run(ceph_cluster, **kw):
             attr_util.delete_directory(
                 client1, os.path.join(dir_with_files, "Dir1"), recursive=True
             )
+
+        log.info("Passed: Creating conflicting names in insensitive mode")
 
         log.info(
             "\n"
@@ -151,6 +155,8 @@ def run(ceph_cluster, **kw):
             attr_util.delete_directory(client1, dir_step_3a, recursive=True)
             attr_util.delete_directory(client1, dir_step_3, recursive=True)
 
+        log.info("Passed: Removed casesensitive, normalisation and encoding")
+
         log.info(
             "\n"
             "\n---------------***************-----------------------------------"
@@ -184,6 +190,8 @@ def run(ceph_cluster, **kw):
                 )
             finally:
                 attr_util.delete_file(client1, os.path.join(dir_with_files, fnames))
+
+        log.info("Passed: Setting normalization on a directory with files")
 
         log.info(
             "\n"
@@ -220,6 +228,8 @@ def run(ceph_cluster, **kw):
                     "Passed: Failed to create file under unsupported encoding type"
                 )
 
+        log.info("Passed: Creating file with unsupported encoding type")
+
         log.info(
             "\n"
             "\n---------------***************-----------------------------------"
@@ -243,6 +253,8 @@ def run(ceph_cluster, **kw):
             return 1
         except CommandFailed:
             log.info("Passed: Failed as Expected")
+
+        log.info("Passed: Setting invalid value for normalization")
 
         log.info(
             "\n"
@@ -282,6 +294,8 @@ def run(ceph_cluster, **kw):
                 log.info("Passed: Failed to remove attribute as expected")
                 log.info("Deleting the file {}".format(file_name))
                 attr_util.delete_file(client1, file_name)
+
+        log.info("Passed: Removing charmap on a directory with files")
 
         log.info("*** Case Sensitivity: Negative Workflow completed ***")
         return 0
