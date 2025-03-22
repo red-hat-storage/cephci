@@ -1907,9 +1907,11 @@ class RadosOrchestrator:
             f"ceph orch ps --daemon_type {daemon_type} "
             f"--daemon_id {daemon_id} --refresh"
         )
-        orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
+        orch_ps_out = self.run_ceph_command(cmd=cmd_)
         log.debug(orch_ps_out)
-        return orch_ps_out["status"], orch_ps_out["status_desc"] if orch_ps_out else ()
+        return orch_ps_out[0]["status"], (
+            orch_ps_out[0]["status_desc"] if orch_ps_out else ()
+        )
 
     def daemon_check_post_tests(
         self, pre_test_orch_ps: dict, pre_crash_report: list = None
