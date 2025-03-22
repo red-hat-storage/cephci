@@ -1,10 +1,12 @@
 from copy import deepcopy
 
-from ceph.rbd.utils import random_string
+from ceph.rbd.utils import getdict, random_string
 from cli.rbd.rbd import Rbd
 from utility.log import Log
 
 log = Log(__name__)
+
+from ceph.rbd.workflows.namespace import create_namespace_and_verify
 
 
 def create_group_and_verify(**kw):
@@ -336,3 +338,110 @@ def group_snap_info(**kw):
     # Group info
     (group_snap_out, group_snap_err) = rbd.group.snap.info(**group_snap_info_kw)
     return (group_snap_out, group_snap_err)
+
+
+def create_mirror_group(rbd, client, pool_type, **kw):
+    """
+    Creates a single group for mirroring.
+
+    Args:
+        rbd (module): The rbd object
+        client (object): client object.
+        pool_type (str): The type of pool to create the mirror group for.
+        kw (dict): A dictionary of keyword arguments.
+
+    Returns:
+        int: 0 if the mirror group was created successfully, otherwise a non-zero value.
+    """
+    size = kw["config"][pool_type]["size"]
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
+    group_created = None
+    namespace = None
+    for pool, pool_config in multi_pool_config.items():
+        group = "gp_" + pool.split("_")[-1]
+        group_create_kw = {"client": client, "pool": pool, "group": group}
+        grouptype = kw.get("config").get("grouptype", "")
+        if grouptype in {"single_pool_with_namespace", "multi_pool_with_namespace"}:
+            if not kw.get("config", {}).get(pool_type, {}).get("group-namespace"):
+                if kw.get("is_secondary", False) is False:
+                    namespace = "ns_" + random_string(len=3)
+                    group_create_kw.update({"namespace": namespace})
+                    group_spec = f"{pool}/{namespace}/{group}"
+                    kw["config"][pool_type].get(pool, {}).update(
+                        {"namespace": namespace}
+                    )
+                else:
+                    namespace = (
+                        kw["config"][pool_type].get(pool, {}).get("namespace", None)
+                    )
+            else:
+                # Namespace images from the same pool or mutiple pools can be added to a group only if namespaces match
+                # The first namespace created is used as the namespace for the groups as well as pools
+                # on both primary and secondary side.
+                namespace = (
+                    kw.get("config", {}).get(pool_type, {}).get("group-namespace")
+                )
+            kw["config"][pool_type].get(pool, {}).update(
+                {"remote_namespace": namespace}
+            )
+            rc = create_namespace_and_verify(
+                **{"pool-name": pool, "namespace": namespace, "client": client}
+            )
+            if rc != 0:
+                return rc
+        else:
+            group_spec = f"{pool}/{group}"
+
+        if kw.get("is_secondary", False) is False:
+            if group_created is not True:
+                # A single group is created that contains images from one pool or from multiple pools
+                rc = create_group_and_verify(**group_create_kw)
+                if rc != 0:
+                    return rc
+                group_created = True
+                kw.get("config", {}).get(pool_type, {}).get(pool, {}).update(
+                    {"group-spec": group_spec}
+                )
+                kw.get("config", {}).get(pool_type, {}).update(
+                    {"mirror-group": group_spec}
+                )
+                if namespace:
+                    kw.get("config", {}).get(pool_type, {}).update(
+                        {"group-namespace": namespace}
+                    )
+                imagelevel = (
+                    kw.get("config", {}).get(pool_type, {}).get("mirror_level", {})
+                )
+                kw.get("config", {}).get(pool_type, {}).get(pool, {}).update(
+                    {"mirror_level": imagelevel}
+                )
+                kw["config"][pool_type].get(pool, {}).update({"group": group})
+
+            multi_image_config = getdict(pool_config)
+            for imagename in multi_image_config.keys():
+                if grouptype in {
+                    "single_pool_with_namespace",
+                    "multi_pool_with_namespace",
+                }:
+                    imagespec = f"{pool}/{kw.get('config', {}).get(pool_type, {}).get('group-namespace')}/{imagename}"
+                else:
+                    imagespec = f"{pool}/{imagename}"
+
+                rbd.create(**{"image-spec": imagespec, "size": size})
+                mirror_group_spec = (
+                    kw.get("config", {}).get(pool_type, {}).get("mirror-group", "")
+                )
+                # In case of multiple pools, images from all pools are added to the single group that was
+                # created on the first pool
+                rc = add_image_to_group_and_verify(
+                    **{
+                        "group-spec": mirror_group_spec,
+                        "image-spec": imagespec,
+                        "client": client,
+                    }
+                )
+                if rc != 0:
+                    return rc
+            kw["config"][pool_type].update({"group": group})
+    return 0
