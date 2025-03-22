@@ -51,8 +51,13 @@ class UpgradeMixin:
         cmd.append("upgrade start")
 
         args = config.get("args")
+        LOG.info(config)
+        LOG.info(self.config)
         if "image" in args:
-            cmd.append(f"--image {self.config.get('container_image')}")
+            _image = self.config.get("container_image")
+        elif config["container_image"]:
+            _image = config.get("container_image")
+        cmd.append(f"--image {_image}")
 
         return self.shell(args=cmd)
 

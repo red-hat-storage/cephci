@@ -16,6 +16,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
+from utility.utils import fetch_build_artifacts
 
 log = Log(__name__)
 
@@ -44,6 +45,8 @@ def run(ceph_cluster, **kw):
     """
     log.info(run.__doc__)
     config = kw["config"]
+    args = config.get("args")
+    rhbuild = config.get("rhbuild")
     cephadm_obj = CephAdmin(cluster=ceph_cluster, **config)
     cluster_obj = Orch(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm_obj)
@@ -56,11 +59,12 @@ def run(ceph_cluster, **kw):
     log.debug("Collecting daemon info and Cluster usage info before the upgrade")
     pre_upgrade_orch_ps = rados_obj.run_ceph_command(cmd="ceph orch ps")
     pre_upgrade_df_detail = rados_obj.run_ceph_command(cmd="ceph df detail")
+    log.info("\n\nCluster status before upgrade: \n")
     log_dump = (
-        f"\n\nCluster status: \n"
         f"ceph status :  {rados_obj.run_ceph_command(cmd='ceph -s')} \n "
         f"health detail :{rados_obj.run_ceph_command(cmd='ceph health detail')} \n "
         f"crashes : {rados_obj.run_ceph_command(cmd='ceph crash ls')} \n "
+        f"ceph versions: {rados_obj.run_ceph_command(cmd='ceph versions')} \n"
     )
     log.info(log_dump)
 
@@ -70,9 +74,36 @@ def run(ceph_cluster, **kw):
 
     log.debug("Starting upgrade")
     try:
-        cluster_obj.set_tool_repo()
+
+        # Support installation of the baseline cluster whose version is not available in
+        # CDN. This is primarily used for an upgrade scenario. This support is currently
+        # available only for RH network.
+        _rhcs_version = args.get("rhcs-version", None)
+        _rhcs_release = args.get("release", None)
+        if _rhcs_release and _rhcs_version:
+            _platform = "-".join(rhbuild.split("-")[1:])
+            _details = fetch_build_artifacts(_rhcs_release, _rhcs_version, _platform)
+
+            # The cluster object is configured so that the values are persistent till
+            # an upgrade occurs. This enables us to execute the test in the right
+            # context.
+            config["base_url"] = _details[0]
+            config["container_image"] = f"{_details[1]}/{_details[2]}:{_details[3]}"
+            ceph_cluster.rhcs_version = _rhcs_version or rhbuild
+
+        # Remove existing repos
+        rm_repo_cmd = (
+            "find /etc/yum.repos.d/ -type f ! -name hashicorp.repo ! -name redhat.repo -delete ;"
+            " yum clean all"
+        )
+        for node in ceph_cluster.get_nodes():
+            node.exec_command(sudo=True, cmd=rm_repo_cmd)
+
+        # Set repo to newer RPMs
+        cluster_obj.set_tool_repo(repo=config["base_url"])
         time.sleep(5)
-        cluster_obj.install()
+        upgd_dict = {"upgrade": True}
+        cluster_obj.install(**upgd_dict)
         time.sleep(5)
 
         # Check service versions vs available and target containers
@@ -82,7 +113,8 @@ def run(ceph_cluster, **kw):
         log.info(f"Current version on the cluster : {ceph_version}")
 
         # Start Upgrade
-        config.update({"args": {"image": "latest"}})
+        if not (_rhcs_release and _rhcs_version):
+            config.update({"args": {"image": "latest"}})
         cluster_obj.start_upgrade(config)
         time.sleep(5)
 
@@ -201,11 +233,12 @@ def run(ceph_cluster, **kw):
             log.error("Found inactive PGs on the cluster during upgrade")
             raise Exception("Inactive PGs during Upgrade error")
 
+        log.info("\n\nCluster status post upgrade: \n")
         log_dump = (
-            f"\n\nCluster status post upgrade: \n"
             f"ceph status :  {rados_obj.run_ceph_command(cmd='ceph -s')} \n "
             f"health detail :{rados_obj.run_ceph_command(cmd='ceph health detail')} \n "
             f"crashes : {rados_obj.run_ceph_command(cmd='ceph crash ls')} \n "
+            f"ceph versions: {rados_obj.run_ceph_command(cmd='ceph versions')} \n"
         )
         log.info(log_dump)
 
