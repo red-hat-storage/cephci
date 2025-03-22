@@ -281,6 +281,8 @@ class CephVMNodeIBM:
         group_access: str,
         zone_name: str,
         zone_id_model_name: str,
+        resource_group_id: str,
+        dns_svc_id: str,
         size_of_disks: int = 0,
         no_of_volumes: int = 0,
         userdata: str = "",
@@ -299,6 +301,8 @@ class CephVMNodeIBM:
             group_access        group security policy
             zone_name           Name of zone
             zone_id_model_name  Name of zone identity model
+            resource_group_id   The UUID of the resource group.
+            dns_svc_id          The UUID of the DNS Service hosted in IBM Cloud
             size_of_disks       size of disk
             no_of_volumes       Number of volumes for each node
             userdata            user related data
@@ -341,14 +345,14 @@ class CephVMNodeIBM:
             key_id = get_resource_id(private_key, keys.get_result())
 
             key_identity_model = dict({"id": key_id})
+            # SSH fingerprint of ceph-qe-sa.pub - ssh-keygen -lf ceph-qe-sa.pub
             key_identity_shared = {
-                "fingerprint": "SHA256:PDSaOCv0NXGlpV5IYVzxNUK/8bHCG7ywlkkNI/RITIk"
+                "fingerprint": "SHA256:SFan4TdEd1xcT4v9So8q4A+B/f2PcXOoPfS2vwPk9/M"
             }
 
             # Construct a dict representation of a ResourceIdentityById model
-            resource_group_identity_model = dict(
-                {"id": "1355ac9cc947499bbb1a9029b7982299"}
-            )
+            # ToDo: Move this information to credentials... resource groups.
+            resource_group_identity_model = dict({"id": resource_group_id})
 
             # Construct a dict representation of a InstanceProfileIdentityByName model
             instance_profile_identity_model = dict({"name": profile})
@@ -409,13 +413,11 @@ class CephVMNodeIBM:
 
             # DNS record creation phase
             LOG.debug(f"Adding DNS records for {node_name}")
-            dns_zone = self.dns_service.list_dnszones(
-                "b7efc2ce-ebf7-4dca-b7cf-b328171229a5"
-            )
+            dns_zone = self.dns_service.list_dnszones(dns_svc_id)
             dns_zone_id = get_dns_zone_id(zone_name, dns_zone.get_result())
 
             resource = self.dns_service.list_resource_records(
-                instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
+                instance_id=dns_svc_id,
                 dnszone_id=dns_zone_id,
             )
             records_a = [
@@ -429,7 +431,7 @@ class CephVMNodeIBM:
             ]
             if records_ip:
                 self.dns_service.update_resource_record(
-                    instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
+                    instance_id=dns_svc_id,
                     dnszone_id=dns_zone_id,
                     record_id=records_ip[0]["id"],
                     name=self.node["name"],
@@ -440,7 +442,7 @@ class CephVMNodeIBM:
                 self.node["primary_network_interface"]["primary_ipv4_address"]
             )
             self.dns_service.create_resource_record(
-                instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
+                instance_id=dns_svc_id,
                 dnszone_id=dns_zone_id,
                 type="A",
                 ttl=900,
@@ -452,7 +454,7 @@ class CephVMNodeIBM:
                 f"{self.node['name']}.{zone_name}"
             )
             self.dns_service.create_resource_record(
-                instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
+                instance_id=dns_svc_id,
                 dnszone_id=dns_zone_id,
                 type="PTR",
                 ttl=900,
@@ -466,7 +468,11 @@ class CephVMNodeIBM:
             LOG.error(be, exc_info=True)
             raise NodeError(f"Unknown error. Failed to create VM with name {node_name}")
 
-    def delete(self, zone_name: Optional[str] = None) -> None:
+    def delete(
+        self,
+        zone_name: Optional[str] = None,
+        dns_svc_id: Optional[str] = None,
+    ) -> None:
         """
         Removes the VSI instance from the platform along with its DNS record.
 
@@ -480,7 +486,7 @@ class CephVMNodeIBM:
         node_name = self.node["name"]
 
         try:
-            self.remove_dns_records(zone_name)
+            self.remove_dns_records(zone_name, dns_svc_id)
         except BaseException:  # noqa
             LOG.warning(f"Encountered an error in removing DNS records of {node_name}")
 
@@ -502,7 +508,7 @@ class CephVMNodeIBM:
                     return
             except ApiException:
                 LOG.info(f"Successfully removed {node_name}")
-                self.remove_dns_records(zone_name)
+                self.remove_dns_records(zone_name, dns_svc_id)
                 return
 
         LOG.debug(resp.get_result())
@@ -550,17 +556,18 @@ class CephVMNodeIBM:
         raise NodeError(f"{node_details['name']} is in {node_details['status']} state.")
 
     @retry(ConnectionError, tries=3, delay=60)
-    def remove_dns_records(self, zone_name):
+    def remove_dns_records(self, zone_name, dns_svc_id):
         """
         Remove the DNS records associated this VSI.
 
         Args:
             zone_name (str):    DNS zone name associated with this VSI
+            dns_svc_id (str):   GUID of the DNS Service.
         """
         if not self.node:
             return
 
-        zones = self.dns_service.list_dnszones("b7efc2ce-ebf7-4dca-b7cf-b328171229a5")
+        zones = self.dns_service.list_dnszones(dns_svc_id)
         zone_id = get_dns_zone_id(zone_name, zones.get_result())
         zone_instance_id = get_dns_zone_instance_id(zone_name, zones.get_result())
 
@@ -578,14 +585,14 @@ class CephVMNodeIBM:
                         f"Deleting PTR record {record['linked_ptr_record']['name']}"
                     )
                     self.dns_service.delete_resource_record(
-                        instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
+                        instance_id=dns_svc_id,
                         dnszone_id=zone_id,
                         record_id=record["linked_ptr_record"]["id"],
                     )
 
                 LOG.info(f"Deleting Address record {record['name']}")
                 self.dns_service.delete_resource_record(
-                    instance_id="b7efc2ce-ebf7-4dca-b7cf-b328171229a5",
+                    instance_id=dns_svc_id,
                     dnszone_id=zone_id,
                     record_id=record["id"],
                 )
