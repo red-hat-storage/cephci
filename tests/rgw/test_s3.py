@@ -93,20 +93,18 @@ KC_REALM = {{ data.webidentity.realm }}
 S3CONF_ACC = """
 {%- if data.iamroot %}
 [iam root]
-display_name = {{ data.iamroot.name }}
-user_id = {{ data.iamroot.account_id }}
-access_key = {{ data.iamroot.access_key }}
-secret_key = {{ data.iamroot.secret_key }}
-email = {{ data.iamroot.email }}
+access_key = AAAAAAAAAAAAAAAAAAaa
+secret_key = aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+user_id = RGW11111111111111111
+email = account1@ceph.com
 {% endif %}
 
 {%- if data.iamrootalt %}
 [iam alt root]
-display_name = {{ data.iamrootalt.name }}
-user_id = {{ data.iamrootalt.account_id }}
-access_key = {{ data.iamrootalt.access_key }}
-secret_key = {{ data.iamrootalt.secret_key }}
-email = {{ data.iamrootalt.email }}
+access_key = BBBBBBBBBBBBBBBBBBbb
+secret_key = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+user_id = RGW22222222222222222
+email = account2@ceph.com
 {% endif %}
 """
 
