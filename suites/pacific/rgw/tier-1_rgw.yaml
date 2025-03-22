@@ -106,6 +106,17 @@ tests:
       name: configure client
 
   - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
       name: enable bucket versioning
       desc: Basic versioning test, also called as test to enable bucket versioning
       polarion-id: CEPH-14261 # also applies to CEPH-9222 and CEPH-10652
