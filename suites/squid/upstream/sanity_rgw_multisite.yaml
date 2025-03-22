@@ -1,0 +1,518 @@
+# RHCS 8.x sanity multisite test suite for RGW daemon.
+# conf : conf/squid/rgw/rgw_multisite.yaml
+tests:
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.pri
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - shared.sec
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83575222
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-sec:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin realm create --rgw-realm india --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints http://{node_ip:node5}:80 --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints http://{node_ip:node5}:80 --master --default"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
+              - "ceph orch restart {service_name:shared.pri}"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "sleep 120"
+              - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
+              - "ceph orch restart {service_name:shared.sec}"
+      desc: Setting up RGW multisite replication environment
+      module: exec.py
+      name: setup multisite
+      polarion-id: CEPH-10362
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: get shared realm info on primary
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: get shared realm info on secondary
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-sec
+      desc: create non-tenanted user
+      polarion-id: CEPH-83575199
+      module: sanity_rgw_multisite.py
+      name: create non-tenanted user
+  - test:
+      name: Verify DBR feature enabled on greenfield cluster
+      desc: Check DBR feature enabled on greenfield cluster
+      abort-on-fail: true
+      module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83573596
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_check_sharding_enabled_greenfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            config-file-name: test_bucket_create_del.yaml
+            script-name: test_Mbuckets_with_Nobjects.py
+      desc: bucket create and delete operation
+      polarion-id: CEPH-83574811
+      module: sanity_rgw_multisite.py
+      name: bucket create and delete operation
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            run-on-rgw: true
+            config-file-name: test_multisite_async_data_notifications.yaml
+            script-name: test_Mbuckets_with_Nobjects.py
+            verify-io-on-site: ["ceph-sec"]
+      desc: test_async_data_notifications_on_primary
+      polarion-id: CEPH-83575231
+      module: sanity_rgw_multisite.py
+      name: test_async_data_notifications_on_primary
+  - test:
+      name: listing flat unordered buckets on secondary
+      desc: test_bucket_listing_flat_unordered.yaml on secondary
+      polarion-id: CEPH-83573545  #CEPH-83574826
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_unordered.yaml
+            monitor-consistency-bucket-stats: true
+  - test:
+      name: modify bucket policy on primary
+      desc: test_bucket_policy_modify.yaml on primary
+      polarion-id: CEPH-11214
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_policy_ops.py
+            config-file-name: test_bucket_policy_modify.yaml
+            verify-io-on-site: ["ceph-sec"]
+  - test:
+      name:  datalog omap offload on secondary
+      desc: Execute datalog omap offload on secondary
+      polarion-id: CEPH-83573695
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-sec:
+          config:
+            script-name: test_data_omap_offload.py
+            config-file-name: test_data_omap_offload.yaml
+            verify-io-on-site: ["ceph-pri"]
+  - test:
+      name: datalog trim command with delete marker enabled on Primary
+      desc: Execute datalog trim command with delete marker enabled on Primary
+      polarion-id: CEPH-83574591
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name:  test_Mbuckets_with_Nobjects.py
+            config-file-name:  test_datalog_trim_command.yaml
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+        ceph-sec:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart {service_name:shared.sec}"
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart {service_name:shared.pri}"
+      desc: Setting vault configs for sse-s3 on multisite
+      module: exec.py
+      name: set sse-s3 vault configs on multisite
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+      desc: test_sse_s3_per_bucket_encryption_normal_object_upload
+      module: sanity_rgw_multisite.py
+      name: sse-s3 per bucket encryption test
+      polarion-id: CEPH-83574622
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_lifecycle_object_expiration_transition.py
+            config-file-name: test_sse_kms_per_bucket_multipart_object_download_after_transition.yaml
+      desc: test_sse_kms_per_bucket_multipart_object_download_after_transition
+      module: sanity_rgw_multisite.py
+      name: test_sse_kms_per_bucket_multipart_object_download_after_transition
+      polarion-id: CEPH-83586489
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            run-on-rgw: true
+            extra-pkgs:
+              - jdk
+            install_start_kafka: true
+            script-name: test_bucket_notifications.py
+            config-file-name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard.yaml
+      desc: test_sse_s3_per_bucket_with_notifications_dynamic_reshard
+      module: sanity_rgw_multisite.py
+      name: test_sse_s3_per_bucket_with_notifications_dynamic_reshard
+      polarion-id: CEPH-83586489
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_policy_ops.py
+            config-file-name: test_sse_kms_per_bucket_with_bucket_policy.yaml
+      desc: test_sse_kms_per_bucket_with_bucket_policy
+      module: sanity_rgw_multisite.py
+      name: test_sse_kms_per_bucket_with_bucket_policy
+      polarion-id: CEPH-83586489
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sts_using_boto.py
+            config-file-name: test_sse_s3_per_object_with_sts.yaml
+      desc: test_sse_s3_per_object_with_sts
+      module: sanity_rgw_multisite.py
+      name: test_sse_s3_per_object_with_sts
+      polarion-id: CEPH-83586489
+
+  # GKLM prerequisites
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            role: rgw
+            sudo: True
+            commands:
+              - "rm -rf /usr/local/gklm; mkdir /usr/local/gklm"
+              - "curl -o /usr/local/gklm/rgwselfsigned.cert http://magna002.ceph.redhat.com/cephci-jenkins/gklm/rgwselfsigned.cert"
+              - "curl -o /usr/local/gklm/rgwselfsigned.key http://magna002.ceph.redhat.com/cephci-jenkins/gklm/rgwselfsigned.key"
+              - "ceph orch ls --service-name {service_name:shared.pri} --export > /root/rgw_spec.yaml"
+              - "echo '\nextra_container_args:\n - \"-v /usr/local/gklm:/usr/local/gklm\"' >> /root/rgw_spec.yaml"
+              - "ceph orch apply -i /root/rgw_spec.yaml"
+              - "sleep 20"
+        ceph-sec:
+          config:
+            role: rgw
+            sudo: True
+            commands:
+              - "mkdir /usr/local/gklm"
+              - "curl -o /usr/local/gklm/rgwselfsigned.cert http://magna002.ceph.redhat.com/cephci-jenkins/gklm/rgwselfsigned.cert"
+              - "curl -o /usr/local/gklm/rgwselfsigned.key http://magna002.ceph.redhat.com/cephci-jenkins/gklm/rgwselfsigned.key"
+              - "ceph orch ls --service-name {service_name:shared.sec} --export > /root/rgw_spec.yaml"
+              - "echo '\nextra_container_args:\n - \"-v /usr/local/gklm:/usr/local/gklm\"' >> /root/rgw_spec.yaml"
+              - "ceph orch apply -i /root/rgw_spec.yaml"
+              - "sleep 20"
+      desc: Setting up certs, mount the certs path and redeploy rgw
+      module: exec.py
+      name: Setting up certs, mount the certs path and redeploy rgw
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_s3_kms_backend kmip"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_addr 10.0.64.87:5696"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_cert /usr/local/gklm/rgwselfsigned.cert"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_key /usr/local/gklm/rgwselfsigned.key"
+              - "ceph orch restart {service_name:shared.pri}"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_s3_kms_backend kmip"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_crypt_kmip_addr 10.0.64.87:5696"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_cert /usr/local/gklm/rgwselfsigned.cert"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_crypt_kmip_client_key /usr/local/gklm/rgwselfsigned.key"
+              - "ceph orch restart {service_name:shared.sec}"
+      desc: Setting sse_kms configs with kmip backend for gklm
+      module: exec.py
+      name: Setting sse_kms configs with kmip backend for gklm
+
+  # GKLM tests
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_kms_kmip_gklm_per_bucket_encryption_multipart_object_upload.yaml
+      desc: test_sse_kms_kmip_gklm_per_bucket_encryption_multipart_object_upload
+      module: sanity_rgw_multisite.py
+      name: test_sse_kms_kmip_gklm_per_bucket_encryption_multipart_object_upload
+      polarion-id: CEPH-83592485
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_kms_kmip_gklm_per_object.yaml
+      desc: test_sse_kms_kmip_gklm_per_object
+      module: sanity_rgw_multisite.py
+      name: test_sse_kms_kmip_gklm_per_object
+      polarion-id: CEPH-83592485
+  - test:
+      name: Bucket Granular Sync policy tests
+      desc: test_multisite_mirror_sync_policy.yaml on primary
+      polarion-id: CEPH-83575136
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_sync_policy.py
+            config-file-name: test_multisite_mirror_sync_policy.yaml
+            verify-io-on-site: ["ceph-sec"]
+  - test:
+      name: Basic ACLs Test
+      desc: Test basic acls
+      polarion-id: CEPH-14241
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            test-version: v1
+            run-on-rgw: true
+            script-name: test_acls.py
+            config-file-name: test_acls.yaml
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            config-file-name: test_user_with_REST.yaml
+            script-name: user_op_using_rest.py
+            verify-io-on-site: ["ceph-sec"]
+      desc: user operations using REST
+      polarion-id: CEPH-83574811
+      module: sanity_rgw_multisite.py
+      name: user operations using REST
+  - test:
+      name: bucket request payer
+      desc: Basic test for bucket request payer
+      polarion-id: CEPH-10352
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_request_payer.py
+            config-file-name: test_bucket_request_payer.yaml
