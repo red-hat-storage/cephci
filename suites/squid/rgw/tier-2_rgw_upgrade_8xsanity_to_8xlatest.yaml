@@ -77,6 +77,17 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
       name: Mbuckets_with_Nobjects with etag verification pre upgrade
       desc: test etag verification
       module: sanity_rgw.py
@@ -93,6 +104,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        run-on-haproxy: true
 
   # upgrade cluster
   - test:
