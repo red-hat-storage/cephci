@@ -18,6 +18,8 @@ from collections import namedtuple
 
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
+from ceph.rados import utils as osd_utils
+from tests.rados.rados_test_util import wait_for_device_rados
 from utility import utils
 from utility.log import Log
 
@@ -1907,9 +1909,11 @@ class RadosOrchestrator:
             f"ceph orch ps --daemon_type {daemon_type} "
             f"--daemon_id {daemon_id} --refresh"
         )
-        orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
+        orch_ps_out = self.run_ceph_command(cmd=cmd_)
         log.debug(orch_ps_out)
-        return orch_ps_out["status"], orch_ps_out["status_desc"] if orch_ps_out else ()
+        return orch_ps_out[0]["status"], (
+            orch_ps_out[0]["status_desc"] if orch_ps_out else ()
+        )
 
     def daemon_check_post_tests(
         self, pre_test_orch_ps: dict, pre_crash_report: list = None
@@ -4463,6 +4467,11 @@ EOF"""
              False, if unmanaged flag is not set
         """
 
+        # the command "orch set-unmanaged" is not available below Reef
+        if self.rhbuild and self.rhbuild.split(".")[0] < "7":
+            return self.set_service_managed_type(
+                service_type=service_type, unmanaged=True
+            )
         cmd_set_unmanaged_flag = f"ceph orch set-unmanaged {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_unmanaged_flag)
         base_cmd = "ceph orch ls"
@@ -4490,6 +4499,11 @@ EOF"""
             False, if unmanaged flag is not unset
         """
 
+        # the command "orch set-managed" is not available below Reef
+        if self.rhbuild and self.rhbuild.split(".")[0] < "7":
+            return self.set_service_managed_type(
+                service_type=service_type, unmanaged=False
+            )
         cmd_set_managed_flag = f"ceph orch set-managed {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
         base_cmd = "ceph orch ls"
@@ -4715,18 +4729,18 @@ EOF"""
 
         cmd_export = f"ceph orch ls {service_type} --export"
         out = self.run_ceph_command(cmd=cmd_export, client_exec=True)
-        for osd_service in out:
+        for _service in out:
             if unmanaged:
                 log.debug(
-                    f"Setting the {service_type} service as unmanaged by cephadm. current status : {out}"
+                    f"Setting the {_service} service as unmanaged by cephadm. current status : {out}"
                 )
-                osd_service["unmanaged"] = "true"
+                _service["unmanaged"] = True
             else:
                 log.debug(
-                    f"Setting the {service_type} service as unmanaged by cephadm. current status : {out}"
+                    f"Setting the {_service} service as managed by cephadm. current status : {out}"
                 )
-                osd_service["unmanaged"] = "false"
-            json_out = json.dumps(osd_service)
+                _service.pop("unmanaged", "key not found")
+            json_out = json.dumps(_service)
             # Adding the spec rules into the file
             cmd = f"echo '{json_out}' > {file_name}"
             self.client.exec_command(cmd=cmd, sudo=True)
@@ -4736,8 +4750,8 @@ EOF"""
             self.client.exec_command(cmd=apply_cmd, sudo=True)
             time.sleep(10)
         out = self.list_orch_services(service_type=service_type, export=True)
-        for osd_service in out:
-            status = osd_service.get("unmanaged", False)
+        for _service in out:
+            status = _service.get("unmanaged", False)
             if status == "false":
                 unmanaged_check = False
             else:
@@ -4745,7 +4759,7 @@ EOF"""
 
             if unmanaged_check != unmanaged:
                 log.error(
-                    f"{service_type} Service with {osd_service['service_id']}not unmanaged={unmanaged} state. Fail"
+                    f"{service_type} Service with {_service['service_id']}not unmanaged={unmanaged} state. Fail"
                 )
                 return False
         log.info(f" All {service_type} Service in unmanaged={unmanaged} state. Pass")
@@ -4901,3 +4915,38 @@ EOF"""
         else:
             log.error(f"The {label} not added to the {host_name} node ")
             return False
+
+    def switch_osd_device_type(self, osd_id: str, rota_val: int, redeploy: bool = True):
+        """
+        Method to fake the OSD underlying device class by changing the
+        queue/rotational value in /sys/block/<device> and re-deploy OSD
+        Args:
+            osd_id: ID of the OSD
+            rota_val: underlying device type's rotational value (0 / 1)
+            redeploy: flag to control redeployment of OSD
+        Returns:
+            None if pass | raise exception if failure
+        """
+        # find the osd device from metadata
+        osd_metadata = self.get_daemon_metadata(daemon_type="osd", daemon_id=osd_id)
+
+        # get osd device path and OSD host
+        osd_device = osd_metadata["devices"]
+        osd_host = self.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+
+        _cmd = f"echo {rota_val} > /sys/block/{osd_device}/queue/rotational"
+        osd_host.exec_command(cmd=_cmd, sudo=True)
+
+        if redeploy:
+            # re-deploy the input OSD
+            osd_utils.set_osd_out(self.ceph_cluster, osd_id=osd_id)
+            osd_utils.osd_remove(self.ceph_cluster, osd_id=osd_id, zap=True, force=True)
+
+            # set OSD service to managed
+            self.set_service_managed_type(service_type="osd", unmanaged=False)
+
+            # wait for OSD to be re-deployed
+            if not wait_for_device_rados(host=osd_host, osd_id=osd_id, action="add"):
+                _err = f"OSD {osd_id} did not get redeployed within timeout"
+                log.error(_err)
+                raise Exception(_err)
