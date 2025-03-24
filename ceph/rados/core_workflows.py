@@ -4462,22 +4462,26 @@ EOF"""
              True, if unmanaged flag is set
              False, if unmanaged flag is not set
         """
-
-        cmd_set_unmanaged_flag = f"ceph orch set-unmanaged {service_name}"
-        self.client.exec_command(sudo=True, cmd=cmd_set_unmanaged_flag)
-        base_cmd = "ceph orch ls"
-        cmd = f"{base_cmd} {service_type} {service_name}"
-        duration = 300  # 5 minutes
-        start_time = time.time()
-        while time.time() - start_time < duration:
-            orch_ls_op = self.run_ceph_command(cmd=cmd)
-            for entry in orch_ls_op:
-                if entry["unmanaged"]:
-                    log.info("The unmanaged flag is set to True ")
-                    return True
-            time.sleep(30)
-        log.error("The unmanaged flag is not set to True  ")
-        return False
+        if self.rhbuild and self.rhbuild.split(".")[0] >= "8":
+            cmd_set_unmanaged_flag = f"ceph orch set-unmanaged {service_name}"
+            self.client.exec_command(sudo=True, cmd=cmd_set_unmanaged_flag)
+            base_cmd = "ceph orch ls"
+            cmd = f"{base_cmd} {service_type} {service_name}"
+            duration = 300  # 5 minutes
+            start_time = time.time()
+            while time.time() - start_time < duration:
+                orch_ls_op = self.run_ceph_command(cmd=cmd)
+                for entry in orch_ls_op:
+                    if entry["unmanaged"]:
+                        log.info("The unmanaged flag is set to True ")
+                        return True
+                time.sleep(30)
+            log.error("The unmanaged flag is not set to True  ")
+            return False
+        else:
+            return self.set_service_managed_type(
+                service_type=service_type, unmanaged=True
+            )
 
     def set_managed_flag(self, service_type, service_name):
         """
@@ -4489,22 +4493,26 @@ EOF"""
             True, if unmanaged flag is unset
             False, if unmanaged flag is not unset
         """
-
-        cmd_set_managed_flag = f"ceph orch set-managed {service_name}"
-        self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
-        base_cmd = "ceph orch ls"
-        cmd = f"{base_cmd} {service_type} {service_name}"
-        duration = 300  # 5 minutes
-        start_time = time.time()
-        while time.time() - start_time < duration:
-            orch_ls_op = self.run_ceph_command(cmd=cmd)
-            for entry in orch_ls_op:
-                if "unmanaged" not in entry:
-                    log.info("The unmanaged flag is unset")
-                    return True
-            time.sleep(30)
-        log.error("The unmanaged flag is not unset")
-        return False
+        if self.rhbuild and self.rhbuild.split(".")[0] >= "8":
+            cmd_set_managed_flag = f"ceph orch set-managed {service_name}"
+            self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
+            base_cmd = "ceph orch ls"
+            cmd = f"{base_cmd} {service_type} {service_name}"
+            duration = 300  # 5 minutes
+            start_time = time.time()
+            while time.time() - start_time < duration:
+                orch_ls_op = self.run_ceph_command(cmd=cmd)
+                for entry in orch_ls_op:
+                    if "unmanaged" not in entry:
+                        log.info("The unmanaged flag is unset")
+                        return True
+                time.sleep(30)
+            log.error("The unmanaged flag is not unset")
+            return False
+        else:
+            return self.set_service_managed_type(
+                service_type=service_type, unmanaged=False
+            )
 
     def check_daemon_exists_on_host(self, host, daemon_type=None) -> bool:
         """
@@ -4725,7 +4733,7 @@ EOF"""
                 log.debug(
                     f"Setting the {service_type} service as unmanaged by cephadm. current status : {out}"
                 )
-                osd_service["unmanaged"] = "false"
+                osd_service["unmanaged"] = False
             json_out = json.dumps(osd_service)
             # Adding the spec rules into the file
             cmd = f"echo '{json_out}' > {file_name}"
