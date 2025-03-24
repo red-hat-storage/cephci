@@ -166,6 +166,7 @@ tests:
                 image_size: 1T
                 no-auto-visible: true
                 group: group1
+                validate_ns_masking_initiators: true
           - config:
               command: add_host
               args:
@@ -178,6 +179,7 @@ tests:
                   - node11
                   - node12
                 group: group1
+                validate_ns_masking_initiators: true
           - config:
               command: del_host
               args:
@@ -190,6 +192,7 @@ tests:
                   - node11
                   - node12
                 group: group1
+                validate_ns_masking_initiators: true
           - config:
               command: change_visibility
               args:
@@ -197,6 +200,7 @@ tests:
                 namespaces: 50
                 auto-visible: 'yes'
                 group: group1
+                validate_ns_masking_initiators: true
           - config:
               command: change_visibility
               args:
@@ -204,6 +208,7 @@ tests:
                 namespaces: 50
                 auto-visible: 'no'
                 group: group1
+                validate_ns_masking_initiators: true
         initiators:
           - node8
           - node9
