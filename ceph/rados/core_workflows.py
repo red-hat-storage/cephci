@@ -3961,7 +3961,7 @@ EOF"""
             log.error(f"Unable to start the OSD : {target_osd}")
             return None
         log.info(f"Performing the deep-scrub on the pg-{pg_id}")
-        if not self.start_check_deep_scrub_complete(pg_id=pg_id, wait_time=1000):
+        if not self.start_check_deep_scrub_complete(pg_id=pg_id, wait_time=3600):
             log.debug(f"deep-scrubbing could not be completed on PG : {pg_id}")
             raise Exception("PG not deep-scrubbed error")
         log.debug(f"Completed deep-scrubbing the pg : {pg_id}")
