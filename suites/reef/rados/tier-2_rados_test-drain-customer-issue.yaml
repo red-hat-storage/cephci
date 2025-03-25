@@ -111,6 +111,14 @@ tests:
       config:
         log_to_file: true
       desc: Change config options to enable logging to file
+
+  # RHOS-d run duration: 8 mins
+  - test:
+      name: MGR regression test
+      module: test_mgr_daemon.py
+      polarion-id: CEPH-83586116
+      desc: MGR regression testing
+
   - test:
       name: Reproducing the Ceph mgr crash bug
       module: test_node_drain_customer_bug.py
@@ -122,6 +130,7 @@ tests:
           pool_name: mgr_test_pool
           delete_pool: mgr_test_pool
       desc: Reproducing the Ceph mgr crashed after a mgr failover
+
   - test:
       name: Upgrade cluster to latest 7.x ceph version
       desc: Upgrade cluster to latest version
@@ -135,6 +144,7 @@ tests:
           verbose: true
         verify_cluster_health: true
       destroy-cluster: false
+
   - test:
       name: Verification of Ceph mgr crash bug
       module: test_node_drain_customer_bug.py

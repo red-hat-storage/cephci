@@ -151,6 +151,13 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
       name: OSD addition on an unavailable disk
       desc: Add new OSD on an pre-occupied OSD disk
       module: test_add_new_osd.py
