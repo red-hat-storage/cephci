@@ -102,13 +102,11 @@ tests:
   -
     test:
       abort-on-fail: false
-      desc: "Verify fscrypt cli lifecycle on supported cephfs mountpoints"
+      desc: "Verify fscrypt basic tests - lifecycle,non_empty_path and metadata_not_encrypted validation"
       destroy-cluster: false
-      module: cephfs_fscrypt.test_fscrypt_functional.py
-      name: "fscrypt_functional"
+      module: cephfs_fscrypt.test_fscrypt_basic.py
+      name: "fscrypt_basic"
       polarion-id: CEPH-83607378
-      config:
-       test_name: fscrypt_lifecycle_test
   -
     test:
       abort-on-fail: false
