@@ -291,7 +291,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: user_create.py
             config-file-name: non_tenanted_user.yaml
             copy-user-info-to-site: ceph-sec
