@@ -178,7 +178,7 @@ def save_to_remote(command, output, subcomponent_filter, output_directory):
         output_directory (str): The directory where JSON files will be saved.
     """
     output_hash = compute_output_hash(output)
-    base_dir = os.path.join(output_directory, "cephci-commands-results")
+    base_dir = os.path.join(output_directory, "rgw_command_extractor")
     os.makedirs(base_dir, exist_ok=True)
 
     subcommand_match = re.search(r"radosgw-admin (\w+)", command)
