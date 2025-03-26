@@ -10,6 +10,7 @@ import socket
 from distutils.version import LooseVersion
 from time import sleep, time
 
+import cryptography
 import paramiko
 import requests
 import yaml
@@ -1282,11 +1283,7 @@ class SSHConnectionManager(object):
         self.username = username
         self.password = password
         self.look_for_keys = look_for_keys
-        self.pkey = (
-            paramiko.RSAKey.from_private_key_file(private_key_file_path)
-            if look_for_keys
-            else None
-        )
+        self.pkey = self._get_ssh_key(private_key_file_path) if look_for_keys else None
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
         self.__transport = None
@@ -1296,6 +1293,33 @@ class SSHConnectionManager(object):
     @property
     def client(self):
         return self.get_client()
+
+    def _get_ssh_key(self, private_key_file_path):
+        """Get SSH key based on file type"""
+        private_key = None
+        with open(private_key_file_path, "rb") as key_file:
+            private_key = (
+                cryptography.hazmat.primitives.serialization.load_ssh_private_key(
+                    key_file.read(),
+                    password=None,
+                    backend=cryptography.hazmat.backends.default_backend(),
+                )
+            )
+
+        if isinstance(
+            private_key,
+            cryptography.hazmat.primitives.asymmetric.rsa.RSAPrivateKey,
+        ):
+            return paramiko.RSAKey.from_private_key_file(private_key_file_path)
+
+        elif isinstance(
+            private_key,
+            cryptography.hazmat.primitives.asymmetric.ed25519.Ed25519PrivateKey,
+        ):
+            return paramiko.Ed25519Key.from_private_key_file(private_key_file_path)
+
+        logger.error("Unsupported ssh key {}".format(private_key_file_path))
+        return False
 
     def get_client(self):
         if not (self.__transport and self.__transport.is_active()):
