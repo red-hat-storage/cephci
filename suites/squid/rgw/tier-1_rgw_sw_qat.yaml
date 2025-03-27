@@ -6,7 +6,7 @@
 # - Run Compression and Envryption SSE-KMS tests on the cluster
 
 # RHCS 8.x sanity test suite for RGW daemon.
-# conf : conf/squid/rgw/tier-0_rgw_with_haproxy.yaml
+# conf : conf/squid/rgw/tier-0_rgw.yaml
 # Polarion ID : CEPH-83582013
 tests:
 

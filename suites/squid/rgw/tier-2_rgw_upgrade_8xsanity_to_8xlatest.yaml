@@ -1,6 +1,6 @@
 #Objective: Testing single site upgrade from RHCS 8.0 sanity latest to 8.x latest build
 #platform : RHEL-9
-#conf: conf/squid/rgw/tier-0_rgw_with_haproxy.yaml
+#conf: conf/squid/rgw/tier-0_rgw.yaml
 
 tests:
   - test:
