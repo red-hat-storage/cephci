@@ -192,7 +192,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
-        if rhbuild.split(".")[0] > 5:
+        if rhbuild.split(".")[0] > "5":
             mon_obj.remove_config(section="mgr", name="debug_mgr")
             mon_obj.remove_config(section="mgr", name="debug_cephsqlite")
             if "cephsqlite_addr" in locals() or "cephsqlite_addr" in globals():
