@@ -451,7 +451,7 @@ class RadosOrchestrator:
         log.info(f"check_ec: {check_ec}")
 
         try:
-            self.node.shell([cmd], check_status=check_ec, timeout=_timeout)
+            self.client.exec_command(sudo=True, cmd=cmd, timeout=_timeout)
             if max_objs and verify_stats:
                 exp_objs = org_objs + max_objs
                 assert self.verify_pool_stats(pool_name=pool_name, exp_objs=exp_objs)
