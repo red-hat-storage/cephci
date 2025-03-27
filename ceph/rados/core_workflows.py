@@ -451,7 +451,9 @@ class RadosOrchestrator:
         log.info(f"check_ec: {check_ec}")
 
         try:
-            self.client.exec_command(sudo=True, cmd=cmd, timeout=_timeout)
+            self.client.exec_command(
+                cmd=cmd, check_ec=check_ec, timeout=_timeout, verbose=True
+            )
             if max_objs and verify_stats:
                 exp_objs = org_objs + max_objs
                 assert self.verify_pool_stats(pool_name=pool_name, exp_objs=exp_objs)
@@ -460,9 +462,11 @@ class RadosOrchestrator:
                 new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
                     "objects"
                 ]
-                log_info_msg = f"Objs in the {pool_name} before IOPS: {org_objs} \
-                    | Objs in the pool post IOPS: {new_objs} \
-                    | Expected {new_objs} > 0 | Expected {new_objs} > {org_objs}"
+                log_info_msg = (
+                    f"Objs in the {pool_name} before IOPS: {org_objs} "
+                    f"| Objs in the pool post IOPS: {new_objs} "
+                    f"| Expected {new_objs} > 0 | Expected {new_objs} > {org_objs}"
+                )
                 log.info(log_info_msg)
                 assert new_objs > 0
                 assert new_objs > org_objs
@@ -484,7 +488,7 @@ class RadosOrchestrator:
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         while end_time > datetime.datetime.now():
             new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
-            log_debug_msg = f"| Objs in the pool post IOPS: {new_objs} | Expected {exp_objs} or {exp_objs + 1}"
+            log_debug_msg = f"Objs in the pool post IOPS: {new_objs} | Expected {exp_objs} or {exp_objs + 1}"
             log.debug(log_debug_msg)
             if (new_objs == exp_objs) or (new_objs == exp_objs + 1):
                 log.info("Stats in the pool are as expected")
@@ -526,7 +530,9 @@ class RadosOrchestrator:
                     check_ec = False
                     cmd = f"{cmd} &> /dev/null &"
                 log.info(f"check_ec: {check_ec}")
-                self.node.shell([cmd], check_status=check_ec, timeout=_timeout)
+                self.client.exec_command(
+                    cmd=cmd, check_ec=check_ec, timeout=_timeout, verbose=True
+                )
             return True
         except Exception as err:
             log.error(f"Error running rados bench write on pool : {pool_name}")
@@ -1911,9 +1917,10 @@ class RadosOrchestrator:
         )
         orch_ps_out = self.run_ceph_command(cmd=cmd_)
         log.debug(orch_ps_out)
-        return orch_ps_out[0]["status"], (
-            orch_ps_out[0]["status_desc"] if orch_ps_out else ()
-        )
+        if orch_ps_out:
+            return orch_ps_out[0]["status"], orch_ps_out[0]["status_desc"]
+
+        return ()
 
     def daemon_check_post_tests(
         self, pre_test_orch_ps: dict, pre_crash_report: list = None
