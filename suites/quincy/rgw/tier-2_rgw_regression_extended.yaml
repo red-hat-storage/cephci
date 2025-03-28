@@ -110,6 +110,17 @@ tests:
       name: configure client
 
   - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
       name: Test non-current deletion via s3cmd
       desc: Test non-current deletion via s3cmd
       polarion-id: CEPH-83573543

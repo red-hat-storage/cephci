@@ -129,6 +129,17 @@ tests:
                   placement:
                     host_pattern: "*"
 
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node5
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
 #   S3CMD tests
   - test:
       name: S3CMD basic  operations

@@ -92,6 +92,17 @@ tests:
       module: test_client.py
       name: configure client
 
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
   # Testing stage
 
 
