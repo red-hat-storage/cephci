@@ -1,0 +1,338 @@
+# RHCS 8.x sanity test suite for RGW daemon.
+# conf : conf/squid/rgw/tier-0_rgw.yaml
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        git_clone: true
+        git_node_role: rgw
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+  - test:
+      name: test basic object operations with swift
+      desc: Test basic object operations with swift
+      polarion-id: CEPH-11019
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+        run-on-rgw: true
+  - test:
+      name: overwrite objects after suspending versioning
+      desc: test to overwrite objects after suspending versioning
+      polarion-id: CEPH-9199 # also applies to CEPH-9223
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_suspend_re-upload.yaml
+  - test:
+      name: Bucket Lifecycle Object_expiration_tests for Prefix and tag based filter and for more than one days
+      desc: Test object expiration for Prefix and tag based filter and for more than one days
+      polarion-id: CEPH-11179 # also applies to CEPH-11180
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_prefix_and_tag.yaml
+  - test:
+      name: Dynamic Resharding tests
+      desc: Resharding test - dynamic
+      polarion-id: CEPH-83571740 # also applies to ceph-11479, ceph-11477
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding.yaml
+  - test:
+      name: object lock verification
+      desc: object lock test
+      polarion-id: CEPH-83574055
+      module: sanity_rgw.py
+      config:
+        script-name: test_object_lock.py
+        config-file-name: test_object_lock_compliance.yaml
+  - test:
+      name: Test rgw through CURL
+      desc: Test rgw through CURL
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_rgw_using_curl.yaml
+  - test:
+      name: Test rgw multipart upload through curl
+      desc: Test rgw multipart upload through curl
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_rgw_curl_multipart_upload.yaml
+  - test:
+      name: Test rename of large object using sts user through AWS
+      desc: Test rename of large object using sts user through AWS
+      polarion-id: CEPH-83575419
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
+  - test:
+      name: STS Tests to perform assume role on principle user and perform IOs
+      desc: Perform assume role on principle user and perform IOs
+      polarion-id: CEPH-83572938
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        test-version: v2
+        script-name: test_sts_using_boto.py
+        config-file-name: test_sts_using_boto.yaml
+  - test:
+      name: test bucket notifcation with empty configuration
+      desc: verify empty bucket notification deletes the existing configuration
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575035
+      config:
+        run-on-rgw: true
+        install_common: false
+        extra-pkgs:
+          - jdk
+        install_start_kafka: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_empty_bucket_notification_kafka_broker.yaml
+  - test:
+      name: Multipart upload with Bucket policy enabled
+      desc: Perform multipart upload with Bucket policy enabled
+      polarion-id: CEPH-83574538
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_with_multipart_upload.yaml
+  - test:
+      name: Test ACL Operations
+      desc: Test ACL Operations
+      polarion-id: CEPH-14238
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        test-version: v2
+        script-name: test_acl_ops.py
+        config-file-name: test_acl_ops.yaml
+  - test:
+      name: S3CMD basic  operations
+      desc: S3CMD basic  operations
+      polarion-id: CEPH-83573244
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd.yaml
+  - test:
+      name: Test Ratelimit for tenanted users
+      desc: Test Ratelimit for tenanted users
+      polarion-id: CEPH-83574914
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml
+      comments: known issue BZ 2301986
+  - test:
+      name: test swift enable version on conatainer of different user
+      desc: test swift enable version on conatainer of different user
+      polarion-id: CEPH-10650
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_enable_version_with_different_user.yaml
+  - test:
+      name: Add a lifecycle configuration to a bucket with tenant user
+      desc: Apply lc configuration to bucket with tenant user and perform get lc with other users of tenant
+      polarion-id: CEPH-11206
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_bucket_put_get_lifecycle_configuration_with_tenant_users.yaml
+  - test:
+      name: Test the byte ranges with get object
+      desc: Test the byte ranges with get_object
+      polarion-id: CEPH-83572691
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_byte_range.py
+        config-file-name: test_byte_range.yaml
+  - test:
+      config:
+        script-name: test_quota_management.py
+        config-file-name: test_quota_bucket_max_objects.yaml
+      desc: test bucket quota max objects
+      module: sanity_rgw.py
+      name: test bucket quota max objects
+      polarion-id: CEPH-83575330
+
+  - test:
+      name: versioned object deletion with mfa token
+      desc: test versioned object deletion with mfa token
+      polarion-id: CEPH-83574054
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_rgw_mfa.py
+        config-file-name: test_rgw_mfa.yaml
+        extra-pkgs:
+            - oathtool
+  - test:
+      name: Bucket link and unlink
+      desc: Bucket move between tenanted and non tenanted users
+      polarion-id: CEPH-83572908
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_user_bucket_rename.py
+        config-file-name: test_bucket_link_unlink.yaml
+  - test:
+      name: User and container access in same and different tenants
+      desc: User and container access in same and different tenants
+      polarion-id: CEPH-9740 # also applies to CEPH-9741
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+  - test:
+      name: Generate secret for tenant user
+      desc: Generate secret for tenant user
+      polarion-id: CEPH-9739
+      module: sanity_rgw.py
+      config:
+        script-name: test_tenant_user_secret_key.py
+        config-file-name: test_tenantuser_secretkey_gen.yaml
+  - test:
+      name: Bucket radoslist
+      desc: radoslist on all buckets
+      polarion-id: CEPH-83574480
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_radoslist.yaml
+
+  - test:
+      name: bucket request payer with object download
+      desc: Basic test for bucket request payer with object download
+      polarion-id: CEPH-10347
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_request_payer.py
+        config-file-name: test_bucket_request_payer_download.yaml
+  - test:
+      name: Manual Resharding tests
+      desc: Resharding test - manual
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_manual_resharding.yaml
+  - test:
+      name: D3n-cache enable
+      desc: D3n-cache enable
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575567
+      config:
+        script-name: test_d3n_cache.py
+        config-file-name: test_d3n_cache_enable.yaml
+        run-on-rgw: true
+  - test:
+      name: GetBucketLocation with bucket policy for users in same tenant
+      desc: Test GetBucketLocation bucket policy for users in same tenant
+      polarion-id: CEPH-11623
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_bucketlocation_using_bucketpolicy_with_tenantuser.yaml
+  - test:
+      name: test REST api operation
+      desc: test user operation using REST API
+      module: sanity_rgw.py
+      polarion-id: CEPH-83573505
+      config:
+        script-name: user_op_using_rest.py
+        config-file-name: test_user_with_REST.yaml
+  - test:
+      name: test s3cmd put operation with malformed bucket url
+      desc: test s3cmd put operation with malformed bucket url
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575388
+      config:
+        script-name: ../s3cmd/test_s3cmd_malformed_url.py
+        config-file-name: ../../s3cmd/configs/test_s3cmd_malformed_url_put.yaml
+  - test:
+      name: Bucket Lifecycle Object_transition_tests for Prefix and tag based filter
+      desc: Test object transition for Prefix and tag based filter and for more than one days
+      polarion-id: CEPH-83574045
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_prefix_and_TAG_rule.yaml
