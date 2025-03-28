@@ -47,6 +47,7 @@ class HighAvailability:
         self.host = Host(cluster=self.cluster, **{})
         self.nvme_pool = config["rbd_pool"]
         self.clients = []
+        self.initiators = {}
 
         for gateway in gateways:
             gw_node = get_node_by_id(self.cluster, gateway)
@@ -71,6 +72,40 @@ class HighAvailability:
                 LOG.info(f"[{node_id}] {gw.node.hostname} is NVMeoF Gateway node.")
                 return gw
         raise Exception(f"{node_id} doesn't match to any gateways provided...")
+
+    def get_or_create_initiator(self, node_id, nqn):
+        """Get existing NVMeInitiator or create a new one for each (node_id, nqn)."""
+        key = (node_id, nqn)  # Use both as dictionary key
+
+        if key not in self.initiators:
+            node = get_node_by_id(self.cluster, node_id)
+            self.initiators[key] = NVMeInitiator(node, self.gateways[0], nqn)
+
+        return self.initiators[key]
+
+    def create_dhchap_key(self, config, update_host_key=False):
+        """Generate DHCHAP key for each initiator and store it."""
+        nqn = config["subnqn"]
+
+        for host_config in config["hosts"]:
+            node_id = host_config["node"]
+            initiator = self.get_or_create_initiator(node_id, nqn)
+
+            # Generate key for subsystem NQN
+            key, _ = initiator.gen_dhchap_key(n=config["subnqn"])
+            LOG.info(f"{key.strip()} is generated for {nqn} and {node_id}")
+
+            initiator.auth_mode = config.get("auth_mode")
+            if initiator.auth_mode == "bidirectional" and not update_host_key:
+                initiator.subsys_key = key.strip()
+                initiator.host_key = key.strip()
+            if initiator.auth_mode == "unidirectional":
+                initiator.host_key = key.strip()
+            if update_host_key:
+                initiator.host_key = key.strip()
+            config["dhchap-key"] = key.strip()
+
+            self.clients.append(initiator)
 
     def catogorize(self, gws):
         """Categorize to-be failed and running GWs.
@@ -791,7 +826,7 @@ class HighAvailability:
             lsblk_devs.extend(client.fetch_lsblk_nvme_devices())
 
         LOG.info(
-            f"Expcted NVMe Targets : {set(list(uuids))} Vs LSBLK devices: {set(list(lsblk_devs))}"
+            f"Expected NVMe Targets : {set(list(uuids))} Vs LSBLK devices: {set(list(lsblk_devs))}"
         )
         if sorted(uuids) != sorted(set(lsblk_devs)):
             raise IOError("Few Namespaces are missing!!!")
@@ -807,10 +842,13 @@ class HighAvailability:
             node: node10
         """
         for io_client in io_clients:
-            node = get_node_by_id(self.cluster, io_client["node"])
-            client = NVMeInitiator(node, self.gateways[0])
+            nqn = io_client.get("nqn")
+            if io_client.get("subnqn"):
+                nqn = io_client.get("subnqn")
+            client = self.get_or_create_initiator(io_client["node"], nqn)
             client.connect_targets(io_client)
-            self.clients.append(client)
+            if client not in self.clients:
+                self.clients.append(client)
 
     def fetch_namespaces(self, gateway, failed_ana_grp_ids=[], get_list=False):
         """Fetch all namespaces for failed gateways.

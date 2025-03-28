@@ -469,11 +469,26 @@ class GenerateServiceSpec:
             spec["placement"]["hosts"] = self.get_hostnames(node_names)
 
         mtls = spec.pop("mtls", None)
+        encryption = spec.pop("encryption", None)
+        nodes = get_nodes_by_ids(self.cluster, node_names)
+
+        # encryption key
+        if encryption:
+            key_file = "encryption.key"
+            installer_node = self.cluster.get_ceph_object("installer")
+            installer_node.exec_command(
+                cmd=f"openssl req -newkey rsa:512 -noenc -noout -keyout {key_file} -batch 2> /dev/null",
+                sudo=True,
+            )
+
+            # Read the encryption key content from the installer node
+            key, _ = installer_node.exec_command(f"cat {key_file}", sudo=True)
+            spec["spec"]["encryption_key"] = key.strip()
+
         if mtls:
             spec["spec"]["enable_auth"] = True
 
             # server cert
-            nodes = get_nodes_by_ids(self.cluster, node_names)
             key, cert = create_nvme_certificates(
                 self.node,
                 domain="nvme.server",

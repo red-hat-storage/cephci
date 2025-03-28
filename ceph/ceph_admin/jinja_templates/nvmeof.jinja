@@ -1,6 +1,6 @@
 {%- set nlt = "\n  " -%}
 {%- set newline = "\n" -%}
-{% set cert_list = ['server_cert', 'server_key', 'client_cert', 'client_key', 'root_ca_cert'] %}
+{% set cert_list = ['server_cert', 'server_key', 'client_cert', 'client_key', 'root_ca_cert', 'encryption_key'] %}
 ---
 service_type: {{ spec['service_type'] }}
 service_id: {{ spec['service_id'] }}
