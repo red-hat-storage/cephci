@@ -55,6 +55,10 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
       desc: RHCS cluster deployment using cephadm.
       polarion-id: CEPH-83573713
       destroy-cluster: false
