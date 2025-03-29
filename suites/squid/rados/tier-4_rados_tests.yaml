@@ -307,3 +307,9 @@ tests:
       polarion-id: CEPH-9388
       module: test_mon_system_operations.py
       desc: Performing system tests with mon daemons
+
+  - test:
+      name: OSD Fragmentation tests
+      polarion-id: CEPH-83607852
+      module: test_fragmentation_warnings.py
+      desc: Generate Fragmentation on OSDs and verify health warning + logs
