@@ -118,7 +118,7 @@ def run(ceph_cluster, **kw):
 
             if operation == "restart":
                 # Get nfs service name
-                data = json.loads(Ceph(nfs_node).orch.ls(format="json"))
+                data = json.loads(Ceph(clients[0]).orch.ls(format="json"))
                 [service_name] = [
                     x["service_name"]
                     for x in data
@@ -126,7 +126,7 @@ def run(ceph_cluster, **kw):
                 ]
 
                 # restart the service
-                Ceph(nfs_node).orch.restart(service_name)
+                Ceph(clients[0]).orch.restart(service_name)
                 if cluster_name not in [x["service_name"] for x in data]:
                     sleep(1)
 
