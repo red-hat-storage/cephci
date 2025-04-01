@@ -85,6 +85,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests pre upgrade
