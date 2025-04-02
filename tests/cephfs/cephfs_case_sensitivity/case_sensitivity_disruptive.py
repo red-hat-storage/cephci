@@ -5,6 +5,7 @@ import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.lib.cephfs_attributes_lib import CephFSAttributeUtilities
+from tests.cephfs.lib.cephfs_recovery_lib import FSRecovery
 from utility.log import Log
 
 log = Log(__name__)
@@ -15,6 +16,7 @@ def run(ceph_cluster, **kw):
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
         attr_util = CephFSAttributeUtilities(ceph_cluster)
+        fs_recovery = FSRecovery(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
@@ -64,7 +66,9 @@ def run(ceph_cluster, **kw):
 
         log.info("Validating alternate name for %s", rel_child_dir)
         alter_dict = attr_util.fetch_alternate_name(client1, fs_name, "/")
-        if not attr_util.validate_alternate_name(alter_dict, rel_child_dir):
+        if not attr_util.validate_alternate_name(
+            alter_dict, rel_child_dir, "NFKD", casesensitive=False
+        ):
             log.error("Validation failed for alternate name")
             return 1
 
@@ -100,7 +104,9 @@ def run(ceph_cluster, **kw):
 
         log.info("Validating alternate name for %s", rel_child_dir)
         alter_dict_1 = attr_util.fetch_alternate_name(client1, fs_name, "/")
-        if not attr_util.validate_alternate_name(alter_dict_1, rel_child_dir):
+        if not attr_util.validate_alternate_name(
+            alter_dict_1, rel_child_dir, "NFKD", casesensitive=False
+        ):
             log.error("Validation failed for alternate name")
             return 1
 
@@ -127,7 +133,62 @@ def run(ceph_cluster, **kw):
 
         log.info("Passed: Attribute persisted after remount")
 
-        log.info("Disruptive Case Sensitive use cases completed")
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n    Usecase 3: Failing the file system                           "
+            "\n---------------***************-----------------------------------"
+        )
+
+        log.info("Unmounting fuse client:")
+        child_dir_3 = os.path.join(parent_dir, "child_dir_step-3")
+        attr_util.create_directory(client1, child_dir_3)
+
+        assert attr_util.get_charmap(client1, child_dir_3) == {
+            "casesensitive": False,
+            "normalization": "nfkd",
+            "encoding": "utf8",
+        }
+
+        active_mds_ranks = fs_recovery.get_active_mds_ranks(client1, fs_name)
+        assert attr_util.fail_fs(client1, fs_name)
+
+        mds_output = fs_util.get_mds_config(client1, fs_name)
+        failed_found = False
+        for mds in mds_output:
+            if mds.get("state") == "failed":
+                log.info("MDS is in failed state")
+                failed_found = True  # Found a failed MDS
+
+        if not failed_found:
+            log.error("No MDS is in failed state")
+            return 1
+
+        fs_recovery.fs_recovery(client1, active_mds_ranks, fs_name)
+
+        fs_util.wait_for_stable_fs(client1, False, 60)
+
+        assert attr_util.get_charmap(client1, child_dir_3) == {
+            "casesensitive": False,
+            "normalization": "nfkd",
+            "encoding": "utf8",
+        }
+
+        attr_util.set_attributes(
+            client1, child_dir_3, casesensitive=1, normalization="nfkc"
+        )
+
+        assert attr_util.get_charmap(client1, child_dir_3) == {
+            "casesensitive": True,
+            "normalization": "nfkc",
+            "encoding": "utf8",
+        }
+
+        log.info("Attribute persisted after remount")
+
+        log.info("Passed: Failing the file system")
+
+        log.info("** Disruptive Case Sensitive use cases completed **")
         return 0
 
     except Exception as e:
@@ -136,6 +197,12 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
+        log.info(
+            "\n"
+            "\n---------------***************----------------------------------------"
+            "\n                 Cleanup                                              "
+            "\n---------------***************----------------------------------------"
+        )
         fs_util.client_clean_up(
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )

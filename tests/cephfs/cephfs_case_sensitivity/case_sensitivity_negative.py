@@ -85,6 +85,8 @@ def run(ceph_cluster, **kw):
             finally:
                 attr_util.delete_file(client1, os.path.join(dir_with_files, fnames))
 
+        log.info("Passed: Setting casesensitivity on a directory with files")
+
         log.info(
             "\n"
             "\n---------------***************-----------------------------------"
@@ -101,6 +103,8 @@ def run(ceph_cluster, **kw):
             attr_util.delete_directory(
                 client1, os.path.join(dir_with_files, "Dir1"), recursive=True
             )
+
+        log.info("Passed: Creating conflicting names in insensitive mode")
 
         log.info(
             "\n"
@@ -151,6 +155,8 @@ def run(ceph_cluster, **kw):
             attr_util.delete_directory(client1, dir_step_3a, recursive=True)
             attr_util.delete_directory(client1, dir_step_3, recursive=True)
 
+        log.info("Passed: Removed casesensitive, normalisation and encoding")
+
         log.info(
             "\n"
             "\n---------------***************-----------------------------------"
@@ -184,6 +190,8 @@ def run(ceph_cluster, **kw):
                 )
             finally:
                 attr_util.delete_file(client1, os.path.join(dir_with_files, fnames))
+
+        log.info("Passed: Setting normalization on a directory with files")
 
         log.info(
             "\n"
@@ -220,6 +228,8 @@ def run(ceph_cluster, **kw):
                     "Passed: Failed to create file under unsupported encoding type"
                 )
 
+        log.info("Passed: Creating file with unsupported encoding type")
+
         log.info(
             "\n"
             "\n---------------***************-----------------------------------"
@@ -244,7 +254,7 @@ def run(ceph_cluster, **kw):
         except CommandFailed:
             log.info("Passed: Failed as Expected")
 
-        log.info("Negative Case Sensitive use cases completed")
+        log.info("Passed: Setting invalid value for normalization")
 
         log.info(
             "\n"
@@ -285,6 +295,141 @@ def run(ceph_cluster, **kw):
                 log.info("Deleting the file {}".format(file_name))
                 attr_util.delete_file(client1, file_name)
 
+        log.info("Passed: Removing charmap on a directory with files")
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n  Usecase 8: Kernel mount should fail setting the attributes     "
+            "\n---------------***************-----------------------------------"
+        )
+
+        log.info("Mount file system on Kernel Client")
+        kernel_mount_dir = "/mnt/cephfs_kernel_{}_1/".format(mounting_dir)
+        mon_node_ips = fs_util.get_mon_node_ips()
+
+        fs_util.kernel_mount(
+            [client1],
+            kernel_mount_dir,
+            ",".join(mon_node_ips),
+            extra_params=",fs={}".format(fs_name),
+        )
+
+        dir_path = os.path.join(kernel_mount_dir, "step-8")
+        attr_util.create_directory(client1, dir_path)
+
+        attr_util.set_attributes(
+            client1, dir_path, casesensitive=0, normalization="nfkd"
+        )
+
+        charmap = attr_util.get_charmap(client1, dir_path)
+        assert (
+            charmap.get("casesensitive") is False
+            and charmap.get("normalization") == "nfkd"
+            and charmap.get("encoding") == "utf8"
+        )
+
+        try:
+            child_dir_path = os.path.join(dir_path, "step-8-child")
+            attr_util.create_directory(client1, child_dir_path)
+            log.error("Failed: Created child directory under kernel mount")
+            return 1
+        except CommandFailed:
+            log.info("Passed: Failed to create child directory as expected")
+
+        log.info("Cleaning up kernel mount")
+
+        fs_util.client_clean_up(
+            "umount",
+            kernel_clients=[client1],
+            mounting_dir=kernel_mount_dir,
+            retain_keyring=True,
+        )
+
+        log.info("Passed: Kernel mount should fail setting the attributes")
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n  Usecase 9: Create client users without p flag and validate     "
+            "\n---------------***************-----------------------------------"
+        )
+
+        log.info("Create directories and set attributes")
+        dir_path = os.path.join(fuse_mounting_dir, "step-9")
+        attr_util.create_directory(client1, dir_path)
+
+        attr_util.set_attributes(
+            client1, dir_path, casesensitive=0, normalization="nfkd"
+        )
+
+        charmap = attr_util.get_charmap(client1, dir_path)
+        assert (
+            charmap.get("casesensitive") is False
+            and charmap.get("normalization") == "nfkd"
+            and charmap.get("encoding") == "utf8"
+        )
+
+        log.info("Create client user without p flag and validate attributes")
+
+        new_client1_name = client1.node.hostname + "_"
+        new_mount_dir = "/mnt/{}new/".format(new_client1_name)
+        attr_util.create_directory(client1, new_mount_dir, force=True)
+
+        rc1 = fs_util.auth_list(
+            [client1],
+            path="",
+            permission="rw",
+            mds=True,
+        )
+        if rc1 != 0:
+            log.error("auth list failed")
+            return 1
+
+        fs_util.fuse_mount(
+            [client1],
+            new_mount_dir,
+            new_client_hostname=new_client1_name,
+            extra_params=" --client_fs {}".format(fs_name),
+        )
+
+        new_dir_path = os.path.join(new_mount_dir, "step-9")
+
+        try:
+            charmap = attr_util.get_charmap(client1, new_dir_path)
+            assert (
+                charmap.get("casesensitive") is False
+                and charmap.get("normalization") == "nfkd"
+                and charmap.get("encoding") == "utf8"
+            )
+            log.info("Validated attributes for client user without p flag")
+        except AssertionError:
+            log.error(
+                "Failed: Attributes validation failed for client user without p flag"
+            )
+            return 1
+
+        try:
+            attr_util.set_attributes(
+                client1, new_dir_path, casesensitive=1, normalization="nfc"
+            )
+            log.error("Failed: Attribute was set when the user doesn't have p flag")
+            return 1
+        except CommandFailed:
+            log.info(
+                "Passed: Failed to set attribute as expected for user without p flag"
+            )
+
+        log.info("** Cleanup **")
+        fs_util.client_clean_up(
+            "umount", fuse_clients=[client1], mounting_dir=new_mount_dir
+        )
+        fs_util.auth_list([client1])
+
+        log.info(
+            "Passed: Creating client users without p flag and validating attributes"
+        )
+
         log.info("*** Case Sensitivity: Negative Workflow completed ***")
         return 0
 
@@ -294,6 +439,12 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
+        log.info(
+            "\n"
+            "\n---------------***************----------------------------------------"
+            "\n                 Cleanup                                              "
+            "\n---------------***************----------------------------------------"
+        )
         fs_util.client_clean_up(
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )

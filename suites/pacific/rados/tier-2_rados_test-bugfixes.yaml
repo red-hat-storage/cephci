@@ -186,3 +186,10 @@ tests:
       module: test_v1client.py
       polarion-id: CEPH-83594645
       desc: Ensure client connection over v1 port does not crash
+
+  - test:
+      name: Verify that there are no 'defunct' ssh connections after the manager is redeployed
+      module: test_defunct_ssh_connections.py
+      polarion-id: CEPH-83602699
+      desc: ceph-mgr cephadm ssh connections 'defunct' after the manager is redeployed
+

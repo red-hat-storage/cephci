@@ -158,7 +158,9 @@ class ServiceabilityMethods:
             )
 
             # cursory check to ensure input node is actually offline
-            if self.rados_obj.check_host_status(hostname=rm_host.hostname):
+            if not self.rados_obj.check_host_status(
+                hostname=rm_host.hostname, status="offline"
+            ):
                 err_msg = (
                     f"Input host {rm_host.hostname} is not in Offline state. Exiting"
                 )

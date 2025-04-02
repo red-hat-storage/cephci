@@ -195,24 +195,31 @@ def set_osd_in(
     return ret_val
 
 
-def osd_remove(ceph_cluster, osd_id, zap=False, force=False):
+def osd_remove(ceph_cluster, osd_id, **kwargs):
     """
     osd remove
     Args:
         ceph_cluster: ceph cluster
         osd_id: osd id
-        zap: flag to control zapping of device
-        force: flag to remove the OSD forcefully
+        valid inputs for keyword argument dict:
+            - zap(bool): flag to control zapping of device
+            - force(bool): flag to remove the OSD forcefully
+            - timeout(int): time to wait for OSD removal
+            - interval(int): retry interval wait time
+            - validate(bool): flag to control OSD removal validation
     """
     config = {"command": "rm", "service": "osd", "pos_args": [osd_id]}
     cmd_args = {}
-    if zap:
+    if kwargs.get("zap"):
         cmd_args["zap"] = True
         cmd_args["force"] = True
-    if force:
+    if kwargs.get("force"):
         cmd_args["force"] = True
     if bool(cmd_args):
         config["base_cmd_args"] = cmd_args
+    config["timeout"] = kwargs.get("timeout", 1800)
+    config["interval"] = kwargs.get("interval", 120)
+    config["validate"] = kwargs.get("validate", True)
     log.info(f"Executing OSD {config.pop('command')} service")
     osd = OSD(cluster=ceph_cluster, **config)
     osd.rm(config)

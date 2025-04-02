@@ -22,6 +22,7 @@ This module contains the methods required for scrubbing.
 
 import datetime
 import json
+import time
 from collections import defaultdict
 
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -221,3 +222,39 @@ class RadosScrubber(RadosOrchestrator):
                 return pg_no
         log.error(f"The provided {pg_id} is not exist in dump scrub")
         return None
+
+    def wait_for_scrub_deepscrub_complete(self, wait_time=20):
+        """
+        Method is used to wait until scrub/deep-scrub to complete
+        Args:
+            wait_time:  Wait time, The default is 20 minutes
+
+        Returns:
+               True -> Scrub/deep-scrub is completed
+               False -> Scrub/deep-scrub is not completed
+        """
+
+        end_time = datetime.datetime.now() + datetime.timedelta(minutes=wait_time)
+        is_scrubbing = False
+        while end_time > datetime.datetime.now():
+            is_scrubbing = False
+            out_put = self.run_ceph_command(cmd="ceph -s")
+            log.info(f"The cluster status is -{out_put}")
+            for state in out_put["pgmap"]["pgs_by_state"]:
+                if "scrubbing" in state["state_name"]:
+                    log.info(f"The {state['state_name']} is in progress")
+                    is_scrubbing = True
+            cmd = "ceph pg dump pgs"
+            pg_stats = self.run_ceph_command(cmd)
+            for pg in pg_stats["pg_stats"]:
+                if "scrubbing" in pg["state"]:
+                    log.info(f"The {pg['stat']} is in progress on {pg['pgid']} ")
+                    is_scrubbing = True
+            if is_scrubbing:
+                log.info("Scrubbing is isn progress.Wait for 30 seconds")
+                time.sleep(30)
+        if is_scrubbing:
+            log.error("Scrubbing still in progress")
+            return False
+        log.info("Scrubbing completed")
+        return True
