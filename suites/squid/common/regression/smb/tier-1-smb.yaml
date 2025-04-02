@@ -1,0 +1,440 @@
+#========================================================================
+# Test-Case: Tier 1
+#
+# Cluster Configuration:
+#    conf/squid/common/5node-2client-rh.yaml
+#========================================================================
+tests:
+  - test:
+      name: Verify IO runs over cifs mount
+      desc: Verify IO runs over cifs mount
+      module: smb_cifs_mount.py
+      polarion-id: CEPH-83594252
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cifs_mount_point: "/mnt/smb"
+        file_count: 10
+
+  - test:
+      name: Validate SMB share options are getting overwritten after restarting cephfs mds service
+      desc: Validate SMB share options are getting overwritten after restarting cephfs mds service
+      module: smb_service_restart.py
+      polarion-id: CEPH-83594250
+      config:
+        restart_service: mds.cephfs
+        change_resource_names: ceph.smb.share
+        change_resource_option: readonly
+        change_value: true
+        file_type: yaml
+        file_mount: /tmp
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        spec:
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            readonly: true
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+        name: Validate SMB share options are getting overwritten after restarting smb service
+        desc: Validate SMB share options are getting overwritten after restarting smb service
+        module: smb_service_restart.py
+        polarion-id: CEPH-83594251
+        config:
+          restart_service: smb.smb1
+          change_resource_names: ceph.smb.share
+          change_resource_option: readonly
+          change_value: true
+          file_type: yaml
+          file_mount: /tmp
+          cephfs_volume: cephfs
+          smb_subvolume_group: smb
+          smb_subvolumes: [sv1]
+          smb_subvolume_mode: '0777'
+          smb_cluster_id: smb1
+          auth_mode: user
+          smb_user_name: user1
+          smb_user_password: passwd
+          smb_shares: [share1]
+          path: "/"
+          spec:
+            - resource_type: ceph.smb.share
+              cluster_id: smb1
+              share_id: share1
+              readonly: true
+              cephfs:
+                volume: cephfs
+                subvolumegroup: smb
+                subvolume: sv1
+                path: /
+
+  - test:
+      name: Create files on windows client 1 and perform lookup from windows client 2
+      desc: Create files on windows client 1 and perform lookup from windows client 2
+      module: smb_clients_operations.py
+      polarion-id: CEPH-83593842
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        windows_client: True
+        mount_point: "Z:"
+        file_count: 3
+        operations:
+          client01: create_file
+          client02: perform_lookups
+        windows_clients:
+          - ip: 10.70.47.29
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
+            password: Samba@123
+          - ip: 10.70.45.192
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
+            password: Samba@123
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+              readonly: true
+
+  - test:
+      name: Create files on windows client 1 and perform file rename from windows client 2
+      desc: Create files on windows client 1 and perform file rename from windows client 2
+      module: smb_clients_operations.py
+      polarion-id: CEPH-83595370
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        windows_client: True
+        mount_point: "Z:"
+        file_count: 3
+        operations:
+          client01: create_file
+          client02: rename_file
+        windows_clients:
+          - ip: 10.70.47.29
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
+            password: Samba@123
+          - ip: 10.70.45.192
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
+            password: Samba@123
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+              readonly: true
+            vfs_objects: acl_xattr
+            map_acl_inherit: yes
+            store_dos_attributes: yes
+
+  - test:
+      name: Create files on windows client 1 and delete from window client 2
+      desc: Create files on windows client 1 and delete from window client 2
+      module: smb_clients_operations.py
+      polarion-id: CEPH-83595372
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        windows_client: True
+        mount_point: "Z:"
+        file_count: 3
+        operations:
+          client01: create_file
+          client02: remove_files
+        windows_clients:
+          - ip: 10.70.47.29
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
+            password: Samba@123
+          - ip: 10.70.45.192
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
+            password: Samba@123
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+              readonly: true
+            vfs_objects: acl_xattr
+            map_acl_inherit: yes
+            store_dos_attributes: yes
+
+  - test:
+      name: Verify changing owner and permission of file using cifs mount
+      desc: Verify changing owner and permission of file using cifs mount
+      module: smb_change_permission.py
+      polarion-id: CEPH-83595847
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cifs_mount_point: "/mnt/smb"
+        system_users:
+          user1: "batman"
+          user2: "superman"
+        file_name: "testfile"
+
+  - test:
+      name: Verify samba share creation with "nfs" earmark subvolume should failed
+      desc: Verify samba share creation with "nfs" earmark subvolume should failed
+      module: smb_deployment_earmark.py
+      polarion-id: CEPH-83599223
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: nfs
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        earmark: nfs
+
+  - test:
+      name: Verify samba multiple share creation with "nfs" earmark subvolume should failed
+      desc: Verify samba multiple share creation with "nfs" earmark subvolume should failed
+      module: smb_deployment_earmark.py
+      polarion-id: CEPH-83599224
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: nfs
+        smb_subvolumes: [sv1, sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1, share2]
+        path: "/"
+        earmark: nfs
+
+  - test:
+      name: Verify samba share creation without any earmark subvolumes should pass
+      desc: Verify samba share creation without any earmark subvolumes should pass
+      module: smb_deployment_earmark.py
+      polarion-id: CEPH-83599225
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+
+  - test:
+      name: Verify samba share creation with "smb" earmark subvolumes should pass
+      desc: Verify samba share creation with "smb" earmark subvolumes should pass
+      module: smb_deployment_earmark.py
+      polarion-id: CEPH-83599226
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        earmark: smb
+
+  - test:
+      name: Verify samba multiple share creation with "smb" earmark subvolumes should pass
+      desc: Verify samba multiple share creation with "smb" earmark subvolumes should pass
+      module: smb_deployment_earmark.py
+      polarion-id: CEPH-83599227
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1, sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1, share2]
+        path: "/"
+        earmark: smb
+
+  - test:
+      name: Verify that the smb cli cluster listing command correctly lists all SMB clusters.
+      desc: Verify that the smb cli cluster listing command correctly lists all SMB clusters.
+      module: smb_cli_support.py
+      polarion-id: CEPH-83605168
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cli_cmd: "cluster ls"
+
+  - test:
+      name: Verify that the smb cli share listing command correctly lists all SMB shares.
+      desc: Verify that the smb cli cluster listing command correctly lists all SMB shares.
+      module: smb_cli_support.py
+      polarion-id: CEPH-83605169
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cli_cmd: "share ls"
+
+  - test:
+      name: Verify that the smb cli show command correctly show SMB resource.
+      desc: Verify that the smb cli show command correctly show SMB resource.
+      module: smb_cli_support.py
+      polarion-id: CEPH-83605170
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cli_cmd: "show"
+        resource_names: "ceph.smb.cluster"
+
+  - test:
+      name: Verify that the smb cli dump cluster-config command correctly give cluster-config.
+      desc: Verify that the smb cli dump cluster-config command correctly give cluster-config.
+      module: smb_cli_support.py
+      polarion-id: CEPH-83605171
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cli_cmd: "dump cluster-config"
+
+  - test:
+      name: Verify that the smb cli dump service-spec command correctly give service-spec details.
+      desc: Verify that the smb cli dump service-spec command correctly give service-spec details.
+      module: smb_cli_support.py
+      polarion-id: CEPH-83605173
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        cli_cmd: "dump service-spec"
