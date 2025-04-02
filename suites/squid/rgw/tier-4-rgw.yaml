@@ -53,6 +53,10 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node4
+                    - node3
+                    - node5
       desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
       module: test_cephadm.py
@@ -89,6 +93,22 @@ tests:
                 - service_type: crash
                   placement:
                     host_pattern: "*"
+          
+  # configuring HAproxy on the client node 'node4' and port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node4:80
+              - node3:80
+              - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
 
   # Bucket policy tests
 
@@ -100,6 +120,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_action.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid conditional in condition blocks
@@ -109,6 +130,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_condition_key.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid effect
@@ -118,6 +140,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_effect.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid key
@@ -127,6 +150,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_key.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid principal
@@ -136,6 +160,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_principal.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid resource
@@ -145,6 +170,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_resource.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid version
@@ -154,6 +180,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_version.yaml
+        run-on-haproxy: true
 
   # Bucket lifecycle tests
 
@@ -239,6 +266,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_csv_depth1.yaml
+        run-on-haproxy: true
 
   - test:
       name: test s3select with depth2 queries on csv objects
@@ -248,6 +276,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_csv_depth2.yaml
+        run-on-haproxy: true
 
   - test:
       name: test s3select with depth1 queries on parquet objects
@@ -257,6 +286,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_parquet_depth1.yaml
+        run-on-haproxy: true
 
   - test:
       name: test s3select with depth2 queries on parquet objects
@@ -266,6 +296,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_parquet_depth2.yaml
+        run-on-haproxy: true
 
   - test:
       name: test s3select with depth1 queries on parquet objects
@@ -275,6 +306,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_parquet_depth1.yaml
+        run-on-haproxy: true
 
   - test:
       name: test s3select with depth2 queries on parquet objects
@@ -284,6 +316,7 @@ tests:
       config:
         script-name: test_s3select.py
         config-file-name: test_s3select_query_gen_parquet_depth2.yaml
+        run-on-haproxy: true
 
   # test MOD hotfix bz: complete and abort multipart upload race causes obj download failure after gc kicks in
 
@@ -295,4 +328,5 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_multipart_upload_complete_abort_race.yaml
+        run-on-haproxy: true
       comments: known issue BZ 2331908
