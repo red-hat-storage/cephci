@@ -84,13 +84,15 @@ def test_io(default_fs, client, fs_util, sv_list, nfs_params):
                 cmd=cmd,
             )
             mnt_path = subvol_path.strip()
+            sv_name = sv["subvol_name"]
+            nfs_export = f"{nfs_params['nfs_export_name']}_{sv_name}"
             mount_params = {
                 "fs_util": fs_util,
                 "client": client,
                 "mnt_path": mnt_path,
                 "fs_name": default_fs,
                 "export_created": 0,
-                "nfs_export_name": nfs_params["nfs_export_name"],
+                "nfs_export_name": nfs_export,
                 "nfs_server": nfs_params["nfs_server"],
                 "nfs_name": nfs_params["nfs_name"],
             }
@@ -196,14 +198,17 @@ def validate_after_recovery(client, file_list, inode_details):
             inode_orig = inode_details[sv_name][dir_path]
             try:
                 out, _ = client.exec_command(sudo=True, cmd=cmd)
+                log.info(out)
                 inode_num, _ = out.split()
-                if int(inode_num) == inode_orig:
+                if int(inode_num) == int(inode_orig):
                     log.info(
                         f"Dir object recovery suceeded,current_inode:{inode_num},old_inode:{inode_orig}"
                     )
                 else:
                     log.error(
-                        "Dir object recovery failed,current_inode:{inode_num},old_inode:{inode_orig}"
+                        "Dir object recovery failed,current_inode:%s,old_inode:%s",
+                        inode_num,
+                        inode_orig,
                     )
             except BaseException as ex:
                 log.info(ex)
