@@ -49,6 +49,10 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node4
+                    - node3
+                    - node5
       desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
       polarion-id: CEPH-83573713

@@ -59,6 +59,8 @@ tests:
                   service_id: rgw.ssl
                   placement:
                     nodes:
+                      - node4
+                      - node3
                       - node5
                   spec:
                     ssl: true
