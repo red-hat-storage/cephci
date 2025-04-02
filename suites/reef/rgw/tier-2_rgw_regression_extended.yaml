@@ -104,7 +104,7 @@ tests:
   - test:
       name: RGW Orphan Utility Validation
       desc: Validates RGW object consistency using the rgw-orphan-list utility.
-      polarion-id: <Your Polarian ID>
+      polarion-id: CEPH-83614243
       module: sanity_rgw.py
       config:
         cephadm: true
