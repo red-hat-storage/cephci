@@ -127,7 +127,6 @@ tests:
       polarion-id: CEPH-11350
       module: sanity_rgw.py
       config:
-        run-on-haproxy: true
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
         run-on-haproxy: true

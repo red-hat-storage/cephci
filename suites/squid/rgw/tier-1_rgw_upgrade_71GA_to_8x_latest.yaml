@@ -58,7 +58,7 @@ tests:
                   nodes:
                     - node4
                     - node3
-                    - node5 
+                    - node5
       desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
       destroy-cluster: false
