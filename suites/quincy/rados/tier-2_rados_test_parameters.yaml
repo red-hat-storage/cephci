@@ -18,6 +18,7 @@ tests:
       desc: Setup phase to deploy the required pre-requisites for running the tests.
       module: install_prereq.py
       abort-on-fail: true
+
   - test:
       abort-on-fail: true
       config:
@@ -60,6 +61,7 @@ tests:
       destroy-cluster: false
       module: test_cephadm.py
       name: Deploy RHCS cluster using cephadm
+
   - test:
       abort-on-fail: true
       config:
@@ -78,6 +80,14 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
   - test:
       name: Ceph paramter checking in 5.x
       desc: MSGRV2 parameter checking in 5.x
@@ -86,6 +96,7 @@ tests:
       config:
         scenario : msgrv2_5x
         ini-file: conf/quincy/rados/test-confs/rados_config_parameters.ini
+
   - test:
       name: Upgrade cluster to latest 6.1 ceph version
       desc: Upgrade cluster to latest version
@@ -99,6 +110,7 @@ tests:
         verify_cluster_health: true
       destroy-cluster: false
       abort-on-fail: true
+
   - test:
       name: Ceph MSGRV2 paramter check in 6.1
       desc: MSGRV2 parameter check in 6.1
@@ -116,6 +128,7 @@ tests:
       config:
         scenario: mclock_sleep
         ini-file: conf/quincy/rados/test-confs/rados_config_parameters.ini
+
   - test:
       name: Mclock default,reservation,limit and weight parameter check
       desc: Mclock default,reservation,limit and weight parameter check

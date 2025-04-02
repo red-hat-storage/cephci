@@ -81,6 +81,13 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
       name: Ceph bluestore_min_alloc_size tests
       desc: Modification of Ceph bluestore_min_alloc_size before OSD deployment
       polarion-id: CEPH-83594019

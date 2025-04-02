@@ -9,6 +9,7 @@ More operations to be added as needed
 
 """
 
+import concurrent.futures as cf
 import datetime
 import json
 import math
@@ -18,6 +19,8 @@ from collections import namedtuple
 
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
+from ceph.rados import utils as osd_utils
+from tests.rados.rados_test_util import wait_for_device_rados
 from utility import utils
 from utility.log import Log
 
@@ -449,7 +452,9 @@ class RadosOrchestrator:
         log.info(f"check_ec: {check_ec}")
 
         try:
-            self.node.shell([cmd], check_status=check_ec, timeout=_timeout)
+            self.client.exec_command(
+                cmd=cmd, check_ec=check_ec, timeout=_timeout, verbose=True
+            )
             if max_objs and verify_stats:
                 exp_objs = org_objs + max_objs
                 assert self.verify_pool_stats(pool_name=pool_name, exp_objs=exp_objs)
@@ -458,9 +463,11 @@ class RadosOrchestrator:
                 new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"][
                     "objects"
                 ]
-                log_info_msg = f"Objs in the {pool_name} before IOPS: {org_objs} \
-                    | Objs in the pool post IOPS: {new_objs} \
-                    | Expected {new_objs} > 0 | Expected {new_objs} > {org_objs}"
+                log_info_msg = (
+                    f"Objs in the {pool_name} before IOPS: {org_objs} "
+                    f"| Objs in the pool post IOPS: {new_objs} "
+                    f"| Expected {new_objs} > 0 | Expected {new_objs} > {org_objs}"
+                )
                 log.info(log_info_msg)
                 assert new_objs > 0
                 assert new_objs > org_objs
@@ -482,7 +489,7 @@ class RadosOrchestrator:
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         while end_time > datetime.datetime.now():
             new_objs = self.get_cephdf_stats(pool_name=pool_name)["stats"]["objects"]
-            log_debug_msg = f"| Objs in the pool post IOPS: {new_objs} | Expected {exp_objs} or {exp_objs + 1}"
+            log_debug_msg = f"Objs in the pool post IOPS: {new_objs} | Expected {exp_objs} or {exp_objs + 1}"
             log.debug(log_debug_msg)
             if (new_objs == exp_objs) or (new_objs == exp_objs + 1):
                 log.info("Stats in the pool are as expected")
@@ -524,7 +531,9 @@ class RadosOrchestrator:
                     check_ec = False
                     cmd = f"{cmd} &> /dev/null &"
                 log.info(f"check_ec: {check_ec}")
-                self.node.shell([cmd], check_status=check_ec, timeout=_timeout)
+                self.client.exec_command(
+                    cmd=cmd, check_ec=check_ec, timeout=_timeout, verbose=True
+                )
             return True
         except Exception as err:
             log.error(f"Error running rados bench write on pool : {pool_name}")
@@ -624,11 +633,9 @@ class RadosOrchestrator:
         ceph_health_status = list(status_report["health"]["checks"].keys())
         if warning in ceph_health_status:
             log.info(
-                f"warning: {warning}  present on the cluster"
-                f"all Generated warnings : {ceph_health_status}"
-            )
-            log.info(
-                f"Warning: {warning} generated on the cluster : {ceph_health_status}"
+                "warning: %s  present on the cluster" "all Generated warnings : %s",
+                warning,
+                ceph_health_status,
             )
             return True
         log.info(
@@ -1194,6 +1201,147 @@ class RadosOrchestrator:
         log.error(f"Pool:{pool} could not be deleted on cluster")
         return False
 
+    def create_fragmented_osds_on_pool(
+        self,
+        pool: str = None,
+        required_fragmentation: float = 0.03,
+        timeout: int = 12000,
+        num_threads: int = 25,
+    ) -> bool:
+        """
+        Method to add fragmentation on OSDs of the cluster by writing objects at various offsets. This method writes
+        500 objects with offsets in each iteration and checks if desired level of fragmentation is achieved.
+
+        Args:
+            pool: name of the pool on which the Objects with offset need to be written
+            required_fragmentation: desired level of fragmentation on the cluster to be reached
+            timeout: timeout for the method
+            num_threads: number of threads to use. Note: Too many can cause host OOM kill
+
+        Return:
+            True -> Desired level of fragmentation achieved on the cluster
+            False -> Desired level of fragmentation not achieved on the cluster
+        """
+
+        def create_objects(pool_name, obj_filename, start, end) -> bool:
+            """
+            Writes objects at different offsets to introduce fragmentation.
+            """
+            for obj in range(start, end):
+                for i in range(0, 15 * 60 * 1024, 60 * 1024):
+                    try:
+                        cmd = f"rados -p {pool_name} --offset {i} put Object-{obj} {obj_filename}"
+                        self.client.exec_command(sudo=True, cmd=cmd, timeout=200)
+                    except Exception as err:
+                        log.error(
+                            "Error writing object %s at offset %s: %s", obj, i, err
+                        )
+                        return False
+            log.debug("Wrote objects in range: %s - %s", start, end)
+            return True
+
+        cluster_osds = self.get_osd_list(status="UP")
+        for osd_id in cluster_osds:
+            init_frag_scores = {osd_id: self.get_fragmentation_score(osd_id=osd_id)}
+
+        for osd_id, score in init_frag_scores.items():
+            log.debug("Initial fragmentation score on OSD %s: %s", osd_id, score)
+
+        if pool:
+            if not self.get_pool_details(pool=pool):
+                log.error("Pool %s not found.", pool)
+                return False
+        else:
+            pool = "test_frag_pool"
+            self.create_pool(pool_name=pool, bulk=True)
+
+        log.info(
+            "Starting object writes to introduce %.2f%% fragmentation on OSDs",
+            required_fragmentation * 100,
+        )
+
+        obj_file = "/tmp/120k_obj"
+        self.client.exec_command(cmd=f"fallocate -l 120K {obj_file}", check_ec=True)
+
+        pool_size = len(self.get_pg_acting_set(pool_name=pool))
+        log.debug(
+            "Pool size detected: %s. Targeting fragmentation for at least %s OSDs.",
+            pool_size,
+            pool_size,
+        )
+
+        obj_start = 0
+        iteration = 0
+        fragmented_osds = set()
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+
+        while datetime.datetime.now() < end_time:
+            obj_end = obj_start + (num_threads * 20)
+            step = (obj_end - obj_start) // num_threads
+            step = max(step, 1)
+
+            log.info(
+                "Iteration %d: Writing objects from %s to %s",
+                iteration,
+                obj_start,
+                obj_end,
+            )
+            log.debug(
+                "Number of steps in this iteration: %d, Each thread handles ~%d objects.",
+                num_threads,
+                step,
+            )
+
+            with cf.ThreadPoolExecutor(max_workers=num_threads) as executor:
+                futures = {
+                    executor.submit(
+                        create_objects,
+                        pool,
+                        obj_file,
+                        start,
+                        min(start + step, obj_end),
+                    ): start
+                    for start in range(obj_start, obj_end, step)
+                }
+
+                for future in cf.as_completed(futures):
+                    if not future.result():
+                        log.error("Object creation failed.")
+                        return False
+
+                for osd_id in cluster_osds:
+                    if osd_id in fragmented_osds:
+                        continue
+                    frag_score = self.get_fragmentation_score(osd_id=osd_id)
+                    log.debug(
+                        "OSD %s fragmentation after iteration %d: %.2f",
+                        osd_id,
+                        iteration,
+                        frag_score,
+                    )
+                    if frag_score >= required_fragmentation:
+                        fragmented_osds.add(osd_id)
+                        if len(fragmented_osds) >= pool_size:
+                            log.info(
+                                "Fragmentation target : %s reached for %s OSDs. List of OSDs : %s",
+                                frag_score * 100,
+                                pool_size,
+                                fragmented_osds,
+                            )
+                            time.sleep(120)
+                            return True
+            total_written = obj_end - obj_start
+            log.info(
+                "Iteration %d complete. Total objects written in this step: %d",
+                iteration,
+                total_written,
+            )
+            obj_start = obj_end
+            iteration += 1
+
+        log.error("Timeout! Could not achieve desired fragmentation.")
+        return False
+
     def enable_file_logging(self) -> bool:
         """
         Enables the cluster logging into files at var/log/ceph and checks file permissions
@@ -1649,6 +1797,9 @@ class RadosOrchestrator:
     ) -> str:
         """
         Retrieve logs for the requested daemon using journalctl command
+
+        Note: make sure to collect the time from a cluster node.
+        eg :  time, _ = installer_node.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
         Args:
             start_time: time to start reading the journalctl logs - format ('2022-07-20 09:40:10')
             end_time: time to stop reading the journalctl logs - format ('2022-07-20 10:58:49')
@@ -1907,9 +2058,12 @@ class RadosOrchestrator:
             f"ceph orch ps --daemon_type {daemon_type} "
             f"--daemon_id {daemon_id} --refresh"
         )
-        orch_ps_out = self.run_ceph_command(cmd=cmd_)[0]
+        orch_ps_out = self.run_ceph_command(cmd=cmd_)
         log.debug(orch_ps_out)
-        return orch_ps_out["status"], orch_ps_out["status_desc"] if orch_ps_out else ()
+        if orch_ps_out:
+            return orch_ps_out[0]["status"], orch_ps_out[0]["status_desc"]
+
+        return ()
 
     def daemon_check_post_tests(
         self, pre_test_orch_ps: dict, pre_crash_report: list = None
@@ -3957,7 +4111,7 @@ EOF"""
             log.error(f"Unable to start the OSD : {target_osd}")
             return None
         log.info(f"Performing the deep-scrub on the pg-{pg_id}")
-        if not self.start_check_deep_scrub_complete(pg_id=pg_id, wait_time=1000):
+        if not self.start_check_deep_scrub_complete(pg_id=pg_id, wait_time=3600):
             log.debug(f"deep-scrubbing could not be completed on PG : {pg_id}")
             raise Exception("PG not deep-scrubbed error")
         log.debug(f"Completed deep-scrubbing the pg : {pg_id}")
@@ -4463,6 +4617,11 @@ EOF"""
              False, if unmanaged flag is not set
         """
 
+        # the command "orch set-unmanaged" is not available below Reef
+        if self.rhbuild and self.rhbuild.split(".")[0] < "7":
+            return self.set_service_managed_type(
+                service_type=service_type, unmanaged=True
+            )
         cmd_set_unmanaged_flag = f"ceph orch set-unmanaged {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_unmanaged_flag)
         base_cmd = "ceph orch ls"
@@ -4490,6 +4649,11 @@ EOF"""
             False, if unmanaged flag is not unset
         """
 
+        # the command "orch set-managed" is not available below Reef
+        if self.rhbuild and self.rhbuild.split(".")[0] < "7":
+            return self.set_service_managed_type(
+                service_type=service_type, unmanaged=False
+            )
         cmd_set_managed_flag = f"ceph orch set-managed {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
         base_cmd = "ceph orch ls"
@@ -4715,18 +4879,18 @@ EOF"""
 
         cmd_export = f"ceph orch ls {service_type} --export"
         out = self.run_ceph_command(cmd=cmd_export, client_exec=True)
-        for osd_service in out:
+        for _service in out:
             if unmanaged:
                 log.debug(
-                    f"Setting the {service_type} service as unmanaged by cephadm. current status : {out}"
+                    f"Setting the {_service} service as unmanaged by cephadm. current status : {out}"
                 )
-                osd_service["unmanaged"] = "true"
+                _service["unmanaged"] = True
             else:
                 log.debug(
-                    f"Setting the {service_type} service as unmanaged by cephadm. current status : {out}"
+                    f"Setting the {_service} service as managed by cephadm. current status : {out}"
                 )
-                osd_service["unmanaged"] = "false"
-            json_out = json.dumps(osd_service)
+                _service.pop("unmanaged", "key not found")
+            json_out = json.dumps(_service)
             # Adding the spec rules into the file
             cmd = f"echo '{json_out}' > {file_name}"
             self.client.exec_command(cmd=cmd, sudo=True)
@@ -4736,8 +4900,8 @@ EOF"""
             self.client.exec_command(cmd=apply_cmd, sudo=True)
             time.sleep(10)
         out = self.list_orch_services(service_type=service_type, export=True)
-        for osd_service in out:
-            status = osd_service.get("unmanaged", False)
+        for _service in out:
+            status = _service.get("unmanaged", False)
             if status == "false":
                 unmanaged_check = False
             else:
@@ -4745,7 +4909,7 @@ EOF"""
 
             if unmanaged_check != unmanaged:
                 log.error(
-                    f"{service_type} Service with {osd_service['service_id']}not unmanaged={unmanaged} state. Fail"
+                    f"{service_type} Service with {_service['service_id']}not unmanaged={unmanaged} state. Fail"
                 )
                 return False
         log.info(f" All {service_type} Service in unmanaged={unmanaged} state. Pass")
@@ -4901,3 +5065,38 @@ EOF"""
         else:
             log.error(f"The {label} not added to the {host_name} node ")
             return False
+
+    def switch_osd_device_type(self, osd_id: str, rota_val: int, redeploy: bool = True):
+        """
+        Method to fake the OSD underlying device class by changing the
+        queue/rotational value in /sys/block/<device> and re-deploy OSD
+        Args:
+            osd_id: ID of the OSD
+            rota_val: underlying device type's rotational value (0 / 1)
+            redeploy: flag to control redeployment of OSD
+        Returns:
+            None if pass | raise exception if failure
+        """
+        # find the osd device from metadata
+        osd_metadata = self.get_daemon_metadata(daemon_type="osd", daemon_id=osd_id)
+
+        # get osd device path and OSD host
+        osd_device = osd_metadata["devices"]
+        osd_host = self.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+
+        _cmd = f"echo {rota_val} > /sys/block/{osd_device}/queue/rotational"
+        osd_host.exec_command(cmd=_cmd, sudo=True)
+
+        if redeploy:
+            # re-deploy the input OSD
+            osd_utils.set_osd_out(self.ceph_cluster, osd_id=osd_id)
+            osd_utils.osd_remove(self.ceph_cluster, osd_id=osd_id, zap=True, force=True)
+
+            # set OSD service to managed
+            self.set_service_managed_type(service_type="osd", unmanaged=False)
+
+            # wait for OSD to be re-deployed
+            if not wait_for_device_rados(host=osd_host, osd_id=osd_id, action="add"):
+                _err = f"OSD {osd_id} did not get redeployed within timeout"
+                log.error(_err)
+                raise Exception(_err)

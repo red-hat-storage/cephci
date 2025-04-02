@@ -74,7 +74,7 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
                 service_url=ibmc["service-url"],
                 node=instance,
             )
-            p.spawn(vsi.delete, ibmc["zone_name"])
+            p.spawn(vsi.delete, ibmc["zone_name"], ibmc["dns_svc_id"])
             counter += 1
 
     log.info(f"Done cleaning up nodes with pattern {pattern}")
@@ -158,6 +158,8 @@ def create_ibmc_ceph_nodes(
     params["zone_name"] = ibm_cred["zone_name"]
     params["vpc_name"] = ibm_cred["vpc_name"]
     params["zone_id_model_name"] = ibm_cred["zone_id_model_name"]
+    params["resource_group_id"] = ibm_cred["resource_group_id"]
+    params["dns_svc_id"] = ibm_cred["dns_svc_id"]
 
     if inventory.get("instance").get("create"):
         if ceph_cluster.get("image-name"):
@@ -257,6 +259,8 @@ def setup_vm_node_ibm(node, ceph_nodes, **params):
             group_access=params["group_access"],
             zone_name=params["zone_name"],
             zone_id_model_name=params["zone_id_model_name"],
+            resource_group_id=params["resource_group_id"],
+            dns_svc_id=params["dns_svc_id"],
             size_of_disks=params.get("size-of-disks", 0),
             no_of_volumes=params.get("no-of-volumes", 0),
             userdata=params.get("cloud-data", ""),
