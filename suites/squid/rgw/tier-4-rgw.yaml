@@ -93,7 +93,7 @@ tests:
                 - service_type: crash
                   placement:
                     host_pattern: "*"
-     
+
   # configuring HAproxy on the client node 'node4' and port '5000'
   - test:
       abort-on-fail: true
