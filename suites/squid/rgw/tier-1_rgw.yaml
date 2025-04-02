@@ -55,6 +55,10 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node4
+                    - node3
+                    - node5
       desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
       polarion-id: CEPH-83573713
@@ -85,6 +89,8 @@ tests:
           - node6
         rgw_endpoints:
           - node5:80
+          - node4:80
+          - node3:80
       desc: "Configure HAproxy"
       module: haproxy.py
       name: "Configure HAproxy"
