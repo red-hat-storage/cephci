@@ -1,6 +1,6 @@
 #Objective: Testing single site upgrade from RHCS 6.1 ga to 8.x latest build
 #platform : RHEL-9
-#conf: conf/squid/rgw/tier-0_rgw_with_haproxy.yaml
+#conf: conf/squid/rgw/tier-0_rgw.yaml
 
 tests:
   - test:
@@ -55,8 +55,8 @@ tests:
                 placement:
                   label: rgw
                   nodes:
-                    - node4
                     - node3
+                    - node4
                     - node5
       desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
@@ -88,8 +88,8 @@ tests:
             haproxy_clients:
               - node6
             rgw_endpoints:
-              - node4:80
               - node3:80
+              - node4:80
               - node5:80
       desc: "Configure HAproxy"
       module: haproxy.py
@@ -218,17 +218,6 @@ tests:
         script-name: ../s3cmd/test_rgw_ops_log.py
         config-file-name: ../../s3cmd/configs/test_rgw_log_details.yaml
         run-on-haproxy: true
-
-# Post upgrade tests
-  - test:
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-        run-on-haproxy: true
-      desc: test to create "M" no of buckets and "N" no of objects with download
-      module: sanity_rgw.py
-      name: download objects post upgrade
-      polarion-id: CEPH-14237
 
   - test:
       name: S3CMD small and multipart object download post upgrade

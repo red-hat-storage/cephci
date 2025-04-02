@@ -45,8 +45,8 @@ tests:
                 placement:
                   label: rgw
                   nodes:
-                    - node4
                     - node3
+                    - node4
                     - node5
       desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
