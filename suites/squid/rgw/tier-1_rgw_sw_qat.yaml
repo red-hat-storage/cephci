@@ -53,8 +53,8 @@ tests:
                 placement:
                   label: rgw
                   nodes:
-                    - node4
                     - node3
+                    - node4
                     - node5
       desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
@@ -88,8 +88,8 @@ tests:
             haproxy_clients:
               - node6
             rgw_endpoints:
-              - node4:80
               - node3:80
+              - node4:80
               - node5:80
       desc: "Configure HAproxy"
       module: haproxy.py
