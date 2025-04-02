@@ -2509,6 +2509,7 @@ class RadosOrchestrator:
         num_copies_per_site: int = 2,
         total_buckets: int = 3,
         req_peering_buckets: int = 2,
+        create_pool: bool = True,
     ) -> bool:
         """Method to create a replicated pool and enable stretch mode on the pool
 
@@ -2526,13 +2527,14 @@ class RadosOrchestrator:
                 note: In most cases, total_buckets = num_sites. this changes when CU does not want each site to
                         hold data copy
             req_peering_buckets: number of "peer_bucket_barrier" buckets to perform successful peering process
+            create_pool: Checks if pool is present and creates if not
         Returns:
             bool. Pass -> True, Fail -> False
         """
 
         # Checking if test pool exists. if not, creating a new pool and continuing workflow
         pools = self.list_pools()
-        if pool_name not in pools:
+        if pool_name not in pools and create_pool:
             if not self.create_pool(pool_name=pool_name):
                 log.error("Failed to create pool : " + pool_name)
                 return False
@@ -2678,11 +2680,12 @@ step emit"""
         )
 
         try:
-            self.run_ceph_command(cmd=cmd)
-            time.sleep(5)
+            out, _ = self.client.exec_command(cmd=cmd, sudo=True, check_ec=True)
+            log.debug(out)
+            time.sleep(2)
             log.debug(f"Checking if the stretch mode op the pool : {pool_name}")
             cmd = f"ceph osd pool stretch show {pool_name}"
-            out = self.run_ceph_command(cmd=cmd)
+            out, _ = self.client.exec_command(cmd=cmd, sudo=True, check_ec=True)
             log.debug(out)
             return True
         except Exception as err:
@@ -5104,3 +5107,26 @@ EOF"""
                 _err = f"OSD {osd_id} did not get redeployed within timeout"
                 log.error(_err)
                 raise Exception(_err)
+
+    def delete_crush_rule(self, rule_name: str) -> bool:
+        """
+        Method used to delete the crush rules on the cluster
+        Args:
+            rule_name: name of the crush rule to be deleted
+        Returns: True -> pass, False -> fail
+        """
+        log.info("Deleting the crush rule passed %s", rule_name)
+        rule_list = self.get_crush_rule_names()
+        if rule_name in rule_list:
+            try:
+                cmd = f"ceph osd crush rule rm {rule_name}"
+                self.client.exec_command(cmd=cmd, sudo=True)
+                time.sleep(1)
+            except Exception as err:
+                log.info(
+                    "Crush rule : %s could not be deleted.\n Error : %s\n",
+                    rule_name,
+                    err,
+                )
+                return False
+        return True if rule_name not in self.get_crush_rule_names() else False
