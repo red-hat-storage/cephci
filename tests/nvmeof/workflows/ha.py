@@ -4,6 +4,7 @@ NVMe High Availability Module.
 
 import json
 import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
 from ceph.ceph import CommandFailed
@@ -941,6 +942,142 @@ class HighAvailability:
             f"All namespaces for the ana-group-id {ana_id} are optimized for all \
             initiators for gateway {gateway.daemon_name}"
         )
+
+    def validate_init_namespace_masking(
+        self,
+        command,
+        init_nodes,
+        expected_visibility,
+        validate_config=None,
+    ):
+        """Validate that the namespace visibility is correct from all initiators."""
+        for node in init_nodes:
+            initiator_node = get_node_by_id(self.cluster, node)
+            client = NVMeInitiator(initiator_node, self.gateways[0])
+            client.disconnect_all()  # Reconnect NVMe targets
+            client.connect_targets(config={"nqn": "connect-all"})
+            args = validate_config["args"]
+            subsystem_to_nsid = {args["nsid"]: args["sub_num"]}
+            init_node = args.get("init_node")
+            serial_to_namespace = defaultdict(list)
+
+            @retry(
+                IOError,
+                tries=4,
+                delay=3,
+            )
+            def execute_nvme_command(client_node):
+                devices_output, _ = client_node.exec_command(
+                    cmd="nvme list --output-format=json", sudo=True
+                )
+                return devices_output
+
+            devices_json = json.loads(execute_nvme_command(initiator_node))
+            devices = devices_json.get("Devices", [])
+            if not devices:
+                LOG.info(f"No devices found on node {node}")
+                continue
+
+            for device in devices:
+                key = device["NameSpace"]
+                value = int(device["SerialNumber"])
+                serial_to_namespace[key].append(value)
+
+            ns_to_check, subsystem_to_check = next(iter(subsystem_to_nsid.items()))
+            LOG.info(f"{subsystem_to_nsid} : {serial_to_namespace}")
+
+            def subsystem_nsid_found(dictionary, key, value):
+                return key in dictionary and value in dictionary[key]
+
+            ns_subsys_found = subsystem_nsid_found(
+                serial_to_namespace, ns_to_check, subsystem_to_check
+            )
+
+            if command == "add_host":
+                if node == init_node:
+                    if ns_subsys_found:
+                        LOG.info(
+                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                        )
+                    else:
+                        LOG.error(
+                            f"Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                        )
+                        raise Exception(
+                            f"Expected Namespace:Subsystem pair {subsystem_to_nsid} on {node} but did not find it"
+                        )
+                else:
+                    if ns_subsys_found:
+                        LOG.error(
+                            f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                        )
+                        raise Exception(
+                            f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
+                        )
+                    else:
+                        LOG.info(
+                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                        )
+            elif command == "del_host":
+                if node == init_node:
+                    if ns_subsys_found:
+                        LOG.error(
+                            f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                        )
+                        raise Exception(
+                            f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
+                        )
+                    else:
+                        LOG.info(
+                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                        )
+                else:
+                    if ns_subsys_found:
+                        LOG.error(
+                            f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                        )
+                        raise Exception(
+                            f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
+                        )
+                    else:
+                        LOG.info(
+                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                        )
+            else:
+                if (
+                    expected_visibility == "False"
+                ):  # If expected visibility is False, devices should be empty
+                    if devices_json.get("Devices"):  # Check if Devices is not empty
+                        LOG.error(
+                            f"Expected no devices for initiator {node}, but found: {devices_json}"
+                        )
+                        raise Exception(
+                            f"Initiator {node} has devices when NS visibility is restricted"
+                        )
+                    else:
+                        LOG.info(f"Validated - no devices found on {node}")
+                elif (
+                    expected_visibility == "True"
+                ):  # If expected visibility is True, devices should not be empty
+                    if not devices_json.get("Devices"):
+                        LOG.error(
+                            f"Expected devices to be visible for node {node}, but found none."
+                        )
+                        raise Exception(
+                            f"Initiator {node} has no devices when NS visibility is restricted"
+                        )
+                    else:
+                        # Log Namespace and SerialNumber from each device
+                        for device in devices_json.get("Devices", []):
+                            namespace = device.get("NameSpace", None)
+                            serial_number = device.get("SerialNumber", None)
+                            LOG.info(
+                                f"Namespace: {namespace}, SerialNumber: {serial_number}"
+                            )
+
+                        LOG.info(
+                            f"Validated - {len(devices_json['Devices'])} devices found on {node}"
+                        )
 
     def validate_namespace_masking(
         self,

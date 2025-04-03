@@ -237,6 +237,10 @@ class RefInodeUtils(object):
         client.exec_command(sudo=True, cmd=f'echo "{content}" >> {file_path}')
         log.info(f"Appended content to file: {file_path}")
 
+    def rename_file(self, client, old_path, new_path):
+        client.exec_command(sudo=True, cmd=f"mv {old_path} {new_path}")
+        log.info(f"Renamed file from {old_path} to {new_path}")
+
     def create_snapshot_on_dir(self, client, dir_path, snapshot_name):
         snap_path = f"{dir_path}/.snap/{snapshot_name}"
         client.exec_command(sudo=True, cmd=f"mkdir -p {snap_path}")
@@ -701,3 +705,57 @@ class RefInodeUtils(object):
         except Exception as e:
             log.error(f"Exception while creating hard link: {e}")
             return False
+
+    def allow_referent_inode_feature_enablement(self, clients, fs_name, enable=False):
+        """
+        Validate if 'allow_referent_inodes' is enabled or disabled.
+        If disabled and enable=True, enable it and validate again.
+
+        :param clients: Ceph client object to execute commands
+        :param fs_name: Name of the Ceph filesystem
+        :param enable: Boolean flag to enable the feature if disabled
+        """
+        out, _ = clients.exec_command(
+            sudo=True,
+            cmd=f"ceph fs get {fs_name} -f json",
+            check_ec=False,
+        )
+
+        json_data = json.loads(out.strip())
+        allow_referent_inodes = json_data["mdsmap"]["flags_state"].get(
+            "allow_referent_inodes", False
+        )
+
+        if allow_referent_inodes:
+            log.info(
+                f"'allow_referent_inodes' is already enabled for filesystem {fs_name}."
+            )
+        else:
+            log.info(f"'allow_referent_inodes' is disabled for filesystem {fs_name}.")
+            if enable:
+                log.info(f"Enabling 'allow_referent_inodes' for filesystem {fs_name}.")
+                clients.exec_command(
+                    sudo=True,
+                    cmd=f"ceph fs set {fs_name} allow_referent_inodes true",
+                    check_ec=True,
+                )
+
+                # Revalidate after enabling
+                out, _ = clients.exec_command(
+                    sudo=True,
+                    cmd=f"ceph fs get {fs_name} -f json",
+                    check_ec=False,
+                )
+
+                json_data = json.loads(out.strip())
+                if json_data["mdsmap"]["flags_state"].get(
+                    "allow_referent_inodes", False
+                ):
+                    log.info(
+                        f"Successfully enabled 'allow_referent_inodes' for filesystem {fs_name}."
+                    )
+                else:
+                    log.error(
+                        f"Failed to enable 'allow_referent_inodes' for filesystem {fs_name}."
+                    )
+                    return 1

@@ -7,7 +7,7 @@ globals:
       name: ceph
       node1:
         image-name:
-          openstack: RHEL-9.2.0-x86_64-ga-latest
+          openstack: RHEL-9.5.0-x86_64-ga-latest
         role:
           - _admin
           - installer
@@ -24,7 +24,7 @@ globals:
         disk-size: 15
       node2:
         image-name:
-          openstack: RHEL-8.7.0-x86_64-ga-latest
+          openstack: RHEL-8.10.0-x86_64-ga-latest
         role:
           - osd
           - mon
@@ -36,7 +36,7 @@ globals:
         disk-size: 15
       node3:
         image-name:
-          openstack: RHEL-8.7.0-x86_64-ga-latest
+          openstack: RHEL-8.10.0-x86_64-ga-latest
         role:
           - mon
           - mgr
@@ -47,12 +47,12 @@ globals:
         disk-size: 15
       node4:
         image-name:
-          openstack: RHEL-8.7.0-x86_64-ga-latest
+          openstack: RHEL-8.10.0-x86_64-ga-latest
         role:
           - mds
           - rgw
       node5:
         image-name:
-          openstack: RHEL-8.7.0-x86_64-ga-latest
+          openstack: RHEL-8.10.0-x86_64-ga-latest
         role:
           - client

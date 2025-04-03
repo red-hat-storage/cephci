@@ -242,7 +242,8 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
 
             Supported keys:
               upgrade: boolean # to upgrade cephadm RPM package
-              gpgcheck: boolean
+              nogpgcheck: boolean
+              upgrade_client: boolean # to upgrade ceph client RPM packages (default: true)
 
 
         :Note: At present, they are prefixed with -- hence use long options
@@ -251,22 +252,31 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
         cmd = "yum install cephadm -y"
 
         if kwargs.get("nogpgcheck", True):
-            cmd += " --nogpghceck"
+            cmd += " --nogpgcheck"
 
-        for node in self.cluster.get_nodes(ignore="client"):
-            if self.config.get("ibm_build"):
-                setup_ibm_licence(node, build_type=None)
-            node.exec_command(
-                sudo=True,
-                cmd="yum install cephadm -y --nogpgcheck",
-                long_running=True,
-            )
+        nodes = self.cluster.get_nodes(ignore="client")  # list of only cluster nodes
+        if kwargs.get("upgrade", False):
+            if kwargs.get("upgrade_client", True):
+                nodes = self.cluster.get_nodes()  # list of all nodes, includes clients
+            for node in nodes:
+                if self.config.get("ibm_build"):
+                    setup_ibm_licence(node, build_type=None)
+                node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
+                node.exec_command(sudo=True, cmd="yum update --nogpgcheck -y ceph*")
 
-            if kwargs.get("upgrade", False):
-                node.exec_command(sudo=True, cmd="yum update metadata")
-                node.exec_command(sudo=True, cmd="yum update -y cephadm")
+                node.exec_command(cmd="rpm -qa | grep ceph")
 
-            node.exec_command(cmd="rpm -qa | grep cephadm")
+        else:
+            for node in nodes:
+                if self.config.get("ibm_build"):
+                    setup_ibm_licence(node, build_type=None)
+                node.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                    long_running=True,
+                )
+
+                node.exec_command(cmd="rpm -qa | grep cephadm")
 
     def get_cluster_state(self, commands):
         """
