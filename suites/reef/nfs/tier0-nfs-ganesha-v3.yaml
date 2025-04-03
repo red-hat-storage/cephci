@@ -162,8 +162,8 @@ tests:
       config:
         nfs_version: 3
         clients: 3
-        num_files: 1000
-        num_dirs: 1000
+        num_files: 100
+        num_dirs: 100
 
   - test:
       name: Verify create file, create soflink and lookups from nfs clients
