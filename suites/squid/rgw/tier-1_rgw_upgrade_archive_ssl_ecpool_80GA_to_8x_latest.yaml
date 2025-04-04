@@ -56,13 +56,13 @@ tests:
                   command: shell
               - config:
                   args:
-                    - "ceph osd pool create secondary.rgw.buckets.data 32 32"
+                    - "ceph osd pool create primary.rgw.buckets.data 32 32"
                     - "erasure rgwec01"
                   command: shell
               - config:
                   args:
                     - "ceph osd pool application enable"
-                    - "secondary.rgw.buckets.data rgw"
+                    - "primary.rgw.buckets.data rgw"
                   command: shell
               - config:
                   command: apply
@@ -202,13 +202,13 @@ tests:
                   command: shell
               - config:
                   args:
-                    - "ceph osd pool create secondary.rgw.buckets.data 32 32"
+                    - "ceph osd pool create archive.rgw.buckets.data 32 32"
                     - "erasure rgwec01"
                   command: shell
               - config:
                   args:
                     - "ceph osd pool application enable"
-                    - "secondary.rgw.buckets.data rgw"
+                    - "archive.rgw.buckets.data rgw"
                   command: shell
               - config:
                   command: apply
