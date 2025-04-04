@@ -51,17 +51,27 @@ def run(ceph_cluster, **kw):
         negative_scenarios = config.get("negative_scenarios", False)
         scale_up = config.get("pool_scale_up", True)
         scale_down = config.get("pool_scale_down", False)
+        pool_names = []
 
         for each_pool in pools:
             cr_pool = each_pool["create_pool"]
+            log.debug("Creating pool : %s", cr_pool["pool_name"])
+            pool_names.append(cr_pool["pool_name"])
             if cr_pool.get("pool_type", "replicated") == "erasure":
+                log.debug("Creating EC pool : %s", cr_pool["pool_name"])
                 method_should_succeed(
                     rados_obj.create_erasure_pool, name=cr_pool["pool_name"], **cr_pool
                 )
             else:
+                log.debug("Creating replicated pool : %s", cr_pool["pool_name"])
                 method_should_succeed(rados_obj.create_pool, **cr_pool)
-            method_should_succeed(rados_obj.bench_write, max_objs=500, **cr_pool)
-        log.info("Completed creating pools and writing test data into the pools")
+
+            method_should_succeed(rados_obj.bench_write, max_objs=200, **cr_pool)
+        log.info(
+            "Completed creating pools and writing test data into the pools\n Pools : %s",
+            pool_names,
+        )
+
         log.debug(
             "Checking the scores on each pool on the cluster, if the pool is replicated pool"
         )
@@ -84,7 +94,11 @@ def run(ceph_cluster, **kw):
             f"require_min_compat_client before starting the tests is {min_client_version}"
         )
 
-        if negative_scenarios:
+        # Added new check before beginning the -ve scenarios.
+        # Checking if there are any pg_upmap_items in the OSD map, as if there is an item,
+        # Min compact client for cluster cannot be updated unless the entries are removed from the cluster.
+        osd_dump = rados_obj.run_ceph_command(cmd="ceph osd dump")
+        if negative_scenarios and not osd_dump["pg_upmap_primaries"]:
             log.debug("Starting with -ve scenario in online reads balancer tests")
             failed = False
             try:
@@ -293,6 +307,31 @@ def run(ceph_cluster, **kw):
                     "Not failing the test"
                 )
 
+        log.info(
+            "Proceeding to delete pools : %s and "
+            "checking if the corresponding pg-primary entries are removed as well",
+            pool_names,
+        )
+
+        for pool in pool_names:
+            if not rados_obj.delete_pool(pool=pool):
+                log.error("Could not delete pool : %s", pool)
+                raise Exception("Pool not deleted error")
+            log.info(
+                "pool deleted  : %s, sleeping for 5 sec and checking for pg-primary entries in osd_map",
+                pool,
+            )
+            time.sleep(5)
+            pool_id = rados_obj.get_pool_id(pool_name=pool)
+            out = rados_obj.run_ceph_command(cmd="ceph osd dump")
+            for item in out["pg_upmap_primaries"]:
+                if int(pool_id) == int(item["pgid"].split(".")[0]):
+                    log.error("Could not delete pg-primary entries for pool : %s", pool)
+                    raise Exception("pg-primary entries not deleted error")
+                log.info(
+                    "All pg-primary entries for pool %s deleted from osd map", pool
+                )
+
         log.info("Completed reads balancing scenarios")
         return 0
 
@@ -306,7 +345,7 @@ def run(ceph_cluster, **kw):
         log.info("\n\n\nIn the finally block of Online reads balancer tests\n\n\n")
         rados_obj.rados_pool_cleanup()
         rados_obj.enable_balancer(balancer_mode="upmap")
-        time.sleep(60)
+        time.sleep(10)
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution

@@ -106,6 +106,13 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
       name: Automatic trimming of osdmaps
       desc: check for periodic trimming of osdmaps
       module: test_osdmap_trim.py
@@ -189,3 +196,4 @@ tests:
           pg_num: 128
           pgp_num: 128
       desc: Perform OSD compaction with & without failures
+      comments: regression Bug in 8.1 - 2351352

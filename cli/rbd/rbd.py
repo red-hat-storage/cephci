@@ -443,3 +443,16 @@ class Rbd(Cli):
         cmd = f"ceph osd blocklist rm {blocklist_ip_spec}"
 
         return self.execute_as_sudo(cmd=cmd)
+
+    def get_raw_file_size(self, raw_file_path):
+        """
+        This method is used get size of raw file format
+        Args:
+          kw(dict): Key/value pairs that needs to be provided to the installer
+          Example:
+            Supported keys:
+                raw_file_path(str) : absolute path of the file
+        """
+        cmd = f"ls -lh {raw_file_path}"
+
+        return self.execute(cmd=cmd)

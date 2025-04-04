@@ -71,11 +71,21 @@ tests:
       name: configure client
 
   - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
       name: Test BucketNotification with users in same tenant and different tenant
       desc: BucketNotification with users in same tenant and different tenant
       polarion-id: CEPH-11204
       module: sanity_rgw.py
-      comments: known issue (bz-2309013)
       config:
         run-on-rgw: true
         extra-pkgs:
@@ -235,6 +245,8 @@ tests:
         commands:
           - "radosgw-admin account create --account-id RGW22222222222222222 --account-name Account2 --email account2@ceph.com"
           - "radosgw-admin account create --account-id RGW11111111111111111 --account-name Account1  --email account1@ceph.com"
+          - "radosgw-admin user create --account-id RGW11111111111111111 --uid testacct1root --account-root --display-name 'Account1Root' --access-key  AAAAAAAAAAAAAAAAAAaa --secret aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          - "radosgw-admin user create --account-id RGW22222222222222222 --uid testacct2root --account-root --display-name 'Account2Root' --access-key BBBBBBBBBBBBBBBBBBbb --secret bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
           - "radosgw-admin zone modify --enable-feature notification_v2"
           - "radosgw-admin zonegroup modify --enable-feature notification_v2"
           - "ceph orch restart rgw.rgw.1"
@@ -309,12 +321,11 @@ tests:
       name: Test Tags added during multipart upload are retrievable
       desc: Test Tags added during multipart upload are retrievable
       polarion-id: CEPH-83604857
-      comments: Known issue BZ-2336076 targeted to 8.0z2, BZ-2323604 targeted to 8.1
+      comments: Known issue BZ-2323604 targeted to 8.1
       module: sanity_rgw.py
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_multipart_upload_with_tagging.yaml
-
 
   # test customer RFE: Public access block
 
@@ -360,3 +371,33 @@ tests:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_public_access_block_restricted_public_buckets.yaml
       comments: known issue - Bug 2344730
+
+  - test:
+      name: Dynamic Resharding tests without bucket delete
+      desc: Resharding test - dynamic without bucket delete
+      polarion-id: CEPH-83571740 # also applies to ceph-11479, ceph-11477
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Manual Resharding tests without bucket delete
+      desc: Resharding test - manual without bucket delete
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_manual_resharding_without_bucket_delete.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: Test large omap creation and clearance
+      desc: Test large omap creation and clearance
+      polarion-id: CEPH-83591446
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_large_omap.py
+        config-file-name: ../../s3cmd/configs/test_large_omap_clearance_brown_field_post_upgrade.yaml
+        run-on-haproxy: true

@@ -105,6 +105,7 @@ class FsUtils(object):
                 "gcc",
                 "python3-devel",
                 "git",
+                "lua",
             ]
             if build.endswith("7") or build.startswith("3"):
                 pkgs.extend(
@@ -1121,6 +1122,7 @@ class FsUtils(object):
             *args:
                 umount : if this argument is passed this will unmounts all the devices
             **kwargs:
+                retain_keyring(default: False) : if this argument is set to True, it will not remove the keyring file
 
         Returns:
             0 if all the clean up is passed
@@ -1145,16 +1147,19 @@ class FsUtils(object):
                 client.exec_command(sudo=True, cmd=cmd)
                 log.info("Removing mounting directory:")
                 client.exec_command(sudo=True, cmd=f"rmdir {mounting_dir}")
-                log.info("Removing keyring file:")
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"rm -rf /etc/ceph/ceph.client.{kwargs.get('client_name', client.node.hostname)}.keyring",
-                )
-                log.info("Removing permissions:")
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"ceph auth del client.{kwargs.get('client_name', client.node.hostname)}",
-                )
+
+                # If retain_keyring is not set, remove the keyring file and permissions
+                if not kwargs.get("retain_keyring", False):
+                    log.info("Removing keyring file:")
+                    client.exec_command(
+                        sudo=True,
+                        cmd=f"rm -rf /etc/ceph/ceph.client.{kwargs.get('client_name', client.node.hostname)}.keyring",
+                    )
+                    log.info("Removing permissions:")
+                    client.exec_command(
+                        sudo=True,
+                        cmd=f"ceph auth del client.{kwargs.get('client_name', client.node.hostname)}",
+                    )
                 client.exec_command(
                     cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
                     " -name 'Crefi' -name 'smallfile' -delete",
@@ -1196,6 +1201,7 @@ class FsUtils(object):
         return subvolumes
 
     @function_execution_time
+    @retry(CommandFailed, tries=5, delay=20)
     def create_nfs(self, client, nfs_cluster_name, validate=True, **kwargs):
         """
         Create an NFS cluster with the given parameters.
@@ -1218,11 +1224,15 @@ class FsUtils(object):
         )
         if validate:
             out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-            nfscluster_ls = out.split("\n")
-            if nfs_cluster_name not in nfscluster_ls:
-                raise CommandFailed(
-                    f"Creation of NFS cluster: {nfs_cluster_name} failed"
-                )
+        try:
+            nfs_clusters = json.loads(out.strip())  # Ensure proper JSON parsing
+        except json.JSONDecodeError:
+            log.error(f"Failed to parse NFS cluster list output: {out.strip()}")
+            raise CommandFailed("Invalid JSON output from 'ceph nfs cluster ls'")
+
+        if nfs_cluster_name not in nfs_clusters:
+            raise CommandFailed(f"Creation of NFS cluster: {nfs_cluster_name} failed")
+
         return cmd_out, cmd_rc
 
     @function_execution_time

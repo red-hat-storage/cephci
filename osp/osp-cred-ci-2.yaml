@@ -15,3 +15,5 @@ globals:
         zone_name: '<dns_zone>'
         vpc_name: '<vpc_name>'
         zone_id_model_name: '<vpc_datacenter_name>'
+        resource_group_id: "<UUID of the resource group>"
+        dns_svc_id: "<GUID of the DNS service hosted>"

@@ -4,6 +4,7 @@ NVMe High Availability Module.
 
 import json
 import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
 from ceph.ceph import CommandFailed
@@ -46,6 +47,7 @@ class HighAvailability:
         self.host = Host(cluster=self.cluster, **{})
         self.nvme_pool = config["rbd_pool"]
         self.clients = []
+        self.initiators = {}
 
         for gateway in gateways:
             gw_node = get_node_by_id(self.cluster, gateway)
@@ -70,6 +72,40 @@ class HighAvailability:
                 LOG.info(f"[{node_id}] {gw.node.hostname} is NVMeoF Gateway node.")
                 return gw
         raise Exception(f"{node_id} doesn't match to any gateways provided...")
+
+    def get_or_create_initiator(self, node_id, nqn):
+        """Get existing NVMeInitiator or create a new one for each (node_id, nqn)."""
+        key = (node_id, nqn)  # Use both as dictionary key
+
+        if key not in self.initiators:
+            node = get_node_by_id(self.cluster, node_id)
+            self.initiators[key] = NVMeInitiator(node, self.gateways[0], nqn)
+
+        return self.initiators[key]
+
+    def create_dhchap_key(self, config, update_host_key=False):
+        """Generate DHCHAP key for each initiator and store it."""
+        nqn = config["subnqn"]
+
+        for host_config in config["hosts"]:
+            node_id = host_config["node"]
+            initiator = self.get_or_create_initiator(node_id, nqn)
+
+            # Generate key for subsystem NQN
+            key, _ = initiator.gen_dhchap_key(n=config["subnqn"])
+            LOG.info(f"{key.strip()} is generated for {nqn} and {node_id}")
+
+            initiator.auth_mode = config.get("auth_mode")
+            if initiator.auth_mode == "bidirectional" and not update_host_key:
+                initiator.subsys_key = key.strip()
+                initiator.host_key = key.strip()
+            if initiator.auth_mode == "unidirectional":
+                initiator.host_key = key.strip()
+            if update_host_key:
+                initiator.host_key = key.strip()
+            config["dhchap-key"] = key.strip()
+
+            self.clients.append(initiator)
 
     def catogorize(self, gws):
         """Categorize to-be failed and running GWs.
@@ -790,7 +826,7 @@ class HighAvailability:
             lsblk_devs.extend(client.fetch_lsblk_nvme_devices())
 
         LOG.info(
-            f"Expcted NVMe Targets : {set(list(uuids))} Vs LSBLK devices: {set(list(lsblk_devs))}"
+            f"Expected NVMe Targets : {set(list(uuids))} Vs LSBLK devices: {set(list(lsblk_devs))}"
         )
         if sorted(uuids) != sorted(set(lsblk_devs)):
             raise IOError("Few Namespaces are missing!!!")
@@ -806,10 +842,13 @@ class HighAvailability:
             node: node10
         """
         for io_client in io_clients:
-            node = get_node_by_id(self.cluster, io_client["node"])
-            client = NVMeInitiator(node, self.gateways[0])
+            nqn = io_client.get("nqn")
+            if io_client.get("subnqn"):
+                nqn = io_client.get("subnqn")
+            client = self.get_or_create_initiator(io_client["node"], nqn)
             client.connect_targets(io_client)
-            self.clients.append(client)
+            if client not in self.clients:
+                self.clients.append(client)
 
     def fetch_namespaces(self, gateway, failed_ana_grp_ids=[], get_list=False):
         """Fetch all namespaces for failed gateways.
@@ -941,6 +980,213 @@ class HighAvailability:
             f"All namespaces for the ana-group-id {ana_id} are optimized for all \
             initiators for gateway {gateway.daemon_name}"
         )
+
+    def validate_init_namespace_masking(
+        self,
+        command,
+        init_nodes,
+        expected_visibility,
+        validate_config=None,
+    ):
+        """Validate that the namespace visibility is correct from all initiators."""
+        for node in init_nodes:
+            initiator_node = get_node_by_id(self.cluster, node)
+            client = NVMeInitiator(initiator_node, self.gateways[0])
+            client.disconnect_all()  # Reconnect NVMe targets
+            client.connect_targets(config={"nqn": "connect-all"})
+            args = validate_config["args"]
+            subsystem_to_nsid = {args["nsid"]: args["sub_num"]}
+            init_node = args.get("init_node")
+            serial_to_namespace = defaultdict(list)
+
+            @retry(
+                IOError,
+                tries=4,
+                delay=3,
+            )
+            def execute_nvme_command(client_node):
+                devices_output, _ = client_node.exec_command(
+                    cmd="nvme list --output-format=json", sudo=True
+                )
+                return devices_output
+
+            devices_json = json.loads(execute_nvme_command(initiator_node))
+            devices = devices_json.get("Devices", [])
+            if not devices:
+                LOG.info(f"No devices found on node {node}")
+                continue
+
+            for device in devices:
+                key = device["NameSpace"]
+                value = int(device["SerialNumber"])
+                serial_to_namespace[key].append(value)
+
+            ns_to_check, subsystem_to_check = next(iter(subsystem_to_nsid.items()))
+            LOG.info(f"{subsystem_to_nsid} : {serial_to_namespace}")
+
+            def subsystem_nsid_found(dictionary, key, value):
+                return key in dictionary and value in dictionary[key]
+
+            ns_subsys_found = subsystem_nsid_found(
+                serial_to_namespace, ns_to_check, subsystem_to_check
+            )
+
+            if command == "add_host":
+                if node == init_node:
+                    if ns_subsys_found:
+                        LOG.info(
+                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                        )
+                    else:
+                        LOG.error(
+                            f"Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                        )
+                        raise Exception(
+                            f"Expected Namespace:Subsystem pair {subsystem_to_nsid} on {node} but did not find it"
+                        )
+                else:
+                    if ns_subsys_found:
+                        LOG.error(
+                            f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                        )
+                        raise Exception(
+                            f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
+                        )
+                    else:
+                        LOG.info(
+                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                        )
+            elif command == "del_host":
+                if node == init_node:
+                    if ns_subsys_found:
+                        LOG.error(
+                            f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                        )
+                        raise Exception(
+                            f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
+                        )
+                    else:
+                        LOG.info(
+                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                        )
+                else:
+                    if ns_subsys_found:
+                        LOG.error(
+                            f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                        )
+                        raise Exception(
+                            f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
+                        )
+                    else:
+                        LOG.info(
+                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                        )
+            else:
+                if (
+                    expected_visibility == "False"
+                ):  # If expected visibility is False, devices should be empty
+                    if devices_json.get("Devices"):  # Check if Devices is not empty
+                        LOG.error(
+                            f"Expected no devices for initiator {node}, but found: {devices_json}"
+                        )
+                        raise Exception(
+                            f"Initiator {node} has devices when NS visibility is restricted"
+                        )
+                    else:
+                        LOG.info(f"Validated - no devices found on {node}")
+                elif (
+                    expected_visibility == "True"
+                ):  # If expected visibility is True, devices should not be empty
+                    if not devices_json.get("Devices"):
+                        LOG.error(
+                            f"Expected devices to be visible for node {node}, but found none."
+                        )
+                        raise Exception(
+                            f"Initiator {node} has no devices when NS visibility is restricted"
+                        )
+                    else:
+                        # Log Namespace and SerialNumber from each device
+                        for device in devices_json.get("Devices", []):
+                            namespace = device.get("NameSpace", None)
+                            serial_number = device.get("SerialNumber", None)
+                            LOG.info(
+                                f"Namespace: {namespace}, SerialNumber: {serial_number}"
+                            )
+
+                        LOG.info(
+                            f"Validated - {len(devices_json['Devices'])} devices found on {node}"
+                        )
+
+    def validate_namespace_masking(
+        self,
+        nsid,
+        subnqn,
+        namespaces_sub,
+        hostnqn_dict,
+        ns_visibility,
+        command,
+        expected_visibility,
+    ):
+        """Validate that the namespace visibility is correct."""
+
+        if command == "add_host":
+            LOG.info(command)
+            num_namespaces_per_node = namespaces_sub // len(hostnqn_dict)
+
+            # Determine the initiator node responsible for this nsid based on the calculated range
+            node_index = (nsid - 1) // num_namespaces_per_node
+            expected_host = list(hostnqn_dict.values())[node_index]
+
+            # Log the visibility of the namespace
+            if expected_host in ns_visibility:
+                LOG.info(
+                    f"Validated - Namespace {nsid} of {subnqn} has the correct nqn {ns_visibility}"
+                )
+            else:
+                LOG.error(
+                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Expected {expected_host}, but got {ns_visibility}"
+                )
+                raise Exception(
+                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Expected {expected_host}, but got {ns_visibility}"
+                )
+
+        elif command == "del_host":
+            LOG.info(command)
+            num_namespaces_per_node = namespaces_sub // len(hostnqn_dict)
+
+            # Determine the initiator node responsible for this nsid based on the calculated range
+            node_index = (nsid - 1) // num_namespaces_per_node
+            expected_host = list(hostnqn_dict.values())[node_index]
+
+            # Log the visibility of the namespace
+            if expected_host not in ns_visibility:
+                LOG.info(
+                    f"Validated - Namespace {nsid} of {subnqn} does not has {expected_host}"
+                )
+            else:
+                LOG.error(
+                    f"Namespace {nsid} of {subnqn} has {ns_visibility} which was removed"
+                )
+                raise Exception(
+                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Not expecting {ns_visibility} in {expected_host}"
+                )
+
+        else:
+            # Validate visibility based on the expected value (for non-add/del host commands)
+            ns_visibility = str(ns_visibility)
+            LOG.info(command)
+            if ns_visibility.lower() == expected_visibility.lower():
+                LOG.info(
+                    f"Validated - Namespace {nsid} has correct visibility: {ns_visibility}"
+                )
+            else:
+                LOG.info("esle")
+                LOG.error(
+                    f"NS {nsid} of {subnqn} has wrong visibility.Expected {expected_visibility} got{ns_visibility}"
+                )
+                raise Exception(
+                    f"NS {nsid} of {subnqn} has wrong visibility.Expected {expected_visibility} got {ns_visibility}"
+                )
 
     def run(self):
         """Execute the HA failover and failback with IO validation."""

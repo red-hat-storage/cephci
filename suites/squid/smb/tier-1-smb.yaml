@@ -183,13 +183,13 @@ tests:
           client01: create_file
           client02: perform_lookups
         windows_clients:
-          - ip: 10.70.47.106
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.47.29
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
-          - ip: 10.70.45.15
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.45.192
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
         spec:
           - resource_type: ceph.smb.cluster
@@ -230,13 +230,13 @@ tests:
           client01: create_file
           client02: rename_file
         windows_clients:
-          - ip: 10.70.47.106
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.47.29
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
-          - ip: 10.70.45.15
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.45.192
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
         spec:
           - resource_type: ceph.smb.cluster
@@ -280,13 +280,13 @@ tests:
           client01: create_file
           client02: remove_files
         windows_clients:
-          - ip: 10.70.47.106
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.47.29
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
-          - ip: 10.70.45.15
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.45.192
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
         spec:
           - resource_type: ceph.smb.cluster

@@ -17,9 +17,11 @@ iscsi/              @Manohar-Murthy @HaruChebrolu
 
 # for NVMe-oF
 nvmeof/             @Manohar-Murthy @HaruChebrolu
+ceph/nvmegw_cli     @Manohar-Murthy @HaruChebrolu
 
 # for RADOS
-rados/              @neha-gangadhar @pdhiran
+rados/				             @neha-gangadhar @pdhiran
+utility/generate_frag_objs.py	             @neha-gangadhar @pdhiran
 
 # for FS
 cephfs/             @neha-gangadhar @AmarnatReddy @Manimaran-MM

@@ -1,3 +1,4 @@
+import datetime
 import json
 import logging
 import os
@@ -372,3 +373,51 @@ class CephFSSystemUtils(object):
             )
             test_status = 1
         return test_status
+
+    def get_pool_usage(self, client, fs_name):
+        """
+        This method will return disk usage in percentage as maximum of usage across pools of FS volume
+        """
+        out, _ = client.exec_command(cmd="ceph df --f json", client_exec=True)
+        log.info(out)
+        ceph_df = json.loads(out)
+        pool_usage_list = []
+        for pool in ceph_df["pools"]:
+            if fs_name in pool["name"]:
+                disk_usage_pct = pool["stats"]["percent_used"]
+                disk_usage_pct = disk_usage_pct * 100
+                if "e" in str(disk_usage_pct):
+                    disk_usage_pct = 0
+                pool_usage_list.append(disk_usage_pct)
+        return max(pool_usage_list)
+
+    def get_osd_usage(self, client):
+        """
+        This method will return osd usage in percentage as maximum of usage across OSDs
+        """
+        out, _ = client.exec_command(cmd="ceph osd df --f json", client_exec=True)
+        log.info(out)
+        ceph_osd_df = json.loads(out)
+        osd_usage_list = []
+        for osd_item in ceph_osd_df["nodes"]:
+            osd_pct = round(osd_item["utilization"])
+            osd_usage_list.append(osd_pct)
+        return max(osd_usage_list)
+
+    def wait_for_proc(self, test_proc, wait_time):
+        """
+        This method will wait for the given process to complete until wait_time in seconds
+        """
+        if test_proc.is_alive():
+            proc_stop = 0
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=wait_time)
+            while (datetime.datetime.now() < end_time) and (proc_stop == 0):
+                if test_proc.is_alive():
+                    time.sleep(10)
+                else:
+                    proc_stop = 1
+            if proc_stop == 1:
+                return 0
+            elif proc_stop == 0:
+                log.error("Process is still running : %s", test_proc.name)
+                return 1

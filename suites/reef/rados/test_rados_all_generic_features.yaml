@@ -426,7 +426,7 @@ tests:
         create_re_pool: true
         create_ec_pool: false
       desc: verify autoscaler flags functionality
-      comments: active Bugs 2252788, 2283358
+      comments: active Bugs 2252788
 
   - test:
       name: Decreasing the replica count
@@ -551,7 +551,7 @@ tests:
         create_ec_pool: true
         create_re_pool: false
       desc: verify autoscaler flags functionality
-      comments: active Bugs 2252788, 2283358
+      comments: active Bugs 2252788
 
   - test:
       name: EC Pool Recovery Improvement

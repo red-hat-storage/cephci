@@ -1,5 +1,6 @@
 """Manage OSD service via cephadm CLI."""
 
+import datetime
 import json
 from time import sleep
 from typing import Dict
@@ -169,13 +170,17 @@ class OSD(ApplyMixin, Orch):
 
             config:
                 command: rm
+                timeout: <>
+                interval: <>
+                validate: <bool>
                 base_cmd_args:
                     zap: true
                 pos_args:
                     - 1
         """
-        base_cmd = ["ceph", "orch", "osd"]
-        base_cmd.append("rm")
+        timeout = config.get("timeout", 1800)
+        interval = config.get("interval", 120)
+        base_cmd = ["ceph", "orch", "osd", "rm"]
         osd_id = config["pos_args"][0]
         base_cmd.append(str(osd_id))
         if config.get("base_cmd_args"):
@@ -185,8 +190,8 @@ class OSD(ApplyMixin, Orch):
         check_osd_id_dict = {
             "args": {"format": "json"},
         }
-
-        while True:
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        while end_time > datetime.datetime.now():
             # "ceph orch osd rm status -f json"
             # condition
             # continue loop if OSD_ID present
@@ -197,26 +202,31 @@ class OSD(ApplyMixin, Orch):
                 status = json.loads(out)
                 for osd_id_ in status:
                     if int(osd_id_["osd_id"]) == int(osd_id):
-                        LOG.info(f"OSDs removal in progress: {osd_id_}")
-                        sleep(2)
+                        LOG.info("OSDs removal in progress: " + str(osd_id_))
+                        sleep(interval)
                         continue
                     else:
                         break
 
             except json.decoder.JSONDecodeError:
                 break
+        else:
+            LOG.error(
+                "OSD.%s removal could not be completed within %d secs"
+                % (osd_id, timeout)
+            )
 
         if config.get("validate", True):
             # validate OSD removal
-            out, verify = self.shell(
+            out, _ = self.shell(
                 args=["ceph", "osd", "tree", "-f", "json"],
             )
             out = json.loads(out)
             for id_ in out["nodes"]:
                 if int(id_["id"]) == int(osd_id):
-                    LOG.error("OSD Removed ID found")
-                    raise AssertionError("fail, OSD is present still after removing")
-        LOG.info(f" OSD {osd_id} Removal is successful")
+                    LOG.error("Removed OSD ID found")
+                    raise AssertionError("fail, OSD is still present after removal")
+        LOG.info("OSD %s Removal is successful" % osd_id)
 
     def out(self, config: Dict):
         """

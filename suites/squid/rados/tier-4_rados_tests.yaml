@@ -151,6 +151,13 @@ tests:
           mgr: "allow *"
 
   - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
       name: OSD addition on an unavailable disk
       desc: Add new OSD on an pre-occupied OSD disk
       module: test_add_new_osd.py
@@ -186,7 +193,6 @@ tests:
           obj_nums: 5
           delete_pool: true
 
-# commented due to active bug: https://bugzilla.redhat.com/show_bug.cgi?id=2316351
   - test:
       name: Verify MAX_AVAIL variance with OSD size change
       desc: MAX_AVAIL value update correctly when OSD size changes
@@ -301,3 +307,9 @@ tests:
       polarion-id: CEPH-9388
       module: test_mon_system_operations.py
       desc: Performing system tests with mon daemons
+
+  - test:
+      name: OSD Fragmentation tests
+      polarion-id: CEPH-83607852
+      module: test_fragmentation_warnings.py
+      desc: Generate Fragmentation on OSDs and verify health warning + logs

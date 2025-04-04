@@ -83,7 +83,7 @@ tests:
       config:
         specs:
           service_type: osd
-          service_id: osd.3
+          service_id: osd
           placement:
             hosts:
               - node0
