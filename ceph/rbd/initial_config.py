@@ -98,11 +98,15 @@ def update_config(**kw):
             is_pool_config_updated = [
                 k for k in getdict(rep_pool_config).keys() if k not in ["test_config"]
             ]
-            if config.get("grouptype").startswith("single"):
-                rep_pool_config.update({"num_pools": 1})
-            elif config.get("grouptype").startswith("multi"):
-                if not config.get("num_pools") or rep_pool_config.get("num_pools") == 1:
-                    rep_pool_config.update({"num_pools": 2})
+            if config.get("grouptype"):
+                if config.get("grouptype").startswith("single"):
+                    rep_pool_config.update({"num_pools": 1})
+                elif config.get("grouptype").startswith("multi"):
+                    if (
+                        not config.get("num_pools")
+                        or rep_pool_config.get("num_pools") == 1
+                    ):
+                        rep_pool_config.update({"num_pools": 2})
 
             if not is_pool_config_updated and rep_pool_config.get("num_pools"):
                 for i in range(rep_pool_config.get("num_pools")):
@@ -218,11 +222,15 @@ def update_config(**kw):
             is_pool_config_updated = [
                 k for k in getdict(ec_pool_config).keys() if k not in ["test_config"]
             ]
-            if config.get("grouptype").startswith("single"):
-                ec_pool_config.update({"num_pools": 1})
-            elif config.get("grouptype").startswith("multi"):
-                if not config.get("num_pools") or ec_pool_config.get("num_pools") == 1:
-                    ec_pool_config.update({"num_pools": 2})
+            if config.get("grouptype"):
+                if config.get("grouptype").startswith("single"):
+                    ec_pool_config.update({"num_pools": 1})
+                elif config.get("grouptype").startswith("multi"):
+                    if (
+                        not config.get("num_pools")
+                        or ec_pool_config.get("num_pools") == 1
+                    ):
+                        ec_pool_config.update({"num_pools": 2})
 
             if not is_pool_config_updated and ec_pool_config.get("num_pools"):
                 for i in range(ec_pool_config.get("num_pools")):
