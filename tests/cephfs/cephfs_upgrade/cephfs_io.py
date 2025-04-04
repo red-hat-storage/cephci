@@ -25,9 +25,6 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
 
         clients = ceph_cluster.get_ceph_objects("client")
-        build = config.get("build", config.get("rhbuild"))
-        fs_util.prepare_clients(clients, build)
-
         timeout = config.get("timeout", 1800)
         log.info("checking Pre-requisites")
         if not clients:

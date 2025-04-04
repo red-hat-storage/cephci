@@ -149,15 +149,6 @@ def run(ceph_cluster, **kw):
             )
             for line in after_upgrade_file.readlines():
                 log.info(line)
-            clients = ceph_cluster.get_ceph_objects("client")
-            cmd = (
-                "dnf clean all;dnf -y install ceph-common --nogpgcheck;"
-                "dnf -y update ceph-common --nogpgcheck; "
-                "dnf -y install ceph-fuse --nogpgcheck;"
-                "dnf -y update ceph-fuse --nogpgcheck;"
-            )
-            for client in clients:
-                client.exec_command(sudo=True, cmd=cmd)
         else:
             log.info("---------Writing stats of a file before upgrade--------------")
             log.info(
