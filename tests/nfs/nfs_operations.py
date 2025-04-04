@@ -45,6 +45,11 @@ def setup_nfs_cluster(
     setup_start_time = datetime.strptime(setup_start_time, "%Y-%m-%d %H:%M:%S")
 
     # Step 1: Enable nfs
+    installer_node = ceph_cluster.get_nodes("installer")[0]
+    version_info = installer_node.exec_command(
+        sudo=True, cmd="cephadm shell -- rpm -qa | grep nfs"
+    )
+    log.info(f"nfs info: {version_info}")
     Ceph(clients[0]).mgr.module.enable(module="nfs", force=True)
     sleep(3)
 
@@ -92,8 +97,32 @@ def setup_nfs_cluster(
             sleep(1)
     log.info("Mount succeeded on all clients")
 
-    # Step 5: Enable nfs coredump to nfs nodes
+    try:
+        cmd_used = None
+        services = [
+            x["service_name"]
+            for x in json.loads(Ceph(clients[0]).orch.ls(format="json"))
+        ]
+        # check nfs cluster and services are up
+        if Ceph(clients[0]).nfs.cluster.ls():
+            cmd_used = "ceph nfs cluster ls"
+            log.info(
+                f"NFS cluster {Ceph(clients[0]).nfs.cluster.ls()[0]} created successfully using {cmd_used}"
+            )
+
+        # verifying with orch cmd
+        elif [x for x in services if x.startswith("nfs")]:
+            cmd_used = "ceph orch ls"
+            log.info(f"NFS services are up and running from cmd {cmd_used}")
+        elif Ceph(clients[0]).execute("ps aux | grep nfs-ganesha")[0]:
+            cmd_used = "ps aux | grep nfs-ganesha"
+            log.info(f"NFS daemons are up and running verifying using {cmd_used}")
+    except Exception as e:
+        log.error(f"Failed to verify nfs cluster and services {e} cmd used: {cmd_used}")
+
     nfs_nodes = ceph_cluster.get_nodes("nfs")
+
+    # Step 5: Enable nfs coredump to nfs nodes
     Enable_nfs_coredump(nfs_nodes)
 
 
