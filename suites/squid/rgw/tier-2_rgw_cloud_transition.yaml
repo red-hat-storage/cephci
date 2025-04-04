@@ -294,7 +294,7 @@ tests:
       polarion-id: CEPH-83591675
       module: sanity_rgw.py
       clusters:
-        ceph-pri:
+        local:
           config:
             script-name: test_rgw_account_management.py
             config-file-name: test_account_ownership_change_user_adoption.yaml
