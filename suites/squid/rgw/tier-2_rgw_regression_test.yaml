@@ -59,6 +59,10 @@ tests:
               args:
                 placement:
                   label: rgw
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
       desc: RHCS cluster deployment using cephadm.
       destroy-cluster: false
       module: test_cephadm.py
