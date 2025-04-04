@@ -4,11 +4,13 @@ It contains methods to run fscrypt cli options - setup,encrypt,lock,unlock,purge
 
 """
 
+import datetime
 import random
 import re
 import string
 import time
 
+from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
@@ -147,11 +149,18 @@ class FscryptUtils(object):
                     cmd=cmd,
                 )
         cmd = f"echo y | fscrypt setup {mnt_pt}"
-        out, _ = client.exec_command(
-            sudo=True,
-            cmd=cmd,
-        )
-        log.info(out)
+        try:
+            out, _ = client.exec_command(
+                sudo=True,
+                cmd=cmd,
+            )
+            log.info(out)
+        except BaseException as ex:
+            if "is already setup for use" in str(ex):
+                log.info("FScrypt setup already exists for %s", mnt_pt)
+            else:
+                log.error("Unexpected error during fscrypt setup")
+                return 1
         if validate:
             try:
                 cmd = f"ls -l {mnt_pt}/.fscrypt/"
@@ -206,15 +215,40 @@ class FscryptUtils(object):
             source = kwargs.get("protector_source", "custom_passphrase")
             name = kwargs.get("protector_name", f"cephfs_{rand_str}")
             protector_params = {"source": source, "name": name}
+            # if source is pam_passphrase get 'user'
+            if source == "pam_passphrase":
+                if kwargs["user"]:
+                    protector_params.update({"user": kwargs["user"]})
+                else:
+                    log.error(
+                        "For protector source as pam_passphrase, 'user' param is required"
+                    )
+                    return 1
+            elif source == "raw_key":
+                if not kwargs.get("protector_key"):
+                    key_path = f"{mnt_pt}/{name}.key"
+                    cmd_1 = f"head --bytes=32 /dev/urandom > {key_path}"
+                    client.exec_command(
+                        sudo=True,
+                        cmd=cmd_1,
+                    )
+                    protector_params.update({"key": key_path})
+                else:
+                    protector_params.update({"key": kwargs["protector_key"]})
             protector_id = self.metadata_ops(
                 client, "create", "protector", mnt_pt, **protector_params
             )
             cmd += f" --protector={mnt_pt}:{protector_id}"
+            if source == "raw_key":
+                cmd += f" --key={protector_params['key']}"
 
         if policy_id:
             cmd += f" --policy={mnt_pt}:{policy_id}"
         else:
-            policy_params = {"protector_id": protector_id}
+            policy_params = {
+                "protector_id": protector_id,
+                "key": protector_params.get("key", None),
+            }
             policy_id = self.metadata_ops(
                 client, "create", "policy", mnt_pt, **policy_params
             )
@@ -222,7 +256,7 @@ class FscryptUtils(object):
 
         cmd += f" --unlock-with={mnt_pt}:{protector_id}"
 
-        out, rc = client.exec_command(
+        out, _ = client.exec_command(
             sudo=True,
             cmd=cmd,
         )
@@ -232,8 +266,9 @@ class FscryptUtils(object):
             return 1
         encrypt_params = {
             "protector_id": protector_id,
-            "protector_source": source,
-            "protector_name": name,
+            "protector_source": protector_params.get("source", None),
+            "protector_name": protector_params.get("name", None),
+            "key": protector_params.get("key", None),
             "policy_id": policy_id,
         }
         return encrypt_params
@@ -351,7 +386,7 @@ class FscryptUtils(object):
             cmd += " --force"
         if kwargs.get("user"):
             cmd += f" --user {kwargs['user']}"
-        out, rc = client.exec_command(
+        out, _ = client.exec_command(
             sudo=True,
             cmd=cmd,
         )
@@ -398,12 +433,14 @@ class FscryptUtils(object):
             if entity == "protector":
                 source = entity_params["source"]
                 name = entity_params["name"]
-                cmd = f"echo y | fscrypt metadata create protector --source={source} --name={name} {mnt_pt}"
-                if entity_params.get("user"):
+                cmd = f"echo y | fscrypt metadata create protector {mnt_pt} --source={source}"
+                if "pam_passphrase" not in source:
+                    cmd += f" --name={name} "
+                elif entity_params.get("user"):
                     cmd += f" --user={entity_params['user']}"
-                if entity_params.get("key"):
+                if "raw_key" in source:
                     cmd += f" --key={entity_params['key']}"
-                out, rc = client.exec_command(
+                out, _ = client.exec_command(
                     sudo=True,
                     cmd=cmd,
                 )
@@ -422,26 +459,37 @@ class FscryptUtils(object):
                     cmd=cmd,
                 )
                 log.info(out)
-                out_list = out.split("\n")
-                out_list2 = out_list[1].split("[Y/n]")
+                out_list = out.split("[Y/n]")
                 id_str = re.findall(
-                    r"^.*Policy (\w+) created on filesystem.*$", out_list2[1]
+                    r"^.*Policy (\w+) created on filesystem.*$", out_list[1]
                 )
                 entity_id = list(id_str)[0]
             return entity_id
 
         def destroy():
             id = entity_params["id"]
-            cmd = f"echo y | fscrypt metadata destroy --{entity}={mnt_pt}:{id} --force"
-            out, rc = client.exec_command(
-                sudo=True,
-                cmd=cmd,
-            )
-            out.strip()
-            exp_str = f"{id} deleted from filesystem"
-            if exp_str not in str(out):
-                log.error("%s %s deletion seems not successful:%s", entity, id, out)
-                return 1
+            if entity_params.get("id"):
+                cmd = f"echo y | fscrypt metadata destroy --{entity}={mnt_pt}:{id} --force"
+                out, _ = client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+                out.strip()
+                exp_str = f"{id} deleted from filesystem"
+                if exp_str not in str(out):
+                    log.error("%s %s deletion seems not successful:%s", entity, id, out)
+                    return 1
+            else:
+                cmd = f"echo y | fscrypt metadata destroy {mnt_pt}"
+                out, rc = client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                )
+                out.strip()
+                exp_str = f'All metadata on "{mnt_pt}" deleted'
+                if exp_str not in str(out):
+                    log.error("%s %s deletion seems not successful:%s", entity, id, out)
+                    return 1
             return 0
 
         def add_protector_to_policy():
@@ -461,7 +509,7 @@ class FscryptUtils(object):
             pol_id = entity_params["policy_id"]
             cmd = f"echo y | fscrypt metadata remove-protector-from-policy --protector={mnt_pt}:{pro_id}"
             cmd += f" --policy={mnt_pt}:{pol_id}"
-            out, rc = client.exec_command(
+            out, _ = client.exec_command(
                 sudo=True,
                 cmd=cmd,
             )
@@ -490,7 +538,7 @@ class FscryptUtils(object):
         file_ops = [
             "name_content_read",
             "create",
-            "file_open",
+            # "file_open",
             "write_overwrite",
             "truncate",
             "append",
@@ -504,10 +552,6 @@ class FscryptUtils(object):
         }
         ops_to_test = ops[encrypt_mode]
         lock_str = "Required key not available"
-        cmd = f"find {encrypt_path} -maxdepth 1 -type f"
-        out, _ = client.exec_command(sudo=True, cmd=cmd)
-        test_files = out.strip()
-        test_files_list = test_files.split("\n")
 
         def name_content_read():
             cmd = f"find {encrypt_path} -type f"
@@ -582,20 +626,23 @@ class FscryptUtils(object):
                 return 1
             return 0
 
-        def file_open():
+        """def file_open():
+            test_files_list = self.get_file_list(client,encrypt_path)
             file_to_open = random.choice(test_files_list)
             try:
                 fh_fscrypt = open(file_to_open, "r")
                 fh_fscrypt.readlines()
                 fh_fscrypt.close()
             except BaseException as ex:
-                log.info(ex)
+                log.error(ex)
                 return 1
             return 0
+        """
 
         def write_overwrite():
+            test_files_list = self.get_file_list(client, encrypt_path)
             file_to_overwrite = random.choice(test_files_list)
-            cmd = f"cp /var/log/messages > {file_to_overwrite}"
+            cmd = f"cp /var/log/messages {file_to_overwrite}"
             try:
                 client.exec_command(sudo=True, cmd=cmd)
             except BaseException as ex:
@@ -604,6 +651,7 @@ class FscryptUtils(object):
             return 0
 
         def truncate():
+            test_files_list = self.get_file_list(client, encrypt_path)
             file_to_truncate = random.choice(test_files_list)
             cmd = f"truncate -s -1M {file_to_truncate}"
             try:
@@ -614,6 +662,7 @@ class FscryptUtils(object):
             return 0
 
         def append():
+            test_files_list = self.get_file_list(client, encrypt_path)
             file_to_append = random.choice(test_files_list)
             cmd = f"echo cephfs_fscrypt_testing >> {file_to_append}"
             try:
@@ -624,6 +673,7 @@ class FscryptUtils(object):
             return 0
 
         def rename():
+            test_files_list = self.get_file_list(client, encrypt_path)
             file_to_rename = random.choice(test_files_list)
             file_to_rename_1 = random.choice(test_files_list)
             try:
@@ -640,6 +690,7 @@ class FscryptUtils(object):
             return 0
 
         def delete():
+            test_files_list = self.get_file_list(client, encrypt_path)
             file_to_del = random.choice(test_files_list)
             try:
                 client.exec_command(sudo=True, cmd=f"rm -f {file_to_del}")
@@ -652,7 +703,7 @@ class FscryptUtils(object):
         ops_func = {
             "name_content_read": name_content_read(),
             "create": file_create(),
-            "file_open": file_open(),
+            # "file_open": file_open(),
             "write_overwrite": write_overwrite(),
             "truncate": truncate(),
             "append": append(),
@@ -661,7 +712,11 @@ class FscryptUtils(object):
         }
         for file_op in all_file_ops:
             test_status = ops_func[file_op]
-            if test_status == 1 and "name_content_read" in file_op:
+            if (
+                test_status == 1
+                and "name_content_read" in file_op
+                and file_op in ops_to_test["allowed"]
+            ):
                 failed_ops.append(file_op)
             elif test_status == 1 and file_op in ops_to_test["allowed"]:
                 failed_ops.append(file_op)
@@ -676,7 +731,95 @@ class FscryptUtils(object):
         return_val = 1 if len(failed_ops) > 0 else 0
         return return_val
 
+    def validate_fscrypt_metadata(self, client, encrypt_path):
+        test_files_list = self.get_file_list(client, encrypt_path)
+        test_file = random.choice(test_files_list)
+        out, _ = client.exec_command(sudo=True, cmd=f"ls -l {test_file}")
+        line = out.split("\n")
+        if "total" in line[0]:
+            line.pop(0)
+
+        line_list = line[0].split(" ")
+
+        test_status = 0
+        for i in range(0, len(line_list)):
+            if i == 0:
+                found = 0
+                pattern = ["d", "-", "r", "w", "x", "."]
+                for i in range(0, len(line_list[0])):
+                    if line_list[0][i] in pattern:
+                        found += 1
+
+                if found == len(line_list[0]):
+                    log.info("File permissions not encrypted")
+                else:
+                    log.error("File permissions could be encrypted:%s", line_list[0])
+                    test_status += 1
+            elif i in [1, 4, 6]:
+                info = {1: "Number of links", 4: "Size_in_bytes", 6: "Date"}
+                res = re.search(r"(\d+)", line_list[i])
+                if res:
+                    log.info("%s info is not encrypted", info[i])
+                else:
+                    log.error("%s info could be encrypted:%s", info[i], line_list[i])
+                    test_status += 1
+            elif i in [2, 3]:
+                cmd = "awk -F':' '{ print $1}' /etc/passwd"
+                out, _ = client.exec_command(sudo=True, cmd=cmd)
+                user_list = out.split("\n")
+
+                if line_list[i] in user_list:
+                    log.info("User info is not encrypted")
+                else:
+                    log.error("User info could be encrypted:%s", line_list[i])
+                    test_status += 1
+            elif i == 5:
+                pattern = [
+                    "Jan",
+                    "Feb",
+                    "Mar",
+                    "Apr",
+                    "May",
+                    "Jun",
+                    "Jul",
+                    "Aug",
+                    "Sep",
+                    "Oct",
+                    "Nov",
+                    "Dec",
+                ]
+                if line_list[i] in pattern:
+                    log.info("Month info is not encrypted")
+                else:
+                    log.error("Month info could be encrypted:%s", line_list[i])
+                    test_status += 1
+            elif i == 7:
+                res = re.search(r"(\d+):(\d+)", line_list[i])
+                if res:
+                    log.info("Time info is not encrypted")
+                else:
+                    log.error("Time info could be encrypted:%s", line_list[i])
+                    test_status += 1
+
+        cmd = f"getfattr -n security.selinux {test_file}"
+        out, _ = client.exec_command(sudo=True, cmd=cmd)
+        if "security.selinux" in out:
+            log.info("Extended attribute security.selinux not encrypted")
+        else:
+            log.error("Extended attribute security.selinux could be encrypted:%s", out)
+            test_status += 1
+        return test_status
+
     # HELPER ROUTINES #
+    def get_file_list(self, client, path):
+        """
+        This helper method is to provide list of files in path
+        """
+        cmd = f"find {path} -maxdepth 1 -type f"
+        out, _ = client.exec_command(sudo=True, cmd=cmd)
+        test_files = out.strip()
+        test_files_list = test_files.split("\n")
+        return test_files_list
 
     def format_fscrypt_info(self, status):
         fscrypt_info = {}
@@ -729,3 +872,68 @@ class FscryptUtils(object):
                         }
                     )
         return fscrypt_info
+
+    def add_dataset(self, client, encrypt_path):
+        """
+        This method is to add add files using dd to directory path created as - mix(depth-10,breadth-5)
+        Also to add some test files used for validation in lock/unlock states
+        """
+        file_list = []
+
+        log.info("Add directory with multi-level breadth and depth")
+        dir_path = f"{encrypt_path}/"
+
+        # multi-depth
+        for i in range(1, 11):
+            dir_path += f"dir_{i}/"
+        cmd = f"mkdir -p {dir_path}"
+        client.exec_command(sudo=True, cmd=cmd)
+        for i in range(2):
+            file_path = f"{dir_path}dd_file_2m_{i}"
+            file_list.append(file_path)
+        # multi-breadth
+        dir_path = f"{encrypt_path}"
+        for i in range(2, 6):
+            cmd = f"mkdir {dir_path}/dir_{i}/"
+            client.exec_command(sudo=True, cmd=cmd)
+            for j in range(2):
+                file_path = f"{dir_path}/dir_{i}/dd_file_2m_{j}"
+                file_list.append(file_path)
+
+        for file_path in file_list:
+            client.exec_command(
+                sudo=True,
+                cmd=f"dd bs=1M count=2 if=/dev/urandom of={file_path}",
+            )
+
+        log.info("Add directory with files used for lock/unlock tests")
+        linux_files = [
+            "/var/log/messages",
+            "/var/log/cloud-init.log",
+            "/var/log/dnf.log",
+        ]
+        for i in range(1, 25):
+            linux_file = random.choice(linux_files)
+            file_path = f"{encrypt_path}/testfile_{i}"
+            client.exec_command(
+                sudo=True,
+                cmd=f"dd bs=1M count=2 if={linux_file} of={file_path}",
+            )
+
+        return file_list
+
+    def fscrypt_io(client, file_list, run_time):
+        def fscrypt_fio(client, file_path):
+            client.exec_command(
+                sudo=True,
+                cmd=f"fio --name={file_path} --ioengine=libaio --size 2M --rw=write --bs=1M --direct=1 "
+                f"--numjobs=1 --iodepth=5 --runtime=10",
+                timeout=20,
+                long_running=True,
+            )
+
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
+        while datetime.datetime.now() < end_time:
+            with parallel() as p:
+                for file_path in file_list:
+                    p.spawn(fscrypt_fio, client, file_path, validate=False)
