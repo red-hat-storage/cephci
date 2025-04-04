@@ -9,10 +9,14 @@ LOG = Log(__name__)
 
 
 class NVMeInitiator(Initiator):
-    def __init__(self, node, gateway):
+    def __init__(self, node, gateway, nqn=""):
         super().__init__(node)
         self.gateway = gateway
         self.discovery_port = 8009
+        self.subsys_key = None
+        self.host_key = None
+        self.nqn = nqn
+        self.auth_mode = ""
 
     def fetch_lsblk_nvme_devices_dict(self):
         """Validate all devices at client side.
@@ -105,6 +109,8 @@ class NVMeInitiator(Initiator):
         connect_all = {}
         if config["nqn"] == "connect-all":
             connect_all = {"ctrl-loss-tmo": 3600}
+            if self.auth_mode == "unidirectional":
+                cmd_args.update({"dhchap-secret": self.host_key})
             cmd = {**discovery_port, **cmd_args, **connect_all}
             self.connect_all(**cmd)
             self.list()
@@ -127,7 +133,16 @@ class NVMeInitiator(Initiator):
             conn_port = {"trsvcid": config["listener_port"]}
             sub_args = {"nqn": sub_endpoint["subnqn"]}
             cmd_args.update({"traddr": sub_endpoint["traddr"]})
+
+            if self.auth_mode == "bidirectional":
+                sub_args.update(
+                    {
+                        "dhchap-secret": self.host_key,
+                        "dhchap-ctrl-secret": self.subsys_key,
+                    }
+                )
             _conn_cmd = {**cmd_args, **conn_port, **sub_args}
+
             LOG.debug(self.connect(**_conn_cmd))
 
     def list_devices(self):
