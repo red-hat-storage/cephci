@@ -7,8 +7,7 @@ log = Log(__name__)
 
 def run(ceph_cluster, **kwargs):
     try:
-        test_data = kwargs.get("test_data")
-        config = kwargs.get("config")
+        test_data, config = kwargs.get("test_data"), kwargs.get("config")
         ref_inode_utils = RefInodeUtils(ceph_cluster)  # Create an instance
 
         fs_util, clients, erasure = ref_inode_utils.prepare_environment(
@@ -16,10 +15,11 @@ def run(ceph_cluster, **kwargs):
         )
 
         # Ensure at least one client is available.
-        if not clients:
+        client_count = len(clients)
+        if client_count == 0:
             log.info(
                 "This test requires at least 1 client node. Found %d client node(s).",
-                len(clients),
+                client_count,
             )
             return 1
 
@@ -35,16 +35,17 @@ def run(ceph_cluster, **kwargs):
         if not nfs_servers:
             log.error("No NFS servers found in the Ceph cluster.")
             return 1
-        nfs_server = nfs_servers[0].node.hostname
 
+        nfs_server = nfs_servers[0].node.hostname
         nfs_name = "cephfs-nfs"
+
         try:
-            cmd_output, cmd_return_code = fs_util.create_nfs(
-                client, nfs_name, validate=True, placement=f"1 {nfs_server}"
+            fs_util.create_nfs(
+                client, nfs_name, validate=True, placement="1 %s" % nfs_server
             )
-            log.info(f"NFS cluster {nfs_name} created successfully.")
+            log.info("NFS cluster %s created successfully." % nfs_name)
         except CommandFailed as e:
-            log.error(f"Failed to create NFS cluster: {e}")
+            log.error("Failed to create NFS cluster: %s" % e)
             return 1
 
         log.info("Validate if allow referent inode feature is enabled")
@@ -53,9 +54,12 @@ def run(ceph_cluster, **kwargs):
         )
 
         # Mount the root filesystems.
-        fuse_dir, kernel_dir, nfs_dir = ref_inode_utils.mount_rootfs(
-            client, fs_util, default_fs, nfs_server, nfs_name
-        )
+        fuse_dir, kernel_dir, nfs_dir = [
+            dirs[0]
+            for dirs in ref_inode_utils.mount_rootfs(
+                client, fs_util, default_fs, nfs_server, nfs_name
+            )
+        ]
 
         mount_dirs = {
             "Fuse": (fuse_dir, ["f_dir1"]),
@@ -65,39 +69,39 @@ def run(ceph_cluster, **kwargs):
         # Loop through the mount directories and create the necessary directories.
         for label, (base_path, dirs) in mount_dirs.items():
             ref_inode_utils.create_directories(client, base_path, dirs)
-        log.info(f"Created directories inside {label} mount: {dirs}")
+        log.info("Created directories inside %s mount: %s" % (label, dirs))
 
+        # flush the journal
         ref_inode_utils.flush_journal_on_active_mdss(fs_util, client, default_fs)
 
         # Define the files to be created inside each directory.
         files_to_create = {
-            "Fuse": (f"{fuse_dir}/f_dir1/f_file1", "Fuse file content"),
-            "Kernel": (f"{kernel_dir}/k_dir1/k_file1", "Kernel file content"),
-            "NFS": (f"{nfs_dir}/n_dir1/n_file1", "NFS file content"),
+            "Fuse": ("%s/f_dir1/f_file1" % fuse_dir, "Fuse file content"),
+            "Kernel": ("%s/k_dir1/k_file1" % kernel_dir, "Kernel file content"),
+            "NFS": ("%s/n_dir1/n_file1" % nfs_dir, "NFS file content"),
         }
-
         # Loop through each mount point and create the tagged file.
         for label, (file_path, content) in files_to_create.items():
             ref_inode_utils.create_file_with_content(client, file_path, content)
-            log.info(f"Created file inside {label} mount: {file_path}")
+            log.info("Created file inside %s mount: %s" % (label, file_path))
 
         ref_inode_utils.flush_journal_on_active_mdss(fs_util, client, default_fs)
 
         # Get inode numbers for each file and tag them accordingly.
         f_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{fuse_dir}/f_dir1/f_file1"
+            client, "%s/f_dir1/f_file1" % fuse_dir
         )
         k_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{kernel_dir}/k_dir1/k_file1"
+            client, "%s/k_dir1/k_file1" % kernel_dir
         )
         n_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{nfs_dir}/n_dir1/n_file1"
+            client, "%s/n_dir1/n_file1" % nfs_dir
         )
 
         # Log the inode numbers.
-        log.info(f"Inode of f_file1: {f_file1_inode}")
-        log.info(f"Inode of k_file1: {k_file1_inode}")
-        log.info(f"Inode of n_file1: {n_file1_inode}")
+        log.info("Inode of f_file1: %s", f_file1_inode)
+        log.info("Inode of k_file1: %s", k_file1_inode)
+        log.info("Inode of n_file1: %s", n_file1_inode)
 
         # --------- Scenario : Check hard links and referent inodes -----------
         # Dictionary to store referent inodes
@@ -115,80 +119,80 @@ def run(ceph_cluster, **kwargs):
             )
 
             file_path = inode_data.get("path", "Unknown")
-            log.info(f"{tag} is located at: {file_path}")
+            log.info("%s is located at: %s" % (tag, file_path))
 
             # Check hard links (`nlink`)
             nlink = inode_data.get("nlink", 1)
             if nlink > 1:
                 hardlinks = nlink - 1
                 log.info(
-                    f"Hard links found for {tag}: {hardlinks} (Total links: {nlink})"
+                    "Hard links found for %s: %s (Total links: %s)"
+                    % (tag, hardlinks, nlink)
                 )
             else:
-                log.info(f"No hard links found for {tag}")
+                log.info("No hard links found for %s" % tag)
 
             # Handle referent inodes
             referent_inodes = inode_data.get("referent_inodes", [])
             if referent_inodes:
-                log.info(f"Referent inodes for {tag}: {referent_inodes}")
+                log.info("Referent inodes for %s: %s" % (tag, referent_inodes))
                 referent_inodes_map[tag] = referent_inodes  # Store for future use
             else:
-                log.info(f"No referent inodes found for {tag}")
+                log.info("No referent inodes found for %s" % tag)
                 referent_inodes_map[tag] = (
                     None  # Explicitly store None if no referent inodes
                 )
+
         # Log the stored referent inodes for future use
-        log.info(f"Stored referent inodes: {referent_inodes_map}")
+        log.info("Stored referent inodes: %s" % referent_inodes_map)
 
         # -------- Scenario: Modify file content and validate referent inodes -----------
         log.info("Scenario 2 : Modify file content and validate referent inodes")
         # Step 1: Get initial inode numbers before modification
         initial_f_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{fuse_dir}/f_dir1/f_file1"
+            client, "%s/f_dir1/f_file1" % fuse_dir
         )
         initial_k_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{kernel_dir}/k_dir1/k_file1"
+            client, "%s/k_dir1/k_file1" % kernel_dir
         )
         initial_n_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{nfs_dir}/n_dir1/n_file1"
+            client, "%s/n_dir1/n_file1" % nfs_dir
         )
 
         log.info(
-            f"Before modification - "
-            f"Inodes: f_file1={initial_f_file1_inode}, "
-            f"k_file1={initial_k_file1_inode}, "
-            f"n_file1={initial_n_file1_inode}"
+            "Before modification - "
+            "Inodes: f_file1=%s, k_file1=%s, n_file1=%s"
+            % (initial_f_file1_inode, initial_k_file1_inode, initial_n_file1_inode)
         )
 
         # Step 2: Append content to the files
         ref_inode_utils.append_to_file(
-            client, f"{fuse_dir}/f_dir1/f_file1", "New content for fuse file"
+            client, "%s/f_dir1/f_file1" % fuse_dir, "New content for fuse file"
         )
         ref_inode_utils.append_to_file(
-            client, f"{kernel_dir}/k_dir1/k_file1", "New content for kernel file"
+            client, "%s/k_dir1/k_file1" % kernel_dir, "New content for kernel file"
         )
         ref_inode_utils.append_to_file(
-            client, f"{nfs_dir}/n_dir1/n_file1", "New content for NFS file"
+            client, "%s/n_dir1/n_file1" % nfs_dir, "New content for NFS file"
         )
 
         ref_inode_utils.flush_journal_on_active_mdss(fs_util, client, default_fs)
 
         # Step 3: Get inode numbers after modification
         modified_f_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{fuse_dir}/f_dir1/f_file1"
+            client, "%s/f_dir1/f_file1" % fuse_dir
         )
         modified_k_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{kernel_dir}/k_dir1/k_file1"
+            client, "%s/k_dir1/k_file1" % kernel_dir
         )
         modified_n_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{nfs_dir}/n_dir1/n_file1"
+            client, "%s/n_dir1/n_file1" % nfs_dir
         )
 
         log.info(
-            f"After modification - Inodes: "
-            f"f_file1={modified_f_file1_inode}, "
-            f"k_file1={modified_k_file1_inode}, "
-            f"n_file1={modified_n_file1_inode}"
+            "After modification - Inodes: "
+            "f_file1=%s, k_file1=%s, n_file1=%s"
+            % (modified_f_file1_inode, modified_k_file1_inode, modified_n_file1_inode)
         )
 
         # Step 4: Validate that the inode numbers remain unchanged
@@ -216,10 +220,13 @@ def run(ceph_cluster, **kwargs):
 
             referent_inodes = inode_data.get("referent_inodes", [])
             if referent_inodes:
-                log.info(f"Referent inodes for {tag} remain intact: {referent_inodes}")
+                log.info(
+                    "Referent inodes for %s remain intact: %s" % (tag, referent_inodes)
+                )
             else:
                 log.info(
-                    f"No referent inodes found for {tag}, consistent with original state."
+                    "No referent inodes found for %s, consistent with original state."
+                    % tag
                 )
 
         # ---- Scenario: Validate referent inodes when a file is hardlinked within the same directory--
@@ -227,18 +234,18 @@ def run(ceph_cluster, **kwargs):
             "Scenario 3: Validate referent inodes when a file is hardlinked within the same directory"
         )
         # Create hard links for the files
-        f_file1_link = f"{fuse_dir}/f_dir1/f_file1_hl"
-        k_file1_link = f"{kernel_dir}/k_dir1/k_file1_hl"
-        n_file1_link = f"{nfs_dir}/n_dir1/n_file1_hl"
+        f_file1_link = "%s/f_dir1/f_file1_hl" % fuse_dir
+        k_file1_link = "%s/k_dir1/k_file1_hl" % kernel_dir
+        n_file1_link = "%s/n_dir1/n_file1_hl" % nfs_dir
 
         ref_inode_utils.create_hardlink(
-            client, f"{fuse_dir}/f_dir1/f_file1", f_file1_link
+            client, "%s/f_dir1/f_file1" % fuse_dir, f_file1_link
         )
         ref_inode_utils.create_hardlink(
-            client, f"{kernel_dir}/k_dir1/k_file1", k_file1_link
+            client, "%s/k_dir1/k_file1" % kernel_dir, k_file1_link
         )
         ref_inode_utils.create_hardlink(
-            client, f"{nfs_dir}/n_dir1/n_file1", n_file1_link
+            client, "%s/n_dir1/n_file1" % nfs_dir, n_file1_link
         )
 
         ref_inode_utils.flush_journal_on_active_mdss(fs_util, client, default_fs)
@@ -265,29 +272,32 @@ def run(ceph_cluster, **kwargs):
             )
 
             file_path = inode_data.get("path", "Unknown")
-            log.info(f"{tag} is located at: {file_path}")
+            log.info("%s is located at: %s" % (tag, file_path))
 
             # Check hard links (`nlink`)
             nlink = inode_data.get("nlink", 1)
             if nlink > 1:
                 hardlinks = nlink - 1
                 log.info(
-                    f"Hard links found for {tag}: {hardlinks} (Total links: {nlink})"
+                    "Hard links found for %s: %s (Total links: %s)"
+                    % (tag, hardlinks, nlink)
                 )
             else:
-                log.info(f"No hard links found for {tag}")
+                log.info("No hard links found for %s" % tag)
 
             # Handle referent inodes
             referent_inodes = inode_data.get("referent_inodes", [])
             if referent_inodes:
-                log.info(f"Referent inodes for {tag}: {referent_inodes}")
+                log.info("Referent inodes for %s: %s" % (tag, referent_inodes))
                 referent_inodes_map[tag] = referent_inodes  # Store for validation
             else:
-                log.info(f"No referent inodes found for {tag}")
+                log.info("No referent inodes found for %s" % tag)
                 referent_inodes_map[tag] = []
 
+            # Log stored referent inodes
+            log.info("Stored referent inodes: %s" % referent_inodes_map)
         # Log stored referent inodes
-        log.info(f"Stored referent inodes: {referent_inodes_map}")
+        log.info("Stored referent inodes: %s" % referent_inodes_map)
 
         # Dictionary to store original source inodes
         inodes_map = {
@@ -300,7 +310,7 @@ def run(ceph_cluster, **kwargs):
         for file_name, inode_list in referent_inodes_map.items():
             if not inode_list:  # Skip empty lists
                 log.info(
-                    f"No referent inodes found for {file_name}, skipping validation."
+                    "No referent inodes found for %s, skipping validation." % file_name
                 )
                 continue
 
@@ -308,13 +318,14 @@ def run(ceph_cluster, **kwargs):
             mount_dir = mount_dir_map.get(file_name)
 
             if source_inode is None:
-                log.error(f"Inode for {file_name} not found! Skipping validation.")
+                log.error("Inode for %s not found! Skipping validation." % file_name)
                 continue
 
             for referent_inode in inode_list:
                 log.info(
-                    f"Fetching details for referent inode {referent_inode} ({file_name})\n"
+                    "Fetching details for referent inode %s (%s)\n"
                     "and validating linkage to source file"
+                    % (referent_inode, file_name)
                 )
 
                 ref_inode_utils.get_referent_inode_details(
@@ -325,30 +336,30 @@ def run(ceph_cluster, **kwargs):
         log.info("Scenario 4 : Rename source file and validate referent inodes")
         # Step 1: Capture inode numbers before renaming
         initial_f_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{fuse_dir}/f_dir1/f_file1"
+            client, "%s/f_dir1/f_file1" % fuse_dir
         )
         initial_k_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{kernel_dir}/k_dir1/k_file1"
+            client, "%s/k_dir1/k_file1" % kernel_dir
         )
         initial_n_file1_inode = ref_inode_utils.get_inode_number(
-            client, f"{nfs_dir}/n_dir1/n_file1"
+            client, "%s/n_dir1/n_file1" % nfs_dir
         )
 
         log.info(
-            f"Before renaming - Inodes: "
-            f"f_file1={initial_f_file1_inode}, "
-            f"k_file1={initial_k_file1_inode}, "
-            f"n_file1={initial_n_file1_inode}"
+            "Before renaming - Inodes: f_file1=%s, k_file1=%s, n_file1=%s"
+            % (initial_f_file1_inode, initial_k_file1_inode, initial_n_file1_inode)
         )
 
         # Step 2: Rename the files
-        f_file1_new = f"{fuse_dir}/f_dir1/f_file1_renamed"
-        k_file1_new = f"{kernel_dir}/k_dir1/k_file1_renamed"
-        n_file1_new = f"{nfs_dir}/n_dir1/n_file1_renamed"
+        f_file1_new = "%s/f_dir1/f_file1_renamed" % fuse_dir
+        k_file1_new = "%s/k_dir1/k_file1_renamed" % kernel_dir
+        n_file1_new = "%s/n_dir1/n_file1_renamed" % nfs_dir
 
-        ref_inode_utils.rename_file(client, f"{fuse_dir}/f_dir1/f_file1", f_file1_new)
-        ref_inode_utils.rename_file(client, f"{kernel_dir}/k_dir1/k_file1", k_file1_new)
-        ref_inode_utils.rename_file(client, f"{nfs_dir}/n_dir1/n_file1", n_file1_new)
+        ref_inode_utils.rename_file(client, "%s/f_dir1/f_file1" % fuse_dir, f_file1_new)
+        ref_inode_utils.rename_file(
+            client, "%s/k_dir1/k_file1" % kernel_dir, k_file1_new
+        )
+        ref_inode_utils.rename_file(client, "%s/n_dir1/n_file1" % nfs_dir, n_file1_new)
 
         # Step 3: Capture inode numbers after renaming
         renamed_f_file1_inode = ref_inode_utils.get_inode_number(client, f_file1_new)
@@ -356,10 +367,11 @@ def run(ceph_cluster, **kwargs):
         renamed_n_file1_inode = ref_inode_utils.get_inode_number(client, n_file1_new)
 
         log.info(
-            f"After renaming - Inodes: "
-            f"f_file1={renamed_f_file1_inode}, "
-            f"k_file1={renamed_k_file1_inode}, "
-            f"n_file1={renamed_n_file1_inode}"
+            "After renaming - Inodes: "
+            "f_file1=%s, "
+            "k_file1=%s, "
+            "n_file1=%s"
+            % (renamed_f_file1_inode, renamed_k_file1_inode, renamed_n_file1_inode)
         )
 
         # Step 4: Validate that inode numbers remain unchanged
@@ -389,11 +401,14 @@ def run(ceph_cluster, **kwargs):
 
             referent_inodes = inode_data.get("referent_inodes", [])
             if referent_inodes:
-                log.info(f"Referent inodes for {tag} remain intact: {referent_inodes}")
+                log.info(
+                    "Referent inodes for %s remain intact: %s", tag, referent_inodes
+                )
                 referent_inodes_map[tag] = referent_inodes
             else:
                 log.info(
-                    f"No referent inodes found for {tag}, consistent with original state."
+                    "No referent inodes found for %s, consistent with original state.",
+                    tag,
                 )
                 referent_inodes_map[tag] = None  # Explicitly store None
 
@@ -408,13 +423,14 @@ def run(ceph_cluster, **kwargs):
             if inode_list:  # Ensure it’s not None
                 for referent_inode in inode_list:
                     log.info(
-                        f"Fetching details for referent inode {referent_inode} ({file_name})\n"
-                        "and validating linkage to source file"
+                        "Fetching details for referent inode %s (%s)\n"
+                        "and validating linkage to source file",
+                        referent_inode,
+                        file_name,
                     )
-
                     source_inode = renamed_inodes.get(file_name)
                     if source_inode is None:
-                        log.error(f"Renamed inode for {file_name} not found!")
+                        log.error("Renamed inode for %s not found!", file_name)
                         continue
 
                     ref_inode_utils.get_referent_inode_details(
@@ -422,7 +438,7 @@ def run(ceph_cluster, **kwargs):
                     )
             else:
                 log.info(
-                    f"No referent inodes found for {file_name}, skipping validation."
+                    "No referent inodes found for %s, skipping validation.", file_name
                 )
 
         log.info("File renaming test passed - referent inodes remained unchanged.")
@@ -442,7 +458,7 @@ def run(ceph_cluster, **kwargs):
         # Loop through the mount directories and create the necessary directories.
         for label, (base_path, dirs) in new_subdirs.items():
             ref_inode_utils.create_directories(client, base_path, dirs)
-            log.info(f"Created directories inside {label} mount: {dirs}")
+            log.info("Created directories inside %s mount: %s", label, dirs)
 
         # Step 2: Flush journal before hard link creation
         ref_inode_utils.flush_journal_on_active_mdss(fs_util, client, default_fs)
@@ -450,25 +466,28 @@ def run(ceph_cluster, **kwargs):
         # Step 3: Creating hard links within the same mount type
         same_mount_hard_links = {
             "Fuse": (
-                f"{fuse_dir}/f_dir1/f_file1_renamed",
-                f"{fuse_dir}/f_dir2/f_file1_hl",
+                "%s/f_dir1/f_file1_renamed" % fuse_dir,
+                "%s/f_dir2/f_file1_hl" % fuse_dir,
             ),
             "Kernel": (
-                f"{kernel_dir}/k_dir1/k_file1_renamed",
-                f"{kernel_dir}/k_dir2/k_file1_hl",
+                "%s/k_dir1/k_file1_renamed" % kernel_dir,
+                "%s/k_dir2/k_file1_hl" % kernel_dir,
             ),
             "NFS": (
-                f"{nfs_dir}/n_dir1/n_file1_renamed",
-                f"{nfs_dir}/n_dir2/n_file1_hl",
+                "%s/n_dir1/n_file1_renamed" % nfs_dir,
+                "%s/n_dir2/n_file1_hl" % nfs_dir,
             ),
         }
 
         for tag, (src, dest) in same_mount_hard_links.items():
             try:
                 ref_inode_utils.create_hardlink(client, src, dest)
-                log.info(f"Created same-mount hard link: {src} -> {dest}")
+                log.info("Created same-mount hard link: %s -> %s" % (src, dest))
             except CommandFailed as e:
-                log.error(f"Failed to create same-mount hard link {src} -> {dest}: {e}")
+                log.error(
+                    "Failed to create same-mount hard link %s -> %s: %s"
+                    % (src, dest, e)
+                )
                 return 1
 
         # Step 4: Flush journal after hard link creation
@@ -480,13 +499,13 @@ def run(ceph_cluster, **kwargs):
         # Capture inode numbers for validation
         file_inode_map = {
             "f_file1_renamed": ref_inode_utils.get_inode_number(
-                client, f"{fuse_dir}/f_dir1/f_file1_renamed"
+                client, "%s/f_dir1/f_file1_renamed" % fuse_dir
             ),
             "k_file1_renamed": ref_inode_utils.get_inode_number(
-                client, f"{kernel_dir}/k_dir1/k_file1_renamed"
+                client, "%s/k_dir1/k_file1_renamed" % kernel_dir
             ),
             "n_file1_renamed": ref_inode_utils.get_inode_number(
-                client, f"{nfs_dir}/n_dir1/n_file1_renamed"
+                client, "%s/n_dir1/n_file1_renamed" % nfs_dir
             ),
         }
 
@@ -503,15 +522,17 @@ def run(ceph_cluster, **kwargs):
             referent_inodes = inode_data.get("referent_inodes", [])
 
             if referent_inodes:
-                log.info(f"Referent inodes for {tag}: {referent_inodes}")
+                log.info("Referent inodes for %s: %s", tag, referent_inodes)
                 referent_inodes_map[tag] = referent_inodes
             else:
                 log.info(
-                    f"No referent inodes found for {tag}, consistent with original state."
+                    "No referent inodes found for %s, consistent with original state.",
+                    tag,
                 )
+
                 referent_inodes_map[tag] = None  # Explicitly store None
 
-        log.info(f"Referent inode details: {referent_inodes_map}")
+        log.info("Referent inode details: %s", referent_inodes_map)
 
         # Step 6: Validate referent inode linkage
         for file_name, inode_list in referent_inodes_map.items():
@@ -520,15 +541,17 @@ def run(ceph_cluster, **kwargs):
 
                 for referent_inode in inode_list:
                     log.info(
-                        f"Fetching details for referent inode {referent_inode} ({file_name})\n"
-                        "and validating linkage to source file"
+                        "Fetching details for referent inode %s (%s)\n"
+                        "and validating linkage to source file",
+                        referent_inode,
+                        file_name,
                     )
                     ref_inode_utils.get_referent_inode_details(
                         client, default_fs, source_inode, referent_inode, mount_dir
                     )
             else:
                 log.info(
-                    f"No referent inodes found for {file_name}, skipping validation."
+                    "No referent inodes found for %s, skipping validation.", file_name
                 )
 
         log.info("Hard link test across directories passed successfully.")
@@ -539,25 +562,25 @@ def run(ceph_cluster, **kwargs):
         # Step 1: Renaming hardlinked files
         renamed_files = {
             "Fuse": (
-                f"{fuse_dir}/f_dir1/f_file1_hl",
-                f"{fuse_dir}/f_dir1/f_file1_hl_renamed",
+                "%s/f_dir1/f_file1_hl" % fuse_dir,
+                "%s/f_dir1/f_file1_hl_renamed" % fuse_dir,
             ),
             "Kernel": (
-                f"{kernel_dir}/k_dir1/k_file1_hl",
-                f"{kernel_dir}/k_dir1/k_file1_hl_renamed",
+                "%s/k_dir1/k_file1_hl" % kernel_dir,
+                "%s/k_dir1/k_file1_hl_renamed" % kernel_dir,
             ),
             "NFS": (
-                f"{nfs_dir}/n_dir1/n_file1_hl",
-                f"{nfs_dir}/n_dir1/n_file1_hl_renamed",
+                "%s/n_dir1/n_file1_hl" % nfs_dir,
+                "%s/n_dir1/n_file1_hl_renamed" % nfs_dir,
             ),
         }
 
         for tag, (old_path, new_path) in renamed_files.items():
             try:
                 ref_inode_utils.rename_file(client, old_path, new_path)
-                log.info(f"Renamed hardlinked file: {old_path} -> {new_path}")
+                log.info("Renamed hardlinked file: %s -> %s", old_path, new_path)
             except CommandFailed as e:
-                log.error(f"Failed to rename file {old_path} -> {new_path}: {e}")
+                log.error("Failed to rename file %s -> %s: %s", old_path, new_path, e)
                 return 1
 
         # Step 2: Flush journal to ensure metadata consistency
@@ -569,13 +592,13 @@ def run(ceph_cluster, **kwargs):
         # Capture inode numbers dynamically before validation
         file_inode_map = {
             "f_file1_renamed": ref_inode_utils.get_inode_number(
-                client, f"{fuse_dir}/f_dir1/f_file1_renamed"
+                client, "%s/f_dir1/f_file1_renamed" % fuse_dir
             ),
             "k_file1_renamed": ref_inode_utils.get_inode_number(
-                client, f"{kernel_dir}/k_dir1/k_file1_renamed"
+                client, "%s/k_dir1/k_file1_renamed" % kernel_dir
             ),
             "n_file1_renamed": ref_inode_utils.get_inode_number(
-                client, f"{nfs_dir}/n_dir1/n_file1_renamed"
+                client, "%s/n_dir1/n_file1_renamed" % nfs_dir
             ),
         }
 
@@ -592,15 +615,18 @@ def run(ceph_cluster, **kwargs):
             referent_inodes = inode_data.get("referent_inodes", [])
 
             if referent_inodes:
-                log.info(f"Referent inodes for {tag} after rename: {referent_inodes}")
+                log.info(
+                    "Referent inodes for %s after rename: %s", tag, referent_inodes
+                )
                 renamed_referent_inodes_map[tag] = referent_inodes
             else:
                 log.info(
-                    f"No referent inodes found for {tag} after rename, consistent with original state."
+                    "No referent inodes found for %s after rename, consistent with original state.",
+                    tag,
                 )
                 renamed_referent_inodes_map[tag] = None  # Explicitly store None
 
-        log.info(f"Referent inode details after rename: {renamed_referent_inodes_map}")
+        log.info("Referent inode details after rename: %s", renamed_referent_inodes_map)
 
         # Step 4: Validate that referent inodes remain unchanged after rename
         if referent_inodes_map != renamed_referent_inodes_map:
@@ -614,15 +640,17 @@ def run(ceph_cluster, **kwargs):
 
                 for referent_inode in inode_list:
                     log.info(
-                        f"Fetching details for referent inode {referent_inode} ({file_name})\n"
-                        "and validating linkage to source file"
+                        "Fetching details for referent inode %s (%s)\n"
+                        "and validating linkage to source file",
+                        referent_inode,
+                        file_name,
                     )
                     ref_inode_utils.get_referent_inode_details(
                         client, default_fs, source_inode, referent_inode, mount_dir
                     )
             else:
                 log.info(
-                    f"No referent inodes found for {file_name}, skipping validation."
+                    "No referent inodes found for %s, skipping validation.", file_name
                 )
 
         log.info("Rename test for hardlinked files passed successfully.")
@@ -635,25 +663,25 @@ def run(ceph_cluster, **kwargs):
         # Step 1: Moving renamed hardlinked files
         moved_files = {
             "Fuse": (
-                f"{fuse_dir}/f_dir1/f_file1_hl_renamed",
-                f"{fuse_dir}/f_dir2/f_file1_hl_moved",
+                "%s/f_dir1/f_file1_hl_renamed" % fuse_dir,
+                "%s/f_dir2/f_file1_hl_moved" % fuse_dir,
             ),
             "Kernel": (
-                f"{kernel_dir}/k_dir1/k_file1_hl_renamed",
-                f"{kernel_dir}/k_dir2/k_file1_hl_moved",
+                "%s/k_dir1/k_file1_hl_renamed" % kernel_dir,
+                "%s/k_dir2/k_file1_hl_moved" % kernel_dir,
             ),
             "NFS": (
-                f"{nfs_dir}/n_dir1/n_file1_hl_renamed",
-                f"{nfs_dir}/n_dir2/n_file1_hl_moved",
+                "%s/n_dir1/n_file1_hl_renamed" % nfs_dir,
+                "%s/n_dir2/n_file1_hl_moved" % nfs_dir,
             ),
         }
 
         for tag, (old_path, new_path) in moved_files.items():
             try:
                 ref_inode_utils.rename_file(client, old_path, new_path)
-                log.info(f"Moved renamed hardlinked file: {old_path} -> {new_path}")
+                log.info("Moved renamed hardlinked file: %s -> %s", old_path, new_path)
             except CommandFailed as e:
-                log.error(f"Failed to move file {old_path} -> {new_path}: {e}")
+                log.error("Failed to move file %s -> %s: %s", old_path, new_path, e)
                 return 1
 
         # Step 2: Flush journal to ensure metadata consistency
@@ -664,13 +692,13 @@ def run(ceph_cluster, **kwargs):
 
         file_inode_map = {
             "f_file1_renamed": ref_inode_utils.get_inode_number(
-                client, f"{fuse_dir}/f_dir2/f_file1_hl_moved"
+                client, "%s/f_dir2/f_file1_hl_moved" % fuse_dir
             ),
             "k_file1_renamed": ref_inode_utils.get_inode_number(
-                client, f"{kernel_dir}/k_dir2/k_file1_hl_moved"
+                client, "%s/k_dir2/k_file1_hl_moved" % kernel_dir
             ),
             "n_file1_renamed": ref_inode_utils.get_inode_number(
-                client, f"{nfs_dir}/n_dir2/n_file1_hl_moved"
+                client, "%s/n_dir2/n_file1_hl_moved" % nfs_dir
             ),
         }
 
@@ -683,7 +711,7 @@ def run(ceph_cluster, **kwargs):
         for tag, inode in file_inode_map.items():
             if inode is None:
                 log.error(
-                    f"Failed to retrieve inode number for {tag}. Skipping validation."
+                    "Failed to retrieve inode number for %s. Skipping validation.", tag
                 )
                 return 1
 
@@ -695,19 +723,20 @@ def run(ceph_cluster, **kwargs):
             referent_inodes = inode_data.get("referent_inodes", [])
 
             if referent_inodes:
-                log.info(f"Referent inodes for {tag} after move: {referent_inodes}")
+                log.info("Referent inodes for %s after move: %s", tag, referent_inodes)
                 moved_referent_inodes_map[tag] = referent_inodes
             else:
                 log.info(
-                    f"No referent inodes found for {tag} after move, consistent with original state."
+                    "No referent inodes found for %s after move, consistent with original state.",
+                    tag,
                 )
                 moved_referent_inodes_map[tag] = None  # Explicitly store None
 
-        log.info(f"Referent inode details after move: {moved_referent_inodes_map}")
+        log.info("Referent inode details after move: %s", moved_referent_inodes_map)
 
         # Step 4: Validate that referent inodes remain unchanged after move
-        log.info(f"Renamed Referent Inode Map: {renamed_referent_inodes_map}")
-        log.info(f"Moved Referent Inode Map: {moved_referent_inodes_map}")
+        log.info("Renamed Referent Inode Map: %s", renamed_referent_inodes_map)
+        log.info("Moved Referent Inode Map: %s", moved_referent_inodes_map)
 
         if renamed_referent_inodes_map != moved_referent_inodes_map:
             log.error("Referent inodes changed after moving!")
@@ -718,21 +747,23 @@ def run(ceph_cluster, **kwargs):
             if inode_list:  # Ensure it’s not None
                 source_inode = file_inode_map.get(tag)
                 if source_inode is None:
-                    log.error(f"Source inode for {tag} is None. Skipping validation.")
+                    log.error("Source inode for %s is None. Skipping validation.", tag)
                     continue
 
                 mount_dir = mount_dirs[tag]  # Ensure correct mount_dir for validation
 
                 for referent_inode in inode_list:
                     log.info(
-                        f"Fetching details for referent inode {referent_inode} ({tag})\n"
-                        "and validating linkage to source file"
+                        "Fetching details for referent inode %s (%s)\n"
+                        "and validating linkage to source file",
+                        referent_inode,
+                        tag,
                     )
                     ref_inode_utils.get_referent_inode_details(
                         client, default_fs, source_inode, referent_inode, mount_dir
                     )
             else:
-                log.info(f"No referent inodes found for {tag}, skipping validation.")
+                log.info("No referent inodes found for %s, skipping validation.", tag)
 
         log.info("Move test for renamed hardlinked files passed successfully.")
 
@@ -742,16 +773,16 @@ def run(ceph_cluster, **kwargs):
         )
         cross_mount_hard_links = {
             "Fuse_to_Kernel": (
-                f"{fuse_dir}/f_dir1/f_file1_renamed",
-                f"{kernel_dir}/k_dir1/f_file1_hl",
+                "%s/f_dir1/f_file1_renamed" % fuse_dir,
+                "%s/k_dir1/f_file1_hl" % kernel_dir,
             ),
             "Kernel_to_NFS": (
-                f"{kernel_dir}/k_dir1/k_file1_renamed",
-                f"{nfs_dir}/n_dir1/k_file1_hl",
+                "%s/k_dir1/k_file1_renamed" % kernel_dir,
+                "%s/n_dir1/k_file1_hl" % nfs_dir,
             ),
             "NFS_to_Fuse": (
-                f"{nfs_dir}/n_dir1/n_file1_renamed",
-                f"{fuse_dir}/f_dir1/n_file1_hl",
+                "%s/n_dir1/n_file1_renamed" % nfs_dir,
+                "%s/f_dir1/n_file1_hl" % fuse_dir,
             ),
         }
 
@@ -760,17 +791,21 @@ def run(ceph_cluster, **kwargs):
         )
 
         for tag, (src, dest) in cross_mount_hard_links.items():
-            log.info(f"Attempting to create hard link: {src} -> {dest}")
+            log.info("Attempting to create hard link: %s -> %s", src, dest)
             result = ref_inode_utils.create_hardlink(client, src, dest)
             if result:
                 log.error(
-                    f"ERROR: Unexpectedly created cross-mount hard link {src} -> {dest}"
+                    "ERROR: Unexpectedly created cross-mount hard link %s -> %s",
+                    src,
+                    dest,
                 )
                 unexpected_failure = (
                     True  # Mark failure but continue checking other links
                 )
             else:
-                log.info(f"Expected failure for cross-mount hard link {src} -> {dest}")
+                log.info(
+                    "Expected failure for cross-mount hard link %s -> %s", src, dest
+                )
 
             # If any hard link was unexpectedly created, return failure
         if unexpected_failure:
@@ -780,6 +815,83 @@ def run(ceph_cluster, **kwargs):
         log.info(
             "Cross-mount hard link validation passed. All expected failures occurred."
         )
+
+        # ----- SCENARIO: Fetch and unlink all hardlinks -----
+        log.info(
+            "Scenario 9: Retrieve all hard links, unlink them, and verify removal of referent inodes."
+        )
+        # Dictionary to store initial referent inodes
+        referent_inodes_map = {}
+        post_referent_inodes_map = {}
+
+        # Define file paths
+        file_paths = {
+            "f_file1_renamed": "%s/f_dir1/f_file1_renamed" % fuse_dir,
+            "k_file1_renamed": "%s/k_dir1/k_file1_renamed" % kernel_dir,
+            "n_file1_renamed": "%s/n_dir1/n_file1_renamed" % nfs_dir,
+        }
+
+        # Fetch and store inode details before unlinking
+        file_inode_map = {
+            tag: ref_inode_utils.get_inode_number(client, path)
+            for tag, path in file_paths.items()
+        }
+
+        for tag, inode in file_inode_map.items():
+            mount_dir = file_paths[tag].rsplit("/", 1)[0]  # Extract mount directory
+            inode_data = ref_inode_utils.get_inode_details(
+                client, default_fs, inode, mount_dir
+            )
+            referent_inodes_map[tag] = inode_data.get("referent_inodes", None)
+            log.info("%s referent inodes: %s", tag, referent_inodes_map[tag])
+
+        log.info("Initial referent inodes: %s", referent_inodes_map)
+
+        mount_dirs = {
+            "f_file1_renamed": fuse_dir,
+            "k_file1_renamed": kernel_dir,
+            "n_file1_renamed": nfs_dir,
+        }
+
+        # Unlink hardlinks
+        log.info("Unlinking hardlinks for all files...")
+        for tag, path in file_paths.items():
+            mount_dir = mount_dirs.get(tag, None)
+            if mount_dir:
+                ref_inode_utils.unlink_hardlinks(client, default_fs, path, mount_dir)
+            else:
+                log.error("Skipping %s: Mount directory not found", tag)
+
+        ref_inode_utils.flush_journal_on_active_mdss(fs_util, client, default_fs)
+
+        # Verify referent inodes after unlinking
+        log.info("Verifying referent inodes after unlinking...")
+        for tag, inode in file_inode_map.items():
+            mount_dir = file_paths[tag].rsplit("/", 1)[0]
+            inode_data = ref_inode_utils.get_inode_details(
+                client, default_fs, inode, mount_dir
+            )
+            post_referent_inodes_map[tag] = inode_data.get("referent_inodes", []) or []
+            log.info(
+                "%s referent inodes after unlinking: %s",
+                tag,
+                post_referent_inodes_map[tag],
+            )
+
+        log.info("Post unlink referent inodes: %s", post_referent_inodes_map)
+
+        for tag, inodes in post_referent_inodes_map.items():
+            if (
+                inodes and len(inodes) > 0
+            ):  # Ensures only non-empty lists trigger an error
+                log.error("Referent inodes for %s still exist: %s", tag, inodes)
+                raise AssertionError(
+                    "Unexpected referent inodes found for {}".format(tag)
+                )
+            else:
+                log.info("Referent inodes successfully removed for %s", tag)
+
+        log.info("Test passed: All referent inodes removed as expected.")
 
         return 0
     except Exception as err:
