@@ -1282,11 +1282,7 @@ class SSHConnectionManager(object):
         self.username = username
         self.password = password
         self.look_for_keys = look_for_keys
-        self.pkey = (
-            paramiko.RSAKey.from_private_key_file(private_key_file_path)
-            if look_for_keys
-            else None
-        )
+        self.pkey = self._get_ssh_key(private_key_file_path) if look_for_keys else None
         self.__client = paramiko.SSHClient()
         self.__client.set_missing_host_key_policy(paramiko.MissingHostKeyPolicy())
         self.__transport = None
@@ -1296,6 +1292,19 @@ class SSHConnectionManager(object):
     @property
     def client(self):
         return self.get_client()
+
+    def _get_ssh_key(self, private_key_file_path):
+        """Get SSH key based on file type"""
+        with open(private_key_file_path, "r") as f:
+            _header = f.readline().strip()
+
+        if "BEGIN OPENSSH PRIVATE KEY" in _header:
+            return paramiko.Ed25519Key.from_private_key_file(private_key_file_path)
+        elif "BEGIN RSA PRIVATE KEY" in _header:
+            return paramiko.RSAKey.from_private_key_file(private_key_file_path)
+
+        logger.error("Unsupported ssh key {}".format(private_key_file_path))
+        return False
 
     def get_client(self):
         if not (self.__transport and self.__transport.is_active()):
