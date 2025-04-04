@@ -77,9 +77,21 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        run-on-haproxy: true
       desc: test to create "M" no of buckets and "N" no of objects with download
       module: sanity_rgw.py
       name: download objects pre upgrade
@@ -102,6 +114,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests pre upgrade
@@ -245,6 +258,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        run-on-haproxy: true
       desc: test to create "M" no of buckets and "N" no of objects with download
       module: sanity_rgw.py
       name: download objects post upgrade
@@ -267,6 +281,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
 
   - test:
       name: Dynamic Resharding tests post upgrade
