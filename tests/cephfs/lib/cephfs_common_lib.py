@@ -45,19 +45,17 @@ class CephFSCommonUtils(FsUtils):
         ceph_healthy = 0
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=wait_time)
         while ceph_healthy == 0 and (datetime.datetime.now() < end_time):
-            try:
-                self.get_ceph_health_status(client)
+            if self.check_ceph_status(client, "HEALTH_OK"):
                 ceph_healthy = 1
-            except Exception as ex:
-                log.info(ex)
-                out, rc = client.exec_command(sudo=True, cmd="ceph health detail")
+            else:
+                out, _ = client.exec_command(sudo=True, cmd="ceph health detail")
                 if "experiencing slow operations in BlueStore" in str(out):
                     log.info("Ignoring the known warning for Bluestore Slow ops")
                     ceph_healthy = 1
                 else:
                     log.info(
                         "Wait for sometime to check if Cluster health can be OK, current state : %s",
-                        ex,
+                        out,
                     )
                     time.sleep(5)
 
@@ -156,6 +154,7 @@ class CephFSCommonUtils(FsUtils):
             )
 
             mnt_type_list = ["kernel", "fuse", "nfs"]
+            mnt_type_list = ["kernel"]
             mount_details = {}
             sv_list = setup_params["sv_list"]
             fs_name = setup_params["fs_name"]
@@ -178,7 +177,6 @@ class CephFSCommonUtils(FsUtils):
                 )
                 mnt_client = random.choice(clients)
                 mount_params = {
-                    "fs_util": self.fs_util,
                     "client": mnt_client,
                     "mnt_path": mnt_path,
                     "fs_name": fs_name,
@@ -187,7 +185,6 @@ class CephFSCommonUtils(FsUtils):
                     "nfs_server": setup_params["nfs_server"],
                     "nfs_name": setup_params["nfs_name"],
                 }
-
                 for mnt_type in mnt_type_list:
                     mounting_dir, _ = self.mount_ceph(mnt_type, mount_params)
                     mount_details[sv_name].update(
