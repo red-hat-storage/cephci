@@ -2,6 +2,7 @@ import datetime
 import random
 import traceback
 
+from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
@@ -10,6 +11,7 @@ from utility.log import Log
 
 log = Log(__name__)
 global cg_test_io_status
+global fscrypt_util
 
 
 def run(ceph_cluster, **kw):
@@ -76,8 +78,8 @@ def run(ceph_cluster, **kw):
         log.info("checking Pre-requisites")
         log.info("Verify Cluster is healthy before test")
         if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
-            assert False, "Cluster health is not OK even after waiting for 300secs"
-
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
         log.info("Setup test configuration")
         setup_params = cephfs_common_utils.test_setup(default_fs, client)
         fs_name = setup_params["fs_name"]
@@ -231,11 +233,8 @@ def fscrypt_lifecycle(fscrypt_test_params):
         fscrypt_sv[sv_name].update({"encrypt_path_list": encrypt_path_list_new})
 
     log.info("Validate file and directory names,file contents and ops before lock")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            fscrypt_util.validate_fscrypt(client1, "unlock", encrypt_path)
+    if test_validate(client1, "unlock", fscrypt_sv, fscrypt_util):
+        test_status += 1
 
     log.info("fscrypt lock")
     for sv_name in fscrypt_sv:
@@ -255,12 +254,8 @@ def fscrypt_lifecycle(fscrypt_test_params):
                     test_status += 1
 
     log.info("Validate file and directory names,file contents and ops in locked state")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            if fscrypt_util.validate_fscrypt(client1, "lock", encrypt_path):
-                test_status += 1
+    if test_validate(client1, "lock", fscrypt_sv, fscrypt_util):
+        test_status += 1
 
     log.info("fscrypt unlock")
     for sv_name in fscrypt_sv:
@@ -289,11 +284,8 @@ def fscrypt_lifecycle(fscrypt_test_params):
     # Read of encrypt path after unlock issue : https://issues.redhat.com/browse/RHEL-79046
     """
     log.info("Validate file and directory names,file contents and ops in unlocked state")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]['encrypt_path_list']
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict['encrypt_path_info']['encrypt_path']
-            fscrypt_util.validate_fscrypt(client1,'unlock',encrypt_path)
+    if test_validate(client1,"unlock",fscrypt_sv, fscrypt_util):
+        test_status += 1
     """
 
     log.info("fscrypt purge")
@@ -302,12 +294,8 @@ def fscrypt_lifecycle(fscrypt_test_params):
         test_status += fscrypt_util.purge(client1, mnt_pt)
 
     log.info("Validate file and directory names,file contents and ops in locked state")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            if fscrypt_util.validate_fscrypt(client1, "lock", encrypt_path):
-                test_status += 1
+    if test_validate(client1, "lock", fscrypt_sv, fscrypt_util):
+        test_status += 1
 
     log.info("fscrypt unlock after purge")
     for sv_name in fscrypt_sv:
@@ -336,12 +324,8 @@ def fscrypt_lifecycle(fscrypt_test_params):
     # Read of encrypt path after unlock issue : https://issues.redhat.com/browse/RHEL-79046
     """
     log.info("Validate file and directory names,file contents and ops in unlocked state")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]['encrypt_path_list']
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict['encrypt_path_info']['encrypt_path']
-            if fscrypt_util.validate_fscrypt(client1,'unlock',encrypt_path):
-                test_status += 1
+    if test_validate(client1,"unlock",fscrypt_sv, fscrypt_util):
+        test_status += 1
     """
 
     log.info("fscrypt metadata destroy for policy and protector")
@@ -410,16 +394,17 @@ def fscrypt_non_empty_dir(fscrypt_test_params):
     try:
         fscrypt_util.encrypt(client1, encrypt_path, mountpoint)
         log.error(
-            "FScrypt suceeded on non_empty dir %s, it's not expected", encrypt_path
+            "FAIL:FScrypt suceeded on non_empty dir %s, it's not expected", encrypt_path
         )
         return 1
-    except BaseException as ex:
-        if "cannot be encrypted because it is non-empty" in str(ex):
-            log.info("FScrypt failed on non_empty encrypt path with expected error")
+    except CommandFailed as ex:
+        exp_msg = "cannot be encrypted because it is non-empty"
+        if exp_msg in str(ex):
+            log.info("PASS:FScrypt didn't suceed on non_empty encrypt path")
             return 0
         else:
             log.error(
-                "FScrypt failed on non_empty encrypt path but with unexpected error"
+                "FAIL: Incorrect error message for FScrypt on non_empty encrypt path"
             )
             return 1
 
@@ -528,3 +513,16 @@ def fscrypt_io(client, file_list, run_time):
         with parallel() as p:
             for file_path in file_list:
                 p.spawn(fscrypt_fio, client, file_path, validate=False)
+
+
+def test_validate(client, mode, fscrypt_sv, fscrypt_util):
+    """
+    This method will validate data in encrypt path as per given mode - lock/unlock
+    """
+    for sv_name in fscrypt_sv:
+        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
+        for encrypt_dict in encrypt_path_list:
+            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
+            if fscrypt_util.validate_fscrypt(client, mode, encrypt_path):
+                return 1
+    return 0

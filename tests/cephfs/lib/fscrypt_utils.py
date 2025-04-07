@@ -735,71 +735,114 @@ class FscryptUtils(object):
         test_files_list = self.get_file_list(client, encrypt_path)
         test_file = random.choice(test_files_list)
         out, _ = client.exec_command(sudo=True, cmd=f"ls -l {test_file}")
-        line = out.split("\n")
-        if "total" in line[0]:
-            line.pop(0)
-
-        line_list = line[0].split(" ")
+        ls_out = out.split("\n")
+        if "total" in ls_out[0]:
+            ls_out.pop(0)
+        ls_list = re.split(r"\s+", ls_out[0])
 
         test_status = 0
-        for i in range(0, len(line_list)):
-            if i == 0:
-                found = 0
-                pattern = ["d", "-", "r", "w", "x", "."]
-                for i in range(0, len(line_list[0])):
-                    if line_list[0][i] in pattern:
-                        found += 1
 
-                if found == len(line_list[0]):
-                    log.info("File permissions not encrypted")
-                else:
-                    log.error("File permissions could be encrypted:%s", line_list[0])
-                    test_status += 1
-            elif i in [1, 4, 6]:
-                info = {1: "Number of links", 4: "Size_in_bytes", 6: "Date"}
-                res = re.search(r"(\d+)", line_list[i])
-                if res:
-                    log.info("%s info is not encrypted", info[i])
-                else:
-                    log.error("%s info could be encrypted:%s", info[i], line_list[i])
-                    test_status += 1
+        def check_perm(column):
+            """
+            This method checks if permissions field of ls output is encrypted
+            return - 1 if encrypted, 0 if not encrypted
+            """
+            found = 0
+            pattern = ["d", "-", "r", "w", "x", "."]
+            for i in range(0, len(ls_list[column])):
+                if ls_list[column][i] in pattern:
+                    found += 1
+            if found == len(ls_list[column]):
+                log.info("File permissions not encrypted")
+                return 0
+            else:
+                log.error("File permissions could be encrypted:%s", ls_list[column])
+                return 1
+
+        def check_links_size_date(column):
+            """
+            This method checks if soft/hard link field, size or date field of ls output is encrypted
+            return - 1 if encrypted, 0 if not encrypted
+            """
+            info = {1: "Number of links", 4: "Size_in_bytes", 6: "Date"}
+            res = re.search(r"(\d+)", ls_list[column])
+            if res:
+                log.info("%s info is not encrypted", info[column])
+                return 0
+            else:
+                log.error(
+                    "%s info could be encrypted:%s", info[column], ls_list[column]
+                )
+                return 1
+
+        def check_user_group_info(column):
+            """
+            This method checks if user and group field of ls output is encrypted
+            return - 1 if encrypted, 0 if not encrypted
+            """
+            cmd = "awk -F':' '{ print $1}' /etc/passwd"
+            out, _ = client.exec_command(sudo=True, cmd=cmd)
+            user_list = out.split("\n")
+
+            if ls_list[column] in user_list:
+                log.info("User/group info is not encrypted")
+                return 0
+            else:
+                log.error("User/group info could be encrypted:%s", ls_list[column])
+                return 1
+
+        def check_month(column):
+            """
+            This method checks if month field of ls output is encrypted
+            return - 1 if encrypted, 0 if not encrypted
+            """
+            pattern = [
+                "Jan",
+                "Feb",
+                "Mar",
+                "Apr",
+                "May",
+                "Jun",
+                "Jul",
+                "Aug",
+                "Sep",
+                "Oct",
+                "Nov",
+                "Dec",
+            ]
+            if ls_list[column] in pattern:
+                log.info("Month info is not encrypted")
+                return 0
+            else:
+                log.error("Month info could be encrypted:%s", ls_list[column])
+                return 1
+
+        def check_time(column):
+            """
+            This method checks if time field of ls output is encrypted
+            return - 1 if encrypted, 0 if not encrypted
+            """
+            res = re.search(r"(\d+):(\d+)", ls_list[column])
+            if res:
+                log.info("Time info is not encrypted")
+                return 0
+            else:
+                log.error("Time info could be encrypted:%s", ls_list[column])
+                return 1
+
+        lsop_test = {
+            "0": check_perm,
+            "146": check_links_size_date,
+            "23": check_user_group_info,
+            "5": check_month,
+            "7": check_time,
+        }
+        for i in range(0, (len(ls_list) - 1)):
+            if i in [1, 4, 6]:
+                test_status += lsop_test["146"](i)
             elif i in [2, 3]:
-                cmd = "awk -F':' '{ print $1}' /etc/passwd"
-                out, _ = client.exec_command(sudo=True, cmd=cmd)
-                user_list = out.split("\n")
-
-                if line_list[i] in user_list:
-                    log.info("User info is not encrypted")
-                else:
-                    log.error("User info could be encrypted:%s", line_list[i])
-                    test_status += 1
-            elif i == 5:
-                pattern = [
-                    "Jan",
-                    "Feb",
-                    "Mar",
-                    "Apr",
-                    "May",
-                    "Jun",
-                    "Jul",
-                    "Aug",
-                    "Sep",
-                    "Oct",
-                    "Nov",
-                    "Dec",
-                ]
-                if line_list[i] in pattern:
-                    log.info("Month info is not encrypted")
-                else:
-                    log.error("Month info could be encrypted:%s", line_list[i])
-                    test_status += 1
-            elif i == 7:
-                res = re.search(r"(\d+):(\d+)", line_list[i])
-                if res:
-                    log.info("Time info is not encrypted")
-                else:
-                    log.error("Time info could be encrypted:%s", line_list[i])
-                    test_status += 1
+                test_status += lsop_test["23"](i)
+            test_status += lsop_test[str(i)](i)
 
         cmd = f"getfattr -n security.selinux {test_file}"
         out, _ = client.exec_command(sudo=True, cmd=cmd)
