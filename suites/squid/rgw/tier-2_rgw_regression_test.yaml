@@ -606,6 +606,15 @@ tests:
 
   # Keystone Integration
   - test:
+      name: Verify unified namespace for S3 and swift
+      desc: Verify unified namespace for S3 and swift
+      polarion-id: CEPH-83572907
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_unified_namespace.py
+        config-file-name: ../../aws/configs/test_unified_namespace.yaml
+
+  - test:
       name: test keystone integration with RGW
       desc: test keystone integration with RGW
       polarion-id: CEPH-10169
