@@ -29,6 +29,12 @@ from utility.log import Log
 log = Log(__name__)
 
 
+class OsdStartFailed(Exception):
+    """Custom exception thrown when OSD Start operation fails"""
+
+    pass
+
+
 class BluestoreToolWorkflows:
     """
     Contains various functions to verify ceph-bluestore-tool commands
@@ -72,13 +78,14 @@ class BluestoreToolWorkflows:
             if not self.nostop:
                 self.rados_obj.change_osd_state(action="stop", target=osd_id)
             out, err = osd_node.exec_command(sudo=True, cmd=_cmd, timeout=timeout)
+            return str(out)
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
             raise
         finally:
             if not self.nostart:
-                self.rados_obj.change_osd_state(action="start", target=osd_id)
-        return str(out)
+                if not self.rados_obj.change_osd_state(action="start", target=osd_id):
+                    raise OsdStartFailed("Failed to start OSD.%d" % osd_id)
 
     def help(self, osd_id: int):
         """Module to run help command with ceph-bluestore-tool to display usage

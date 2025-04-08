@@ -10,6 +10,7 @@ Quincy to reef bug : https://bugzilla.redhat.com/show_bug.cgi?id=2243570
 """
 
 import datetime
+import json
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -45,7 +46,8 @@ def run(ceph_cluster, **kw):
     """
     log.info(run.__doc__)
     config = kw["config"]
-    args = config.get("args")
+    args = config.get("args", {})
+    timeout = config.get("timeout", 1800)
     rhbuild = config.get("rhbuild")
     cephadm_obj = CephAdmin(cluster=ceph_cluster, **config)
     cluster_obj = Orch(cluster=ceph_cluster, **config)
@@ -138,15 +140,21 @@ def run(ceph_cluster, **kw):
         upgrade_complete = False
         inactive_pgs = 0
         # Monitor upgrade status, till completion, checking for the warning to be generated
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         while end_time > datetime.datetime.now():
             cmd = "ceph orch upgrade status"
-            out = rados_obj.run_ceph_command(cmd=cmd, client_exec=True)
-
-            if not out["in_progress"]:
-                log.info("Upgrade Complete...")
-                upgrade_complete = True
-                break
+            out, _ = rados_obj.client.exec_command(cmd=cmd, sudo=True)
+            try:
+                status = json.loads(out)
+                if not status["in_progress"]:
+                    log.info("Upgrade Complete...")
+                    upgrade_complete = True
+                    break
+            except json.JSONDecodeError:
+                if "no upgrades in progress" in out:
+                    log.info("Upgrade Complete...")
+                    upgrade_complete = True
+                    break
 
             log.debug(f"upgrade in progress. Status : {out}")
 
