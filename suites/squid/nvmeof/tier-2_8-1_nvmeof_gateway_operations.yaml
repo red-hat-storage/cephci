@@ -292,7 +292,10 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 1
-                rw-ios-per-second: 10
+                rw-ios-per-second: 150
+                rw-megabytes-per-second: 19
+                r-megabytes-per-second: 19
+                w-megabytes-per-second: 19
               validate:
                 omap: true
           - config:
@@ -301,7 +304,10 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 1
-                rw-ios-per-second: 20
+                rw-ios-per-second: 200
+                rw-megabytes-per-second: 59
+                r-megabytes-per-second: 59
+                w-megabytes-per-second: 59
               validate:
                 omap: true
           - config:
@@ -532,7 +538,10 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 1
-                rw-ios-per-second: 10
+                rw-ios-per-second: 150
+                rw-megabytes-per-second: 19
+                r-megabytes-per-second: 19
+                w-megabytes-per-second: 19
               validate:
                 omap: true
           - config:
@@ -541,7 +550,10 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 1
-                rw-ios-per-second: 20
+                rw-ios-per-second: 200
+                rw-megabytes-per-second: 59
+                r-megabytes-per-second: 59
+                w-megabytes-per-second: 59
               validate:
                 omap: true
           - config:

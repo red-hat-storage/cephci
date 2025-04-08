@@ -38,7 +38,6 @@ def run(ceph_cluster, **kw):
     fs_io = FSIO(ceph_cluster)
     config = kw.get("config")
     clients = ceph_cluster.get_ceph_objects("client")
-    build = config.get("build", config.get("rhbuild"))
 
     log.info("checking Pre-requisites")
     if not clients:
@@ -93,8 +92,9 @@ def run(ceph_cluster, **kw):
         },
     ]
 
-    # Run the FS lifecycle for 2 iteration
-    for i in range(1, 3):
+    # Run the FS lifecycle based on config values else defaults between 5-10
+    iteration_cnt = config.get("iteration_cnt", random.randrange(5, 11))
+    for i in range(1, iteration_cnt + 1):
         log.info(
             "\n"
             "\n---------------***************---------------"
@@ -102,9 +102,11 @@ def run(ceph_cluster, **kw):
             "\n---------------***************---------------"
         )
         try:
-            fs_util.prepare_clients(clients, build)
-            fs_util.auth_list(clients)
-            client1 = clients[0]
+            # fs_util.prepare_clients(clients, build)
+
+            # Set recreate to False, since the clients are already created as part of system test
+            fs_util.auth_list(clients, recreate=False)
+            client1 = clients[1]
 
             # Creation of FS
             fs_util.create_fs(client1, fs_name)
@@ -518,7 +520,10 @@ def run(ceph_cluster, **kw):
                 fuse_mount_dir_pgsql,
             ]:
                 fs_util.client_clean_up(
-                    "umount", fuse_clients=[client1], mounting_dir=mount_dir
+                    "umount",
+                    fuse_clients=[client1],
+                    mounting_dir=mount_dir,
+                    retain_keyring=True,
                 )
 
             for mount_dir in [
@@ -527,7 +532,10 @@ def run(ceph_cluster, **kw):
                 kernel_mount_dir_pgsql,
             ]:
                 fs_util.client_clean_up(
-                    "umount", kernel_clients=[client1], mounting_dir=mount_dir
+                    "umount",
+                    kernel_clients=[client1],
+                    mounting_dir=mount_dir,
+                    retain_keyring=True,
                 )
 
             client1.exec_command(sudo=True, cmd=f"rm -rf {nfs_mounting_dir}/*")

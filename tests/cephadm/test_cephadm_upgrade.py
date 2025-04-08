@@ -64,8 +64,8 @@ def run(ceph_cluster, **kwargs) -> int:
         # Set repo to newer RPMs
         orch.set_tool_repo()
 
-        # Install cephadm
-        orch.install()
+        # Update cephadm rpms
+        orch.install(**{"upgrade": True})
 
         # Check service versions vs available and target containers
         orch.upgrade_check(image=config.get("container_image"))

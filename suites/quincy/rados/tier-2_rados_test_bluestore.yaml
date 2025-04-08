@@ -113,6 +113,13 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
+      name: Verify osd heartbeat no reply
+      desc: heartbeat_check log entries should contain hostname:port
+      polarion-id: CEPH-10839
+      module: test_osd_heartbeat.py
+      destroy-cluster: false
+
+  - test:
       name: BlueStore Checksum algorithms
       module: test_bluestore_configs.py
       polarion-id: CEPH-83571646

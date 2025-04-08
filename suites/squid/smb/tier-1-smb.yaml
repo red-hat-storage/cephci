@@ -183,13 +183,13 @@ tests:
           client01: create_file
           client02: perform_lookups
         windows_clients:
-          - ip: 10.70.47.106
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.47.29
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
-          - ip: 10.70.45.15
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.45.192
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
         spec:
           - resource_type: ceph.smb.cluster
@@ -230,13 +230,13 @@ tests:
           client01: create_file
           client02: rename_file
         windows_clients:
-          - ip: 10.70.47.106
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.47.29
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
-          - ip: 10.70.45.15
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.45.192
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
         spec:
           - resource_type: ceph.smb.cluster
@@ -280,13 +280,13 @@ tests:
           client01: create_file
           client02: remove_files
         windows_clients:
-          - ip: 10.70.47.106
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.47.29
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
-          - ip: 10.70.45.15
-            hostname: DESKTOP-FTP9SJ1
-            user: smb-c
+          - ip: 10.70.45.192
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
             password: Samba@123
         spec:
           - resource_type: ceph.smb.cluster
@@ -516,3 +516,59 @@ tests:
         smb_shares: [share1]
         path: "/"
         cli_cmd: "dump service-spec"
+
+  - test:
+      name: Verify that encryption is enabled for the deployed SMB services.
+      desc: Verify that encryption is enabled for the deployed SMB services.
+      module: smb_encryption.py
+      polarion-id: CEPH-83614662
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        windows_client: True
+        mount_point: "Z:"
+        encryption: AES
+        windows_clients:
+          - ip: 10.70.47.29
+            hostname: DESKTOP-KC49RQO
+            user: smb-i
+            password: Samba@123
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Verify that smb mgr module enable by default
+      desc: Verify that smb mgr module enable by default
+      module: smb_mgr_module.py
+      polarion-id: CEPH-83614663
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"

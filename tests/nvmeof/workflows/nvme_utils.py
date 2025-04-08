@@ -69,7 +69,7 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
         gw_nodes = [gw_nodes]
 
     gw_nodes = get_nodes_by_ids(ceph_cluster, gw_nodes)
-    is_spec_or_mtls = config.get("mtls", False)
+    is_spec_or_mtls = config.get("mtls", False) or config.get("spec_deployment", False)
     gw_group = config.get("gw_group")
 
     cfg = {
@@ -92,11 +92,11 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
                     {
                         "service_type": "nvmeof",
                         "service_id": rbd_pool,
-                        "mtls": True,
+                        "mtls": config.get("mtls", False),
                         "placement": {"nodes": [i.hostname for i in gw_nodes]},
                         "spec": {
                             "pool": rbd_pool,
-                            "enable_auth": True,
+                            "enable_auth": config.get("mtls", False),
                         },
                     }
                 ],

@@ -103,6 +103,7 @@ tests:
             - write
             - read
             - delete
+
   - test:
       name: Ceph samba load test
       desc: Setup Ceph cluster with SMB, run load test and check process id
@@ -130,22 +131,7 @@ tests:
             - write
             - read
             - delete
-  - test:
-      name: Deploy samba with 500 shares
-      desc: Deploy samba with 500 shares using auth_mode 'user'
-      module: smb_deployment_500_shares.py
-      polarion-id: CEPH-83593847
-      config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: 500
-        smb_subvolume_mode: '0777'
-        smb_cluster_id: smb1
-        auth_mode: user
-        smb_user_name: user1
-        smb_user_password: passwd
-        smb_shares: 500
-        path: "/"
+
   - test:
       name: Deploy samba with 500 shares using declarative style(Spec File)
       desc: Deploy samba with 500 shares using auth_mode 'user'
@@ -177,3 +163,23 @@ tests:
               subvolumegroup: smb
               subvolume: sv
               path: /
+
+  - test:
+      name: Verify that asynchronous IO read and write is enabled for the deployed SMB services.
+      desc: Verify that asynchronous IO read and write is enabled for the deployed SMB services.
+      module: smb_conf_check.py
+      polarion-id: CEPH-83614664
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        smb_conf:
+          - aio write size: 1
+          - aio read size: 1

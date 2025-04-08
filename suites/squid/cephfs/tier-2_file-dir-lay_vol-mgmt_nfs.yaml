@@ -465,12 +465,6 @@ tests:
       desc: File system life cycle
       abort-on-fail: false
   - test:
-      name: Test fs volume creation, run IO & deletion in loop for 5 times
-      module: cephfs_vol_management.cephfs_vol_mgmt_fs_create_delete_loop.py
-      polarion-id: CEPH-83604070
-      desc: Test fs volume creation, run IO & deletion in loop for 5 times
-      abort-on-fail: false
-  - test:
       name: CephFS Volume Operations
       module: cephfs_vol_management.cephfs_vol_mgmt_test_volume.py
       polarion-id: CEPH-83604097
@@ -488,3 +482,10 @@ tests:
       polarion-id: CEPH-83606764
       desc: Validate the volume info command and ensure the output is accurate.
       abort-on-fail: false
+  - test:
+      name: rename scenarios
+      module: cephfs_vol_management.cephfs_vol_mgmt_rename_scenarios.py
+      polarion-id: CEPH-83607848
+      desc: volume rename scenarios
+      abort-on-fail: false
+      comments: bz-2352998

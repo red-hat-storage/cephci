@@ -45,6 +45,11 @@ def setup_nfs_cluster(
     setup_start_time = datetime.strptime(setup_start_time, "%Y-%m-%d %H:%M:%S")
 
     # Step 1: Enable nfs
+    installer_node = ceph_cluster.get_nodes("installer")[0]
+    version_info = installer_node.exec_command(
+        sudo=True, cmd="cephadm shell -- rpm -qa | grep nfs"
+    )
+    log.info("nfs info: %s" % version_info)
     Ceph(clients[0]).mgr.module.enable(module="nfs", force=True)
     sleep(3)
 
@@ -58,7 +63,7 @@ def setup_nfs_cluster(
     export_list = []
     i = 0
     for client in clients:
-        export_name = f"{export}_{i}"
+        export_name = "{export}_{i}".format(export=export, i=i)
         Ceph(client).nfs.export.create(
             fs_name=fs_name, nfs_name=nfs_name, nfs_export=export_name, fs=fs
         )
@@ -85,15 +90,44 @@ def setup_nfs_cluster(
                 version=version,
                 port=port,
                 server=nfs_server,
-                export=f"{export}_{i}",
+                export="{export}_{i}".format(export=export, i=i),
             ):
-                raise OperationFailedError(f"Failed to mount nfs on {client.hostname}")
+                raise OperationFailedError(
+                    "Failed to mount nfs on %s" % client.hostname
+                )
             i += 1
             sleep(1)
     log.info("Mount succeeded on all clients")
 
-    # Step 5: Enable nfs coredump to nfs nodes
+    try:
+        cmd_used = None
+        services = [
+            x["service_name"]
+            for x in json.loads(Ceph(clients[0]).orch.ls(format="json"))
+        ]
+        # check nfs cluster and services are up
+        if Ceph(clients[0]).nfs.cluster.ls():
+            cmd_used = "ceph nfs cluster ls"
+            log.info(
+                "NFS cluster %s created successfully using %s"
+                % (Ceph(clients[0]).nfs.cluster.ls()[0], cmd_used)
+            )
+
+        # verifying with orch cmd
+        elif [x for x in services if x.startswith("nfs")]:
+            cmd_used = "ceph orch ls"
+            log.info("NFS services are up and running from cmd %s" % cmd_used)
+        elif Ceph(clients[0]).execute("ps aux | grep nfs-ganesha")[0]:
+            cmd_used = "ps aux | grep nfs-ganesha"
+            log.info("NFS daemons are up and running verifying using %s" % cmd_used)
+    except Exception as e:
+        log.error(
+            "Failed to verify nfs cluster and services %s cmd used: %s" % (e, cmd_used)
+        )
+
     nfs_nodes = ceph_cluster.get_nodes("nfs")
+
+    # Step 5: Enable nfs coredump to nfs nodes
     Enable_nfs_coredump(nfs_nodes)
 
 

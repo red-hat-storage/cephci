@@ -25,7 +25,7 @@ import traceback
 
 from test_osd_ecpool_inconsistency_scenario import (
     get_inconsistent_count,
-    set_default_param_value,
+    set_ecpool_inconsistent_default_param_value,
     verify_pg_state,
 )
 
@@ -244,7 +244,8 @@ def run(ceph_cluster, **kw):
         if config.get("delete_pool"):
             method_should_succeed(rados_obj.delete_pool, replicated_pool_name)
             log.info("deleted the pool successfully")
-        set_default_param_value(mon_obj)
+        # The values used for the  replicated and ec pool are same.Using the same method to set the default values
+        set_ecpool_inconsistent_default_param_value(mon_obj, scrub_object)
         rados_obj.log_cluster_health()
         # check for crashes after test execution
         if rados_obj.check_crash_status():

@@ -1,0 +1,199 @@
+# Suite contains tests around scrubbing process
+# Conf: conf/squid/common/13node-4client-single-site-regression.yaml
+# Deployment: suites/squid/common/regression/single-site-deploy-and-configure.yaml
+tests:
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Verify scrub logs
+      module: test_scrub_log.py
+      polarion-id: CEPH-83575403
+      config:
+        # After the implementation of BZ#2320860 set the verify_log to true
+        verify_log: false
+        pool_configs:
+            - type: replicated
+              conf: sample-pool-2
+            - type: erasure
+              conf: sample-pool-2
+        pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
+      desc: Verify that scrub & deep-scrub logs are captured in OSD logs
+
+  - test:
+      name: verify scrub chunk max
+      polarion-id: CEPH-10792
+      module: test_scrub_chunk_max.py
+      config:
+        delete_pool: true
+      desc: Scrub Chunk max validation
+  - test:
+      name: Scrub enhancement
+      module: test_scrub_enhancement.py
+      desc: Verify scrub enhancement feature
+      polarion-id: CEPH-83575885
+      config:
+        create_pools:
+          - create_pool:
+              pool_name: scrub_pool
+              pg_num: 1
+              pg_num_max: 1
+              pool_type: replicated
+        delete_pools:
+          - scrub_pool
+  - test:
+      name: CPU and Memory check during scheduled scrub
+      module: test_scrub_cpu_memory_usage.py
+      desc: Verify CPU and Memory check during scheduled scrub
+      polarion-id: CEPH-9369
+      config:
+        create_pools:
+          - create_pool:
+              pool_name: scheduled_scrub
+              pg_num: 32
+              pg_num_min: 32
+              pool_type: replicated
+              max_objs: 500
+              rados_read_duration: 120
+              byte_size: 1KB
+        delete_pools:
+          - scheduled_scrub
+
+  - test:
+      name: Preempt scrub messages checks
+      desc: Checking preempt messages in the OSDs
+      module: test_rados_preempt_scrub.py
+      polarion-id: CEPH-83572916
+      config:
+        pool_name: preempt_pool
+        pg_num: 1
+        delete_pool: true
+
+  - test:
+      name: Default scheduled scrub
+      polarion-id: CEPH-9361
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
+          disable_pg_autoscale: true
+        scenario: "default"
+        debug_enable: False
+      delete_pools:
+        - scrub_pool
+
+  - test:
+      name: Begin Time = End Time
+      polarion-id: CEPH-9362
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
+          disable_pg_autoscale: true
+        scenario: "begin_end_time_equal"
+        debug_enable: False
+      delete_pools:
+        - scrub_pool
+
+  - test:
+      name: Begin time > End time
+      polarion-id: CEPH-9363
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
+          disable_pg_autoscale: true
+        scenario: "beginTime gt endTime"
+        debug_enable: False
+      delete_pools:
+        - scrub_pool
+
+  - test:
+      name: Begin Time >End time<current
+      polarion-id: CEPH-9365
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
+          disable_pg_autoscale: true
+        scenario: "beginTime gt endTime lt currentTime"
+        debug_enable: False
+      delete_pools:
+        - scrub_pool
+
+  - test:
+      name: Begin Time & End time > current
+      polarion-id: CEPH-9368
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
+          disable_pg_autoscale: true
+        scenario: "beginTime and endTime gt currentTime"
+        debug_enable: False
+      delete_pools:
+        - scrub_pool
+
+  - test:
+      name: Decrease scrub time
+      polarion-id: CEPH-9371
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
+          disable_pg_autoscale: true
+        scenario: "decreaseTime"
+        debug_enable: False
+      delete_pools:
+        - scrub_pool
+
+  - test:
+      name: Unsetting scrubbing
+      polarion-id: CEPH-9374
+      module: scheduled_scrub_scenarios.py
+      desc: Scheduled scrub validation
+      config:
+        replicated_pool:
+          create: true
+          pool_name: scrub_pool
+          pg_num: 1
+          disable_pg_autoscale: true
+        scenario: "unsetScrub"
+        debug_enable: False
+      delete_pools:
+        - scrub_pool
+
+  - test:
+      name: Verification of the scrub and deep-scrub time check
+      desc: BZ#2292517deep scrub taking too long under mclock I/O scheduler
+      module: test_scrub_deepscrub_timecheck.py
+      polarion-id: CEPH-83605026
+      config:
+        pool_name: scrub_pool
+        pg_num: 1
+        pg_num_max: 1
+      delete_pool:
+        - scrub_pool
