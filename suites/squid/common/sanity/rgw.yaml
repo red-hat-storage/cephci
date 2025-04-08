@@ -6,7 +6,7 @@ tests:
       abort-on-fail: true
       config:
         haproxy_clients:
-          - node6
+          - node4
         rgw_endpoints:
           - node2:80
           - node3:80
