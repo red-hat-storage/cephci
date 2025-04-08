@@ -22,9 +22,6 @@ It ensures efficient log parsing, prevents duplicate storage, and organizes outp
 5. **Duplicate Detection:**
    - Computes SHA-256 hashes for command outputs to prevent redundant storage.
 
-6. **Error Handling:**
-   - Manages file I/O operations and JSON parsing errors gracefully.
-
 ### **How the Script Works:**
 1. **Fetching Log Files:**
    - The get_log_files_from_directory function scans the given directory and collects all .log files.
@@ -57,8 +54,17 @@ It ensures efficient log parsing, prevents duplicate storage, and organizes outp
 - save_to_remote(command, output, subcomponent_filter, output_directory): Saves as JSON files.
 - run(log_directory, subcomponent_filter, output_directory): Orchestrates log file processing and output storage.
 
-### **Folder Structure:**
-The script organizes extracted outputs into the specified output directory as follows:
+### **Directory Description:**
+- **Log Directory (`--logdir`)**: Input folder containing `.log` files to scan for `radosgw-admin` commands.
+- **Output Directory (`--outdir`)**: Target folder where JSON files (organized by subcommand) will be saved.
+- **Filter (`--filter`)**: Used to filter subcomponents like `rgw`, `rbd`, `rados` if required (currently not applied
+    in logic but reserved for future enhancements).
+
+### **Limitations:**
+1. **Command Scope**: Only `radosgw-admin` commands are supported; other Ceph CLI tools (e.g., `rbd`) are ignored.
+2. **JSON Output Assumptions**: Assumes the command output is JSON or JSON-like. If the output
+    format is not JSON-parsable,the raw text is saved.
+3. **Filter Parameter Unused**: The `--filter` argument is accepted but not actively used in filtering logic.
 
 """
 
@@ -66,7 +72,6 @@ import hashlib
 import json
 import os
 import re
-
 from docopt import docopt
 
 DOC = """
@@ -85,26 +90,12 @@ Options:
 
 
 def compute_output_hash(output):
-    """
-    Computes a SHA-256 hash for the given output data.
-    Args:
-        output (dict): The output data to hash.
-    Returns:
-        str: The computed hash value as a hexadecimal string.
-    """
     return hashlib.sha256(
         json.dumps(output, sort_keys=True).encode("utf-8")
     ).hexdigest()
 
 
 def clean_log_line(line):
-    """
-    Cleans log lines by removing timestamps and log level prefixes.
-    Args:
-        line (str): A single line from the log file.
-    Returns:
-        str or None: The cleaned log line or None if empty.
-    """
     line = re.sub(
         r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3} - cephci - ceph:\d+ - (INFO|DEBUG|ERROR) -\s*",
         "",
@@ -117,13 +108,6 @@ def clean_log_line(line):
 
 
 def reconstruct_json(lines):
-    """
-    Reconstructs JSON data from cleaned log lines.
-    Args:
-        lines (list): A list of cleaned log lines.
-    Returns:
-        dict or list: The reconstructed JSON data if valid, otherwise a list of cleaned lines.
-    """
     cleaned_lines = [clean_log_line(line) for line in lines if clean_log_line(line)]
     try:
         return json.loads("\n".join(cleaned_lines))
@@ -132,16 +116,8 @@ def reconstruct_json(lines):
 
 
 def extract_radosgw_admin_commands(log_lines):
-    """
-    Extracts `radosgw-admin` commands and their corresponding outputs from log files.
-    Args:
-        log_lines (list): A list of log file lines.
-    Returns:
-        dict: Extracted commands and their outputs, preventing duplicates using SHA-256 hashes.
-    """
     results, existing_hashes = [], set()
     current_command, current_output_lines = None, []
-
     for line in log_lines:
         cleaned_line = clean_log_line(line)
         if not cleaned_line:
@@ -169,14 +145,6 @@ def extract_radosgw_admin_commands(log_lines):
 
 
 def save_to_remote(command, output, subcomponent_filter, output_directory):
-    """
-    Saves extracted command outputs to structured JSON files, avoiding duplicates.
-    Args:
-        command (str): The extracted `radosgw-admin` command.
-        output (dict): The parsed output of the command.
-        subcomponent_filter (str): The specified subcomponent filter.
-        output_directory (str): The directory where JSON files will be saved.
-    """
     output_hash = compute_output_hash(output)
     base_dir = os.path.join(output_directory, "rgw_command_extractor")
     os.makedirs(base_dir, exist_ok=True)
@@ -192,6 +160,7 @@ def save_to_remote(command, output, subcomponent_filter, output_directory):
                     json.dump({"outputs": []}, file)
             with open(file_path, "r") as file:
                 data = json.load(file)
+
             if not any(
                 entry["output_hash"] == output_hash for entry in data["outputs"]
             ):
@@ -205,13 +174,6 @@ def save_to_remote(command, output, subcomponent_filter, output_directory):
 
 
 def get_log_files_from_directory(directory):
-    """
-    Retrieves all `.log` files from a given directory.
-    Args:
-        directory (str): The directory to scan.
-    Returns:
-        list: List of file paths to `.log` files.
-    """
     if not isinstance(directory, str):
         raise TypeError("Expected a string path for directory")
     return [
@@ -223,13 +185,6 @@ def get_log_files_from_directory(directory):
 
 
 def process_log_file(file_path, subcomponent_filter, output_directory, chunk_size=1000):
-    """
-    Processes a single log file in chunks for command extraction and saves the outputs.
-    Args:
-        file_path (str): The path to the log file.
-        subcomponent_filter (str): The subcomponent filter.
-        output_directory (str): The directory where extracted data will be saved.
-    """
     try:
         with open(file_path, "r") as file:
             buffer = []
@@ -259,13 +214,6 @@ def process_log_file(file_path, subcomponent_filter, output_directory, chunk_siz
 
 
 def run(log_directory, subcomponent_filter, output_directory):
-    """
-    Orchestrates log file processing and output storage.
-    Args:
-        log_directory (str): Directory containing log files.
-        subcomponent_filter (str): Subcomponent filter for logs.
-        output_directory (str): Directory for storing extracted JSON files.
-    """
     log_files = get_log_files_from_directory(log_directory)
     for file_path in log_files:
         process_log_file(file_path, subcomponent_filter, output_directory)
