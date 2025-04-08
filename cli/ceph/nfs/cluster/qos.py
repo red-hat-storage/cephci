@@ -1,103 +1,134 @@
-import json
-
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
 
 
 class Qos(Cli):
 
-    def __init__(self, nodes, base_cmd):
-        super(Qos, self).__init__(nodes)
-        self.base_cmd = f"{base_cmd} qos"
+    def __init__(self, nodes: list, base_cmd: str) -> None:
+        super().__init__(nodes)
+        self.base_cmd = "%s qos" % base_cmd
 
     def get(self, cluster_id: str, **kwargs):
-        """
-        cluster_id = cluster name
-        """
-        cmd = f"{self.base_cmd} get {cluster_id} {build_cmd_from_args(**kwargs)}"
+        cmd = " ".join(
+            [self.base_cmd, "get", cluster_id, build_cmd_from_args(**kwargs)]
+        )
         out = self.execute(sudo=True, cmd=cmd)
-        if isinstance(out, tuple):
-            out = out[0].strip()
-        try:
-            return json.loads(out)
-        except json.JSONDecodeError:
-            return out
+        processed_out = out[0].strip() if isinstance(out, tuple) else out
+        return processed_out
 
-    def enable(
+    def enable_per_share(
+        self,
+        qos_type: str,
+        cluster_id: str,
+        max_export_combined_bw=None,
+        max_export_write_bw=None,
+        max_export_read_bw=None,
+    ) -> str:
+        params = self._build_per_share_params(
+            max_export_combined_bw, max_export_write_bw, max_export_read_bw
+        )
+        return self._execute_qos_cmd(
+            "enable", "bandwidth_control", cluster_id, params, qos_type=qos_type
+        )
+
+    def enable_per_client(
         self,
         cluster_id: str,
         qos_type: str,
-        operation: str = "bandwidth_control",
-        **kwargs,
+        max_client_combined_bw: str = None,
+        max_client_write_bw: str = None,
+        max_client_read_bw: str = None,
     ) -> str:
-        """Enable QoS controls for an NFS cluster.
-
-        Args:
-            cluster_id: NFS cluster identifier
-            qos_type: QoS type (PerShare/PerClient/PerShare-PerClient)
-            operation: Operation type (default: bandwidth_control)
-            **kwargs: Required parameters based on qos_type:
-                - PerShare: Either (max_export_write_bw + max_export_read_bw)
-                            OR max_export_combined_bw
-                - PerClient: Either (max_client_write_bw + max_client_read_bw)
-                             OR max_client_combined_bw
-                - PerShare-PerClient: Combination of PerShare AND PerClient requirements
-
-        Returns:
-            Command execution output
-
-        Raises:
-            ValueError: For missing/invalid parameters or qos_type
-        """
-        # Validate qos_type
-        params = []
-
-        # Handle Export (PerShare) parameters
-        if qos_type in ["PerShare", "PerShare_PerClient"]:
-            if "max_export_combined_bw" in kwargs:
-                params.append(
-                    f"--max_export_combined_bw {kwargs['max_export_combined_bw']}"
-                )
-            else:
-                params.extend(
-                    [
-                        f"--max_export_write_bw {kwargs['max_export_write_bw']}",
-                        f"--max_export_read_bw {kwargs['max_export_read_bw']}",
-                    ]
-                )
-
-        # Handle Client (PerClient) parameters
-        if qos_type in ["PerClient", "PerShare_PerClient"]:
-            if "max_client_combined_bw" in kwargs:
-                params.append(
-                    f"--max_client_combined_bw {kwargs['max_client_combined_bw']}"
-                )
-            else:
-                params.extend(
-                    [
-                        f"--max_client_write_bw {kwargs['max_client_write_bw']}",
-                        f"--max_client_read_bw {kwargs['max_client_read_bw']}",
-                    ]
-                )
-
-        # Build and execute command
-        cmd = (
-            f"{self.base_cmd} enable {operation} {cluster_id} {qos_type} "
-            f"{' '.join(params)}"
+        params = self._build_client_params(
+            max_client_combined_bw, max_client_write_bw, max_client_read_bw
         )
-        result = self.execute(sudo=True, cmd=cmd)
+        return self._execute_qos_cmd(
+            "enable", "bandwidth_control", cluster_id, params, qos_type=qos_type
+        )
 
+    def enable_per_share_per_client(
+        self,
+        cluster_id: str,
+        qos_type: str,
+        max_export_combined_bw: str = None,
+        max_export_write_bw: str = None,
+        max_export_read_bw: str = None,
+        max_client_combined_bw: str = None,
+        max_client_write_bw: str = None,
+        max_client_read_bw: str = None,
+    ) -> str:
+        share_params = self._build_per_share_params(
+            max_export_combined_bw, max_export_write_bw, max_export_read_bw
+        )
+        client_params = self._build_client_params(
+            max_client_combined_bw, max_client_write_bw, max_client_read_bw
+        )
+        return self._execute_qos_cmd(
+            "enable",
+            "bandwidth_control",
+            cluster_id,
+            share_params + client_params,
+            qos_type=qos_type,
+        )
+
+    def disable(
+        self,
+        cluster_id: str,
+        qos_type: str = None,
+        operation: str = "bandwidth_control",
+        **kwargs
+    ) -> str:
+        cmd_parts = [self.base_cmd, "disable", operation, cluster_id]
+
+        if qos_type:
+            cmd_parts.append(qos_type)
+
+        cmd_parts.append(build_cmd_from_args(**kwargs))
+        cmd = " ".join(cmd_parts)
+
+        result = self.execute(sudo=True, cmd=cmd)
         return result[0].strip() if isinstance(result, tuple) else result
 
-    def disable(self, cluster_id, operation="bandwidth_control", **kwargs):
-        """
-        cluster_id = cluster name
-        qos_type = PerShare | PerClient | PerShare-PerClient
-        operation="bandwidth_control"
-        """
-        cmd = f"{self.base_cmd} disable {operation} {cluster_id}"
-        f" {build_cmd_from_args(**kwargs)}"
-        out = self.execute(sudo=True, cmd=cmd)
-        if isinstance(out, tuple):
-            return out[0].strip()
-        return out
+    def _build_per_share_params(
+        self,
+        combined_bw: str,
+        write_bw: str,
+        read_bw: str,
+    ) -> list:
+        if combined_bw:
+            return ["--max_export_combined_bw %s" % combined_bw]
+        if write_bw and read_bw:
+            return [
+                "--max_export_write_bw %s" % write_bw,
+                "--max_export_read_bw %s" % read_bw,
+            ]
+        raise ValueError(
+            "Per-share QoS requires either combined bandwidth or both read/write limits"
+        )
+
+    def _build_client_params(
+        self,
+        combined_bw: str,
+        write_bw: str,
+        read_bw: str,
+    ) -> list:
+        if combined_bw:
+            return ["--max_client_combined_bw %s" % combined_bw]
+        if write_bw and read_bw:
+            return [
+                "--max_client_write_bw %s" % write_bw,
+                "--max_client_read_bw %s" % read_bw,
+            ]
+        raise ValueError(
+            "Per_client QoS requires either combined bandwidth or both read/write limits"
+        )
+
+    def _execute_qos_cmd(
+        self, action: str, operation: str, cluster_id: str, params: list, qos_type: str
+    ) -> str:
+        cmd = " ".join(
+            [self.base_cmd, action, operation, cluster_id, qos_type, " ".join(params)]
+        )
+
+        result = self.execute(sudo=True, cmd=cmd)
+        return result[0].strip() if isinstance(result, tuple) else result
