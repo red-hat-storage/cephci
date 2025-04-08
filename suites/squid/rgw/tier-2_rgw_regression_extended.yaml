@@ -405,5 +405,5 @@ tests:
       module: sanity_rgw.py
       config:
         script-name: ../s3cmd/test_large_omap.py
-        config-file-name: ../../s3cmd/configs/test_large_omap_clearance_brown_field_post_upgrade.yaml
+        config-file-name: ../../s3cmd/configs/test_large_omap_clearance_green_field.yaml
         run-on-haproxy: true
