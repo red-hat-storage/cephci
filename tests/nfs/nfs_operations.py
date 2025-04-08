@@ -49,7 +49,7 @@ def setup_nfs_cluster(
     version_info = installer_node.exec_command(
         sudo=True, cmd="cephadm shell -- rpm -qa | grep nfs"
     )
-    log.info("nfs info: %s" % version_info)
+    log.info("nfs info: %s", version_info)
     Ceph(clients[0]).mgr.module.enable(module="nfs", force=True)
     sleep(3)
 
@@ -90,7 +90,7 @@ def setup_nfs_cluster(
                 version=version,
                 port=port,
                 server=nfs_server,
-                export="{export}_{i}".format(export=export, i=i),
+                export="{0}_{1}".format(export, i),
             ):
                 raise OperationFailedError(
                     "Failed to mount nfs on %s" % client.hostname
@@ -112,12 +112,12 @@ def setup_nfs_cluster(
                 "NFS cluster %s created successfully using %s"
                 % (Ceph(clients[0]).nfs.cluster.ls()[0], cmd_used)
             )
-
         # verifying with orch cmd
-        elif [x for x in services if x.startswith("nfs")]:
+        if [x for x in services if x.startswith("nfs")]:
             cmd_used = "ceph orch ls"
             log.info("NFS services are up and running from cmd %s" % cmd_used)
-        elif Ceph(clients[0]).execute("ps aux | grep nfs-ganesha")[0]:
+
+        if Ceph(clients[0]).execute("ps aux | grep nfs-ganesha")[0]:
             cmd_used = "ps aux | grep nfs-ganesha"
             log.info("NFS daemons are up and running verifying using %s" % cmd_used)
     except Exception as e:
