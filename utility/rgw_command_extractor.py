@@ -78,8 +78,8 @@ DOC = """
 Standard script to fetch and process log files from a given directory.
 
 Usage:
-    subcommands.py --logdir <log_directory> --filter <subcomponent_filter> --outdir <output_directory>
-    subcommands.py (-h | --help)
+    rgw_command_extractor.py --logdir <log_directory> --filter <subcomponent_filter> --outdir <output_directory>
+    rgw_command_extractor.py (-h | --help)
 
 Options:
     -h --help                      Show this help message
