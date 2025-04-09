@@ -72,6 +72,7 @@ import hashlib
 import json
 import os
 import re
+
 from docopt import docopt
 
 DOC = """
