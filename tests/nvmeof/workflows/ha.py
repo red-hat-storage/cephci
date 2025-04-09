@@ -578,6 +578,11 @@ class HighAvailability:
             }
             LOG.info(log_json_dump(result))
 
+            # Validate auto load balance if rhcs version is 8.1
+            if self.cluster.rhcs_version == "8.1":
+                time.sleep(60)
+                validate_ns_balance = self.validate_auto_loadbalance()
+                LOG.info(f"Validated namespaces in each GW:{validate_ns_balance}")
             # Validate IO post scale down
             self.validate_io(set(list(old_namespaces)))
             return result
@@ -636,6 +641,12 @@ class HighAvailability:
                 "scale-up-end-counter-time": end_counter,
             }
             LOG.info(log_json_dump(result))
+            # Validate auto load balance if rhcs version is 8.1
+            if self.cluster.rhcs_version == "8.1":
+                time.sleep(60)
+                validate_ns_balance = self.validate_auto_loadbalance()
+                LOG.info(f"Validated namespaces in each GW:{validate_ns_balance}")
+            # Validate IO post scale up
             self.validate_io(set(list(namespaces)))
             return result
 
@@ -682,6 +693,40 @@ class HighAvailability:
                         LOG.info("Scaleup nodes took over the previous anagrpids")
                     else:
                         raise Exception("anagrpids are not matching after scaleup")
+
+    def validate_auto_loadbalance(self, gw_group=""):
+        """
+        Fetch the namespace count on each Gateway and compare them.
+        Ensure that the number of namespaces for each GW is within the range [num_namespaces_per_gw + or - len(GWs)].
+        """
+        out, _ = self.orch.shell(
+            args=["ceph", "nvme-gw", "show", self.nvme_pool, repr(self.gateway_group)]
+        )
+        total_num_namespaces = out.get("num-namespaces")
+        gateways = out.get("Created Gateways:", [])
+        total_gateways = len(gateways)
+        if total_gateways == 0:
+            raise Exception("No gateways found in the output.")
+
+        num_namespaces_per_gw = total_num_namespaces / total_gateways
+        namespaces = {}
+
+        for gateway in gateways:
+            gw_id = gateway["gw-id"]
+            num_namespaces = gateway["num-namespaces"]
+            lower_range = num_namespaces_per_gw - total_gateways
+            upper_range = num_namespaces_per_gw + total_gateways
+
+            if not (lower_range <= num_namespaces <= upper_range):
+                raise Exception(
+                    f"Gateway '{gw_id}' has an invalid num-namespaces: {num_namespaces}. "
+                    f"It must be between {lower_range} and {upper_range}."
+                )
+
+            namespaces[gw_id] = gateway
+            namespaces[gw_id]["num-namespaces"] = num_namespaces
+
+        return namespaces
 
     def failover(self, gateway, fail_tool):
         """HA Failover on the NVMeoF Gateways.

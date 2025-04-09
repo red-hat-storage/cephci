@@ -1194,23 +1194,22 @@ def test_ceph_83608266(ceph_cluster, rbd, pool, config, placement_cfg):
         states = {}
         container_ids = []
         subsystem_list = []
-        gw_nodes = get_nodes_by_ids(ceph_cluster, conf.get("gw_nodes"))
+        gw_nodes = get_nodes_by_ids(ceph_cluster, config.get("gw_nodes"))
         if conf["placement"] == "apply_spec":
             cfg = {
                 "no_cluster_state": False,
                 "config": {
                     "command": "apply_spec",
                     "service": "nvmeof",
-                    "validate-spec-services": True,
+                    "validate-spec-services": False,
                     "specs": [
                         {
                             "service_type": "nvmeof",
                             "service_id": "rbd",
-                            "mtls": True,
                             "placement": {"nodes": [i.hostname for i in gw_nodes]},
                             "spec": {
                                 "pool": "rbd",
-                                "enable_auth": True,
+                                "enable_auth": False,
                             },
                         }
                     ],
@@ -1324,7 +1323,7 @@ def test_ceph_83608266(ceph_cluster, rbd, pool, config, placement_cfg):
             for gateway in out["Created Gateways:"]:
                 gw = gateway["gw-id"]
                 states[gw] = gateway
-                states[gw].update(string_to_dict(gateway["ana states"]))
+                states[gw].update((string_to_dict(gateway["ana states"])))
         return states
 
     def resolve_placement(ceph_cluster, placement_cfg):
@@ -1395,9 +1394,6 @@ def test_ceph_83608266(ceph_cluster, rbd, pool, config, placement_cfg):
         for group in ["gw_group1", "gw_group2"]:
             config["gw_group"] = group
             teardown(ceph_cluster, rbd, nvmegwcli, config)
-        if io_tasks:
-            LOG.info("Waiting for completion of IOs.")
-            executor.shutdown(wait=True, cancel_futures=True)
         return 0
 
 

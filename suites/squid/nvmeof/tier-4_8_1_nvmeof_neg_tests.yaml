@@ -77,7 +77,7 @@ tests:
           placement:
             - nodes: ["node5", "node6"]
             - label: nvmeof-gw
-            # - apply_spec: True
+            - apply_spec: True
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
