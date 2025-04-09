@@ -156,7 +156,7 @@ tests:
   - test:
       name: "issue repro-osd recovery with allocator file corruption"
       module: test_osd_crashes.py
-      desc: failed osd recovery due to allocator file corruption during upgrade
+      desc: setup osd failure due to allocator file corruption
       polarion-id: CEPH-83609785
       config:
         verify_allocator_corruption:
@@ -166,6 +166,32 @@ tests:
            pg_num: 1
            pg_num_max: 1
            pool_type: replicated
+
+  - test:
+      name: Upgrade cluster to 7.1z2 ceph version
+      desc: Upgrade cluster to 7.1z2 version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        args:
+          rhcs-version: 7.1
+          release: z2
+      abort-on-fail: false
+
+  - test:
+      name: "issue repro-osd recovery with allocator file corruption"
+      module: test_osd_crashes.py
+      desc: OSD fails with ceph_assert post upgrade
+      polarion-id: CEPH-83609785
+      config:
+        verify_allocator_corruption:
+           check_assert: true
+        pool_config:
+           pool_name: osd-alloc-pool
 
   - test:
       name: Upgrade cluster to latest 7.x ceph version
@@ -182,11 +208,28 @@ tests:
       abort-on-fail: true
 
   - test:
+      name: "verify fix-osd recovery with allocator file corruption"
+      module: test_osd_crashes.py
+      desc: failed osd recovery due to allocator file corruption during upgrade
+      polarion-id: CEPH-83609785
+      config:
+        verify_allocator_corruption:
+          verify_fix: true
+
+  - test:
+      name: "verify fix-obj snap and pool snap deletion"
+      module: test_pool_snap.py
+      desc: obj snap deletion when pool snapshot is deleted on fixed build
+      polarion-id: CEPH-83602685
+      config:
+        verify_fix: true
+
+  - test:
       name: Test configuration Assimilation
       module: test_config_assimilation.py
       polarion-id: CEPH-83573480
       config:
-        cluster_conf_path: "conf/squid/rados/test-confs/cluster-configs"
+        cluster_conf_path: "conf/reef/rados/test-confs/cluster-configs"
         Verify_config_parameters:
           configurations:
             - config-1:
@@ -210,23 +253,6 @@ tests:
                 name: "mds_op_history_size"
                 value: "40"
       desc: Verify config assimilation into ceph mon configuration database
-
-  - test:
-      name: "verify fix-osd recovery with allocator file corruption"
-      module: test_osd_crashes.py
-      desc: failed osd recovery due to allocator file corruption during upgrade
-      polarion-id: CEPH-83609785
-      config:
-        verify_allocator_corruption:
-          verify_fix: true
-
-  - test:
-      name: "verify fix-obj snap and pool snap deletion"
-      module: test_pool_snap.py
-      desc: obj snap deletion when pool snapshot is deleted on fixed build
-      polarion-id: CEPH-83602685
-      config:
-        verify_fix: true
 
   # Running basic rbd and rgw tests after upgrade
   - test:

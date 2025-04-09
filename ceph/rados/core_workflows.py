@@ -5082,6 +5082,7 @@ EOF"""
 
         # get osd device path and OSD host
         osd_device = osd_metadata["devices"]
+        device_path = f"/dev/{osd_device}"
         osd_host = self.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
 
         _cmd = f"echo {rota_val} > /sys/block/{osd_device}/queue/rotational"
@@ -5090,7 +5091,10 @@ EOF"""
         if redeploy:
             # re-deploy the input OSD
             osd_utils.set_osd_out(self.ceph_cluster, osd_id=osd_id)
-            osd_utils.osd_remove(self.ceph_cluster, osd_id=osd_id, zap=True, force=True)
+            osd_utils.osd_remove(self.ceph_cluster, osd_id=osd_id, force=True)
+            osd_utils.zap_device(
+                self.ceph_cluster, host=osd_host.hostname, device_path=device_path
+            )
 
             # set OSD service to managed
             self.set_service_managed_type(service_type="osd", unmanaged=False)
