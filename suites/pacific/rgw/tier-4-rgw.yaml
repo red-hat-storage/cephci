@@ -88,7 +88,16 @@ tests:
                 - service_type: crash
                   placement:
                     host_pattern: "*"
-
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node5
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
   # Bucket policy tests
 
   - test:
@@ -99,6 +108,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_action.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid conditional in condition blocks
@@ -108,6 +118,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_condition_key.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid effect
@@ -117,6 +128,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_effect.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid key
@@ -126,6 +138,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_key.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid principal
@@ -135,6 +148,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_principal.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid resource
@@ -144,6 +158,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_resource.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket policy with invalid version
@@ -153,6 +168,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_bucket_policy_invalid_version.yaml
+        run-on-haproxy: true
 
   # Bucket lifecycle tests
 
@@ -164,6 +180,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_conflict_btw_exp_transition.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket lc rule conflict between expiration days
@@ -173,6 +190,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_conflict_exp_days.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket lc rule conflict between transition actions
@@ -182,6 +200,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_conflict_transition_actions.yaml
+        run-on-haproxy: true
 
   - test:
       name: test bucket lc rules with same ruleid but different rules
@@ -191,6 +210,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_same_rule_id_diff_rules.yaml
+        run-on-haproxy: true
 
   - test:
       name: Test bucket lc reverse transition
@@ -200,6 +220,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_rule_reverse_transition.yaml
+        run-on-haproxy: true
 
   # swift container operation
   - test:
