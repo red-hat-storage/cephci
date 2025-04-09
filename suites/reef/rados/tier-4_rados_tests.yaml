@@ -218,12 +218,12 @@ tests:
           create: true
           pool_name: re_pool_compress
           pg_num: 32
-          rados_write_duration: 10
+          max_objs: 300
           rados_read_duration: 10
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           configurations:
             - config-1:
                 compression_mode: force
@@ -254,12 +254,12 @@ tests:
           create: true
           pool_name: re_pool_compress
           pg_num: 32
-          rados_write_duration: 10
+          max_objs: 300
           rados_read_duration: 10
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           configurations:
             - config-1:
                 compression_mode: force

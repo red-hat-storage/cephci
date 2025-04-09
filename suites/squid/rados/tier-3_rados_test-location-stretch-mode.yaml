@@ -233,7 +233,7 @@ tests:
         verify_forced_recovery: true
         osd_max_backfills: 16
         osd_recovery_max_active: 16
-        rados_write_duration: 200
+        max_objs: 300
       desc: Verify forced recovery and healthy on a stretch configured cluster
 
   - test:
