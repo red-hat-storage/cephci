@@ -277,6 +277,15 @@ tests:
       desc: Test stretch site maintenance mode scenarios in 3 AZ cluster
 
   - test:
+      name: Negative Scenarios
+      module: test_stretch_n_az_negative_scenarios.py
+      polarion-id: CCEPH-83609872
+      config:
+        stretch_bucket: datacenter
+        rule_name: 3az_rule
+      desc: negative scenarios with stretch pool enable command
+
+  - test:
       name: Netsplit Scenarios data-data sites
       module: test_stretch_n-az_netsplit_scenarios.py
       polarion-id: CEPH-83609870
