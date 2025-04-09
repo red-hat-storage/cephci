@@ -4,6 +4,7 @@ Bugzilla:
  - https://bugzilla.redhat.com/show_bug.cgi?id=1608060
  - https://bugzilla.redhat.com/show_bug.cgi?id=1644409
 """
+
 import datetime
 import time
 
@@ -49,12 +50,6 @@ def run(ceph_cluster, **kw):
         log.info(f"Default value of parameter osd_max_pg_log_entries: {def_value}")
         assert int(def_value) == 10000
 
-        # set pglog_hardlimit flag and 2000 value for 'osd_max_pg_log_entries'
-        out, _ = cephadm.shell(args=["ceph osd set pglog_hardlimit"])
-        assert mon_obj.set_config(
-            section="osd", name="osd_max_pg_log_entries", value="2000"
-        )
-
         pg_id = rados_obj.get_pgid(pool_name=_pool_name)[0]
         primary_osd = rados_obj.get_pg_acting_set(pg_num=pg_id)[0]
         log.info(f"Primary OSD for pg {pg_id}: {primary_osd}")
@@ -77,22 +72,29 @@ def run(ceph_cluster, **kw):
         while datetime.datetime.now() < endtime:
             curr_pg_query = rados_obj.run_ceph_command(cmd=f"ceph pg {pg_id} query")
             curr_log_size = curr_pg_query["info"]["stats"]["log_size"]
-            if int(curr_log_size) >= 2000:
+            if int(curr_log_size) >= 2200:
                 log.info(
-                    f"PG log size is now greater than or equal to 2000: {curr_log_size}"
+                    f"PG log size is now greater than or equal to 2200: {curr_log_size}"
                 )
                 log.info("Fetching machine time to determine OSD log start time")
                 init_time, _ = osd_host.exec_command(
                     cmd="date '+%Y-%m-%d %H:%M:%S'", sudo=True
                 )
                 break
-            log.info(f"PG log is increasing but currently below 2000: {curr_log_size}")
+            log.info(f"PG log is increasing but currently below 2200: {curr_log_size}")
             log.info("Triggering bench IOPS for 90 secs followed by recovery")
             rados_obj.bench_write(**fore_bench_cfg)
             rados_obj.change_osd_state(action="restart", target=primary_osd)
         else:
-            log.error("PG logs could not increase beyond 2000 within timeout 1800 secs")
-            raise Exception("PG logs could not increase beyond 2000 within timeout.")
+            log.error("PG logs could not increase beyond 2200 within timeout 1800 secs")
+            raise Exception("PG logs could not increase beyond 2200 within timeout.")
+
+        # set pglog_hardlimit flag and 2000 value for 'osd_max_pg_log_entries'
+        out, _ = cephadm.shell(args=["ceph osd set pglog_hardlimit"])
+        assert mon_obj.set_config(
+            section="osd", name="osd_max_pg_log_entries", value="2000"
+        )
+        time.sleep(5)
 
         """ Now that PG log count has reached 2K, we trigger background IOPS for a
         duration of 120 secs and observe the trimming of these log beyond 2000."""
@@ -156,4 +158,8 @@ def run(ceph_cluster, **kw):
         rados_obj.delete_pool(pool=_pool_name)
         # log cluster health
         rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
     return 0
