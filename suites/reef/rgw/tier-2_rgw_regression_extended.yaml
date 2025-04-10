@@ -75,6 +75,7 @@ tests:
       desc: BucketNotification with users in same tenant and different tenant
       polarion-id: CEPH-11204
       module: sanity_rgw.py
+      comments: Known issue BZ-2358562 targeted to 7.1z4
       config:
         run-on-rgw: true
         extra-pkgs:
