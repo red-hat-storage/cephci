@@ -97,6 +97,21 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
+      name: Cluster behaviour when OSDs are full
+      desc: Test PG autoscaling and rebalancing when OSDs are near-full, backfill-full and completely full
+      module: test_osd_full.py
+      polarion-id: CEPH-83571715
+      config:
+        pg_autoscaling:
+          pool_config:
+            pool-1:
+              pool_type: replicated
+              pool_name: re_pool_3
+              pg_num: 1
+              disable_pg_autoscale: true
+            # EC pool will be added later
+
+  - test:
       name: osd_memory_target param set at OSD level
       module: test_osd_memory_target.py
       desc: Verification of osd_memory_target parameter set at OSD level
@@ -122,21 +137,6 @@ tests:
         pool_name: test-objectstore
         write_iteration: 3
         delete_pool: true
-
-  - test:
-      name: Cluster behaviour when OSDs are full
-      desc: Test PG autoscaling and rebalancing when OSDs are near-full, backfill-full and completely full
-      module: test_osd_full.py
-      polarion-id: CEPH-83571715
-      config:
-        pg_autoscaling:
-          pool_config:
-            pool-1:
-              pool_type: replicated
-              pool_name: re_pool_3
-              pg_num: 1
-              disable_pg_autoscale: true
-            # EC pool will be added later
 
   - test:
       name: ceph osd df stats

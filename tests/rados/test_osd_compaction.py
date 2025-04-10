@@ -36,6 +36,7 @@ def run(ceph_cluster, **kw):
     pool_obj = PoolFunctions(node=cephadm)
     omap_config = config["omap_config"]
     bench_config = config["bench_config"]
+    rhbuild = config.get("rhbuild")
 
     # Creating pools and starting the test
     try:
@@ -187,7 +188,11 @@ def run(ceph_cluster, **kw):
         log.info(f"Starting OSD compaction for OSD {osd_id}")
         out, _ = cephadm.shell([f"ceph tell osd.{osd_id} compact"])
         log.info(out)
-        assert "elapsed_time" in out
+
+        # "ceph tell osd.1 compact" does not print elapsed_time
+        # in 8.1. BZ https://bugzilla.redhat.com/show_bug.cgi?id=2351352
+        if rhbuild.split("-")[0] != "8.1":
+            assert "elapsed_time" in out
         time.sleep(10)
 
         # fetch the final use % for the chosen OSD after compaction
@@ -221,7 +226,11 @@ def run(ceph_cluster, **kw):
         log.info(f"Starting OSD compaction for OSD {osd_id}")
         out, _ = cephadm.shell([f"ceph tell osd.{osd_id} compact"])
         log.info(out)
-        assert "elapsed_time" in out
+
+        # "ceph tell osd.1 compact" does not print elapsed_time
+        # in 8.1. BZ https://bugzilla.redhat.com/show_bug.cgi?id=2351352
+        if rhbuild.split("-")[0] != "8.1":
+            assert "elapsed_time" in out
         time.sleep(10)
 
         # stop the OSD to check compaction failure
