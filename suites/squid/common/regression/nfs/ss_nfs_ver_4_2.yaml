@@ -1,0 +1,301 @@
+# Test suite deploy and configure single site cluster
+# global-conf: conf/squid/common/7node-4client-nfs.yaml
+
+tests:
+
+  - test:
+      name: Verify create file, create hardlink and lookups from nfs clients
+      module: nfs_verify_file_ops_hard_links.py
+      desc: Verify create file, create soflink and lookups from nfs clients
+      polarion-id: CEPH-83577597
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+
+  - test:
+      name: Modifying file attributes such as size, modification time, and access time
+      module: nfs_verify_file_modification.py
+      desc: Verify create file, create soflink and lookups from nfs clients
+      polarion-id: CEPH-83577602
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+
+  - test:
+     name: Nfs export with client permission
+     module: nfs_client_permission_export
+     desc: Test nfs export with authorized client mount
+     polarion-id: CEPH-83578394
+     abort-on-fail: false
+     config:
+       nfs_version: 4.2
+       clients: 2
+
+  - test:
+     name: Nfs Test File Truncate
+     module: nfs_file_truncate.py
+     desc: Perform file truncate operation from clients
+     polarion-id: CEPH-83577598
+     abort-on-fail: false
+     config:
+       nfs_version: 4.2
+       clients: 2
+
+  - test:
+      name: Nfs Verify multiple parallel io and lookups
+      module: nfs_verify_multiple_parallel_io_and_lookups.py
+      desc: Perform look ups while multiple parallel io are in progress
+      polarion-id: CEPH-83581304
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 4
+  - test:
+      name: Nfs Verify rm write lookups in parellel from multi clients
+      module: nfs_verify_parallel_rm_write_lookup.py
+      desc: Perform lookups rm and write at the same time
+      polarion-id: CEPH-83577591
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 4
+
+  - test:
+     name: Nfs Test File Append
+     module: nfs_file_append.py
+     desc: Perform file append operation from clients
+     polarion-id: CEPH-83577599
+     abort-on-fail: false
+     config:
+       nfs_version: 4.2
+       clients: 4
+
+  - test:
+      name: Nfs Verify read write operation permissions
+      module: nfs_verify_read_write_operations.py
+      desc: Perform read write without permissions on nfs share
+      polarion-id: CEPH-83575941
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        operation: verify_permission
+
+  - test:
+      name: Nfs verify read and write non existing file
+      module: nfs_verify_read_write_operations.py
+      desc: Perform read write of no existing file on nfs share
+      polarion-id: CEPH-83575927
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        operation: verify_non_existing_file
+
+  - test:
+      name: Nfs verify export unexport while nfs share is in use
+      module: nfs_verify_stress.py
+      desc: Stress by performing admin ops like exports unexports while clients are actively using the NFS shares.
+      polarion-id: CEPH-83575994
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+
+  - test:
+      name: Nfs Ganesha copy operations
+      module: test_file_ops_copy.py
+      desc: Perform file and dir copy and lookups in parallel
+      polarion-id: CEPH-83577595
+      abort-on-fail: true
+      config:
+        nfs_version: 4.2
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
+
+  - test:
+      name: Nfs Ganesha rename operations
+      module: test_file_ops_renames.py
+      desc: Perform file and dir renaming and lookups in parallel
+      polarion-id: CEPH-83577594
+      abort-on-fail: true
+      config:
+        nfs_version: 4.2
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
+
+  - test:
+      name: Nfs Ganesha test multi mount versions
+      module: nfs_verify_multi_mount_version.py
+      desc: Perform different mount versions on clients and validate the behavior
+      polarion-id: CEPH-83577595
+      abort-on-fail: true
+      config:
+        clients: 3
+        nfs_version: [4.2: 2, 3: 1]  # Out of the 3 clients, 2 will be mounted with v4.2 and other with v3
+
+  - test:
+      name: Nfs Verify symbolic links inherit appropriate permissions and not allow unauthorized access
+      module: nfs_verify_symbolic_links_permissions.py
+      desc: Verify symbolic links inherit appropriate permissions and not allow unauthorized access
+      polarion-id: CEPH-83575975
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Verify owner of a symbolic link and the owner of the target file can be different users
+      module: nfs_verify_symbolic_links_users.py
+      desc: Verify owner of a symbolic link and the owner of the target file can be different users
+      polarion-id: CEPH-83575972
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Nfs Verify file mv operation
+      module: nfs_verify_read_write_operations.py
+      desc: Verify mv is denied with a permission error when tried on readonly nfs share
+      polarion-id: CEPH-83575932
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        operation: mv_file
+
+  - test:
+      name: Nfs Verify file mv and replace opertaion
+      module: nfs_verify_read_write_operations.py
+      desc: Verify mv is overwrites the content of the existing file with same name
+      polarion-id: CEPH-83575934
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        operation: mv_file_overwrite
+
+  - test:
+      name: Nfs Verify symbolic links create to file on other file system
+      module: nfs_verify_symbolic_links_file_other_file_system.py
+      desc: Verify NFS behavior when attempting to create symbolic links to files residing on other file systems with different protocols (e.g., NFS to local filesystem)
+      polarion-id: CEPH-83575969
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Nfs Verify hard links correctly reference the same inode as the original file.
+      module: nfs_verify_hard_links_inode.py
+      desc: Verify creation of hard links within an NFS share and verify that they correctly reference the same inode as the original file.
+      polarion-id: CEPH-83575960
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Nfs Verify multi depth dir creations
+      module: nfs_verify_multi_depth_dir_and_permissions.py
+      desc: Verify creating nested mutli depth directories on nfs share
+      polarion-id: CEPH-83575983
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        dir_depth: 10
+        dirs_per_depth: 5
+
+  - test:
+      name: Nfs Verify default permissions
+      module: nfs_verify_multi_depth_dir_and_permissions.py
+      desc: Verify newly created files and dirs on an NFS share inherit default permissions.
+      polarion-id: CEPH-83576012
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        operation: default_permissions
+
+  - test:
+      name: Verify that hard links remain valid after an NFS server reboot.
+      module: nfs_hard_links_server_reboot.py
+      desc: Verify that hard links remain valid after an NFS server reboot.
+      polarion-id: CEPH-83575971
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Verify renaming a file that has one or more hard or symbolic links associated with it.
+      module: nfs_hard_symbolic_links_rename.py
+      desc: Test NFS behavior when renaming a file that has one or more hard or symbolic links associated with it.
+      polarion-id: CEPH-83575974
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Verify when deleting a file with one or more hard links and verify that the remaining hard links are still valid.
+      module: nfs_hard_links_delete_file.py
+      desc: Test NFS behavior when deleting a file with one or more hard links and verify that the remaining hard links are still valid.
+      polarion-id: CEPH-83575964
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Delete the old earmark and set the "nfs". Create NFS export out of it
+      desc: Delete the old earmark and set the "nfs". Create NFS export out of it
+      module: test_earmark_feature.py
+      polarion-id: CEPH-83604500
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        earmark: smb
+        operation: rename_earmark
+
+  - test:
+      name: creating volume and setting earmark
+      desc: creating volume and setting earmark
+      module: test_earmark_feature.py
+      polarion-id: CEPH-83604497
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        earmark: nfs
+        operation: verify_earmark
+
+  - test:
+      name: Override the earmark and try to create nfs export. It should fail
+      desc: Override the earmark and try to create nfs export. It should fail
+      module: test_earmark_feature.py
+      polarion-id: CEPH-83604499
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        earmark: nfs
+        operation: override_earmark
+
+  - test:
+      name: Set the earmark as "smb" and try to use the same subvolume for nfs export
+      desc: Set the earmark as "smb" and try to use the same subvolume for nfs export
+      module: test_earmark_feature.py
+      polarion-id: CEPH-83604498
+      config:
+        cephfs_volume: cephfs
+        subvolume_group: nfsgroup
+        nfs_version: 4.2
+        earmark: smb
+        operation: wrong_earmark
