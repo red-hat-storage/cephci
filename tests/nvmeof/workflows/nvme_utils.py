@@ -105,7 +105,7 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
 
     if release <= ("7.1"):
         return cfg
-    elif release == "8.0":
+    elif release >= "8":
         if not gw_group:
             raise NVMeDeployArgumentError("Gateway group not provided..")
 

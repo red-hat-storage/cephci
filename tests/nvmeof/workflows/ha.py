@@ -153,7 +153,7 @@ class HighAvailability:
             args=["ceph", "nvme-gw", "show", self.nvme_pool, repr(self.gateway_group)]
         )
         states = {}
-        if self.cluster.rhcs_version == "8.0":
+        if self.cluster.rhcs_version >= "8":
             out = json.loads(out)
             for gateway in out.get("Created Gateways:"):
                 gw = gateway["gw-id"]
