@@ -161,7 +161,6 @@ tests:
         debug_enable: False
         delete_pool:
           - ecpool
-      comments:  Active bugs 2277111,2335727 and 2335762
 
   - test:
       name: Inconsistent objects in replicated pool functionality check
