@@ -316,10 +316,29 @@ def run(ceph_cluster, **kw):
                         host=osd_host,
                     )
 
+                for _ in range(5):
+                    out = rados_obj.get_orch_device_list(node=osd_host.hostname)
+                    available_devices = [
+                        device["path"]
+                        for device in out[0]["devices"]
+                        if device["available"]
+                    ]
+                    if dev_path in available_devices:
+                        break
+                else:
+                    log_msg = (
+                        f"OSD could not be deployed on host {osd_host.hostname}"
+                        f" after zapping device using command"
+                        f" ceph-volume lvm zap {' '.join(option)}"
+                        f"\ndevice path: {dev_path}"
+                        f"\nOSD ID: {osd_id}"
+                    )
+                    raise Exception(log_msg)
+
                 wait_for_osd_daemon_state(rados_obj.client, osd_id, "up")
 
                 log.info(
-                    f"Successfully added back osd {osd_id} to cluster\n"
+                    f"Successfully added back osd {osd_id} to clustblueer\n"
                     f"Successfully removed osd {osd_id}, zapped device {dev_path}"
                     f" associated with osd [osd_id: {osd_id}, osd_fsid: {osd_fsid}]"
                     f" and added back the removed OSD"
