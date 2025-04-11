@@ -159,6 +159,7 @@ tests:
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_multiple_rules.yaml
+        run-on-haproxy: true
   - test:
       name: Bucket Lifecycle Object_transition_tests multiple pool transition
       desc: Bucket Lifecycle Object_transition_tests multiple pool transition

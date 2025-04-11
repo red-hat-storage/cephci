@@ -187,6 +187,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
   - test:
       name: Test GetObjectAttributes with normal objects
       desc: Test GetObjectAttributes with normal objects
