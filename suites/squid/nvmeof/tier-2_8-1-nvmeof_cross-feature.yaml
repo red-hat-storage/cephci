@@ -1,7 +1,6 @@
-# Scale test suite including all new features from 8.1
-# 1 GW group with 4 GWs and 128 subsystems with 20 namespaces each and 5 initiator nodes
+# Test suite including all new features from 8.1
+# 1 GW group with 4 GWs and 5 subsystems with 10 namespaces each and 5 initiator nodes
 # Test conf at rhos-d conf/squid/nvmeof/ceph_nvmeof_ns-masking-5_client.yaml
-# Bare Metal conf TBD
 tests:
   - test:
       abort-on-fail: true
@@ -42,7 +41,8 @@ tests:
               command: apply
               service: osd
               args:
-                all-available-devices: true
+                placement:
+                  label: osd
       desc: RHCS cluster deployment using cephadm
       destroy-clster: false
       module: test_cephadm.py
@@ -122,13 +122,13 @@ tests:
               service: subsystem
               command: add
               args:
-                subsystems: 128
+                subsystems: 5
                 max-namespaces: 1024
           - config:
               service: listener
               command: add
               args:
-                subsystems: 128
+                subsystems: 5
                 port: 4420
                 group: group1
                 nodes:
@@ -140,13 +140,13 @@ tests:
               service: host
               command: add
               args:
-                subsystems: 128
+                subsystems: 5
                 group: group1
-      desc: GW group with 4 GWs and 128 subsystems
+      desc: GW group with 4 GWs and 5 subsystems
       destroy-cluster: false
       module: test_ceph_nvmeof_gateway_sub_scale.py
       name: Configure subsystems
-      polarion-id: CEPH-83595512                     # This can be replaced with In band authentication functionality at scale
+      polarion-id: CEPH-83595512                     # This shall be replaced with In band authentication functionality
 
   - test:
       abort-on-fail: true
@@ -161,17 +161,18 @@ tests:
           - config:
               command: add
               args:
-                subsystems: 128
-                namespaces: 2560
+                subsystems: 5
+                namespaces: 50
                 pool: rbd
                 image_size: 1T
                 no-auto-visible: true
                 group: group1
+                validate_ns_masking_initiators: true
           - config:
               command: add_host
               args:
-                subsystems: 128
-                namespaces: 2560
+                subsystems: 5
+                namespaces: 50
                 initiators:
                   - node8
                   - node9
@@ -179,11 +180,12 @@ tests:
                   - node11
                   - node12
                 group: group1
+                validate_ns_masking_initiators: true
           - config:
               command: del_host
               args:
-                subsystems: 128
-                namespaces: 2560
+                subsystems: 5
+                namespaces: 50
                 initiators:
                   - node8
                   - node9
@@ -191,28 +193,31 @@ tests:
                   - node11
                   - node12
                 group: group1
+                validate_ns_masking_initiators: true
           - config:
               command: change_visibility
               args:
-                subsystems: 128
-                namespaces: 2560
+                subsystems: 5
+                namespaces: 50
                 auto-visible: 'yes'
                 group: group1
+                validate_ns_masking_initiators: true
           - config:
               command: change_visibility
               args:
-                subsystems: 128
-                namespaces: 2560
+                subsystems: 5
+                namespaces: 50
                 auto-visible: 'no'
                 group: group1
+                validate_ns_masking_initiators: true
         initiators:
           - node8
           - node9
           - node10
           - node11
           - node12
-      desc: e2e NS masking on 2560 namespaces 128 subsystems and 5 initiators
+      desc: e2e NS masking on 50 namespaces and 5 initiators
       destroy-cluster: false
       module: test_ceph_nvmeof_ns_masking.py
-      name: Test E2E nvmeof namespace masking at scale
-      polarion-id: CEPH-83609782
+      name: Test E2E nvmeof namespace masking
+      polarion-id: CEPH-83609777
