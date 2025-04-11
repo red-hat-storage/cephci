@@ -288,7 +288,6 @@ def run_io_and_validate_qos(ceph_cluster, config, key, qos_args, nvmegwcli):
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     """Return the status of the Ceph NVMEof test execution.
 
-    - Configure SPDK and install with control interface.
     - Configures Initiators, run FIO on NVMe targets, verify QoS.
 
     Args:
@@ -312,10 +311,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
     gw_port = config.get("gw_port", 5500)
     nvmegwcli = NVMeGWCLI(gw_node, gw_port)
-
-    if config.get("cleanup-only"):
-        teardown(ceph_cluster, rbd_obj, nvmegwcli, config)
-        return 0
 
     try:
         if config.get("install"):
