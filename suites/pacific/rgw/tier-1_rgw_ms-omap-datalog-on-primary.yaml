@@ -360,6 +360,7 @@ tests:
           config:
             script-name: ../s3cmd/test_s3cmd.py
             config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+            run-on-haproxy: true
             # verify-io-on-site: ["ceph-sec"] as there is an io file issue, once its fixed need to uncomment
 
   # - test:
