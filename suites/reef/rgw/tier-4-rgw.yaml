@@ -271,4 +271,3 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_multipart_upload_complete_abort_race.yaml
-      comments: known issue BZ 2331908
