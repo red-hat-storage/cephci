@@ -133,7 +133,8 @@ def run(ceph_cluster, **kw):
         except Exception as e:
             log.info(e)
             return 1
-
+        msg_obj_count = f"Scenario-1:The object count value is-{obj_count}"
+        log.info(msg_obj_count)
         if obj_count == -1:
             log.error(f"The scrub not initiated on the pg-{pg_id}")
             rados_obj.log_cluster_health()
@@ -175,6 +176,8 @@ def run(ceph_cluster, **kw):
         except Exception as e:
             log.info(e)
             return 1
+        msg_obj_count = f"Scenario-2:The object count value is-{obj_count}"
+        log.info(msg_obj_count)
         if obj_count == -1:
             log.error(f"The scrub not initiated on the pg-{pg_id}")
             rados_obj.log_cluster_health()
@@ -198,86 +201,79 @@ def run(ceph_cluster, **kw):
             "Test scenario3:Inconsistent objects less than the osd_scrub_auto_repair_num_errors count and "
             "osd_scrub_auto_repair is true\n"
             + "operation : scrub\n"
-            + "Expectation : Repairs to be made"
+            + "Expectation : No repairs to be made"
         )
         mon_obj.set_config(section="osd", name="osd_scrub_auto_repair", value="true")
+        obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "scrub")
+        msg_obj_count = f"Scenario-3:The object count value is-{obj_count}"
+        log.info(msg_obj_count)
+        if obj_count == -1:
+            log.error(f"The scrub not initiated on the pg-{pg_id}")
+            rados_obj.log_cluster_health()
+            return 1
 
-        # Case3: The inconsistent object count is less than osd_scrub_auto_repair_num_errors count and
-        # osd_scrub_auto_repair is True
-        # # Commented the code due to the BZ#2335762- Scrub operations fail to repair inconsistent data in the EC pool
-        # # when the nodeep-scrub flag is enabled. To track the issue jira task is -RHCEPHQE-17391
-        #
-        # obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "scrub")
-        #
-        # scrub_obj.set_osd_flags("unset", "nodeep-scrub")
-        # if obj_count == -1:
-        #     log.error(f"The scrub not initiated on the pg-{pg_id}")
-        #     rados_obj.log_cluster_health()
-        #     return 1
-        #
-        # if obj_count != 0:
-        #     log.error(
-        #         f"Scrub repaired the {no_of_objects - obj_count} inconsistent objects"
-        #     )
-        #     rados_obj.log_cluster_health()
-        #     return 1
-        # result = verify_pg_state(rados_obj, pg_id)
-        #
-        # if not result:
-        #     log.error("The  pg state output contain repair state after deep-scrub")
-        #     rados_obj.log_cluster_health()
-        #     return 1
+        if obj_count == -1:
+            log.error(f"The scrub not initiated on the pg-{pg_id}")
+            rados_obj.log_cluster_health()
+            return 1
+        if obj_count != no_of_objects:
+            log.error(
+                f"Scrub repaired the {no_of_objects - obj_count} inconsistent objects"
+            )
+            return 1
 
         log.info(
             "Test scenario3 completed:SCRUB-Inconsistent objects less than the osd_scrub_auto_repair_num_errors "
             "count and osd_scrub_auto_repair is true\n"
             + "operation : scrub\n"
-            + "Expectation : Repairs to be made\n"
+            + "Expectation : No repairs to be made\n"
             + f"Inconsistent count before test:{obj_count}\n"
             + f"Inconsistent count after test:{no_of_objects}"
         )
-        method_should_succeed(rados_obj.delete_pool, pool_name)
-        set_ecpool_inconsistent_default_param_value(mon_obj, scrub_obj)
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         log.info(
             "====VERIFICATION OF THE TESTS BY PERFORMING SCRUB OPERATIONS ARE COMPLETED===="
         )
         log.info(
             "====VERIFICATION OF THE TESTS BY PERFORMING DEEP-SCRUB OPERATIONS===="
         )
-        req_no_of_objects = config.get("inconsistent_obj_count")
-        if not rados_obj.create_erasure_pool(name=pool_name, **ec_config):
-            log.error("Failed to create the EC Pool")
-            return 1
-        pg_info = rados_obj.create_ecpool_inconsistent_obj(
-            objectstore_obj, client_node, pool_name, req_no_of_objects
-        )
-        if pg_info is None:
-            log.error(
-                "The inconsistent_obj_count is 0.To proceed further tests the auto_repair_param_value "
-                "should be less than Inconsistent objects count which is -1.The -1 is not acceptable to "
-                "run the tests"
-            )
-            return 1
-            # Verification of the tests with the scrub operation
-        pg_id, no_of_objects = pg_info
-        auto_repair_param_value = no_of_objects - 1
+        # req_no_of_objects = config.get("inconsistent_obj_count")
+        # if not rados_obj.create_erasure_pool(name=pool_name, **ec_config):
+        #     log.error("Failed to create the EC Pool")
+        #     return 1
+        # pg_info = rados_obj.create_ecpool_inconsistent_obj(
+        #     objectstore_obj, client_node, pool_name, req_no_of_objects
+        # )
+        # if pg_info is None:
+        #     log.error(
+        #         "The inconsistent_obj_count is 0.To proceed further tests the auto_repair_param_value "
+        #         "should be less than Inconsistent objects count which is -1.The -1 is not acceptable to "
+        #         "run the tests"
+        #     )
+        #     return 1
+        # Verification of the tests with the scrub operation
+        # pg_id, no_of_objects = pg_info
+        # auto_repair_param_value = no_of_objects - 1
 
         log.info(
             "Test scenario4:Inconsistent objects greater than the osd_scrub_auto_repair_num_errors count\n"
             + "operation : Deep-Scrub\n"
             + "Expectation : No repairs to be made"
         )
+        auto_repair_param_value = no_of_objects - 1
+
         mon_obj.set_config(
             section="osd",
             name="osd_scrub_auto_repair_num_errors",
             value=auto_repair_param_value,
         )
+
         log.info(
             f"The osd_scrub_auto_repair_num_errors value is set to {auto_repair_param_value}"
         )
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         scrub_obj.set_osd_flags("set", "noscrub")
+        scrub_obj.set_osd_flags("unset", "nodeep-scrub")
+        time.sleep(5)
+        # method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         try:
             obj_count = get_inconsistent_count(
                 scrub_object, pg_id, rados_obj, "deep-scrub"
@@ -285,7 +281,8 @@ def run(ceph_cluster, **kw):
         except Exception as e:
             log.info(e)
             return 1
-
+        msg_obj_count = f"Scenario-4:The object count value is-{obj_count}"
+        log.info(msg_obj_count)
         if obj_count == -1:
             log.error(f"The scrub not initiated on the pg-{pg_id}")
             rados_obj.log_cluster_health()
@@ -325,6 +322,8 @@ def run(ceph_cluster, **kw):
         except Exception as e:
             log.info(e)
             return 1
+        msg_obj_count = f"Scenario-5:The object count value is-{obj_count}"
+        log.info(msg_obj_count)
         if obj_count == -1:
             log.error(f"The scrub not initiated on the pg-{pg_id}")
             rados_obj.log_cluster_health()
@@ -356,7 +355,12 @@ def run(ceph_cluster, **kw):
         except Exception as e:
             log.info(e)
             return 1
+        msg_obj_count = f"Scenario-6:The object count value is-{obj_count}"
+        log.info(msg_obj_count)
         scrub_obj.set_osd_flags("unset", "noscrub")
+        msg_obj_count = f"The object count value is-{obj_count}"
+        log.info(msg_obj_count)
+
         if obj_count == -1:
             log.error(f"The scrub not initiated on the pg-{pg_id}")
             rados_obj.log_cluster_health()
