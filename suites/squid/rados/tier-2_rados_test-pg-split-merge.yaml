@@ -109,20 +109,20 @@ tests:
               pg_num: 64
               byte_size: 256
               pool_type: replicated
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
           - create_pool:
               pool_name: rpool_2
               pg_num: 128
               pool_type: replicated
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
           - create_pool:
               pool_name: rpool_3
               pg_num: 32
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
               pool_type: replicated
           - create_pool:
@@ -132,8 +132,8 @@ tests:
               pg_num: 32
               k: 2
               m: 2
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
         delete_pools:
           - rpool_1
@@ -154,20 +154,20 @@ tests:
               pg_num: 64
               byte_size: 256
               pool_type: replicated
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
           - create_pool:
               pool_name: rpool_2
               pg_num: 128
               pool_type: replicated
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
           - create_pool:
               pool_name: rpool_3
               pg_num: 32
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
               pool_type: replicated
           - create_pool:
@@ -177,8 +177,8 @@ tests:
               pg_num: 32
               k: 2
               m: 2
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
         delete_pools:
           - rpool_1

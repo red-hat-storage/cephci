@@ -134,8 +134,8 @@ tests:
         replicated_pool:
           create: true
           pool_name: rep_test_pool
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           pg_num: 32
         configure_pg_autoscaler:
           default_mode: warn
@@ -218,16 +218,16 @@ tests:
               plugin: jerasure
               crush-failure-domain: osd
               target_size_ratio: 0.8
-              rados_write_duration: 50
-              rados_read_duration: 50
+              max_objs: 300
+              rados_read_duration: 10
               delete_pool: true
             pool-2:
               pool_type: replicated
               pool_name: re_pool_1
               pg_num: 32
               target_size_ratio: 0.8
-              rados_write_duration: 50
-              rados_read_duration: 50
+              max_objs: 300
+              rados_read_duration: 10
               delete_pool: true
       desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
 
@@ -274,16 +274,16 @@ tests:
               plugin: jerasure
               crush-failure-domain: osd
               pg_num_min: 16
-              rados_write_duration: 50
-              rados_read_duration: 50
+              max_objs: 300
+              rados_read_duration: 10
               delete_pool: true
             pool-2:
               pool_type: replicated
               pool_name: re_pool_2
               pg_num: 64
               pg_num_min: 32
-              rados_write_duration: 50
-              rados_read_duration: 50
+              max_objs: 300
+              rados_read_duration: 10
               delete_pool: true
       desc: Specifying pool bounds on pool Pgs - Verify pg_num_min
 
@@ -396,7 +396,7 @@ tests:
           pool_config:
             pool-1: test_compression_repool-1
             pool-2: test_compression_repool-2
-            rados_write_duration: 200
+            max_objs: 300
             byte_size: 400KB
             pg_num: 32
           compression_config:

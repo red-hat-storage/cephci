@@ -170,8 +170,8 @@ tests:
                  pool_name: blustore_pinned
                  pg_num: 64
                  pg_num_min: 32
-                 rados_write_duration: 300
-                 rados_read_duration: 150
+                 max_objs: 300
+                 rados_read_duration: 10
                  byte_size: 64MB
                pool-2:
                  pool_name: bluestore_ec_pool
@@ -180,6 +180,6 @@ tests:
                  k: 8
                  m: 4
                  plugin: jerasure
-                 rados_write_duration: 50
-                 rados_read_duration: 50
+                 max_objs: 300
+                 rados_read_duration: 10
           desc: Verification of the bluestore pinned tests
