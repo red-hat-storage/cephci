@@ -121,3 +121,21 @@ tests:
       module: test_ceph_nvmeof_alerts_events.py
       name: Validate NVMeoFMultipleNamespacesOfRBDImage alert
       polarion-id: CEPH-83610950
+
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        test_case: CEPH-83611097
+        cleanup:
+          - pool
+          - gateway
+        gw_group: group1
+        gw_nodes:
+          - node5
+          - node6
+      desc: NVMeoF Missing Listener warning alert
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFMissingListener alert
+      polarion-id: CEPH-83611097
