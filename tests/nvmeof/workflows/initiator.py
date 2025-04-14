@@ -1,8 +1,10 @@
 import json
 
+from ceph.ceph import CommandFailed
 from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
 from utility.log import Log
+from utility.retry import retry
 from utility.utils import log_json_dump, run_fio
 
 LOG = Log(__name__)
@@ -31,20 +33,6 @@ class NVMeInitiator(Initiator):
         )
         out = json.loads(out)["blockdevices"]
         return out
-
-    def fetch_device_for_namespace(self, uuid):
-        """
-        Fetch the device path for the given namespace UUID
-        Args:
-            uuid: Namespace UUID
-        Returns:
-            NVMe device path
-        """
-        out = self.fetch_lsblk_nvme_devices_dict()
-        for device in out:
-            if device.get("wwn", "").removeprefix("uuid.") == uuid:
-                return f"/dev/{device['name']}"
-        return None
 
     def fetch_anastate(self, device):
         """
@@ -180,3 +168,86 @@ class NVMeInitiator(Initiator):
             for op in p:
                 results.append(op)
         return results
+
+
+@retry((IOError, TimeoutError, CommandFailed), tries=7, delay=2)
+def fetch_gw_paths_for_namespaces(client, ns_device):
+    """
+    Fetch the optimized and inaccessible paths for the namespaces
+    serviced by a particular gateway.
+
+    Args:
+        gateway: gateway object
+        ana_id: ana group id of the namespaces
+    """
+    gw_paths = client.fetch_anastate(ns_device)
+    LOG.info(f"Gateway paths : {log_json_dump(gw_paths)}")
+
+    if not gw_paths.get("optimized"):
+        raise IOError(f"Namespace is not optimized at {client} initiator")
+    return {"namespace": ns_device, "paths": gw_paths}
+
+
+def fetch_paths_for_namespaces(client, namespaces, devices):
+    """
+    Fetch the device path for the given namespace UUID
+    Args:
+        uuid: Namespace UUID
+    Returns:
+        NVMe device path
+    """
+    gw_paths = []
+    wwn_to_name = {
+        device.get("wwn", "").removeprefix("uuid."): device["name"]
+        for device in devices
+    }
+    device_names = [
+        wwn_to_name.get(ns.get("uuid"))
+        for ns in namespaces
+        if ns.get("uuid") in wwn_to_name
+    ]
+    with parallel() as p:
+        for ns_device in device_names:
+            p.spawn(fetch_gw_paths_for_namespaces, client, ns_device)
+        for result in p:
+            gw_paths.append(result)
+    return gw_paths
+
+
+def validate_initiator(clients, gateway, namespaces_gw, failed_gw=None):
+    """Check whether all namespaces serviced by a particular gateway are optimized
+    for that gateway at the initiator and also during failover, check if the failed
+    gateway is inaccessible at the initiator.
+
+    Args:
+        gateway: gateway object
+        namespaces_gw: namespaces related to the gateway
+        failed_gw: failed gateway object
+    """
+    for client in clients:
+        devices = client.fetch_lsblk_nvme_devices_dict()
+        if not devices:
+            raise Exception(f"NVMe devices are not available at {client} initiator")
+        gw_paths = fetch_paths_for_namespaces(gateway, client, namespaces_gw, devices)
+        for paths in gw_paths:
+            if len(paths.get("paths").get("optimized")) > 1:
+                raise Exception(
+                    f"Namespace {paths.get('namespace')} has more than one at optimized paths \
+                        {client} initiator"
+                )
+            gw_ip = gateway.node.ip_address
+            if paths.get("paths").get("optimized")[0] != gw_ip:
+                raise Exception(
+                    f"Namespace {paths.get('namespace')} is not optimized for {gw_ip} at \
+                        {client} initiator"
+                )
+            if failed_gw and failed_gw.node.ip_address not in paths.get("paths").get(
+                "inaccessible"
+            ):
+                raise Exception(
+                    f"Namespace {paths.get('namespace')} is not inaccessible for {failed_gw.node.ip_address} \
+                    at {client} initiator"
+                )
+    LOG.info(
+        f"All namespaces are optimized for all initiators for gateway {gateway.node.ip_address}"
+    )
