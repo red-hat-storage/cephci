@@ -542,29 +542,30 @@ class HighAvailability:
         for gateway in to_be_scaledown_gws:
             hostname = gateway.hostname
 
-            # Wait until 60 seconds
-            for w in WaitUntil():
-                # Check for gateway unavailability
-                if self.check_gateway_availability(
-                    gateway.ana_group_id, state="DELETING"
-                ):
-                    LOG.info(f"[ {gateway} ] NVMeofGW service is UNAVAILABLE.")
-                    active = self.get_optimized_state(gateway.ana_group_id)
+            if self.cluster.rhcs_version == "8":
+                # Wait until 60 seconds
+                for w in WaitUntil():
+                    # Check for gateway unavailability
+                    if self.check_gateway_availability(
+                        gateway.ana_group_id, state="DELETING"
+                    ):
+                        LOG.info(f"[ {gateway} ] NVMeofGW service is UNAVAILABLE.")
+                        active = self.get_optimized_state(gateway.ana_group_id)
 
-                    # Find optimized path
-                    if active:
-                        end_counter, end_time = get_current_timestamp()
-                        LOG.info(
-                            f"{list(active[0])} is new and only Active GW for failed {hostname}"
-                        )
-                        break
+                        # Find optimized path
+                        if active:
+                            end_counter, end_time = get_current_timestamp()
+                            LOG.info(
+                                f"{list(active[0])} is new and only Active GW for failed {hostname}"
+                            )
+                            break
 
-                LOG.warning(f"[ {hostname} ] is still in AVAILABLE state..")
+                    LOG.warning(f"[ {hostname} ] is still in AVAILABLE state..")
 
-            if w.expired:
-                raise TimeoutError(
-                    f"[ {hostname} ] Scale down of NVMeofGW service failed after 60s timeout.."
-                )
+                if w.expired:
+                    raise TimeoutError(
+                        f"[ {hostname} ] Scale down of NVMeofGW service failed after 60s timeout.."
+                    )
 
             LOG.info(
                 f"[ {hostname} ] Total time taken to scale down - {end_counter - start_counter} seconds"
@@ -702,6 +703,7 @@ class HighAvailability:
         out, _ = self.orch.shell(
             args=["ceph", "nvme-gw", "show", self.nvme_pool, repr(self.gateway_group)]
         )
+        out = json.loads(out)
         total_num_namespaces = out.get("num-namespaces")
         gateways = out.get("Created Gateways:", [])
         total_gateways = len(gateways)
@@ -710,12 +712,18 @@ class HighAvailability:
 
         num_namespaces_per_gw = total_num_namespaces / total_gateways
         namespaces = {}
+        LOG.info(f"Total namespace in GW group : {total_num_namespaces}")
+        LOG.info(f"Total GWs: {total_gateways}")
+        LOG.info(f"Namespaces per GW : {num_namespaces_per_gw}")
 
         for gateway in gateways:
             gw_id = gateway["gw-id"]
             num_namespaces = gateway["num-namespaces"]
             lower_range = num_namespaces_per_gw - total_gateways
             upper_range = num_namespaces_per_gw + total_gateways
+            LOG.info(
+                f"namespace per GW must be in range between {lower_range} and {upper_range}"
+            )
 
             if not (lower_range <= num_namespaces <= upper_range):
                 raise Exception(
