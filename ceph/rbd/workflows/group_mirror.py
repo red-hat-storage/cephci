@@ -11,19 +11,14 @@ def verify_group_mirroring_state(rbd, mirror_state, **group_kw):
     # Verifies whether group mirroring state matched with the expected state passed as argument
     if mirror_state == "Disabled":
         (group_mirror_status, err) = rbd.mirror.group.status(**group_kw)
-        if err:
-            if "mirroring not enabled on the group" in err:
-                return 1
-            else:
-                return 0
-        else:
-            return 0
+        if err and "mirroring not enabled on the group" in err:
+            return 1
+        return 0
     if mirror_state == "Enabled":
         (group_info, err) = rbd.group.info(**group_kw)
         if "enabled" in group_info:
             return 1
-        else:
-            return 0
+        return 0
 
 
 def verify_group_image_list(rbd, **kw):

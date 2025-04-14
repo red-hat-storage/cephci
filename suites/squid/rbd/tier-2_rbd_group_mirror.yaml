@@ -1,6 +1,6 @@
 # ===============================================================================================
 # Tier-level: 2
-# Test-Suite: tier-2_rbd_cg_mirror.yaml
+# Test-Suite: tier-2_rbd_group_mirror.yaml
 #
 # Cluster Configuration:
 #    cephci/conf/squid/rbd/5-node-2-clusters.yaml
@@ -161,7 +161,7 @@ tests:
               num_pools: 1
               num_images: 2
               do_not_create_image: true
-              size: 1G
+              size: 4G
               mode: image
               mirror_level: group
             ec_pool_config:
@@ -169,11 +169,11 @@ tests:
               num_pools: 1
               num_images: 2
               do_not_create_image: true
-              size: 1G
+              size: 4G
               mode: image
               mirror_level: group
             fio:
-              size: 500M
+              size: 1G
 
   - test:
       abort-on-fail: true
@@ -191,7 +191,7 @@ tests:
               num_pools: 1
               num_images: 2
               do_not_create_image: true
-              size: 1G
+              size: 4G
               mode: image
               mirror_level: group
             ec_pool_config:
@@ -199,8 +199,8 @@ tests:
               num_pools: 1
               num_images: 2
               do_not_create_image: true
-              size: 1G
+              size: 4G
               mode: image
               mirror_level: group
             fio:
-              size: 500M
+              size: 1G
