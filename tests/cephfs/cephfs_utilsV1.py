@@ -658,8 +658,14 @@ class FsUtils(object):
         )
         fs_info = json.loads(out)
         mon_ips = self.get_mon_node_ips()
-        if not set([f"{i}:6789" for i in mon_ips]).issubset(fs_info["mon_addrs"]):
-            log.error("Mon IPs are not matching with FS Info IPs")
+        if not set(fs_info["mon_addrs"]).issubset([f"{i}:6789" for i in mon_ips]):
+            log.error(
+                "Mon IPs are not matching with FS Info IPs.\n"
+                "Mon IPs as per the cluster config: %s\n"
+                "Mon IPs from FS Info: %s",
+                [f"{i}:6789" for i in mon_ips],
+                fs_info["mon_addrs"],
+            )
             return False
         return True
 
