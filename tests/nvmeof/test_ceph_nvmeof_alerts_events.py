@@ -427,6 +427,7 @@ def test_ceph_83610948(ceph_cluster, config):
         "CEPH-83610948 - GW Unavailability healthcheck warning validated successfully."
     )
 
+
 def test_ceph_83611098(ceph_cluster, config):
     """[CEPH-83611098] Warning at Ceph cluster on zero listener in a subsystem.
 
@@ -444,7 +445,7 @@ def test_ceph_83611098(ceph_cluster, config):
     msg = "No listeners added to {subsystem_name} subsystem"
     gateway_nodes = deepcopy(config.get("gw_nodes"))
 
-    LOG.info(f"deploy_nvme_service")
+    LOG.info("Deploy nvme service")
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
 
@@ -452,39 +453,60 @@ def test_ceph_83611098(ceph_cluster, config):
     nvmegwcl1 = ha.gateways[0]
     subsystem1 = f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"
     sub1_args = {"subsystem": subsystem1}
-    config.update({'nqn': subsystem1})
+    config.update({"nqn": subsystem1})
     nvmegwcl1.subsystem.add(**{"args": {**sub1_args, **{"no-group-append": True}}})
 
     # Check for alert
     # NVMeoFZeroListenerSubsystem prometheus alert should be firing
-    LOG.info(f"NVMeoFZeroListenerSubsystem prometheus alert should be firing because no listener is configured")
+    LOG.info(
+        "NVMeoFZeroListenerSubsystem should be firing because no listener is configured"
+    )
     events = PrometheusAlerts(ha.orch)
-    events.monitor_alert(alert, timeout=time_to_fire, msg=msg.format(subsystem_name=subsystem1), interval=intervel)
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(subsystem_name=subsystem1),
+        interval=intervel,
+    )
 
     # Add the listener and check alert is inactive state or not
-    LOG.info(f"Add the listener and alert should be in inactive state")
+    LOG.info("Add the listener")
     configure_listeners(ha, [gateway_nodes[0]], config)
-    events.monitor_alert(alert, timeout=time_to_fire, state="inactive", interval=intervel)
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
 
     # Delete the listener and alert should be in firing state
-    LOG.info(f"Delete the listener and alert should be in firing state")
+    LOG.info("Delete the listener")
     listener_args = {"nqn": subsystem1, "listener_port": config["listener_port"]}
     configure_listeners(ha, [gateway_nodes[0]], listener_args, action="delete")
-    events.monitor_alert(alert, timeout=time_to_fire, msg=msg.format(subsystem_name=subsystem1), interval=intervel)
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(subsystem_name=subsystem1),
+        interval=intervel,
+    )
 
     # Add the listener and check alert is inactive state or not
-    LOG.info(f"Add the listener back and alert should in inactive state")
+    LOG.info("Add the listener back")
     configure_listeners(ha, [gateway_nodes[0]], config)
-    events.monitor_alert(alert, timeout=time_to_fire, state="inactive", interval=intervel)
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
 
     # Add one more subsystem and ceph prometheus alert to be in firing state
-    LOG.info(f"Add one more subsystem and alert should be in firing state")
+    LOG.info("Add one more subsystem")
     subsystem2 = f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"
     sub2_args = {"subsystem": subsystem2}
     nvmegwcl1.subsystem.add(**{"args": {**sub2_args, **{"no-group-append": True}}})
-    events.monitor_alert(alert, timeout=time_to_fire, msg=msg.format(subsystem_name=subsystem2), interval=intervel)
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(subsystem_name=subsystem2),
+        interval=intervel,
+    )
 
-    LOG.info(f"CEPH-83611098 - {alert} alert validated successfully.")
+    LOG.info("CEPH-83611098 - {alert} alert validated successfully.")
 
 
 def test_ceph_83611099(ceph_cluster, config):
@@ -499,12 +521,12 @@ def test_ceph_83611099(ceph_cluster, config):
     """
 
     time_to_fire = 300
-    intervel = 60;
+    intervel = 60
     alert = "NVMeoFSingleGateway"
     msg = "The gateway group {gw_group} consists of a single gateway - HA is not possible on cluster"
 
     # Deploy nvmeof service
-    LOG.info(f"deploy_nvme_service")
+    LOG.info("deploy nvme service")
     gateway_nodes = deepcopy(config.get("gw_nodes"))
     random_gateway = choice(gateway_nodes)
     config.update({"gw_nodes": [random_gateway]})
@@ -514,30 +536,49 @@ def test_ceph_83611099(ceph_cluster, config):
     # NVMeoFSingleGateway prometheus alert should be firing
     events = PrometheusAlerts(ha.orch)
 
-    LOG.info(f"Check for alert and NVMeoFSingleGateway prometheus alert should be firing")
-    events.monitor_alert(alert, timeout=time_to_fire, msg=msg.format(gw_group=config['gw_group']), interval=intervel)
+    LOG.info("Check NVMeoFSingleGateway should be firing")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(gw_group=config["gw_group"]),
+        interval=intervel,
+    )
 
     # Add one more gateway and NVMeoFSingleGateway alert should be in inactive state
-    LOG.info(f"Add one more gateway and NVMeoFSingleGateway alert should be in inactive state")
+    LOG.info("Add one more gateway and NVMeoFSingleGateway should be in inactive state")
     config.update({"gw_nodes": gateway_nodes})
     deploy_nvme_service(ceph_cluster, config)
-    events.monitor_alert(alert, timeout=time_to_fire, state="inactive", interval=intervel)
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
 
     # scale down to one gateway and NVMeoFSingleGateway alert should be in firing state
-    LOG.info(f"scale down to one gateway and NVMeoFSingleGateway alert should be in firing state")
+    LOG.info(
+        "scale down to one gateway and NVMeoFSingleGateway should be in firing state"
+    )
     random_gateway = choice(gateway_nodes)
     config.update({"gw_nodes": [random_gateway]})
     deploy_nvme_service(ceph_cluster, config)
-    LOG.info(f"scaled down to one gateway, alert should be in firing state")
-    events.monitor_alert(alert, timeout=time_to_fire, msg=msg.format(gw_group=config['gw_group']), interval=intervel)
+    LOG.info(
+        "scaled down to one gateway, NVMeoFSingleGateway should be in firing state"
+    )
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(gw_group=config["gw_group"]),
+        interval=intervel,
+    )
 
     # Scale up to 2 gateways and alert should be in inactive state
-    LOG.info(f"Add one more gateway and NVMeoFSingleGateway alert should be in inactive state")
+    LOG.info("Add one more gateway and NVMeoFSingleGateway should be in inactive state")
     config.update({"gw_nodes": gateway_nodes})
     deploy_nvme_service(ceph_cluster, config)
-    events.monitor_alert(alert, timeout=time_to_fire, state="inactive", interval=intervel)
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
 
-    LOG.info(f"CEPH-83611099 - {alert} alert validated successfully.")
+    LOG.info("CEPH-83611099 - NVMeoFSingleGateway validated successfully.")
+
 
 testcases = {
     "CEPH-83610948": test_ceph_83610948,
