@@ -183,6 +183,7 @@ tests:
       module: test_ceph_nvmeof_high_availability.py
       name: NVMeoF 4-GW HA test with mTLS configuration
       polarion-id: CEPH-83594616
+      #done
 
   - test:
       abort-on-fail: false
@@ -240,6 +241,7 @@ tests:
       module: test_ceph_nvmeof_high_availability.py
       name: Switch NVMeoF with mTLS to Non-mTLS configuration
       polarion-id: CEPH-83595464
+      #done
 
   # Non-mTLS Tests
   # NVMe 4-GW Single node failure(s)
@@ -299,6 +301,7 @@ tests:
       module: test_ceph_nvmeof_high_availability.py
       name: NVMeoF 4-GW HA test Single failure
       polarion-id: CEPH-83589016
+      #done
 
   - test:
       abort-on-fail: false
@@ -323,9 +326,9 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
-              lb_group: node6
+              # lb_group: node6
             listener_port: 4420
             listeners:
               - node6
@@ -336,9 +339,9 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
-              lb_group: node7
+              # lb_group: node7
             listener_port: 4420
             listeners:
               - node6
@@ -349,9 +352,9 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode3
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
-              lb_group: node8
+              # lb_group: node8
             listener_port: 4420
             listeners:
               - node6
@@ -362,9 +365,9 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode4
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
-              lb_group: node9
+              # lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -535,7 +538,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node6
             - count: 2
@@ -551,7 +554,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node8
             - count: 2
@@ -607,7 +610,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node6
             listener_port: 4420
@@ -620,7 +623,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node7
             listener_port: 4420
@@ -633,7 +636,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode3
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node8
             listener_port: 4420
@@ -646,7 +649,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode4
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node9
             listener_port: 4420
@@ -699,7 +702,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node6
             listener_port: 4420
@@ -712,7 +715,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node7
             listener_port: 4420
@@ -725,7 +728,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode3
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node8
             listener_port: 4420
@@ -738,7 +741,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode4
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node9
             listener_port: 4420
@@ -793,7 +796,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node6
             listener_port: 4420
@@ -806,7 +809,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node7
             listener_port: 4420
@@ -819,7 +822,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode3
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node8
             listener_port: 4420
@@ -832,7 +835,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode4
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node9
             listener_port: 4420
@@ -883,7 +886,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node6
             listener_port: 4420
@@ -896,7 +899,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node7
             listener_port: 4420
@@ -909,7 +912,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode3
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node8
             listener_port: 4420
@@ -922,7 +925,7 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode4
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
               lb_group: node9
             listener_port: 4420
