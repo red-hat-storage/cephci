@@ -96,7 +96,7 @@ tests:
           - create_pool:
               pool_name: pool1
               pg_num: 64
-              rados_write_duration: 1000
+              rmax_objs: 300
               byte_size: 1024
               pool_type: replicated
               osd_max_backfills: 16
@@ -104,7 +104,7 @@ tests:
           - create_pool:
               pool_name: pool2
               pg_num: 64
-              rados_write_duration: 1000
+              max_objs: 300
               byte_size: 1024
               pool_type: replicated
               osd_max_backfills: 16
@@ -112,7 +112,7 @@ tests:
           - create_pool:
               pool_name: pool3
               pg_num: 64
-              rados_write_duration: 1000
+              max_objs: 300
               byte_size: 1024
               pool_type: replicated
               osd_max_backfills: 16

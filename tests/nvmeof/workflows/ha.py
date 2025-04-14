@@ -153,7 +153,7 @@ class HighAvailability:
             args=["ceph", "nvme-gw", "show", self.nvme_pool, repr(self.gateway_group)]
         )
         states = {}
-        if self.cluster.rhcs_version == "8.0":
+        if self.cluster.rhcs_version >= "8":
             out = json.loads(out)
             for gateway in out.get("Created Gateways:"):
                 gw = gateway["gw-id"]
@@ -578,6 +578,11 @@ class HighAvailability:
             }
             LOG.info(log_json_dump(result))
 
+            # Validate auto load balance if rhcs version is 8.1
+            if self.cluster.rhcs_version == "8.1":
+                time.sleep(60)
+                validate_ns_balance = self.validate_auto_loadbalance()
+                LOG.info(f"Validated namespaces in each GW:{validate_ns_balance}")
             # Validate IO post scale down
             self.validate_io(set(list(old_namespaces)))
             return result
@@ -636,6 +641,12 @@ class HighAvailability:
                 "scale-up-end-counter-time": end_counter,
             }
             LOG.info(log_json_dump(result))
+            # Validate auto load balance if rhcs version is 8.1
+            if self.cluster.rhcs_version == "8.1":
+                time.sleep(60)
+                validate_ns_balance = self.validate_auto_loadbalance()
+                LOG.info(f"Validated namespaces in each GW:{validate_ns_balance}")
+            # Validate IO post scale up
             self.validate_io(set(list(namespaces)))
             return result
 
@@ -683,6 +694,40 @@ class HighAvailability:
                     else:
                         raise Exception("anagrpids are not matching after scaleup")
 
+    def validate_auto_loadbalance(self, gw_group=""):
+        """
+        Fetch the namespace count on each Gateway and compare them.
+        Ensure that the number of namespaces for each GW is within the range [num_namespaces_per_gw + or - len(GWs)].
+        """
+        out, _ = self.orch.shell(
+            args=["ceph", "nvme-gw", "show", self.nvme_pool, repr(self.gateway_group)]
+        )
+        total_num_namespaces = out.get("num-namespaces")
+        gateways = out.get("Created Gateways:", [])
+        total_gateways = len(gateways)
+        if total_gateways == 0:
+            raise Exception("No gateways found in the output.")
+
+        num_namespaces_per_gw = total_num_namespaces / total_gateways
+        namespaces = {}
+
+        for gateway in gateways:
+            gw_id = gateway["gw-id"]
+            num_namespaces = gateway["num-namespaces"]
+            lower_range = num_namespaces_per_gw - total_gateways
+            upper_range = num_namespaces_per_gw + total_gateways
+
+            if not (lower_range <= num_namespaces <= upper_range):
+                raise Exception(
+                    f"Gateway '{gw_id}' has an invalid num-namespaces: {num_namespaces}. "
+                    f"It must be between {lower_range} and {upper_range}."
+                )
+
+            namespaces[gw_id] = gateway
+            namespaces[gw_id]["num-namespaces"] = num_namespaces
+
+        return namespaces
+
     def failover(self, gateway, fail_tool):
         """HA Failover on the NVMeoF Gateways.
 
@@ -727,7 +772,6 @@ class HighAvailability:
                     LOG.info(
                         f"{list(active[0])} is new and only Active GW for failed {hostname}"
                     )
-                    active_gw = list(active[0])
                     break
 
                 if len(active) > 1:
@@ -749,7 +793,6 @@ class HighAvailability:
             "failover-end-time": end_time,
             "failover-start-counter-time": start_counter,
             "failover-end-counter-time": end_counter,
-            "active-gw": active_gw[0],
             "failed-gw": gateway,
         }
 
@@ -817,6 +860,7 @@ class HighAvailability:
             "failback-end-time": end_time,
             "failback-start-counter-time": start_counter,
             "failback-end-counter-time": end_counter,
+            "failed-gw": gateway,
         }
 
     @retry(IOError, tries=3, delay=3)
@@ -875,11 +919,13 @@ class HighAvailability:
             if failed_ana_grp_ids:
                 for ns in nspaces:
                     if ns["load_balancing_group"] in failed_ana_grp_ids:
+                        # <subsystem>|<nsid>|<pool_name>|<image>
+                        ns_info = f"nsid-{ns['nsid']}|{ns['rbd_pool_name']}|{ns['rbd_image_name']}"
                         if get_list:
-                            namespaces.append(ns)
+                            namespaces.append(
+                                {"list": ns, "info": f"{sub_name}|{ns_info}"}
+                            )
                         else:
-                            # <subsystem>|<nsid>|<pool_name>|<image>
-                            ns_info = f"nsid-{ns['nsid']}|{ns['rbd_pool_name']}|{ns['rbd_image_name']}"
                             namespaces.append(f"{sub_name}|{ns_info}")
         if not failed_ana_grp_ids:
             LOG.info(f"All namespaces : {log_json_dump(all_ns)}")
@@ -940,26 +986,46 @@ class HighAvailability:
 
         LOG.info("IO Validation is Successfull on all RBD images..")
 
-    def validate_initiator(self, gateway, ana_id, failed_gw=None):
+    @retry((IOError, TimeoutError, CommandFailed), tries=7, delay=2)
+    def fetch_gw_paths(self, gateway, client, ns_device):
+        """
+        Fetch the optimized and inaccessible paths for the namespaces
+        serviced by a particular gateway.
+
+        Args:
+            gateway: gateway object
+            ana_id: ana group id of the namespaces
+        """
+        gw_paths = client.fetch_anastate(ns_device)
+        LOG.info(f"Gateway paths : {log_json_dump(gw_paths)}")
+
+        if not gw_paths.get("optimized"):
+            raise IOError(
+                f"Namespace is not optimized for {gateway.daemon_name} at {client} initiator"
+            )
+
+        return gw_paths
+
+    def validate_initiator(self, gateway, namespaces_gw, failed_gw=None):
         """Check whether all namespaces serviced by a particular gateway are optimized
         for that gateway at the initiator and also during failover, check if the failed
         gateway is inaccessible at the initiator.
 
         Args:
             gateway: gateway object
-            namespaces: dict of namespaces for a gateway
-            ana_id: ana group id of the namespaces
+            namespaces_gw: namespaces related to the gateway
             failed_gw: failed gateway object
         """
         for client in self.clients:
-            namespaces_gw = self.fetch_namespaces(gateway, [ana_id], get_list=True)
             for ns in namespaces_gw:
                 ns_device = client.fetch_device_for_namespace(ns.get("uuid"))
                 if not ns_device:
                     raise Exception(
                         f"Namespace {ns.get('uuid')} is not available at {client} initiator"
                     )
-                gw_paths = client.fetch_anastate(ns_device)
+
+                gw_paths = self.fetch_gw_paths(gateway, client, ns_device)
+
                 if len(gw_paths.get("optimized")) > 1:
                     raise Exception(
                         f"Namespace {ns.get('uuid')} has more than one at optimized paths {client} initiator"
@@ -977,8 +1043,7 @@ class HighAvailability:
                         at {client} initiator"
                     )
         LOG.info(
-            f"All namespaces for the ana-group-id {ana_id} are optimized for all \
-            initiators for gateway {gateway.daemon_name}"
+            f"All namespaces are optimized for all initiators for gateway {gateway.daemon_name}"
         )
 
     def validate_init_namespace_masking(
@@ -1226,13 +1291,17 @@ class HighAvailability:
                     fail_gws, _ = self.catogorize(nodes)
                     fail_gw_ana_ids = []
                     namespaces = []
-                    namespaces_gw = {}
+                    all_failed_ns = {}
                     for gw in fail_gws:
                         fail_gw_ana_ids.append(gw.ana_group_id)
-                        ns = self.fetch_namespaces(gw, [gw.ana_group_id])
-                        namespaces.extend(ns)
-                        namespaces_gw[gw.ana_group_id] = ns
-                        self.validate_initiator(gw, gw.ana_group_id)
+                        namespaces_gw = self.fetch_namespaces(
+                            gw, [gw.ana_group_id], get_list=True
+                        )
+                        ns_list = [ns.get("list") for ns in namespaces_gw]
+                        ns_info = [ns.get("info") for ns in namespaces_gw]
+                        namespaces.extend(ns_info)
+                        all_failed_ns.update({gw.ana_group_id: ns_list})
+                        self.validate_initiator(gw, ns_list)
 
                     self.validate_io(namespaces)
 
@@ -1244,16 +1313,21 @@ class HighAvailability:
                             else:
                                 p.spawn(self.failover, gw, fail_tool)
                         for result in p:
-                            active_gw = result.pop("active-gw")
-                            failed_gw = result.pop("failed-gw")
+                            if not isinstance(result, dict):
+                                raise Exception("Failover failed")
+                            failed_gw = result.pop("failed-gw", None)
+                            if not failed_gw:
+                                raise Exception("Faileover failed")
+                            active = self.get_optimized_state(failed_gw.ana_group_id)
+                            active_gw = list(active[0])[0]
                             LOG.info(log_json_dump(result))
-                            ns = namespaces_gw[gw.ana_group_id]
-                            new_gw = [
+                            active_gw_obj = [
                                 gw
                                 for gw in self.gateways
                                 if gw.daemon_name in active_gw
                             ][0]
-                            self.validate_initiator(new_gw, gw.ana_group_id, failed_gw)
+                            ns_list = all_failed_ns.get(failed_gw.ana_group_id)
+                            self.validate_initiator(active_gw_obj, ns_list, failed_gw)
                         self.validate_io(namespaces)
 
                     # Fail Back
@@ -1262,9 +1336,14 @@ class HighAvailability:
                             for gw in fail_gws:
                                 p.spawn(self.failback, gw, fail_tool)
                             for result in p:
+                                if not isinstance(result, dict):
+                                    raise Exception("Failback failed")
+                                failed_gw = result.pop("failed-gw", None)
                                 LOG.info(log_json_dump(result))
-                                ns = namespaces_gw[gw.ana_group_id]
-                                self.validate_initiator(gw, gw.ana_group_id)
+                                if not failed_gw:
+                                    raise Exception("Failback failed")
+                                ns_list = all_failed_ns.get(failed_gw.ana_group_id)
+                                self.validate_initiator(failed_gw, ns_list)
                             self.validate_io(namespaces)
 
                         time.sleep(20)

@@ -121,7 +121,7 @@ def run(ceph_cluster, **kw) -> int:
                 try:
                     for node in osd_nodes:
                         assert rados_obj.check_host_status(
-                            hostname=node.hostname, status="offline"
+                            hostname=node.hostname, status=""
                         )
                     log.info("Rebooted hosts are up")
                     break

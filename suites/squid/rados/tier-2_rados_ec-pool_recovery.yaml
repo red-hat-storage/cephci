@@ -139,8 +139,8 @@ tests:
           m: 2
           pg_num: 32
           plugin: jerasure
-          rados_write_duration: 100
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           osd_max_backfills: 16
           osd_recovery_max_active: 16
           delete_pool: true
@@ -159,8 +159,8 @@ tests:
           m: 2
           plugin: jerasure
           disable_pg_autoscale: true
-          rados_write_duration: 50
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
         set_pool_configs:
           pool_name: test_ec_pool
           configurations:
@@ -187,8 +187,8 @@ tests:
           k: 2
           m: 2
           plugin: jerasure
-          rados_write_duration: 50
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
           test_overwrites_pool: true
           metadata_pool: re_pool_overwrite
           image_name: image_ec_pool
@@ -283,20 +283,20 @@ tests:
               pg_num: 64
               byte_size: 256
               pool_type: replicated
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
           - create_pool:
               pool_name: rpool_2
               pg_num: 128
               pool_type: replicated
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
           - create_pool:
               pool_name: rpool_3
               pg_num: 32
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
               pool_type: replicated
           - create_pool:
@@ -306,8 +306,8 @@ tests:
               pg_num: 32
               k: 2
               m: 2
-              rados_write_duration: 50
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
         delete_pools:
           - rpool_1
@@ -330,8 +330,8 @@ tests:
           m: 2
           plugin: isa
           disable_pg_autoscale: true
-          rados_write_duration: 50
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
         set_pool_configs:
           pool_name: test_isa_ec_pool
           configurations:
@@ -358,8 +358,8 @@ tests:
           k: 2
           m: 2
           plugin: isa
-          rados_write_duration: 50
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
           test_overwrites_pool: true
           metadata_pool: isa_re_pool_overwrite
           image_name: image_ec_pool

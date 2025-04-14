@@ -197,8 +197,8 @@ tests:
           pg_num: 16
           size: 2
           disable_pg_autoscale: true
-          rados_write_duration: 50
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
         set_pool_configs:
           pool_name: test_re_pool
           configurations:
@@ -224,13 +224,13 @@ tests:
           byte_size: 200KB
           m: 3
           plugin: jerasure
-          rados_write_duration: 200
-          rados_read_duration: 100
+          max_objs: 300
+          rados_read_duration: 10
         replicated_pool:
           pool_name: delete_pool
           pg_num: 32
           byte_size: 1024
-          rados_write_duration: 300
+          max_objs: 300
           rados_read_duration: 10
 
   - test:
@@ -259,7 +259,7 @@ tests:
           pool_config:
             pool-1: test_compression_ecpool-1
             pool-2: test_compression_ecpool-2
-            rados_write_duration: 300
+            max_objs: 300
             byte_size: 10KB
             pg_num: 32
             k: 2

@@ -120,8 +120,8 @@ tests:
               pool_type: replicated
               size: 2
               min_size: 2
-              rados_write_duration: 30
-              rados_read_duration: 15
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
           - create_pool:
               create: true
@@ -132,8 +132,8 @@ tests:
               k: 4
               m: 2
               plugin: jerasure
-              rados_write_duration: 30
-              rados_read_duration: 15
+              max_objs: 300
+              rados_read_duration: 10
               crush-failure-domain: osd
         delete_pools:
           - ecpool_1
@@ -181,8 +181,8 @@ tests:
           - create_pool:
               pool_name: rpool_01
               pg_num: 16
-              rados_write_duration: 60
-              rados_read_duration: 30
+              max_objs: 300
+              rados_read_duration: 10
               byte_size: 256
               pool_type: replicated
         delete_pools:
@@ -213,7 +213,7 @@ tests:
           k: 4
           m: 2
           plugin: jerasure
-          rados_write_duration: 60
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
           crush-failure-domain: osd
       desc: Create pools and run IO

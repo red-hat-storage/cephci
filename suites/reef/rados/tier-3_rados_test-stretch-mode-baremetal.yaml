@@ -199,7 +199,7 @@ tests:
         verify_forced_recovery: true
         osd_max_backfills: 16
         osd_recovery_max_active: 16
-        rados_write_duration: 200
+        max_objs: 300
       desc: Verify forced recovery and healthy on a stretch configured cluster
 
   - test:
@@ -213,7 +213,7 @@ tests:
           pool_config:
             pool-1: test_compression_repool-1
             pool-2: test_compression_repool-2
-            rados_write_duration: 200
+            max_objs: 300
             byte_size: 100KB
             pg_num: 32
           compression_config:
@@ -233,12 +233,12 @@ tests:
           create: true
           pool_name: re_pool_compress
           pg_num: 32
-          rados_write_duration: 10
+          max_objs: 300
           rados_read_duration: 10
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           configurations:
             - config-1:
                 compression_mode: force
@@ -282,8 +282,8 @@ tests:
         replicated_pool:
           create: true
           pool_name: rep_test_pool
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           pg_num: 32
         configure_pg_autoscaler:
           default_mode: warn

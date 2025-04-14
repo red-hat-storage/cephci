@@ -63,6 +63,7 @@ def run(ceph_cluster, **kw):
         _config = config.get("verify_allocator_corruption")
         pool_cfg = config.get("pool_config", {})
         pool_name = pool_cfg.get("pool_name", "osd-alloc-pool")
+        ino_lines = []
 
         try:
             if _config.get("issue_reproduction"):
@@ -130,7 +131,6 @@ def run(ceph_cluster, **kw):
                     sudo=True, cmd="pip3 install docopt", long_running=True
                 )
 
-                ino_lines = []
                 obj_sizes = [4, 8, 12]
                 log.debug("Writing fragmented objects to the pool %s" % pool_name)
                 for size in obj_sizes:
@@ -198,8 +198,44 @@ def run(ceph_cluster, **kw):
                 log.info("Relevant log lines from bluefs_log_dump \n \n")
                 log.info(ino_lines)
 
-                # to-do: add validation to check ceph assert during OSD restart when upgrading to RHCS 7.1z2
-                # currently not possible as two-step upgrade is not supported with framework
+                # validation to check ceph assert during OSD restart after upgrading to RHCS 7.1z2
+            if _config.get("check_assert"):
+                # the cluster was setup for failure, now it will be upgraded to RHCS 7.1z2 which
+                # does not contain the fix, expectation if that OSD part of the acting set will
+                # error out with expected 'ceph_assert'
+                log.info(desc)
+                log.info(
+                    "\n \n Running test to verify OSD recovery in case of Allocator File corruption"
+                )
+                log.info(
+                    "now that cluster has been upgraded to the 7.1z2 build, one or more OSDs part of"
+                    "the acting set would fail with ceph_assert error upon restart\n"
+                )
+
+                # get acting set of created pool
+                acting_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
+                prim_osd = acting_set[0]
+                log.debug("Acting set for pool %s : %s" % (pool_name, acting_set))
+
+                try:
+                    out = bluestore_obj.get_bluefs_log_dump(osd_id=prim_osd)
+                    log.info("Output of ceph-bluestore-tool bluefs-log-dump: \n")
+                    log.info(out)
+                    for line in out.splitlines():
+                        if "op_file_update  file(ino 27" in line:
+                            assert "20000 extents" in line, "expected extents not found"
+                            ino_lines.append(line)
+                    log.info("Relevant log lines from bluefs_log_dump \n \n")
+                    log.info(ino_lines)
+                except Exception as Err:
+                    log.error(
+                        "Expected failure, OSD.%s has failed with error : \n%s"
+                        % (prim_osd, str(Err))
+                    )
+                    log.exception(Err)
+                down_osds = rados_obj.get_osd_list(status="down")
+                log.info("Down OSDs: %s " % down_osds)
+
             if _config.get("verify_fix"):
                 # now that cluster has been upgraded to the fixed build, ensure all OSDs are UP
                 # and cluster is in HEALTH OK State.

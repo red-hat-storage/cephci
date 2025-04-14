@@ -1216,6 +1216,8 @@ class FsUtils(object):
             tuple: A tuple containing the Ceph command output and command return code.
         """
         nfs_cmd = f"ceph nfs cluster create {nfs_cluster_name}"
+        if kwargs.get("nfs_server_name"):
+            nfs_cmd += f" {kwargs.get('nfs_server_name')}"
         if kwargs.get("placement"):
             nfs_cmd += f" --placement '{kwargs.get('placement')}'"
 

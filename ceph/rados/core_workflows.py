@@ -1620,6 +1620,33 @@ class RadosOrchestrator:
         # verifying the osd state
         start_time = datetime.datetime.now()
         timeout_time = start_time + datetime.timedelta(seconds=timeout)
+        time.sleep(5)
+
+        systemctl_timeout = 120
+        service_name = f"ceph-{cluster_fsid}@osd.{target}.service"
+        status_command = f"systemctl is-active {service_name}"
+        for _ in range(3):
+            status_output, _, _, _ = host.exec_command(
+                cmd=status_command, sudo=True, verbose=True, check_ec=True
+            )
+
+            if not (
+                status_output.strip() == "activating"
+                or status_output.strip() == "deactivating"
+                or status_output.strip() == "reloading"
+            ):
+                break
+
+            log_info_msg = (
+                f"systemctl status is {status_output}"
+                f"retrying after {systemctl_timeout}"
+            )
+            log.info(log_info_msg)
+            time.sleep(systemctl_timeout)
+        else:
+            log_error_msg = f"{service_name} is in {status_output} state"
+            log.error(log_error_msg)
+            return False
 
         while datetime.datetime.now() <= timeout_time:
             osd_status, status_desc = self.get_daemon_status(
@@ -2509,6 +2536,7 @@ class RadosOrchestrator:
         num_copies_per_site: int = 2,
         total_buckets: int = 3,
         req_peering_buckets: int = 2,
+        create_pool: bool = True,
     ) -> bool:
         """Method to create a replicated pool and enable stretch mode on the pool
 
@@ -2526,13 +2554,14 @@ class RadosOrchestrator:
                 note: In most cases, total_buckets = num_sites. this changes when CU does not want each site to
                         hold data copy
             req_peering_buckets: number of "peer_bucket_barrier" buckets to perform successful peering process
+            create_pool: Checks if pool is present and creates if not
         Returns:
             bool. Pass -> True, Fail -> False
         """
 
         # Checking if test pool exists. if not, creating a new pool and continuing workflow
         pools = self.list_pools()
-        if pool_name not in pools:
+        if pool_name not in pools and create_pool:
             if not self.create_pool(pool_name=pool_name):
                 log.error("Failed to create pool : " + pool_name)
                 return False
@@ -2678,11 +2707,12 @@ step emit"""
         )
 
         try:
-            self.run_ceph_command(cmd=cmd)
-            time.sleep(5)
+            out, _ = self.client.exec_command(cmd=cmd, sudo=True, check_ec=True)
+            log.debug(out)
+            time.sleep(2)
             log.debug(f"Checking if the stretch mode op the pool : {pool_name}")
             cmd = f"ceph osd pool stretch show {pool_name}"
-            out = self.run_ceph_command(cmd=cmd)
+            out, _ = self.client.exec_command(cmd=cmd, sudo=True, check_ec=True)
             log.debug(out)
             return True
         except Exception as err:
@@ -5082,6 +5112,7 @@ EOF"""
 
         # get osd device path and OSD host
         osd_device = osd_metadata["devices"]
+        device_path = f"/dev/{osd_device}"
         osd_host = self.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
 
         _cmd = f"echo {rota_val} > /sys/block/{osd_device}/queue/rotational"
@@ -5090,7 +5121,10 @@ EOF"""
         if redeploy:
             # re-deploy the input OSD
             osd_utils.set_osd_out(self.ceph_cluster, osd_id=osd_id)
-            osd_utils.osd_remove(self.ceph_cluster, osd_id=osd_id, zap=True, force=True)
+            osd_utils.osd_remove(self.ceph_cluster, osd_id=osd_id, force=True)
+            osd_utils.zap_device(
+                self.ceph_cluster, host=osd_host.hostname, device_path=device_path
+            )
 
             # set OSD service to managed
             self.set_service_managed_type(service_type="osd", unmanaged=False)
@@ -5100,3 +5134,26 @@ EOF"""
                 _err = f"OSD {osd_id} did not get redeployed within timeout"
                 log.error(_err)
                 raise Exception(_err)
+
+    def delete_crush_rule(self, rule_name: str) -> bool:
+        """
+        Method used to delete the crush rules on the cluster
+        Args:
+            rule_name: name of the crush rule to be deleted
+        Returns: True -> pass, False -> fail
+        """
+        log.info("Deleting the crush rule passed %s", rule_name)
+        rule_list = self.get_crush_rule_names()
+        if rule_name in rule_list:
+            try:
+                cmd = f"ceph osd crush rule rm {rule_name}"
+                self.client.exec_command(cmd=cmd, sudo=True)
+                time.sleep(1)
+            except Exception as err:
+                log.info(
+                    "Crush rule : %s could not be deleted.\n Error : %s\n",
+                    rule_name,
+                    err,
+                )
+                return False
+        return True if rule_name not in self.get_crush_rule_names() else False

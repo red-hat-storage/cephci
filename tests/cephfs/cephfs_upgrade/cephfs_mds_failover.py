@@ -23,11 +23,7 @@ def run(ceph_cluster, **kw):
     """
     try:
         fs_util = FsUtils(ceph_cluster)
-        config = kw.get("config")
-
         clients = ceph_cluster.get_ceph_objects("client")
-        build = config.get("build", config.get("rhbuild"))
-        fs_util.prepare_clients(clients, build)
         log.info("checking Pre-requisites")
         if not clients:
             log.info(

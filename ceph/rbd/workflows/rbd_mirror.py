@@ -351,7 +351,7 @@ def bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw):
         log.error("Peers were not added")
 
 
-def config_mirror(rbd_primary, rbd_secondary, **kw):
+def config_mirror(rbd_primary, rbd_secondary, is_secondary=False, **kw):
     """
     Configure mirroring on RBD clusters based on the parameters provided
     Args:
@@ -379,15 +379,36 @@ def config_mirror(rbd_primary, rbd_secondary, **kw):
         "mode": mode,
         "cluster": ceph_cluster_primary,
     }
-    out = rbd_primary.mirror.pool.enable(**enable_config)
-    log.info(f"Output of RBD mirror pool enable: {out}")
-
-    if "rbd: mirroring is already configured" not in out[0].strip():
-        enable_config.update({"cluster": ceph_cluster_secondary})
-        out = rbd_secondary.mirror.pool.enable(**enable_config)
-        bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw)
+    if (
+        kw.get("namespace_mirror_type")
+        and kw.get("namespace_mirror_type") != "non-default_to_non-default"
+    ):
+        if is_secondary is False:
+            if kw.get("namespace_mirror_type") == "non-default_to_default":
+                # Allow some other namespace to be mirrored to the default namespace of the remote pool
+                enable_config.update({"mode": "init-only"})
+                out = rbd_primary.mirror.pool.enable(**enable_config)
+                log.info(f"Output of RBD mirror pool enable: {out}")
+                enable_config.update({"cluster": ceph_cluster_secondary})
+                enable_config.update({"mode": mode})
+                out = rbd_secondary.mirror.pool.enable(**enable_config)
+                bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw)
+            elif kw.get("namespace_mirror_type") == "default_to_non-default":
+                out = rbd_primary.mirror.pool.enable(**enable_config)
+                # Allow some other namespace to be mirrored to the default namespace of the remote pool
+                enable_config.update({"mode": "init-only"})
+                enable_config.update({"cluster": ceph_cluster_secondary})
+                out = rbd_secondary.mirror.pool.enable(**enable_config)
+                bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw)
     else:
-        log.info(f"RBD Mirroring has already been configured for pool {poolname}")
+        out = rbd_primary.mirror.pool.enable(**enable_config)
+        log.info(f"Output of RBD mirror pool enable: {out}")
+        if "rbd: mirroring is already configured" not in out[0].strip():
+            enable_config.update({"cluster": ceph_cluster_secondary})
+            out = rbd_secondary.mirror.pool.enable(**enable_config)
+            bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw)
+        else:
+            log.info(f"RBD Mirroring has already been configured for pool {poolname}")
 
     # Waiting for OK pool mirror status to be okay based on user input as in image based
     # mirorring status wouldn't reach OK without enabling mirroing on individual images
@@ -498,6 +519,7 @@ def config_mirror_multi_pool(
             config_mirror(
                 rbd_primary,
                 rbd_secondary,
+                is_secondary,
                 primary_client=primary_client,
                 secondary_client=secondary_client,
                 pool_name=pool,

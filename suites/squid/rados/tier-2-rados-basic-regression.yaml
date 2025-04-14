@@ -258,8 +258,8 @@ tests:
           pg_num: 16
           size: 2
           disable_pg_autoscale: true
-          rados_write_duration: 50
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
         set_pool_configs:
           pool_name: test_re_pool
           configurations:
@@ -283,12 +283,12 @@ tests:
           create: true
           pool_name: re_pool_compress
           pg_num: 32
-          rados_write_duration: 10
+          max_objs: 300
           rados_read_duration: 10
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           configurations:
             - config-1:
                 compression_mode: force
@@ -350,8 +350,8 @@ tests:
         replicated_pool:
           create: true
           pool_name: rep_test_pool
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           pg_num: 32
         configure_pg_autoscaler:
           default_mode: warn
@@ -432,8 +432,8 @@ tests:
           k: 2
           m: 2
           plugin: jerasure
-          rados_write_duration: 100
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           crush-failure-domain: host
       desc: Verify the behaviour of EC profiles in ceph
 

@@ -181,7 +181,6 @@ tests:
       desc: Test rgw multipart upload through curl
       polarion-id: CEPH-9801
       module: sanity_rgw.py
-      comments: known issue (BZ2266793) targeted to 6.1z7
       config:
         script-name: ../curl/test_rgw_using_curl.py
         config-file-name: ../../curl/configs/test_rgw_curl_multipart_upload.yaml

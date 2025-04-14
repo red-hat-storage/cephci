@@ -134,8 +134,8 @@ tests:
           m: 2
           pg_num: 32
           plugin: jerasure
-          rados_write_duration: 100
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           osd_max_backfills: 16
           osd_recovery_max_active: 16
           delete_pool: true
@@ -154,8 +154,8 @@ tests:
           m: 2
           plugin: jerasure
           disable_pg_autoscale: true
-          rados_write_duration: 50
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
         set_pool_configs:
           pool_name: test_ec_pool
           configurations:
@@ -182,8 +182,8 @@ tests:
           k: 2
           m: 2
           plugin: jerasure
-          rados_write_duration: 50
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
           test_overwrites_pool: true
           metadata_pool: re_pool_overwrite
           image_name: image_ec_pool

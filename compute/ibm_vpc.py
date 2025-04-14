@@ -37,6 +37,7 @@ def get_ibm_service(access_key: str, service_url: str):
 
     service = VpcV1(authenticator=authenticator)
     service.set_service_url(service_url=service_url)
+    service.set_http_config({"timeout": 130})  # Increase to 130s
 
     return service
 

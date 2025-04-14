@@ -187,8 +187,8 @@ tests:
           pg_num: 32
           plugin: jerasure
           crush-failure-domain: host
-          rados_write_duration: 100
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           osd_max_backfills: 16
           osd_recovery_max_active: 16
           delete_pool: true
@@ -208,8 +208,8 @@ tests:
 #          plugin: jerasure
 #          crush-failure-domain: host
 #          disable_pg_autoscale: true
-#          rados_write_duration: 50
-#          rados_read_duration: 30
+#          max_objs: 300
+#          rados_read_duration: 10
 #        set_pool_configs:
 #          pool_name: test_ec_pool
 #          configurations:
@@ -237,8 +237,8 @@ tests:
           m: 2
           plugin: jerasure
           crush-failure-domain: host
-          rados_write_duration: 50
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
           test_overwrites_pool: true
           metadata_pool: re_pool_overwrite
           image_name: image_ec_pool
@@ -279,7 +279,7 @@ tests:
             profile_name: ec86_5
             pool-1: ec86_pool5
             pool-2: ec86_pool6
-            rados_write_duration: 300
+            max_objs: 300
             byte_size: 10KB
             pg_num: 32
             k: 2
@@ -311,8 +311,8 @@ tests:
 #              plugin: jerasure
 #              crush-failure-domain: host
 #              target_size_ratio: 0.8
-#              rados_write_duration: 50
-#              rados_read_duration: 50
+#              max_objs: 300
+#              rados_read_duration: 10
 #              delete_pool: true
 #      desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
 
@@ -403,8 +403,8 @@ tests:
 #              crush-failure-domain: host
 #              plugin: jerasure
 #              target_size_ratio: 0.8
-#              rados_write_duration: 50
-#              rados_read_duration: 50
+#              max_objs: 300
+#              rados_read_duration: 10
 #              delete_pool: true
 #      desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
 
@@ -424,8 +424,8 @@ tests:
 #              plugin: jerasure
 #              crush-failure-domain: host
 #              pg_num_min: 16
-#              rados_write_duration: 50
-#              rados_read_duration: 50
+#              max_objs: 300
+#              rados_read_duration: 10
 #              delete_pool: true
 #      desc: Specifying pool bounds on pool Pgs - Verify pg_num_min
 
@@ -534,7 +534,7 @@ tests:
 #              plugin: jerasure
 #              crush-failure-domain: host
 #              pg_num: 64
-#              rados_write_duration: 1000
+#              max_objs: 300
 #              byte_size: 1024
 #              osd_max_backfills: 16
 #              osd_recovery_max_active: 16

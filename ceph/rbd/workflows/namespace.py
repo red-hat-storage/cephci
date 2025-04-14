@@ -1,3 +1,4 @@
+from ceph.rbd.utils import getdict, random_string
 from cli.rbd.rbd import Rbd
 from utility.log import Log
 
@@ -129,3 +130,150 @@ def remove_namespace_and_verify(**kw):
     else:
         log.error(f"namespace {namespace_name} deletion verified failed")
         return 1
+
+
+def create_namespace_in_pool(rbd, client, pool_type, **kw):
+    """
+    Creates a namespace in a pool for namespace level mirroring
+        Args:
+        rbd (module): The rbd object
+        client (object): client object.
+        pool_type (str): The type of pool where namespace is being created
+        kw (dict): A dictionary of keyword arguments.
+
+    Returns:
+        int: 0 if the namespace was created successfully, otherwise a non-zero value.
+    """
+    namespace_type = (
+        kw.get("config").get(pool_type, {}).get("namespace_mirror_type", "")
+    )
+    rbd_config = kw.get("config", {}).get(pool_type, {})
+    multi_pool_config = getdict(rbd_config)
+    namespace = "namespace_" + random_string(len=3)
+    size = kw["config"][pool_type]["size"]
+
+    for pool, pool_config in multi_pool_config.items():
+        multi_image_config = getdict(pool_config)
+        if (
+            kw.get("is_secondary", False) is False
+            and namespace_type == "non-default_to_non-default"
+        ):
+            rc = create_namespace_and_verify(
+                **{"pool-name": pool, "namespace": namespace, "client": client}
+            )
+            if rc != 0:
+                return rc
+            kw["config"][pool_type].get(pool, {}).update({"namespace": namespace})
+            for imagename in multi_image_config.keys():
+                imagespec = f"{pool}/{namespace}/{imagename}"
+                out, err = rbd.create(**{"image-spec": imagespec, "size": size})
+                if err:
+                    log.error("Failed to create image {}", err)
+                    return 1
+        elif (
+            kw.get("is_secondary", False) is True
+            and namespace_type == "non-default_to_non-default"
+        ):
+            rc = create_namespace_and_verify(
+                **{"pool-name": pool, "namespace": namespace, "client": client}
+            )
+            if rc != 0:
+                return rc
+            kw["config"][pool_type].get(pool, {}).update(
+                {"remote_namespace": namespace}
+            )
+        elif (
+            kw.get("is_secondary", False) is False
+            and namespace_type == "non-default_to_default"
+        ):
+
+            rc = create_namespace_and_verify(
+                **{"pool-name": pool, "namespace": namespace, "client": client}
+            )
+            if rc != 0:
+                return rc
+            kw["config"][pool_type].get(pool, {}).update({"namespace": namespace})
+            kw["config"][pool_type].get(pool, {}).update({"remote_namespace": ""})
+            for imagename in multi_image_config.keys():
+                imagespec = f"{pool}/{namespace}/{imagename}"
+                out, err = rbd.create(**{"image-spec": imagespec, "size": size})
+                if err:
+                    log.error("Failed to create image {}", err)
+                    return 1
+        elif (
+            kw.get("is_secondary", False) is True
+            and namespace_type == "default_to_non-default"
+        ):
+            rc = create_namespace_and_verify(
+                **{"pool-name": pool, "namespace": namespace, "client": client}
+            )
+            if rc != 0:
+                return rc
+            kw["config"][pool_type].get(pool, {}).update({"namespace": ""})
+            kw["config"][pool_type].get(pool, {}).update(
+                {"remote_namespace": namespace}
+            )
+        elif (
+            kw.get("is_secondary", False) is False
+            and namespace_type == "default_to_non-default"
+        ):
+            for imagename in multi_image_config.keys():
+                imagespec = f"{pool}/{imagename}"
+                out, err = rbd.create(**{"image-spec": imagespec, "size": size})
+                if err:
+                    log.error("Failed to create image {}", err)
+                    return 1
+
+
+def enable_namespace_mirroring(primary_config, secondary_config, pool, **pool_config):
+    """
+    Enables namespace level mirroring
+        Args:
+        primary config : primary cluster config object
+        Secondary config : secondary cluster config object
+        pool : pool name
+        pool config: object having all the pool configuration
+
+    Returns:
+        int: 0 if the namespace level mirroring is enabled successfully, otherwise a non-zero value.
+    """
+    rbd_primary = primary_config.get("rbd")
+    rbd_secondary = secondary_config.get("rbd")
+
+    if pool_config["remote_namespace"]:
+        prim_remote_namespace = pool_config["remote_namespace"]
+        seco_pool_spec = f"{pool}/{pool_config['remote_namespace']}"
+    else:
+        prim_remote_namespace = "''"
+        seco_pool_spec = pool
+    if pool_config["namespace"]:
+        prim_pool_spec = f"{pool}/{pool_config['namespace']}"
+        seco_remote_namespace = pool_config["namespace"]
+    else:
+        prim_pool_spec = pool
+        seco_remote_namespace = "''"
+
+    enable_primary_namespace_config = {
+        "pool-spec": prim_pool_spec,
+        "mode": pool_config["mode"],
+        "remote-namespace": prim_remote_namespace,
+    }
+    out, err = rbd_primary.mirror.pool.enable(**enable_primary_namespace_config)
+    if err:
+        log.error(
+            "Failed to enable namespace level mirroring on primary cluster {}", err
+        )
+        return 1
+
+    enable_secondary_namespace_config = {
+        "pool-spec": seco_pool_spec,
+        "mode": pool_config["mode"],
+        "remote-namespace": seco_remote_namespace,
+    }
+    out, err = rbd_secondary.mirror.pool.enable(**enable_secondary_namespace_config)
+    if err:
+        log.error(
+            "Failed to enable namespace level mirroring on seconday cluster{}", err
+        )
+        return 1
+    return 0
