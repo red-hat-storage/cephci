@@ -11,8 +11,10 @@ import requests
 from ceph.ceph import Ceph
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.parallel import parallel
+from ceph.waiter import WaitUntil
 from tests.nvmeof.test_ceph_nvmeof_high_availability import (
     HighAvailability,
+    configure_listeners,
     configure_subsystems,
     deploy_nvme_service,
     get_node_by_id,
@@ -112,26 +114,161 @@ class PrometheusAlerts:
                 return alert
         raise Exception(f"[ {alert_name} ] alert not found.")
 
-    def monitor_alert(self, alert_name, state="firing", timeout=60, msg=""):
-        """Monitor NVMe alert."""
+    def calculate_timeout_window(self, timeout: int, interval: int):
+        """Calculate Time duration based on the interval.
 
-        @retry(NVMeAlertFailure, tries=3, delay=timeout, backoff=1)
-        def check():
+        Here interval remains same as it is provided by the user,
+        but timeout should be added with tolerance of interval.
+
+        for example,
+            timeout = 60 s, interval = 10s
+            then, timeout with tolerance level = 70s
+            so alert should fire in this range, 60s < fire < 70
+
+        Note: inetrval is the key here to calculate the alerting window
+        """
+        return timeout + interval
+
+    def monitor_alert(
+        self, alert_name, state="firing", msg="", timeout=60, interval=10
+    ):
+        """Monitor NVMe alert."""
+        _alert = str()
+        timeout = self.calculate_timeout_window(timeout, interval)
+        for w in WaitUntil(timeout=timeout, interval=interval):
             _alert = self.get_nvme_alert_by_name(alert_name)
             if _alert["state"] == state:
-                if msg:
-                    for alrt in _alert["alerts"]:
-                        if alrt["annotations"]["summary"] == msg:
-                            raise _alert
                 LOG.info(
                     f"[ {alert_name} ] is in Expected {state} state  - \n{dumps(_alert)}"
                 )
+                if msg:
+                    for alrt in _alert["alerts"]:
+                        if alrt["annotations"]["summary"] == msg:
+                            LOG.info(f"[ {alert_name} ] alert message found {msg}")
+                            return _alert
+                    LOG.warning(f"[ {alert_name} ] msg not found - ( EXPECTED: {msg} )")
                 return _alert
+            LOG.warning(f"[ {alert_name} ] is not in expected {state} state ")
+        if w.expired:
             raise NVMeAlertFailure(
                 f"[ {alert_name} ] - ( Expected: {state} )\n{dumps(_alert)}"
             )
 
-        return check()
+    # def monitor_alert1(self, alert_name, state="firing", timeout=60, msg=""):
+    #     """Monitor NVMe alert."""
+
+    #     @retry(NVMeAlertFailure, tries=3, delay=timeout, backoff=1)
+    #     def check():
+    #         _alert = self.get_nvme_alert_by_name(alert_name)
+    #         if _alert["state"] == state:
+    #             LOG.info(
+    #                 f"[ {alert_name} ] is in Expected {state} state  - \n{dumps(_alert)}"
+    #             )
+    #             if msg:
+    #                 for alrt in _alert["alerts"]:
+    #                     if alrt["annotations"]["summary"] == msg:
+    #                         LOG.info(f"[ {alert_name} ] has expected msg {msg}")
+    #                         return _alert
+    #             return _alert
+    #         raise NVMeAlertFailure(
+    #             f"[ {alert_name} ] - ( Expected: {state} )\n{dumps(_alert)}"
+    #         )
+
+    #     return check()
+
+
+def test_ceph_83611097(ceph_cluster, config):
+    """[CEPH-83611097] NVMeoFNVMeoFMissingListener alert.
+
+    NVMeoFMissingListener alert helps user to identify the missing listener
+      which is important for HA. where initiators could get connected to
+      multipath data paths, ensuring IO is uninterupted when GW(s) fails.
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        config: test case config
+    """
+    time_to_fire = 600
+    interval = 30
+    alert = "NVMeoFMissingListener"
+    msg = "No listener added for {GW} NVMe-oF Gateway to {NQN} subsystem"
+
+    # Deploy Services
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+
+    # Create RBD image and multiple NS with that image.
+    nvmegwcli = ha.gateways[0]
+    events = PrometheusAlerts(ha.orch)
+    sub1_args = {"subsystem": f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"}
+    nvmegwcli.subsystem.add(**{"args": {**sub1_args, **{"no-group-append": True}}})
+    LOG.info(f"{alert} should be INACTIVE.")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        state="inactive",
+        interval=interval,
+    )
+
+    # Add a single listener and NVMeoFNVMeoFMissingListener alert should be firing
+    gw1, gw2 = ha.gateways
+    listener_args = {"nqn": sub1_args["subsystem"], "listener_port": 4420}
+    configure_listeners(ha, [gw1.node.id], listener_args)
+    LOG.info(f"{alert} should be FIRING GW as listener(s) are missing.")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        interval=interval,
+        msg=msg.format(NQN=sub1_args["subsystem"], GW=gw2.node.hostname),
+    )
+
+    # Add all listener and alert should be inactive
+    configure_listeners(ha, [gw2.node.id], listener_args)
+    LOG.info(f"{alert} should be INACTIVE.")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        state="inactive",
+        interval=interval,
+    )
+
+    # Delete a listener and alert should be firing
+    configure_listeners(ha, [gw1.node.id], listener_args, action="delete")
+    LOG.info(f"{alert} should be FIRING GW as listener(s) are missing.")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        interval=interval,
+        msg=msg.format(NQN=sub1_args["subsystem"], GW=gw1.node.hostname),
+    )
+
+    # Add back GW2 listener and alert should be inactive
+    configure_listeners(ha, [gw1.node.id], listener_args)
+    LOG.info(f"{alert} should be INACTIVE.")
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=interval
+    )
+
+    # Add another subsystem and with single listener
+    sub2_args = {"subsystem": f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"}
+    listener_args = {"nqn": sub2_args["subsystem"], "listener_port": 4420}
+    nvmegwcli.subsystem.add(**{"args": {**sub2_args, **{"no-group-append": True}}})
+    configure_listeners(ha, [gw1.node.id], listener_args)
+    LOG.info(f"{alert} should be FIRING GW listener(s) are missing.")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        interval=interval,
+        msg=msg.format(NQN=sub2_args["subsystem"], GW=gw2.node.hostname),
+    )
+
+    # Add all listener and alert should be inactive
+    configure_listeners(ha, [gw2.node.id], listener_args)
+    LOG.info(f"{alert} should be INACTIVE.")
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=interval
+    )
+    LOG.info(f"CEPH-83611097 - {alert} alert validated successfully.")
 
 
 def test_ceph_83610950(ceph_cluster, config):
@@ -148,6 +285,7 @@ def test_ceph_83610950(ceph_cluster, config):
     _rbd_pool = config["rbd_pool"]
     _rbd_obj = config["rbd_obj"]
     time_to_fire = 60
+    interval = 10
     alert = "NVMeoFMultipleNamespacesOfRBDImage"
     msg = "RBD image {image} cannot be reused for multiple NVMeoF namespace"
     svcs = []
@@ -178,22 +316,38 @@ def test_ceph_83610950(ceph_cluster, config):
 
     # Two namespaces created for single RBD image,
     # NVMeoFMultipleNamespacesOfRBDImage prometheus alert should be firing
-    events.monitor_alert(alert, timeout=time_to_fire, msg=msg.format(image=image))
+    LOG.info(
+        f"{alert} should be FIRING Since multiple namespaces are created for Single RBD image."
+    )
+    events.monitor_alert(
+        alert, timeout=time_to_fire, interval=interval, msg=msg.format(image=image)
+    )
     nvmegwcl2.namespace.delete(**{"args": {**sub2_args, **{"nsid": 1}}})
 
     # Alert should be inactive
-    events.monitor_alert(alert, timeout=time_to_fire, state="inactive")
+    LOG.info(f"{alert} should be INACTIVE.")
+    events.monitor_alert(
+        alert, timeout=time_to_fire, interval=interval, state="inactive"
+    )
 
     sub2_args = {"subsystem": f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"}
     nvmegwcl2.subsystem.add(**{"args": {**sub2_args, **{"no-group-append": True}}})
     nvmegwcl2.namespace.add(**{"args": {**sub2_args, **img_args}})
 
     # Alert should be active again, since image is used in new subsystem
-    events.monitor_alert(alert, timeout=time_to_fire, msg=msg.format(image=image))
+    LOG.info(
+        f"{alert} should be FIRING Since multiple namespaces are created for Single RBD image."
+    )
+    events.monitor_alert(
+        alert, timeout=time_to_fire, interval=interval, msg=msg.format(image=image)
+    )
     nvmegwcl1.namespace.delete(**{"args": {**sub1_args, **{"nsid": 1}}})
 
     # Namespace removed , alert should be inactive
-    events.monitor_alert(alert, timeout=time_to_fire, state="inactive")
+    LOG.info(f"{alert} should be INACTIVE.")
+    events.monitor_alert(
+        alert, timeout=time_to_fire, interval=interval, state="inactive"
+    )
     LOG.info(f"CEPH-83610950 - {alert} alert validated successfully.")
 
 
@@ -276,6 +430,7 @@ def test_ceph_83610948(ceph_cluster, config):
 testcases = {
     "CEPH-83610948": test_ceph_83610948,
     "CEPH-83610950": test_ceph_83610950,
+    "CEPH-83611097": test_ceph_83611097,
 }
 
 
