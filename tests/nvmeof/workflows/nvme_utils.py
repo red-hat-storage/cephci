@@ -2,10 +2,13 @@ import ast
 import json
 import time
 
+from ceph.ceph import CommandFailed
 from ceph.ceph_admin.orch import Orch
 from ceph.utils import get_node_by_id, get_nodes_by_ids
 from tests.cephadm import test_nvmeof
 from utility.log import Log
+from utility.retry import retry
+from utility.utils import log_json_dump
 
 LOG = Log(__name__)
 
@@ -191,7 +194,6 @@ def fetch_nvme_entity_in_omap(cluster, entity, pool, group=""):
 
 
 def validate_qos(client, device, **kw):
-
     bandwidth = {"mb_read/s": [], "mb_write/s": [], "mb_r/s": [], "mb_w/s": []}
     try:
         client.exec_command(cmd="dnf install -y sysstat", sudo=True, long_running=True)
@@ -204,7 +206,6 @@ def validate_qos(client, device, **kw):
             found_header = False
 
             for line in lines:
-
                 # Identify the headers row
                 if "Device" in line and "rMB/s" in line and "wMB/s" in line:
                     found_header = True
@@ -371,4 +372,66 @@ def validate_nvme_metadata(cluster, config, pool, group=""):
 
     LOG.info(
         f"[ OMAP VALIDATION SUCCESSFULL ] - {entity} Found in nvmeof state OMAP file.\n{out}."
+    )
+
+
+@retry((IOError, TimeoutError, CommandFailed), tries=7, delay=2)
+def fetch_gw_paths(gateway, client, ns_device):
+    """
+    Fetch the optimized and inaccessible paths for the namespaces
+    serviced by a particular gateway.
+
+    Args:
+        gateway: gateway object
+        ana_id: ana group id of the namespaces
+    """
+    gw_paths = client.fetch_anastate(ns_device)
+    LOG.info(f"Gateway paths : {log_json_dump(gw_paths)}")
+
+    if not gw_paths.get("optimized"):
+        raise IOError(
+            f"Namespace is not optimized for {gateway.daemon_name} at {client} initiator"
+        )
+
+    return gw_paths
+
+
+def validate_initiator(clients, gateway, namespaces_gw, failed_gw=None):
+    """Check whether all namespaces serviced by a particular gateway are optimized
+    for that gateway at the initiator and also during failover, check if the failed
+    gateway is inaccessible at the initiator.
+
+    Args:
+        gateway: gateway object
+        namespaces_gw: namespaces related to the gateway
+        failed_gw: failed gateway object
+    """
+    for client in clients:
+        for ns in namespaces_gw:
+            ns_device = client.fetch_device_for_namespace(ns.get("uuid"))
+            if not ns_device:
+                raise Exception(
+                    f"Namespace {ns.get('uuid')} is not available at {client} initiator"
+                )
+
+            gw_paths = fetch_gw_paths(gateway, client, ns_device)
+
+            if len(gw_paths.get("optimized")) > 1:
+                raise Exception(
+                    f"Namespace {ns.get('uuid')} has more than one at optimized paths {client} initiator"
+                )
+            gw_ip = gateway.node.ip_address
+            if gw_paths.get("optimized")[0] != gw_ip:
+                raise Exception(
+                    f"Namespace {ns.get('uuid')} is not optimized for {gateway.daemon_name} at {client} initiator"
+                )
+            if failed_gw and failed_gw.node.ip_address not in gw_paths.get(
+                "inaccessible"
+            ):
+                raise Exception(
+                    f"Namespace {ns.get('uuid')} is not inaccessible for {failed_gw.daemon_name} \
+                    at {client} initiator"
+                )
+    LOG.info(
+        f"All namespaces are optimized for all initiators for gateway {gateway.daemon_name}"
     )
