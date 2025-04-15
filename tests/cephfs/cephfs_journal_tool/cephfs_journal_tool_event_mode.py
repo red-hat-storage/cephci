@@ -1,4 +1,5 @@
 import random
+import re
 import string
 import time
 import traceback
@@ -66,7 +67,7 @@ def run(ceph_cluster, **kw):
             [client1],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
-            extra_params=f", fs={fs_name}",
+            extra_params=f",fs={fs_name}",
         )
         # down all the osd nodes
         mdss = ceph_cluster.get_ceph_objects("mds")
@@ -138,15 +139,17 @@ def run(ceph_cluster, **kw):
         random_index = random.randint(0, len(result))
         rand_addr = result[random_index][0]
         rand_inode = result[random_index][1]
+        cleaned_inode = re.sub(r"\W+", "", rand_inode)
         log.info("Random address: " + rand_addr)
         log.info("Random inode: " + rand_inode)
+        log.info("Random inode cleaned: " + cleaned_inode)
         for option in ["list", "summary"]:
             out4, ec4 = client1.exec_command(
                 sudo=True,
-                cmd=f"cephfs-journal-tool --rank {fs_name}:0 event get --path {rand_inode} {option}",
+                cmd=f"cephfs-journal-tool --rank {fs_name}:0 event get --path {cleaned_inode} {option}",
             )
             if option == "list":
-                if rand_inode not in out4:
+                if cleaned_inode not in out4:
                     log.error(out4)
                     log.error(ec4)
                     log.error(f"--path {option} failed")

@@ -46,6 +46,16 @@ class SnapUtils(object):
             sudo=True, cmd="ceph mgr module enable snap_schedule"
         )
         log.info(out)
+        for i in range(0, 3):
+            log.info(
+                "Checking the status to ensure ceph mgr restart does not afftect Iteration %d",
+                i,
+            )
+            retry_exec_command = retry(CommandFailed, tries=3, delay=30)(
+                client.exec_command
+            )
+            out, rc = retry_exec_command(sudo=True, cmd="ceph -s")
+        log.info(out)
 
     def allow_minutely_schedule(self, client, allow=True):
         """
