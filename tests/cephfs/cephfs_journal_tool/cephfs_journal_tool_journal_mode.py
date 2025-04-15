@@ -4,6 +4,7 @@ import time
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_recovery_lib import FSRecovery
 from utility.log import Log
 
 log = Log(__name__)
@@ -154,6 +155,49 @@ def run(ceph_cluster, **kw):
         if import_out4 == 1:
             log.error(
                 f"cephfs-journal-tool --rank {fs_name}:0 journal export is expected to succdeed"
+            )
+            return 1
+        log.info("Testing journal tool reset functionality")
+        out, ec = client1.exec_command(
+            sudo=True,
+            cmd="cephfs-journal-tool --rank %s:0 journal reset" % fs_name,
+            check_ec=False,
+        )
+        if "warning" not in ec:
+            log.error(
+                "cephfs-journal-tool --rank %s:0 journal reset is expected"
+                " to have warning: this operation resets the journal" % fs_name
+            )
+            return 1
+        fs_recovery = FSRecovery(ceph_cluster=ceph_cluster)
+        out, ec = fs_recovery.journal_ops(client=client1, fs_name=fs_name, ops="reset")
+        if "done" not in out:
+            log.error(
+                "cephfs-journal-tool --rank %s:0 journal reset is expected to have Done in the output"
+                % fs_name
+            )
+            return 1
+        out, ec = client1.exec_command(
+            sudo=True,
+            cmd="cephfs-journal-tool --rank %s:0 journal reset --force" % fs_name,
+            check_ec=False,
+        )
+        if "warning: this operation resets the journal" not in ec:
+            log.error(
+                "cephfs-journal-tool --rank %s:0 journal reset is expected"
+                " to have warning: this operation resets the journal" % fs_name
+            )
+            return 1
+        out, ec = client1.exec_command(
+            sudo=True,
+            cmd="cephfs-journal-tool --rank %s:0 journal reset --force --yes-i-really-really-mean-it"
+            % fs_name,
+            check_ec=False,
+        )
+        if "writing EResetJournal entry" not in out:
+            log.error(
+                "cephfs-journal-tool --rank %s:0 journal reset is expected to have writing EResetJournal entry"
+                % fs_name
             )
             return 1
         log.info("cephfs-journal-tool functional test is successful")
