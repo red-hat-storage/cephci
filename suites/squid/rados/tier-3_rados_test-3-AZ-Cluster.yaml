@@ -279,7 +279,7 @@ tests:
   - test:
       name: Negative Scenarios
       module: test_stretch_n_az_negative_scenarios.py
-      polarion-id: CCEPH-83609872
+      polarion-id: CEPH-83609872
       config:
         stretch_bucket: datacenter
         rule_name: 3az_rule

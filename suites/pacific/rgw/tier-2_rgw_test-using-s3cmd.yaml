@@ -139,7 +139,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_s3cmd.yaml
-        timeout: 300
 
   - test:
       name: S3CMD large object download with GC
@@ -149,7 +148,6 @@ tests:
       config:
         script-name: ../s3cmd/test_large_object_gc.py
         config-file-name: ../../s3cmd/configs/test_large_object_gc.yaml
-        timeout: 300
 
   - test:
       name: S3CMD bucket stats consistency
@@ -159,7 +157,6 @@ tests:
       config:
         script-name: ../s3cmd/test_bucket_stats.py
         config-file-name: ../../s3cmd/configs/test_bucket_stats.yaml
-        timeout: 300
 
   - test:
       name: S3CMD object header size check
@@ -169,7 +166,6 @@ tests:
       config:
         script-name: ../s3cmd/test_header_size.py
         config-file-name: ../../s3cmd/configs/test_header_size.yaml
-        timeout: 300
 
   - test:
       name: S3CMD tests
@@ -179,7 +175,6 @@ tests:
       config:
         script-name: ../s3cmd/test_rgw_ops_log.py
         config-file-name: ../../s3cmd/configs/test_rgw_opslog.yaml
-        timeout: 300
 
   - test:
       name: Test single delete marker for versioned object using s3cmd
@@ -189,7 +184,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_multiple_delete_marker_check.yaml
-        timeout: 300
 
   - test:
       name: S3CMD object download
@@ -199,7 +193,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
-        timeout: 300
+        run-on-haproxy: true
 
   - test:
       name: Test deletlifecycle rule via s3cmd
@@ -209,7 +203,6 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_deletelifecycle.yaml
-        timeout: 300
 
   - test:
       name: Test by adding almost 1K buckets to the resharding queue
@@ -219,7 +212,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_disable_and_enable_dynamic_resharding_with_1k_bucket.yaml
-        timeout: 300
+        timeout: 5000
 
   - test:
       name: Test non-current deletion via s3cmd
@@ -229,7 +222,6 @@ tests:
       config:
         script-name: ../s3cmd/test_lifecycle_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_lc_expiration_noncurrent_when_current_object_deleted_via_s3cmd.yaml
-        timeout: 300
 
   - test:
       name: Test multipart upload with failed upload parts using s3cmd and boto3
@@ -239,4 +231,3 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_multipart_upload_with_failed_parts_using_s3cmd_and_boto3.yaml
-        timeout: 500

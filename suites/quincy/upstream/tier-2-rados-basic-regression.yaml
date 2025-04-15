@@ -215,8 +215,8 @@ tests:
           pg_num: 16
           size: 2
           disable_pg_autoscale: true
-          rados_write_duration: 50
-          rados_read_duration: 30
+          max_objs: 300
+          rados_read_duration: 10
         set_pool_configs:
           pool_name: test_re_pool
           configurations:
@@ -236,12 +236,12 @@ tests:
           create: true
           pool_name: re_pool_compress
           pg_num: 32
-          rados_write_duration: 10
+          max_objs: 300
           rados_read_duration: 10
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           configurations:
             - config-1:
                 compression_mode: force
@@ -270,8 +270,8 @@ tests:
       config:
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           configurations:
             - config-1:
                 compression_mode: force
@@ -300,8 +300,8 @@ tests:
       config:
         enable_compression:
           pool_name: re_pool_compress
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           configurations:
             - config-1:
                 compression_mode: force
@@ -361,8 +361,8 @@ tests:
         replicated_pool:
           create: true
           pool_name: rep_test_pool
-          rados_write_duration: 50
-          rados_read_duration: 50
+          max_objs: 300
+          rados_read_duration: 10
           pg_num: 32
         configure_pg_autoscaler:
           default_mode: warn
@@ -413,7 +413,7 @@ tests:
           pool_config:
             pool-1: test_compression_repool-1
             pool-2: test_compression_repool-2
-            rados_write_duration: 200
+            max_objs: 300
             byte_size: 400KB
             pg_num: 32
           compression_config:

@@ -77,6 +77,16 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: configure client
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
 
   # Testing stage
 
@@ -112,7 +122,7 @@ tests:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_download.yaml
               install_common: false
-              run-on-rgw: true
+              run-on-haproxy: true
             desc: test to create "M" no of buckets and "N" no of objects with download
             module: sanity_rgw.py
             name: Test download with M buckets with N objects
@@ -170,6 +180,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
   - test:
       name: Header validation of Bucket Lifecycle expiration with date
       desc: Test header validation bucket lifecycle expiration with date

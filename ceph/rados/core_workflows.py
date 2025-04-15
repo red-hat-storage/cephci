@@ -1620,6 +1620,33 @@ class RadosOrchestrator:
         # verifying the osd state
         start_time = datetime.datetime.now()
         timeout_time = start_time + datetime.timedelta(seconds=timeout)
+        time.sleep(5)
+
+        systemctl_timeout = 120
+        service_name = f"ceph-{cluster_fsid}@osd.{target}.service"
+        status_command = f"systemctl is-active {service_name}"
+        for _ in range(3):
+            status_output, _, _, _ = host.exec_command(
+                cmd=status_command, sudo=True, verbose=True, check_ec=True
+            )
+
+            if not (
+                status_output.strip() == "activating"
+                or status_output.strip() == "deactivating"
+                or status_output.strip() == "reloading"
+            ):
+                break
+
+            log_info_msg = (
+                f"systemctl status is {status_output}"
+                f"retrying after {systemctl_timeout}"
+            )
+            log.info(log_info_msg)
+            time.sleep(systemctl_timeout)
+        else:
+            log_error_msg = f"{service_name} is in {status_output} state"
+            log.error(log_error_msg)
+            return False
 
         while datetime.datetime.now() <= timeout_time:
             osd_status, status_desc = self.get_daemon_status(

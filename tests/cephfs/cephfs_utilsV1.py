@@ -137,23 +137,6 @@ class FsUtils(object):
                 ]
                 for cmd in cmd_list:
                     client.node.exec_command(cmd=cmd)
-            out, rc = client.node.exec_command(
-                sudo=True, cmd="rpm -qa | grep -w 'dbench'", check_ec=False
-            )
-            if "dbench" not in out:
-                log.info("Installing dbench")
-                client.node.exec_command(
-                    sudo=True,
-                    cmd=(
-                        "rhel_version=$(rpm -E %rhel) && "
-                        "dnf config-manager --add-repo="
-                        "https://download.fedoraproject.org/pub/epel/${rhel_version}/Everything/x86_64/"
-                    ),
-                )
-                client.node.exec_command(
-                    sudo=True,
-                    cmd="dnf install dbench -y --nogpgcheck",
-                )
         if (
             hasattr(clients[0].node, "vm_node")
             and clients[0].node.vm_node.node_type == "baremetal"

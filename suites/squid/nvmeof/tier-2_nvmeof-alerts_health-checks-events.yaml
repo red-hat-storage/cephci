@@ -74,10 +74,6 @@ tests:
           - node5
         rbd_pool: rbd
         gw_group: gw_group1
-        do_not_create_image: true
-        rep-pool-only: true
-        rep_pool_config:
-          pool: rbd
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
@@ -102,3 +98,44 @@ tests:
       module: test_ceph_nvmeof_alerts_events.py
       name: Validate GW unavailability healthcheck warning
       polarion-id: CEPH-83610948
+
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        test_case: CEPH-83610950
+        cleanup:
+          - pool
+          - gateway
+        gw_groups:
+          - gw_group: group1
+            gw_nodes:
+              - node3
+              - node4
+          - gw_group: group2
+            gw_nodes:
+              - node6
+              - node5
+      desc: Multinamespace over single RBD image warning
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFMultipleNamespacesOfRBDImage alert
+      polarion-id: CEPH-83610950
+
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        test_case: CEPH-83611097
+        cleanup:
+          - pool
+          - gateway
+        gw_group: group1
+        gw_nodes:
+          - node5
+          - node6
+      desc: NVMeoF Missing Listener warning alert
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFMissingListener alert
+      polarion-id: CEPH-83611097
