@@ -61,14 +61,6 @@ def run(ceph_cluster, **kwargs):
             )
         ]
 
-        # Mount the root filesystems.
-        fuse_dir, kernel_dir, nfs_dir = [
-            dirs[0]
-            for dirs in ref_inode_utils.mount_rootfs(
-                client, fs_util, default_fs, nfs_server, nfs_name
-            )
-        ]
-
         mount_dirs = {
             "Fuse": (fuse_dir, ["f_dir1"]),
             "Kernel": (kernel_dir, ["k_dir1"]),

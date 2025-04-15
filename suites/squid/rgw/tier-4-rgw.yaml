@@ -110,22 +110,6 @@ tests:
       module: haproxy.py
       name: "Configure HAproxy"
 
-  # configuring HAproxy on the client node 'node4' and port '5000'
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph:
-          config:
-            haproxy_clients:
-              - node6
-            rgw_endpoints:
-              - node3:80
-              - node4:80
-              - node5:80
-      desc: "Configure HAproxy"
-      module: haproxy.py
-      name: "Configure HAproxy"
-
   # Bucket policy tests
 
   - test:
