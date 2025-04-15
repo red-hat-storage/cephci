@@ -284,7 +284,7 @@ def run(**kw):
     try:
         pool_types = ["rep_pool_config", "ec_pool_config"]
         log.info("Running Consistency Group Mirroring across two clusters")
-        kw.get("config").update({"grouptype": kw.get("config").get("grouptype")[0]})
+        kw.get("config").update({"grouptype": kw.get("config").get("grouptype")})
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])
         for val in mirror_obj.values():

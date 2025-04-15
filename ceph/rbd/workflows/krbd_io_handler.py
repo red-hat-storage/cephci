@@ -155,6 +155,11 @@ def krbd_io_handler(**kw):
                         get_time_taken=config.get("get_time_taken", False),
                         cmd_timeout=config.get("cmd_timeout"),
                         io_type=config.get("io_type", "write"),
+                        num_jobs=config.get("num_jobs", "1"),
+                        iodepth=config.get("iodepth", "8"),
+                        rwmixread=config.get("rwmixread", "50"),
+                        direct=config.get("direct", "0"),
+                        invalidate=config.get("invalidate", "0"),
                     )
                 else:
                     fio_args = {

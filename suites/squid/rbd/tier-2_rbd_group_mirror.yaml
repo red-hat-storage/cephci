@@ -154,8 +154,7 @@ tests:
       clusters:
         ceph-rbd1:
           config:
-            grouptype:
-              - single_pool_without_namespace
+            grouptype: single_pool_without_namespace
             rep_pool_config:
               rbd_mirror_group: true
               num_pools: 1
@@ -184,8 +183,7 @@ tests:
       clusters:
         ceph-rbd1:
           config:
-            grouptype:
-              - single_pool_without_namespace
+            grouptype: single_pool_without_namespace
             rep_pool_config:
               rbd_mirror_group: true
               num_pools: 1

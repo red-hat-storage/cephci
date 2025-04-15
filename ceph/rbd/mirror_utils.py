@@ -54,6 +54,12 @@ def run_IO(rbd, client, pool, image, **kw):
         "client": client,
         "size": fio["size"],
         "do_not_create_image": True,
+        "runtime": "60",
+        "num_jobs": "4",
+        "iodepth": "32",
+        "rwmixread": "70",
+        "direct": "1",
+        "invalidate": "1",
         "config": {
             "file_size": fio["size"],
             "file_path": ["/mnt/mnt_" + random_string(len=5) + "/file"],
@@ -66,7 +72,7 @@ def run_IO(rbd, client, pool, image, **kw):
                 "device_map": True,
             },
             "cmd_timeout": 2400,
-            "io_type": "write",
+            "io_type": "randrw",
         },
     }
     out, err = krbd_io_handler(**io_config)
