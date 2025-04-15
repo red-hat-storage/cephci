@@ -73,8 +73,7 @@ Step 17: Validate the integrity of the data on secondary site-b
                 md5sum file1_b.txt
                 md5sum file2_b.txt
         Note: (Md5sum should match with site-a images)
-Step 18: Repeat Above steps for namespace level rbd images
-Step 19: Repeat above on EC pool
+Step 18: Repeat above on EC pool
 
 """
 
@@ -139,13 +138,7 @@ def test_group_mirroring(
                     if err:
                         return 1
 
-            # Get Groups in a Pool
-            (group, out_err) = rbd_primary.group.list(**group_config)
-            log.info("Groups present in pool " + pool + " are: " + group)
-            if out_err:
-                log.error("Listing Group in a pool Failed")
-                return 1
-            group_config.update({"group": group.strip()})
+            group_config.update({"group": pool_config.get("group")})
 
             # Get Group Mirroring Status
             (group_mirror_status, out_err) = rbd_primary.mirror.group.status(
@@ -159,7 +152,9 @@ def test_group_mirroring(
                     return 1
             else:
                 mirror_state = "Enabled"
-            log.info("Group " + group + " mirroring state is " + mirror_state)
+            log.info(
+                "Group " + group_config["group"] + " mirroring state is " + mirror_state
+            )
 
             # Enable Group Mirroring and Verify
             if mirror_state == "Disabled":
@@ -169,12 +164,16 @@ def test_group_mirroring(
                 if out:
                     log.error("Enabling group mirroring failed")
                     return 1
+            log.info("Successfully Enabled group mirroring")
 
             # Wait for group mirroring to complete
             out = wait_for_idle(rbd_primary, **group_config)
             if out:
                 log.error("Group Mirorring is not idle after 300 seconds")
                 return 1
+            log.info(
+                "Successfully completed sync for group mirroring to secondary site"
+            )
 
             # Validate size of each image should be same on site-a and site-b
             (group_image_list, out_err) = rbd_primary.group.image.list(
@@ -188,6 +187,9 @@ def test_group_mirroring(
                     "size of rbd images do not match on primary and secondary site"
                 )
                 return 1
+            log.info(
+                "Successfully verified size of rbd images matches across both clusters"
+            )
 
             # Check group is replicated on site-b using group info
             (group_info_status, out_err) = rbd_secondary.group.info(
@@ -205,6 +207,7 @@ def test_group_mirroring(
                 ):
                     log.error("group info is not as expected on secondary cluster")
                     return 1
+            log.info("Successfully verified group is present on secondary cluster")
 
             # Check whether images are part of correct group on site-b using group image-list
             (group_image_list_primary, out_err) = rbd_primary.group.image.list(
@@ -224,6 +227,13 @@ def test_group_mirroring(
                         "Group image list does not match for primary and secondary cluster"
                     )
                     return 1
+                else:
+                    log.info(
+                        "Group Image list matches for primary and secondary cluster"
+                    )
+            log.info(
+                "Successfully verified image list for the group matches across both cluster"
+            )
 
             # Verify group mirroring status on both clusters & Match global id of both cluster
             out = group_mirror_status_verify(
@@ -238,6 +248,9 @@ def test_group_mirroring(
             if out:
                 log.error("Group mirroring status is not healthy")
                 return 1
+            log.info(
+                "Successfully verified group status and global ids match for both clusters"
+            )
 
             # Validate the integrity of the data on secondary site-b
             err = check_mirror_consistency(
@@ -246,10 +259,12 @@ def test_group_mirroring(
                 client_primary,
                 client_secondary,
                 group_image_list,
-                **group_config
             )
             if err:
                 return 1
+            log.info(
+                "Successfully verified md5sum of all images matches across both clusters"
+            )
 
     return 0
 

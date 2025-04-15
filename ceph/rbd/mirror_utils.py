@@ -8,6 +8,14 @@ log = Log(__name__)
 
 
 def compare_image_size_primary_secondary(rbd_primary, rbd_secondary, image_spec_list):
+    """
+    Compare image sizes using rbd du on both primary and secondary cluster.
+    Returns: 1 if sizes do not match and 0 otherwise.
+    Args:
+        rbd_primary: Rbd object for primary cluster
+        rbd_secondary: Rbd object for secondary cluster
+        image_spec_list: list of images in spec format '<pool_name>/<image_list>'
+    """
     for spec in list(json.loads(image_spec_list)):
         image_spec = spec["pool"] + "/" + spec["image"]
         image_config = {"image-spec": image_spec}
@@ -26,17 +34,20 @@ def compare_image_size_primary_secondary(rbd_primary, rbd_secondary, image_spec_
         )
 
         if primary_image_size != secondary_image_size:
-            log.error(
-                "Image size for "
-                + image_spec
-                + " does not match for primary and secondary site"
-            )
             return 1
     return 0
 
 
 def run_IO(rbd, client, pool, image, **kw):
-    # Run IO on an image (map, create file system, mount, run FIO)
+    """
+    Run IO on an image (map, create file system, mount, run FIO)
+    Args:
+        rbd: Rbd object
+        client: client object
+        pool: pool in which image resides
+        image: Image on which IO needs to be run
+        **kw: FIO additional arguments for IO size
+    """
     fio = kw.get("config", {}).get("fio", {})
     io_config = {
         "rbd_obj": rbd,
@@ -67,9 +78,18 @@ def run_IO(rbd, client, pool, image, **kw):
 
 
 def check_mirror_consistency(
-    rbd_primary, rbd_secondary, client_primary, client_secondary, image_spec_list, **kw
+    rbd_primary, rbd_secondary, client_primary, client_secondary, image_spec_list
 ):
-    # Verifies MD5sum matches for all images on both clusters
+    """
+    Verifies MD5sum hash matches for all images on both clusters.
+    Returns: 1 if md5sum does not match for any of the image from image_spec_list and retruns 0 otherwise
+    Args:
+       rbd_primary: Rbd object for primary cluster
+       rbd_secondary: Rbd object for secondary cluster
+       client_primary: client object of primary cluster
+       client_secondary: client object of secondary cluster
+       image_spec_list: list of image in spec format <pool_name>/<image_name>
+    """
     for spec in list(json.loads(image_spec_list)):
         data_integrity_spec = {
             "first": {

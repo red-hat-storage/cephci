@@ -164,13 +164,7 @@ def test_add_remove_group_mirroring(
                     if err:
                         return 1
 
-            # Get Groups in a Pool
-            (group, out_err) = rbd_primary.group.list(**group_config)
-            log.info("Groups present in pool " + pool + " are: " + group)
-            if out_err:
-                log.error("Listing Group in a pool Failed")
-                return 1
-            group_config.update({"group": group.strip()})
+            group_config.update({"group": pool_config.get("group")})
 
             # Get Group Mirroring Status
             (group_mirror_status, out_err) = rbd_primary.mirror.group.status(
@@ -184,7 +178,12 @@ def test_add_remove_group_mirroring(
                     return 1
             else:
                 mirror_state = "Enabled"
-            log.info("Group " + group + " mirroring state is " + mirror_state)
+            log.info(
+                "Group "
+                + pool_config.get("group")
+                + " mirroring state is "
+                + mirror_state
+            )
 
             # Enable Group Mirroring and Verify
             if mirror_state == "Disabled":
@@ -194,6 +193,7 @@ def test_add_remove_group_mirroring(
                 if out:
                     log.error("Enabling group mirroring failed")
                     return 1
+                log.info("Successfully Enabled group mirroring")
                 mirror_state = "Enabled"
 
             # Wait for group mirroring to complete
@@ -201,6 +201,7 @@ def test_add_remove_group_mirroring(
             if out:
                 log.error("Group Mirorring is not idle after 300 seconds")
                 return 1
+            log.info("Successfully completed group mirroring syncing to secondary")
 
             # Remove RBD image 'image1' from group # Should FAIL
             (group_image_list, out_err) = rbd_primary.group.image.list(
@@ -221,10 +222,14 @@ def test_add_remove_group_mirroring(
                     "Image should not have removed successfully when group mirroring is enabled"
                 )
                 return 1
+            log.info(
+                "Successfully verified image is not removed from group when group mirroring is enabled"
+            )
 
             (group_image_list, out_err) = rbd_primary.group.image.list(
                 **group_config, format="json"
             )
+            log.info("Group Image list before remove " + str(group_image_list))
 
             # Disable Mirroring
             if mirror_state == "Enabled":
@@ -238,12 +243,16 @@ def test_add_remove_group_mirroring(
 
             # Remove RBD image 'image1' from group # Should Succeed
             out = remove_group_image_and_verify(rbd_primary, **kw)
-            if not out:
+            if out:
                 log.error("Image is not removed from the group")
                 return 1
 
             (group_image_list, out_err) = rbd_primary.group.image.list(
                 **group_config, format="json"
+            )
+            log.info("Group Image list after remove " + str(group_image_list))
+            log.info(
+                "Successfully verified image is removed from group when group mirroring is disabled"
             )
 
             # Enable Mirroring
@@ -267,6 +276,10 @@ def test_add_remove_group_mirroring(
             (group_image_list, out_err) = rbd_primary.group.image.list(
                 **group_config, format="json"
             )
+            log.info("Group Image list before add " + str(group_image_list))
+            log.info(
+                "Successfully verified image is not added to the group when group mirroring is enabled"
+            )
 
             # Disable Mirroring
             if mirror_state == "Enabled":
@@ -280,7 +293,7 @@ def test_add_remove_group_mirroring(
 
             # Add rbd image 'image1' to group # Should Succeed
             out = add_group_image_and_verify(rbd_primary, **kw)
-            if not out:
+            if out:
                 log.error("Image is not added to the group")
                 return 1
 
@@ -288,6 +301,9 @@ def test_add_remove_group_mirroring(
                 **group_config, format="json"
             )
             log.info("Group Image list after add " + str(group_image_list))
+            log.info(
+                "Successfully verified image is added to the group when group mirroring is disabled"
+            )
 
             # Enable mirroring
             if mirror_state == "Disabled":
@@ -298,17 +314,16 @@ def test_add_remove_group_mirroring(
                     log.error("Enabling group mirroring failed")
                     return 1
                 mirror_state = "Enabled"
+            log.info("Successfully Enabled group mirroring")
 
             # Wait for group mirroring to complete
             out = wait_for_idle(rbd_primary, **group_config)
             if out:
                 log.error("Group Mirorring is not idle after 300 seconds")
                 return 1
+            log.info("Successfully completed group mirroring sync to secondary")
 
             # Validate size of each image should be same on site-a and site-b
-            (group_image_list, out_err) = rbd_primary.group.image.list(
-                **group_config, format="json"
-            )
             res = compare_image_size_primary_secondary(
                 rbd_primary, rbd_secondary, group_image_list
             )
@@ -317,6 +332,7 @@ def test_add_remove_group_mirroring(
                     "size of rbd images do not match on primary and secondary site"
                 )
                 return 1
+            log.info("Successfully verified image size matches across both clusters")
 
             # Check group is replicated on site-b using group info
             (group_info_status, out_err) = rbd_secondary.group.info(
@@ -334,11 +350,9 @@ def test_add_remove_group_mirroring(
                 ):
                     log.error("group info is not as expected on secondary cluster")
                     return 1
+            log.info("Successfully verified group is present on secondary site")
 
             # Check whether images are part of correct group on site-b using group image-list
-            (group_image_list_primary, out_err) = rbd_primary.group.image.list(
-                **group_config, format="json"
-            )
             (group_image_list_secondary, out_err) = rbd_secondary.group.image.list(
                 **group_config, format="json"
             )
@@ -351,13 +365,16 @@ def test_add_remove_group_mirroring(
                 )
                 return 1
             else:
-                if json.loads(group_image_list_primary) != json.loads(
+                if json.loads(group_image_list) != json.loads(
                     group_image_list_secondary
                 ):
                     log.error(
                         "Group image list does not match for primary and secondary cluster"
                     )
                     return 1
+            log.info(
+                "Successfully verified image list matches for the group on both clusters"
+            )
 
             # Verify group mirroring status on both clusters & Match global id of both cluster
             out = group_mirror_status_verify(
@@ -372,6 +389,9 @@ def test_add_remove_group_mirroring(
             if out:
                 log.error("Group mirroring status is not healthy")
                 return 1
+            log.info(
+                "Successfully verified group status on both clusters and global ids are matching"
+            )
 
             # Validate the integrity of the data on secondary site-b
             err = check_mirror_consistency(
@@ -380,10 +400,10 @@ def test_add_remove_group_mirroring(
                 client_primary,
                 client_secondary,
                 group_image_list,
-                **group_config
             )
             if err:
                 return 1
+            log.info("Successfully verified md5sum of all images across both clusters")
 
     return 0
 
