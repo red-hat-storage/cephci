@@ -112,7 +112,9 @@ def add_group_image_and_verify(rbd, **kw):
     """
     (out, err) = rbd.group.image.add(**kw)
     if err:
-        log.error("Error in group image add for group: " + kw["group"] + " err: " + err)
+        log.error(
+            "Error in group image add for group: " + kw["group-spec"] + " err: " + err
+        )
         return 1
     if "cannot add image to mirror enabled group" in out and (
         verify_group_image_list(rbd, **kw)
@@ -132,7 +134,10 @@ def remove_group_image_and_verify(rbd, **kw):
     (out, err) = rbd.group.image.rm(**kw)
     if err:
         log.error(
-            "Error in group image remove for group: " + kw["group"] + " err: " + err
+            "Error in group image remove for group: "
+            + kw["group-spec"]
+            + " err: "
+            + err
         )
         return 1
     if "cannot remove image from mirror enabled group" in out and (

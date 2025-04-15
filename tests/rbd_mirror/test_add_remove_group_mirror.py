@@ -226,11 +226,6 @@ def test_add_remove_group_mirroring(
                 "Successfully verified image is not removed from group when group mirroring is enabled"
             )
 
-            (group_image_list, out_err) = rbd_primary.group.image.list(
-                **group_config, format="json"
-            )
-            log.info("Group Image list before remove " + str(group_image_list))
-
             # Disable Mirroring
             if mirror_state == "Enabled":
                 out = disable_group_mirroring_and_verify_state(
@@ -247,10 +242,6 @@ def test_add_remove_group_mirroring(
                 log.error("Image is not removed from the group")
                 return 1
 
-            (group_image_list, out_err) = rbd_primary.group.image.list(
-                **group_config, format="json"
-            )
-            log.info("Group Image list after remove " + str(group_image_list))
             log.info(
                 "Successfully verified image is removed from group when group mirroring is disabled"
             )
@@ -273,10 +264,6 @@ def test_add_remove_group_mirroring(
                 )
                 return 1
 
-            (group_image_list, out_err) = rbd_primary.group.image.list(
-                **group_config, format="json"
-            )
-            log.info("Group Image list before add " + str(group_image_list))
             log.info(
                 "Successfully verified image is not added to the group when group mirroring is enabled"
             )
@@ -297,10 +284,6 @@ def test_add_remove_group_mirroring(
                 log.error("Image is not added to the group")
                 return 1
 
-            (group_image_list, out_err) = rbd_primary.group.image.list(
-                **group_config, format="json"
-            )
-            log.info("Group Image list after add " + str(group_image_list))
             log.info(
                 "Successfully verified image is added to the group when group mirroring is disabled"
             )
@@ -420,36 +403,36 @@ def run(**kw):
     try:
         pool_types = ["rep_pool_config", "ec_pool_config"]
         log.info("Running Add/Remove Consistency Group Mirroring across two clusters")
-        for grouptype in kw.get("config").get("grouptypes"):
-            kw.get("config").update({"grouptype": grouptype})
-            mirror_obj = initial_mirror_config(**kw)
-            mirror_obj.pop("output", [])
-            for val in mirror_obj.values():
-                if not val.get("is_secondary", False):
-                    rbd_primary = val.get("rbd")
-                    client_primary = val.get("client")
-                    primary_cluster = val.get("cluster")
-                else:
-                    rbd_secondary = val.get("rbd")
-                    client_secondary = val.get("client")
-                    secondary_cluster = val.get("cluster")
 
-            pool_types = list(mirror_obj.values())[0].get("pool_types")
-            rc = test_add_remove_group_mirroring(
-                rbd_primary,
-                rbd_secondary,
-                client_primary,
-                client_secondary,
-                primary_cluster,
-                secondary_cluster,
-                pool_types,
-                **kw
+        kw.get("config").update({"grouptype": kw.get("config").get("grouptype")[0]})
+        mirror_obj = initial_mirror_config(**kw)
+        mirror_obj.pop("output", [])
+        for val in mirror_obj.values():
+            if not val.get("is_secondary", False):
+                rbd_primary = val.get("rbd")
+                client_primary = val.get("client")
+                primary_cluster = val.get("cluster")
+            else:
+                rbd_secondary = val.get("rbd")
+                client_secondary = val.get("client")
+                secondary_cluster = val.get("cluster")
+
+        pool_types = list(mirror_obj.values())[0].get("pool_types")
+        rc = test_add_remove_group_mirroring(
+            rbd_primary,
+            rbd_secondary,
+            client_primary,
+            client_secondary,
+            primary_cluster,
+            secondary_cluster,
+            pool_types,
+            **kw
+        )
+        if rc:
+            log.error(
+                "Test: Add/Remove in RBD group mirroring (snapshot mode) across two clusters failed"
             )
-            if rc:
-                log.error(
-                    "Test: Add/Remove in RBD group mirroring (snapshot mode) across two clusters failed"
-                )
-                return 1
+            return 1
 
     except Exception as e:
         log.error(

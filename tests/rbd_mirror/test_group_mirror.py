@@ -284,36 +284,35 @@ def run(**kw):
     try:
         pool_types = ["rep_pool_config", "ec_pool_config"]
         log.info("Running Consistency Group Mirroring across two clusters")
-        for grouptype in kw.get("config").get("grouptypes"):
-            kw.get("config").update({"grouptype": grouptype})
-            mirror_obj = initial_mirror_config(**kw)
-            mirror_obj.pop("output", [])
-            for val in mirror_obj.values():
-                if not val.get("is_secondary", False):
-                    rbd_primary = val.get("rbd")
-                    client_primary = val.get("client")
-                    primary_cluster = val.get("cluster")
-                else:
-                    rbd_secondary = val.get("rbd")
-                    client_secondary = val.get("client")
-                    secondary_cluster = val.get("cluster")
+        kw.get("config").update({"grouptype": kw.get("config").get("grouptype")[0]})
+        mirror_obj = initial_mirror_config(**kw)
+        mirror_obj.pop("output", [])
+        for val in mirror_obj.values():
+            if not val.get("is_secondary", False):
+                rbd_primary = val.get("rbd")
+                client_primary = val.get("client")
+                primary_cluster = val.get("cluster")
+            else:
+                rbd_secondary = val.get("rbd")
+                client_secondary = val.get("client")
+                secondary_cluster = val.get("cluster")
 
-            pool_types = list(mirror_obj.values())[0].get("pool_types")
-            rc = test_group_mirroring(
-                rbd_primary,
-                rbd_secondary,
-                client_primary,
-                client_secondary,
-                primary_cluster,
-                secondary_cluster,
-                pool_types,
-                **kw
+        pool_types = list(mirror_obj.values())[0].get("pool_types")
+        rc = test_group_mirroring(
+            rbd_primary,
+            rbd_secondary,
+            client_primary,
+            client_secondary,
+            primary_cluster,
+            secondary_cluster,
+            pool_types,
+            **kw
+        )
+        if rc:
+            log.error(
+                "Test: RBD group mirroring (snapshot mode) across two clusters failed"
             )
-            if rc:
-                log.error(
-                    "Test: RBD group mirroring (snapshot mode) across two clusters failed"
-                )
-                return 1
+            return 1
 
     except Exception as e:
         log.error(
