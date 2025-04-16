@@ -6,7 +6,7 @@ import traceback
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.lib.cephfs_attributes_lib import CephFSAttributeUtilities
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
-from tests.smb.smb_operations import remove_smb_share, remove_smb_cluster
+from tests.smb.smb_operations import remove_smb_cluster, remove_smb_share
 from utility.log import Log
 
 log = Log(__name__)
