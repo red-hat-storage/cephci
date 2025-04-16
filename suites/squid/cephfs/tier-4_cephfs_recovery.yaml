@@ -234,3 +234,9 @@ tests:
       name: journal_tool_event_mode
       polarion-id: "CEPH-83595482"
       comments: "BZ 2335321"
+  - test:
+      abort-on-fail: false
+      desc: "mds_last_seen_functional"
+      module: cephfs_recovery.mds_last_seen.py
+      name: mds_last_seen
+      polarion-id: "CEPH-83614244"
