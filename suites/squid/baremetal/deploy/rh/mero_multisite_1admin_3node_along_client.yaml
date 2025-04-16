@@ -396,7 +396,7 @@ tests:
             controllers:
               - mero011
             drivers:
-              count: 2
+              count: 3
               hosts:
                 - mero011
                 - mero013
