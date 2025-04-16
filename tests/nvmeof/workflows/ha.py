@@ -1067,9 +1067,6 @@ class HighAvailability:
             client = NVMeInitiator(initiator_node, self.gateways[0])
             client.disconnect_all()  # Reconnect NVMe targets
             client.connect_targets(config={"nqn": "connect-all"})
-            args = validate_config["args"]
-            subsystem_to_nsid = {args["nsid"]: args["sub_num"]}
-            init_node = args.get("init_node")
             serial_to_namespace = defaultdict(list)
 
             @retry(
@@ -1094,66 +1091,69 @@ class HighAvailability:
                 value = int(device["SerialNumber"])
                 serial_to_namespace[key].append(value)
 
-            ns_to_check, subsystem_to_check = next(iter(subsystem_to_nsid.items()))
-            LOG.info(f"{subsystem_to_nsid} : {serial_to_namespace}")
-
             def subsystem_nsid_found(dictionary, key, value):
                 return key in dictionary and value in dictionary[key]
 
-            ns_subsys_found = subsystem_nsid_found(
-                serial_to_namespace, ns_to_check, subsystem_to_check
-            )
+            if validate_config:
+                args = (validate_config or {}).get("args", {})
+                subsystem_to_nsid = {args["nsid"]: args["sub_num"]}
+                init_node = args.get("init_node")
+                ns_to_check, subsystem_to_check = next(iter(subsystem_to_nsid.items()))
+                LOG.info(f"{subsystem_to_nsid} : {serial_to_namespace}")
+                ns_subsys_found = subsystem_nsid_found(
+                    serial_to_namespace, ns_to_check, subsystem_to_check
+                )
 
-            if command == "add_host":
-                if node == init_node:
-                    if ns_subsys_found:
-                        LOG.info(
-                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
-                        )
+                if command == "add_host":
+                    if node == init_node:
+                        if ns_subsys_found:
+                            LOG.info(
+                                f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                            )
+                        else:
+                            LOG.error(
+                                f"Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                            )
+                            raise Exception(
+                                f"Expected Namespace:Subsystem pair {subsystem_to_nsid} on {node} but did not find it"
+                            )
                     else:
-                        LOG.error(
-                            f"Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
-                        )
-                        raise Exception(
-                            f"Expected Namespace:Subsystem pair {subsystem_to_nsid} on {node} but did not find it"
-                        )
-                else:
-                    if ns_subsys_found:
-                        LOG.error(
-                            f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
-                        )
-                        raise Exception(
-                            f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
-                        )
+                        if ns_subsys_found:
+                            LOG.error(
+                                f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                            )
+                            raise Exception(
+                                f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
+                            )
+                        else:
+                            LOG.info(
+                                f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                            )
+                elif command == "del_host":
+                    if node == init_node:
+                        if ns_subsys_found:
+                            LOG.error(
+                                f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                            )
+                            raise Exception(
+                                f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
+                            )
+                        else:
+                            LOG.info(
+                                f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                            )
                     else:
-                        LOG.info(
-                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
-                        )
-            elif command == "del_host":
-                if node == init_node:
-                    if ns_subsys_found:
-                        LOG.error(
-                            f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
-                        )
-                        raise Exception(
-                            f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
-                        )
-                    else:
-                        LOG.info(
-                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
-                        )
-                else:
-                    if ns_subsys_found:
-                        LOG.error(
-                            f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
-                        )
-                        raise Exception(
-                            f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
-                        )
-                    else:
-                        LOG.info(
-                            f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
-                        )
+                        if ns_subsys_found:
+                            LOG.error(
+                                f"Namespace:Subsystem pair {subsystem_to_nsid} is listed on {node}"
+                            )
+                            raise Exception(
+                                f"Did not expect Namespace:Subsystem pair {subsystem_to_nsid} on {node} but found it"
+                            )
+                        else:
+                            LOG.info(
+                                f"Validated - Namespace:Subsystem pair {subsystem_to_nsid} is not listed on {node}"
+                            )
             else:
                 if (
                     expected_visibility == "False"
