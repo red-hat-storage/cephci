@@ -147,6 +147,7 @@ tests:
           - node6
           - node5
         rbd_pool: rbd
+        time_to_fire: 600
         gw_group: gw_group1
         listener_port: 4420
         test_case: CEPH-83611098
@@ -166,6 +167,7 @@ tests:
           - node4
           - node5
         rbd_pool: rbd
+        time_to_fire: 300
         gw_group: gw_group1
         subsystems:                             # Configure subsystems
           - nqn: nqn.2016-06.io.spdk:cnode1

@@ -439,7 +439,7 @@ def test_ceph_83611098(ceph_cluster, config):
         config: test case config
     """
 
-    time_to_fire = 600
+    time_to_fire = config["time_to_fire"]
     intervel = 100
     alert = "NVMeoFZeroListenerSubsystem"
     msg = "No listeners added to {subsystem_name} subsystem"
@@ -520,7 +520,7 @@ def test_ceph_83611099(ceph_cluster, config):
         config: test case config
     """
 
-    time_to_fire = 300
+    time_to_fire = config["time_to_fire"]
     intervel = 60
     alert = "NVMeoFSingleGateway"
     msg = "The gateway group {gw_group} consists of a single gateway - HA is not possible on cluster"
