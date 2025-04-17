@@ -174,26 +174,30 @@ class FSRecovery(object):
                 log.info("journal tool phase : backup")
                 for mds_rank in mds_ranks:
                     cmd = f"cephfs-journal-tool --rank {fs_name}:{mds_rank} journal export backup.bin"
-                    client.exec_command(sudo=True, cmd=cmd)
+                    out, ec = client.exec_command(sudo=True, cmd=cmd)
+                    return out, ec
 
             def journal_recover():
                 log.info("journal tool phase : recover dentries")
                 for mds_rank in mds_ranks:
                     cmd = f"cephfs-journal-tool --rank {fs_name}:{mds_rank} event recover_dentries list"
-                    client.exec_command(sudo=True, cmd=cmd)
+                    out, ec = client.exec_command(sudo=True, cmd=cmd)
+                    return out, ec
 
             def journal_reset():
                 log.info("journal tool phase : reset")
                 cephfs_table_tool(client, fs_name)
                 for mds_rank in mds_ranks:
                     cmd = f"cephfs-journal-tool --rank {fs_name}:{mds_rank} journal reset --yes-i-really-really-mean-it"
-                    client.exec_command(sudo=True, cmd=cmd)
+                    out, ec = client.exec_command(sudo=True, cmd=cmd)
+                    return out, ec
 
             def journal_flush():
                 log.info("journal tool phase : flush")
                 for mds_rank in mds_ranks:
                     cmd = f"ceph tell mds.{fs_name}:{mds_rank} flush journal"
-                    client.exec_command(sudo=True, cmd=cmd)
+                    out, ec = client.exec_command(sudo=True, cmd=cmd)
+                    return out, ec
 
             def cephfs_table_tool(client, fs_name):
                 reset_list = ["session", "snap", "inode"]
@@ -201,7 +205,8 @@ class FSRecovery(object):
                 for i in reset_list:
                     for mds_rank in mds_ranks:
                         cmd = f"cephfs-table-tool {fs_name}:{mds_rank} reset {i}"
-                        client.exec_command(sudo=True, cmd=cmd)
+                        out, ec = client.exec_command(sudo=True, cmd=cmd)
+                        return out, ec
 
             journal_ops_obj = {
                 "backup": journal_backup,
@@ -211,14 +216,21 @@ class FSRecovery(object):
             }
             log.info(f"ops:{ops}")
             if ops == "all":
+                result = {}
                 for op in journal_ops_obj:
                     if "flush" not in op:
                         log.info(f"op:{op}")
-                        journal_ops_obj[op]()
+                        result[op] = journal_ops_obj[op]()
+                return result
             else:
-                journal_ops_obj[ops]()
+                result = journal_ops_obj[ops]()
+                if result is None:
+                    log.error(f"Journal operation {ops} failed")
+                    return 1
+                return result
         except Exception as ex:
-            log.info(ex)
+            log.error(ex)
+            return 1
 
     def scrub_ops(self, client, active_mds_list, ops="all", wait_for="not_running"):
         """
