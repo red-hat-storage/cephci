@@ -419,6 +419,14 @@ def run(ceph_cluster, **kwargs):
             "n_file1_renamed": renamed_n_file1_inode,
         }
 
+        # Dictionary to store original source inodes
+        inodes_map = {
+            "f_file1": f_file1_inode,
+            "k_file1": k_file1_inode,
+            "n_file1": n_file1_inode,
+        }
+
+        # Validate referent inodes linkage
         for file_name, inode_list in referent_inodes_map.items():
             if inode_list:  # Ensure it’s not None
                 for referent_inode in inode_list:
