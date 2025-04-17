@@ -626,3 +626,13 @@ tests:
       config:
         script-name: ../aws/test_keystone_auth.py
         config-file-name: ../../aws/configs/test_keystone_integration.yaml
+
+# Keystone Integration ACL Test
+  - test:
+      name: test keystone acl with RGW
+      desc: test keystone acl with RGW
+      polarion-id: CEPH-83572657
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3_swift/test_swift_acl_with_keystone.py
+        config-file-name: ../../s3_swift/configs/test_swift_acl_with_keystone.yaml
