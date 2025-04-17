@@ -202,25 +202,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            haproxy_clients:
-              - node8
-            rgw_endpoints:
-              - node7:80
-        ceph-sec:
-          config:
-            haproxy_clients:
-              - node8
-            rgw_endpoints:
-              - node7:80
-      desc: "Configure HAproxy"
-      module: haproxy.py
-      name: "Configure HAproxy"
-
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-pri:
-          config:
             cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
@@ -354,7 +335,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            run-on-haproxy: true
   - test:
       name: test encryption on primary
       desc: test_Mbuckets_with_Nobjects_enc on primary

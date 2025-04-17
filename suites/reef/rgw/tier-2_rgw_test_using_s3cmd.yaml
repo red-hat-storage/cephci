@@ -98,7 +98,16 @@ tests:
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
-
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node5
+        rgw_endpoints:
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
 #   S3CMD tests
   - test:
       name: S3CMD basic  operations
@@ -173,6 +182,7 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+        run-on-haproxy: true
 
   # - test:
   #    name: Test Ratelimit at global scope
