@@ -66,7 +66,7 @@ def run(ceph_cluster, **kw):
                 log.debug("Creating replicated pool : %s", cr_pool["pool_name"])
                 method_should_succeed(rados_obj.create_pool, **cr_pool)
 
-            method_should_succeed(rados_obj.bench_write, max_objs=200, **cr_pool)
+            method_should_succeed(rados_obj.bench_write, **cr_pool)
         log.info(
             "Completed creating pools and writing test data into the pools\n Pools : %s",
             pool_names,
@@ -222,7 +222,6 @@ def run(ceph_cluster, **kw):
                     "Not failing the test"
                 )
         log.debug("Completed verifying reads balancer scores on all the pools")
-        rados_obj.rados_pool_cleanup()
         rados_obj.configure_pg_autoscaler(**{"default_mode": "on"})
         time.sleep(20)
 
@@ -314,6 +313,7 @@ def run(ceph_cluster, **kw):
         )
 
         for pool in pool_names:
+            pool_id = rados_obj.get_pool_id(pool_name=pool)
             if not rados_obj.delete_pool(pool=pool):
                 log.error("Could not delete pool : %s", pool)
                 raise Exception("Pool not deleted error")
@@ -322,7 +322,6 @@ def run(ceph_cluster, **kw):
                 pool,
             )
             time.sleep(5)
-            pool_id = rados_obj.get_pool_id(pool_name=pool)
             out = rados_obj.run_ceph_command(cmd="ceph osd dump")
             for item in out["pg_upmap_primaries"]:
                 if int(pool_id) == int(item["pgid"].split(".")[0]):
