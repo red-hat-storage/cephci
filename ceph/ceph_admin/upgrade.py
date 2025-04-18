@@ -1,10 +1,11 @@
 """Module that interfaces with ceph orch upgrade CLI."""
 
 from datetime import datetime, timedelta
-from json import loads
+from json import JSONDecodeError, loads
 from time import sleep
 from typing import Dict
 
+from ceph.ceph import CommandFailed
 from utility.log import Log
 
 from .common import config_dict_to_string
@@ -65,7 +66,19 @@ class UpgradeMixin:
 
         """
         out, _ = self.shell(args=["ceph", "orch", "upgrade", "status"])
-        return loads(out)
+        try:
+            return loads(out)
+        except JSONDecodeError:
+            pass  # Not valid JSON, move to next check
+
+        if "There are no upgrades in progress currently." in out:
+            return {"in_progress": False}
+
+        raise CommandFailed(
+            "Command 'ceph orch upgrade status' returned unexpected output: '{}'".format(
+                out
+            )
+        )
 
     def upgrade_check(self: OrchProtocol, image):
         """
