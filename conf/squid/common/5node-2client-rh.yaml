@@ -9,6 +9,7 @@ globals:
           - mgr
           - crash
           - alertmanager
+          - smb
       node2:
         role:
           - mon
@@ -17,6 +18,7 @@ globals:
           - rgw
           - nfs
           - osd
+          - smb
         no-of-volumes: 6
         disk-size: 40
       node3:
@@ -26,6 +28,7 @@ globals:
           - rgw
           - nfs
           - osd
+          - smb
         no-of-volumes: 6
         disk-size: 40
       node4:
