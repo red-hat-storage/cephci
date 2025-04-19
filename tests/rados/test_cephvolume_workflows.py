@@ -7,6 +7,7 @@ Test Module to perform specific functionalities of ceph-volume.
 
 import json
 import random
+import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
@@ -50,6 +51,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     volumeobject = CephVolumeWorkflows(node=cephadm)
+    rhbuild = config.get("rhbuild")
 
     try:
         if config.get("zap_with_destroy_flag") or config.get(
@@ -315,6 +317,29 @@ def run(ceph_cluster, **kw):
                         osd_fsid=None,
                         host=osd_host,
                     )
+
+                # Orchestrator device refresh takes around 30 minutes in 8.1 after zapping with cephvolume.
+                # To be uncommented once BZ <> fixed
+                if rhbuild.split("-")[0] == "8.1":
+                    for _ in range(10):
+                        out = rados_obj.get_orch_device_list(node=osd_host.hostname)
+                        available_devices = [
+                            device["path"]
+                            for device in out[0]["devices"]
+                            if device["available"]
+                        ]
+                        if dev_path in available_devices:
+                            break
+                        time.sleep(2)
+                    else:
+                        log_msg = (
+                            f"OSD could not be deployed on host {osd_host.hostname}"
+                            f" after zapping device using command"
+                            f" ceph-volume lvm zap {' '.join(option)}"
+                            f"\ndevice path: {dev_path}"
+                            f"\nOSD ID: {osd_id}"
+                        )
+                        raise Exception(log_msg)
 
                 wait_for_osd_daemon_state(rados_obj.client, osd_id, "up")
 

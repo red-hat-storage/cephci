@@ -248,4 +248,4 @@ tests:
       module: test_crash_daemon.py
       polarion-id: CEPH-83573855
       desc: Verify crash warning in ceph health upon crashing a daemon
-      comments: Active BZ-2253394
+      comments: Intermittent Active BZ-2253394
