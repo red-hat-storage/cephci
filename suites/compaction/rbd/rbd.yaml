@@ -1,0 +1,239 @@
+tests:
+
+# Tests from - suites/squid/rbd/tier-1_rbd.yaml
+
+  - test:
+      name: Install rbd-nbd
+      desc: Install rbd-nbd and remove any epel packages
+      module: exec.py
+      config:
+        sudo: true
+        commands:
+          - "rm -rf /etc/yum.repos.d/epel*"
+          - "dnf install rbd-nbd -y"
+
+  - test:
+      name: 1_rbd_cli_groups
+      desc: "Executing upstream RBD CLI Groups scenarios"
+      polarion-id: CEPH-83574239
+      module: test_rbd.py
+      config:
+        script: rbd_groups.sh
+        script_path: qa/workunits/rbd
+
+  - test:
+      name: 2_rbd_cli_import_export
+      desc: "Executing upstream RBD CLI Import Export scenarios"
+      polarion-id: CEPH-83574240
+      module: test_rbd.py
+      config:
+        script: import_export.sh
+        script_path: qa/workunits/rbd
+
+  - test:
+      name: 5_librbd_python
+      desc: Executig upstream LibRBD scenarios
+      polarion-id: CEPH-83574524
+      module: test_rbd.py
+      config:
+        script_path: qa/workunits/rbd
+        script: test_librbd_python.sh
+
+  - test:
+      name: 6_rbd_permissions
+      desc: Executig upstream RBD permissions scenarios
+      polarion-id: CEPH-83574525
+      module: test_rbd.py
+      config:
+        script_path: qa/workunits/rbd
+        script: permissions.sh
+
+  - test:
+      name: 7_rbd_read_flags
+      desc: Executig upstream RBD Read Flag scenarios
+      polarion-id: CEPH-83574526
+      module: test_rbd.py
+      config:
+        script_path: qa/workunits/rbd
+        script: read-flags.sh
+
+  - test:
+      name: 9_journal
+      desc: Executig upstream RBD Journal scenarios
+      polarion-id: CEPH-83574527
+      module: test_rbd.py
+      config:
+        script_path: qa/workunits/rbd
+        script: journal.sh
+
+  - test:
+      name: 10_rbd_kernel
+      desc: Executig upstream RBD Kernal scenarios
+      polarion-id: CEPH-83574528
+      module: test_rbd.py
+      config:
+        script_path: qa/workunits/rbd
+        script: kernel.sh
+
+  - test:
+      name: 11_rbd_krbd_exclusive
+      desc: Executig upstream RBD kernel exclusive scenarios
+      polarion-id: CEPH-83574531
+      module: test_rbd.py
+      config:
+        script_path: qa/workunits/rbd
+        script: krbd_exclusive_option.sh
+
+  - test:
+      name: test delete clones with io
+      desc: Create clone of an image and delete while krbd IO is running
+      polarion-id: CEPH-9225
+      module: delete_clones_with_io.py
+
+# Tests from - suites/squid/rbd/tier-2_rbd_encryption.yaml
+
+  - test:
+      name: encrypt image and clone using different keys
+      desc: Encrypt & decrypt file using same keys and different keys
+      polarion-id: CEPH-83575263
+      module: test_rbd_encryption.py
+      config:
+        encryption_type: #parent,clone
+          - luks1,luks1
+
+  - test:
+      name: Encrypt image and clone using combinations of encryption type
+      desc: Apply different combinations of encryption to parent and clone
+      polarion-id: CEPH-83575251
+      module: test_rbd_encryption.py
+      config:
+        encryption_type: #parent,clone
+           - luks1,luks1
+           - luks1,NA
+           - luks2,luks1
+           - luks2,luks2
+           - luks2,NA
+           - NA,luks1
+           - NA,luks2
+           - luks1,luks2
+
+# Tests from - suites/squid/rbd/tier-2_rbd_regression.yaml
+
+  - test:
+      name: snap and clone on imported image
+      desc: snap and clone operations on imported image
+      polarion-id: CEPH-9230
+      module: rbd_snap_clone_imported_image.py
+
+  - test:
+      name: Verify exclusive lock feature
+      desc: Verify Delayed deletion with exclusive feature on RBD image
+      polarion-id: CEPH-11408
+      module: rbd_exclusive_lock_rm_image.py
+      config:
+        io-total: 5G
+
+  - test:
+      name: Test for parent image deletion after flattening the clone and removing snap
+      desc: verify for parent image deletion after flattening the clone and removing snap
+      polarion-id: CEPH-11409
+      module: rbd_clone_delete_parent_image.py
+      config:
+        io-total: 5G
+
+  - test:
+      name: clones creation with v2clone format
+      desc: Verify that clones creation and deletion of parent image with V2 enabled
+      polarion-id: CEPH-83573309
+      module: rbd_clonev2.py
+
+  - test:
+      name: parent snap deletion after clone flattening
+      desc: Verify parent snapshot deletion after flattening the clone
+      polarion-id: CEPH-83573650
+      module: rbd_clone_delete_parent_snapshot.py
+
+  - test:
+      name: Test Snapshot Rename functionality
+      desc: Rename image snapshots on an image on replicated and ecpools and its clones
+      polarion-id: CEPH-9833
+      module: rbd_snapshot_rename.py
+
+  - test:
+      name: Test Snapshot Rename for snapshot with clone
+      desc: Rename image snapshot from which another image was cloned on a replicated and ecpool
+      polarion-id: CEPH-9835
+      module: rbd_rename_cloned_snapshot.py
+
+  - test:
+      name: Test Snapshot Rename with clone operations in progress
+      desc: Rename image snapshot when operations on clone/parent image is in progress
+      polarion-id: CEPH-9836
+      module: rbd_snapshot_rename_advanced.py
+
+  - test:
+      name: krbd client - Test to Perform Deletion of protected snapshot
+      desc: Trying to delete a protected snapshot should fail - negative
+      polarion-id: CEPH-9224
+      module: rbd_delete_protected_snapshot_krbd.py
+      config:
+        do_not_create_image: True
+        operations:
+          map: true
+          io: true
+          nounmap: true
+
+  - test:
+      name: Test to disable image feature when flatten operation is performed
+      desc: Perform flatten operations while changing the image feature
+      polarion-id: CEPH-9862
+      module: rbd_flatten_image_feature_disable.py
+      config:
+        rbd_op_thread_timeout: 120
+
+  - test:
+      name: Test to verify image feature disable with image meta on it
+      desc: Verify image feature disable on image having image meta set on it
+      polarion-id: CEPH-9864
+      module: image_with_metadata_feature_disable.py
+      config:
+        image_feature: deep-flatten
+
+  - test:
+      name: Test to verify image resize operation while changing image feature
+      desc: Verify image resize while changing image feature
+      polarion-id: CEPH-9861
+      module: rbd_resize_image_with_image_feature.py
+      config:
+        image_feature: fast-diff
+        size_increase: 11G
+        size_decrease: 5G
+        rep_pool_config:
+          size: 10G
+        ec_pool_config:
+          size: 10G
+
+  - test:
+      name: Test to verify data compression on global, pool and image level
+      desc: Verify rbd_compression_hint config settings
+      polarion-id: CEPH-83574644
+      module: test_rbd_compression.py
+      config:
+        compression_algorithm: snappy
+        compression_mode: passive
+        compression_ratio: 0.7
+        io_total: 1G
+
+  - test:
+      name: Test image creation, write and read data using python rbd module
+      desc: Verify python rbd module
+      polarion-id: CEPH-83574791
+      module: test_rbd_python_module.py
+      config:
+        do_not_create_image: true
+        rep_pool_config:
+          num_pools: 1
+          num_images: 1
+        ec_pool_config:
+          num_pools: 1
+          num_images: 1
