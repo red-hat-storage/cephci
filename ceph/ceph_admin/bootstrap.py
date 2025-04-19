@@ -398,14 +398,14 @@ class BootstrapMixin:
             public_nws = ",".join(filter(lambda x: x, list(set(public_nws.split(",")))))
 
         if public_nws:
-            # Refer:
-            # - https://bugzilla.redhat.com/show_bug.cgi?id=2314438
-            # - https://bugzilla.redhat.com/show_bug.cgi?id=2156919
+            # public network config level has been changed to 'global' instead of 'mon'
+            # Refer below bug trackers for respective releases and more context:
+            # - 6.1z1: https://bugzilla.redhat.com/show_bug.cgi?id=2156919
+            # - 6.1z9: https://bugzilla.redhat.com/show_bug.cgi?id=2314604
+            # - 7.1z3: https://bugzilla.redhat.com/show_bug.cgi?id=2314606
+            # - 8.0: https://bugzilla.redhat.com/show_bug.cgi?id=2314438
             # - https://access.redhat.com/solutions/7088483
-            # Todo: update public network config level to global for 6.x and 7.x when changes are in
-            # 6.x tracker: https://bugzilla.redhat.com/show_bug.cgi?id=2314604
-            # 7.x tracker: https://bugzilla.redhat.com/show_bug.cgi?id=2314606
-            config_level = "global" if rhbuild.split(".")[0] >= "8" else "mon"
+            config_level = "global" if rhbuild.split(".")[0] >= "6" else "mon"
             self.shell(
                 args=[
                     "ceph",
