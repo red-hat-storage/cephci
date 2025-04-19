@@ -1686,17 +1686,30 @@ def install_start_kafka(rgw_node, cloud_type):
     """Install kafka package and start zookeeper and kafka services."""
     log.info("install kafka broker for bucket notification tests")
     if cloud_type == "ibmc":
-        wget_cmd = "curl -o /tmp/kafka.tgz https://10.245.4.89/kafka_2.13-2.8.0.tgz"
+        kafka_source_cmd = (
+            "curl -o /tmp/kafka.tgz https://10.245.4.89/kafka_2.13-2.8.0.tgz"
+        )
+        kafka_config_path = "/tmp/kafka.tgz"
     else:
-        wget_cmd = "curl -o /tmp/kafka.tgz http://magna002.ceph.redhat.com/cephci-jenkins/kafka_2.13-2.8.0.tgz"
+        kafka_config_path = setup_and_access_rgw_config(
+            rgw_node, "kafka_2.13-2.8.0.tgz"
+        )
+        kafka_source_cmd = ""
 
-    tar_cmd = "tar -zxvf /tmp/kafka.tgz -C /usr/local/"
+    tar_cmd = f"tar -zxvf {kafka_config_path} -C /usr/local/"
     rename_cmd = "mv /usr/local/kafka_2.13-2.8.0 /usr/local/kafka"
     chown_cmd = "chown cephuser:cephuser /usr/local/kafka"
-    rgw_node.exec_command(
-        cmd=f"ls /usr/local/kafka/ || ({wget_cmd} && {tar_cmd} && {rename_cmd} && {chown_cmd})",
-        sudo=True,
-    )
+
+    if kafka_source_cmd:
+        rgw_node.exec_command(
+            cmd=f"ls /usr/local/kafka/ || ({kafka_source_cmd} && ({tar_cmd} && {rename_cmd} && {chown_cmd})",
+            sudo=True,
+        )
+    else:
+        rgw_node.exec_command(
+            cmd=f"ls /usr/local/kafka/ || ({tar_cmd} && {rename_cmd} && {chown_cmd})",
+            sudo=True,
+        )
 
     KAFKA_HOME = "/usr/local/kafka"
 
@@ -1727,38 +1740,38 @@ def configure_kafka_security(rgw_node, cloud_type):
 
     # append security types configuration into server.properties
     if cloud_type == "ibmc":
-        curl_server_properties = "curl -o /tmp/kafka_server.properties https://10.245.4.89/kafka_server.properties"
-    else:
-        curl_server_properties = (
-            "curl -o /tmp/kafka_server.properties http://magna002.ceph.redhat.com/cephci-jenkins"
-            + "/kafka_server.properties"
+        kafka_properties_path = "/tmp/kafka_server.properties"
+        curl_server_properties = f"curl -o {kafka_properties_path} https://10.245.4.89/kafka_server.properties"
+        rgw_node.exec_command(
+            sudo=True,
+            cmd=curl_server_properties,
         )
+    else:
+        kafka_properties_path = setup_and_access_rgw_config(
+            rgw_node, "kafka_server.properties"
+        )
+
     rgw_node.exec_command(
         sudo=True,
-        cmd=curl_server_properties,
-    )
-    rgw_node.exec_command(
-        sudo=True,
-        cmd=f"yes | cp /tmp/kafka_server.properties {KAFKA_HOME}/config/server.properties",
+        cmd=f"yes | cp {kafka_properties_path} {KAFKA_HOME}/config/server.properties",
     )
 
     # download kafka_security.sh script, create certs and store them in keystore and truststore
     if cloud_type == "ibmc":
+        kafka_security_path = "/tmp/kafka-security.sh"
         curl_security_sh = (
-            "curl -o /tmp/kafka-security.sh https://10.245.4.89/kafka-security.sh"
+            f"curl -o {kafka_security_path} https://10.245.4.89/kafka-security.sh"
+        )
+        rgw_node.exec_command(
+            sudo=True,
+            cmd=curl_security_sh,
         )
     else:
-        curl_security_sh = (
-            "curl -o /tmp/kafka-security.sh http://magna002.ceph.redhat.com/cephci-jenkins"
-            + "/kafka-security.sh"
-        )
-    rgw_node.exec_command(
-        sudo=True,
-        cmd=curl_security_sh,
-    )
+        kafka_security_path = setup_and_access_rgw_config(rgw_node, "kafka-security.sh")
+
     status = rgw_node.exec_command(
         sudo=True,
-        cmd=f"chmod +x /tmp/kafka-security.sh ; cd {KAFKA_HOME} ; /tmp/kafka-security.sh",
+        cmd=f"chmod +x {kafka_security_path} ; cd {KAFKA_HOME} ; {kafka_security_path}",
         long_running=True,
     )
     if status != 0:
@@ -2516,3 +2529,46 @@ def is_unsecured_registry(test_data):
             return insecure_registry_value  # Return boolean value for insecure-registry
 
     return False  # Default return value if conditions are not met
+
+
+def setup_and_access_rgw_config(rgw_node, filename):
+    """Clone, unlock, and access secret file."""
+    RGW_CONFIG_REPO = "https://gitlab.cee.redhat.com/rhcs-qe/rgw-cluster-configs.git"
+    REPO_DIR = "rgw-cluster-configs"
+    GIT_CRYPT_KEY_URL = "http://magna002.ceph.redhat.com/cephci-jenkins/git-crypt-key"
+    cwd, _ = rgw_node.exec_command(sudo=False, cmd="pwd")
+    cwd = cwd.strip()
+    repo_path = f"{cwd}/{REPO_DIR}"
+
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=(
+            "yum install -y "
+            "https://cbs.centos.org/kojifiles/packages/git-crypt/0.6.0/12.el9/x86_64/"
+            "git-crypt-0.6.0-12.el9.x86_64.rpm"
+        ),
+    )
+
+    out, err = rgw_node.exec_command(sudo=False, cmd=f"ls {repo_path}", check_ec=False)
+    if "No such file or directory" in err:
+        log.info("Clone the repository")
+        rgw_node.exec_command(cmd=f"git clone {RGW_CONFIG_REPO}")
+
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=(
+            f"cd {repo_path} && "
+            f"curl -o git-crypt-key {GIT_CRYPT_KEY_URL} && "
+            f"git config --global --add safe.directory {repo_path} || true && "
+            f"git-crypt unlock git-crypt-key"
+        ),
+    )
+    secret_files_output = rgw_node.exec_command(cmd=f"ls {repo_path}/secrets")
+    secret_files = secret_files_output[0].strip().split("\n")
+    log.info(f"secret files output: {secret_files}")
+    rgw_node.exec_command(cmd=f"cd {cwd}")
+
+    if filename in secret_files:
+        file_path = os.path.join(repo_path, "secrets", filename)
+        return file_path
+    return None
