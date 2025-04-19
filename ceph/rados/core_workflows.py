@@ -433,7 +433,7 @@ class RadosOrchestrator:
         duration = kwargs.get("rados_write_duration", 200)
         byte_size = str(kwargs.get("byte_size", 4096)).upper()
         num_threads = kwargs.get("num_threads")
-        max_objs = kwargs.get("max_objs")
+        max_objs = kwargs.get("max_objs", 200)
         verify_stats = kwargs.get("verify_stats", True)
         check_ec = kwargs.get("check_ec", True)
         nocleanup = kwargs.get("nocleanup", True)
