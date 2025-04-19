@@ -104,6 +104,8 @@ def run(ceph_cluster, **kw):
             )
             log.error(f"{e.__doc__}")
             log.exception(e)
+            # log cluster health
+            rados_obj.log_cluster_health()
 
         log.debug(f"Object dump for {object_name} after initial write operation")
         log.debug(obj_dump)
@@ -139,6 +141,8 @@ def run(ceph_cluster, **kw):
             log.info("^FAIL")
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)
+            # log cluster health
+            rados_obj.log_cluster_health()
             raise
 
         method_should_succeed(
@@ -201,10 +205,14 @@ def run(ceph_cluster, **kw):
             log.info("^FAIL")
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)
+            # log cluster health
+            rados_obj.log_cluster_health()
             raise
     except Exception as e:
         log.error(f"Execution failed with exception: {e.__doc__}")
         log.exception(e)
+        # log cluster health
+        rados_obj.log_cluster_health()
         return 1
     finally:
         log.info(

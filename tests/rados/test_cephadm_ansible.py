@@ -189,6 +189,8 @@ EOF"""
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
+        # log cluster health
+        rados_obj.log_cluster_health()
         return 1
 
     finally:

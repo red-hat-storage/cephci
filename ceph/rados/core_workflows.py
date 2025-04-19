@@ -4910,6 +4910,12 @@ EOF"""
         cmd_export = f"ceph orch ls {service_type} --export"
         out = self.run_ceph_command(cmd=cmd_export, client_exec=True)
         for _service in out:
+            if not _service.get("placement", False):
+                log.info(
+                    "Service %s does not have placement entry, skipping"
+                    % _service["service_name"]
+                )
+                continue
             if unmanaged:
                 log.debug(
                     f"Setting the {_service} service as unmanaged by cephadm. current status : {out}"

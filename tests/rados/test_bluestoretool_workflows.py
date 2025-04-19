@@ -685,19 +685,33 @@ def run(ceph_cluster, **kw):
             )
             out = bluestore_obj.show_bluefs_stats(osd_id=osd_id)
             log.info(out)
+            if rhbuild.startswith("6"):
+                log.info(
+                    "Check if the chosen OSD has a dedicated DB device. Fetching metadata..."
+                )
+                osd_metadata = ceph_cluster.get_osd_metadata(
+                    osd_id=int(osd_id), client=client
+                )
+                # 1 if dedicated DB device is present, 0 otherwise
+                dedicated_db = int(osd_metadata["bluefs_dedicated_db"])
 
-            pattern_list = [
-                "device size",
-                "DEV/LEV",
-                "LOG",
-                "WAL",
-                "DB",
-                "SLOW",
-                "MAXIMUMS",
-                "TOTAL",
-            ]
-            if rhbuild.split(".")[0] < "6":
-                pattern_list = ["device size", "wal_total", "db_total", "slow_total"]
+            # default bluefs-stats for releases older than Reef
+            pattern_list = ["device size", "wal_total", "db_total", "slow_total"]
+
+            # verbose updated stats for Reef and above
+            if rhbuild.split(".")[0] > "6" or (
+                rhbuild.startswith("6") and dedicated_db
+            ):
+                pattern_list = [
+                    "device size",
+                    "DEV/LEV",
+                    "LOG",
+                    "WAL",
+                    "DB",
+                    "SLOW",
+                    "MAXIMUMS",
+                    "TOTAL",
+                ]
             for pattern in pattern_list:
                 assert (
                     pattern in out
@@ -712,6 +726,8 @@ def run(ceph_cluster, **kw):
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
+        # log cluster health
+        rados_obj.log_cluster_health()
         return 1
     finally:
         log.info(
