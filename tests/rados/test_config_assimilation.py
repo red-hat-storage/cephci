@@ -76,6 +76,8 @@ def run(ceph_cluster, **kw) -> int:
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
+        # log cluster health
+        rados_obj.log_cluster_health()
         return 1
     finally:
         # removing the additional configurations set in the mon database
