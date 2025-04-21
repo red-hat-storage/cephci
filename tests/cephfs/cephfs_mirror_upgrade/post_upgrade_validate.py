@@ -77,10 +77,10 @@ def run(ceph_cluster, **kw):
             source_clients[0], source_fs
         )
         log.info("Add files into the path and create snapshot on each path")
-        retry_add_files_and_validatet = retry(CommandFailed, tries=3, delay=30)(
-            fs_mirroring_utils.add_files_and_validatet
+        retry_add_files_and_validate = retry(CommandFailed, tries=3, delay=30)(
+            fs_mirroring_utils.add_files_and_validate
         )
-        retry_add_files_and_validatet(
+        retry_add_files_and_validate(
             source_clients,
             kernel_mounting_dir_1,
             subvol1_path,
