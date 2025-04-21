@@ -164,6 +164,7 @@ tests:
               conf: sample-pool-2
           pool_configs_path: "conf/quincy/rados/test-confs/pool-configurations.yaml"
       desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
+      comments: Active BZ 2354833
 
   - test:
       name: Verify autoscaler scales up pool to pg_num_min
