@@ -1,10 +1,10 @@
 import os
 import random
 import string
-import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.exceptions import FsBaseException, log_and_fail
 from tests.cephfs.lib.cephfs_attributes_lib import CephFSAttributeUtilities
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.smb.smb_operations import remove_smb_cluster, remove_smb_share
@@ -502,10 +502,8 @@ def run(ceph_cluster, **kw):
 
             log.info("*** Case Sensitivity: Negative Workflow completed ***")
 
-        except Exception as e:
-            log.error("Test execution failed: {}".format(str(e)))
-            log.error(traceback.format_exc())
-            return 1
+        except FsBaseException as e:
+            return log_and_fail("Test execution failed", e)
 
         finally:
             log.info(

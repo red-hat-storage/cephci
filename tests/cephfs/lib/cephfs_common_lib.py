@@ -12,6 +12,7 @@ import time
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.exceptions import UnsupportedFeature
 from tests.smb.smb_operations import (
     deploy_smb_service_imperative,
     smb_cifs_mount,
@@ -332,7 +333,9 @@ class CephFSCommonUtils(FsUtils):
         elif mount_type == "nfs":
             return self.setup_nfs_mount(client, fs_name, **kwargs)
         else:
-            raise ValueError("Invalid mount type. Choose from 'fuse', 'smb', or 'nfs'.")
+            raise UnsupportedFeature(
+                "Invalid mount type. Choose from 'fuse', 'smb', or 'nfs'."
+            )
 
     def setup_fuse_mount(self, client, fs_name, **kwargs):
         """Set up a FUSE mount for a CephFS file system.

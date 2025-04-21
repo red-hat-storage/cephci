@@ -1,9 +1,21 @@
 import os
 import random
 import string
-import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.exceptions import (
+    CaseSensitivityValidationError,
+    CharMapValidationError,
+    FileDoesNotExistError,
+    FileNotFound,
+    FileOperationError,
+    FsBaseException,
+    LinkDeletionError,
+    NormalizationValidationError,
+    RenameDirectoryError,
+    SnapshotValidationError,
+    log_and_fail,
+)
 from tests.cephfs.lib.cephfs_attributes_lib import CephFSAttributeUtilities
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.smb.smb_operations import remove_smb_cluster, remove_smb_share
@@ -101,8 +113,10 @@ def sub_directory_inheritance_case_True():
             actual_child_dir_name,
             norm_type.upper(),
         ):
-            raise ValueError(
-                "Validation failed: 'validate_normalization' returned False."
+            raise NormalizationValidationError(
+                "Normalization validation failed for dir '{}' using type '{}'.".format(
+                    actual_child_dir_name, norm_type
+                )
             )
 
         log.info("Validating alternate name for %s", rel_child_dir)
@@ -242,8 +256,10 @@ def test_subdirectory_inheritance_special_chars():
             norm_type.upper(),
             casesensitive=False,
         ):
-            raise ValueError(
-                "Validation failed: 'validate_normalization' returned False."
+            raise NormalizationValidationError(
+                "Normalization validation failed for dir '{}' using type '{}'.".format(
+                    actual_child_dir_name, norm_type
+                )
             )
 
         log.info("Validating alternate name for %s", rel_child_dir)
@@ -299,8 +315,8 @@ def test_snapshot_functionality_with_attributes():
     if not attr_util.validate_snapshot_from_mount(
         client1, snap_fuse_mounting_dir, [snap_name]
     ):
-        raise ValueError(
-            "Validation failed: 'validate_snapshot_from_mount' returned False."
+        raise SnapshotValidationError(
+            "Snapshot validation failed for {}".format(snap_fuse_mounting_dir)
         )
 
     attr_util.validate_charmap(
@@ -353,7 +369,9 @@ def test_directory_rename_attribute_validation():
     )
 
     if not attr_util.rename_directory(client1, child_1, child_1_renamed):
-        raise ValueError("Directory rename failed: 'rename_directory' returned False.")
+        raise RenameDirectoryError(
+            "Failed to rename directory from {} to {}".format(child_1, child_1_renamed)
+        )
 
     log.info("Validating the attributes after renaming the directory")
     attr_util.validate_charmap(
@@ -369,7 +387,11 @@ def test_directory_rename_attribute_validation():
         os.path.relpath(child_1_renamed, fuse_mounting_dir).split("/")[-1],
         "NFKC",
     ):
-        raise ValueError("Validation failed: 'validate_normalization' returned False.")
+        raise NormalizationValidationError(
+            "Normalization validation failed for renamed directory '{}'.".format(
+                os.path.relpath(child_1_renamed, fuse_mounting_dir)
+            )
+        )
 
     log.info(
         "Validating alternate name for %s",
@@ -524,14 +546,14 @@ def test_softlink_file_attribute_validation():
     )
 
     if not attr_util.check_if_file_exists(client1, file_path_soft_link):
-        raise FileNotFoundError(
+        raise FileNotFound(
             "File does not exist at the soft link path: {}".format(file_path_soft_link)
         )
 
     if not attr_util.check_if_file_exists(
         client1, os.path.join(soft_link_1, file_name)
     ):
-        raise FileNotFoundError(
+        raise FileNotFound(
             "File does not exist at the soft link 1 path: {}".format(
                 os.path.join(soft_link_1, file_name)
             )
@@ -540,14 +562,14 @@ def test_softlink_file_attribute_validation():
     if not attr_util.check_if_file_exists(
         client1, os.path.join(soft_link_2, file_name)
     ):
-        raise FileNotFoundError(
+        raise FileNotFound(
             "File does not exist at the soft link 2 path: {}".format(
                 os.path.join(soft_link_2, file_name)
             )
         )
 
     if not attr_util.check_ls_case_sensitivity(client1, file_path_soft_link):
-        raise ValueError(
+        raise CaseSensitivityValidationError(
             "Expected case sensitivity check to pass for path: {}".format(
                 file_path_soft_link
             )
@@ -556,7 +578,7 @@ def test_softlink_file_attribute_validation():
     if not attr_util.check_ls_case_sensitivity(
         client1, os.path.join(soft_link_1, file_name)
     ):
-        raise ValueError(
+        raise CaseSensitivityValidationError(
             "Expected case sensitivity check to pass for path: {}".format(
                 os.path.join(soft_link_1, file_name)
             )
@@ -565,7 +587,7 @@ def test_softlink_file_attribute_validation():
     if not attr_util.check_ls_case_sensitivity(
         client1, os.path.join(soft_link_2, file_name)
     ):
-        raise ValueError(
+        raise CaseSensitivityValidationError(
             "Expected case sensitivity check to pass for path: {}".format(
                 os.path.join(soft_link_2, file_name)
             )
@@ -581,14 +603,14 @@ def test_softlink_file_attribute_validation():
     )
 
     if not attr_util.check_if_file_exists(client1, file_path_soft_link_2):
-        raise ValueError(
+        raise FileDoesNotExistError(
             "File does not exist at path: {}".format(file_path_soft_link_2)
         )
 
     if not attr_util.check_if_file_exists(
         client1, os.path.join(soft_link_1, file_name)
     ):
-        raise ValueError(
+        raise FileDoesNotExistError(
             "File does not exist at path: {}".format(
                 os.path.join(soft_link_1, file_name)
             )
@@ -597,21 +619,21 @@ def test_softlink_file_attribute_validation():
     if not attr_util.check_if_file_exists(
         client1, os.path.join(soft_link_2, file_name)
     ):
-        raise ValueError(
+        raise FileDoesNotExistError(
             "File does not exist at path: {}".format(
                 os.path.join(soft_link_2, file_name)
             )
         )
 
     if not attr_util.check_ls_case_sensitivity(client1, file_path_soft_link_2):
-        raise ValueError(
+        raise CaseSensitivityValidationError(
             "Case sensitivity check failed at path: {}".format(file_path_soft_link_2)
         )
 
     if not attr_util.check_ls_case_sensitivity(
         client1, os.path.join(soft_link_1, file_name)
     ):
-        raise ValueError(
+        raise CaseSensitivityValidationError(
             "Case sensitivity check failed at path: {}".format(
                 os.path.join(soft_link_1, file_name)
             )
@@ -620,7 +642,7 @@ def test_softlink_file_attribute_validation():
     if not attr_util.check_ls_case_sensitivity(
         client1, os.path.join(soft_link_2, file_name)
     ):
-        raise ValueError(
+        raise CaseSensitivityValidationError(
             "Case sensitivity check failed at path: {}".format(
                 os.path.join(soft_link_2, file_name)
             )
@@ -628,10 +650,10 @@ def test_softlink_file_attribute_validation():
 
     log.info("** Cleanup of Link ** ")
     if not attr_util.delete_links(client1, soft_link_1):
-        raise ValueError("Failed to delete link at: {}".format(soft_link_1))
+        raise LinkDeletionError("Failed to delete link at: {}".format(soft_link_1))
 
     if not attr_util.delete_links(client1, soft_link_2):
-        raise ValueError("Failed to delete link at: {}".format(soft_link_2))
+        raise LinkDeletionError("Failed to delete link at: {}".format(soft_link_2))
 
     log.info("Passed: Creation of softlink for File and validation of the attribute")
 
@@ -685,7 +707,7 @@ def test_hardlink_file_attribute_validation():
 
     # Validation
     if not attr_util.check_ls_case_sensitivity(client1, hard_link_1):
-        raise ValueError(
+        raise CaseSensitivityValidationError(
             "Case sensitivity check failed for hard link: {}".format(hard_link_1)
         )
 
@@ -758,7 +780,7 @@ def test_subvolume_non_default_group_fuse_mount():
         norm_type.upper(),
         casesensitive=False,
     ):
-        raise ValueError(
+        raise NormalizationValidationError(
             f"Normalization validation failed for {unicode_name} with norm_type {norm_type.upper()}."
         )
 
@@ -777,7 +799,7 @@ def test_subvolume_non_default_group_fuse_mount():
         return 1
 
     if not attr_util.check_ls_case_sensitivity(client1, child_dir_path):
-        raise ValueError(
+        raise CaseSensitivityValidationError(
             f"Case sensitivity check failed for directory: {child_dir_path}."
         )
 
@@ -825,7 +847,7 @@ def test_subvolume_default_group_fuse_mount():
         unicode_name,
         charmap.get("normalization").upper(),
     ):
-        raise ValueError(
+        raise NormalizationValidationError(
             f"Normalization validation failed for {unicode_name} in {fs_name}."
         )
 
@@ -1146,10 +1168,23 @@ def run(ceph_cluster, **kw):
             if mount_type == "fuse":
                 test_subvolume_default_group_fuse_mount()
 
-        except Exception as e:
-            log.error("Test execution failed: {}".format(str(e)))
-            log.error(traceback.format_exc())
-            return 1
+        except CharMapValidationError as e:
+            return log_and_fail("Failed to validate charmap attribute", e)
+
+        except SnapshotValidationError as e:
+            return log_and_fail(
+                "Failed to validate snapshot functionality",
+                e,
+            )
+
+        except FileOperationError as e:
+            return log_and_fail("File operation failed", e)
+
+        except LinkDeletionError as e:
+            return log_and_fail("Failed to delete link", e)
+
+        except FsBaseException as e:
+            return log_and_fail("Test execution failed", e)
 
         finally:
             log.info(

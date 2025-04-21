@@ -7,6 +7,7 @@ import string
 import unicodedata
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.exceptions import CharMapValidationError, UnsupportedInput
 from utility.log import Log
 
 log = Log(__name__)
@@ -43,7 +44,7 @@ class CephFSAttributeUtilities(object):
         supported_attributes = ["casesensitive", "normalization", "encoding"]
         for key, value in kwargs.items():
             if key not in supported_attributes:
-                raise ValueError(
+                raise UnsupportedInput(
                     "Unsupported attribute: {}. Supported attributes are {}".format(
                         key, supported_attributes
                     )
@@ -86,7 +87,7 @@ class CephFSAttributeUtilities(object):
                 return json.loads(charmap_str)
             else:
                 log.info("Failed to extract JSON from charmap output: {}".format(out))
-                raise ValueError("Invalid charmap output")
+                raise CharMapValidationError("Invalid charmap output")
         except Exception:
             log.error("Failed to parse charmap for '{}'".format(directory))
             return {}
@@ -111,7 +112,7 @@ class CephFSAttributeUtilities(object):
         for key, expected in expected_values.items():
             actual = charmap.get(key)
             if actual != expected:
-                raise ValueError(
+                raise CharMapValidationError(
                     "{}: {} must be {}, got {}".format(
                         dir, key, repr(expected), repr(actual)
                     )
@@ -382,7 +383,7 @@ class CephFSAttributeUtilities(object):
         supported_attributes = ["casesensitive", "normalization", "encoding", "charmap"]
         for attribute in attributes:
             if attribute not in supported_attributes:
-                raise ValueError(
+                raise UnsupportedInput(
                     "Unsupported attribute: {}. Supported attributes are {}".format(
                         attribute, supported_attributes
                     )

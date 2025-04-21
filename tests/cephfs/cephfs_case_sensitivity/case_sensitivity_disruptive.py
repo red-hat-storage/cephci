@@ -1,9 +1,9 @@
 import os
 import random
 import string
-import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.exceptions import FsBaseException, log_and_fail
 from tests.cephfs.lib.cephfs_attributes_lib import CephFSAttributeUtilities
 from tests.cephfs.lib.cephfs_recovery_lib import FSRecovery
 from utility.log import Log
@@ -158,9 +158,7 @@ def run(ceph_cluster, **kw):
 
         active_mds_ranks = fs_recovery.get_active_mds_ranks(client1, fs_name)
         if not attr_util.fail_fs(client1, fs_name):
-            raise ValueError(
-                "Validation failed: Expected 'fail_fs' to return True, but got False."
-            )
+            raise FsBaseException("Failed to fail the file system {}".format(fs_name))
 
         mds_output = fs_util.get_mds_config(client1, fs_name)
         failed_found = False
@@ -200,10 +198,10 @@ def run(ceph_cluster, **kw):
         log.info("** Disruptive Case Sensitive use cases completed **")
         return 0
 
-    except Exception as e:
-        log.error("Test execution failed: {}".format(str(e)))
-        log.error(traceback.format_exc())
-        return 1
+    except FsBaseException as e:
+        return log_and_fail(
+            "FsBaseException occurred during case sensitivity disruptive test", e
+        )
 
     finally:
         log.info(
