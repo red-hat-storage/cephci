@@ -2,6 +2,7 @@
 Test suite that verifies NVMe alerts and NVMe Health checks.
 """
 
+from copy import deepcopy
 from json import dumps, loads
 from random import choice
 from urllib.parse import urljoin, urlparse
@@ -427,10 +428,164 @@ def test_ceph_83610948(ceph_cluster, config):
     )
 
 
+def test_ceph_83611098(ceph_cluster, config):
+    """[CEPH-83611098] Warning at Ceph cluster on zero listener in a subsystem.
+
+    NVMeoFZeroListenerSubsystem alert helps user to add listeners to the subsystem,
+    otherwise it would be not visible and able to connect from initators.
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        config: test case config
+    """
+
+    time_to_fire = config["time_to_fire"]
+    intervel = 100
+    alert = "NVMeoFZeroListenerSubsystem"
+    msg = "No listeners added to {subsystem_name} subsystem"
+    gateway_nodes = deepcopy(config.get("gw_nodes"))
+
+    LOG.info("Deploy nvme service")
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+
+    # Configure subsystems
+    nvmegwcl1 = ha.gateways[0]
+    subsystem1 = f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"
+    sub1_args = {"subsystem": subsystem1}
+    config.update({"nqn": subsystem1})
+    nvmegwcl1.subsystem.add(**{"args": {**sub1_args, **{"no-group-append": True}}})
+
+    # Check for alert
+    # NVMeoFZeroListenerSubsystem prometheus alert should be firing
+    LOG.info(
+        "NVMeoFZeroListenerSubsystem should be firing because no listener is configured"
+    )
+    events = PrometheusAlerts(ha.orch)
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(subsystem_name=subsystem1),
+        interval=intervel,
+    )
+
+    # Add the listener and check alert is inactive state or not
+    LOG.info("Add the listener")
+    configure_listeners(ha, [gateway_nodes[0]], config)
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    # Delete the listener and alert should be in firing state
+    LOG.info("Delete the listener")
+    listener_args = {"nqn": subsystem1, "listener_port": config["listener_port"]}
+    configure_listeners(ha, [gateway_nodes[0]], listener_args, action="delete")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(subsystem_name=subsystem1),
+        interval=intervel,
+    )
+
+    # Add the listener and check alert is inactive state or not
+    LOG.info("Add the listener back")
+    configure_listeners(ha, [gateway_nodes[0]], config)
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    # Add one more subsystem and ceph prometheus alert to be in firing state
+    LOG.info("Add one more subsystem")
+    subsystem2 = f"nqn.2016-06.io.spdk:cnode{generate_unique_id(4)}"
+    sub2_args = {"subsystem": subsystem2}
+    nvmegwcl1.subsystem.add(**{"args": {**sub2_args, **{"no-group-append": True}}})
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(subsystem_name=subsystem2),
+        interval=intervel,
+    )
+
+    LOG.info("CEPH-83611098 - {alert} alert validated successfully.")
+
+
+def test_ceph_83611099(ceph_cluster, config):
+    """[CEPH-83611099] Warning message or Status on NVMe Service with single Gateway Node.
+
+    NVMeoFSingleGateway alert indicates to user to add more gateways
+    to the service in order to have High Availability.
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        config: test case config
+    """
+
+    time_to_fire = config["time_to_fire"]
+    intervel = 60
+    alert = "NVMeoFSingleGateway"
+    msg = "The gateway group {gw_group} consists of a single gateway - HA is not possible on cluster"
+
+    # Deploy nvmeof service
+    LOG.info("deploy nvme service")
+    gateway_nodes = deepcopy(config.get("gw_nodes"))
+    random_gateway = choice(gateway_nodes)
+    config.update({"gw_nodes": [random_gateway]})
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    # Check for alert
+    # NVMeoFSingleGateway prometheus alert should be firing
+    events = PrometheusAlerts(ha.orch)
+
+    LOG.info("Check NVMeoFSingleGateway should be firing")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(gw_group=config["gw_group"]),
+        interval=intervel,
+    )
+
+    # Add one more gateway and NVMeoFSingleGateway alert should be in inactive state
+    LOG.info("Add one more gateway and NVMeoFSingleGateway should be in inactive state")
+    config.update({"gw_nodes": gateway_nodes})
+    deploy_nvme_service(ceph_cluster, config)
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    # scale down to one gateway and NVMeoFSingleGateway alert should be in firing state
+    LOG.info(
+        "scale down to one gateway and NVMeoFSingleGateway should be in firing state"
+    )
+    random_gateway = choice(gateway_nodes)
+    config.update({"gw_nodes": [random_gateway]})
+    deploy_nvme_service(ceph_cluster, config)
+    LOG.info(
+        "scaled down to one gateway, NVMeoFSingleGateway should be in firing state"
+    )
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(gw_group=config["gw_group"]),
+        interval=intervel,
+    )
+
+    # Scale up to 2 gateways and alert should be in inactive state
+    LOG.info("Add one more gateway and NVMeoFSingleGateway should be in inactive state")
+    config.update({"gw_nodes": gateway_nodes})
+    deploy_nvme_service(ceph_cluster, config)
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    LOG.info("CEPH-83611099 - NVMeoFSingleGateway validated successfully.")
+
+
 testcases = {
     "CEPH-83610948": test_ceph_83610948,
     "CEPH-83610950": test_ceph_83610950,
     "CEPH-83611097": test_ceph_83611097,
+    "CEPH-83611098": test_ceph_83611098,
+    "CEPH-83611099": test_ceph_83611099,
 }
 
 
