@@ -337,7 +337,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            run-on-haproxy: true
   - test:
       name: multipart upload on primary
       desc: test_Mbuckets_with_Nobjects_multipart on primary

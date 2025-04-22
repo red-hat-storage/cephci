@@ -382,7 +382,7 @@ tests:
             script-name: test_swift_basic_ops.py
             config-file-name: test_swift_version_copy_op.yaml
             verify-io-on-site: ["ceph-sec"]
-      desc: test restoring of versioned objects in swift
+      desc: test swift versioning copy post upgrade
       module: sanity_rgw_multisite.py
       name: swift versioning copy post upgrade
       polarion-id: CEPH-10646
