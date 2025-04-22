@@ -57,6 +57,7 @@ def run(ceph_cluster, **kw):
     verify_cluster_usage = config.get("verify_cluster_usage", False)
     verify_max_avail = config.get("verify_max_avail", False)
     check_for_inactive_pgs = config.get("check_for_inactive_pgs", False)
+    verify_cluster_health = config.get("verify_cluster_health", False)
 
     log.debug("Collecting daemon info and Cluster usage info before the upgrade")
     pre_upgrade_orch_ps = rados_obj.run_ceph_command(cmd="ceph orch ps")
@@ -198,6 +199,15 @@ def run(ceph_cluster, **kw):
             "Proceeding to do further checks on the cluster post upgrade"
         )
 
+        log.info("\n\nCluster status post upgrade: \n")
+        log_dump = (
+            f"ceph status :  {rados_obj.run_ceph_command(cmd='ceph -s')} \n "
+            f"health detail :{rados_obj.run_ceph_command(cmd='ceph health detail')} \n "
+            f"crashes : {rados_obj.run_ceph_command(cmd='ceph crash ls')} \n "
+            f"ceph versions: {rados_obj.run_ceph_command(cmd='ceph versions')} \n"
+        )
+        log.info(log_dump)
+
         if verify_warning:
             """
             History:
@@ -257,14 +267,11 @@ def run(ceph_cluster, **kw):
             log.error("Found inactive PGs on the cluster during upgrade")
             raise Exception("Inactive PGs during Upgrade error")
 
-        log.info("\n\nCluster status post upgrade: \n")
-        log_dump = (
-            f"ceph status :  {rados_obj.run_ceph_command(cmd='ceph -s')} \n "
-            f"health detail :{rados_obj.run_ceph_command(cmd='ceph health detail')} \n "
-            f"crashes : {rados_obj.run_ceph_command(cmd='ceph crash ls')} \n "
-            f"ceph versions: {rados_obj.run_ceph_command(cmd='ceph versions')} \n"
-        )
-        log.info(log_dump)
+        if verify_cluster_health:
+            health_detail = rados_obj.log_cluster_health()
+            if "HEALTH_ERR" in health_detail:
+                log.error("cluster HEALTH is HEALTH_ERR post upgrade")
+                raise Exception("Cluster health in ERROR state post upgrade")
 
         log.info("Completed upgrade on the cluster")
         return 0

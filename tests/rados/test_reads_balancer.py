@@ -64,7 +64,7 @@ def run(ceph_cluster, **kw):
                 )
             else:
                 method_should_succeed(rados_obj.create_pool, **cr_pool)
-            method_should_succeed(rados_obj.bench_write, max_objs=500, **cr_pool)
+            method_should_succeed(rados_obj.bench_write, **cr_pool)
         log.info("Completed creating pools and writing test data into the pools")
 
         existing_pools = rados_obj.list_pools()
