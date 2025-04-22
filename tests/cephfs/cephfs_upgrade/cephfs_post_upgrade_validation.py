@@ -80,7 +80,7 @@ def nfs_test(nfs_req_params):
         f"--operation create --threads 1 --file-size 1024 "
         f"--files 10 --top {dir_path}",
         long_running=True,
-        timeout=20,
+        timeout=600,
     )
     log.info("Verify exports are active by mounting and running IO")
     nfs_mounting_dir = f"{existing_nfs_mount}_new"
@@ -248,7 +248,7 @@ def snap_sched_test(snap_req_params):
             f"--operation create --threads 1 --file-size 1024 "
             f"--files 10 --top {dir_path}",
             long_running=True,
-            timeout=20,
+            timeout=600,
         )
 
     log.info(
@@ -466,7 +466,7 @@ def clone_test(clone_req_params):
             f"--operation create --threads 1 --file-size 1024 "
             f"--files 10 --top {dir_path}",
             long_running=True,
-            timeout=20,
+            timeout=600,
         )
 
     log.info("Mount existing clones, verify IO suceeds")
