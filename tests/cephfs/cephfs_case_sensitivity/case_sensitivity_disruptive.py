@@ -1,9 +1,13 @@
 import os
 import random
 import string
-import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.exceptions import (
+    FileSystemFailOperationError,
+    FsBaseException,
+    log_and_fail,
+)
 from tests.cephfs.lib.cephfs_attributes_lib import CephFSAttributeUtilities
 from tests.cephfs.lib.cephfs_recovery_lib import FSRecovery
 from utility.log import Log
@@ -60,9 +64,11 @@ def run(ceph_cluster, **kw):
         attr_util.set_attributes(client1, parent_dir, normalization="nfkd")
 
         attr_util.create_directory(client1, child_dir)
-        assert attr_util.get_charmap(client1, child_dir).get("casesensitive") is False
-        assert attr_util.get_charmap(client1, child_dir).get("normalization") == "nfkd"
-        assert attr_util.get_charmap(client1, child_dir).get("encoding") == "utf8"
+        attr_util.validate_charmap(
+            client1,
+            child_dir,
+            {"casesensitive": False, "normalization": "nfkd", "encoding": "utf8"},
+        )
 
         log.info("Validating alternate name for %s", rel_child_dir)
         alter_dict = attr_util.fetch_alternate_name(client1, fs_name, "/")
@@ -90,9 +96,11 @@ def run(ceph_cluster, **kw):
             child_dir,
         )
 
-        assert attr_util.get_charmap(client1, child_dir).get("casesensitive") is False
-        assert attr_util.get_charmap(client1, child_dir).get("normalization") == "nfkd"
-        assert attr_util.get_charmap(client1, child_dir).get("encoding") == "utf8"
+        attr_util.validate_charmap(
+            client1,
+            child_dir,
+            {"casesensitive": False, "normalization": "nfkd", "encoding": "utf8"},
+        )
 
         log.info("Capture the mds states after rebooting")
         mds_info_after_for_fs1 = fs_util.get_mds_states_active_standby_replay(
@@ -127,9 +135,11 @@ def run(ceph_cluster, **kw):
             [client1], fuse_mounting_dir, extra_params=" --client_fs {}".format(fs_name)
         )
 
-        assert attr_util.get_charmap(client1, child_dir).get("casesensitive") is False
-        assert attr_util.get_charmap(client1, child_dir).get("normalization") == "nfkd"
-        assert attr_util.get_charmap(client1, child_dir).get("encoding") == "utf8"
+        attr_util.validate_charmap(
+            client1,
+            child_dir,
+            {"casesensitive": False, "normalization": "nfkd", "encoding": "utf8"},
+        )
 
         log.info("Passed: Attribute persisted after remount")
 
@@ -144,14 +154,17 @@ def run(ceph_cluster, **kw):
         child_dir_3 = os.path.join(parent_dir, "child_dir_step-3")
         attr_util.create_directory(client1, child_dir_3)
 
-        assert attr_util.get_charmap(client1, child_dir_3) == {
-            "casesensitive": False,
-            "normalization": "nfkd",
-            "encoding": "utf8",
-        }
+        attr_util.validate_charmap(
+            client1,
+            child_dir_3,
+            {"casesensitive": False, "normalization": "nfkd", "encoding": "utf8"},
+        )
 
         active_mds_ranks = fs_recovery.get_active_mds_ranks(client1, fs_name)
-        assert attr_util.fail_fs(client1, fs_name)
+        if not attr_util.fail_fs(client1, fs_name):
+            raise FileSystemFailOperationError(
+                "Failed to fail the file system {}".format(fs_name)
+            )
 
         mds_output = fs_util.get_mds_config(client1, fs_name)
         failed_found = False
@@ -168,21 +181,21 @@ def run(ceph_cluster, **kw):
 
         fs_util.wait_for_stable_fs(client1, False, 60)
 
-        assert attr_util.get_charmap(client1, child_dir_3) == {
-            "casesensitive": False,
-            "normalization": "nfkd",
-            "encoding": "utf8",
-        }
+        attr_util.validate_charmap(
+            client1,
+            child_dir_3,
+            {"casesensitive": False, "normalization": "nfkd", "encoding": "utf8"},
+        )
 
         attr_util.set_attributes(
             client1, child_dir_3, casesensitive=1, normalization="nfkc"
         )
 
-        assert attr_util.get_charmap(client1, child_dir_3) == {
-            "casesensitive": True,
-            "normalization": "nfkc",
-            "encoding": "utf8",
-        }
+        attr_util.validate_charmap(
+            client1,
+            child_dir_3,
+            {"casesensitive": True, "normalization": "nfkc", "encoding": "utf8"},
+        )
 
         log.info("Attribute persisted after remount")
 
@@ -191,10 +204,10 @@ def run(ceph_cluster, **kw):
         log.info("** Disruptive Case Sensitive use cases completed **")
         return 0
 
-    except Exception as e:
-        log.error("Test execution failed: {}".format(str(e)))
-        log.error(traceback.format_exc())
-        return 1
+    except FsBaseException as e:
+        return log_and_fail(
+            "FsBaseException occurred during case sensitivity disruptive test", e
+        )
 
     finally:
         log.info(

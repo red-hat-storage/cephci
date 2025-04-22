@@ -7,6 +7,7 @@ import string
 import unicodedata
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.exceptions import CharMapValidationError, UnsupportedInput
 from utility.log import Log
 
 log = Log(__name__)
@@ -43,7 +44,7 @@ class CephFSAttributeUtilities(object):
         supported_attributes = ["casesensitive", "normalization", "encoding"]
         for key, value in kwargs.items():
             if key not in supported_attributes:
-                raise ValueError(
+                raise UnsupportedInput(
                     "Unsupported attribute: {}. Supported attributes are {}".format(
                         key, supported_attributes
                     )
@@ -86,10 +87,37 @@ class CephFSAttributeUtilities(object):
                 return json.loads(charmap_str)
             else:
                 log.info("Failed to extract JSON from charmap output: {}".format(out))
-                raise ValueError("Invalid charmap output")
+                raise CharMapValidationError("Invalid charmap output")
         except Exception:
             log.error("Failed to parse charmap for '{}'".format(directory))
             return {}
+
+    def validate_charmap(self, client, dir, expected_values):
+        """
+        Validates that specific attributes in a charmap match expected values.
+
+        Parameters:
+            client (Any): The client object used to retrieve the charmap.
+            dir (str): The directory path to validate.
+            expected_values (dict): A dictionary of expected key-value pairs to check
+                                    in the charmap (e.g., {"encoding": "utf8"}).
+
+        Raises:
+            ValueError: If any expected value does not match the actual value in the charmap.
+
+        Returns:
+            bool: True if all expected values match.
+        """
+        charmap = self.get_charmap(client, dir)
+        for key, expected in expected_values.items():
+            actual = charmap.get(key)
+            if actual != expected:
+                raise CharMapValidationError(
+                    "{}: {} must be {}, got {}".format(
+                        dir, key, repr(expected), repr(actual)
+                    )
+                )
+        return True
 
     def compare_charmaps(self, client, charmap1, charmap2):
         """Compare two charmap dictionaries and return if they match.
@@ -355,7 +383,7 @@ class CephFSAttributeUtilities(object):
         supported_attributes = ["casesensitive", "normalization", "encoding", "charmap"]
         for attribute in attributes:
             if attribute not in supported_attributes:
-                raise ValueError(
+                raise UnsupportedInput(
                     "Unsupported attribute: {}. Supported attributes are {}".format(
                         attribute, supported_attributes
                     )

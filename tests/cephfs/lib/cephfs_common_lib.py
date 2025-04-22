@@ -12,6 +12,7 @@ import time
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.exceptions import UnsupportedFeature
 from tests.smb.smb_operations import (
     deploy_smb_service_imperative,
     smb_cifs_mount,
@@ -260,50 +261,43 @@ class CephFSCommonUtils(FsUtils):
             random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
         )
 
-    def setup_cephfs_mount(self, client, fs_name, mount_type, **kwargs):
+    def subvolume_get_path(self, client, fs_name, **kwargs):
         """
-        Set up a CephFS mount using the specified mount type.
+        Get the path of a subvolume.
 
         Args:
-            client: The client node where the CephFS will be mounted.
+            client: The client node where the subvolume is located.
             fs_name (str): The name of the Ceph file system.
-            mount_type (str): The type of mount. Options:
-                - "fuse": Mount using FUSE.
-                - "smb": Mount using SMB.
-                - "nfs": Mount using NFS.
-            **kwargs: Additional optional parameters based on mount type:
-
-                For "fuse":
-                    - subvolume_name (str, optional): Name of the subvolume.
-                    - subvolume_group (str, optional): Name of the subvolume group.
-
-                For "smb":
-                    - smb_subvolume_group (str, optional): SMB subvolume group. Default is "smb".
-                    - smb_subvolumes (list, optional): List of SMB subvolumes. Default is ["sv1"].
-                    - smb_subvolume_mode (str, optional): Subvolume mode. Default is "0777".
-                    - smb_cluster_id (str, optional): SMB cluster ID. Default is "smb1".
-                    - auth_mode (str, optional): Authentication mode. Default is "user".
-                    - domain_realm (str, optional): Kerberos domain realm (if applicable).
-                    - custom_dns (str, optional): Custom DNS for SMB.
-                    - smb_user_name (str, optional): SMB username. Default is "user1".
-                    - smb_user_password (str, optional): SMB user password. Default is "passwd".
-                    - smb_shares (list, optional): SMB shares to mount. Default is ["share1", "share2"].
-                    - path (str, optional): Path to mount the SMB share. Default is "/".
-                    - cifs_mount_point (str, optional): CIFS mount point. Default is "/mnt/smb".
-
-                For "nfs":
-                    - nfs_cluster_name (str, optional): NFS cluster name. Default is "nfs-cluster-1".
-                    - nfs_server_name (str, optional): NFS server name.
-                    - binding (str, optional): NFS export binding. Default is dynamically generated.
+            **kwargs: Optional parameters:
+                - subvolume_name (str): Name of the subvolume.
+                - subvolume_group (str): Name of the subvolume group.
 
         Returns:
-            str: The mount path if successful.
+            str: The path of the subvolume if successful.
             int: Returns 1 in case of a failure.
-
-        Raises:
-            ValueError: If an invalid mount type is provided.
         """
+        try:
+            cmd = f"ceph fs subvolume getpath {fs_name} {kwargs['subvolume_name']}"
+            if kwargs.get("subvolume_group"):
+                cmd += f" {kwargs['subvolume_group']}"
+            out, _ = client.exec_command(sudo=True, cmd=cmd)
+            return out.strip()
+        except CommandFailed as ex:
+            log.error("Failed to get subvolume path with error: %s", ex)
+            return 1
 
+    def setup_cephfs_mount(self, client, fs_name, mount_type, **kwargs):
+        """Set up a CephFS mount after creating the subvolume and subvolume group.
+        Args:
+            client: The client node where the mount will be set up.
+            fs_name (str): The name of the Ceph file system.
+            mount_type (str): The type of mount (e.g., 'fuse', 'smb', 'nfs').
+            **kwargs: Optional parameters for the mount.
+        Returns:
+            str: The path of the mount if successful.
+            int: Returns 1 in case of a failure.
+        """
+        log.info("Setting up cephfs mount for {}".format(mount_type))
         mounting_dir = self.generate_mount_dir()
         mount_path = f"/mnt/cephfs_{mount_type}_{mounting_dir}/"
 
@@ -317,111 +311,148 @@ class CephFSCommonUtils(FsUtils):
                 client, fs_name, subvolume_name, group_name=subvolume_group
             )
 
-            subvol_path, _ = client.exec_command(
-                sudo=True,
-                cmd="ceph fs subvolume getpath {} {} {}".format(
-                    fs_name, subvolume_name, subvolume_group or ""
-                ).strip(),
-            )
-            log.info(f"Sub volume path: {subvol_path.strip()}")
+            if subvolume_group:
+                subvol_path = self.subvolume_get_path(
+                    client,
+                    fs_name,
+                    subvolume_name=subvolume_name,
+                    subvolume_group=subvolume_group,
+                )
+            else:
+                subvol_path = self.subvolume_get_path(
+                    client, fs_name, subvolume_name=subvolume_name
+                )
+
+            kwargs.update({"subvol_path": subvol_path})
+        kwargs.update({"mount_path": mount_path})
 
         if mount_type == "fuse":
-            if subvolume_name:
-                self.fuse_mount(
-                    [client],
-                    mount_path,
-                    extra_params=f" --client_fs {fs_name} -r {subvol_path.strip()}",
-                )
-            else:
-                self.fuse_mount(
-                    [client], mount_path, extra_params=f" --client_fs {fs_name}"
-                )
-
+            return self.setup_fuse_mount(client, fs_name, **kwargs)
         elif mount_type == "smb":
-            smb_subvol_group = kwargs.get("smb_subvolume_group", "smb")
-            smb_subvols = kwargs.get("smb_subvolumes", ["sv1"])
-            smb_subvolume_mode = kwargs.get("smb_subvolume_mode", "0777")
-            smb_cluster_id = kwargs.get("smb_cluster_id", "smb1")
-            auth_mode = kwargs.get("auth_mode", "user")
-            domain_realm = kwargs.get("domain_realm", None)
-            custom_dns = kwargs.get("custom_dns", None)
-            smb_user_name = kwargs.get("smb_user_name", "user1")
-            smb_user_password = kwargs.get("smb_user_password", "passwd")
-            smb_shares = kwargs.get("smb_shares", ["share1", "share2"])
-            path = kwargs.get("path", "/")
-            installer = self.ceph_cluster.get_nodes(role="installer")[0]
-            smb_nodes = self.ceph_cluster.get_nodes("smb")
-            client = self.ceph_cluster.get_nodes(role="client")[0]
-            mount_path = kwargs.get("cifs_mount_point", "/mnt/smb")
-
-            try:
-                # deploy smb services
-                deploy_smb_service_imperative(
-                    installer,
-                    fs_name,
-                    smb_subvol_group,
-                    smb_subvols,
-                    smb_subvolume_mode,
-                    smb_cluster_id,
-                    auth_mode,
-                    smb_user_name,
-                    smb_user_password,
-                    smb_shares,
-                    path,
-                    domain_realm,
-                    custom_dns,
-                )
-
-                # Check smb share using smbclient
-                smbclient_check_shares(
-                    smb_nodes,
-                    client,
-                    smb_shares,
-                    smb_user_name,
-                    smb_user_password,
-                    auth_mode,
-                    domain_realm,
-                )
-
-                # Mount smb share with cifs
-                smb_cifs_mount(
-                    smb_nodes[0],
-                    client,
-                    smb_shares[0],
-                    smb_user_name,
-                    smb_user_password,
-                    auth_mode,
-                    domain_realm,
-                    mount_path,
-                )
-
-            except Exception as e:
-                log.error("failed to setup smb with error: {}".format(e))
-                return 1
-
+            return self.setup_smb_mount(client, fs_name, **kwargs)
         elif mount_type == "nfs":
-            nfs_cluster_name = kwargs.get("nfs_cluster_name", "nfs-cluster-1")
-            nfs_server_name = kwargs.get("nfs_server_name", None)
-            binding = kwargs.get(
-                "binding",
-                "/export_" + "".join(secrets.choice(string.digits) for i in range(3)),
+            return self.setup_nfs_mount(client, fs_name, **kwargs)
+        else:
+            raise UnsupportedFeature(
+                "Invalid mount type. Choose from 'fuse', 'smb', or 'nfs'."
             )
 
-            self.create_nfs(client, nfs_cluster_name, nfs_server_name=nfs_server_name)
+    def setup_fuse_mount(self, client, fs_name, **kwargs):
+        """Set up a FUSE mount for a CephFS file system.
+        Args:
+            client: The client node where the mount will be set up.
+            fs_name (str): The name of the Ceph file system.
+            **kwargs: Optional parameters for the mount.
+        Returns:
+            str: The path of the mount if successful.
+            int: Returns 1 in case of a failure.
+        """
+        log.info("Setting up fuse mount")
+        for key, value in kwargs.items():
+            log.info(f"{key} = {value}")
+        mount_path = kwargs.get("mount_path")
+        subvolume_name = kwargs.get("subvolume_name")
+        subvol_path = kwargs.get("subvol_path")
 
-            if subvolume_name:
-                export_path = f"{subvol_path}"
-                self.create_nfs_export(
-                    client, nfs_cluster_name, binding, fs_name, path=export_path
-                )
-            else:
-                self.create_nfs_export(client, nfs_cluster_name, binding, fs_name)
-            rc = self.cephfs_nfs_mount(client, nfs_server_name, binding, mount_path)
-            if not rc:
-                log.error("cephfs nfs export mount failed")
-                return 1
-
+        if subvolume_name:
+            extra_params = f" --client_fs {fs_name} -r {subvol_path.strip()}"
         else:
-            raise ValueError("Invalid mount type. Choose from 'fuse', 'smb', or 'nfs'.")
+            extra_params = f" --client_fs {fs_name}"
+
+        self.fuse_mount([client], mount_path, extra_params=extra_params)
+        return mount_path
+
+    def setup_smb_mount(self, client, fs_name, **kwargs):
+        """Set up an SMB mount for a CephFS file system.
+        Args:
+            client: The client node where the mount will be set up.
+            fs_name (str): The name of the Ceph file system.
+            **kwargs: Optional parameters for the mount.
+        Returns:
+            str: The path of the mount if successful.
+            int: Returns 1 in case of a failure.
+        """
+        log.info("Setting up smb mount")
+        mount_path = kwargs.get("mount_path")
+        smb_nodes = self.ceph_cluster.get_nodes("smb")
+        installer = self.ceph_cluster.get_nodes(role="installer")[0]
+
+        try:
+            deploy_smb_service_imperative(
+                kwargs.get("installer", installer),
+                fs_name,
+                kwargs.get("subvolume_group", "smb"),
+                kwargs.get("subvolume_name", ["sv1"]),
+                kwargs.get("smb_subvolume_mode", "0777"),
+                kwargs.get("smb_cluster_id", "smb1"),
+                kwargs.get("auth_mode", "user"),
+                kwargs.get("smb_user_name", "user1"),
+                kwargs.get("smb_user_password", "passwd"),
+                kwargs.get("smb_shares", ["share1", "share2"]),
+                kwargs.get("path", "/"),
+                kwargs.get("domain_realm"),
+                kwargs.get("custom_dns"),
+            )
+
+            smbclient_check_shares(
+                smb_nodes,
+                client,
+                kwargs.get("smb_shares", ["share1", "share2"]),
+                kwargs.get("smb_user_name", "user1"),
+                kwargs.get("smb_user_password", "passwd"),
+                kwargs.get("auth_mode", "user"),
+                kwargs.get("domain_realm"),
+            )
+
+            smb_cifs_mount(
+                smb_nodes[0],
+                client,
+                kwargs.get("smb_shares", ["share1", "share2"])[0],
+                kwargs.get("smb_user_name", "user1"),
+                kwargs.get("smb_user_password", "passwd"),
+                kwargs.get("auth_mode", "user"),
+                kwargs.get("domain_realm"),
+                mount_path,
+            )
+        except Exception as e:
+            log.error("failed to setup smb with error: {}".format(e))
+            return 1
+
+        return mount_path
+
+    def setup_nfs_mount(self, client, fs_name, **kwargs):
+        """Set up an NFS mount for a CephFS file system.
+        Args:
+            client: The client node where the mount will be set up.
+            fs_name (str): The name of the Ceph file system.
+            **kwargs: Optional parameters for the mount.
+        Returns:
+            str: The path of the mount if successful.
+            int: Returns 1 in case of a failure.
+        """
+        log.info("Setting up nfs mount")
+        mount_path = kwargs.get("mount_path")
+        subvol_path = kwargs.get("subvol_path")
+        cluster = kwargs.get("nfs_cluster_name", "nfs-cluster-1")
+        server = kwargs.get("nfs_server_name")
+        binding = kwargs.get(
+            "binding",
+            "/export_" + "".join(secrets.choice(string.digits) for _ in range(3)),
+        )
+
+        self.create_nfs(client, cluster, nfs_server_name=server)
+
+        subvolume_name = kwargs.get("subvolume_name")
+        if subvolume_name:
+            self.create_nfs_export(
+                client, cluster, binding, fs_name, path=subvol_path.strip()
+            )
+        else:
+            self.create_nfs_export(client, cluster, binding, fs_name)
+
+        rc = self.cephfs_nfs_mount(client, server, binding, mount_path)
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
 
         return mount_path
