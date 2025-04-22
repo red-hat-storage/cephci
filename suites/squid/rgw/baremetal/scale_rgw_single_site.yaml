@@ -4,11 +4,19 @@
 # - The cluster health is good
 # - End users can perform object operations.
 
-# tested with conf file: conf/baremetal/mero1_1admin_4node_4client.yaml
+# tested with conf file: conf/baremetal/mero2_1admin_4node_4client.yaml
 
 tests:
 
   # Testing stage
+  - test:
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+      desc: Test object operations with swift
+      module: sanity_rgw.py
+      name: Swift based tests
+      polarion-id: CEPH-11019
 
   - test:
       name: Parallel run
@@ -19,9 +27,6 @@ tests:
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects.yaml
-              timeout: 300
-              install_common: false
-              run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects
             module: sanity_rgw.py
             name: Test M buckets with N objects
@@ -31,9 +36,6 @@ tests:
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
-              timeout: 300
-              install_common: false
-              run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects with delete
             module: sanity_rgw.py
             name: Test delete using M buckets with N objects
@@ -43,8 +45,6 @@ tests:
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-              timeout: 300
-              install_common: false
               run-on-haproxy: true
             desc: test to create "M" no of buckets and "N" no of objects with download
             module: sanity_rgw.py
@@ -55,34 +55,19 @@ tests:
             config:
               script-name: test_Mbuckets_with_Nobjects.py
               config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-              timeout: 300
-              install_common: false
-              run-on-rgw: true
             desc: test to create "M" no of buckets and "N" no of objects with multipart upload
             module: sanity_rgw.py
             name: Test multipart upload of M buckets with N objects
             polarion-id: CEPH-9801
 
-        - test:
-            config:
-              script-name: test_swift_basic_ops.py
-              config-file-name: test_swift_basic_ops.yaml
-              timeout: 300
-              install_common: false
-              run-on-rgw: true
-            desc: Test object operations with swift
-            module: sanity_rgw.py
-            name: Swift based tests
-            polarion-id: CEPH-11019
-
   - test:
       config:
         controllers:
-          - node6
+          - node3
         drivers:
-          - node5
-          - node6
-        fill_percent: 20
+          - node3
+          - node4
+        fill_percent: 5
         bucket_prefix: test-bkt-
       desc: prepare and push cosbench fill workload
       module: push_cosbench_workload.py
@@ -92,13 +77,14 @@ tests:
   - test:
       config:
         controllers:
-          - node6
+          - node3
         drivers:
-          - node5
-          - node6
-        fill_percent: 20
+          - node3
+          - node4
+        fill_percent: 5
         workload_type: hybrid
         bucket_prefix: test-bkt-
+        object_prefix: hybrid-
         run_time: 600 # value in seconds
       desc: initiate cosbench hybrid workload
       module: push_cosbench_workload.py
@@ -114,6 +100,7 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_disable_and_enable_dynamic_resharding_with_10k_bucket.yaml
         timeout: 9000
+
   - test:
       name: Test bucket listing not cause abnormal client IO
       desc: Test bucket listing not cause abnormal client IO
@@ -122,16 +109,15 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_fake_mp.yaml
-      comments: Bug 2329090
 
   - test:
       abort-on-fail: true
       config:
         controllers:
-          - node6
+          - node3
         drivers:
-          - node5
-          - node6
+          - node3
+          - node4
         number_of_buckets: 1
         bucket_prefix: test-bucket-
         number_of_objects: 500000
@@ -177,10 +163,10 @@ tests:
   - test:
       config:
         controllers:
-          - node6
+          - node3
         drivers:
-          - node5
-          - node6
+          - node3
+          - node4
         workload_type: cleanup
         number_of_buckets: 1
         bucket_prefix: test-bucket-
@@ -213,12 +199,12 @@ tests:
             polarion-id: CEPH-83574428
             config:
               controllers:
-                - node6
+                - node3
               drivers:
                 count: 2
                 hosts:
-                  - node5
-                  - node6
+                  - node3
+                  - node4
               bucket_prefix: cosbench01-lc-bkt-
               number_of_buckets: 2
               number_of_objects: 300000 # 300K objects per each bucket
