@@ -366,3 +366,12 @@ tests:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_public_access_block_restricted_public_buckets.yaml
       comments: known issue - Bug 2344730
+
+  - test:
+      name: test_bi_purge for a bucket
+      desc: test bi_purge should not error
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575234
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_bi_purge.yaml

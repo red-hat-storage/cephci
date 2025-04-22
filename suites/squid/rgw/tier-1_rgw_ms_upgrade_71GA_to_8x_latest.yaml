@@ -445,7 +445,6 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-pri"]
             config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            run-on-haproxy: true
 
   - test:
       clusters:
