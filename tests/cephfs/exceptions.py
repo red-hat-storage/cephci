@@ -71,6 +71,12 @@ class UnsupportedInput(FsBaseException):
     pass
 
 
+class FileSystemFailOperationError(FsBaseException):
+    """Raised when a file system operation fails."""
+
+    pass
+
+
 # --------------------------------------
 # 3. Mount Operations
 # --------------------------------------
