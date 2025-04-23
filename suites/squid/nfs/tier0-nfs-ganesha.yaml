@@ -131,7 +131,7 @@ tests:
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
       module: test_client.py
-      name: configure client
+      name: configure clients
 
   - test:
       name: Nfs Ganesha File Lock
@@ -402,3 +402,48 @@ tests:
             max_client_read_bw: 8MB
         qos_type: PerShare
         operation: restart
+
+
+  - test:
+      name: Qos enablement PerShare on export level with nfs service with dynamic update
+      module: test_nfs_qos_on_export_level_enablement.py
+      desc: Verify qos Pershare enablement on export level dynamic update
+      polarion-id: CEPH-83615833
+      abort-on-fail: false
+      config:
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        cluster_bw:
+          - max_export_write_bw: 100MB
+            max_export_read_bw: 100MB
+            max_client_write_bw: 100MB
+            max_client_read_bw: 100MB
+        export_bw:
+          - max_export_write_bw: 8MB
+            max_export_read_bw: 8MB
+            max_client_write_bw: 8MB
+            max_client_read_bw: 8MB
+        qos_type: PerShare
+        operation: dynamic_update
+
+  - test:
+      name: Qos enablement PerShare_PerClient on export level with nfs service with dynamic update
+      module: test_nfs_qos_on_export_level_enablement.py
+      desc: Verify qos PerShare_PerClient enablement on export level dynamic update
+      polarion-id: CEPH-83615834
+      abort-on-fail: false
+      config:
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        cluster_bw:
+          - max_export_write_bw: 100MB
+            max_export_read_bw: 100MB
+            max_client_write_bw: 100MB
+            max_client_read_bw: 100MB
+        export_bw:
+          - max_export_write_bw: 8MB
+            max_export_read_bw: 8MB
+            max_client_write_bw: 8MB
+            max_client_read_bw: 8MB
+        qos_type: PerShare_PerClient
+        operation: dynamic_update

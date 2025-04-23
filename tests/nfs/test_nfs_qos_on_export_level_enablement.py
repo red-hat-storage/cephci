@@ -70,6 +70,28 @@ def enable_disable_qos_for_export(
         )
 
 
+def verify_bw_speed(client, nfs_mount, qos_type, export_bw):
+    speed = capture_copy_details(client, nfs_mount, "sample.txt")
+    log.info(
+        "Transfer speed is {0} for QoS {1} enabled in export level".format(
+            speed, qos_type
+        )
+    )
+    if float(re.findall(r"\d+", export_bw["max_export_write_bw"])[0]) >= float(
+        re.findall(r"\d+\.\d+", speed)[0]
+    ):
+        log.info(
+            "Test passed: QoS {0} enabled successfully in export level transfer speed is {1}"
+            " and max_export_write_bw is {2}".format(
+                qos_type, speed, export_bw["max_export_write_bw"]
+            )
+        )
+    else:
+        raise OperationFailedError(
+            "Test failed: QoS {0} enabled successfully in export level".format(qos_type)
+        )
+
+
 def run(ceph_cluster, **kw):
     """Verify QoS operations on NFS cluster"""
     config = kw.get("config")
@@ -200,29 +222,39 @@ def run(ceph_cluster, **kw):
                     )
                 )
 
-        speed = capture_copy_details(client, nfs_mount, "sample.txt")
-        log.info(
-            "Transfer speed is {0} for QoS {1} enabled in export level".format(
-                speed, qos_type
-            )
-        )
+        verify_bw_speed(client, nfs_mount, qos_type, export_bw)
 
-        if float(re.findall(r"\d+", export_bw["max_export_write_bw"])[0]) >= float(
-            re.findall(r"\d+\.\d+", speed)[0]
-        ):
-            log.info(
-                "Test passed: QoS {0} enabled successfully in export level transfer speed is {1}"
-                " and max_export_write_bw is {2}".format(
-                    qos_type, speed, export_bw["max_export_write_bw"]
-                )
-            )
-        else:
-            raise OperationFailedError(
-                "Test failed: QoS {0} enabled successfully in export level".format(
-                    qos_type
-                )
+        if operation == "dynamic_update":
+            # Update the qos parameters
+            export_bw = {
+                "max_client_read_bw": "6MB",
+                "max_client_write_bw": "6MB",
+                "max_export_read_bw": "6MB",
+                "max_export_write_bw": "6MB",
+            }
+
+            enable_disable_qos_for_export(
+                enable_flag=True,
+                ceph_export_nfs_obj=ceph_nfs_client.export,
+                cluster_name=cluster_name,
+                qos_type=qos_type,
+                nfs_name=nfs_name,
+                export=nfs_export,
+                **{
+                    k: export_bw[k]
+                    for k in [
+                        "max_export_write_bw",
+                        "max_export_read_bw",
+                        "max_client_write_bw",
+                        "max_client_read_bw",
+                    ]
+                    if k in export_bw
+                },
             )
 
+        verify_bw_speed(client, nfs_mount, qos_type, export_bw)
+
+        # Disable QoS for export
         enable_disable_qos_for_export(
             enable_flag=False,
             nfs_name=nfs_name,
