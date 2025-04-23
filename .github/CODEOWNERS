@@ -25,6 +25,7 @@ utility/generate_frag_objs.py	             @neha-gangadhar @pdhiran
 
 # for FS
 cephfs/             @neha-gangadhar @AmarnatReddy @Manimaran-MM
+cli/ceph/fs/        @neha-gangadhar @AmarnatReddy @Manimaran-MM
 
 # smb
 smb/                @vdas-redhat @pranavprakash20
