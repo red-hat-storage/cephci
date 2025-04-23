@@ -91,8 +91,23 @@ tests:
   - test:
       abort-on-fail: true
       config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
         haproxy_clients:
-          - node5
+          - node6
         rgw_endpoints:
           - node5:80
       desc: "Configure HAproxy"
