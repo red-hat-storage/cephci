@@ -328,12 +328,16 @@ class ServiceabilityMethods:
         # Starting to drain a host.
         log.info("Starting to drain host: " + host_obj.hostname)
         cmd = f"ceph orch host drain {host_obj.hostname} --force"
-
         if zap:
             if self.rhbuild.split(".")[0] > "6":
                 cmd = cmd + " --zap-osd-devices"
             else:
-                self.remove_osds_from_host(host_obj=host_obj)
+                rm_osd_list = self.rados_obj.collect_osd_daemon_ids(osd_node=host_obj)
+                dev_path_list = []
+                for osd_id in rm_osd_list:
+                    dev_path_list.append(
+                        rados_utils.get_device_path(host=host_obj, osd_id=osd_id)
+                    )
         if keep_conf:
             cmd = cmd + " --keep-conf-keyring"
 
@@ -377,6 +381,16 @@ class ServiceabilityMethods:
             except json.JSONDecodeError:
                 log.info("Drain operations completed on host : " + host_obj.hostname)
                 break
+
+        if self.rhbuild.split(".")[0] < "7":
+            # zap all devices on the removed host
+            # because we are not zapping OSD devices
+            # with host drain
+
+            for dev_path in dev_path_list:
+                assert osd_utils.zap_device(
+                    self.cluster, host=host_obj.hostname, device_path=dev_path
+                )
 
         # remove recovery thread settings
         self.rados_obj.change_recovery_threads(config={}, action="rm")

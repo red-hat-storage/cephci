@@ -161,7 +161,7 @@ tests:
         debug_enable: False
         delete_pool:
           - ecpool
-      comments:  Active bug 2277111
+      comments:  Intermittent active bug 2277111
 
   - test:
       name: Inconsistent objects in replicated pool functionality check
@@ -178,7 +178,7 @@ tests:
         debug_enable: False
         delete_pool:
           - replicated_pool
-      comments: Active bug 2316244
+      comments: Active bug 2362650
 
   - test:
       name: Verification of ceph config show & get
