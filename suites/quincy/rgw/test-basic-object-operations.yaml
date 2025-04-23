@@ -91,61 +91,47 @@ tests:
   # Testing stage
 
   - test:
-      name: Parallel run
-      desc: RGW tier-0 parallelly.
-      module: test_parallel.py
-      parallel:
-        - test:
-            config:
-              script-name: test_Mbuckets_with_Nobjects.py
-              config-file-name: test_Mbuckets_with_Nobjects.yaml
-              install_common: false
-              run-on-rgw: true
-            desc: test to create "M" no of buckets and "N" no of objects
-            module: sanity_rgw.py
-            name: Test M buckets with N objects
-            polarion-id: CEPH-9789
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
+      desc: test to create "M" no of buckets and "N" no of objects
+      module: sanity_rgw.py
+      name: Test M buckets with N objects
+      polarion-id: CEPH-9789
 
-        - test:
-            config:
-              script-name: test_Mbuckets_with_Nobjects.py
-              config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
-              install_common: false
-              run-on-rgw: true
-            desc: test to create "M" no of buckets and "N" no of objects with delete
-            module: sanity_rgw.py
-            name: Test delete using M buckets with N objects
-            polarion-id: CEPH-14237
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
+      desc: test to create "M" no of buckets and "N" no of objects with delete
+      module: sanity_rgw.py
+      name: Test delete using M buckets with N objects
+      polarion-id: CEPH-14237
 
-        - test:
-            config:
-              script-name: test_Mbuckets_with_Nobjects.py
-              config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-              install_common: false
-              run-on-haproxy: true
-            desc: test to create "M" no of buckets and "N" no of objects with download
-            module: sanity_rgw.py
-            name: Test download with M buckets with N objects
-            polarion-id: CEPH-14237
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+        run-on-haproxy: true
+      desc: test to create "M" no of buckets and "N" no of objects with download
+      module: sanity_rgw.py
+      name: Test download with M buckets with N objects
+      polarion-id: CEPH-14237
 
-        - test:
-            config:
-              script-name: test_Mbuckets_with_Nobjects.py
-              config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
-              install_common: false
-              run-on-rgw: true
-            desc: test to create "M" no of buckets and "N" no of objects with multipart upload
-            module: sanity_rgw.py
-            name: Test multipart upload of M buckets with N objects
-            polarion-id: CEPH-9801
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+      desc: test to create "M" no of buckets and "N" no of objects with multipart upload
+      module: sanity_rgw.py
+      name: Test multipart upload of M buckets with N objects
+      polarion-id: CEPH-9801
 
-        - test:
-            config:
-              script-name: test_swift_basic_ops.py
-              config-file-name: test_swift_basic_ops.yaml
-              install_common: false
-              run-on-rgw: true
-            desc: Test object operations with swift
-            module: sanity_rgw.py
-            name: Swift based tests
-            polarion-id: CEPH-11019
+  - test:
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_basic_ops.yaml
+      desc: Test object operations with swift
+      module: sanity_rgw.py
+      name: Swift based tests
+      polarion-id: CEPH-11019
