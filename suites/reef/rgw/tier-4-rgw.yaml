@@ -92,7 +92,7 @@ tests:
       abort-on-fail: true
       config:
         haproxy_clients:
-          - node5
+          - node6
         rgw_endpoints:
           - node5:80
       desc: "Configure HAproxy"
