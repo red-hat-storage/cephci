@@ -25,10 +25,10 @@ def run(ceph_cluster, **kw):
     2. Check the default value of osd config parameter 'osd_max_pg_log_entries'
         should default to 10K
     3. Set the OSD level flag 'pglog_hardlimit'
-    4. Set OSD config parameter 'osd_pg_max_log_entries' to 2000
-    5. Trigger sequential I/Os followed by OSD restart until PG log size reaches 2000
+    4. Set OSD config parameter 'osd_pg_max_log_entries' to 1800
+    5. Trigger sequential I/Os followed by OSD restart until PG log size reaches 2100
     6. Trigger background IOPS on the created pool and monitor PG log size growth and trimming
-    7. Ensure pg log does not increase beyond value set in 'osd_max_pg_log_entries', i.e. 2000
+    7. Ensure pg log does not increase beyond value set in 'osd_max_pg_log_entries', i.e. 1800
     """
     log.info(run.__doc__)
     config = kw["config"]
@@ -72,32 +72,32 @@ def run(ceph_cluster, **kw):
         while datetime.datetime.now() < endtime:
             curr_pg_query = rados_obj.run_ceph_command(cmd=f"ceph pg {pg_id} query")
             curr_log_size = curr_pg_query["info"]["stats"]["log_size"]
-            if int(curr_log_size) >= 2200:
+            if int(curr_log_size) >= 2100:
                 log.info(
-                    f"PG log size is now greater than or equal to 2200: {curr_log_size}"
+                    f"PG log size is now greater than or equal to 2100: {curr_log_size}"
                 )
                 log.info("Fetching machine time to determine OSD log start time")
                 init_time, _ = osd_host.exec_command(
                     cmd="date '+%Y-%m-%d %H:%M:%S'", sudo=True
                 )
                 break
-            log.info(f"PG log is increasing but currently below 2200: {curr_log_size}")
+            log.info(f"PG log is increasing but currently below 2100: {curr_log_size}")
             log.info("Triggering bench IOPS for 90 secs followed by recovery")
             rados_obj.bench_write(**fore_bench_cfg)
             rados_obj.change_osd_state(action="restart", target=primary_osd)
         else:
-            log.error("PG logs could not increase beyond 2200 within timeout 1800 secs")
+            log.error("PG logs could not increase beyond 2100 within timeout 1800 secs")
             raise Exception("PG logs could not increase beyond 2200 within timeout.")
 
         # set pglog_hardlimit flag and 2000 value for 'osd_max_pg_log_entries'
         out, _ = cephadm.shell(args=["ceph osd set pglog_hardlimit"])
         assert mon_obj.set_config(
-            section="osd", name="osd_max_pg_log_entries", value="2000"
+            section="osd", name="osd_max_pg_log_entries", value="1800"
         )
         time.sleep(5)
 
         """ Now that PG log count has reached 2K, we trigger background IOPS for a
-        duration of 120 secs and observe the trimming of these log beyond 2000."""
+        duration of 120 secs and observe the trimming of these log beyond 1800."""
         # initiate background iops on the pool
         back_bench_cfg = {
             "pool_name": _pool_name,
@@ -114,13 +114,13 @@ def run(ceph_cluster, **kw):
             curr_log_size = curr_pg_query["info"]["stats"]["log_size"]
             # Trimming of pg log is not absolute and immediate, therefore
             # to avoid false failures, a margin of 150 has been provided on top
-            # of set limit of 2000. PG log growth beyond 2100 would suggest
+            # of set limit of 1800. PG log growth beyond 1950 would suggest
             # irregular trimming.
-            if int(curr_log_size) >= 2100:
+            if int(curr_log_size) >= 1950:
                 error_msg = (
                     f"Excepted trimming of PG log did not take place."
                     f"\n Current value of PG log: {curr_log_size}, ideally should"
-                    f"have been below 2100."
+                    f"have been below 1950."
                 )
                 log.error(error_msg)
                 raise Exception(error_msg)
@@ -140,6 +140,11 @@ def run(ceph_cluster, **kw):
                 pg_trim_log_list.append(line)
 
         pg_trim_log = "\n".join(pg_trim_log_list)
+        if "calc_trim_to_aggressive" not in pg_trim_log:
+            log.error("Expected PG trimming log line not found in journalctl logs")
+            raise Exception(
+                "Expected PG trimming log line not found in journalctl logs"
+            )
         log.info(
             f"\n ==========================================================================="
             f"\n PG log trimming entries in OSD.{primary_osd} log: \n {pg_trim_log}"
