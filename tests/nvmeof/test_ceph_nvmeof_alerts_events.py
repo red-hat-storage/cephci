@@ -580,12 +580,110 @@ def test_ceph_83611099(ceph_cluster, config):
     LOG.info("CEPH-83611099 - NVMeoFSingleGateway validated successfully.")
 
 
+def test_ceph_83611306(ceph_cluster, config):
+    """[CEPH-83611306] Raise a Healthcheck warning for gateway in DELETING state
+
+    This test case validates the warning which would be get hit on any gateway in deleting state
+    and Raise a healthcheck warning under ceph status and ceph health.
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        config: test case config
+    """
+    rbd_pool = config["rbd_pool"]
+    LOG.info("Deploy NVME service")
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+
+    with parallel() as p:
+        for subsys_args in config["subsystems"]:
+            subsys_args["ceph_cluster"] = ceph_cluster
+            p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+
+    # Validate the Health warning states
+    @retry(ValueError, tries=10, delay=60)
+    def check_warning_status(alert=True):
+        health, _ = ha.orch.shell(args=["ceph", "health", "detail", "--format", "json"])
+        health = loads(health)
+
+        if not alert:
+            if "NVMEOF_GATEWAY_DELETING" not in health["checks"]:
+                LOG.info(
+                    f"NVMEOF_GATEWAY_DELETING health check warning alerted disappeared - {health}."
+                )
+                return True
+            raise ValueError(
+                f"NVMEOF_GATEWAY_DELETING warning still appears!!! - {health}"
+            )
+
+        if alert and "NVMEOF_GATEWAY_DELETING" in health["checks"]:
+            nvme_gw_deleting = health["checks"]["NVMEOF_GATEWAY_DELETING"]
+            if HEALTH_CHECK_WARN == nvme_gw_deleting:
+                LOG.info(
+                    f"NVMEOF_GATEWAY_DELETING health check warning alerted SUCCESSFULLY - {nvme_gw_deleting}."
+                )
+                return True
+            raise ValueError(
+                f"NVMEOF_GATEWAY_DELETING is alerted, but different messages - {nvme_gw_deleting}"
+            )
+        raise ValueError(
+            f"NVMEOF_GATEWAY_DELETING health warning not alerted - {health}."
+        )
+
+    # This test case can be tested by reducing the below parameter
+    # ceph config set mon mon_nvmeofgw_delete_grace 5
+    LOG.info("Set mon_nvmeofgw_delete_grace to 5 seconds")
+    output, _ = ha.orch.shell(
+        args=["ceph", "config", "set", "mon", "mon_nvmeofgw_delete_grace", "5"]
+    )
+    LOG.info("Check mon_nvmeofgw_delete_grace is set to 5 seconds")
+    get_val, _ = ha.orch.shell(
+        args=["ceph", "config", "get", "mon", "mon_nvmeofgw_delete_grace"]
+    )
+    if int(get_val.strip()) != 5:
+        raise Exception("Failed to set mon_nvmeofgw_delete_grace value to 5 seconds..")
+    # Scale down
+    LOG.info("Scale down and check for NVMEOF_GATEWAY_DELETING warn message")
+    fail_gw = ha.gateways[0]
+    deleting_gw_daemon = ha.gateways[1].daemon_name
+    config.update({"gw_nodes": [fail_gw.node.id]})
+    deploy_nvme_service(ceph_cluster, config)
+    HEALTH_CHECK_WARN = {
+        "severity": "HEALTH_WARN",
+        "summary": {
+            "message": "1 gateway(s) are in deleting state; namespaces are automatically "
+            "balanced across remaining gateways, this should take a few minutes.",
+            "count": 1,
+        },
+        "detail": [
+            {
+                "message": f"NVMeoF Gateway 'client.{deleting_gw_daemon}' is in deleting state."
+            }
+        ],
+        "muted": False,
+    }
+
+    LOG.info("check for NVMEOF_GATEWAY_DELETING message")
+    # Check the warning status
+    check_warning_status(alert=True)
+    # Once autoload balancing happens, automatically warning should disappear
+    LOG.info(
+        "Once autoload balancing completes, NVMEOF_GATEWAY_DELETING should disappeared so check the same"
+    )
+    check_warning_status(alert=False)
+
+    LOG.info(
+        "CEPH-83611306 - Healthcheck warning for gateway in DELETING state validated successfully"
+    )
+
+
 testcases = {
     "CEPH-83610948": test_ceph_83610948,
     "CEPH-83610950": test_ceph_83610950,
     "CEPH-83611097": test_ceph_83611097,
     "CEPH-83611098": test_ceph_83611098,
     "CEPH-83611099": test_ceph_83611099,
+    "CEPH-83611306": test_ceph_83611306,
 }
 
 

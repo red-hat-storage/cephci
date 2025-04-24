@@ -180,3 +180,44 @@ tests:
       module: test_ceph_nvmeof_alerts_events.py
       name: Validate Warning message or Status on NVMe Service with single Gateway Node.
       polarion-id: CEPH-83611099
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node5
+          - node6
+        rbd_pool: nvme_of_pool
+        gw_group: gw_group1
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            max_ns: 1024
+            bdevs:
+            - count: 512
+              size: 1G
+              lb_group: node5
+            listener_port: 4420
+            listeners:
+              - node5
+              - node6
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            max_ns: 1024
+            bdevs:
+            - count: 512
+              size: 1G
+              lb_group: node6
+            listener_port: 4420
+            listeners:
+              - node5
+              - node6
+            allow_host: "*"
+        test_case: CEPH-83611306
+        cleanup:
+          - pool
+          - gateway
+      desc: Gateway in DELETING state via healthcheck warning
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate Gateway in DELETING state healthcheck warning
+      polarion-id: CEPH-83611306
