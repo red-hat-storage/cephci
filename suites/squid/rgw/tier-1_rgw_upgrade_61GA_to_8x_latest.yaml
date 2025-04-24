@@ -56,8 +56,6 @@ tests:
                   label: rgw
                   nodes:
                     - node3
-                    - node4
-                    - node5
       desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
       destroy-cluster: false
