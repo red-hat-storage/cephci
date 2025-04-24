@@ -56,6 +56,8 @@ tests:
                   label: rgw
                   nodes:
                     - node3
+                    - node4
+                    - node5
       desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
       destroy-cluster: false
@@ -89,17 +91,6 @@ tests:
               - node3:80
               - node4:80
               - node5:80
-      desc: "Configure HAproxy"
-      module: haproxy.py
-      name: "Configure HAproxy"
-
-  - test:
-      abort-on-fail: true
-      config:
-        haproxy_clients:
-          - node6
-        rgw_endpoints:
-          - node5:80
       desc: "Configure HAproxy"
       module: haproxy.py
       name: "Configure HAproxy"
