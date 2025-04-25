@@ -136,10 +136,9 @@ tests:
       polarion-id: CEPH-83611928
       desc: Test fs attributes for disruptive use case
       abort-on-fail: false
-
   - test:
       name: test cephfs attributes - subvolume
       module: cephfs_case_sensitivity.case_sensitivity_subvolume.py
-      polarion-id: CEPH-83606639
+      polarion-id: CEPH-83617010
       desc: Test fs attributes for functional use case
       abort-on-fail: false
