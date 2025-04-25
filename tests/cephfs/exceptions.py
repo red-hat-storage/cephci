@@ -14,6 +14,7 @@ Generic Exception Handler
 7. Attribute & CharMap Errors
 8. File Operations on Mounts
 9. Snapshot Operations
+10. Subvolume Group Operations
 """
 
 import logging
@@ -107,6 +108,18 @@ class SubvolumeError(FsBaseException):
     pass
 
 
+class SubvolumeCreateError(SubvolumeError):
+    """Raised when subvolume set operation fails."""
+
+    pass
+
+
+class SubvolumeGetError(SubvolumeError):
+    """Raised when subvolume deletion fails."""
+
+    pass
+
+
 class SubvolumeDeleteError(SubvolumeError):
     """Raised when subvolume deletion fails."""
 
@@ -152,6 +165,12 @@ class VolumeAlreadyExists(VolumeError):
     pass
 
 
+class VolumeRenameError(VolumeError):
+    """Raised when renaming a volume fails."""
+
+    pass
+
+
 # --------------------------------------
 # 6. Quota Operations
 # --------------------------------------
@@ -174,6 +193,24 @@ class QuotaGetError(QuotaError):
 
 class CharMapValidationError(FsBaseException):
     """Raised when a charmap validation operation fails."""
+
+    pass
+
+
+class CharMapSetError(CharMapValidationError):
+    """Raised when setting a charmap fails."""
+
+    pass
+
+
+class CharMapGetError(CharMapValidationError):
+    """Raised when getting a charmap fails."""
+
+    pass
+
+
+class CharMapRemoveError(CharMapValidationError):
+    """Raised when removing a charmap fails."""
 
     pass
 
@@ -234,5 +271,32 @@ class LinkDeletionError(FileOperationError):
 # --------------------------------------
 class SnapshotValidationError(FsBaseException):
     """Raised when a snapshot validation fails."""
+
+    pass
+
+
+# --------------------------------------
+# 10. Subvolume Group Operations
+# --------------------------------------
+class SubvolumeGroupError(FsBaseException):
+    """Raised when subvolume group operation fails."""
+
+    pass
+
+
+class SubvolumeGroupCreateError(SubvolumeGroupError):
+    """Raised when creating a subvolume group fails."""
+
+    pass
+
+
+class SubvolumeGroupGetError(SubvolumeGroupError):
+    """Raised when getting subvolume group information fails."""
+
+    pass
+
+
+class SubvolumeGroupDeleteError(SubvolumeGroupError):
+    """Raised when deleting a subvolume group fails."""
 
     pass
