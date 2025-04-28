@@ -7,7 +7,7 @@ class Earmark(Cli):
 
     def __init__(self, nodes, base_cmd):
         super(Earmark, self).__init__(nodes)
-        self.base_cmd = f"{base_cmd} subvolume earmark"
+        self.base_cmd = f"{base_cmd} earmark"
 
     def set(self, volume, subvolume_name, earmark, **kwargs):
         """

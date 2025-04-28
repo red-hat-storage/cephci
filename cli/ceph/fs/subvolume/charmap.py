@@ -43,6 +43,7 @@ class Charmap(Cli):
                         e, subvolume_name
                     )
                 )
+        return True
 
     def get(self, volume, subvolume_name, charmap_attribute=None, **kwargs):
         """
@@ -69,7 +70,9 @@ class Charmap(Cli):
             log.debug("output: {}".format(out))
         except Exception as e:
             raise CharMapGetError(
-                "Failed to get charmaps: {} for subvolume {}".format(e, subvolume_name)
+                "Failed to get charmaps: {} for subvolume: {} with output: {} ".format(
+                    e, subvolume_name, out
+                )
             )
 
         if isinstance(out, tuple):
@@ -103,8 +106,8 @@ class Charmap(Cli):
             log.debug("output: {}".format(out))
         except Exception as e:
             raise CharMapRemoveError(
-                "Failed to remove charmaps: {} for subvolume {}".format(
-                    e, subvolume_name
+                "Failed to remove charmaps: {} for subvolume {} with output {}".format(
+                    e, subvolume_name, out
                 )
             )
 

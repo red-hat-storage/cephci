@@ -68,8 +68,8 @@ class Charmap(Cli):
             log.debug("output: {}".format(out))
         except Exception as e:
             raise CharMapGetError(
-                "Failed to get charmaps: {} for subvolumegroup {}".format(
-                    e, subvolume_group
+                "Failed to get charmaps: {} for subvolumegroup {} with output: {}".format(
+                    e, subvolume_group, out
                 )
             )
 
@@ -104,8 +104,8 @@ class Charmap(Cli):
             log.debug("output: {}".format(out))
         except Exception as e:
             raise CharMapRemoveError(
-                "Failed to remove charmaps: {} for subvolumegroup {}".format(
-                    e, subvolume_group
+                "Failed to remove charmaps: {} for subvolumegroup {} with output: {}".format(
+                    e, subvolume_group, out
                 )
             )
 

@@ -22,7 +22,7 @@ class SubVolume(Cli):
     def __init__(self, nodes, base_cmd):
         super(SubVolume, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} subvolume"
-        self.earmark = Earmark(nodes, base_cmd)
+        self.earmark = Earmark(nodes, self.base_cmd)
         self.charmap = Charmap(nodes, self.base_cmd)
 
     def create(self, volume, subvolume, **kwargs):
