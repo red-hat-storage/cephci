@@ -169,7 +169,6 @@ tests:
       desc: Create 8+6 MSR EC pools
 
   - test:
-      abort-on-fail: true
       config:
         haproxy_clients:
           - node5
@@ -187,13 +186,27 @@ tests:
   - test:
       abort-on-fail: true
       config:
+        haproxy_clients:
+          - node3
+          - node4
+        rgw_endpoints:
+          - "node1:80"
+          - "node2:80"
+      desc: Configure HAproxy for cosbench
+      module: haproxy.py
+      name: Configure HAproxy for cosbench
+      polarion-id: CEPH-83572703
+
+  - test:
+      abort-on-fail: true
+      config:
         controllers:
-          - node6
+          - node3
         drivers:
-          count: 2
+          count: 3
           hosts:
-            - node5
-            - node6
+            - node3
+            - node4
       desc: Start COS Bench controller and driver
       module: cosbench.py
       name: deploy cosbench
