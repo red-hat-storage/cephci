@@ -5,6 +5,7 @@ import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 from utility.retry import retry
 
@@ -44,6 +45,7 @@ def run(ceph_cluster, **kw):
     """
     try:
         fs_util_v1 = FsUtilsV1(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
@@ -223,7 +225,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "Check for the Ceph Health status to see if it's Healthy after enabling Standby-Replay"
         )
-        fs_util_v1.get_ceph_health_status(clients[0])
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            return 1
         log.info(
             "\n"
             "\n---------------***************---------------"
@@ -240,7 +244,9 @@ def run(ceph_cluster, **kw):
             "\n---------------***************---------------"
         )
         log.info("Proceed only if Ceph Health is OK.")
-        fs_util_v1.get_ceph_health_status(clients[0])
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            return 1
 
         log.info("Capture the mds states before rebooting")
         mds_info_before_for_fs1 = fs_util_v1.get_mds_states_active_standby_replay(
@@ -306,7 +312,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "Check for the Ceph Health status to see if it's Healthy after failover."
         )
-        fs_util_v1.get_ceph_health_status(clients[0])
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            return 1
         log.info(
             "\n"
             "\n---------------***************---------------"
@@ -328,7 +336,9 @@ def run(ceph_cluster, **kw):
         for path in all_paths:
             clients[0].exec_command(sudo=True, cmd=f"rm -rf {path}run_ios*")
         log.info("Proceed only if Ceph Health is OK.")
-        fs_util_v1.get_ceph_health_status(clients[0])
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            return 1
 
         for i in range(1, 11):
             log.info("Capture the mds states before rebooting")
@@ -398,7 +408,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "Check for the Ceph Health status to see if it's Healthy after failover."
         )
-        fs_util_v1.get_ceph_health_status(clients[0])
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            return 1
 
         log.info(
             "\n"
@@ -421,7 +433,9 @@ def run(ceph_cluster, **kw):
         for path in all_paths:
             clients[0].exec_command(sudo=True, cmd=f"rm -rf {path}run_ios*")
         log.info("Proceed only if Ceph Health is OK.")
-        fs_util_v1.get_ceph_health_status(clients[0])
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            return 1
 
         log.info(
             f"Run IO's and make changes to the max_mds {fs_name1} to 1 and wait for the changes to happen"
@@ -460,7 +474,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "Check for the Ceph Health status to see if it's Healthy after max_mds changes."
         )
-        fs_util_v1.get_ceph_health_status(clients[0])
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            return 1
         log.info(
             "\n"
             "\n---------------***************---------------"
@@ -481,7 +497,9 @@ def run(ceph_cluster, **kw):
         for path in all_paths:
             clients[0].exec_command(sudo=True, cmd=f"rm -rf {path}run_ios*")
         log.info("Proceed only if Ceph Health is OK.")
-        fs_util_v1.get_ceph_health_status(clients[0])
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            return 1
 
         log.info("Capture the mds states before failing the standby-replay node")
         mds_info_before_for_fs1 = fs_util_v1.get_mds_states_active_standby_replay(
@@ -561,7 +579,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "Check for the Ceph Health status to see if it's Healthy after failover."
         )
-        fs_util_v1.get_ceph_health_status(clients[0])
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            return 1
         log.info(
             "\n"
             "\n---------------***************---------------"
