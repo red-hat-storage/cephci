@@ -375,7 +375,9 @@ class CephFSCommonUtils(FsUtils):
         log.info("Setting up smb mount")
         mount_path = kwargs.get("mount_path")
         smb_nodes = self.ceph_cluster.get_nodes("smb")
-        installer = self.ceph_cluster.get_nodes(role="installer")[0]
+        installer = kwargs.get(
+            "installer", self.ceph_cluster.get_nodes(role="installer")[0]
+        )
 
         try:
             deploy_smb_service_imperative(

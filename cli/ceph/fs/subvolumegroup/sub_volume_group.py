@@ -1,5 +1,13 @@
+import json
+
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
+from tests.cephfs.exceptions import SubvolumeGroupDeleteError, SubvolumeGroupGetError
+from utility.log import Log
+
+from .charmap import Charmap
+
+log = Log(__name__)
 
 
 class SubVolumeGroup(Cli):
@@ -8,6 +16,7 @@ class SubVolumeGroup(Cli):
     def __init__(self, nodes, base_cmd):
         super(SubVolumeGroup, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} subvolumegroup"
+        self.charmap = Charmap(nodes, self.base_cmd)
 
     def create(self, volume, group, **kwargs):
         """
@@ -34,7 +43,12 @@ class SubVolumeGroup(Cli):
         cmd = f"{self.base_cmd} rm {volume} {group}"
         if force:
             cmd += " --force"
-        out = self.execute(sudo=True, cmd=cmd)
+        try:
+            out = self.execute(sudo=True, cmd=cmd, check_ec=True)
+        except Exception as e:
+            raise SubvolumeGroupDeleteError(
+                "Failed to remove subvolumegroup {}: {}".format(group, str(e))
+            )
         if isinstance(out, tuple):
             return out[0].strip()
         return out
@@ -63,3 +77,30 @@ class SubVolumeGroup(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def info(self, volume, group):
+        """
+        Get information about a subvolume group
+        Args:
+            volume (str): Name of vol where subvol is present
+            group (str): subvol group name
+        Returns:
+            dict: Information about the subvolume group in JSON format
+        Raises:
+            SubvolumeGroupGetError: If the command execution fails or JSON parsing fails
+        """
+        cmd = f"{self.base_cmd} info {volume} {group}"
+        try:
+            out = self.execute(sudo=True, cmd=cmd, check_ec=True)
+            log.debug("output: {}".format(out))
+        except Exception as e:
+            raise SubvolumeGroupGetError(
+                "Failed to get subvolumegroup info for {}: {}".format(group, str(e))
+            )
+
+        try:
+            return json.loads(out)
+        except json.JSONDecodeError as e:
+            raise SubvolumeGroupGetError(
+                "Failed to parse subvolumegroup info JSON output: {}".format(e)
+            )

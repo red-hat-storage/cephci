@@ -319,329 +319,329 @@ tests:
   # Tier-1_fs
   ######################################################################################################################
   - test:
-        name: cephfs_volume_management
-        module: cephfs_volume_management.py
-        polarion-id: CEPH-83573446
-        desc: cephfs volume management
-        abort-on-fail: false
+      name: cephfs_volume_management
+      module: cephfs_volume_management.py
+      polarion-id: CEPH-83573446
+      desc: cephfs volume management
+      abort-on-fail: false
   - test:
-        name: cephfs_snapshot_management
-        module: cephfs_snapshot_management.py
-        polarion-id: CEPH-83573259
-        desc: cephfs snapshot management
-        abort-on-fail: false
+      name: cephfs_snapshot_management
+      module: cephfs_snapshot_management.py
+      polarion-id: CEPH-83573259
+      desc: cephfs snapshot management
+      abort-on-fail: false
   - test:
-        name: cephfs_tier1_ops
-        module: cephfs_tier1_ops.py
-        polarion-id: CEPH-83573447
-        desc: cephfs tier1 operations
-        abort-on-fail: false
+      name: cephfs_tier1_ops
+      module: cephfs_tier1_ops.py
+      polarion-id: CEPH-83573447
+      desc: cephfs tier1 operations
+      abort-on-fail: false
   - test:
-        name: cephfs_client_authorize
-        module: client_authorize.py
-        polarion-id: CEPH-83574483
-        desc: client authorize test for cephfs
-        abort-on-fail: false
+      name: cephfs_client_authorize
+      module: client_authorize.py
+      polarion-id: CEPH-83574483
+      desc: client authorize test for cephfs
+      abort-on-fail: false
   - test:
-        name: cephfs-mdsfailover-pinning-io
-        module: dir_pinning.py
-        config:
-            num_of_dirs: 200
-        polarion-id: CEPH-11227
-        desc: MDSfailover on active-active mdss,performing client IOs with no pinning at the first,later pin 10 dirs with IOs
-        abort-on-fail: false
+      name: cephfs-mdsfailover-pinning-io
+      module: dir_pinning.py
+      config:
+        num_of_dirs: 200
+      polarion-id: CEPH-11227
+      desc: MDSfailover on active-active mdss,performing client IOs with no pinning at the first,later pin 10 dirs with IOs
+      abort-on-fail: false
   - test:
-        name: cephfs subvolume authorize test
-        desc: Test cephfs subvolume client authorize
-        module: subvolume_authorize.py
-        polarion-id: CEPH-83574596
-        abort-on-fail: false
+      name: cephfs subvolume authorize test
+      desc: Test cephfs subvolume client authorize
+      module: subvolume_authorize.py
+      polarion-id: CEPH-83574596
+      abort-on-fail: false
   - test:
-        name: no recover session mount
-        module: no_recover_session_mount.py
-        polarion-id: CEPH-11260
-        desc: test no recover session mount by blocking the client node
-        abort-on-fail: false
+      name: no recover session mount
+      module: no_recover_session_mount.py
+      polarion-id: CEPH-11260
+      desc: test no recover session mount by blocking the client node
+      abort-on-fail: false
   - test:
-        abort-on-fail: false
-        desc: "Ensure kernel mounts works with all available options and validate the functionality of each option"
-        module: fs_kernel_mount_options.py
-        name: fs_kernel_mount_options
-        polarion-id: "CEPH-83575389"
-######################################################################################################################
-      # Suite File Name : tier-2_fs_mutlifs_quota_snaphost.yaml
-      # Features Covered
-      # Multi FS
-      # Quota
-      # Snapshot
-######################################################################################################################
+      abort-on-fail: false
+      desc: "Ensure kernel mounts works with all available options and validate the functionality of each option"
+      module: fs_kernel_mount_options.py
+      name: fs_kernel_mount_options
+      polarion-id: "CEPH-83575389"
+  ######################################################################################################################
+  # Suite File Name : tier-2_fs_mutlifs_quota_snaphost.yaml
+  # Features Covered
+  # Multi FS
+  # Quota
+  # Snapshot
+  ######################################################################################################################
   - test:
-        abort-on-fail: false
-        desc: "Fill the cluster with specific percentage"
-        module: test_io.py
-        name: Fill_Cluster
-        config:
-            cephfs:
-                "fill_data": 60
-                "io_tool": "smallfile"
-                "mount": "fuse"
-                "filesystem": "cephfs"
-                "mount_dir": ""
+      abort-on-fail: false
+      desc: "Fill the cluster with specific percentage"
+      module: test_io.py
+      name: Fill_Cluster
+      config:
+        cephfs:
+          "fill_data": 60
+          "io_tool": "smallfile"
+          "mount": "fuse"
+          "filesystem": "cephfs"
+          "mount_dir": ""
   - test:
-        name: Stanby-replay mds
-        module: stand_by_replay_mds.py
-        polarion-id: CEPH-83573269
-        desc: Stanby-replay mds testt
-        abort-on-fail: false
+      name: Stanby-replay mds
+      module: stand_by_replay_mds.py
+      polarion-id: CEPH-83573269
+      desc: Stanby-replay mds testt
+      abort-on-fail: false
   - test:
-        name: mds service add removal test
-        module: mds_rm_add.py
-        polarion-id: CEPH-11259
-        desc: mds service add removal test
-        abort-on-fail: false
+      name: mds service add removal test
+      module: mds_rm_add.py
+      polarion-id: CEPH-11259
+      desc: mds service add removal test
+      abort-on-fail: false
   - test:
-        name: mon service add removal test
-        module: mon_rm_add.py
-        polarion-id: CEPH-11345
-        desc: mon service add removal test
-        abort-on-fail: false
+      name: mon service add removal test
+      module: mon_rm_add.py
+      polarion-id: CEPH-11345
+      desc: mon service add removal test
+      abort-on-fail: false
   - test:
-        name: mds service stop & start test
-        module: mon_rm_add.py
-        polarion-id: CEPH-83574339
-        desc: mds service stop & start test
-        abort-on-fail: false
+      name: mds service stop & start test
+      module: mon_rm_add.py
+      polarion-id: CEPH-83574339
+      desc: mds service stop & start test
+      abort-on-fail: false
   - test:
-        name: multifs flag
-        module: multifs.multifs_flag.py
-        polarion-id: CEPH-83573878
-        desc: Tests the multifs flag functionality
-        abort-on-fail: false
+      name: multifs flag
+      module: multifs.multifs_flag.py
+      polarion-id: CEPH-83573878
+      desc: Tests the multifs flag functionality
+      abort-on-fail: false
   - test:
-        name: multifs same pool
-        module: multifs.multifs_same_pool.py
-        polarion-id: CEPH-83573873
-        desc: Tests the file system with same pools
-        abort-on-fail: false
+      name: multifs same pool
+      module: multifs.multifs_same_pool.py
+      polarion-id: CEPH-83573873
+      desc: Tests the file system with same pools
+      abort-on-fail: false
   - test:
-        name: multifs reboot with fstab
-        module: multifs.multifs_kernelmounts.py
-        polarion-id: CEPH-83573872
-        desc: Tests the file system with fstab entries with multiple file systems and reboots using kernel mount
-        abort-on-fail: false
+      name: multifs reboot with fstab
+      module: multifs.multifs_kernelmounts.py
+      polarion-id: CEPH-83573872
+      desc: Tests the file system with fstab entries with multiple file systems and reboots using kernel mount
+      abort-on-fail: false
   - test:
-        name: multifs reboot with fstab fuse
-        module: multifs.multifs_fusemounts.py
-        polarion-id: CEPH-83573871
-        desc: Tests the file system with fstab entries with multiple file systems and reboots using fuse mount
-        abort-on-fail: false
+      name: multifs reboot with fstab fuse
+      module: multifs.multifs_fusemounts.py
+      polarion-id: CEPH-83573871
+      desc: Tests the file system with fstab entries with multiple file systems and reboots using fuse mount
+      abort-on-fail: false
   - test:
-        name: creation of multiple file systems wtih different MDS daemons
-        module: multifs.multifs_default_values.py
-        polarion-id: CEPH-83573870
-        desc: Create 2 Filesystem with default values on different MDS daemons
-        abort-on-fail: false
+      name: creation of multiple file systems wtih different MDS daemons
+      module: multifs.multifs_default_values.py
+      polarion-id: CEPH-83573870
+      desc: Create 2 Filesystem with default values on different MDS daemons
+      abort-on-fail: false
   - test:
-        name: creation of multiple file systems
-        module: multifs.multifs_multiplefs.py
-        polarion-id: CEPH-83573867
-        desc: Create 4-5 Filesystem randomly on different MDS daemons
-        abort-on-fail: false
+      name: creation of multiple file systems
+      module: multifs.multifs_multiplefs.py
+      polarion-id: CEPH-83573867
+      desc: Create 4-5 Filesystem randomly on different MDS daemons
+      abort-on-fail: false
   - test:
-        name: Files-quota-test
-        module: quota.quota_files.py
-        polarion-id: CEPH-83573399
-        desc: Tests the file attributes on the directory
-        abort-on-fail: false
+      name: Files-quota-test
+      module: quota.quota_files.py
+      polarion-id: CEPH-83573399
+      desc: Tests the file attributes on the directory
+      abort-on-fail: false
   - test:
-        name: Files-quota-increase-test
-        module: quota.quota_files_increase.py
-        polarion-id: CEPH-83573400
-        desc: Tests the increase of file attributes  on the directory
-        abort-on-fail: false
+      name: Files-quota-increase-test
+      module: quota.quota_files_increase.py
+      polarion-id: CEPH-83573400
+      desc: Tests the increase of file attributes  on the directory
+      abort-on-fail: false
   - test:
-        name: Files-quota-decrease-test
-        module: quota.quota_files_decrease.py
-        polarion-id: CEPH-83573403
-        desc: Tests the increase of file attributes  on the directory
-        abort-on-fail: false
+      name: Files-quota-decrease-test
+      module: quota.quota_files_decrease.py
+      polarion-id: CEPH-83573403
+      desc: Tests the increase of file attributes  on the directory
+      abort-on-fail: false
   - test:
-        name: Files-quota-remove-test
-        module: quota.quota_files_remove.py
-        polarion-id: CEPH-83573405
-        desc: Tests the remove of file attributes on the directory
-        abort-on-fail: false
+      name: Files-quota-remove-test
+      module: quota.quota_files_remove.py
+      polarion-id: CEPH-83573405
+      desc: Tests the remove of file attributes on the directory
+      abort-on-fail: false
   - test:
-        name: Bytes-quota-test
-        module: quota.quota_bytes.py
-        polarion-id: CEPH-83573402
-        desc: Tests the Byte attributes on the directory
-        abort-on-fail: false
+      name: Bytes-quota-test
+      module: quota.quota_bytes.py
+      polarion-id: CEPH-83573402
+      desc: Tests the Byte attributes on the directory
+      abort-on-fail: false
   - test:
-        name: Bytes-quota-increase-test
-        module: quota.quota_bytes_increase.py
-        polarion-id: CEPH-83573401
-        desc: Tests the increase of Byte attributes  on the directory
-        abort-on-fail: false
+      name: Bytes-quota-increase-test
+      module: quota.quota_bytes_increase.py
+      polarion-id: CEPH-83573401
+      desc: Tests the increase of Byte attributes  on the directory
+      abort-on-fail: false
   - test:
-        name: Bytes-quota-decrease-test
-        module: quota.quota_bytes_decrease.py
-        polarion-id: CEPH-83573407
-        desc: Tests the decrease of Byte attributes  on the directory
-        abort-on-fail: false
+      name: Bytes-quota-decrease-test
+      module: quota.quota_bytes_decrease.py
+      polarion-id: CEPH-83573407
+      desc: Tests the decrease of Byte attributes  on the directory
+      abort-on-fail: false
   - test:
-        name: Bytes-quota-remove-test
-        module: quota.quota_bytes_remove.py
-        polarion-id: CEPH-83573409
-        desc: Tests the remove of Byte attributes on the directory
-        abort-on-fail: false
+      name: Bytes-quota-remove-test
+      module: quota.quota_bytes_remove.py
+      polarion-id: CEPH-83573409
+      desc: Tests the remove of Byte attributes on the directory
+      abort-on-fail: false
   - test:
-        name: Quota-Reboot-test
-        module: quota.quota_reboot.py
-        polarion-id: CEPH-83573408
-        desc: Tests the remove of Byte attributes on the directory
-        abort-on-fail: false
+      name: Quota-Reboot-test
+      module: quota.quota_reboot.py
+      polarion-id: CEPH-83573408
+      desc: Tests the remove of Byte attributes on the directory
+      abort-on-fail: false
   - test:
-        name: Quota-file-byte-test
-        module: quota.quota_files_bytes.py
-        polarion-id: CEPH-83573406
-        desc: Tests the file and byte attributes on the directory
-        abort-on-fail: false
+      name: Quota-file-byte-test
+      module: quota.quota_files_bytes.py
+      polarion-id: CEPH-83573406
+      desc: Tests the file and byte attributes on the directory
+      abort-on-fail: false
   - test:
-        name: Concurrent-clone-test
-        module: snapshot_clone.clone_threads.py
-        polarion-id: CEPH-83574592
-        desc: Concurrent-clone-test
-        abort-on-fail: false
+      name: Concurrent-clone-test
+      module: snapshot_clone.clone_threads.py
+      polarion-id: CEPH-83574592
+      desc: Concurrent-clone-test
+      abort-on-fail: false
   - test:
-        name: Clone_status
-        module: snapshot_clone.clone_status.py
-        polarion-id: CEPH-83573501
-        desc: Checks the clone status and states of the clone process
-        abort-on-fail: false
+      name: Clone_status
+      module: snapshot_clone.clone_status.py
+      polarion-id: CEPH-83573501
+      desc: Checks the clone status and states of the clone process
+      abort-on-fail: false
   - test:
-        name: Clone_cancel_status
-        module: snapshot_clone.clone_cancel_status.py
-        polarion-id: CEPH-83573502
-        desc: Checks the clone status and states of the clone process
-        abort-on-fail: false
+      name: Clone_cancel_status
+      module: snapshot_clone.clone_cancel_status.py
+      polarion-id: CEPH-83573502
+      desc: Checks the clone status and states of the clone process
+      abort-on-fail: false
   - test:
-        name: Retain_Snapshots
-        module: snapshot_clone.retain_snapshots.py
-        polarion-id: CEPH-83573521
-        desc: Retains the snapshots after deletig the subvolume
-        abort-on-fail: false
+      name: Retain_Snapshots
+      module: snapshot_clone.retain_snapshots.py
+      polarion-id: CEPH-83573521
+      desc: Retains the snapshots after deletig the subvolume
+      abort-on-fail: false
   - test:
-        name: snapshot_flag
-        module: snapshot_clone.snapshot_flag.py
-        polarion-id: CEPH-83573415
-        desc: Test to validate the cli - ceph fs set <fs_name> allow_new_snaps true
-        abort-on-fail: false
+      name: snapshot_flag
+      module: snapshot_clone.snapshot_flag.py
+      polarion-id: CEPH-83573415
+      desc: Test to validate the cli - ceph fs set <fs_name> allow_new_snaps true
+      abort-on-fail: false
   - test:
-        name: Remove_Subvolume_clone
-        module: snapshot_clone.clone_remove_subvol.py
-        polarion-id: CEPH-83573499
-        desc: Clone a subvolume and remove the orginal volume and verify the contents in subvolume
-        abort-on-fail: false
+      name: Remove_Subvolume_clone
+      module: snapshot_clone.clone_remove_subvol.py
+      polarion-id: CEPH-83573499
+      desc: Clone a subvolume and remove the orginal volume and verify the contents in subvolume
+      abort-on-fail: false
   - test:
-        name: Test Max Snapshot limit
-        module: snapshot_clone.max_snapshot_limit.py
-        polarion-id: CEPH-83573520
-        desc: Validate the max snapshot that can be created under a root FS sub volume level.Increase by 50 at a time until it reaches the max limit.
-        abort-on-fail: false
+      name: Test Max Snapshot limit
+      module: snapshot_clone.max_snapshot_limit.py
+      polarion-id: CEPH-83573520
+      desc: Validate the max snapshot that can be created under a root FS sub volume level.Increase by 50 at a time until it reaches the max limit.
+      abort-on-fail: false
   - test:
-        name: Snapshot reboot
-        module: snapshot_clone.snapshot_reboot.py
-        polarion-id: CEPH-83573418
-        desc: Create a Snapshot, reboot the node and rollback the snapshot
-        abort-on-fail: false
+      name: Snapshot reboot
+      module: snapshot_clone.snapshot_reboot.py
+      polarion-id: CEPH-83573418
+      desc: Create a Snapshot, reboot the node and rollback the snapshot
+      abort-on-fail: false
   - test:
-        name: Snapshot write
-        module: snapshot_clone.snapshot_write.py
-        polarion-id: CEPH-83573420
-        desc: Try writing the data to snap directory
-        abort-on-fail: false
+      name: Snapshot write
+      module: snapshot_clone.snapshot_write.py
+      polarion-id: CEPH-83573420
+      desc: Try writing the data to snap directory
+      abort-on-fail: false
   - test:
-        name: Clone_attributes
-        module: snapshot_clone.clone_attributes.py
-        polarion-id: CEPH-83573524
-        desc: Retains the snapshots after deletig the subvolume
-        abort-on-fail: false
+      name: Clone_attributes
+      module: snapshot_clone.clone_attributes.py
+      polarion-id: CEPH-83573524
+      desc: Retains the snapshots after deletig the subvolume
+      abort-on-fail: false
   - test:
-        name: cross_platform_snaps
-        module: snapshot_clone.cross_platform_snaps.py
-        polarion-id: CEPH-11319
-        desc: Clone a subvolume and remove the orginal volume and verify the contents in subvolume
-        abort-on-fail: false
+      name: cross_platform_snaps
+      module: snapshot_clone.cross_platform_snaps.py
+      polarion-id: CEPH-11319
+      desc: Clone a subvolume and remove the orginal volume and verify the contents in subvolume
+      abort-on-fail: false
   - test:
-        name: rename snap directory
-        module: snapshot_clone.rename_snap_dir.py
-        polarion-id: CEPH-83573255
-        desc: Validate the max snapshot that can be created under a root FS sub volume level.Increase by 50 at a time until it reaches the max limit.
-        abort-on-fail: false
+      name: rename snap directory
+      module: snapshot_clone.rename_snap_dir.py
+      polarion-id: CEPH-83573255
+      desc: Validate the max snapshot that can be created under a root FS sub volume level.Increase by 50 at a time until it reaches the max limit.
+      abort-on-fail: false
   - test:
-        name: subvolume_info_retain
-        module: snapshot_clone.subvolume_info_retain.py
-        polarion-id: CEPH-83573522
-        desc: Create a Snapshot, reboot the node and rollback the snapshot
-        abort-on-fail: false
+      name: subvolume_info_retain
+      module: snapshot_clone.subvolume_info_retain.py
+      polarion-id: CEPH-83573522
+      desc: Create a Snapshot, reboot the node and rollback the snapshot
+      abort-on-fail: false
   - test:
-        name: subvolume_full_vol
-        module: snapshot_clone.clone_subvolume_full_vol.py
-        polarion-id: CEPH-83574724
-        desc: Clone a subvolume with full data in the subvolume
-        abort-on-fail: false
+      name: subvolume_full_vol
+      module: snapshot_clone.clone_subvolume_full_vol.py
+      polarion-id: CEPH-83574724
+      desc: Clone a subvolume with full data in the subvolume
+      abort-on-fail: false
   - test:
-        name: snapshot_metadata
-        module: snapshot_clone.snapshot_metadata.py
-        polarion-id: CEPH-83575038
-        desc: verify CRUD operation on metadata of subvolume's snapshot
-        abort-on-fail: false
+      name: snapshot_metadata
+      module: snapshot_clone.snapshot_metadata.py
+      polarion-id: CEPH-83575038
+      desc: verify CRUD operation on metadata of subvolume's snapshot
+      abort-on-fail: false
   - test:
-        name: cancel the subvolume snapshot clonning
-        module: snapshot_clone.clone_cancel_in_progress.py
-        polarion-id: CEPH-83574681
-        desc: Try to cancel the snapshot while clonning is operating
-        abort-on-fail: false
+      name: cancel the subvolume snapshot clonning
+      module: snapshot_clone.clone_cancel_in_progress.py
+      polarion-id: CEPH-83574681
+      desc: Try to cancel the snapshot while clonning is operating
+      abort-on-fail: false
   - test:
-        name: snap_schedule_test
-        module: snapshot_clone.snap_schedule.py
-        polarion-id: CEPH-83575569
-        desc: snap_schedule_test
-        abort-on-fail: false
+      name: snap_schedule_test
+      module: snapshot_clone.snap_schedule.py
+      polarion-id: CEPH-83575569
+      desc: snap_schedule_test
+      abort-on-fail: false
   - test:
-        name: snap_schedule_retention_vol_subvol
-        module: snapshot_clone.snap_schedule_retention_vol_subvol.py
-        polarion-id: CEPH-83579271
-        desc: snap schedule and retention functional test on vol and subvol
-        abort-on-fail: false
-        config:
-            test_name: functional
+      name: snap_schedule_retention_vol_subvol
+      module: snapshot_clone.snap_schedule_retention_vol_subvol.py
+      polarion-id: CEPH-83579271
+      desc: snap schedule and retention functional test on vol and subvol
+      abort-on-fail: false
+      config:
+        test_name: functional
   - test:
-        name: snap_sched_multi_fs
-        module: snapshot_clone.snap_schedule_retention_vol_subvol.py
-        polarion-id: CEPH-83581235
-        desc: snap schedule and retention functional test on multi-fs setup
-        abort-on-fail: false
-        config:
-            test_name: systemic
+      name: snap_sched_multi_fs
+      module: snapshot_clone.snap_schedule_retention_vol_subvol.py
+      polarion-id: CEPH-83581235
+      desc: snap schedule and retention functional test on multi-fs setup
+      abort-on-fail: false
+      config:
+        test_name: systemic
   - test:
-        name: snapshot_nfs_mount
-        module: snapshot_clone.snapshot_nfs_mount.py
-        polarion-id: CEPH-83592018
-        desc: Validate Snapshot mount through NFS suceeds and snapshot data is accessible
-        abort-on-fail: false
+      name: snapshot_nfs_mount
+      module: snapshot_clone.snapshot_nfs_mount.py
+      polarion-id: CEPH-83592018
+      desc: Validate Snapshot mount through NFS suceeds and snapshot data is accessible
+      abort-on-fail: false
   - test:
-        name: snap_schedule_with_mds_restart
-        module: snapshot_clone.snap_schedule_with_mds_restart.py
-        polarion-id: CEPH-83600860
-        desc: Validate Verify Kernel and FUSE Mount Behavior with Snapshot Scheduling and MDS Restarts
-        abort-on-fail: false
-######################################################################################################################
-      # Suite File Name : tier-2_cephfs_test-clients.yaml
-      # Features Covered
-      # Fs Clients
-######################################################################################################################
+      name: snap_schedule_with_mds_restart
+      module: snapshot_clone.snap_schedule_with_mds_restart.py
+      polarion-id: CEPH-83600860
+      desc: Validate Verify Kernel and FUSE Mount Behavior with Snapshot Scheduling and MDS Restarts
+      abort-on-fail: false
+  ######################################################################################################################
+  # Suite File Name : tier-2_cephfs_test-clients.yaml
+  # Features Covered
+  # Fs Clients
+  ######################################################################################################################
   - test:
       name: multiple clients run IO's on same directory from each clients and exersize POSIX locks
       module: clients.multiple_clients_posix_calls.py
@@ -673,15 +673,15 @@ tests:
       desc: scp bw filesystem and remote directory and vice versa
       abort-on-fail: false
   - test:
-       name: Running basic bash commands on fuse,Kernel and NFS mounts
-       module: clients.fs_basic_bash_cmds.py
-       polarion-id: CEPH-11300
-       desc: Running basic bash commands on fuse,Kernel and NFS mounts
-       abort-on-fail: false
-       config:
-         no_of_files: 1000
-         size_of_files: 1
-         num_dir: 100
+      name: Running basic bash commands on fuse,Kernel and NFS mounts
+      module: clients.fs_basic_bash_cmds.py
+      polarion-id: CEPH-11300
+      desc: Running basic bash commands on fuse,Kernel and NFS mounts
+      abort-on-fail: false
+      config:
+        no_of_files: 1000
+        size_of_files: 1
+        num_dir: 100
   - test:
       name: Client File locking on mounts
       module: clients.file_lock_on_mounts.py
@@ -707,11 +707,11 @@ tests:
       desc: Mount and unmount CephFS repeatedly in interval of 30 min & check data integrity
       abort-on-fail: false
   - test:
-        name: Filesystem information restriction for client
-        module: clients.multiclient_cephx_restrict_fs.py
-        polarion-id: CEPH-11338
-        desc: Test Filesystem information restriction for client for multiple cephfs
-        abort-on-fail: false
+      name: Filesystem information restriction for client
+      module: clients.multiclient_cephx_restrict_fs.py
+      polarion-id: CEPH-11338
+      desc: Test Filesystem information restriction for client for multiple cephfs
+      abort-on-fail: false
   - test:
       name: multi client file and dir ops
       module: clients.multiclient_file_dir_ops.py
@@ -841,13 +841,12 @@ tests:
       module: clients.client_root_squash_non_root_user.py
       name: client_root_squash_non_root_user
       polarion-id: "CEPH-83602912"
-######################################################################################################################
-      # Suite File Name : tier-1_cephfs_cg_quiesce.yaml
-      # Features Covered
-      # FS CG Quiesce
-######################################################################################################################
-  -
-    test:
+  ######################################################################################################################
+  # Suite File Name : tier-1_cephfs_cg_quiesce.yaml
+  # Features Covered
+  # FS CG Quiesce
+  ######################################################################################################################
+  - test:
       abort-on-fail: false
       desc: "Verify quiesce release with if-version, repeat with exclude and include prior to release"
       destroy-cluster: false
@@ -855,9 +854,8 @@ tests:
       name: "cg_snap_func_workflow_2"
       polarion-id: CEPH-83581470
       config:
-       test_name: cg_snap_func_workflow_2
-  -
-    test:
+        test_name: cg_snap_func_workflow_2
+  - test:
       abort-on-fail: false
       desc: "Verify restore suceeds from snapshot taken when subvolume was quiesced"
       destroy-cluster: false
@@ -865,9 +863,8 @@ tests:
       name: "cg_snap_func_workflow_4"
       polarion-id: CEPH-83590254
       config:
-       test_name: cg_snap_func_workflow_4
-  -
-    test:
+        test_name: cg_snap_func_workflow_4
+  - test:
       abort-on-fail: false
       desc: "Verify quiesce release response when quiesce-timeout and quiesce-expire time is reached"
       destroy-cluster: false
@@ -875,9 +872,8 @@ tests:
       name: "cg_snap_func_workflow_5"
       polarion-id: CEPH-83590255
       config:
-       test_name: cg_snap_func_workflow_5
-  -
-    test:
+        test_name: cg_snap_func_workflow_5
+  - test:
       abort-on-fail: false
       desc: "Verify state transitions suceed during quiescing,quiesced and releasing state"
       destroy-cluster: false
@@ -885,9 +881,8 @@ tests:
       name: "cg_snap_func_workflow_6"
       polarion-id: CEPH-83590256
       config:
-       test_name: cg_snap_func_workflow_6
-  -
-    test:
+        test_name: cg_snap_func_workflow_6
+  - test:
       abort-on-fail: false
       desc: "Verify quiesce suceeds with IO from nfs,fuse and kernel mounts"
       destroy-cluster: false
@@ -895,9 +890,8 @@ tests:
       name: "cg_snap_interop_workflow_2"
       polarion-id: CEPH-83591508
       config:
-       test_name: cg_snap_interop_workflow_2
-  -
-    test:
+        test_name: cg_snap_interop_workflow_2
+  - test:
       abort-on-fail: false
       desc: "Verify parallel quiesce calls to same quiesce set members"
       destroy-cluster: false
@@ -905,9 +899,8 @@ tests:
       name: "cg_snap_neg_workflow_1"
       polarion-id: CEPH-83591512
       config:
-       test_name: cg_snap_neg_workflow_1
-  -
-    test:
+        test_name: cg_snap_neg_workflow_1
+  - test:
       abort-on-fail: false
       desc: "Verify CG quiesce on pre-provisioned quiesce set"
       destroy-cluster: false
@@ -915,19 +908,17 @@ tests:
       name: "cg_snap_func_workflow_3"
       polarion-id: CEPH-83590253
       config:
-       test_name: cg_snap_func_workflow_3
-  -
-    test:
+        test_name: cg_snap_func_workflow_3
+  - test:
       abort-on-fail: false
       desc: "Enable ceph debug logs"
       module: cephfs_logs_util.py
       name: cephfs-enable-logs
       config:
-       ENABLE_LOGS : 1
-       daemon_list : ['mds','client']
-       daemon_dbg_level : {'mds':20,'client':20}
-  -
-    test:
+        ENABLE_LOGS: 1
+        daemon_list: ["mds", "client"]
+        daemon_dbg_level: { "mds": 20, "client": 20 }
+  - test:
       abort-on-fail: false
       desc: "Verify quiesce lifecycle with and without --await"
       destroy-cluster: false
@@ -935,9 +926,8 @@ tests:
       name: "cg_snap_func_workflow_1"
       polarion-id: CEPH-83581467
       config:
-       test_name: cg_snap_func_workflow_1
-  -
-    test:
+        test_name: cg_snap_func_workflow_1
+  - test:
       abort-on-fail: false
       desc: "Verify quiesce ops in parallel to multi-MDS failover"
       destroy-cluster: false
@@ -945,17 +935,16 @@ tests:
       name: "cg_snap_interop_workflow_1"
       polarion-id: CEPH-83581472
       config:
-       test_name: cg_snap_interop_workflow_1
+        test_name: cg_snap_interop_workflow_1
       comments: product bug bz-2273569
-  -
-    test:
+  - test:
       abort-on-fail: false
       desc: "Disable ceph debug logs"
       module: cephfs_logs_util.py
       name: cephfs-disable-logs
       config:
-       DISABLE_LOGS : 1
-       daemon_list : ['mds','client']
+        DISABLE_LOGS: 1
+        daemon_list: ["mds", "client"]
   - test:
       name: test cephfs attributes - functional
       module: cephfs_case_sensitivity.case_sensitivity_functional.py
@@ -973,4 +962,10 @@ tests:
       module: cephfs_case_sensitivity.case_sensitivity_disruptive.py
       polarion-id: CEPH-83611928
       desc: Test fs attributes for disruptive use case
+      abort-on-fail: false
+  - test:
+      name: test cephfs attributes - subvolume
+      module: cephfs_case_sensitivity.case_sensitivity_subvolume.py
+      polarion-id: CEPH-83617010
+      desc: Test fs attributes for functional use case
       abort-on-fail: false
