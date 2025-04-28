@@ -69,6 +69,18 @@ def configure_namespaces(nvmegwcli, config, lb_groups, sub_args, pool, ceph_clus
                 p.spawn(nvmegwcli.namespace.add, **ns_args)
 
 
+def delete_namespaces(nvmegwcli, ns_count, subsystem):
+    with parallel() as p:
+        for num in range(1, ns_count + 1):
+            ns_args = {
+                "args": {
+                    "nsid": num,
+                    "subsystem": subsystem,
+                }
+            }
+            p.spawn(nvmegwcli.namespace.delete, **ns_args)
+
+
 def configure_subsystems(pool, ha, config):
     """Configure Ceph-NVMEoF Subsystems."""
     sub_args = {"subsystem": config["nqn"]}
@@ -232,10 +244,44 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 for subsys_args in config["subsystems"]:
                     subsys_args["ceph_cluster"] = ceph_cluster
                     p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+            if ceph_cluster.rhcs_version > "8.0":
+                time.sleep(120)
+                ha.validate_auto_loadbalance()
 
         # Initiate scale-down and scale-up
         if config.get("load_balancing"):
             for lb_config in config.get("load_balancing"):
+                # namespace addition
+                if lb_config.get("ns_add"):
+                    config = lb_config["ns_add"]
+                    subsystems = config["subsystems"]
+                    for subsystem in subsystems:
+                        sub_args = {"subsystem": subsystem["nqn"]}
+                        lb_groups = None
+                        LOG.info(sub_args)
+                        configure_namespaces(
+                            ha.gateways[0],
+                            subsystem,
+                            lb_groups,
+                            sub_args,
+                            rbd_pool,
+                            ceph_cluster,
+                        )
+                    if ceph_cluster.rhcs_version > "8.0":
+                        ha.validate_auto_loadbalance()
+
+                # namespace deletion
+                if lb_config.get("ns_del"):
+                    ns_del_config = lb_config["ns_del"]
+                    LOG.info(ns_del_config)
+                    ns_del_count = ns_del_config["count"]
+                    subsystems = ns_del_config["subsystems"]
+                    for subsystem in subsystems:
+                        delete_namespaces(ha.gateways[0], ns_del_count, subsystem)
+                    if ceph_cluster.rhcs_version > "8.0":
+                        time.sleep(120)
+                        ha.validate_auto_loadbalance()
+
                 # Scale down
                 if lb_config.get("scale_down"):
                     gateway_nodes_to_be_deployed = lb_config["scale_down"]
@@ -274,7 +320,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
                     # Perform scale-up of new nodes
                     if not all([node in set(gateway_nodes) for node in scaleup_nodes]):
-
                         # Perform scale up
                         old_namespaces = parse_namespaces(config, old_namespaces)
                         ha.scale_up(scaleup_nodes, gw_nodes, old_namespaces)
