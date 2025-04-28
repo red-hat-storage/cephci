@@ -1,7 +1,7 @@
 # RGW build evaluation
 #
 # This test suite is auto triggered via the Jenkins pipeline to determine if the
-# newly available binary of RHCS 7.x meets the minimum acceptance criteria set forth by
+# newly available binary of RHCS 8.x meets the minimum acceptance criteria set forth by
 # the Object QE FG team.
 #
 # The following evaluations are carried out
@@ -56,21 +56,22 @@ tests:
                 placement:
                   label: rgw
                   nodes:
-                    - node4
+                    - node2
                     - node3
-                    - node5
+                    - node4
       desc: bootstrap with registry-url option and deployment services.
       destroy-cluster: false
       polarion-id: CEPH-83573713
       module: test_cephadm.py
       name: RHCS deploy cluster using cephadm
 
+
   - test:
       abort-on-fail: true
       config:
         command: add
         id: client.1
-        node: node6
+        node: node4
         install_packages:
           - ceph-common
         copy_admin_keyring: true
@@ -86,11 +87,11 @@ tests:
       abort-on-fail: true
       config:
         haproxy_clients:
-          - node6
+          - node4
         rgw_endpoints:
+          - node2:80
           - node3:80
           - node4:80
-          - node5:80
       desc: "Configure HAproxy"
       module: haproxy.py
       name: "Configure HAproxy"
@@ -190,19 +191,48 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_get_object_attributes_multipart.yaml
+  
   - test:
-      name: Header validation of Bucket Lifecycle expiration with date
-      desc: Test header validation bucket lifecycle expiration with date
-      polarion-id: CEPH-83573254
+      name: Test Checksum on all supported algorithms
+      desc: Test Checksum on all supported algorithms
+      polarion-id: CEPH-83591679
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration_transition.py
-        config-file-name: test_lc_date_expire_header.yaml
+        script-name: ../aws/test_checksum.py
+        config-file-name: ../../aws/configs/test_checksum_api.yaml
+
   - test:
-      name: Header validation of Bucket Lifecycle expiration with days
-      desc: Test header validation bucket lifecycle expiration with days
-      polarion-id: CEPH-83573254
+      name: Dynamic Resharding tests
+      desc: Resharding test - dynamic
+      polarion-id: CEPH-83571740 # also applies to ceph-11479, ceph-11477
       module: sanity_rgw.py
       config:
-        script-name: test_bucket_lifecycle_object_expiration_transition.py
-        config-file-name: test_lc_days_expire_header.yaml
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_dynamic_resharding.yaml
+
+
+  - test:
+      name: ordered listing of bucket with pseudo directories and objects
+      desc: measure execution time for ordered listing of bucket with pseudo directories and objects
+      polarion-id: CEPH-83573545
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_listing_pseudo_ordered.yaml
+
+  # - test:
+  #     name: Header validation of Bucket Lifecycle expiration with date
+  #     desc: Test header validation bucket lifecycle expiration with date
+  #     polarion-id: CEPH-83573254
+  #     module: sanity_rgw.py
+  #     config:
+  #       script-name: test_bucket_lifecycle_object_expiration_transition.py
+  #       config-file-name: test_lc_date_expire_header.yaml
+  # - test:
+  #     name: Header validation of Bucket Lifecycle expiration with days
+  #     desc: Test header validation bucket lifecycle expiration with days
+  #     polarion-id: CEPH-83573254
+  #     module: sanity_rgw.py
+  #     config:
+  #       script-name: test_bucket_lifecycle_object_expiration_transition.py
+  #       config-file-name: test_lc_days_expire_header.yaml
