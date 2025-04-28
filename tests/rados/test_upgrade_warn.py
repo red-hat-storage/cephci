@@ -77,6 +77,22 @@ def run(ceph_cluster, **kw):
 
     log.debug("Starting upgrade")
     try:
+        if rhbuild.startswith("8"):
+            log.info("Build passed for upgrade: %s" % rhbuild)
+            log_txt = """
+            Disabling the balancer module as a WA for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2314146
+            Issue : If any mgr module based operation is performed right after mgr failover, The command execution fails
+            as the module isn't loaded by mgr daemon. Issue was identified to be with Balancer module.
+            Disabling automatic balancing on the cluster as a WA until we get the fix for the same.
+            Disabling balancer should unblock Upgrade tests.
+            Error snippet :
+    Error ENOTSUP: Warning: due to ceph-mgr restart, some PG states may not be up to date
+    Module 'crash' is not enabled/loaded (required by command 'crash ls'): use `ceph mgr module enable crash` to enable
+            """
+            log.info(log_txt)
+            out, err = cephadm_obj.shell(args=["ceph balancer off"])
+            log.debug(out + err)
+
         config.update({"args": {"image": "latest"}})
 
         # Support installation of the baseline cluster whose version is not available in
@@ -278,3 +294,10 @@ def run(ceph_cluster, **kw):
     except Exception as e:
         log.error(f"Could not upgrade the cluster. error : {e}")
         return 1
+    finally:
+        log.info(
+            "\n \n ************** Execution of finally block begins here *************** \n \n"
+        )
+        log.info("Enabling ceph balancer module")
+        out, err = cephadm_obj.shell(args=["ceph balancer on"])
+        log.debug(out + err)

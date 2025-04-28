@@ -40,6 +40,7 @@ def run(ceph_cluster, **kwargs) -> int:
     """
     log.info("Upgrade Ceph cluster...")
     config = kwargs["config"]
+    rhbuild = config.get("rhbuild")
     config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
     verify_image = bool(config.get("verify_cluster_health", False))
     orch = Orch(cluster=ceph_cluster, **config)
@@ -53,6 +54,24 @@ def run(ceph_cluster, **kwargs) -> int:
         executor = RadosBench(mon_node=client, clients=clients)
 
     try:
+        if rhbuild.startswith("8"):
+            log.info("Build passed for upgrade: %s" % rhbuild)
+            log_txt = """
+                Disabling the balancer module as a WA for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2314146
+                Issue : If any mgr module based operation is performed right after mgr failover,
+                The command execution fails as the module isn't loaded by mgr daemon.
+                Issue was identified to be with Balancer module.
+                Disabling automatic balancing on the cluster as a WA until we get the fix for the same.
+                Disabling balancer should unblock Upgrade tests.
+                Error snippet :
+        Error ENOTSUP: Warning: due to ceph-mgr restart, some PG states may not be up to date
+        Module 'crash' is not enabled/loaded (required by command 'crash ls'): use `ceph mgr module enable crash`
+         to enable
+                """
+            log.info(log_txt)
+            out, err = client.exec_command(cmd="ceph balancer off", sudo=True)
+            log.debug(out + err)
+
         # Initiate thread pool to run rados bench
         if executor:
             executor.run(config=config["benchmark"])
@@ -115,6 +134,11 @@ def run(ceph_cluster, **kwargs) -> int:
     finally:
         if executor:
             executor.teardown()
+
+        # TODO: Remove explicitly enabling ceph balancer module when BZ-2314146 has been fixed
+        log.info("Enabling ceph balancer module")
+        out, err = client.exec_command(cmd="ceph balancer on", sudo=True)
+        log.debug(out + err)
 
         # Get cluster state
         orch.get_cluster_state(

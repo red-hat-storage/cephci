@@ -9,6 +9,7 @@ from distutils.version import LooseVersion
 from json import loads
 
 from ceph.ceph import Ceph
+from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.parallel import parallel
@@ -191,6 +192,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     """
     LOG.info("Upgrade Ceph cluster with NVMEoF Gateways")
     config = kwargs["config"]
+    cephadm = CephAdmin(cluster=ceph_cluster, **config)
+    rhbuild = config.get("rhbuild")
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
     ibm_build = config.get("ibm_build", False)
@@ -247,6 +250,24 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         # Check service versions vs available and target containers
         orch.upgrade_check(image=container_image)
 
+        if rhbuild.startswith("8"):
+            LOG.info("Build passed for upgrade: %s" % rhbuild)
+            log_txt = """
+                Disabling the balancer module as a WA for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2314146
+                Issue : If any mgr module based operation is performed right after mgr failover,
+                The command execution fails as the module isn't loaded by mgr daemon.
+                Issue was identified to be with Balancer module.
+                Disabling automatic balancing on the cluster as a WA until we get the fix for the same.
+                Disabling balancer should unblock Upgrade tests.
+                Error snippet :
+        Error ENOTSUP: Warning: due to ceph-mgr restart, some PG states may not be up to date
+        Module 'crash' is not enabled/loaded (required by command 'crash ls'): use `ceph mgr module enable crash`
+         to enable
+                """
+            LOG.info(log_txt)
+            out, err = cephadm.shell(args=["ceph balancer off"])
+            LOG.debug(out + err)
+
         # Start Upgrade
         config.update({"args": {"image": "latest"}})
         orch.start_upgrade(config)
@@ -268,4 +289,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         if config.get("cleanup"):
             teardown(ceph_cluster, rbd_obj, config)
 
+        # TODO: Remove explicitly enabling ceph balancer module when BZ-2314146 has been fixed
+        LOG.info("Enabling ceph balancer module")
+        out, err = cephadm.shell(args=["ceph balancer on"])
+        LOG.debug(out + err)
     return 1
