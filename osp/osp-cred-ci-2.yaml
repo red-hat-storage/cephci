@@ -1,10 +1,10 @@
 globals:
     openstack-credentials:
-        username: '<user_name>'
-        password: '<user_password>'
+        username: '2ad2de1c997d440f95bae9d48714d94a'
+        password: '56DLl2e_0fdsGiky8jaX60gfB0wYqFWqu_d9s1fCSmRKYPqV8Z6XE8NH-UZf6yP21nyVZhS9sZn9dqshcdSklA'
         auth-url: 'https://rhos-d.infra.prod.upshift.rdu2.redhat.com:13000'
-        auth-version: '3.x_password'
-        tenant-name: 'ceph-ci'
+        auth-version: '3.x_appcred'
+        tenant-name: 'ceph-perf'
         service-region: 'regionOne'
         domain: 'redhat.com'
         tenant-domain-id: '62cf1b5ec006489db99e2b0ebfb55f57'
@@ -15,5 +15,3 @@ globals:
         zone_name: '<dns_zone>'
         vpc_name: '<vpc_name>'
         zone_id_model_name: '<vpc_datacenter_name>'
-        resource_group_id: "<UUID of the resource group>"
-        dns_svc_id: "<GUID of the DNS service hosted>"
