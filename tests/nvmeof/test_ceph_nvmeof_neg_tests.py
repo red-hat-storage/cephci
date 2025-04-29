@@ -1437,6 +1437,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     try:
         if config["operation"] != "CEPH-83608266":
+            rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
             deploy_nvme_service(ceph_cluster, config)
 
         if config["operation"] == "CEPH-83608266":
