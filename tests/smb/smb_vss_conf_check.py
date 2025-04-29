@@ -115,7 +115,7 @@ def run(ceph_cluster, **kw):
         # check smb conf
         for conf in smb_conf:
             cmd = f"cephadm ls --no-detail | jq -r 'map(select(.name | startswith(\"smb.{smb_cluster_id}\")))[-1].name'"
-            out = smb_nodes[0].exec_command(sudo=True, cmd=cmd)[0].strip()
+            out = smb_nodes[0].exec_command(sudo=True, cmd=cmd, pretty_print=True)[0].strip()
             parameter = list(conf.keys())[0]
             cmd = (
                 f"cephadm enter -n {out} -- bash -c \"testparm -sv | grep '{parameter}' | sed -n 2p "
@@ -123,8 +123,9 @@ def run(ceph_cluster, **kw):
             )
             out = smb_nodes[0].exec_command(sudo=True, cmd=cmd)[0]
             value = out.split("= ")[1]
+            log.info("Parameter {} is in the conf: {}".format(conf[parameter],value))
             if conf[parameter] not in value:
-                log.error("Smb conf value not as expected")
+                log.error(f"{conf[parameter]}not in {value} Smb conf value not as expected")
                 return 1
     except Exception as e:
         log.error(f"Failed to deploy samba with auth_mode 'user' : {e}")
