@@ -4,7 +4,7 @@
 # Cluster Configuration:
 #    conf/squid/smb/1admin-4node-1client-cluster.yaml
 #========================================================================
-#tests:
+tests:
 #  - test:
 #      name: setup pre-requisites
 #      desc: Install software pre-requisites for cluster deployment
