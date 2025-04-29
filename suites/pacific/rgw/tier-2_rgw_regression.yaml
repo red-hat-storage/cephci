@@ -133,6 +133,20 @@ tests:
 
   # Basic Bucket Operation Tests
 
+  # configuring HAproxy on the client node 'node4' and port '5000'
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
   - test:
       name: Mbuckets
       desc: test to create "M" no of buckets
@@ -150,6 +164,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
+        run-on-haproxy: true
 
   - test:
       name: compresstion_with_zstd_type
@@ -159,6 +174,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
+        run-on-haproxy: true
 
   - test:
       name: compresstion_with_snappy_type
@@ -168,6 +184,7 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_compression_snappy.yaml
+        run-on-haproxy: true
 
   - test:
       name: Mbuckets_with_Nobjects with sharing enabled
