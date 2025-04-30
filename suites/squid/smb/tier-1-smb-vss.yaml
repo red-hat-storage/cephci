@@ -87,7 +87,7 @@ tests:
       name: Verify VSS feature is enabled for the deployed SMB services by default.
       desc: Verify VSS feature is enabled for the deployed SMB services by default.
       module: smb_vss_conf_check.py
-      polarion-id:
+      polarion-id: CEPH-83617639
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
@@ -100,4 +100,4 @@ tests:
         smb_shares: [ share1 ]
         path: "/"
         smb_conf:
-          - vfs objects: ceph_new
+          - vfs objects: ceph_snapshots
