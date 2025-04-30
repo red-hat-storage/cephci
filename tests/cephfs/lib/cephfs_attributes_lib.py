@@ -109,8 +109,39 @@ class CephFSAttributeUtilities(object):
             bool: True if all expected values match.
         """
         charmap = self.get_charmap(client, dir)
+        log.info("Validating charmap for directory: {}".format(dir))
+        log.debug("\nActual: {} \nExpected: {}".format(charmap, expected_values))
         for key, expected in expected_values.items():
             actual = charmap.get(key)
+            if actual != expected:
+                raise CharMapValidationError(
+                    "{}: {} must be {}, got {}".format(
+                        dir, key, repr(expected), repr(actual)
+                    )
+                )
+        return True
+
+    def validate_charmap_with_values(self, actual_values, expected_values):
+        """
+        Validates that specific attributes in a charmap match expected values.
+
+        Parameters:
+            actual_values (dict): A dictionary of actual key-value pairs from the charmap.
+            expected_values (dict): A dictionary of expected key-value pairs to check
+                                    in the charmap (e.g., {"encoding": "utf8"}).
+
+        Raises:
+            ValueError: If any expected value does not match the actual value in the charmap.
+
+        Returns:
+            bool: True if all expected values match.
+        """
+        log.info("Validating charmap values")
+        log.debug(
+            "\n Actual: {},\n Expected: {}".format(actual_values, expected_values)
+        )
+        for key, expected in expected_values.items():
+            actual = actual_values.get(key)
             if actual != expected:
                 raise CharMapValidationError(
                     "{}: {} must be {}, got {}".format(

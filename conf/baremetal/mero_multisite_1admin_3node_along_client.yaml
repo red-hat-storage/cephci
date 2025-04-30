@@ -4,8 +4,8 @@ globals:
       networks:
         public: ['10.8.128.0/21']
       nodes:
-        - hostname: mero001
-          ip: 10.8.129.221
+        - hostname: mero016
+          ip: 10.8.129.236
           root_password: passwd
           role:
             - _admin
@@ -15,6 +15,7 @@ globals:
             - rgw
             - osd
           volumes:
+            - /dev/sda
             - /dev/sdb
             - /dev/sdc
             - /dev/sdd
@@ -25,7 +26,7 @@ globals:
             - /dev/sdi
             - /dev/sdj
             - /dev/sdk
-            - /dev/sdm
+            - /dev/sdl
         - hostname: mero002
           ip: 10.8.129.222
           root_password: passwd

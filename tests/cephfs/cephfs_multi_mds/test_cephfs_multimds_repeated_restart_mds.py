@@ -3,6 +3,7 @@ import string
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -11,6 +12,7 @@ log = Log(__name__)
 def run(ceph_cluster, **kw):
     try:
         fs_util_v1 = FsUtilsV1(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
@@ -150,7 +152,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "Check for the Ceph Health status to see if it's Healthy after failover."
         )
-        fs_util_v1.get_ceph_health_status(clients[0])
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            return 1
 
         return 0
 

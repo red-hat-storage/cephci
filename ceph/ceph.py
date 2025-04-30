@@ -1298,9 +1298,22 @@ class SSHConnectionManager(object):
         """Get SSH key based on file type"""
         private_key = None
         with open(private_key_file_path, "rb") as key_file:
+            key_data = key_file.read()
+
+        try:
+            # Try loading as OpenSSH first
             private_key = (
                 cryptography.hazmat.primitives.serialization.load_ssh_private_key(
-                    key_file.read(),
+                    key_data,
+                    password=None,
+                    backend=cryptography.hazmat.backends.default_backend(),
+                )
+            )
+        except ValueError:
+            # Fall back to PEM format
+            private_key = (
+                cryptography.hazmat.primitives.serialization.load_pem_private_key(
+                    key_data,
                     password=None,
                     backend=cryptography.hazmat.backends.default_backend(),
                 )

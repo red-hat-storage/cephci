@@ -2,7 +2,7 @@
 #===============================================================================================
 # Tier-level: 1
 # Test-Suite: tier-1_cephfs_case_sensitivity
-# Conf file : conf/squid/cephfs/tier-1_fs.yaml
+# Conf file : conf/squid/cephfs/tier-1_cephfs_smb_nfs.yaml
 # Test-Case Covered:
 # CEPH-83606639 Verify Case Sensitivity Functionality
 #===============================================================================================
@@ -63,6 +63,8 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
+          - samba-client
+          - cifs-utils
         node: node8
       desc: "Configure the Cephfs client system 1"
       destroy-cluster: false
@@ -77,6 +79,8 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
+          - samba-client
+          - cifs-utils
         node: node9
       desc: "Configure the Cephfs client system 2"
       destroy-cluster: false
@@ -91,6 +95,8 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
+          - samba-client
+          - cifs-utils
         node: node10
       desc: "Configure the Cephfs client system 3"
       destroy-cluster: false
@@ -105,6 +111,8 @@ tests:
         install_packages:
           - ceph-common
           - ceph-fuse
+          - samba-client
+          - cifs-utils
         node: node11
       desc: "Configure the Cephfs client system 4"
       destroy-cluster: false
@@ -127,4 +135,10 @@ tests:
       module: cephfs_case_sensitivity.case_sensitivity_disruptive.py
       polarion-id: CEPH-83611928
       desc: Test fs attributes for disruptive use case
+      abort-on-fail: false
+  - test:
+      name: test cephfs attributes - subvolume
+      module: cephfs_case_sensitivity.case_sensitivity_subvolume.py
+      polarion-id: CEPH-83617010
+      desc: Test fs attributes for functional use case
       abort-on-fail: false
