@@ -246,3 +246,4 @@ tests:
       module: test_defunct_ssh_connections.py
       polarion-id: CEPH-83602699
       desc: ceph-mgr cephadm ssh connections 'defunct' after the manager is redeployed
+
