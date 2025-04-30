@@ -1473,50 +1473,60 @@ def run(ceph_cluster, **kw):
                 test_pass = False
 
             # Modify profile with --force flag
-            log.info("Attempt 2: Modifying the profile with the --force flag")
-            try:
-                rados_obj.create_erasure_pool(**profile_configs, force=True)
-            except Exception as err:
-                log.warning(f"Modification failed with --force flag. Exception: {err}")
-
-            # Check profile modification based on Ceph release
-            out = rados_obj.get_ec_profile_detail(
-                profile=profile_configs["profile_name"]
+            # Pass modify_ec_profile_with_force flag to execute test case
+            # Attempt 2: "Modifying the profile with the --force flag"
+            # scenario set to False by default
+            # due to bug :- https://bugzilla.redhat.com/show_bug.cgi?id=2311179
+            modify_ec_profile_with_force = profile_configs.get(
+                "modify_ec_profile_with_force", False
             )
-            if out:
-                ceph_version = float(rhbuild.split("-")[0])
-                if ceph_version < 8.0 and int(out["k"]) != profile_configs["k"]:
-                    log.error(
-                        f"Profile updated with --force on build < 8.0. Build: {rhbuild}. Error!"
-                        f" Current Value : {out['k']} , Expected : {profile_configs['k']}"
+            if modify_ec_profile_with_force:
+                log.info("Attempt 2: Modifying the profile with the --force flag")
+                try:
+                    rados_obj.create_erasure_pool(**profile_configs, force=True)
+                except Exception as err:
+                    log.warning(
+                        f"Modification failed with --force flag. Exception: {err}"
                     )
-                    test_pass = False
-                elif ceph_version >= 8.0:
-                    log.info(
-                        f"Retrying with --force and --yes-i-really-mean-it flags, build: {rhbuild}"
-                    )
-                    try:
-                        rados_obj.create_erasure_pool(
-                            **profile_configs, force=True, yes_i_mean_it=True
-                        )
-                    except Exception as err:
-                        log.info(
-                            f"Failed to modify profile with --force and --yes-i-really-mean-it flags. Error: {err}"
-                        )
 
-                    out = rados_obj.get_ec_profile_detail(
-                        profile=profile_configs["profile_name"]
-                    )
-                    if int(out["k"]) != profile_configs["k"]:
+                # Check profile modification based on Ceph release
+                out = rados_obj.get_ec_profile_detail(
+                    profile=profile_configs["profile_name"]
+                )
+                if out:
+                    ceph_version = float(rhbuild.split("-")[0])
+                    if ceph_version < 8.0 and int(out["k"]) != profile_configs["k"]:
                         log.error(
-                            f"Profile not updated with --force and --yes-i-really-mean-it flag. Build: {rhbuild}"
+                            f"Profile updated with --force on build < 8.0. Build: {rhbuild}. Error!"
                             f" Current Value : {out['k']} , Expected : {profile_configs['k']}"
                         )
                         test_pass = False
-                    else:
+                    elif ceph_version >= 8.0:
                         log.info(
-                            "Profile could be updated successfully with --force & --yes-i-mean-it flags. Pass"
+                            f"Retrying with --force and --yes-i-really-mean-it flags, build: {rhbuild}"
                         )
+                        try:
+                            rados_obj.create_erasure_pool(
+                                **profile_configs, force=True, yes_i_mean_it=True
+                            )
+                        except Exception as err:
+                            log.info(
+                                f"Failed to modify profile with --force and --yes-i-really-mean-it flags. Error: {err}"
+                            )
+
+                        out = rados_obj.get_ec_profile_detail(
+                            profile=profile_configs["profile_name"]
+                        )
+                        if int(out["k"]) != profile_configs["k"]:
+                            log.error(
+                                f"Profile not updated with --force and --yes-i-really-mean-it flag. Build: {rhbuild}"
+                                f" Current Value : {out['k']} , Expected : {profile_configs['k']}"
+                            )
+                            test_pass = False
+                        else:
+                            log.info(
+                                "Profile could be updated successfully with --force & --yes-i-mean-it flags. Pass"
+                            )
 
             # Attempt to delete the profile in use by the pool
             log.info(
