@@ -8,3 +8,4 @@ awscli
 pylero
 python-dotenv
 smbprotocol
+trcli
