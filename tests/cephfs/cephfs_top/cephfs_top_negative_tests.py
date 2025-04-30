@@ -3,13 +3,16 @@ import random
 import string
 import time
 import traceback
-from datetime import datetime, timedelta
+from datetime import datetime
 from threading import Thread
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.exceptions import ValueMismatchError
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -48,7 +51,8 @@ def test_setup(fs_util, ceph_cluster, client):
         cmd=f"ceph fs set {default_fs} max_mds 2",
     )
 
-    if wait_for_healthy_ceph(client, fs_util, 300) == 0:
+    if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
+        log.error("Cluster health is not OK even after waiting for 5 mins.")
         return 1
 
     nfs_servers = ceph_cluster.get_ceph_objects("nfs")
@@ -102,7 +106,8 @@ def test_setup(fs_util, ceph_cluster, client):
     return setup_params
 
 
-def cephfs_top_stats_validate(client, fs_name, mnt_info):
+@retry(ValueMismatchError, tries=5, delay=30)
+def cephfs_top_stats_validate(client, fs_util, fs_name, mnt_info):
     """
     This method validates cephfs-top --dump output for given mount info and mountpoints
     Required params:
@@ -112,21 +117,17 @@ def cephfs_top_stats_validate(client, fs_name, mnt_info):
     mnt_info = {'sv1':{'client':client_obj,'path':mnt_path,'mnt_type':'fuse'}
     }
     """
-    retry_cnt = 10
-    while retry_cnt > 0:
-        out, _ = client.exec_command(
-            sudo=True,
-            cmd="cephfs-top --dump",
+    log.debug(
+        "Validating cephfs-top --dump output for fs_name:{} and mnt_info:{}".format(
+            fs_name, mnt_info
         )
-        parsed_data = json.loads(out)
-        log.info(f"cephfs-top --dump output:{parsed_data}")
-        client_info = parsed_data.get("client_count")
-        if client_info["total_clients"] == 0:
-            retry_cnt -= 1
-            time.sleep(1)
-        else:
-            retry_cnt = 0
+    )
+    parsed_data = fs_util.get_cephfs_top_dump(client)
+    log.debug("Dump Output: {}".format(parsed_data))
+    client_info = parsed_data.get("client_count")
+    log.debug("Client Info: {}".format(client_info))
     fs_info = parsed_data.get("filesystems")[fs_name]
+    log.debug("fs_info from cephfs-top dump output: {}".format(fs_info))
     test_fail = 0
     mnt_pass = 0
     mnt_pnt_pass = 0
@@ -136,8 +137,14 @@ def cephfs_top_stats_validate(client, fs_name, mnt_info):
         )
     else:
         test_fail += 1
+        raise ValueMismatchError(
+            "Total clients in cephfs-top dump output is not as expected. Expected: {}, Found: {}".format(
+                len(mnt_info.keys()), client_info["total_clients"]
+            )
+        )
     for mnt_iter in mnt_info:
         mnt_type = mnt_info[mnt_iter]["mnt_type"]
+        log.debug(f"Validating mount info for mnt_iter:{mnt_iter},mnt_type:{mnt_type}")
         if mnt_type == "libcephfs":
             nfs_server = mnt_info[mnt_iter]["nfs_server"]
             for id in fs_info:
@@ -151,28 +158,52 @@ def cephfs_top_stats_validate(client, fs_name, mnt_info):
         ):
             log.info(f"Validated {mnt_type} mount info in cephfs-top dump output")
             mnt_pass += 1
+        else:
+            log.error(
+                "{} mount info not found in cephfs-top dump output: {}".format(
+                    mnt_type, client_info
+                )
+            )
     if mnt_pass != 3:
         test_fail += 1
-        log.error("Validation of Mountinfo in cephfs-top dump output failed")
+        log.error(
+            "Validation of Mountinfo in cephfs-top dump output failed. Expected 3, got {}".format(
+                mnt_pass
+            )
+        )
+
+    log.info("Completed mountinfo validation in cephfs-top dump output")
+
+    log.info("Validating mountpoints in cephfs-top dump output")
     for id in fs_info:
+        log.debug(
+            "Validating mountpoint for id:{} from fs_info: {}".format(id, fs_info)
+        )
         log.info(
             f"fs_info[id]['mount_point@host/addr']:{fs_info[id]['mount_point@host/addr']}"
         )
         for mnt_iter in mnt_info:
             log.info(f"path:{mnt_info[mnt_iter]['path']}")
             path = replace_nth("/", "", mnt_info[mnt_iter]["path"], 3)
+            log.debug("Path after replace_nth: {}".format(path))
             if path in fs_info[id]["mount_point@host/addr"]:
                 log.info(
                     f"Validated mountpoint {mnt_info[mnt_iter]['path']} in cephfs-top dump output"
                 )
                 mnt_pnt_pass += 1
-    if mnt_pnt_pass < 3:
+    # As per BZ 2307251, validating only for 1 mountpoint(FUSE)
+    # if mnt_pnt_pass < 3:
+    if mnt_pnt_pass != 1:
         test_fail += 1
         log.error(
-            "BZ 2307251 : Validation of Mountpoint in cephfs-top dump output failed"
+            "Validation of Mountpoint in cephfs-top dump output failed. Expected 1, got {}".format(
+                mnt_pnt_pass
+            )
         )
     if test_fail > 0:
         return 1
+
+    log.info("Validated mountpoints in cephfs-top dump output successfully")
     return 0
 
 
@@ -350,25 +381,6 @@ def remove_fs_cephfs_top_check(client, fs_util, fs_name, mnt_info):
         return 1
 
 
-def wait_for_healthy_ceph(client1, fs_util, wait_time_secs):
-    # Returns 1 if healthy, 0 if unhealthy
-    ceph_healthy = 0
-    end_time = datetime.now() + timedelta(seconds=wait_time_secs)
-    while ceph_healthy == 0 and (datetime.now() < end_time):
-        try:
-            fs_util.get_ceph_health_status(client1)
-            ceph_healthy = 1
-        except Exception as ex:
-            log.info(ex)
-            log.info(
-                f"Wait for sometime to check if Cluster health can be OK, current state : {ex}"
-            )
-            time.sleep(5)
-    if ceph_healthy == 0:
-        return 0
-    return 1
-
-
 def replace_nth(sub, repl, txt, nth):
     arr = txt.split(sub)
     part1 = sub.join(arr[:nth])
@@ -393,12 +405,14 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83575020"
         log.info(f"Running cephfs {tc} test case")
+        global cephfs_common_utils
 
         config = kw["config"]
         build = config.get("build", config.get("rhbuild"))
 
         test_data = kw.get("test_data")
         fs_util_v1 = FsUtils(ceph_cluster, test_data=test_data)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         erasure = (
             FsUtils.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -516,7 +530,7 @@ def run(ceph_cluster, **kw):
             )
             p.start()
             write_procs.append(p)
-        if cephfs_top_stats_validate(client, fs_name, mnt_info) == 1:
+        if cephfs_top_stats_validate(client, fs_util_v1, fs_name, mnt_info) == 1:
             test_fail += 1
             log.error("Test failed during cephfs_top_stats_validate")
 
@@ -539,8 +553,6 @@ def run(ceph_cluster, **kw):
                 elif proc_stop == 0:
                     log.error("IO has NOT completed")
 
-        if wait_for_healthy_ceph(client, fs_util_v1, 300) == 0:
-            return 1
         if remove_fs_client_cephfs_top_check(client, fs_name, mnt_info) == 1:
             test_fail += 1
             log.error("Test failed during remove_fs_client_cephfs_top_check")
@@ -554,6 +566,11 @@ def run(ceph_cluster, **kw):
             log.error("Cephfs-top negative testing failed")
             return 1
         return 0
+
+    except ValueMismatchError as e:
+        log.error("Value mismatch error occurred. Error: {}".format(e))
+        log.error(traceback.format_exc())
+        return 1
 
     except Exception as e:
         log.error(e)

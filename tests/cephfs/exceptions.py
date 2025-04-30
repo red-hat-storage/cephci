@@ -72,6 +72,12 @@ class UnsupportedInput(FsBaseException):
     pass
 
 
+class ValueMismatchError(FsBaseException):
+    """Raised when a value does not match the expected value."""
+
+    pass
+
+
 class FileSystemFailOperationError(FsBaseException):
     """Raised when a file system operation fails."""
 
