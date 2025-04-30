@@ -585,6 +585,7 @@ def run(args):
         details["polarion-id-link"] = "{}{}".format(
             polarion_default_url, details["polarion-id"]
         )
+        details["testrail-id"] = var.get("testrail-id")
         details["rhbuild"] = rhbuild
         details["cloud-type"] = cloud_type
         details["ceph-version"] = ceph_version
