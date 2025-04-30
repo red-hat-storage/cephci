@@ -57,7 +57,7 @@ class UpgradeMixin:
 
         return self.shell(args=cmd)
 
-    def upgrade_status(self: OrchProtocol):
+    def upgrade_status(self: OrchProtocol, timeout: int = 600, interval: int = 10):
         """
         Execute the command ceph orch status.
 
@@ -65,19 +65,23 @@ class UpgradeMixin:
             upgrade Status (Dict)
 
         """
-        out, _ = self.shell(args=["ceph", "orch", "upgrade", "status"])
-        try:
-            return loads(out)
-        except JSONDecodeError:
-            pass  # Not valid JSON, move to next check
+        end_time = datetime.now() + timedelta(seconds=timeout)
 
-        if "There are no upgrades in progress currently." in out:
-            return {"in_progress": False}
+        while datetime.now() < end_time:
+            out, _ = self.shell(args=["ceph", "orch", "upgrade", "status"])
+            try:
+                return loads(out)
+            except JSONDecodeError:
+                pass  # Not valid JSON, move to next check
+
+            if "There are no upgrades in progress currently." in out:
+                return {"in_progress": False}
+
+            sleep(interval)
 
         raise CommandFailed(
-            "Command 'ceph orch upgrade status' returned unexpected output: '{}'".format(
-                out
-            )
+            "Command 'ceph orch upgrade status' did not return valid JSON or expected message "
+            "within {} seconds. Final output: '{}'".format(timeout, out)
         )
 
     def upgrade_check(self: OrchProtocol, image):
