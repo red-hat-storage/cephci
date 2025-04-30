@@ -131,7 +131,7 @@ tests:
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
       module: test_client.py
-      name: configure clients
+      name: configure client
 
   - test:
       name: Nfs Ganesha File Lock
@@ -403,47 +403,76 @@ tests:
         qos_type: PerShare
         operation: restart
 
-
   - test:
-      name: Qos enablement PerShare on export level with nfs service with dynamic update
+      name: Qos enablement PerShare-combined_bw value for export level with nfs service with restart
       module: test_nfs_qos_on_export_level_enablement.py
-      desc: Verify qos Pershare enablement on export level dynamic update
-      polarion-id: CEPH-83615833
+      desc: Verify qos PerShare-combined_bw value enablement on export level
+      polarion-id: CEPH-83616913
       abort-on-fail: false
       config:
         cephfs_volume: cephfs
         cluster_name: cephfs-nfs
         cluster_bw:
-          - max_export_write_bw: 100MB
-            max_export_read_bw: 100MB
-            max_client_write_bw: 100MB
-            max_client_read_bw: 100MB
+          - max_export_combined_bw: 100MB
         export_bw:
-          - max_export_write_bw: 8MB
-            max_export_read_bw: 8MB
-            max_client_write_bw: 8MB
-            max_client_read_bw: 8MB
+          - max_export_combined_bw: 8MB
         qos_type: PerShare
-        operation: dynamic_update
+        operation: restart
 
   - test:
-      name: Qos enablement PerShare_PerClient on export level with nfs service with dynamic update
+      name: Qos enablement PerShare_PerClient-combined_bw value for export level with nfs service with restart
       module: test_nfs_qos_on_export_level_enablement.py
-      desc: Verify qos PerShare_PerClient enablement on export level dynamic update
-      polarion-id: CEPH-83615834
+      desc: Verify qos PerShare_PerClient-combined_bw value enablement on export level
+      polarion-id: CEPH-83616914
       abort-on-fail: false
       config:
         cephfs_volume: cephfs
         cluster_name: cephfs-nfs
         cluster_bw:
-          - max_export_write_bw: 100MB
-            max_export_read_bw: 100MB
-            max_client_write_bw: 100MB
-            max_client_read_bw: 100MB
+          - max_client_combined_bw: 100MB
+            max_export_combined_bw: 100MB
         export_bw:
-          - max_export_write_bw: 8MB
-            max_export_read_bw: 8MB
-            max_client_write_bw: 8MB
-            max_client_read_bw: 8MB
+          - max_client_combined_bw: 8MB
+            max_export_combined_bw: 8MB
         qos_type: PerShare_PerClient
-        operation: dynamic_update
+        operation: restart
+
+  - test:
+      name: Qos PerShare-combined_bw enablement on Cluster level with nfs with service restart
+      module: test_nfs_qos_on_cluster_level_enablement.py
+      desc: Verify qos PerShare-combined_bw enablement on cluster level
+      polarion-id: CEPH-83616910
+      abort-on-fail: false
+      config:
+        cephfs_volume : cephfs
+        cluster_name : cephfs-nfs
+        max_export_combined_bw: 8MB
+        qos_type : PerShare
+        operation : restart
+
+  - test:
+      name: Qos PerClient-combined_bw enablement on Cluster level with nfs with service restart
+      module: test_nfs_qos_on_cluster_level_enablement.py
+      desc: Verify qos PerClient-combined_bw enablement on cluster level
+      polarion-id: CEPH-83616911
+      abort-on-fail: false
+      config:
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        max_client_combined_bw: 8MB
+        qos_type: PerClient
+        operation: restart
+
+  - test:
+      name: Qos PerShare_PerClient-combined_bw enablement on Cluster level with nfs with service restart
+      module: test_nfs_qos_on_cluster_level_enablement.py
+      desc: Verify qos PerShare_PerClient-combined_bw enablement on cluster level
+      polarion-id: CEPH-83616912
+      abort-on-fail: false
+      config:
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        max_export_combined_bw: 8MB
+        max_client_combined_bw: 8MB
+        qos_type: PerShare_PerClient
+        operation: restart

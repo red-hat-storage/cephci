@@ -96,7 +96,7 @@ class Qos(Cli):
         read_bw: str,
     ) -> list:
         if combined_bw:
-            return ["--max_export_combined_bw %s" % combined_bw]
+            return ["--combined-rw-bw-ctrl --max_export_combined_bw %s" % combined_bw]
         if write_bw and read_bw:
             return [
                 "--max_export_write_bw %s" % write_bw,
@@ -113,7 +113,7 @@ class Qos(Cli):
         read_bw: str,
     ) -> list:
         if combined_bw:
-            return ["--max_client_combined_bw %s" % combined_bw]
+            return ["--combined-rw-bw-ctrl --max_client_combined_bw %s" % combined_bw]
         if write_bw and read_bw:
             return [
                 "--max_client_write_bw %s" % write_bw,

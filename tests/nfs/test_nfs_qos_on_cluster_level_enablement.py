@@ -17,31 +17,69 @@ def capture_copy_details(client, nfs_mount, file_name, size="100"):
     :param size: The size of the file to create (default is "100M").
     :return: A tuple containing (stdout, stderr) from the dd command.
     """
+
+    write_speed, read_speed = "", ""
     cmd = "touch {0}/{1}".format(nfs_mount, file_name)
     client.exec_command(
         sudo=True,
         cmd=cmd,
     )
 
-    cmd = "dd if=/dev/urandom of={0}/{1} bs={2}M count=1".format(
+    write_cmd = "dd if=/dev/urandom of={0}/{1} bs={2}M count=1".format(
         nfs_mount, file_name, size
     )
-    data = client.exec_command(sudo=True, cmd=cmd)
+    write_results = client.exec_command(sudo=True, cmd=write_cmd)[1]
 
     if (
-        re.search(r"(\d+\.\d+ MB/s)$", data[1])
-        or re.findall(r"(\d+ MB/s)$", data[1])[0]
+        re.search(r"(\d+\.\d+ MB/s)$", write_results)
+        or re.findall(r"(\d+ MB/s)$", write_results)[0]
     ):
-        speed = (
-            re.findall(r"(\d+\.\d+ MB/s)$", data[1])[0]
-            if re.search(r"(\d+\.\d+ MB/s)$", data[1])[0]
-            else re.findall(r"(\d+ MB/s)$", data[1])[0]
+        write_speed = (
+            re.findall(r"(\d+\.\d+ MB/s)$", write_results)[0]
+            if re.search(r"(\d+\.\d+ MB/s)$", write_results)
+            else re.findall(r"(\d+ MB/s)$", write_results)[0]
         )
         log.info("File created successfully on {0}".format(client.hostname))
-        return speed
+        log.info("write speed is {0}".format(write_speed))
+
+    # dropping cache
+    drop_cache_cmd = "echo 3 > /proc/sys/vm/drop_caches"
+    client.exec_command(
+        sudo=True,
+        cmd=drop_cache_cmd,
+    )
+    log.info("Cache dropped successfully")
+
+    read_cmd = "dd if={0}/{1} of=/dev/urandom".format(nfs_mount, file_name)
+    read_results = client.exec_command(sudo=True, cmd=read_cmd)[1]
+
+    if (
+        re.search(r"(\d+\.\d+ MB/s)$", read_results)
+        or re.findall(r"(\d+ MB/s)$", read_results)[0]
+    ):
+        read_speed = (
+            re.findall(r"(\d+\.\d+ MB/s)$", read_results)[0]
+            if re.search(r"(\d+\.\d+ MB/s)$", read_results)
+            else re.findall(r"(\d+ MB/s)$", read_results)[0]
+        )
+        log.info("read speed is {0}".format(read_speed))
+
+    rm_cmd = "rm -rf {0}/{1}".format(nfs_mount, file_name)
+    client.exec_command(
+        sudo=True,
+        cmd=rm_cmd,
+    )
+
+    if write_speed and read_speed:
+        log.info(
+            'Read and write speed captured successfully on {0} "write_speed": {1}, "read_speed": {2}'.format(
+                client.hostname, write_speed, read_speed
+            ),
+        )
+        return {"write_speed": write_speed, "read_speed": read_speed}
     else:
         raise OperationFailedError(
-            "Failed to run dd command on {0} : {1}".format(client.hostname, data)
+            "Failed to capture read/write speed on {0}".format(client.hostname)
         )
 
 
@@ -82,28 +120,58 @@ def enable_disable_qos_for_cluster(
     try:
         if enable_flag:
             if qos_type == "PerShare":
-                ceph_cluster_nfs_obj.qos.enable_per_share(
-                    qos_type=qos_type,
-                    cluster_id=cluster_name,
-                    max_export_read_bw=qos_parameters.get("max_export_read_bw"),
-                    max_export_write_bw=qos_parameters.get("max_export_write_bw"),
-                )
+                if "max_export_combined_bw" in qos_parameters:
+                    ceph_cluster_nfs_obj.qos.enable_per_share(
+                        qos_type=qos_type,
+                        cluster_id=cluster_name,
+                        max_export_combined_bw=qos_parameters.get(
+                            "max_export_combined_bw"
+                        ),
+                    )
+                else:
+                    ceph_cluster_nfs_obj.qos.enable_per_share(
+                        qos_type=qos_type,
+                        cluster_id=cluster_name,
+                        max_export_read_bw=qos_parameters.get("max_export_read_bw"),
+                        max_export_write_bw=qos_parameters.get("max_export_write_bw"),
+                    )
             elif qos_type == "PerClient":
-                ceph_cluster_nfs_obj.qos.enable_per_client(
-                    qos_type=qos_type,
-                    cluster_id=cluster_name,
-                    max_client_read_bw=qos_parameters.get("max_client_read_bw"),
-                    max_client_write_bw=qos_parameters.get("max_client_write_bw"),
-                )
+                if "max_client_combined_bw" in qos_parameters:
+                    ceph_cluster_nfs_obj.qos.enable_per_client(
+                        qos_type=qos_type,
+                        cluster_id=cluster_name,
+                        max_client_combined_bw=qos_parameters.get(
+                            "max_client_combined_bw"
+                        ),
+                    )
+                else:
+                    ceph_cluster_nfs_obj.qos.enable_per_client(
+                        qos_type=qos_type,
+                        cluster_id=cluster_name,
+                        max_client_read_bw=qos_parameters.get("max_client_read_bw"),
+                        max_client_write_bw=qos_parameters.get("max_client_write_bw"),
+                    )
             elif qos_type == "PerShare_PerClient":
-                ceph_cluster_nfs_obj.qos.enable_per_share_per_client(
-                    qos_type=qos_type,
-                    cluster_id=cluster_name,
-                    max_export_read_bw=qos_parameters.get("max_export_read_bw"),
-                    max_export_write_bw=qos_parameters.get("max_export_write_bw"),
-                    max_client_read_bw=qos_parameters.get("max_client_read_bw"),
-                    max_client_write_bw=qos_parameters.get("max_client_write_bw"),
-                )
+                if "max_client_combined_bw" in qos_parameters:
+                    ceph_cluster_nfs_obj.qos.enable_per_share_per_client(
+                        qos_type=qos_type,
+                        cluster_id=cluster_name,
+                        max_export_combined_bw=qos_parameters.get(
+                            "max_export_combined_bw"
+                        ),
+                        max_client_combined_bw=qos_parameters.get(
+                            "max_client_combined_bw"
+                        ),
+                    )
+                else:
+                    ceph_cluster_nfs_obj.qos.enable_per_share_per_client(
+                        qos_type=qos_type,
+                        cluster_id=cluster_name,
+                        max_export_read_bw=qos_parameters.get("max_export_read_bw"),
+                        max_export_write_bw=qos_parameters.get("max_export_write_bw"),
+                        max_client_read_bw=qos_parameters.get("max_client_read_bw"),
+                        max_client_write_bw=qos_parameters.get("max_client_write_bw"),
+                    )
         else:
             ceph_cluster_nfs_obj.qos.disable(cluster_id=cluster_name)
 
@@ -175,9 +243,9 @@ def run(ceph_cluster, **kw):
         # Process QoS operations
         enable_disable_qos_for_cluster(
             enable_flag=True,
+            qos_type=qos_type,
             ceph_cluster_nfs_obj=ceph_nfs_client.cluster,
             cluster_name=cluster_name,
-            qos_type=qos_type,
             **{
                 k: config[k]
                 for k in [
@@ -185,6 +253,8 @@ def run(ceph_cluster, **kw):
                     "max_export_read_bw",
                     "max_client_write_bw",
                     "max_client_read_bw",
+                    "max_export_combined_bw",
+                    "max_client_combined_bw",
                 ]
                 if k in config
             },
@@ -224,19 +294,51 @@ def run(ceph_cluster, **kw):
             )
         )
 
-        if float(re.findall(r"\d+", config["max_export_write_bw"])[0]) >= float(
-            re.findall(r"\d+\.\d+", speed)[0]
+        write_speed = speed.get("write_speed")
+        read_speed = speed.get("read_speed")
+
+        max_export_write_bw = config.get("max_export_write_bw")
+        max_export_read_bw = config.get("max_export_read_bw")
+        max_client_write_bw = config.get("max_client_write_bw")
+        max_client_read_bw = config.get("max_client_read_bw")
+        max_export_combined_bw = config.get("max_export_combined_bw")
+        if max_export_combined_bw:
+            max_export_write_bw = max_export_combined_bw
+            max_export_read_bw = max_export_combined_bw
+        max_client_combined_bw = config.get("max_client_combined_bw")
+        if max_client_combined_bw:
+            max_client_write_bw = max_client_combined_bw
+            max_client_read_bw = max_client_combined_bw
+
+        if (
+            (max_export_write_bw is not None and max_export_read_bw is not None)
+            and float(max_export_write_bw.replace("MB", ""))
+            >= float(write_speed.replace(" MB/s", ""))
+            and float(max_export_read_bw.replace("MB", ""))
+            >= float(read_speed.replace(" MB/s", ""))
+        ) or (
+            (max_client_write_bw is not None and max_client_read_bw is not None)
+            and float(max_client_write_bw.replace("MB", ""))
+            >= float(write_speed.replace(" MB/s", ""))
+            and float(max_client_read_bw.replace("MB", ""))
+            >= float(read_speed.replace(" MB/s", ""))
         ):
             log.info(
-                "Test passed: QoS {0} enabled successfully in cluster level".format(
-                    qos_type
+                "Test passed: QoS {0} enabled successfully in export level write speed is {1}"
+                " , max_export_write_bw is {2} and read speed is {3}"
+                " and max_export_read_bw is {4}".format(
+                    qos_type,
+                    write_speed,
+                    max_export_write_bw,
+                    read_speed,
+                    max_export_read_bw,
                 )
             )
         else:
             raise OperationFailedError(
-                "Test failed: QoS {0} enabled successfully in cluster level transfer speed is {1} "
-                "and max_export_write_bw is {2}".format(
-                    qos_type, speed, config["max_export_write_bw"]
+                "Test failed: QoS {0} enabled successfully in export level write speed is {1}"
+                " and read speed is {2} config is {3}".format(
+                    qos_type, write_speed, read_speed, config
                 )
             )
 

@@ -32,28 +32,58 @@ def enable_disable_qos_for_export(
     try:
         if enable_flag:
             if qos_type == "PerShare":
-                ceph_export_nfs_obj.qos.enable_per_share(
-                    nfs_name=nfs_name,
-                    export=export,
-                    max_export_read_bw=qos_parameters.get("max_export_read_bw"),
-                    max_export_write_bw=qos_parameters.get("max_export_write_bw"),
-                )
+                if "max_export_combined_bw" in qos_parameters:
+                    ceph_export_nfs_obj.qos.enable_per_share(
+                        nfs_name=nfs_name,
+                        export=export,
+                        max_export_combined_bw=qos_parameters.get(
+                            "max_export_combined_bw"
+                        ),
+                    )
+                else:
+                    ceph_export_nfs_obj.qos.enable_per_share(
+                        nfs_name=nfs_name,
+                        export=export,
+                        max_export_read_bw=qos_parameters.get("max_export_read_bw"),
+                        max_export_write_bw=qos_parameters.get("max_export_write_bw"),
+                    )
             elif qos_type == "PerClient":
-                ceph_export_nfs_obj.qos.enable_per_client(
-                    nfs_name=nfs_name,
-                    export=export,
-                    max_client_read_bw=qos_parameters.get("max_client_read_bw"),
-                    max_client_write_bw=qos_parameters.get("max_client_write_bw"),
-                )
+                if "max_client_combined_bw" in qos_parameters:
+                    ceph_export_nfs_obj.qos.enable_per_client(
+                        nfs_name=nfs_name,
+                        export=export,
+                        max_client_combined_bw=qos_parameters.get(
+                            "max_client_combined_bw"
+                        ),
+                    )
+                else:
+                    ceph_export_nfs_obj.qos.enable_per_client(
+                        nfs_name=nfs_name,
+                        export=export,
+                        max_client_read_bw=qos_parameters.get("max_client_read_bw"),
+                        max_client_write_bw=qos_parameters.get("max_client_write_bw"),
+                    )
             elif qos_type == "PerShare_PerClient":
-                ceph_export_nfs_obj.qos.enable_per_share_per_client(
-                    nfs_name=nfs_name,
-                    export=export,
-                    max_export_read_bw=qos_parameters.get("max_export_read_bw"),
-                    max_export_write_bw=qos_parameters.get("max_export_write_bw"),
-                    max_client_read_bw=qos_parameters.get("max_client_read_bw"),
-                    max_client_write_bw=qos_parameters.get("max_client_write_bw"),
-                )
+                if "max_client_combined_bw" in qos_parameters:
+                    ceph_export_nfs_obj.qos.enable_per_share_per_client(
+                        nfs_name=nfs_name,
+                        export=export,
+                        max_export_combined_bw=qos_parameters.get(
+                            "max_export_combined_bw"
+                        ),
+                        max_client_combined_bw=qos_parameters.get(
+                            "max_client_combined_bw"
+                        ),
+                    )
+                else:
+                    ceph_export_nfs_obj.qos.enable_per_share_per_client(
+                        nfs_name=nfs_name,
+                        export=export,
+                        max_export_read_bw=qos_parameters.get("max_export_read_bw"),
+                        max_export_write_bw=qos_parameters.get("max_export_write_bw"),
+                        max_client_read_bw=qos_parameters.get("max_client_read_bw"),
+                        max_client_write_bw=qos_parameters.get("max_client_write_bw"),
+                    )
         else:
             ceph_export_nfs_obj.qos.disable(cluster_id=nfs_name, export=export)
         qos_data = ceph_export_nfs_obj.qos.get(nfs_name=nfs_name, export=export)
@@ -67,28 +97,6 @@ def enable_disable_qos_for_export(
             "Failed to {0} QoS for export {1} in cluster {2} : {3}".format(
                 operation_key, export, cluster_name, str(e)
             )
-        )
-
-
-def verify_bw_speed(client, nfs_mount, qos_type, export_bw):
-    speed = capture_copy_details(client, nfs_mount, "sample.txt")
-    log.info(
-        "Transfer speed is {0} for QoS {1} enabled in export level".format(
-            speed, qos_type
-        )
-    )
-    if float(re.findall(r"\d+", export_bw["max_export_write_bw"])[0]) >= float(
-        re.findall(r"\d+\.\d+", speed)[0]
-    ):
-        log.info(
-            "Test passed: QoS {0} enabled successfully in export level transfer speed is {1}"
-            " and max_export_write_bw is {2}".format(
-                qos_type, speed, export_bw["max_export_write_bw"]
-            )
-        )
-    else:
-        raise OperationFailedError(
-            "Test failed: QoS {0} enabled successfully in export level".format(qos_type)
         )
 
 
@@ -144,9 +152,9 @@ def run(ceph_cluster, **kw):
         # Enable QoS with parameters
         enable_disable_qos_for_cluster(
             enable_flag=True,
+            qos_type=qos_type,
             ceph_cluster_nfs_obj=ceph_nfs_client.cluster,
             cluster_name=cluster_name,
-            qos_type=qos_type,
             **{
                 k: cluster_bw[k]
                 for k in [
@@ -154,6 +162,8 @@ def run(ceph_cluster, **kw):
                     "max_export_read_bw",
                     "max_client_write_bw",
                     "max_client_read_bw",
+                    "max_export_combined_bw",
+                    "max_client_combined_bw",
                 ]
                 if k in cluster_bw
             },
@@ -174,6 +184,8 @@ def run(ceph_cluster, **kw):
                     "max_export_read_bw",
                     "max_client_write_bw",
                     "max_client_read_bw",
+                    "max_export_combined_bw",
+                    "max_client_combined_bw",
                 ]
                 if k in export_bw
             },
@@ -204,57 +216,94 @@ def run(ceph_cluster, **kw):
             export_data_after_restart = json.loads(export_data_after_restart)
             log.info("export_data_after_restart: {0}".format(export_data_after_restart))
 
-            if float(
-                re.findall(
-                    r"\d+.\d+",
-                    export_data_after_restart["qos_block"]["max_export_write_bw"],
-                )[0]
-            ) == float(re.findall(r"\d+", export_bw["max_export_write_bw"])[0]):
-                log.info(
-                    "Qos data for {0} for export persists even after the nfs cluster restarted".format(
-                        qos_type
+            if export_data_after_restart["qos_block"].get("max_export_write_bw"):
+                if float(
+                    re.findall(
+                        r"\d+\.\d+",
+                        export_data_after_restart["qos_block"]["max_export_write_bw"],
+                    )[0]
+                ) == float(re.findall(r"\d+", export_bw["max_export_write_bw"])[0]):
+                    log.info(
+                        "Qos data for {0} for export persists even after the nfs cluster restarted".format(
+                            qos_type
+                        )
                     )
-                )
+            elif export_data_after_restart["qos_block"].get("max_export_combined_bw"):
+                if float(
+                    re.findall(
+                        r"\d+\.\d+",
+                        export_data_after_restart["qos_block"][
+                            "max_export_combined_bw"
+                        ],
+                    )[0]
+                ) == float(re.findall(r"\d+", export_bw["max_export_combined_bw"])[0]):
+                    log.info(
+                        "Qos data for {0} for export persists even after the nfs cluster restarted".format(
+                            qos_type
+                        )
+                    )
             else:
                 raise OperationFailedError(
-                    "Qos data for {0} did not persists after the nfs cluster restarted".format(
+                    "Qos data for {0} did not persist after the nfs cluster restarted".format(
                         qos_type
                     )
                 )
 
-        verify_bw_speed(client, nfs_mount, qos_type, export_bw)
+        speed = capture_copy_details(client, nfs_mount, "sample.txt")
+        log.info(
+            "Transfer speed is {0} for QoS {1} enabled in export level".format(
+                speed, qos_type
+            )
+        )
 
-        if operation == "dynamic_update":
-            # Update the qos parameters
-            export_bw = {
-                "max_client_read_bw": "6MB",
-                "max_client_write_bw": "6MB",
-                "max_export_read_bw": "6MB",
-                "max_export_write_bw": "6MB",
-            }
+        write_speed = speed.get("write_speed")
+        read_speed = speed.get("read_speed")
 
-            enable_disable_qos_for_export(
-                enable_flag=True,
-                ceph_export_nfs_obj=ceph_nfs_client.export,
-                cluster_name=cluster_name,
-                qos_type=qos_type,
-                nfs_name=nfs_name,
-                export=nfs_export,
-                **{
-                    k: export_bw[k]
-                    for k in [
-                        "max_export_write_bw",
-                        "max_export_read_bw",
-                        "max_client_write_bw",
-                        "max_client_read_bw",
-                    ]
-                    if k in export_bw
-                },
+        max_export_write_bw = export_bw.get("max_export_write_bw")
+        max_export_read_bw = export_bw.get("max_export_read_bw")
+        max_client_write_bw = export_bw.get("max_client_write_bw")
+        max_client_read_bw = export_bw.get("max_client_read_bw")
+        max_export_combined_bw = export_bw.get("max_export_combined_bw")
+        if max_export_combined_bw:
+            max_export_write_bw = max_export_combined_bw
+            max_export_read_bw = max_export_combined_bw
+        max_client_combined_bw = export_bw.get("max_client_combined_bw")
+        if max_client_combined_bw:
+            max_client_write_bw = max_client_combined_bw
+            max_client_read_bw = max_client_combined_bw
+
+        if (
+            (max_export_write_bw is not None and max_export_read_bw is not None)
+            and float(max_export_write_bw.replace("MB", ""))
+            >= float(write_speed.replace(" MB/s", ""))
+            and float(max_export_read_bw.replace("MB", ""))
+            >= float(read_speed.replace(" MB/s", ""))
+        ) or (
+            (max_client_write_bw is not None and max_client_read_bw is not None)
+            and float(max_client_write_bw.replace("MB", ""))
+            >= float(write_speed.replace(" MB/s", ""))
+            and float(max_client_read_bw.replace("MB", ""))
+            >= float(read_speed.replace(" MB/s", ""))
+        ):
+            log.info(
+                "Test passed: QoS {0} enabled successfully in export level write speed is {1}"
+                " , max_export_write_bw is {2} and read speed is {3}"
+                " and max_export_read_bw is {4}".format(
+                    qos_type,
+                    write_speed,
+                    max_export_write_bw,
+                    read_speed,
+                    max_export_read_bw,
+                )
+            )
+        else:
+            raise OperationFailedError(
+                "Test failed: QoS {0} enabled successfully in export level write speed is {1}"
+                " and read speed is {2} config is {3}".format(
+                    qos_type, write_speed, read_speed, cluster_bw
+                )
             )
 
-        verify_bw_speed(client, nfs_mount, qos_type, export_bw)
-
-        # Disable QoS for export
         enable_disable_qos_for_export(
             enable_flag=False,
             nfs_name=nfs_name,
