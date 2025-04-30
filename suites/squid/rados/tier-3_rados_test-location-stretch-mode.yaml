@@ -351,6 +351,7 @@ tests:
         netsplit_site: tiebreaker
         tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
+        set_debug: true
       desc: Test stretch Cluster netsplit scenario between data site and tiebreaker site
 
   - test:
