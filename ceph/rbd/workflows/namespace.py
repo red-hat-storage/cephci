@@ -225,7 +225,7 @@ def create_namespace_in_pool(rbd, client, pool_type, **kw):
                     return 1
 
 
-def enable_namespace_mirroring(primary_config, secondary_config, pool, **pool_config):
+def enable_namespace_mirroring(rbd_primary, rbd_secondary, pool, **pool_config):
     """
     Enables namespace level mirroring
         Args:
@@ -237,8 +237,6 @@ def enable_namespace_mirroring(primary_config, secondary_config, pool, **pool_co
     Returns:
         int: 0 if the namespace level mirroring is enabled successfully, otherwise a non-zero value.
     """
-    rbd_primary = primary_config.get("rbd")
-    rbd_secondary = secondary_config.get("rbd")
 
     if pool_config["remote_namespace"]:
         prim_remote_namespace = pool_config["remote_namespace"]
