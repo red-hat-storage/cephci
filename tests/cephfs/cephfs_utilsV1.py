@@ -3111,15 +3111,45 @@ os.system('sudo systemctl start  network')
             )
             io_path = f"{mounting_dir}/{io_params['testdir_prefix']}_{dir_suffix}"
             client.exec_command(sudo=True, cmd=f"mkdir {io_path}")
-            client.exec_command(
-                sudo=True,
-                cmd=f"for i in create read append read delete create overwrite rename delete-renamed mkdir rmdir "
-                f"create symlink stat chmod ls-l delete cleanup  ; "
-                f"do python3 /home/cephuser/smallfile/smallfile_cli.py "
-                f"--operation $i --threads {io_params['threads']} --file-size {io_params['file-size']} "
-                f"--files {io_params['files']} --top {io_path} ; done",
-                long_running=True,
-            )
+            ops = [
+                "create",
+                "read",
+                "append",
+                "read",
+                "delete",
+                "create",
+                "overwrite",
+                "rename",
+                "delete-renamed",
+                "mkdir",
+                "rmdir",
+                "create",
+                "symlink",
+                "stat",
+                "chmod",
+                "ls-l",
+                "delete",
+                "cleanup",
+            ]
+
+            for op in ops:
+                log.debug("Running smallfile operation: {}".format(op))
+                cmd = (
+                    f"python3 /home/cephuser/smallfile/smallfile_cli.py "
+                    f"--operation {op} --threads {io_params['threads']} "
+                    f"--file-size {io_params['file-size']} --files {io_params['files']} "
+                    f"--top {io_path}"
+                )
+
+                out, _ = client.exec_command(
+                    sudo=True, cmd=cmd, timeout=600
+                )  # Give 10 min per op
+                log.debug(
+                    "Small Operation {} completed with output: {}".format(
+                        op, out.strip()
+                    )
+                )
+                time.sleep(3)
 
         def file_extract():
             log.info("IO tool scheduled : FILE_EXTRACT")

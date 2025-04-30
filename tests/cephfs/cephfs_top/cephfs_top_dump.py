@@ -4,7 +4,9 @@ import time
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.exceptions import ValueMismatchError
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -28,8 +30,190 @@ Steps to Reproduce:
 """
 
 
+@retry(ValueMismatchError, tries=5, delay=30)
+def verify_open_files_count(expected_count):
+    """
+    Fetch cephfs-top dump and verify open file count.
+    Retries if count does not match the expected value.
+    """
+    out_open = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][client_id][
+        "ofiles"
+    ]
+    log.info("Output of {} top dump after opening files: {}".format(fs_name, out_open))
+
+    if int(out_open) != expected_count:
+        raise ValueMismatchError(
+            "Open files did not match. Expected/Before: {}, Found/After: {}".format(
+                expected_count, out_open
+            )
+        )
+
+    log.info("Open files count matched")
+
+
+@retry(ValueMismatchError, tries=5, delay=30)
+def verify_closed_files_count():
+    """
+    Fetch cephfs-top dump and verify closed file count is 0.
+    Retries if the count is not zero.
+    """
+    out_closed = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][
+        client_id
+    ]["ofiles"]
+
+    if int(out_closed) != 0:
+        raise ValueMismatchError(
+            "Closed files count mismatch. Expected: 0, Found: {}.".format(out_closed)
+        )
+
+    log.info("Closed files count matched")
+
+
+@retry(ValueMismatchError, tries=5, delay=30)
+def verify_io_caps_increment(iocaps_value_before, num_files):
+    """
+    Verify that IO Caps value increased by the expected number of files.
+    Retries if the value does not match expected increment.
+    """
+    iocaps_value_after = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][
+        client_id
+    ]["oicaps"]
+
+    expected_value = int(iocaps_value_before) + num_files
+    if int(iocaps_value_after) != expected_value:
+        raise ValueMismatchError(
+            "IO Caps value mismatch. Expected: {}, Found: {}".format(
+                expected_value, iocaps_value_after
+            )
+        )
+
+    log.info("IO Caps value matched")
+
+
+@retry(ValueMismatchError, tries=5, delay=30)
+def verify_io_caps_decrease(iocaps_value_before):
+    """
+    Verify that IO Caps value remains unchanged.
+    Retries if the value changes unexpectedly.
+    """
+    iocaps_value_after = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][
+        client_id
+    ]["oicaps"]
+
+    if int(iocaps_value_after) != int(iocaps_value_before):
+        raise ValueMismatchError(
+            "IO Caps value mismatch: Expected/Before: {}, Found/After: {}".format(
+                iocaps_value_before, iocaps_value_after
+            )
+        )
+
+    log.info("IO Caps value matched")
+
+
+@retry(ValueMismatchError, tries=5, delay=30)
+def verify_fuse_client_count_increment(current_fuse_count):
+    """
+    Verify that the fuse client count increased by a specific increment.
+    Retries if the value does not match.
+    """
+    new_fuse_count = fs_util.get_cephfs_top_dump(client1)["client_count"]["fuse"]
+    expected_fuse_count = current_fuse_count + 2
+
+    if new_fuse_count != expected_fuse_count:
+        raise ValueMismatchError(
+            "Fuse client count mismatch. Expected/Before: {}, Found/After: {}".format(
+                expected_fuse_count, new_fuse_count
+            )
+        )
+
+    log.info("Fuse client count matched")
+
+
+@retry(ValueMismatchError, tries=5, delay=30)
+def verify_kernel_client_count_increment(current_kernel_count):
+    """
+    Verify that the kernel client count increased by the expected increment.
+    Retries if the value does not match.
+    """
+    new_kernel_count = fs_util.get_cephfs_top_dump(client1)["client_count"]["kclient"]
+    expected_kernel_count = current_kernel_count + 1
+
+    if new_kernel_count != expected_kernel_count:
+        raise ValueMismatchError(
+            "Kernel client count mismatch. Expected/Before: {}, Found/After: {}".format(
+                expected_kernel_count, new_kernel_count
+            )
+        )
+
+    log.info("Kernel client count matched")
+
+
+@retry(ValueMismatchError, tries=5, delay=30)
+def verify_total_client_count_increment(current_total_count):
+    """
+    Verify that the total client count increased by the expected increment.
+    Retries if the value does not match.
+    """
+    new_total_count = fs_util.get_cephfs_top_dump(client1)["client_count"][
+        "total_clients"
+    ]
+    expected_total_count = current_total_count + 3
+
+    if new_total_count != expected_total_count:
+        raise ValueMismatchError(
+            "Total client count mismatch. Expected/Before: {}, Found/After: {}".format(
+                expected_total_count, new_total_count
+            )
+        )
+
+    log.info("Total client count matched")
+
+
+@retry(ValueMismatchError, tries=5, delay=30)
+def verify_filesystems_present(fs_names):
+    """
+    Verify that all specified CephFS names are present in the filesystems dump.
+    Retries if any filesystem name is missing.
+    """
+    fs_name_dump = fs_util.get_cephfs_top_dump(client1)["filesystems"]
+
+    for fs_name in fs_names:
+        if fs_name not in fs_name_dump:
+            raise ValueMismatchError("{} not found in filesystems dump".format(fs_name))
+        log.info("{} found in filesystems dump".format(fs_name))
+
+
+@retry(ValueMismatchError, tries=5, delay=30)
+def verify_read_write_io_progress(before_total_read, before_total_write):
+    """
+    Verify that read and write IO (rtio and wtio) have not decreased.
+    Retries if either value is less than before.
+    """
+    dump = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][client_id]
+    after_total_read = dump["rtio"]
+    after_total_write = dump["wtio"]
+
+    if int(after_total_read) < int(before_total_read):
+        raise ValueMismatchError(
+            "Total read IO mismatch. Expected/Before: {}, Found/After: {}".format(
+                before_total_read, after_total_read
+            )
+        )
+    log.info("Total read IO matched")
+
+    if int(after_total_write) < int(before_total_write):
+        raise ValueMismatchError(
+            "Total write IO mismatch. Expected/Before: {}, Found/After: {}".format(
+                before_total_write, after_total_write
+            )
+        )
+    log.info("Total write IO matched")
+
+
 def run(ceph_cluster, **kw):
     try:
+        global fs_util, client1, fs_name, client_id
+
         tc = "CEPH-83573848"
         log.info(f"Running CephFS tests for ceph {tc}")
         # Initialize the utility class for CephFS
@@ -114,32 +298,30 @@ def run(ceph_cluster, **kw):
         rand = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
         )
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n    Usecase 1: Verify open and close files functionality        "
+            "\n---------------***************-----------------------------------"
+        )
         file_list = []
         opened_files = 10
         for i in range(opened_files):
             file_name = f"file_{rand}_{i}"
             file_list.append(file_name)
         pids = fs_util.open_files(client1, fuse_mounting_dir_1, file_list)
-        time.sleep(60)
-        out_open = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][
-            client_id
-        ]["ofiles"]
-        log.info(f"Output of {fs_name} top dump after opening files: {out_open}")
-        if int(out_open) != opened_files:
-            log.error(f"Open files did not match with {opened_files}")
-            return 1
-        else:
-            log.info("Open files count matched")
+        verify_open_files_count(opened_files)
+
         fs_util.close_files(client1, pids)
-        time.sleep(60)
-        out_closed = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][
-            client_id
-        ]["ofiles"]
-        if int(out_closed) != 0:
-            log.error("Open files count mismatch with 0")
-            return 1
-        else:
-            log.info("Open files count matched")
+        verify_closed_files_count()
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n    Usecase 2: Verify iocaps increment and decrement          "
+            "\n---------------***************-----------------------------------"
+        )
         log.info("verifying iocaps")
         num_files = 10
         iocaps_value_before = fs_util.get_cephfs_top_dump(client1)["filesystems"][
@@ -150,31 +332,23 @@ def run(ceph_cluster, **kw):
             client1.exec_command(
                 sudo=True, cmd=f"touch {fuse_mounting_dir_1}/{file_name}"
             )
-        time.sleep(60)
-        iocaps_value_after = fs_util.get_cephfs_top_dump(client1)["filesystems"][
-            "cephfs"
-        ][client_id]["oicaps"]
-        if int(iocaps_value_after) != int(iocaps_value_before) + num_files:
-            log.error("IO Caps value mismatch")
-            return 1
-        else:
-            log.info("IO Caps value matched")
+        verify_io_caps_increment(iocaps_value_before, num_files)
+
         log.info("Decrease the iocaps value")
         for i in range(num_files):
             file_name = f"files_{rand}_{i}"
             client1.exec_command(
-                sudo=True, cmd=f"rm -f {fuse_mounting_dir_1}/{file_name}"
+                sudo=True, cmd=f"rm -rf {fuse_mounting_dir_1}/{file_name}"
             )
-        time.sleep(60)
-        iocaps_value_after = fs_util.get_cephfs_top_dump(client1)["filesystems"][
-            "cephfs"
-        ][client_id]["oicaps"]
-        if int(iocaps_value_after) != int(iocaps_value_before):
-            log.error("IO Caps value mismatch")
-            return 1
-        else:
-            log.info("IO Caps value matched")
-        log.info("Verifying client conuts")
+        verify_io_caps_decrease(iocaps_value_before)
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n    Usecase 3: Verify total client counts, increment for fuse and kernel clients"
+            "\n---------------***************-----------------------------------"
+        )
+        log.info("Verifying client counts")
         fuse_mounting_dir_2 = f"/mnt/cephfs_fuse_{rand}_2"
         fuse_mounting_dir_3 = f"/mnt/cephfs_fuse_{rand}_3"
         kernel_mounting_dir_2 = f"/mnt/cephfs_kernel_{rand}_2"
@@ -188,12 +362,6 @@ def run(ceph_cluster, **kw):
             "total_clients"
         ]
         log.info("mounting clients")
-        fs_util.fuse_mount(
-            [client1], fuse_mounting_dir_2, extra_params=f" --client_fs {fs_name}"
-        )
-        fs_util.fuse_mount(
-            [client1], fuse_mounting_dir_3, extra_params=f" --client_fs {fs_name}"
-        )
         mon_node_ips = fs_util.get_mon_node_ips()
         fs_util.kernel_mount(
             [client1],
@@ -201,56 +369,42 @@ def run(ceph_cluster, **kw):
             ",".join(mon_node_ips),
             extra_params=f",fs={fs_name}",
         )
-        time.sleep(120)
-        new_fuse_count = fs_util.get_cephfs_top_dump(client1)["client_count"]["fuse"]
-        new_kernel_count = fs_util.get_cephfs_top_dump(client1)["client_count"][
-            "kclient"
-        ]
-        new_total_count = fs_util.get_cephfs_top_dump(client1)["client_count"][
-            "total_clients"
-        ]
-        if new_fuse_count != current_fuse_count + 2:
-            log.error(
-                f"Current fuse count: {current_kernel_count} New fuse count: {new_kernel_count}"
-            )
-            log.error("Fuse client count mismatch")
-            return 1
-        else:
-            log.info("Fuse client count matched")
-        if new_kernel_count != current_kernel_count + 1:
-            log.error(
-                f"Current kernel count: {current_kernel_count} New kernel count: {new_kernel_count}"
-            )
-            log.error("Kernel client count mismatch")
-            return 1
-        else:
-            log.info("Kernel client count matched")
-        if new_total_count != current_total_count + 3:
-            log.error(
-                f"Current total count: {current_total_count} New total count: {new_total_count}"
-            )
-            log.error("Total client count mismatch")
-            return 1
-        else:
-            log.info("Total client count matched")
 
+        time.sleep(5)
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_2, extra_params=f" --client_fs {fs_name}"
+        )
+        time.sleep(5)
+        fs_util.fuse_mount(
+            [client1], fuse_mounting_dir_3, extra_params=f" --client_fs {fs_name}"
+        )
+
+        verify_fuse_client_count_increment(current_fuse_count)
+
+        verify_kernel_client_count_increment(current_kernel_count)
+
+        verify_total_client_count_increment(current_total_count)
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n    Usecase 4: Create multiple filesystems and verify client metrics   "
+            "\n---------------***************-----------------------------------"
+        )
         log.info("Create multiple filesystems and verify client metrics")
         cephfs_name1 = f"cephfs_top_name_{rand}_1"
         cephfs_name2 = f"cephfs_top_name_{rand}_2"
         fs_util.create_fs(client1, cephfs_name1)
         fs_util.create_fs(client1, cephfs_name2)
 
-        fs_name_dump = fs_util.get_cephfs_top_dump(client1)["filesystems"]
-        if cephfs_name1 not in fs_name_dump:
-            log.error(f"{cephfs_name1} not found in filesystems dump")
-            return 1
-        else:
-            log.info(f"{cephfs_name1} found in filesystems dump")
-        if cephfs_name2 not in fs_name_dump:
-            log.error(f"{cephfs_name2} not found in filesystems dump")
-            return 1
-        else:
-            log.info(f"{cephfs_name2} found in filesystems dump")
+        verify_filesystems_present([cephfs_name1, cephfs_name2])
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n    Usecase 5: Create increase read and write IO"
+            "\n---------------***************-----------------------------------"
+        )
         log.info("create increase read and write IO")
         log.info("create a file 4GB file with dd")
         file_name = f"file_{rand}"
@@ -269,50 +423,42 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"cp {fuse_mounting_dir_1}/{file_name} {fuse_mounting_dir_1}/{file_name}_copy",
         )
-        after_total_read = fs_util.get_cephfs_top_dump(client1)["filesystems"][fs_name][
-            client_id
-        ]["rtio"]
-        after_total_write = fs_util.get_cephfs_top_dump(client1)["filesystems"][
-            fs_name
-        ][client_id]["wtio"]
-        if int(after_total_read) < int(before_total_read):
-            log.error("Total read IO mismatch")
-            return 1
-        else:
-            log.info("Total read IO matched")
-        if int(after_total_write) < int(before_total_write):
-            log.error("Total write IO mismatch")
-            return 1
-        else:
-            log.info("Total write IO matched")
+
+        verify_read_write_io_progress(before_total_read, before_total_write)
         return 0
+
+    except ValueMismatchError as e:
+        log.error("Value mismatch error: {}".format(e))
+        log.error(traceback.format_exc())
+        return 1
+
     except Exception as e:
         log.error(e)
         log.error(traceback.format_exc())
         return 1
+
     finally:
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n              Cleaning up the environment                        "
+            "\n---------------***************-----------------------------------"
+        )
         log.info("Disable mgr stats")
         client1.exec_command(sudo=True, cmd="ceph mgr module disable stats")
+
+        for mount_dir in [
+            fuse_mounting_dir_1,
+            fuse_mounting_dir_2,
+            fuse_mounting_dir_3,
+        ]:
+            fs_util.client_clean_up(
+                "umount", fuse_clients=[client1], mounting_dir=mount_dir
+            )
+
         fs_util.client_clean_up(
-            "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_1
+            "umount", kernel_clients=[client1], mounting_dir=kernel_mounting_dir_1
         )
-        fs_util.client_clean_up(
-            "umount", kernel_clients=[clients[0]], mounting_dir=kernel_mounting_dir_1
-        )
-        fs_util.client_clean_up(
-            "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_2
-        )
-        fs_util.client_clean_up(
-            "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_3
-        )
-        client1.exec_command(
-            sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
-        )
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph fs volume rm {cephfs_name1} --yes-i-really-mean-it",
-        )
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph fs volume rm {cephfs_name2} --yes-i-really-mean-it",
-        )
+
+        for fs_delete in [cephfs_name1, cephfs_name2]:
+            fs_util.remove_fs(client1, fs_delete)

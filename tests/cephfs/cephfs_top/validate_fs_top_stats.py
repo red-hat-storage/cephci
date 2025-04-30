@@ -73,10 +73,8 @@ def validate_mount_info(
     """
     This function validates the extracted mount_point and root values with the cephfs data based on client_id.
     """
-    out, rc = client.exec_command(sudo=True, cmd=f"cephfs-top --dumpfs {fs_name}")
-    top_details = json.loads(out)
-    log.info(f"{top_details}")
-    cephfs_data = top_details.get(fs_name, {})
+    cephfs_data = fs_util.get_cephfs_top_dump(client)["filesystems"][fs_name]
+    log.debug("Dump of CephFS top from validate_mount: {}".format(cephfs_data))
     if not cephfs_data:
         raise CommandFailed(f"Unable to load the cephfs_data: {cephfs_data}")
     log.info(f"JSON data for {fs_name}: {cephfs_data}")
@@ -136,6 +134,8 @@ def run(ceph_cluster, **kw):
     try:
         tc = "CEPH-83573838"
         log.info(f"Running CephFS tests for -{tc}")
+        global fs_util
+
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
         erasure = (
@@ -170,6 +170,7 @@ def run(ceph_cluster, **kw):
         )
         log.info("Scenario 1: cephfs-top should be empty when no clients have mounted")
         out, rc = client2.exec_command(sudo=True, cmd=f"cephfs-top --dumpfs {fs_name}")
+        log.debug("Dump of cephfs-top: {}".format(out))
         top_details = json.loads(out)
         is_empty = (
             "Empty"
