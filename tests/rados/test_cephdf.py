@@ -9,6 +9,7 @@ Tests included:
 """
 
 import datetime
+import json
 import math
 import random
 import time
@@ -85,6 +86,11 @@ def run(ceph_cluster, **kw):
                 try:
                     while counter < 5:
                         pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                        log_info_msg = (
+                            f"Pool stats of {pool_name} post object creation:"
+                            f"\n{json.dumps(pool_stat, indent=4)}"
+                        )
+                        log.info(log_info_msg)
                         ceph_df_obj = pool_stat["stats"]["objects"]
                         if ceph_df_obj == obj_num:
                             log.info(
@@ -121,6 +127,11 @@ def run(ceph_cluster, **kw):
                     counter = 1
                     while counter < 5:
                         pool_stat = rados_obj.get_cephdf_stats(pool_name=pool_name)
+                        log_info_msg = (
+                            f"Pool stats of {pool_name} post objects deletion:"
+                            f"\n{json.dumps(pool_stat, indent=4)}"
+                        )
+                        log.info(log_info_msg)
                         ceph_df_obj = pool_stat.get("stats")["objects"]
                         if ceph_df_obj == 0:
                             log.info(f"ceph df stats display 0 objects for {pool_name}")

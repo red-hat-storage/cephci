@@ -185,7 +185,21 @@ tests:
                 - "1099511627776"
 
   - test:
-      name: EC pool 2=2@4 LC
+      name: Upgrade cluster to latest 7.x ceph version
+      desc: Upgrade cluster to latest version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934,CEPH-83573790
+      abort-on-fail: true
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
+
+  - test:
+      name: EC pool 2=2@4 LC - scenarios 1,2
       module: test_four_node_ecpool.py
       polarion-id: CEPH-83575858
       abort-on-fail: true
@@ -201,6 +215,53 @@ tests:
         remove_host: true
         delete_pools:
           - test_ec_pool
+        scenarios_to_run:
+          - scenario-1
+          - scenario-2
+          - scenario-3
+      desc: 2+2@4 EC pool life cycle with serviceability scenarios with upgrade
+
+  - test:
+      name: EC pool 2=2@4 LC - scenarios 3
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec22_profile
+          pool_name: test_ec_pool
+          k: 2
+          m: 2
+          force: true
+          plugin: jerasure
+          crush-failure-domain: host
+        remove_host: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-4
+          - scenario-5
+      desc: 2+2@4 EC pool life cycle with serviceability scenarios with upgrade
+
+  - test:
+      name: EC pool 2=2@4 LC - scenarios 4
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec22_profile
+          pool_name: test_ec_pool
+          k: 2
+          m: 2
+          force: true
+          plugin: jerasure
+          crush-failure-domain: host
+        remove_host: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-6
       desc: 2+2@4 EC pool life cycle with serviceability scenarios with upgrade
 
   - test:

@@ -310,8 +310,10 @@ tests:
       polarion-id: CEPH-83571692
       desc: Verify ceph-bluestore-tool functionalities
 
-  - test:
-      name: ceph-objectstore-tool utility
-      module: test_objectstoretool_workflows.py
-      polarion-id: CEPH-83581811
-      desc: Verify ceph-objectstore-tool functionalities
+#  Uncomment test case once stabilisation is completed
+#  CI stabilisation: https://issues.redhat.com/browse/RHCEPHQE-19549
+#  - test:
+#      name: ceph-objectstore-tool utility
+#      module: test_objectstoretool_workflows.py
+#      polarion-id: CEPH-83581811
+#      desc: Verify ceph-objectstore-tool functionalities
