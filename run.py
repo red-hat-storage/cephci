@@ -1016,20 +1016,23 @@ def run(args):
 
     email_results(test_result=test_res)
 
-    if jenkins_rc and not skip_sos_report:
-        log.info(
-            "\n\nGenerating sosreports for all the nodes due to failures in testcase"
-        )
+    if jenkins_rc:
+        # collecting ceph cluster logs for failed test suites
         for cluster in ceph_cluster_dict.keys():
-            log.info(f"Installing Ceph-common on {cluster} nodes to gather Sos report")
-            for node in ceph_cluster_dict[cluster].get_nodes():
-                setup_cluster_access(ceph_cluster_dict[cluster], node)
-            installer = ceph_cluster_dict[cluster].get_nodes(role="installer")[0]
-            sosreport.run(installer.ip_address, "cephuser", "cephuser", run_dir)
-            # This can be Removed as sos report will have this details as well
             get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
-        log.info(f"Generated sosreports location : {url_base}/sosreports\n")
-
+        if not skip_sos_report:
+            log.info(
+                "\n\nGenerating sosreports for all the nodes due to failures in testcase"
+            )
+            for cluster in ceph_cluster_dict.keys():
+                log.info(
+                    f"Installing Ceph-common on {cluster} nodes to gather Sos report"
+                )
+                for node in ceph_cluster_dict[cluster].get_nodes():
+                    setup_cluster_access(ceph_cluster_dict[cluster], node)
+                installer = ceph_cluster_dict[cluster].get_nodes(role="installer")[0]
+                sosreport.run(installer.ip_address, "cephuser", "cephuser", run_dir)
+            log.info(f"Generated sosreports location : {url_base}/sosreports\n")
     return jenkins_rc
 
 
