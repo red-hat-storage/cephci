@@ -1,8 +1,6 @@
-from utility.log import Log
 from rest.common.utils.rest import rest
-from rest.workflows.rgw.rgw import (
-    create_bucket_verify,
-)
+from rest.workflows.rgw.rgw import create_bucket_verify
+from utility.log import Log
 
 log = Log(__name__)
 

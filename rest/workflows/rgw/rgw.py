@@ -1,4 +1,5 @@
 from utility.log import Log
+
 log = Log(__name__)
 
 

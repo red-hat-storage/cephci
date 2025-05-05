@@ -1,5 +1,6 @@
 import json
 from copy import deepcopy
+
 from rest.common.config.config import Config
 from utility.log import Log
 
