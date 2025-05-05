@@ -10,6 +10,7 @@ from time import sleep
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
 from utility.retry import retry
 from utility.utils import get_ceph_version_from_cluster
@@ -49,6 +50,7 @@ def run(ceph_cluster, **kw):
     try:
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        snap_util = SnapUtils(ceph_cluster)
         erasure = (
             FsUtils.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -95,7 +97,7 @@ def run(ceph_cluster, **kw):
         )
 
         log.info("Enable Snap Schedule")
-        client1.exec_command(sudo=True, cmd="ceph mgr module enable snap_schedule")
+        snap_util.enable_snap_schedule(client1)
         fs_details = fs_util.get_fs_info(client1, fs_name=default_fs)
         if not fs_details:
             fs_util.create_fs(client1, default_fs)
