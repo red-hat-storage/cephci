@@ -1,6 +1,4 @@
 from utility.log import Log
-from rest.endpoints.rgw.rgw import RGW
-
 log = Log(__name__)
 
 
@@ -25,9 +23,9 @@ def create_bucket_verify(self, **kw):
             "placement_target": kw.get("placement_target", None),
             "lock_enabled": kw.get("lock_enabled", "false"),
             "lock_mode": kw.get("lock_mode", None),
-            "lock_retention_period_days": 
+            "lock_retention_period_days":
             kw.get("lock_retention_period_days", None),
-            "lock_retention_period_years": 
+            "lock_retention_period_years":
             kw.get("lock_retention_period_years", None),
             "encryption_state": kw.get("encryption_state", "false"),
             "encryption_type": kw.get("encryption_type", None),
@@ -47,7 +45,7 @@ def create_bucket_verify(self, **kw):
             "details": bucket_data,
         }
         log.info(f"Successfully created bucket {bucket_name}.")
-
+        log.info(log_entry)
         log.info("Verifying via listing created buckets...")
         if self.created_buckets:
             log.info(f"Buckets found: {self.created_buckets}")
