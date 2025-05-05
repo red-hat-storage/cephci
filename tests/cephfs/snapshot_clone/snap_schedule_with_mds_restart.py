@@ -90,7 +90,7 @@ def run(ceph_cluster, **kw):
         )
 
         log.info("Enable Snap Schedule")
-        client1.exec_command(sudo=True, cmd="ceph mgr module enable snap_schedule")
+        snap_util.enable_snap_schedule(client1)
         fs_details = fs_util.get_fs_info(client1, fs_name=default_fs)
         if not fs_details:
             fs_util.create_fs(client1, default_fs)
