@@ -9,6 +9,17 @@
             "GET_IMAGE": "/api/block/image/{image_spec}",
             "LIST_IMAGE": "/api/block/image"
         },
+        "rgw": {
+            "LIST_BUCKET": "/api/rgw/bucket",
+            "CREATE_BUCKET": "/api/rgw/bucket",
+            "DELETE_BUCKET_ENCRYPTION": "/api/rgw/bucket/deleteEncryption",
+            "LIST_BUCKET_ENCRYPTION": "/api/rgw/bucket/getEncryption",
+            "LIST_BUCKET_LIFECYCLE": "/api/rgw/bucket/lifecycle",
+            "UPDATE_BUCKET_LIFECYCLE": "/api/rgw/bucket/lifecycle",
+            "LIST_BUCKET_RATELIMIT": "/api/rgw/bucket/ratelimit",
+            "LIST_BUCKET_ENCRYPTCONF": "/api/rgw/bucket/getEncryptionConfig",
+            "UPDATE_BUCKET_ENCRYPTCONF": "/api/rgw/bucket/setEncryptionConfig"
+        },
         "nvmeof": {
             "GATEWAY_INFO": "/api/nvmeof/gateway",
             "CREATE_SUBSYSTEM": "/api/nvmeof/subsystem",
