@@ -4001,7 +4001,7 @@ os.system('sudo systemctl start  network')
         crash_info = json.loads(out)
         return crash_info
 
-    @retry(JSONDecodeError, tries=3, delay=30)
+    @retry((JSONDecodeError, CommandFailed), tries=5, delay=30)
     def get_mds_metrics(self, client, rank=0, mounted_dir="", fs_name="cephfs"):
         """
         returns the metrics for the MDS rank and the client mounted directory
@@ -4029,7 +4029,9 @@ os.system('sudo systemctl start  network')
         client_id = client_id.replace('"', "").replace("\n", "")
         if client_id == "":
             log.error(f"Client not found for Mounted Directory : {mounted_dir}")
-            return 1
+            raise CommandFailed(
+                f"Client not found for Mounted Directory : {mounted_dir}"
+            )
         log.info(f"Client ID :[{client_id}] for Mounted Directory : [{mounted_dir}]")
         cmd = f""" ceph tell mds.{ranked_mds} counter dump 2>/dev/null | \
             jq -r '. | to_entries | map(select(.key | match("mds_client_metrics"))) | \
@@ -4042,7 +4044,9 @@ os.system('sudo systemctl start  network')
         )
         if metrics_out == "":
             log.error(f"Metrics not found for MDS : {ranked_mds}")
-            return 1
+            raise CommandFailed(
+                f"Client not found for Mounted Directory : {mounted_dir}"
+            )
         metrics_out = json.loads(str(metrics_out))
 
         return metrics_out
