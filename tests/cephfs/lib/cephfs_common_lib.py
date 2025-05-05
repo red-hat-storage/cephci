@@ -45,13 +45,20 @@ class CephFSCommonUtils(FsUtils):
         """
         ceph_healthy = 0
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=wait_time)
+        accepted_list = [
+            "experiencing slow operations in BlueStore",
+            "Slow OSD heartbeats",
+        ]
         while ceph_healthy == 0 and (datetime.datetime.now() < end_time):
             if self.check_ceph_status(client, "HEALTH_OK"):
                 ceph_healthy = 1
             else:
                 out, _ = client.exec_command(sudo=True, cmd="ceph health detail")
-                if "experiencing slow operations in BlueStore" in str(out):
-                    log.info("Ignoring the known warning for Bluestore Slow ops")
+                if any(msg in str(out) for msg in accepted_list):
+                    log.info(
+                        "Ignoring the known warning for Bluestore Slow ops and OSD heartbeats"
+                    )
+                    log.warning("Cluster health can be OK, current state : %s", out)
                     ceph_healthy = 1
                 else:
                     log.info(
