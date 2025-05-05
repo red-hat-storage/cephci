@@ -24,10 +24,8 @@ def create_bucket_verify(self, **kw):
             "placement_target": kw.get("placement_target", None),
             "lock_enabled": kw.get("lock_enabled", "false"),
             "lock_mode": kw.get("lock_mode", None),
-            "lock_retention_period_days":
-            kw.get("lock_retention_period_days", None),
-            "lock_retention_period_years":
-            kw.get("lock_retention_period_years", None),
+            "lock_retention_period_days": kw.get("lock_retention_period_days", None),
+            "lock_retention_period_years": kw.get("lock_retention_period_years", None),
             "encryption_state": kw.get("encryption_state", "false"),
             "encryption_type": kw.get("encryption_type", None),
             "key_id": kw.get("key_id", None),

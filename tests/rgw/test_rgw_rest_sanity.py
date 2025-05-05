@@ -17,8 +17,7 @@ def sanity_rgw_workflow(config):
 
     buckets = config.get("buckets", [])
     for bucket_cfg in buckets:
-        log.info(
-            f"Step 2: Creating and verifying bucket {bucket_cfg.get('bucket')}")
+        log.info(f"Step 2: Creating and verifying bucket {bucket_cfg.get('bucket')}")
         rc_create = create_bucket_verify(**bucket_cfg, rest=_rest)
         if rc_create:
             log.error(
