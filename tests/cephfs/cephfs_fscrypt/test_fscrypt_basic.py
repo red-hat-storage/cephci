@@ -1,9 +1,7 @@
-import datetime
 import random
 import traceback
 
 from ceph.ceph import CommandFailed
-from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.lib.fscrypt_utils import FscryptUtils
@@ -74,7 +72,6 @@ def run(ceph_cluster, **kw):
         default_fs = default_fs if not erasure else "cephfs-ec"
         cleanup = config.get("cleanup", 1)
         client = clients[0]
-        client1 = clients[1]
         log.info("checking Pre-requisites")
         log.info("Verify Cluster is healthy before test")
         if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
@@ -85,7 +82,6 @@ def run(ceph_cluster, **kw):
         fs_name = setup_params["fs_name"]
         log.info("Mount subvolumes")
         mount_details = cephfs_common_utils.test_mount(clients, setup_params)
-        clients = [client, client1]
         test_case_name = config.get("test_name", "all_tests")
         test_functional = [
             "fscrypt_lifecycle",
@@ -162,15 +158,14 @@ def fscrypt_lifecycle(fscrypt_test_params):
     """
     log.info("FScrypt lifecycle test across Kernel, Ceph-fuse and NFS mountpoints")
     fscrypt_util = fscrypt_test_params["fscrypt_util"]
-    clients = fscrypt_test_params["clients"]
     mount_details = fscrypt_test_params["mount_details"]
     test_status = 0
-    client1 = clients[1]
     test_status = 0
-    mnt_type = "kernel"
+    mnt_type = "fuse"
     log.info("Create 2 test directories in each subvolume")
     for sv_name in mount_details:
         mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
+        client1 = mount_details[sv_name][mnt_type]["mnt_client"]
         for i in range(2):
             cmd = f"mkdir {mountpoint}/fscrypt_testdir_{i}"
             client1.exec_command(
@@ -185,9 +180,12 @@ def fscrypt_lifecycle(fscrypt_test_params):
         if "sv_def" in sv_name:
             sv_from_def_grp += 1
         mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
+        client1 = mount_details[sv_name][mnt_type]["mnt_client"]
         if sv_from_def_grp <= 1 or "sv_non_def" in sv_name:
             test_status = fscrypt_util.setup(client1, mountpoint)
-            fscrypt_sv.update({sv_name: {}})
+            fscrypt_sv.update(
+                {sv_name: {"mnt_client": client1, "mountpoint": mountpoint}}
+            )
             if test_status == 1:
                 log.error(f"FScrypt setup on {mountpoint} failed for {sv_name}")
                 return 1
@@ -196,7 +194,8 @@ def fscrypt_lifecycle(fscrypt_test_params):
         "fscrypt encrypt on 2 test directories of subvolumes where fscrypt setup done"
     )
     for sv_name in fscrypt_sv:
-        mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
+        mountpoint = fscrypt_sv[sv_name]["mountpoint"]
+        client1 = fscrypt_sv[sv_name]["mnt_client"]
         encrypt_path_list = []
         for i in range(2):
             encrypt_path = f"{mountpoint}/fscrypt_testdir_{i}"
@@ -223,6 +222,7 @@ def fscrypt_lifecycle(fscrypt_test_params):
     )
     for sv_name in fscrypt_sv:
         encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
+        client1 = fscrypt_sv[sv_name]["mnt_client"]
         encrypt_path_list_new = []
         for encrypt_dict in encrypt_path_list:
             encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
@@ -233,12 +233,13 @@ def fscrypt_lifecycle(fscrypt_test_params):
         fscrypt_sv[sv_name].update({"encrypt_path_list": encrypt_path_list_new})
 
     log.info("Validate file and directory names,file contents and ops before lock")
-    if test_validate(client1, "unlock", fscrypt_sv, fscrypt_util):
+    if test_validate("unlock", fscrypt_sv, fscrypt_util):
         test_status += 1
 
     log.info("fscrypt lock")
     for sv_name in fscrypt_sv:
         encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
+        client1 = fscrypt_sv[sv_name]["mnt_client"]
         for encrypt_dict in encrypt_path_list:
             encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
             file_list = encrypt_dict["encrypt_path_info"]["file_list"]
@@ -254,17 +255,18 @@ def fscrypt_lifecycle(fscrypt_test_params):
                     test_status += 1
 
     log.info("Validate file and directory names,file contents and ops in locked state")
-    if test_validate(client1, "lock", fscrypt_sv, fscrypt_util):
+    if test_validate("lock", fscrypt_sv, fscrypt_util):
         test_status += 1
 
     log.info("fscrypt unlock")
     for sv_name in fscrypt_sv:
         encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
+        client1 = fscrypt_sv[sv_name]["mnt_client"]
         for encrypt_dict in encrypt_path_list:
             encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
             encrypt_params = encrypt_dict["encrypt_path_info"]["encrypt_params"]
             protector_id = encrypt_params["protector_id"]
-            mnt_pt = mount_details[sv_name][mnt_type]["mountpoint"]
+            mnt_pt = fscrypt_sv[sv_name]["mountpoint"]
             unlock_args = {"key": encrypt_params["key"]}
             test_status += fscrypt_util.unlock(
                 client1, encrypt_path, mnt_pt, protector_id, **unlock_args
@@ -281,30 +283,31 @@ def fscrypt_lifecycle(fscrypt_test_params):
                         )
                         test_status += 1
 
-    # Read of encrypt path after unlock issue : https://issues.redhat.com/browse/RHEL-79046
-    """
-    log.info("Validate file and directory names,file contents and ops in unlocked state")
-    if test_validate(client1,"unlock",fscrypt_sv, fscrypt_util):
+    log.info(
+        "Validate file and directory names,file contents and ops in unlocked state"
+    )
+    if test_validate("unlock", fscrypt_sv, fscrypt_util):
         test_status += 1
-    """
 
     log.info("fscrypt purge")
     for sv_name in fscrypt_sv:
-        mnt_pt = mount_details[sv_name][mnt_type]["mountpoint"]
-        test_status += fscrypt_util.purge(client1, mnt_pt)
+        test_status += fscrypt_util.purge(
+            fscrypt_sv[sv_name]["mnt_client"], fscrypt_sv[sv_name]["mountpoint"]
+        )
 
     log.info("Validate file and directory names,file contents and ops in locked state")
-    if test_validate(client1, "lock", fscrypt_sv, fscrypt_util):
+    if test_validate("lock", fscrypt_sv, fscrypt_util):
         test_status += 1
 
     log.info("fscrypt unlock after purge")
     for sv_name in fscrypt_sv:
         encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
+        client1 = fscrypt_sv[sv_name]["mnt_client"]
+        mnt_pt = fscrypt_sv[sv_name]["mountpoint"]
         for encrypt_dict in encrypt_path_list:
             encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
             encrypt_params = encrypt_dict["encrypt_path_info"]["encrypt_params"]
             protector_id = encrypt_params["protector_id"]
-            mnt_pt = mount_details[sv_name][mnt_type]["mountpoint"]
             unlock_args = {"key": encrypt_params["key"]}
             test_status += fscrypt_util.unlock(
                 client1, encrypt_path, mnt_pt, protector_id, **unlock_args
@@ -321,20 +324,20 @@ def fscrypt_lifecycle(fscrypt_test_params):
                         )
                         test_status += 1
 
-    # Read of encrypt path after unlock issue : https://issues.redhat.com/browse/RHEL-79046
-    """
-    log.info("Validate file and directory names,file contents and ops in unlocked state")
-    if test_validate(client1,"unlock",fscrypt_sv, fscrypt_util):
+    log.info(
+        "Validate file and directory names,file contents and ops in unlocked state"
+    )
+    if test_validate("unlock", fscrypt_sv, fscrypt_util):
         test_status += 1
-    """
 
     log.info("fscrypt metadata destroy for policy and protector")
     for sv_name in fscrypt_sv:
         encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
+        client1 = fscrypt_sv[sv_name]["mnt_client"]
+        mnt_pt = fscrypt_sv[sv_name]["mountpoint"]
         for encrypt_dict in encrypt_path_list:
             encrypt_params = encrypt_dict["encrypt_path_info"]["encrypt_params"]
             protector_id = encrypt_params["protector_id"]
-            mnt_pt = mount_details[sv_name][mnt_type]["mountpoint"]
             protector_params = {"id": protector_id}
             protector_id = fscrypt_util.metadata_ops(
                 client1, "destroy", "protector", mnt_pt, **protector_params
@@ -369,7 +372,9 @@ def fscrypt_non_empty_dir(fscrypt_test_params):
     log.info("Create test directory in one of subvolumes and add some data")
     sv_name = random.choice(list(mount_details.keys()))
     mnt_type = random.choice(list(mount_details[sv_name].keys()))
+    mnt_type = "fuse"
     mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
+    client1 = mount_details[sv_name][mnt_type]["mnt_client"]
     encrypt_path = f"{mountpoint}/fscrypt_non_empty_dir"
     cmd = f"mkdir {encrypt_path}"
     client1.exec_command(
@@ -424,14 +429,14 @@ def fscrypt_metadata_not_encrypted(fscrypt_test_params):
         "FScrypt test to verify File metadata like size,timestamp,extended attrs are not encrypted"
     )
     fscrypt_util = fscrypt_test_params["fscrypt_util"]
-    clients = fscrypt_test_params["clients"]
     mount_details = fscrypt_test_params["mount_details"]
-    client1 = clients[1]
 
     log.info("Create test directory in one of subvolumes and add some data")
     sv_name = random.choice(list(mount_details.keys()))
     mnt_type = random.choice(list(mount_details[sv_name].keys()))
+    mnt_type = "fuse"
     mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
+    client1 = mount_details[sv_name][mnt_type]["mnt_client"]
     encrypt_path = f"{mountpoint}/test_encrypt_metadata"
     cmd = f"mkdir {encrypt_path}"
     client1.exec_command(
@@ -498,28 +503,12 @@ def fscrypt_metadata_not_encrypted(fscrypt_test_params):
 # HELPER ROUTINES
 
 
-def fscrypt_io(client, file_list, run_time):
-    def fscrypt_fio(client, file_path):
-        client.exec_command(
-            sudo=True,
-            cmd=f"fio --name={file_path} --ioengine=libaio --size 2M --rw=write --bs=1M --direct=1 "
-            f"--numjobs=1 --iodepth=5 --runtime=10",
-            timeout=20,
-            long_running=True,
-        )
-
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
-    while datetime.datetime.now() < end_time:
-        with parallel() as p:
-            for file_path in file_list:
-                p.spawn(fscrypt_fio, client, file_path, validate=False)
-
-
-def test_validate(client, mode, fscrypt_sv, fscrypt_util):
+def test_validate(mode, fscrypt_sv, fscrypt_util):
     """
     This method will validate data in encrypt path as per given mode - lock/unlock
     """
     for sv_name in fscrypt_sv:
+        client = fscrypt_sv[sv_name]["mnt_client"]
         encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
         for encrypt_dict in encrypt_path_list:
             encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]

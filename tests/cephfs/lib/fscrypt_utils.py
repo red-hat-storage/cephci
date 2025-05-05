@@ -84,7 +84,7 @@ class FscryptUtils(object):
         go_cmds += "tar -C /usr/local -xzf go1.23.6.linux-amd64.tar.gz;sleep 5"
         fscrypt_cmds = "cd /home/cephuser/fscrypt;make;sudo make install"
         cmd_list = [
-            "cd /home/cephuser;git clone https://github.com/google/fscrypt",
+            "cd /home/cephuser;git clone -b wip-ceph-fuse https://github.com/ceph/fscrypt.git",
             "sudo yum install -y pam-devel",
             "yum install -y m4",
             f"cd /home/cephuser;{go_cmds}",
@@ -674,8 +674,16 @@ class FscryptUtils(object):
 
         def rename():
             test_files_list = self.get_file_list(client, encrypt_path)
-            file_to_rename = random.choice(test_files_list)
-            file_to_rename_1 = random.choice(test_files_list)
+            file_to_rename, file_to_rename_1 = random.sample(test_files_list, 2)
+            retry_cnt = 5
+            while retry_cnt:
+                if ("renamed_file" in file_to_rename) or (
+                    "renamed_file" in file_to_rename_1
+                ):
+                    file_to_rename, file_to_rename_1 = random.sample(test_files_list, 2)
+                    retry_cnt -= 1
+                else:
+                    retry_cnt = 0
             try:
                 client.exec_command(
                     sudo=True, cmd=f"mv {file_to_rename} {encrypt_path}/renamed_file"
@@ -739,7 +747,6 @@ class FscryptUtils(object):
         if "total" in ls_out[0]:
             ls_out.pop(0)
         ls_list = re.split(r"\s+", ls_out[0])
-
         test_status = 0
 
         def check_perm(column):
@@ -842,7 +849,8 @@ class FscryptUtils(object):
                 test_status += lsop_test["146"](i)
             elif i in [2, 3]:
                 test_status += lsop_test["23"](i)
-            test_status += lsop_test[str(i)](i)
+            else:
+                test_status += lsop_test[str(i)](i)
 
         cmd = f"getfattr -n security.selinux {test_file}"
         out, _ = client.exec_command(sudo=True, cmd=cmd)
