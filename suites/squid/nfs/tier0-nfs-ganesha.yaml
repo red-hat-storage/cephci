@@ -476,3 +476,14 @@ tests:
         max_client_combined_bw: 8MB
         qos_type: PerShare_PerClient
         operation: restart
+
+  - test:
+      name: cthon tests for NFS ganesha
+      module: test_cthon.py
+      desc: cthon tests for NFS ganesha - running all testcases basic, general, special and lock
+      polarion-id: CEPH-83617827
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        total_num_exports: 4

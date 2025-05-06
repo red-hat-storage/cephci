@@ -727,6 +727,33 @@ def change_ownership(client, mount_point, file_count, user):
             raise OperationFailedError(f"failed to change ownership for file{i}")
 
 
+def clone_git_repo(node, git_link, dir) -> None:
+    """
+    Clone git repo
+    Args:
+        node (ceph): Node where the git repo has to be cloned
+        git_link (str): Git link to clone
+    """
+    try:
+        cmd = f"git clone --depth=1 {git_link}"
+        node.exec_command(cmd=cmd)
+        log.info(f"Cloned git repo command --> {cmd}")
+    except Exception as e:
+        raise OperationFailedError(f"failed to clone git repo {cmd} \n error: {e}")
+
+
+def make_repo(node, directory) -> None:
+    """
+    Make directory
+    Args:
+        node (ceph): Node where the directory has to be created
+        directory (str): Directory name to be created
+    """
+    cmd = f"cd {directory}; make"
+    out, _ = node.exec_command(cmd=cmd)
+    log.info(f"make operation done in directory {directory} on {node.hostname} {out}")
+
+
 def change_permission(client, mount_point, file_count, permissions):
     """
     Perform lookups
@@ -744,6 +771,21 @@ def change_permission(client, mount_point, file_count, permissions):
             )
         except Exception:
             raise OperationFailedError(f"failed to change permission for file{i}")
+
+
+def change_permission_any_dir(client, dir_path, permissions, sudo=True):
+    """
+    Perform lookups
+    Args:
+        clients (ceph): Client nodes
+        dir (str): mount path
+        dir (int): total file count
+        permissions (str): file permissions
+    """
+    try:
+        client.exec_command(cmd=f"chmod {permissions} {dir_path}", sudo=sudo)
+    except Exception:
+        raise OperationFailedError(f"failed to change permission for dir {dir_path}")
 
 
 def generate_random_string(**kw):
