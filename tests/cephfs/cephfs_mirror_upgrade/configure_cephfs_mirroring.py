@@ -362,7 +362,8 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Create a Variables file for post validations")
-        with open("variables.pkl", "wb") as file:
+        log_dir = kw["run_config"]["log_dir"]
+        with open(f"{log_dir}/variables.pkl", "wb") as file:
             pickle.dump(
                 (
                     source_fs,
