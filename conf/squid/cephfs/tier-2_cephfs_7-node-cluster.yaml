@@ -19,12 +19,14 @@ globals:
         role:
           - osd
           - mds
+          - smb
         no-of-volumes: 4
         disk-size: 15
       node5:
         role:
           - osd
           - mds
+          - smb
         no-of-volumes: 4
         disk-size: 15
       node6:
