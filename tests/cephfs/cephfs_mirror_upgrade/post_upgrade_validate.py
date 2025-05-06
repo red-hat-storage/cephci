@@ -51,7 +51,8 @@ def run(ceph_cluster, **kw):
             for _ in list(range(3))
         )
         config = kw.get("config")
-        with open("variables.pkl", "rb") as file:
+        log_dir = kw["run_config"]["log_dir"]
+        with open(f"{log_dir}/variables.pkl", "rb") as file:
             (
                 source_fs,
                 target_fs,

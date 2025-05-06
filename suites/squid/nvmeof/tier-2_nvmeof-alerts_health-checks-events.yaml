@@ -221,3 +221,34 @@ tests:
       module: test_ceph_nvmeof_alerts_events.py
       name: Validate Gateway in DELETING state healthcheck warning
       polarion-id: CEPH-83611306
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node5
+          - node6
+        rbd_pool: rbd
+        time_to_fire: 60
+        gw_group: gw_group1
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            max_ns: 10
+            serial: 1
+            bdevs:
+            - count: 10
+              size: 5G
+              lb_group: node5
+            listener_port: 4420
+            listeners:
+              - node5
+            allow_host: "*"
+        test_case: CEPH-83616917
+        cleanup:
+          - pool
+          - gateway
+      desc: Warning at maximum number of namespaces reached at subsystem.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate Warning at maximum number of namespaces reached at subsystem.
+      polarion-id: CEPH-83616917

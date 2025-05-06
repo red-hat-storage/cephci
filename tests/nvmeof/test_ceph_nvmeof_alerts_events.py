@@ -677,6 +677,71 @@ def test_ceph_83611306(ceph_cluster, config):
     )
 
 
+def test_CEPH_83616917(ceph_cluster, config):
+    """[CEPH-83616917] - Warning at maximum number of namespaces reached at subsystem.
+
+    NVMeoFSubsystemNamespaceLimit alert indicates to user to maximum number of
+    namespaces reached at subsystem
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        config: test case config
+    """
+
+    time_to_fire = config["time_to_fire"]
+    rbd_pool = config["rbd_pool"]
+    rbd_obj = config["rbd_obj"]
+    nqn_name = config["subsystems"][0]["nqn"]
+    intervel = 60
+    alert = "NVMeoFSubsystemNamespaceLimit"
+    msg = "{nqn} subsystem has reached its maximum number of namespaces on cluster "
+
+    # Deploy nvmeof service
+    LOG.info("deploy nvme service")
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    # Configure subsystems, --max-namespaces is 10 and we are creating 10 namesapces
+    with parallel() as p:
+        for subsys_args in config["subsystems"]:
+            subsys_args["ceph_cluster"] = ceph_cluster
+            p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+
+    # Check for alert
+    # NVMeoFSubsystemNamespaceLimit prometheus alert should be firing
+    events = PrometheusAlerts(ha.orch)
+    LOG.info("Check NVMeoFSubsystemNamespaceLimit should be firing")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(nqn=nqn_name),
+        interval=intervel,
+    )
+
+    nvmegwcli = ha.gateways[0]
+    sub1_args = {"subsystem": nqn_name}
+    # Delete an namespace and check alert should be in inactive state
+    LOG.info("Delete an namespace and check alert should be in inactive state")
+    nvmegwcli.namespace.delete(**{"args": {**sub1_args, **{"nsid": 1}}})
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    # Add namespace back and check alert should be in active state
+    LOG.info("Add namespace back and check alert should be in active state")
+    image = f"image-{generate_unique_id(4)}"
+    rbd_obj.create_image(rbd_pool, image, "10G")
+    img_args = {"rbd-pool": rbd_pool, "rbd-image": image, "nsid": 1}
+    nvmegwcli.namespace.add(**{"args": {**sub1_args, **img_args}})
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(nqn=nqn_name),
+        interval=intervel,
+    )
+
+    LOG.info("CEPH-83616917 - NVMeoFSubsystemNamespaceLimit validated successfully.")
+
+
 testcases = {
     "CEPH-83610948": test_ceph_83610948,
     "CEPH-83610950": test_ceph_83610950,
@@ -684,6 +749,7 @@ testcases = {
     "CEPH-83611098": test_ceph_83611098,
     "CEPH-83611099": test_ceph_83611099,
     "CEPH-83611306": test_ceph_83611306,
+    "CEPH-83616917": test_CEPH_83616917,
 }
 
 
