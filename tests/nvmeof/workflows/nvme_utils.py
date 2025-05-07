@@ -191,7 +191,6 @@ def fetch_nvme_entity_in_omap(cluster, entity, pool, group=""):
 
 
 def validate_qos(client, device, **kw):
-
     bandwidth = {"mb_read/s": [], "mb_write/s": [], "mb_r/s": [], "mb_w/s": []}
     try:
         client.exec_command(cmd="dnf install -y sysstat", sudo=True, long_running=True)
@@ -204,7 +203,6 @@ def validate_qos(client, device, **kw):
             found_header = False
 
             for line in lines:
-
                 # Identify the headers row
                 if "Device" in line and "rMB/s" in line and "wMB/s" in line:
                     found_header = True
