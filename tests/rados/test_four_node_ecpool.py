@@ -30,6 +30,13 @@ def run(ceph_cluster, **kw):
     Test to Verify the ec 2+2 pool
     Returns:
         1 -> Fail, 0 -> Pass
+    Scenarios:
+        scenario-1: Test the effects of bulk flag and no IO stoppage
+        scenario-2: Perform rolling reboot of all the OSDs on a particular host.
+        scenario-3: OSD operations
+        scenario-4: Stopping 1 OSD from each host
+        scenario-5: Stopping all OSDs of 1 host
+        scenario-6: Remove 1 OSD from 1 host
     """
     log.info(run.__doc__)
     config = kw["config"]
@@ -39,6 +46,17 @@ def run(ceph_cluster, **kw):
     pool_obj = PoolFunctions(node=cephadm)
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
     test_fail = False
+    scenarios_to_run = config.get(
+        "scenarios_to_run",
+        [
+            "scenario-1",
+            "scenario-2",
+            "scenario-3",
+            "scenario-4",
+            "scenario-5",
+            "scenario-6",
+        ],
+    )
 
     if not mon_obj.verify_set_config(
         section="mon", name="mon_osd_down_out_subtree_limit", value="host"
@@ -88,6 +106,7 @@ def run(ceph_cluster, **kw):
         log.debug(
             f"Completed creating & Writing objects into the EC pool: {pool_name} for testing"
         )
+
         cmd = "ceph osd pool autoscale-status"
         pool_status = rados_obj.run_ceph_command(cmd=cmd)
 
@@ -103,245 +122,267 @@ def run(ceph_cluster, **kw):
         # Increasing the recovery threads on the cluster
         rados_obj.change_recovery_threads(config={}, action="set")
 
-        init_pg_count = rados_obj.get_pool_property(pool=pool_name, props="pg_num")[
-            "pg_num"
-        ]
-        log.debug(f"init PG count on the pool upon creation: {init_pg_count}")
-
-        bulk = pool_obj.get_bulk_details(pool_name=pool_name)
-        if bulk:
-            log.error("Expected bulk flag should be False upon pool creation")
-            raise Exception("Expected bulk flag should be False.")
-
-        log.debug(
-            f"Bulk flag not enabled on pool {pool_name}, Proceeding to enable bulk"
-        )
-
-        new_bulk = pool_obj.set_bulk_flag(pool_name=pool_name)
-        if not new_bulk:
-            log.error("Expected bulk flag should be True.")
-            raise Exception("Expected bulk flag should be True.")
-        # Sleeping for 60 seconds for bulk flag application and PG count to be increased.
-        time.sleep(60)
-        log.debug(f"Enabled bulk flag on the pool : {pool_name}")
-        pg_count_bulk_true = rados_obj.get_pool_details(pool=pool_name)["pg_num_target"]
-        log.debug(
-            f"PG count on pool {pool_name} post addition of bulk flag : {pg_count_bulk_true}"
-            f"Starting to wait for PG count on the pool to go from {init_pg_count} to"
-            f" {pg_count_bulk_true} while checking for PG inactivity"
-        )
-
-        inactive_pg = 0
-        endtime = datetime.datetime.now() + datetime.timedelta(seconds=14000)
-        while datetime.datetime.now() < endtime:
-            pool_pg_num = rados_obj.get_pool_property(pool=pool_name, props="pg_num")[
+        if "scenario-1" in scenarios_to_run:
+            init_pg_count = rados_obj.get_pool_property(pool=pool_name, props="pg_num")[
                 "pg_num"
             ]
-            if pool_pg_num == pg_count_bulk_true:
-                log.info(
-                    f"PG count on pool {pool_name} is achieved post adding the bulk flag"
-                )
-                break
-            log.info(
-                f"PG count on pool {pool_name} has not reached desired levels."
-                f"Expected : {pg_count_bulk_true}, Current : {pool_pg_num}"
-            )
-            if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
-                log.error(f"Inactive PGs found on pool : {pool_name}")
-                inactive_pg += 1
+            log.debug(f"init PG count on the pool upon creation: {init_pg_count}")
 
-            log.info("Sleeping for 60 secs and checking the PG states and PG count")
+            bulk = pool_obj.get_bulk_details(pool_name=pool_name)
+            if bulk:
+                log.error("Expected bulk flag should be False upon pool creation")
+                raise Exception("Expected bulk flag should be False.")
+
+            log.debug(
+                f"Bulk flag not enabled on pool {pool_name}, Proceeding to enable bulk"
+            )
+
+            new_bulk = pool_obj.set_bulk_flag(pool_name=pool_name)
+            if not new_bulk:
+                log.error("Expected bulk flag should be True.")
+                raise Exception("Expected bulk flag should be True.")
+            # Sleeping for 60 seconds for bulk flag application and PG count to be increased.
             time.sleep(60)
-        else:
-            raise Exception(
-                f"pg_num on pool {pool_name} did not reach the desired levels of PG count "
-                f"with bulk flag enabled"
-                f"Expected : {pg_count_bulk_true}"
-            )
-        log.info(
-            "PGs increased to desired levels after application of bulk flag on the pool with no inactive PGs"
-        )
-
-        if inactive_pg > 5:
-            log.error(
-                f"Found inactive PGs on the cluster multiple times during bulk flag addition on pool {pool_name}"
-                f"Count {inactive_pg}"
-            )
-            raise Exception("Inactive PGs during bulk on error")
-
-        log.info("Starting with OSD reboot scenarios for a Host")
-
-        # Restarting OSDs belonging to a particular host
-        osd_node = ceph_cluster.get_nodes(role="osd")[0]
-        osd_list = rados_obj.collect_osd_daemon_ids(osd_node=osd_node)
-
-        for osd_id in osd_list:
-            log.debug(f"Rebooting OSD : {osd_id} and checking health status")
-            if not rados_obj.change_osd_state(action="restart", target=osd_id):
-                log.error(f"Unable to restart the OSD : {osd_id}")
-                raise Exception("Execution error")
-
-            time.sleep(5)
-            # Waiting for recovery to post OSD reboot
-            method_should_succeed(
-                wait_for_clean_pg_sets, rados_obj, timeout=12000, test_pool=pool_name
-            )
+            log.debug(f"Enabled bulk flag on the pool : {pool_name}")
+            pg_count_bulk_true = rados_obj.get_pool_details(pool=pool_name)[
+                "pg_num_target"
+            ]
             log.debug(
-                "PG's are active + clean post OSD reboot, proceeding to restart next OSD"
+                f"PG count on pool {pool_name} post addition of bulk flag : {pg_count_bulk_true}"
+                f"Starting to wait for PG count on the pool to go from {init_pg_count} to"
+                f" {pg_count_bulk_true} while checking for PG inactivity"
             )
 
-        log.info(
-            f"All the planned  OSD reboots have completed for host {osd_node.hostname}"
-        )
-        # Upgrade workflow and the checks moved to dedicated test, which will be called from suite file
+            inactive_pg = 0
+            endtime = datetime.datetime.now() + datetime.timedelta(seconds=14000)
+            while datetime.datetime.now() < endtime:
+                pool_pg_num = rados_obj.get_pool_property(
+                    pool=pool_name, props="pg_num"
+                )["pg_num"]
+                if pool_pg_num == pg_count_bulk_true:
+                    log.info(
+                        f"PG count on pool {pool_name} is achieved post adding the bulk flag"
+                    )
+                    break
+                log.info(
+                    f"PG count on pool {pool_name} has not reached desired levels."
+                    f"Expected : {pg_count_bulk_true}, Current : {pool_pg_num}"
+                )
+                if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
+                    log.error(f"Inactive PGs found on pool : {pool_name}")
+                    inactive_pg += 1
 
-        # Beginning with OSD stop operations
-        log.debug("Stopping 1 OSD from each host. No inactive PGs")
+                log.info("Sleeping for 60 secs and checking the PG states and PG count")
+                time.sleep(60)
+            else:
+                raise Exception(
+                    f"pg_num on pool {pool_name} did not reach the desired levels of PG count "
+                    f"with bulk flag enabled"
+                    f"Expected : {pg_count_bulk_true}"
+                )
+            log.info(
+                "PGs increased to desired levels after application of bulk flag on the pool with no inactive PGs"
+            )
+
+            if inactive_pg > 5:
+                log.error(
+                    f"Found inactive PGs on the cluster multiple times during bulk flag addition on pool {pool_name}"
+                    f"Count {inactive_pg}"
+                )
+                raise Exception("Inactive PGs during bulk on error")
+
+        if "scenario-2" in scenarios_to_run:
+            log.info("Starting with OSD reboot scenarios for a Host")
+
+            # Restarting OSDs belonging to a particular host
+            osd_node = ceph_cluster.get_nodes(role="osd")[0]
+            osd_list = rados_obj.collect_osd_daemon_ids(osd_node=osd_node)
+
+            for osd_id in osd_list:
+                log.debug(f"Rebooting OSD : {osd_id} and checking health status")
+                if not rados_obj.change_osd_state(action="restart", target=osd_id):
+                    log.error(f"Unable to restart the OSD : {osd_id}")
+                    raise Exception("Execution error")
+
+                time.sleep(5)
+                # Waiting for recovery to post OSD reboot
+                method_should_succeed(
+                    wait_for_clean_pg_sets,
+                    rados_obj,
+                    timeout=12000,
+                    test_pool=pool_name,
+                )
+                log.debug(
+                    "PG's are active + clean post OSD reboot, proceeding to restart next OSD"
+                )
+
+            log.info(
+                f"All the planned  OSD reboots have completed for host {osd_node.hostname}"
+            )
+            # Upgrade workflow and the checks moved to dedicated test, which will be called from suite file
+
         osd_nodes = ceph_cluster.get_nodes(role="osd")
-        for node in osd_nodes:
-            osd_list = rados_obj.collect_osd_daemon_ids(osd_node=node)
-            log.debug(
-                f"Reboot OSDs: Chosen host {node.hostname} , Chosen OSD : {osd_list[0]}"
-            )
-            if not rados_obj.change_osd_state(action="stop", target=osd_list[0]):
-                log.error(f"Unable to stop the OSD : {osd_list[0]}")
-                raise Exception("Execution error")
-            time.sleep(5)
+        if "scenario-3" in scenarios_to_run:
+            # Beginning with OSD stop operations
+            log.debug("Stopping 1 OSD from each host. No inactive PGs")
+            for node in osd_nodes:
+                osd_list = rados_obj.collect_osd_daemon_ids(osd_node=node)
+                log.debug(
+                    f"Reboot OSDs: Chosen host {node.hostname} , Chosen OSD : {osd_list[0]}"
+                )
+                if not rados_obj.change_osd_state(action="stop", target=osd_list[0]):
+                    log.error(f"Unable to stop the OSD : {osd_list[0]}")
+                    raise Exception("Execution error")
+                time.sleep(5)
 
-            log.debug(
-                f"Completed reboot of OSD {osd_list[0]}. Checking for any inactive PGs due to reboot"
-            )
+                log.debug(
+                    f"Completed reboot of OSD {osd_list[0]}. Checking for any inactive PGs due to reboot"
+                )
+                inactive_pgs = 0
+                if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
+                    log.error(f"Inactive PGs found on pool : {pool_name}")
+                    inactive_pgs += 1
+                time.sleep(5)
+                # Waiting for recovery to post OSD reboot
+                method_should_succeed(
+                    wait_for_clean_pg_sets,
+                    rados_obj,
+                    timeout=12000,
+                    test_pool=pool_name,
+                )
+                log.debug(f"PG's are active + clean post OSD reboot : {osd_list[0]}")
+                if not rados_obj.change_osd_state(action="start", target=osd_list[0]):
+                    log.error(f"Unable to stop the OSD : {osd_list[0]}")
+                    raise Exception("Execution error")
+                time.sleep(5)
+                log.debug(
+                    f"OSD : {osd_list[0]} Started.  proceeding to restart next OSD"
+                )
+
+            if inactive_pgs > 5:
+                log.error("Found inactive PGs on the cluster during OSD reboots")
+                raise Exception("Inactive PGs during reboot error")
+            log.debug("Completed scenario of rebooting 1 OSD from each host")
+
+        if "scenario-4" in scenarios_to_run:
+            log.debug("Stopping all OSDs of 1 host and check for inactive PGs")
+            # Stopping all OSDs of 1 host and check for inactive PGs
+            stop_host = osd_nodes[0]
+            osd_list = rados_obj.collect_osd_daemon_ids(osd_node=stop_host)
             inactive_pgs = 0
+            for osd in osd_list:
+                if not rados_obj.change_osd_state(action="stop", target=osd):
+                    log.error(f"Unable to stop the OSD : {osd_list[0]}")
+                    raise Exception("Unable to stop OSDs error")
+                time.sleep(5)
+
+            log.debug(f"Stopped all OSDs on host : {stop_host.hostname}")
             if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
                 log.error(f"Inactive PGs found on pool : {pool_name}")
                 inactive_pgs += 1
-            time.sleep(5)
-            # Waiting for recovery to post OSD reboot
+
+            if inactive_pgs > 5:
+                log.error("Found inactive PGs on the cluster during OSD stop")
+                raise Exception("Inactive PGs during stop error")
+            log.debug(
+                f"No inactive PGs found upon stopping OSDs on host : {stop_host.hostname}"
+            )
+
+            for osd in osd_list:
+                if not rados_obj.change_osd_state(action="start", target=osd):
+                    log.error(f"Unable to start the OSD : {osd_list[0]}")
+                    raise Exception("Unable to start OSDs error")
+                time.sleep(5)
+
+            log.debug("Completed restart of all the OSDs on the Host")
+
+        if "scenario-5" in scenarios_to_run:
+            log.debug("Starting to reboot all the OSD hosts and waiting till recovery")
+            osd_nodes = ceph_cluster.get_nodes(role="osd")
+            for node in osd_nodes:
+                log.debug(f"Proceeding to reboot the host : {node.hostname}")
+                node.exec_command(cmd="reboot", sudo=True)
+                time.sleep(2)
+                log.info(
+                    f"\nceph status : {rados_obj.run_ceph_command(cmd='ceph -s', client_exec=True)}\n"
+                )
+                # Waiting for recovery to post OSD host addition
+                method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
+                # Checking cluster health after OSD removal
+                method_should_succeed(rados_obj.run_pool_sanity_check)
+                log.info(f"reboot of OSD host : {node.hostname} is successful.")
+            log.debug("Done with reboot of all the OSD hosts")
+
+        if "scenario-6" in scenarios_to_run:
+            log.debug("Starting test to remove OSD from the host.")
+            # Remove one OSD
+            inactive_pgs = 0
+            node_label = "osd"
+            try:
+                node_id = ceph_cluster.get_nodes(role=node_label)[0]
+            except Exception as err:
+                log.error(
+                    f"Could not find the host for the removal process with label 'osd-bak'. Err: {err}"
+                )
+                raise Exception("Host not found error")
+            target_osd = rados_obj.collect_osd_daemon_ids(osd_node=node_id)[0]
+            log.debug(f"Target OSD for removal : {target_osd}")
+            host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=target_osd)
+            should_not_be_empty(host, "Failed to fetch host details")
+            dev_path = get_device_path(host, target_osd)
+            log.debug(
+                f"osd device path  : {dev_path}, osd_id : {target_osd}, host.hostname : {host.hostname}"
+            )
+            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=True)
+            method_should_succeed(utils.set_osd_out, ceph_cluster, target_osd)
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
+            log.debug("Cluster clean post draining of OSD for removal")
+            utils.osd_remove(ceph_cluster, target_osd)
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
             method_should_succeed(
-                wait_for_clean_pg_sets, rados_obj, timeout=12000, test_pool=pool_name
+                utils.zap_device, ceph_cluster, host.hostname, dev_path
             )
-            log.debug(f"PG's are active + clean post OSD reboot : {osd_list[0]}")
-            if not rados_obj.change_osd_state(action="start", target=osd_list[0]):
-                log.error(f"Unable to stop the OSD : {osd_list[0]}")
-                raise Exception("Execution error")
-            time.sleep(5)
-            log.debug(f"OSD : {osd_list[0]} Started.  proceeding to restart next OSD")
-
-        if inactive_pgs > 5:
-            log.error("Found inactive PGs on the cluster during OSD reboots")
-            raise Exception("Inactive PGs during reboot error")
-        log.debug("Completed scenario of rebooting 1 OSD from each host")
-
-        log.debug("Stopping all OSDs of 1 host and check for inactive PGs")
-        # Stopping all OSDs of 1 host and check for inactive PGs
-        stop_host = osd_nodes[0]
-        osd_list = rados_obj.collect_osd_daemon_ids(osd_node=stop_host)
-        inactive_pgs = 0
-        for osd in osd_list:
-            if not rados_obj.change_osd_state(action="stop", target=osd):
-                log.error(f"Unable to stop the OSD : {osd_list[0]}")
-                raise Exception("Unable to stop OSDs error")
-            time.sleep(5)
-
-        log.debug(f"Stopped all OSDs on host : {stop_host.hostname}")
-        if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
-            log.error(f"Inactive PGs found on pool : {pool_name}")
-            inactive_pgs += 1
-
-        if inactive_pgs > 5:
-            log.error("Found inactive PGs on the cluster during OSD stop")
-            raise Exception("Inactive PGs during stop error")
-        log.debug(
-            f"No inactive PGs found upon stopping OSDs on host : {stop_host.hostname}"
-        )
-
-        for osd in osd_list:
-            if not rados_obj.change_osd_state(action="start", target=osd):
-                log.error(f"Unable to start the OSD : {osd_list[0]}")
-                raise Exception("Unable to start OSDs error")
-            time.sleep(5)
-
-        log.debug("Completed restart of all the OSDs on the Host")
-
-        log.debug("Starting to reboot all the OSD hosts and waiting till recovery")
-        osd_nodes = ceph_cluster.get_nodes(role="osd")
-        for node in osd_nodes:
-            log.debug(f"Proceeding to reboot the host : {node.hostname}")
-            node.exec_command(cmd="reboot", sudo=True)
-            time.sleep(2)
-            log.info(
-                f"\nceph status : {rados_obj.run_ceph_command(cmd='ceph -s', client_exec=True)}\n"
+            method_should_succeed(
+                wait_for_device_rados, host, target_osd, action="remove"
             )
+
             # Waiting for recovery to post OSD host addition
             method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
             # Checking cluster health after OSD removal
             method_should_succeed(rados_obj.run_pool_sanity_check)
-            log.info(f"reboot of OSD host : {node.hostname} is successful.")
-        log.debug("Done with reboot of all the OSD hosts")
-
-        log.debug("Starting test to remove OSD from the host.")
-        # Remove one OSD
-        inactive_pgs = 0
-        node_label = "osd"
-        try:
-            node_id = ceph_cluster.get_nodes(role=node_label)[0]
-        except Exception as err:
-            log.error(
-                f"Could not find the host for the removal process with label 'osd-bak'. Err: {err}"
+            log.info(
+                f"Removal of OSD : {target_osd} is successful. Proceeding to add back the OSD daemon."
             )
-            raise Exception("Host not found error")
-        target_osd = rados_obj.collect_osd_daemon_ids(osd_node=node_id)[0]
-        log.debug(f"Target OSD for removal : {target_osd}")
-        host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=target_osd)
-        should_not_be_empty(host, "Failed to fetch host details")
-        dev_path = get_device_path(host, target_osd)
-        log.debug(
-            f"osd device path  : {dev_path}, osd_id : {target_osd}, host.hostname : {host.hostname}"
-        )
-        utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=True)
-        method_should_succeed(utils.set_osd_out, ceph_cluster, target_osd)
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
-        log.debug("Cluster clean post draining of OSD for removal")
-        utils.osd_remove(ceph_cluster, target_osd)
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
-        method_should_succeed(utils.zap_device, ceph_cluster, host.hostname, dev_path)
-        method_should_succeed(wait_for_device_rados, host, target_osd, action="remove")
+            if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
+                log.error(f"Inactive PGs found on pool : {pool_name}")
+                inactive_pgs += 1
 
-        # Waiting for recovery to post OSD host addition
-        method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
-        # Checking cluster health after OSD removal
-        method_should_succeed(rados_obj.run_pool_sanity_check)
-        log.info(
-            f"Removal of OSD : {target_osd} is successful. Proceeding to add back the OSD daemon."
-        )
-        if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
-            log.error(f"Inactive PGs found on pool : {pool_name}")
-            inactive_pgs += 1
+            # Adding the removed OSD back and checking the cluster status
+            log.debug("Adding the removed OSD back and checking the cluster status")
+            utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
+            method_should_succeed(wait_for_device_rados, host, target_osd, action="add")
+            time.sleep(30)
+            log.debug(
+                "Completed addition of OSD post removal. Checking for inactive PGs post OSD addition"
+            )
+            if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
+                log.error(f"Inactive PGs found on pool : {pool_name}")
+                inactive_pgs += 1
 
-        # Adding the removed OSD back and checking the cluster status
-        log.debug("Adding the removed OSD back and checking the cluster status")
-        utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
-        method_should_succeed(wait_for_device_rados, host, target_osd, action="add")
-        time.sleep(30)
-        log.debug(
-            "Completed addition of OSD post removal. Checking for inactive PGs post OSD addition"
-        )
-        if not rados_obj.check_inactive_pgs_on_pool(pool_name=pool_name):
-            log.error(f"Inactive PGs found on pool : {pool_name}")
-            inactive_pgs += 1
+            if inactive_pgs > 10:
+                log.error(
+                    "Found inactive PGs on the cluster during OSD removal/Addition"
+                )
+                raise Exception("Inactive PGs during stop error")
 
-        if inactive_pgs > 10:
-            log.error("Found inactive PGs on the cluster during OSD removal/Addition")
-            raise Exception("Inactive PGs during stop error")
+            # Checking cluster health after OSD removal
+            method_should_succeed(rados_obj.run_pool_sanity_check)
+            log.info(
+                f"Addition of OSD : {target_osd} back into the cluster was successful, and the health is good!"
+            )
 
-        # Checking cluster health after OSD removal
-        method_should_succeed(rados_obj.run_pool_sanity_check)
-        log.info(
-            f"Addition of OSD : {target_osd} back into the cluster was successful, and the health is good!"
-        )
-
-        utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
-        log.info("Completed the removal and addition of OSD daemons")
+            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
+            log.info("Completed the removal and addition of OSD daemons")
 
         if config.get("remove_host", True):
             node_id = "node5"
