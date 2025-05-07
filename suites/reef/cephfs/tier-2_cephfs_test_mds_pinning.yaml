@@ -55,35 +55,6 @@ tests:
                 - create
                 - cephfs
           - config:
-              command: shell
-              args:
-                - ceph
-                - osd
-                - pool
-                - create
-                - cephfs-data-ec
-                - "64"
-                - erasure
-          - config:
-              command: shell
-              args:
-                - ceph
-                - osd
-                - pool
-                - create
-                - cephfs-metadata
-                - "64"
-          - config:
-              command: shell
-              args:
-                - ceph
-                - osd
-                - pool
-                - set
-                - cephfs-data-ec
-                - allow_ec_overwrites
-                - "true"
-          - config:
               command: apply
               service: mds
               base_cmd_args:
@@ -211,5 +182,4 @@ tests:
       desc: "Validate selinux relabel on kernel client"
       module: clients.test_selinux_relabel.py
       name: Validate selinux relabels
-      comments: "BZ-2309363"
       polarion-id: "CEPH-83595737"

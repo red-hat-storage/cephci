@@ -3700,20 +3700,23 @@ os.system('sudo systemctl start  network')
 
     @retry(CommandFailed, tries=4, delay=30)
     def get_ceph_health_status(self, client, validate=True, status=["HEALTH_OK"]):
-        """
-        Validate if the Ceph Health is OK or in WARN/ERROR State.
-        Args:
-            client : client node.
-        Return:
-            Status of the Ceph Health.
-        """
         out, rc = client.exec_command(sudo=True, cmd="ceph -s -f json")
         log.info(out)
         health_status = json.loads(out)["health"]["status"]
 
-        if health_status not in status:
-            raise CommandFailed(f"Ceph Cluster is in {health_status} State")
-        log.info("Ceph Cluster is Healthy")
+        if health_status == "HEALTH_ERR":
+            raise CommandFailed(f"Ceph Cluster is in {health_status} state")
+
+        if validate:
+            if health_status not in status:
+                raise CommandFailed(f"Ceph Cluster is in {health_status} state")
+        else:
+            if health_status not in status:
+                log.warning(
+                    f"Ceph Cluster is in {health_status} state. Proceeding without validation..."
+                )
+
+        log.info("Ceph Cluster is Healthy or acceptable")
         return health_status
 
     def monitor_ceph_health(self, client, retry, interval):
