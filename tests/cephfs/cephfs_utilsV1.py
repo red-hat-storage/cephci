@@ -3897,13 +3897,12 @@ os.system('sudo systemctl start  network')
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(3))
         )
-        fs_util = mount_params["fs_util"]
 
         if mnt_type == "kernel":
             mounting_dir = f"/mnt/cephfs_kernel_{mount_suffix}/"
             client.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}")
-            mon_node_ips = fs_util.get_mon_node_ips()
-            retry_mount = retry(CommandFailed, tries=3, delay=30)(fs_util.kernel_mount)
+            mon_node_ips = self.get_mon_node_ips()
+            retry_mount = retry(CommandFailed, tries=3, delay=30)(self.kernel_mount)
             retry_mount(
                 [client],
                 mounting_dir,
@@ -3914,7 +3913,7 @@ os.system('sudo systemctl start  network')
         if mnt_type == "fuse":
             mounting_dir = f"/mnt/cephfs_fuse_{mount_suffix}/"
             client.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}")
-            fs_util.fuse_mount(
+            self.fuse_mount(
                 [client],
                 mounting_dir,
                 extra_params=f" -r {fs_vol_path} --client_fs {mount_params['fs_name']}",
@@ -3928,7 +3927,7 @@ os.system('sudo systemctl start  network')
                     f"{mount_params['nfs_export_name']} {mount_params['fs_name']} path={fs_vol_path}",
                 )
                 mount_params["export_created"] = 1
-            fs_util.cephfs_nfs_mount(
+            self.cephfs_nfs_mount(
                 client,
                 mount_params["nfs_server"],
                 mount_params["nfs_export_name"],

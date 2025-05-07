@@ -154,7 +154,7 @@ class CephFSCommonUtils(FsUtils):
                    }}}
         """
         try:
-            client = clients.pop(0)
+            client = clients[0]
 
             mounting_dir = "".join(
                 random.choice(string.ascii_lowercase + string.digits)
@@ -162,7 +162,6 @@ class CephFSCommonUtils(FsUtils):
             )
 
             mnt_type_list = ["kernel", "fuse", "nfs"]
-            mnt_type_list = ["kernel"]
             mount_details = {}
             sv_list = setup_params["sv_list"]
             fs_name = setup_params["fs_name"]
@@ -179,7 +178,6 @@ class CephFSCommonUtils(FsUtils):
                 )
 
                 mnt_path = subvol_path.strip()
-                mnt_path = subvol_path
                 nfs_export_name = f"/export_{sv_name}_" + "".join(
                     random.choice(string.digits) for i in range(3)
                 )
