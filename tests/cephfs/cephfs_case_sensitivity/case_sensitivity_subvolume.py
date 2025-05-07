@@ -311,28 +311,28 @@ def sv1_create_and_mount():
     )
     log.info("Mounting dir for FUSE: {}".format(fuse_mounting_dir))
 
-    # log.info("*** Mounting via NFS ***")
+    log.info("*** Mounting via NFS ***")
 
-    # mds = fs_util.get_active_mdss(client1, cephfs_vol)
-    # active_mds_hostnames = [i.split(".")[1] for i in mds]
-    # nfs_server_name = active_mds_hostnames[0]
-    # log.debug("Active MDS Hostname: {}".format(nfs_server_name))
+    mds = fs_util.get_active_mdss(client1, cephfs_vol)
+    active_mds_hostnames = [i.split(".")[1] for i in mds]
+    nfs_server_name = active_mds_hostnames[0]
+    log.debug("Active MDS Hostname: {}".format(nfs_server_name))
 
-    # nfs_params = {
-    #     "nfs_cluster_name": "nfs-sv-1",
-    #     "nfs_server_name": nfs_server_name,
-    #     "binding": "/export_binding_nfs_sv_1",
-    # }
-    # nfs_mounting_dir = common_util.setup_nfs_mount(
-    #     client1,
-    #     cephfs_vol,
-    #     mount_path="/mnt/nfs_{}/".format(common_util.generate_mount_dir()),
-    #     subvol_path=sub_vol_path_1,
-    #     nfs_server_name=nfs_params.get("nfs_server_name"),
-    #     cluster=nfs_params.get("nfs_cluster_name"),
-    #     binding=nfs_params.get("binding"),
-    # )
-    # log.info("NFS Mounting dir: {}".format(nfs_mounting_dir))
+    nfs_params = {
+        "nfs_cluster_name": "nfs-sv-1",
+        "nfs_server_name": nfs_server_name,
+        "binding": "/export_binding_nfs_sv_1",
+    }
+    nfs_mounting_dir = common_util.setup_nfs_mount(
+        client1,
+        cephfs_vol,
+        mount_path="/mnt/nfs_{}/".format(common_util.generate_mount_dir()),
+        subvol_path=sub_vol_path_1,
+        nfs_server_name=nfs_params.get("nfs_server_name"),
+        nfs_cluster_name=nfs_params.get("nfs_cluster_name"),
+        binding=nfs_params.get("binding"),
+    )
+    log.info("NFS Mounting dir: {}".format(nfs_mounting_dir))
 
 
 def validate_charmap_sv1():
@@ -894,18 +894,18 @@ def run(ceph_cluster, **kw):
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )
 
-        # log.info("Unmounting and cleaning up the NFS mounts")
-        # fs_util.client_clean_up(
-        #     "umount", kernel_clients=[client1], mounting_dir=nfs_mounting_dir
-        # )
+        log.info("Unmounting and cleaning up the NFS mounts")
+        fs_util.client_clean_up(
+            "umount", kernel_clients=[client1], mounting_dir=nfs_mounting_dir
+        )
 
-        # fs_util.remove_nfs_export(
-        #     client1,
-        #     nfs_params.get("nfs_cluster_name"),
-        #     nfs_params.get("binding"),
-        # )
+        fs_util.remove_nfs_export(
+            client1,
+            nfs_params.get("nfs_cluster_name"),
+            nfs_params.get("binding"),
+        )
 
-        # fs_util.remove_nfs_cluster(client1, nfs_params.get("nfs_cluster_name"))
+        fs_util.remove_nfs_cluster(client1, nfs_params.get("nfs_cluster_name"))
         if ibm_build:
             log.info("Unmounting and cleaning up the SMB mounts")
             client1.exec_command(
@@ -935,17 +935,6 @@ def run(ceph_cluster, **kw):
             cephfs_subvol,
             cephfs_snap1,
             **{"group_name": cephfs_subvol_group1},
-        )
-        Ceph(client1).fs.sub_volume.rm(cephfs_vol, cephfs_subvol_default)
-        Ceph(client1).fs.sub_volume.rm(
-            cephfs_vol, cephfs_clone_subvol, cephfs_subvol_group1
-        )
-        Ceph(client1).fs.sub_volume.rm(cephfs_vol, cephfs_subvol, cephfs_subvol_group1)
-        Ceph(client1).fs.sub_volume_group.rm(
-            cephfs_vol, cephfs_subvol_group1, force=True
-        )
-        Ceph(client1).fs.sub_volume_group.rm(
-            cephfs_vol, cephfs_subvol_group2, force=True
         )
         Ceph(client1).fs.volume.rm(cephfs_vol, yes_i_really_mean_it=True)
         log.info("Cleanup completed successfully.")
