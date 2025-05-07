@@ -1,6 +1,4 @@
-import json
-
-from ceph.waiter import WaitUntil
+from ceph.ceph_admin.orch import Orch
 from cli.cephadm.cephadm import CephAdm
 from utility.log import Log
 
@@ -9,23 +7,6 @@ log = Log(__name__)
 
 class StaggeredUpgradeError(Exception):
     pass
-
-
-def check_upgrade_status(node):
-    """Check upgrade status
-    Args:
-        node: installer node
-    """
-    timeout, interval = 600, 5
-    for w in WaitUntil(timeout=timeout, interval=interval):
-        out = CephAdm(node).ceph.orch.upgrade.status()
-        if not json.loads(out)["in_progress"]:
-            log.info("Upgrade completed")
-            return
-        log.info(f"Upgrade still In Progress. Retry for status after '{interval}' sec")
-    if w.expired:
-        log.error("Cluster upgrade not completed")
-        raise StaggeredUpgradeError("Cluster upgrade not completed")
 
 
 def run(ceph_cluster, **kw):
@@ -52,6 +33,7 @@ def run(ceph_cluster, **kw):
     target_image = config.get("container_image")
     action = config.get("action")
     node = ceph_cluster.get_nodes(role="mon")[0]
+    orch = Orch(cluster=ceph_cluster, **config)
     # Check cluster health before upgrade
     if CephAdm(node).ceph.health() != "HEALTH_OK":
         raise StaggeredUpgradeError("Cluster not in 'HEALTH_OK' state")
@@ -112,7 +94,7 @@ def run(ceph_cluster, **kw):
         ):
             raise StaggeredUpgradeError("Unable to start upgrade with all combinations")
     # Check upgrade status
-    check_upgrade_status(node)
+    orch.monitor_upgrade_status()
     # Unset osd flags
     for flag in osd_flags:
         if CephAdm(node).ceph.osd.unset(flag):
