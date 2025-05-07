@@ -147,3 +147,16 @@ tests:
       polarion-id: CEPH-83617010
       desc: Test fs attributes for functional use case
       abort-on-fail: false
+
+  ######################################################################################################################
+  # Conf File : conf/squid/cephfs/tier-2_cephfs_7-node-cluster.yaml
+  # Features Covered
+  # fscrypt basic functional tests - lifecycle,empty_dir and metadata
+  ######################################################################################################################
+  - test:
+      abort-on-fail: false
+      desc: "Verify fscrypt basic tests - lifecycle,non_empty_path and metadata validation"
+      destroy-cluster: false
+      module: cephfs_fscrypt.test_fscrypt_basic.py
+      name: "fscrypt_basic"
+      polarion-id: CEPH-83607378
