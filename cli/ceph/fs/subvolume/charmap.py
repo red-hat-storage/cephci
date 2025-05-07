@@ -70,9 +70,7 @@ class Charmap(Cli):
             log.debug("output: {}".format(out))
         except Exception as e:
             raise CharMapGetError(
-                "Failed to get charmaps: {} for subvolume: {} with output: {} ".format(
-                    e, subvolume_name, out
-                )
+                "Failed to get charmaps: {} for subvolume: {}".format(e, subvolume_name)
             )
 
         if isinstance(out, tuple):
@@ -106,8 +104,8 @@ class Charmap(Cli):
             log.debug("output: {}".format(out))
         except Exception as e:
             raise CharMapRemoveError(
-                "Failed to remove charmaps: {} for subvolume {} with output {}".format(
-                    e, subvolume_name, out
+                "Failed to remove charmaps: {} for subvolume {}".format(
+                    e, subvolume_name
                 )
             )
 
