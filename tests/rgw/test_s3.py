@@ -511,7 +511,7 @@ def _s3test_req_py3(node: CephNode) -> None:
         "python3 -m venv s3-tests/virtualenv",
         "s3-tests/virtualenv/bin/python -m pip install --upgrade pip setuptools",
         "s3-tests/virtualenv/bin/python -m pip install -r s3-tests/requirements.txt",
-        "s3-tests/virtualenv/bin/python s3-tests/setup.py develop",
+        "s3-tests/virtualenv/bin/python -m pip install --editable s3-tests/.",
     ]
     node.exec_command(
         sudo=True, check_ec=False, cmd=f"yum install -y {' '.join(packages)}"
@@ -547,7 +547,7 @@ def _s3tests_req_install(node: CephNode, os_ver: str) -> None:
         f"{venv_cmd} -p python2 --no-site-packages --distribute s3-tests/virtualenv",
         "s3-tests/virtualenv/bin/pip install --upgrade pip setuptools",
         "s3-tests/virtualenv/bin/pip install -r s3-tests/requirements.txt",
-        "s3-tests/virtualenv/bin/python s3-tests/setup.py develop",
+        "s3-tests/virtualenv/bin/python -m pip install --editable s3-tests/.",
     ]
     for cmd in commands:
         node.exec_command(cmd=cmd)
