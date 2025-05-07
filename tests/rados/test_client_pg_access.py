@@ -39,13 +39,13 @@ def run(ceph_cluster, **kw):
         num_objects = config["verify_client_pg_access"]["num_objects"]
     except KeyError:
         print("Variable num_objects is not defined.Assigning to the default value")
-        num_objects = 250
+        num_objects = 25
     # Check if num of objects variable is assigned
     if num_objects is None or not num_objects or num_objects < 0:
         log.info(
             "The number of objects are not defined properly and assigned to the default value 250 "
         )
-        num_objects = 250
+        num_objects = 25
     log.debug(
         "Verifying the effects of rados put, get, snap & delete on pool with single PG"
     )

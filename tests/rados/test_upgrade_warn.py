@@ -16,6 +16,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
+from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 from utility.utils import fetch_build_artifacts
 
@@ -52,12 +53,20 @@ def run(ceph_cluster, **kw):
     cephadm_obj = CephAdmin(cluster=ceph_cluster, **config)
     cluster_obj = Orch(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm_obj)
+    mon_obj = MonConfigMethods(rados_obj=rados_obj)
     verify_warning = config.get("verify_warning", False)
+    verify_older_version_warn = config.get("verify_older_version_warn", False)
     verify_daemons = config.get("verify_daemons", False)
     verify_cluster_usage = config.get("verify_cluster_usage", False)
     verify_max_avail = config.get("verify_max_avail", False)
     check_for_inactive_pgs = config.get("check_for_inactive_pgs", False)
     verify_cluster_health = config.get("verify_cluster_health", False)
+    enable_debug_level = config.get("enable_debug_level", False)
+    installer = ceph_cluster.get_nodes(role="installer")[0]
+
+    init_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+    msg = f"time when upgrade test was started : {init_time}"
+    log.info(msg)
 
     log.debug("Collecting daemon info and Cluster usage info before the upgrade")
     pre_upgrade_orch_ps = rados_obj.run_ceph_command(cmd="ceph orch ps")
@@ -70,6 +79,10 @@ def run(ceph_cluster, **kw):
         f"ceph versions: {rados_obj.run_ceph_command(cmd='ceph versions')} \n"
     )
     log.info(log_dump)
+    if enable_debug_level:
+        log.debug("Setting up debug configs on the cluster for mon & Mgr daemons")
+        mon_obj.set_config(section="mon", name="debug_mon", value="30/30")
+        mon_obj.set_config(section="mgr", name="debug_mgr", value="20/20")
 
     if verify_max_avail and not rados_obj.verify_max_avail():
         log.error("MAX_AVAIL deviates on the cluster more than expected")
@@ -138,14 +151,15 @@ def run(ceph_cluster, **kw):
         time.sleep(5)
 
         warn_flag = False
+        version_flag = False
         upgrade_complete = False
         inactive_pgs = 0
         # Monitor upgrade status, till completion, checking for the warning to be generated
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
         while end_time > datetime.datetime.now():
             cmd = "ceph orch upgrade status"
-            out, _ = rados_obj.client.exec_command(cmd=cmd, sudo=True)
             try:
+                out, _ = rados_obj.client.exec_command(cmd=cmd, sudo=True)
                 status = json.loads(out)
                 if not status["in_progress"]:
                     log.info("Upgrade Complete...")
@@ -155,6 +169,21 @@ def run(ceph_cluster, **kw):
                 if "no upgrades in progress" in out:
                     log.info("Upgrade Complete...")
                     upgrade_complete = True
+                    break
+            except Exception as err:
+                # checking if the Exception raised is due to bug : 2314146
+                # Error msg :  ENOTSUP: Warning: due to ceph-mgr restart, some PG states may not be up to date
+                # Module 'orchestrator' is not enabled/loaded (required by command 'orch upgrade status'):
+                # use `ceph mgr module enable orchestrator` to enable it
+                if "not enabled/loaded" in err:
+                    log.info(
+                        "Intermittent issue hit. bug : 2314146. Error hit : \n %s \n"
+                        % err,
+                    )
+                    continue
+                else:
+                    upgrade_complete = False
+                    log.error("Exception hit : %s" % err)
                     break
 
             log.debug(f"upgrade in progress. Status : {out}")
@@ -179,6 +208,35 @@ def run(ceph_cluster, **kw):
                     )
                     out = rados_obj.run_ceph_command(cmd="ceph health detail")
                     log.info(f"\n\nHealth detail on the cluster :\n {out}\n\n")
+                else:
+                    log.debug(
+                        "expected health warning not yet generated on the cluster."
+                        f" health_warns on cluster : {ceph_health_status}"
+                    )
+
+            if not version_flag:
+                # Changing configs for generating DAEMON_OLD_VERSION warning
+                mon_obj.set_config(
+                    section="mon", name="mon_warn_older_version_delay", value="10"
+                )
+                status_report = rados_obj.run_ceph_command(
+                    cmd="ceph report", client_exec=True
+                )
+                ceph_health_status = list(status_report["health"]["checks"].keys())
+                expected_health_warns = "DAEMON_OLD_VERSION"
+                if expected_health_warns in ceph_health_status:
+                    version_flag = True
+                    log.info(
+                        "We have the expected health warning generated on the cluster.\n "
+                        "Warnings on cluster: %s",
+                        ceph_health_status,
+                    )
+                    out = rados_obj.run_ceph_command(cmd="ceph health detail")
+                    log.info("\n\nHealth detail on the cluster :\n %s\n\n", out)
+                    # Reverting the changes made for DAEMON_OLD_VERSION warning
+                    mon_obj.remove_config(
+                        section="mon", name="mon_warn_older_version_delay"
+                    )
                 else:
                     log.debug(
                         "expected health warning not yet generated on the cluster."
@@ -244,6 +302,13 @@ def run(ceph_cluster, **kw):
                 " health status and Removed once upgrade was completed"
             )
 
+        if verify_older_version_warn:
+            if not version_flag:
+                log.error(
+                    "DAEMON_OLD_VERSION warning not observed on the cluster during upgrade"
+                )
+                raise Exception("DAEMON_OLD_VERSION not generated during upgrade")
+
         if verify_max_avail and not rados_obj.verify_max_avail():
             log.error(
                 "MAX_AVAIL deviates on the cluster more than expected post upgrade"
@@ -273,8 +338,27 @@ def run(ceph_cluster, **kw):
                 log.error("cluster HEALTH is HEALTH_ERR post upgrade")
                 raise Exception("Cluster health in ERROR state post upgrade")
 
-        log.info("Completed upgrade on the cluster")
-        return 0
     except Exception as e:
         log.error(f"Could not upgrade the cluster. error : {e}")
         return 1
+    finally:
+        log.debug("---------------- In Finally Block -------------")
+        if enable_debug_level:
+            log.debug("Removing debug configs on the cluster for mon & Mgr")
+            mon_obj.remove_config(section="mon", name="debug_mon")
+            mon_obj.remove_config(section="mgr", name="debug_mgr")
+
+        end_time, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
+        msg = f"time when upgrade test was ended : {end_time}"
+        log.info(msg)
+        time.sleep(10)
+
+        # log cluster health
+        rados_obj.log_cluster_health()
+        # check for crashes after test execution
+        if rados_obj.check_crash_status():
+            log.error("Test failed due to crash at the end of test")
+            return 1
+
+    log.info("Completed upgrade on the cluster")
+    return 0
