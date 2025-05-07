@@ -46,6 +46,7 @@ def run(ceph_cluster, **kw):
     pool_obj = PoolFunctions(node=cephadm)
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
     test_fail = False
+    set_debug = config.get("set_debug", False)
     scenarios_to_run = config.get(
         "scenarios_to_run",
         [
@@ -89,6 +90,14 @@ def run(ceph_cluster, **kw):
     pool_name = ec_config["pool_name"]
 
     try:
+        if set_debug:
+            log.debug(
+                "Setting up debug configs on the cluster for mon, osd & Mgr daemons"
+            )
+            mon_obj.set_config(section="osd", name="debug_osd", value="20/20")
+            mon_obj.set_config(section="mon", name="debug_mon", value="30/30")
+            mon_obj.set_config(section="mgr", name="debug_mgr", value="20/20")
+
         if not rados_obj.create_erasure_pool(
             name=ec_config["profile_name"], **ec_config
         ):
@@ -301,7 +310,7 @@ def run(ceph_cluster, **kw):
             osd_nodes = ceph_cluster.get_nodes(role="osd")
             for node in osd_nodes:
                 log.debug(f"Proceeding to reboot the host : {node.hostname}")
-                node.exec_command(cmd="reboot", sudo=True)
+                node.exec_command(cmd="reboot", sudo=True, check_ec=False)
                 time.sleep(2)
                 log.info(
                     f"\nceph status : {rados_obj.run_ceph_command(cmd='ceph -s', client_exec=True)}\n"
@@ -437,6 +446,13 @@ def run(ceph_cluster, **kw):
 
         # removing the recovery threads on the cluster
         rados_obj.change_recovery_threads(config={}, action="rm")
+
+        if set_debug:
+            log.debug("Removing debug configs on the cluster for mon, osd & Mgr")
+            mon_obj.remove_config(section="osd", name="debug_osd")
+            mon_obj.remove_config(section="mon", name="debug_mon")
+            mon_obj.remove_config(section="mgr", name="debug_mgr")
+
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution

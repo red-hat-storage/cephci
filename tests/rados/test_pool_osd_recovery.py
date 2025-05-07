@@ -352,12 +352,11 @@ def run(ceph_cluster, **kw) -> int:
 
             # workflow to fail the host and make it offline
             # Blocks all incoming traffic on selected OSD node, except for SSH
-            out, _ = installer_node.exec_command(
-                sudo=True, cmd=f"iptables -A INPUT -d {fail_host.ip_address} -j REJECT"
-            )
-            out, _ = installer_node.exec_command(
-                sudo=True, cmd=f"iptables -A OUTPUT -d {fail_host.ip_address} -j REJECT"
-            )
+            cluster_nodes = ceph_cluster.get_nodes()
+            for node in cluster_nodes:
+                rados_obj.block_in_out_packets_on_host(
+                    source_host=node, target_host=fail_host
+                )
 
             # smart wait to check the status of osd host
             end_time = datetime.datetime.now() + datetime.timedelta(seconds=400)
