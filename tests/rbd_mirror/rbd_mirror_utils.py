@@ -1,4 +1,3 @@
-import ast
 import datetime
 import json
 import random
@@ -406,7 +405,6 @@ class RbdMirror:
                         return 0
                 if kw.get("images_pattern"):
                     out = self.mirror_status("pool", kw.get("poolname"), "states")
-                    out = ast.literal_eval(out)
                     state_pattern = kw.get("state", "total")
                     num_image = 0
                     if "total" in state_pattern:
@@ -825,8 +823,18 @@ class RbdMirror:
             output=True,
             cmd=f"rbd mirror {args[0]} status {args[1]} --format=json",
         )
+
         json_dict = json.loads(output)
-        return self.value(args[2], json_dict)
+
+        # Handle structural differences in status output
+        key = args[2]
+        if key == "states":
+            summary = json_dict.get("summary", {})
+            return summary.get("image_states") or summary.get("states", {})
+        elif key == "health":
+            return json_dict.get("summary", {}).get("health")
+        else:
+            return self.value(key, json_dict)
 
     # Add Peer
     def peer_add(self, **kw):
