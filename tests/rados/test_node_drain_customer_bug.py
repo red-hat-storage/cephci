@@ -143,6 +143,7 @@ def run(ceph_cluster, **kw):
         # Re-producing the bug by running  mgr start and removing OSD parallely
         time.sleep(10)
         mgr_daemon.start()
+        host_labels = rados_obj.get_host_label(drain_host)
         if bug_exists:
             log.info("Reproducing  the bug")
             rm_host = utils.get_node_by_id(ceph_cluster, drain_host)
@@ -175,7 +176,6 @@ def run(ceph_cluster, **kw):
             "--unmanaged=true.Once the node is added back to the cluster the OSDs get configured automatically"
         )
         # Check if labels exist for the node
-        host_labels = rados_obj.get_host_label(drain_host)
         for label_name in host_labels:
             if label_name == "_no_schedule" or label_name == "_no_conf_keyring":
                 log.error(
@@ -298,6 +298,8 @@ def verify_mgr_traceback_log(
     host = None
     log.info("Checking log lines")
     fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
+    log_info_message = f"The MGR daemons list are - {mgr_daemon_list}"
+    log.info(log_info_message)
     for mgr_daemon in mgr_daemon_list:
         systemctl_name = f"ceph-{fsid}@mgr.{mgr_daemon}.service"
         host_name = mgr_daemon.split(".")[0]

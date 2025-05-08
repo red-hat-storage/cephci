@@ -3,7 +3,6 @@ The file contains the script to check the "Full-object read crc" error in the OS
 with the different sizes
 """
 
-import re
 import time
 import traceback
 
@@ -203,18 +202,25 @@ def check_read_crc_log(rados_object, init_time, end_time, pgid):
         host = rados_object.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
         cmd_get_log_lines = (
             f'awk \'$1 >= "{init_time}" && $1 <= "{end_time}"\' '
-            f"/var/log/ceph/{fsid}/ceph-osd.{osd_id}.log"
+            f"/var/log/ceph/{fsid}/ceph-osd.{osd_id}.log | grep '{log_line}'"
         )
-        osd_logs, err = host.exec_command(
-            sudo=True,
-            cmd=cmd_get_log_lines,
+        out, _, exit_code, _ = host.exec_command(
+            sudo=True, cmd=cmd_get_log_lines, verbose=True
         )
-        osd_lines = osd_logs.splitlines()
-        for osd_line in osd_lines:
-            if re.search(log_line, osd_line):
-                msg_err_msg = f" Found the error lines on OSD : {osd_id} and log line is {osd_line}"
-                log.error(msg_err_msg)
-                return False
+        log_info_msg = f"exit code is {exit_code}"
+        log.info(log_info_msg)
+        # if the string "full-object read crc" is found
+        # exit code of grep is 0
+        # if the "full-object read crc" is not found
+        # exit code of grep is 1
+        if exit_code == 0:
+            msg_err_msg = (
+                f" Found the error lines on OSD : {osd_id}"
+                f"\n--------output---------"
+                f"\n{out}"
+            )
+            log.error(msg_err_msg)
+            return False
     log.info(
         "The read crc error line not generated while reading the same object with different size "
     )
