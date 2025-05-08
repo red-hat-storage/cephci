@@ -1,5 +1,5 @@
 # NVMeoF alerts and testing
-# cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_functional.yaml
+# cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_4-nvmeof-gwgroup_2gw_cluster.yaml
 # Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml or later versions
 
 tests:
@@ -56,7 +56,7 @@ tests:
         command: add
         id: client.1
         nodes:
-          - node10
+          - node14
         install_packages:
           - ceph-common
         copy_admin_keyring: true
