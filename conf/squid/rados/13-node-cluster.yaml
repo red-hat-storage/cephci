@@ -21,22 +21,22 @@ globals:
           - mds
           - nfs
           - osd
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15
       node3:
         role:
           - osd
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15
       node4:
         role:
           - osd
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15
       node5:
         role:
           - osd
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15
       node6:
         role:
@@ -45,7 +45,7 @@ globals:
           - mds
           - nfs
           - osd
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15
       node7:
         role:
@@ -55,32 +55,32 @@ globals:
           - mon
           - rgw
           - osd
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15
       node9:
         role:
           - osd
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15
       node10:
         role:
           - osd
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15
       node11:
         role:
           - mon
           - rgw
           - osd
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15
       node12:
         role:
           - osd-bak
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15
       node13:
         role:
           - osd-bak
-        no-of-volumes: 3
+        no-of-volumes: 4
         disk-size: 15

@@ -196,14 +196,20 @@ def run(ceph_cluster, **kw):
 
                 # perform rados bench to trigger nearfull warning
                 nearfull_config = {
-                    "seconds": 150,
-                    "b": f"{bench_obj_size_kb}KB",
-                    "no-cleanup": True,
-                    "max-objects": max_obj_nearfull,
+                    "rados_write_duration": 150,
+                    "byte_size": f"{bench_obj_size_kb}KB",
+                    "nocleanup": True,
+                    "max_objs": max_obj_nearfull,
                 }
-                bench_obj.write(
-                    client=client_node, pool_name=pool_name, **nearfull_config
-                )
+
+                if (
+                    rados_obj.bench_write(
+                        pool_name=pool_name, **nearfull_config, verify_stats=False
+                    )
+                    is False
+                ):
+                    err_msg = f"Error running rados bench using nearfull_config: {nearfull_config}"
+                    raise Exception(err_msg)
 
                 assert rados_obj.verify_pool_stats(
                     pool_name=pool_name, exp_objs=max_obj_nearfull
@@ -222,14 +228,20 @@ def run(ceph_cluster, **kw):
 
                 # perform rados bench to trigger backfill-full warning
                 backfillfull_config = {
-                    "seconds": 80,
-                    "b": f"{bench_obj_size_kb}KB",
-                    "no-cleanup": True,
-                    "max-objects": subseq_obj_backfillfull,
+                    "rados_write_duration": 80,
+                    "byte_size": f"{bench_obj_size_kb}KB",
+                    "nocleanup": True,
+                    "max_objs": subseq_obj_backfillfull,
                 }
-                bench_obj.write(
-                    client=client_node, pool_name=pool_name, **backfillfull_config
-                )
+
+                if (
+                    rados_obj.bench_write(
+                        pool_name=pool_name, **backfillfull_config, verify_stats=False
+                    )
+                    is False
+                ):
+                    err_msg = f"Error running rados bench using backfillfull_config: {backfillfull_config}"
+                    raise Exception(err_msg)
 
                 _exp_objs = max_obj_nearfull + subseq_obj_backfillfull
                 assert rados_obj.verify_pool_stats(
@@ -250,14 +262,19 @@ def run(ceph_cluster, **kw):
 
                 # perform rados bench to trigger osd full warning
                 osdfull_config = {
-                    "seconds": 80,
-                    "b": f"{bench_obj_size_kb}KB",
-                    "no-cleanup": True,
-                    "max-objects": subseq_obj_full,
+                    "rados_write_duration": 80,
+                    "byte_size": f"{bench_obj_size_kb}KB",
+                    "nocleanup": True,
+                    "max_objs": subseq_obj_full,
                 }
-                bench_obj.write(
-                    client=client_node, pool_name=pool_name, **osdfull_config
-                )
+                if (
+                    rados_obj.bench_write(
+                        pool_name=pool_name, **osdfull_config, verify_stats=False
+                    )
+                    is False
+                ):
+                    err_msg = f"Error running rados bench using osdfull_config: {osdfull_config}"
+                    raise Exception(err_msg)
 
                 assert rados_obj.verify_pool_stats(
                     pool_name=pool_name, exp_objs=total_objs

@@ -3192,7 +3192,7 @@ EOF"""
         pool_id = out["pools"][pool_names.index(pool)]["id"]
 
         cmd = f" ceph pg ls {pool_id}"
-        out = self.run_ceph_command(cmd=cmd)
+        out = self.run_ceph_command(cmd=cmd, client_exec=True)
         for ele in out["pg_stats"]:
             if any(key in disallowed_states for key in ele["state"].split("+")):
                 log.error(
