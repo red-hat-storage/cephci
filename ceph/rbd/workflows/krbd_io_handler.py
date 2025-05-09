@@ -57,8 +57,16 @@ def krbd_io_handler(**kw):
     return_flag = 0
 
     for image_spec in config["image_spec"]:
-        pool_name = image_spec.split("/")[0]
-        image_name = image_spec.split("/")[1]
+        image_spec_list = image_spec.split("/")
+        if len(image_spec_list) == 2:
+            pool_name = image_spec_list[0]
+            image_name = image_spec_list[1]
+            namespace = False
+        if len(image_spec_list) == 3:
+            pool_name = image_spec_list[0]
+            namespace_name = image_spec_list[1]
+            image_name = image_spec_list[2]
+            namespace = True
         try:
             if not kw.get("do_not_create_image"):
                 create_config = {
@@ -77,7 +85,14 @@ def krbd_io_handler(**kw):
                     return 1, "Image creation failed"
 
             if operations.get("map"):
-                device_names.append(rbd.map(pool=pool_name, image=image_name)[:-1])
+                if namespace:
+                    device_names.append(
+                        rbd.map(
+                            pool=pool_name, image=image_name, namespace=namespace_name
+                        )[:-1]
+                    )
+                else:
+                    device_names.append(rbd.map(pool=pool_name, image=image_name)[:-1])
 
             if operations.get("device_map"):
                 out = exec_cmd(
@@ -86,11 +101,19 @@ def krbd_io_handler(**kw):
                 if not out or out == 1 or "rbd-nbd" not in out:
                     exec_cmd(cmd="dnf install rbd-nbd -y", node=client, sudo=True)
 
-                map_config = {
-                    "pool": pool_name,
-                    "image": image_name,
-                    "device-type": config.get("device_type", "nbd"),
-                }
+                if namespace:
+                    map_config = {
+                        "pool": pool_name,
+                        "image": image_name,
+                        "namespace": namespace_name,
+                        "device-type": config.get("device_type", "nbd"),
+                    }
+                else:
+                    map_config = {
+                        "pool": pool_name,
+                        "image": image_name,
+                        "device-type": config.get("device_type", "nbd"),
+                    }
                 if config.get("encryption_config"):
                     options = create_map_options(config.get("encryption_config"))
                     map_config.update(
@@ -155,6 +178,11 @@ def krbd_io_handler(**kw):
                         get_time_taken=config.get("get_time_taken", False),
                         cmd_timeout=config.get("cmd_timeout"),
                         io_type=config.get("io_type", "write"),
+                        num_jobs=config.get("num_jobs", "4"),
+                        iodepth=config.get("iodepth", "32"),
+                        rwmixread=config.get("rwmixread", "70"),
+                        direct=config.get("direct", "1"),
+                        invalidate=config.get("invalidate", "1"),
                     )
                 else:
                     fio_args = {
