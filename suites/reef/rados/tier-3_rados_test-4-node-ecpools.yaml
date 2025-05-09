@@ -227,6 +227,7 @@ tests:
       polarion-id: CEPH-83575858
       abort-on-fail: true
       config:
+        set_debug: true
         ec_pool:
           profile_name: ec22_profile
           pool_name: test_ec_pool
