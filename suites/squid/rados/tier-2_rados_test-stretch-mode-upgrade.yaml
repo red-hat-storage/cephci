@@ -238,6 +238,7 @@ tests:
       config:
         verify_warning: false
         verify_daemons: true
+        verify_older_version_warn: true
         verify_cluster_usage: true
       abort-on-fail: true
 
