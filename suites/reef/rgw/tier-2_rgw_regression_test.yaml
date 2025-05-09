@@ -157,13 +157,13 @@ tests:
         config-file-name: test_modify_tenanted_subuser.yaml
 
   - test:
-       name: Swift bulk delete operation
-       desc: Swift bulk delete operation
-       polarion-id: CEPH-9753
-       module: sanity_rgw.py
-       config:
-           script-name: test_swift_bulk_delete.py
-           config-file-name: test_swift_bulk_delete.yaml
+      name: Swift bulk delete operation
+      desc: Swift bulk delete operation
+      polarion-id: CEPH-9753
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_bulk_delete.py
+        config-file-name: test_swift_bulk_delete.yaml
 
   - test:
       name: swift upload large object tests
@@ -522,7 +522,7 @@ tests:
         script-name: test_rgw_mfa.py
         config-file-name: test_rgw_mfa_multipart.yaml
         extra-pkgs:
-            - oathtool
+          - oathtool
 
   - test:
       name: incorrect syntax for mfa resync commnad appropriate usage message is displayed
@@ -653,3 +653,13 @@ tests:
       config:
         script-name: ../aws/test_keystone_auth.py
         config-file-name: ../../aws/configs/test_keystone_integration.yaml
+
+  # Swift Static Large Object
+  - test:
+      name: test_swift_static_large_object_expiration
+      desc: test_swift_static_large_object_expiration
+      polarion-id: CEPH-9726
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3_swift/test_swift_static_large_object_expiration.py
+        config-file-name: ../../s3_swift/configs/test_swift_slo_expiry.yaml
