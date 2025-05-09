@@ -75,8 +75,9 @@ def mds_rm_add(fs_util, mdss, client, fs_name="cephfs"):
         stop_flag = True
 
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
+        stop_flag = True
         raise CommandFailed
 
 
@@ -143,14 +144,12 @@ def run(ceph_cluster, get_fs_info=None, **kw):
                 fs_util,
                 client1,
                 kernel_mount_dir + "/kernel_1",
-                timeout=0,
             )
             p.spawn(
                 start_io_time,
                 fs_util,
                 client1,
                 fuse_mount_dir + "/fuse_1",
-                timeout=0,
             )
         return 0
 
