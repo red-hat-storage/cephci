@@ -85,6 +85,7 @@ tests:
       module: test_cephadm.py
       name: "cluster deployment"
       polarion-id: CEPH-83573777
+      testrail-id: 141394
   -
     test:
       abort-on-fail: true
@@ -105,6 +106,7 @@ tests:
       module: mds_default_values.py
       name: cephfs default values for mds
       polarion-id: "CEPH-83574284"
+      testrail-id: 140708
   -
     test:
       abort-on-fail: false
@@ -112,18 +114,22 @@ tests:
       module: cephfs_basic_tests.py
       name: cephfs-basics
       polarion-id: "CEPH-11293"
+      testrail-id: 140851
   -
     test:
       name: nfs-ganesha_with_cephfs
       module: nfs-ganesha_basics.py
       desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
       polarion-id: CEPH-83574439
+      testrail-id: 140743
       abort-on-fail: false
+
   - test:
       name: Increase and Decrease of MDS
       module: mds_inc_dec.py
       desc: Deploy mds using cephadm and increase & decrease number of mds.
       polarion-id: CEPH-83574286
+      testrail-id: 140707
       abort-on-fail: false
   -
     test:
