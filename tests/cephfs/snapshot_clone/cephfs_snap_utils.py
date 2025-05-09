@@ -13,6 +13,7 @@ import time
 from distutils.version import LooseVersion
 
 from ceph.ceph import CommandFailed
+from tests.cephfs.exceptions import ValueMismatchError
 from utility.log import Log
 from utility.retry import retry
 from utility.utils import get_ceph_version_from_cluster
@@ -588,7 +589,31 @@ class SnapUtils(object):
             f"Actual Snapshots : {ret_verified}, Expected Snapshots : {ret_num}, Snapshot list : {sched_snap_list}"
         )
         if ret_verified != int(ret_num):
-            log.info("Snapshots are NOT retained as per retention policy")
-            return 1
+            log.info(
+                "Snapshots are NOT retained as per retention policy,Retry until sometime"
+            )
+            verify_snaps_count(client, client_path, ret_num)
         log.info("Snapshots are retained as per retention policy")
         return 0
+
+
+# HELPER ROUTINES
+
+
+@retry(ValueMismatchError, tries=5, delay=30)
+def verify_snaps_count(client, client_path, ret_num):
+    """
+    Fetch snap count
+    Retries if count does not match the expected value.
+    """
+    out, rc = client.exec_command(
+        sudo=True, cmd=f'ls {client_path}/.snap/| grep "scheduled"'
+    )
+    sched_snap_list = out.split()
+    if len(sched_snap_list) != int(ret_num):
+        raise ValueMismatchError(
+            "Snap count did not match. Expected: {}, Found: {}".format(
+                ret_num, len(sched_snap_list)
+            )
+        )
+    return 0

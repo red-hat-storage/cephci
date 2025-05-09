@@ -112,7 +112,7 @@ tests:
         install_packages:
           - ceph-common
         node: node9
-      desc: "Configure the Cephfs client system 1"
+      desc: "Configure the Cephfs client system 2"
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
@@ -141,7 +141,7 @@ tests:
               client_upgrade_node: "node8"
             desc: Runs IOs in parallel with upgrade process
             module: cephfs_upgrade.cephfs_io.py
-            name: "creation of Prerequisites for Upgrade"
+            name: "Run IOs in parallel to upgrade"
             polarion-id: CEPH-83575315
 
         - test:
@@ -177,9 +177,9 @@ tests:
       polarion-id: CEPH-83575313
   - test:
       abort-on-fail: false
-      desc: Validates nfs after upgrade
+      desc: Post upgrade CephFS validation
       module: cephfs_upgrade.cephfs_post_upgrade_validation.py
-      name: "Validates NFS after upgrade"
+      name: "Post upgrade CephFS validation"
       polarion-id: CEPH-83575098
   - test:
       name: cephfs_volume_management

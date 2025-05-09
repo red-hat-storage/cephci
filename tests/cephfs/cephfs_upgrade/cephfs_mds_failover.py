@@ -37,10 +37,10 @@ def run(ceph_cluster, **kw):
         # while True:
         start_time = time.time()
         while time.time() - start_time < 1800:
-            cmd = "ceph orch upgrade status --format json"
+            cmd = "ceph orch upgrade status"
             out, rc = client1.exec_command(cmd=cmd, sudo=True)
-            output = json.loads(out)
-            if not output["in_progress"]:
+            exp_msg = "There are no upgrades in progress currently."
+            if exp_msg in out:
                 log.info("Upgrade Complete...")
                 break
             mds_ls = fs_util.get_active_mdss(client1, fs_name=fs_name)
