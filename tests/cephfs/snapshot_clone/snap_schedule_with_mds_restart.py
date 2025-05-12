@@ -1,4 +1,3 @@
-import datetime
 import json
 import os
 import random
@@ -10,6 +9,7 @@ from time import sleep
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
 from utility.retry import retry
@@ -44,6 +44,7 @@ def run(ceph_cluster, **kw):
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
         snap_util = SnapUtils(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         erasure = (
             FsUtils.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -136,18 +137,9 @@ def run(ceph_cluster, **kw):
             "m" if LooseVersion(ceph_version) >= LooseVersion("17.2.6") else "M"
         )
         log.info("Verify Ceph Status is healthy before starting test")
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
-        ceph_healthy = 0
-        while (datetime.datetime.now() < end_time) and (ceph_healthy == 0):
-            try:
-                fs_util.get_ceph_health_status(client1)
-                ceph_healthy = 1
-            except Exception as ex:
-                log.info(ex)
-                log.info("Wait for few secs and recheck ceph status")
-                time.sleep(5)
-        if ceph_healthy == 0:
-            assert False, "Ceph remains unhealthy even after wait for 300secs"
+        wait_time_secs = 300
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, wait_time_secs):
+            assert False, "Cluster health is not OK even after waiting for sometime"
         commands = [
             f"ceph fs subvolume ls {default_fs}",
             "ceph config set mgr mgr/snap_schedule/allow_m_granularity true",
