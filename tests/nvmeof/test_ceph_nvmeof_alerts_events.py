@@ -11,6 +11,7 @@ import requests
 
 from ceph.ceph import Ceph
 from ceph.nvmegw_cli import NVMeGWCLI
+from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
 from ceph.waiter import WaitUntil
 from tests.nvmeof.test_ceph_nvmeof_high_availability import (
@@ -801,6 +802,71 @@ def test_ceph_83617544(ceph_cluster, config):
     LOG.info("CEPH-83617544 - NVMeoFMaxGatewayGroupSize validated successfully.")
 
 
+def test_ceph_83616916(ceph_cluster, config):
+    """[CEPH-83616916] - Warning at subsystem defined without host level security on cluster.
+
+    NVMeoFGatewayOpenSecurity alert helps user to add host security to the subsystem
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        config: test case config
+    """
+
+    time_to_fire = config["time_to_fire"]
+    rbd_pool = config["rbd_pool"]
+    nqn_name = config["subsystems"][0]["nqn"]
+    intervel = 60
+    alert = "NVMeoFGatewayOpenSecurity"
+    msg = "Subsystem {nqn} has been defined without host level security on cluster "
+
+    # Deploy nvmeof service
+    LOG.info("deploy nvme service")
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    nvmegwcli = ha.gateways[0]
+
+    with parallel() as p:
+        for subsys_args in config["subsystems"]:
+            subsys_args["ceph_cluster"] = ceph_cluster
+            p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+
+    # Check for alert
+    # NVMeoFGatewayOpenSecurity prometheus alert should be firing
+    events = PrometheusAlerts(ha.orch)
+    LOG.info("Check NVMeoFGatewayOpenSecurity should be firing")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(nqn=nqn_name),
+        interval=intervel,
+    )
+
+    # Delete allow open security
+    sub_args = {"subsystem": nqn_name}
+    nvmegwcli.host.delete(**{"args": {**sub_args, **{"host": repr("*")}}})
+    # Add the host security with host nqn and check the alert is in inactive state
+    LOG.info("Add the host security with host nqn and check alert is in inactive state")
+    initiator_node = get_node_by_id(ceph_cluster, config.get("host"))
+    initiator = Initiator(initiator_node)
+    host_nqn = initiator.nqn()
+    nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    # Allow open security and check for alert
+    LOG.info("Add namespace back and check alert should be in active state")
+    nvmegwcli.host.add(**{"args": {**sub_args, **{"host": repr("*")}}})
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(nqn=nqn_name),
+        interval=intervel,
+    )
+
+    LOG.info("CEPH-83616916 - NVMeoFGatewayOpenSecurity validated successfully.")
+
+
 testcases = {
     "CEPH-83610948": test_ceph_83610948,
     "CEPH-83610950": test_ceph_83610950,
@@ -810,6 +876,7 @@ testcases = {
     "CEPH-83611306": test_ceph_83611306,
     "CEPH-83616917": test_CEPH_83616917,
     "CEPH-83617544": test_ceph_83617544,
+    "CEPH-83616916": test_ceph_83616916,
 }
 
 
