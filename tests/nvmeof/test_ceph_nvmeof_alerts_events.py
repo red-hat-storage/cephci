@@ -742,6 +742,65 @@ def test_CEPH_83616917(ceph_cluster, config):
     LOG.info("CEPH-83616917 - NVMeoFSubsystemNamespaceLimit validated successfully.")
 
 
+def test_ceph_83617544(ceph_cluster, config):
+    """[CEPH-83617544] Warning at Max gateways within a gateway group exceeded on cluster.
+
+    NVMeoFMaxGatewayGroupSize alert users to notify when user created
+    more than 8 gateways within a group per cluster
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        config: test case config
+    """
+
+    time_to_fire = config["time_to_fire"]
+    intervel = 60
+    alert = "NVMeoFMaxGatewayGroupSize"
+    msg = "Max gateways within a gateway group ({gw_group}) exceeded on cluster "
+
+    # Deploy nvmeof service
+    LOG.info("deploy nvme service")
+    gateway_nodes = deepcopy(config.get("gw_nodes"))
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    # Check for alert
+    # NVMeoFMaxGatewayGroupSize prometheus alert should be firing
+    events = PrometheusAlerts(ha.orch)
+
+    LOG.info("Check NVMeoFMaxGatewayGroupSize should be firing")
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(gw_group=config["gw_group"]),
+        interval=intervel,
+    )
+
+    # Deploy 8 gateways in group and NVMeoFMaxGatewayGroupSize alert should be in inactive state
+    LOG.info(
+        "Deploy 8 gateways in group and NVMeoFMaxGatewayGroupSize alert should be in inactive state"
+    )
+    config.update({"gw_nodes": gateway_nodes[0:8]})
+    deploy_nvme_service(ceph_cluster, config)
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    # Add more than 8 gateways and NVMeoFMaxGatewayGroupSize alert should be in firing state
+    LOG.info(
+        "Add more than 8 gateways and NVMeoFMaxGatewayGroupSize alert should be in firing state"
+    )
+    config.update({"gw_nodes": gateway_nodes})
+    deploy_nvme_service(ceph_cluster, config)
+    events.monitor_alert(
+        alert,
+        timeout=time_to_fire,
+        msg=msg.format(gw_group=config["gw_group"]),
+        interval=intervel,
+    )
+
+    LOG.info("CEPH-83617544 - NVMeoFMaxGatewayGroupSize validated successfully.")
+
+
 testcases = {
     "CEPH-83610948": test_ceph_83610948,
     "CEPH-83610950": test_ceph_83610950,
@@ -750,6 +809,7 @@ testcases = {
     "CEPH-83611099": test_ceph_83611099,
     "CEPH-83611306": test_ceph_83611306,
     "CEPH-83616917": test_CEPH_83616917,
+    "CEPH-83617544": test_ceph_83617544,
 }
 
 
