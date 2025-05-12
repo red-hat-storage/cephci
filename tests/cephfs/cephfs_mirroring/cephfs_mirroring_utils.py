@@ -4,8 +4,10 @@ It contains all the re-useable functions related to cephfs mirroring feature
 
 """
 
+import csv
 import json
 import random
+import secrets
 import string
 
 from ceph.ceph import CommandFailed
@@ -600,7 +602,7 @@ class CephfsMirroringUtils(object):
         log.error("last synced Snapshot not found or not synced")
         raise CommandFailed("last synced Snapshot not found or not synced")
 
-    @retry(CommandFailed, tries=5, delay=30)
+    @retry(CommandFailed, tries=10, delay=30)
     def validate_snapshot_sync_status(
         self,
         cephfs_mirror_node,
@@ -1329,3 +1331,448 @@ class CephfsMirroringUtils(object):
             after_snaps_synced = json_after[path].get(snap_status, 0)
             validation_results[path] = after_snaps_synced > before_snaps_synced
         return validation_results
+
+    def initialize_csv_file_snapdiff(self, csv_file, ceph_version_out):
+        try:
+            with open(csv_file, mode="x", newline="") as file:
+                writer = csv.writer(file)
+                writer.writerow([f"Ceph Version: {ceph_version_out}"])
+                writer.writerow([])
+                writer.writerow(
+                    [
+                        "Snapshot Type",
+                        "Snapshot Name",
+                        "Sync Duration",
+                        "Sync Timestamp",
+                        "Snaps Synced",
+                    ]
+                )
+        except FileExistsError:
+            pass
+
+    def log_snapshot_info_snapdiff(self, snapshot_type, snapshot_info, csv_file):
+        with open(csv_file, mode="a", newline="") as file:
+            writer = csv.writer(file)
+            writer.writerow(
+                [
+                    snapshot_type,
+                    snapshot_info["snapshot_name"],
+                    snapshot_info["sync_duration"],
+                    snapshot_info["sync_time_stamp"],
+                    snapshot_info["snaps_synced"],
+                ]
+            )
+
+    def mount_subvolumes_snapdiff(
+        self,
+        source_client,
+        fs_util_ceph1,
+        default_fs,
+        subvolume_names,
+        subvol_group_name,
+        nfs_server,
+        nfs_name,
+    ):
+        """
+        Function to mount paths which will be used for snapdiff tests.
+        """
+
+        export_created = 0
+        mount_paths = {}
+        subvol_paths = {}
+
+        for idx, mount_type in enumerate(["fuse", "kernel", "nfs"]):
+            subvol_path, _ = source_client.exec_command(
+                sudo=True,
+                cmd=f"ceph fs subvolume getpath {default_fs} {subvolume_names[idx]} "
+                f"{subvol_group_name if idx in [0, 1, 2] else ''}",
+            )
+            subvol_path = subvol_path.strip()
+
+            mount_params = {
+                "client": source_client,
+                "fs_util": fs_util_ceph1,
+                "fs_name": default_fs,
+                "mnt_path": subvol_path.strip(),
+                "export_created": export_created,
+            }
+
+            if mount_type == "nfs":
+                mount_params.update(
+                    {
+                        "nfs_server": nfs_server,
+                        "nfs_name": nfs_name,
+                        "nfs_export_name": f"/nfs_export_{''.join(secrets.choice(string.digits) for _ in range(3))}",
+                        "export_created": export_created,
+                    }
+                )
+
+            mounting_path, export_created = fs_util_ceph1.mount_ceph(
+                mount_type, mount_params
+            )
+
+            if mount_type == "nfs" and not mounting_path:
+                log.error("CephFS NFS export mount failed")
+                return 1
+            mount_paths[mount_type] = mounting_path
+            subvol_name = subvolume_names[idx]
+            subvol_index = subvol_path.find(subvol_name)
+            subvol_paths[mount_type] = (
+                subvol_path[subvol_index:] if subvol_index != -1 else subvol_path
+            )
+
+        return mount_paths, subvol_paths
+
+    def create_files_for_snapdiff(self, client, dir_path, num_files, size_gb):
+        """
+        Uploads and executes the generate_large_file.py script on the remote client.
+
+        :param client: Remote client object
+        :param dir_path: Directory where files should be created
+        :param num_files: Number of files to create
+        :param size_gb: Size of each file in GB
+        """
+        generate_file_script = "generate_files_for_snapdiff.py"
+        remote_path = f"/root/{generate_file_script}"
+
+        client.upload_file(
+            sudo=True,
+            src=f"tests/cephfs/cephfs_mirroring/snapdiff_scripts/{generate_file_script}",
+            dst=remote_path,
+        )
+
+        client.exec_command(
+            sudo=True,
+            cmd=f"python3 {remote_path} {dir_path} {num_files} {size_gb}",
+            timeout=14400,
+        )
+        log.info(
+            "Completed creation of %s files, each of size %s GB, on all the Paths",
+            num_files,
+            size_gb,
+        )
+
+    def modify_files_for_snapdiff(
+        self, client, dir_path, num_files, mode="write", length=5, bytes_size=None
+    ):
+        """
+        Uploads and executes the modify_file_at_10_random_offsets.py script on the remote client.
+
+        :param client: Remote client object
+        :param dir_path: Directory where files should be created or read
+        :param num_files: Number of files to modify
+        :param mode: 'write' or 'read'
+        :param length: Number of random offsets
+        :param bytes_size: Required only for write mode, size of data to write at each offset (e.g., '1M', '512K')
+        """
+        modify_script = "modify_file_at_10_random_offsets.py"
+        remote_path = f"/root/{modify_script}"
+
+        client.upload_file(
+            sudo=True,
+            src=f"tests/cephfs/cephfs_mirroring/snapdiff_scripts/{modify_script}",
+            dst=remote_path,
+        )
+
+        cmd = f"python3 {remote_path} {dir_path} --file-count {num_files} --mode {mode} --length {length}"
+        if mode == "write" and bytes_size:
+            cmd += f" --bytes {bytes_size}"
+
+        client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            timeout=14400,
+        )
+
+        log.info(
+            "Completed '%s' modification on %s files in path: %s using %s random offsets%s",
+            mode,
+            num_files,
+            dir_path,
+            length,
+            (
+                f", writing {bytes_size} at each offset"
+                if mode == "write" and bytes_size
+                else ""
+            ),
+        )
+
+    def create_snapshot_snapdiff(
+        self,
+        fs_util,
+        client,
+        mounting_dir,
+        subvol_path,
+        snap_name,
+        source_fs,
+        subvolume=False,
+        subvol_name=None,
+        subvol_group=None,
+    ):
+        """
+        Function to create a snapshot (either path-based or subvolume-based).
+        """
+        if subvolume:
+            if not subvol_name or not subvol_group:
+                raise ValueError(
+                    "subvol_name and subvol_group are required when subvolume=True"
+                )
+
+            fs_util.create_snapshot(
+                client=client,
+                vol_name=source_fs,
+                subvol_name=subvol_name,
+                snap_name=snap_name,
+                validate=True,
+                group_name=subvol_group,
+            )
+
+        else:
+            # Default path-based snapshot creation
+            client.exec_command(
+                sudo=True, cmd=f"mkdir {mounting_dir}{subvol_path}/.snap/{snap_name}"
+            )
+
+    # Function to validate snapshot sync with retry
+    @retry(CommandFailed, tries=10, delay=30)
+    def validate_snapshot_sync(
+        self,
+        fs_mirroring_utils,
+        cephfs_mirror_node,
+        source_fs,
+        snap_name,
+        fsid,
+        asok_file,
+        filesystem_id,
+        peer_uuid,
+    ):
+        """
+        Function to validate snapshot sync status.
+        """
+        result = fs_mirroring_utils.validate_snapshot_sync_status(
+            cephfs_mirror_node,
+            source_fs,
+            snap_name,
+            fsid,
+            asok_file,
+            filesystem_id,
+            peer_uuid,
+        )
+
+        if result:
+            log.info(f"Snapshot '{result['snapshot_name']}' has been synced:")
+            log.info(
+                f"Sync Duration: {result['sync_duration']} of '{result['snapshot_name']}'"
+            )
+            log.info(
+                f"Sync Time Stamp: {result['sync_time_stamp']} of '{result['snapshot_name']}'"
+            )
+            log.info(
+                f"Snaps Synced: {result['snaps_synced']} of '{result['snapshot_name']}'"
+            )
+
+            return {
+                "snapshot_name": result["snapshot_name"],
+                "sync_duration": result["sync_duration"],
+                "sync_time_stamp": result["sync_time_stamp"],
+                "snaps_synced": result["snaps_synced"],
+            }
+        else:
+            log.error(f"Snapshot '{snap_name}' not found or not synced.")
+            raise CommandFailed(f"Snapshot '{snap_name}' not found or not synced.")
+
+    def prepare_env_snapdiff(self, config, ceph_cluster_dict, test_data):
+        """
+        Prepares environment for CephFS mirroring snapdiff performance tests.
+        Returns all initialized variables as a dictionary.
+        """
+        erasure = (
+            FsUtils.get_custom_config_value(test_data, "erasure")
+            if test_data
+            else False
+        )
+        fs_util_ceph1 = FsUtils(ceph_cluster_dict.get("ceph1"), test_data=test_data)
+        fs_util_ceph2 = FsUtils(ceph_cluster_dict.get("ceph2"), test_data=test_data)
+        fs_mirroring_utils = CephfsMirroringUtils(
+            ceph_cluster_dict.get("ceph1"), ceph_cluster_dict.get("ceph2")
+        )
+
+        build = config.get("build", config.get("rhbuild"))
+
+        source_clients = ceph_cluster_dict.get("ceph1").get_ceph_objects("client")
+        target_clients = ceph_cluster_dict.get("ceph2").get_ceph_objects("client")
+        cephfs_mirror_node = ceph_cluster_dict.get("ceph1").get_ceph_objects(
+            "cephfs-mirror"
+        )
+
+        log.info("checking Pre-requisites")
+        if not source_clients or not target_clients:
+            log.error(
+                "This test requires a minimum of 1 client node on both ceph1 and ceph2."
+            )
+            return 1
+
+        log.info("Preparing Clients...")
+        fs_util_ceph1.prepare_clients(source_clients, build)
+        fs_util_ceph2.prepare_clients(target_clients, build)
+        fs_util_ceph1.auth_list(source_clients)
+        fs_util_ceph2.auth_list(target_clients)
+
+        log.info("Create required filesystem on Source Cluster...")
+        mds_nodes = ceph_cluster_dict.get("ceph1").get_ceph_objects("mds")
+        source_fs = (
+            config.get("source_fs") if not erasure else f'{config.get("source_fs")}-ec'
+        )
+        mds_names = [mds.node.hostname for mds in mds_nodes]
+        hosts_list1 = mds_names[0:2]
+        mds_hosts_1 = " ".join(hosts_list1) + " "
+        log.info(f"MDS host list 1 {mds_hosts_1}")
+        fs_util_ceph1.create_fs(
+            client=source_clients[0],
+            vol_name=source_fs,
+            validate=True,
+            placement=f"2 {mds_hosts_1}",
+        )
+
+        fs_util_ceph1.wait_for_mds_process(source_clients[0], source_fs)
+
+        log.info("Create required filesystem on Target Cluster...")
+        mds_nodes = ceph_cluster_dict.get("ceph2").get_ceph_objects("mds")
+        target_fs = (
+            config.get("target_fs") if not erasure else f'{config.get("target_fs")}-ec'
+        )
+        mds_names = [mds.node.hostname for mds in mds_nodes]
+        hosts_list1 = mds_names[0:2]
+        mds_hosts_1 = " ".join(hosts_list1) + " "
+        log.info(f"MDS host list 1 {mds_hosts_1}")
+        fs_util_ceph1.create_fs(
+            client=target_clients[0],
+            vol_name=target_fs,
+            validate=True,
+            placement=f"2 {mds_hosts_1}",
+        )
+
+        fs_util_ceph1.wait_for_mds_process(target_clients[0], target_fs)
+
+        ceph_cluster = ceph_cluster_dict.get("ceph1")
+        nfs_servers = ceph_cluster.get_ceph_objects("nfs")
+        if not nfs_servers:
+            log.error("No NFS servers found in the Ceph cluster.")
+            return 1
+
+        nfs_server = nfs_servers[0].node.hostname
+        nfs_name = "cephfs-nfs"
+
+        try:
+            fs_util_ceph1.create_nfs(
+                source_clients[0],
+                nfs_name,
+                validate=True,
+                placement="1 %s" % nfs_server,
+            )
+            log.info("NFS cluster %s created successfully." % nfs_name)
+        except CommandFailed as e:
+            log.error("Failed to create NFS cluster: %s" % e)
+            return 1
+
+        return {
+            "source_clients": source_clients,
+            "target_clients": target_clients,
+            "fs_util_ceph1": fs_util_ceph1,
+            "fs_util_ceph2": fs_util_ceph2,
+            "fs_mirroring_utils": fs_mirroring_utils,
+            "source_fs": source_fs,
+            "target_fs": target_fs,
+            "erasure": erasure,
+            "cephfs_mirror_node": cephfs_mirror_node,
+            "nfs_server": nfs_server,
+            "nfs_name": nfs_name,
+        }
+
+    def modify_and_create_snapshot_snapdiff(
+        self,
+        fs_util,
+        num_files,
+        snap_suffix,
+        label_suffix,
+        io_dir_paths,
+        source_clients,
+        mount_paths,
+        subvol_paths_without_uuid,
+        source_fs,
+        subvol_group_name,
+        fs_mirroring_utils,
+        cephfs_mirror_node,
+        fsid,
+        asok_file,
+        filesystem_id,
+        peer_uuid,
+        csv_file,
+    ):
+        """
+        Modify files and create incremental snapshots for kernel, fuse, and nfs mounts.
+        Then validate and log snapshot info.
+        """
+        snapshots = {}
+
+        # Step 1: Modify files
+        log.info(
+            f"Modify {num_files} files and take {label_suffix} incremental snapshots"
+        )
+        for mount_type in ["kernel", "fuse", "nfs"]:
+            dir_path = io_dir_paths[mount_type]
+            self.modify_files_for_snapdiff(
+                source_clients[0],
+                dir_path,
+                num_files,
+                mode="write",
+                length=5,
+                bytes_size="1M",
+            )
+            self.modify_files_for_snapdiff(
+                source_clients[0], dir_path, num_files, mode="read", length=5
+            )
+            self.modify_files_for_snapdiff(
+                source_clients[0], dir_path, num_files, mode="remove", length=5
+            )
+
+        # Step 2: Create snapshots
+        for mount_type in ["kernel", "fuse", "nfs"]:
+            snap_name = f"snap_{mount_type[0]}_{snap_suffix}"
+            self.create_snapshot_snapdiff(
+                fs_util,
+                source_clients[0],
+                mount_paths[mount_type],
+                subvol_paths_without_uuid[mount_type],
+                snap_name,
+                source_fs,
+                subvolume=True,
+                subvol_name=subvol_paths_without_uuid[mount_type].rstrip("/"),
+                subvol_group=subvol_group_name,
+            )
+            snapshots[mount_type] = snap_name
+
+        # Step 3: Validate sync and log
+        for mount_type in ["kernel", "fuse", "nfs"]:
+            snap_info = self.validate_snapshot_sync(
+                fs_mirroring_utils,
+                cephfs_mirror_node[0],
+                source_fs,
+                snapshots[mount_type],
+                fsid,
+                asok_file,
+                filesystem_id,
+                peer_uuid,
+            )
+            if snap_info:
+                log.info(
+                    f"{mount_type.capitalize()} Snapshot Info - Name: {snap_info['snapshot_name']}, "
+                    f"Duration: {snap_info['sync_duration']}, "
+                    f"Time Stamp: {snap_info['sync_time_stamp']}, "
+                    f"Snaps Synced: {snap_info['snaps_synced']}"
+                )
+                self.log_snapshot_info_snapdiff(
+                    f"{mount_type.capitalize()} Incremental {label_suffix}",
+                    snap_info,
+                    csv_file,
+                )
