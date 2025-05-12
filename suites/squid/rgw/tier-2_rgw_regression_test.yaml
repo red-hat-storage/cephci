@@ -656,3 +656,13 @@ tests:
         test-version: v2
         script-name: test_indexless_buckets.py
         config-file-name: test_indexless_buckets_s3.yaml
+
+  # Swift Static Large Object
+  - test:
+      name: test_swift_static_large_object_expiration
+      desc: test_swift_static_large_object_expiration
+      polarion-id: CEPH-9726
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3_swift/test_swift_static_large_object_expiration.py
+        config-file-name: ../../s3_swift/configs/test_swift_slo_expiry.yaml
