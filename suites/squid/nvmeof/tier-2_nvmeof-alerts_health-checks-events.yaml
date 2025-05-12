@@ -305,3 +305,34 @@ tests:
       module: test_ceph_nvmeof_alerts_events.py
       name: Validate NVMeoFGatewayOpenSecurity alert helps user to add host security to the subsystem
       polarion-id: CEPH-83616916
+
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        time_to_fire: 60
+        gw_groups:
+          - gw_group: group1
+            gw_nodes:
+              - node2
+          - gw_group: group2
+            gw_nodes:
+              - node3
+          - gw_group: group3
+            gw_nodes:
+              - node4
+          - gw_group: group4
+            gw_nodes:
+              - node5
+          - gw_group: group5
+            gw_nodes:
+              - node6
+        test_case: CEPH-83617404
+        cleanup:
+          - pool
+          - gateway
+      desc: Warning at when created more than 4 gateway groups
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFMaxGatewayGroups alert when created more than 4 gateway groups
+      polarion-id: CEPH-83617404
