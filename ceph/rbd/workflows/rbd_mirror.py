@@ -332,6 +332,7 @@ def bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw):
             )[0]
         ),
     )
+    log.info(primary_peer_info)
     secondary_peer_info = value(
         key="peers",
         dictionary=json.loads(
@@ -340,6 +341,7 @@ def bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw):
             )[0]
         ),
     )
+    log.info(secondary_peer_info)
     if primary_peer_info.lower() not in [
         "none",
         "",

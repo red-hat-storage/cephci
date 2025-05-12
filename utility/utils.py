@@ -2091,6 +2091,10 @@ def run_fio(**fio_args):
 
     if fio_args.get("rwmixread"):
         cmd_args.update({"rwmixread": fio_args["rwmixread"]})
+    if fio_args.get("direct"):
+        cmd_args.update({"direct": fio_args["direct"]})
+    if fio_args.get("invalidate"):
+        cmd_args.update({"invalidate": fio_args["invalidate"]})
 
     # add verify and verify_fatal for data corruption test
     # e.g verify="crc32", verify_fatal=1
