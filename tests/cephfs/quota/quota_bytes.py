@@ -79,6 +79,7 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True,
             cmd=f"rm -rf {root_folder_fuse_mount}*;mkdir {root_folder_fuse_mount}test_fuse;",
+            timeout=600,
         )
         fs_util.set_quota_attrs(
             clients[0], 20, 1073741824, f"{root_folder_fuse_mount}test_fuse"
@@ -105,6 +106,7 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True,
             cmd=f"rm -rf {root_folder_kernel_mount}*;mkdir {root_folder_kernel_mount}test_kernel",
+            timeout=600,
         )
         fs_util.set_quota_attrs(
             clients[0], 20, 1073741824, f"{root_folder_kernel_mount}test_kernel"
@@ -177,7 +179,9 @@ def run(ceph_cluster, **kw):
         fs_util.byte_quota_test(clients[0], fuse_mounting_dir_1, quota_attrs)
 
         clients[0].exec_command(
-            sudo=True, cmd=f"cd {fuse_mounting_dir_1};rm -rf *;mkdir test;"
+            sudo=True,
+            cmd=f"cd {fuse_mounting_dir_1};rm -rf *;mkdir test;",
+            timeout=600,
         )
         fs_util.set_quota_attrs(
             clients[0], 30, 1073741824, f"{fuse_mounting_dir_1}/test"
@@ -186,7 +190,9 @@ def run(ceph_cluster, **kw):
         fs_util.byte_quota_test(clients[0], f"{fuse_mounting_dir_1}/test", quota_attrs)
 
         clients[0].exec_command(
-            sudo=True, cmd=f"cd {kernel_mounting_dir_1};rm -rf *;mkdir test;"
+            sudo=True,
+            cmd=f"cd {kernel_mounting_dir_1};rm -rf *;mkdir test;",
+            timeout=600,
         )
         fs_util.set_quota_attrs(
             clients[0], 30, 1073741824, f"{kernel_mounting_dir_1}/test"
@@ -206,9 +212,28 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("Clean Up in progess")
-        if "5" in build:
-            fs_util.set_quota_attrs(clients[0], "0", "0", root_folder_fuse_mount)
-        for subvolume in subvolume_list:
-            fs_util.remove_subvolume(client1, **subvolume)
-        for subvolumegroup in subvolumegroup_list:
-            fs_util.remove_subvolumegroup(client1, **subvolumegroup, force=True)
+        try:
+            if "5" in build:
+                fs_util.set_quota_attrs(clients[0], "0", "0", root_folder_fuse_mount)
+            # Unmount and cleanup all mount directories
+            for mount_dir in [
+                root_folder_fuse_mount,
+                root_folder_kernel_mount,
+                fuse_mounting_dir_1,
+                kernel_mounting_dir_1,
+            ]:
+                try:
+                    log.info(f"Unmounting and removing mount directory: {mount_dir}")
+                    clients[0].exec_command(sudo=True, cmd=f"umount -l {mount_dir}")
+                    clients[0].exec_command(sudo=True, cmd=f"rm -rf {mount_dir}")
+                except Exception as umount_err:
+                    log.error(
+                        f"Error during unmounting/removing {mount_dir}: {umount_err}"
+                    )
+
+            for subvolume in subvolume_list:
+                fs_util.remove_subvolume(client1, **subvolume)
+            for subvolumegroup in subvolumegroup_list:
+                fs_util.remove_subvolumegroup(client1, **subvolumegroup, force=True)
+        except Exception as cleanup_err:
+            log.error(f"Error during cleanup: {cleanup_err}")

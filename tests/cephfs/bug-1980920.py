@@ -114,3 +114,15 @@ def run(ceph_cluster, **kw):
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+
+    finally:
+        # Clean up in case of partial failure
+        try:
+            client1.exec_command(
+                sudo=True, cmd=f"umount -l {kernel_mounting_dir_1}", check_ec=False
+            )
+            client1.exec_command(
+                sudo=True, cmd=f"rm -rf {kernel_mounting_dir_1}", check_ec=False
+            )
+        except Exception as umount_err:
+            log.warning(f"Unmount cleanup failed: {umount_err}")
