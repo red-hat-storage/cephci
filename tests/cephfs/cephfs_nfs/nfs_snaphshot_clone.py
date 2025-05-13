@@ -1,5 +1,6 @@
 import secrets
 import string
+import time
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -118,14 +119,14 @@ def run(ceph_cluster, **kw):
         subvolume2_path = out.rstrip()
         commands = [
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --file-size 4 "
-            f"--files 1000 --top {nfs_mounting_dir}{subvolume1_path}",
+            f"--files 500 --top {nfs_mounting_dir}{subvolume1_path}",
             f"for n in {{1..20}}; do     dd if=/dev/urandom of={nfs_mounting_dir}{subvolume2_path}"
-            f"/file$(printf %03d "
-            "$n"
-            ") bs=500k count=1000; done",
+            f"/file$(printf %03d $n) bs=500k count=500; done",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command, long_running=True)
+            log.info("Sleep for 5 seconds to allow IOs to complete....")
+            time.sleep(5)
         commands = [
             f"ceph fs subvolume snapshot create {fs_name} subvolume1 snap1 --group_name subvolume_group1",
             f"ceph fs subvolume snapshot create {fs_name} subvolume2 snap2",
