@@ -1,17 +1,9 @@
-#===============================================================================
-# Conf:  conf/compaction/smoke/1node-smoke-test.yaml
-# Bootstrap ceph cluster with single node
-#===============================================================================
-
 tests:
   - test:
-      abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
-      module: install_prereq.py
-      name: setup pre-requisites
-
-  - test:
-      abort-on-fail: true
+      name: Deploy cluster using cephadm
+      desc: bootstrap and deploy services.
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
       config:
         steps:
           - config:
@@ -58,8 +50,5 @@ tests:
               args:
                 - "rbd pool init rbd"
               command: shell
-      desc: bootstrap and deploy services.
+      abort-on-fail: true
       destroy-cluster: false
-      polarion-id: CEPH-83573713
-      module: test_cephadm.py
-      name: Deploy cluster using cephadm
