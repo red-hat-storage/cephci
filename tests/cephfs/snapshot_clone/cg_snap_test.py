@@ -336,30 +336,35 @@ def run(ceph_cluster, **kw):
                 check_ec=False,
             )
         qs_cnt += 1
-
-        for i in range(1, qs_cnt):
-            subvol_name = f"sv_def_{i}"
-            subvol_info = fs_util_v1.get_subvolume_info(
-                client1, default_fs, subvol_name
+        try:
+            for i in range(1, qs_cnt):
+                subvol_name = f"sv_def_{i}"
+                subvol_info = fs_util_v1.get_subvolume_info(
+                    client1, default_fs, subvol_name
+                )
+                log.info(subvol_info)
+                fs_util_v1.remove_subvolume(
+                    client1, default_fs, subvol_name, validate=True
+                )
+            for i in range(1, qs_cnt):
+                subvol_name = f"sv_non_def_{i}"
+                subvol_info = fs_util_v1.get_subvolume_info(
+                    client1, default_fs, subvol_name, group_name="subvolgroup_cg"
+                )
+                log.info(subvol_info)
+                fs_util_v1.remove_subvolume(
+                    client1,
+                    default_fs,
+                    subvol_name,
+                    validate=True,
+                    group_name="subvolgroup_cg",
+                )
+            fs_util_v1.remove_subvolumegroup(
+                client1, default_fs, "subvolgroup_cg", validate=True
             )
-            log.info(subvol_info)
-            fs_util_v1.remove_subvolume(client1, default_fs, subvol_name, validate=True)
-        for i in range(1, qs_cnt):
-            subvol_name = f"sv_non_def_{i}"
-            subvol_info = fs_util_v1.get_subvolume_info(
-                client1, default_fs, subvol_name, group_name="subvolgroup_cg"
-            )
-            log.info(subvol_info)
-            fs_util_v1.remove_subvolume(
-                client1,
-                default_fs,
-                subvol_name,
-                validate=True,
-                group_name="subvolgroup_cg",
-            )
-        fs_util_v1.remove_subvolumegroup(
-            client1, default_fs, "subvolgroup_cg", validate=True
-        )
+        except CommandFailed as ex:
+            log.error(ex)
+            fs_util_v1.remove_fs(client1, default_fs, validate=True)
 
 
 def cg_snap_test_func(cg_test_params):

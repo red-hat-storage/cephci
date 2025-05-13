@@ -1165,7 +1165,7 @@ class CG_snap_IO(object):
                 log.info(f"fio read on {mnt_pt}, Iteration {i}")
                 out, _ = client.exec_command(
                     sudo=True,
-                    cmd=f"fio --name={fio_file} --ioengine=libaio --size 2M --rw=read --bs=1M --direct=1 "
+                    cmd=f"fio --name={fio_file} --ioengine=libaio --size 100k --rw=read --bs=64k --direct=0 "
                     f"--numjobs=1 --iodepth=5 --runtime=10 --debug=io",
                     timeout=30,
                 )
@@ -1220,7 +1220,7 @@ class CG_snap_IO(object):
             file_path = f"{dir_path}/{file_name}"
             client.exec_command(
                 sudo=True,
-                cmd=f"fio --name={file_path} --ioengine=libaio --size 2M --rw=write --bs=1M --direct=1 "
+                cmd=f"fio --name={file_path} --ioengine=libaio --size 100k --rw=write --bs=64k --direct=0 "
                 f"--numjobs=1 --iodepth=5 --runtime=10",
                 timeout=20,
                 long_running=True,
