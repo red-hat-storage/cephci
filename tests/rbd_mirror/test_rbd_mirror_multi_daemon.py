@@ -100,7 +100,7 @@ def run(**kw):
         mirror2.change_service_state(service_name_mirror2, "start")
 
         log.info(
-            "Marking leader rbd daemon in booth clusters and performing failover operation"
+            "Marking leader rbd daemon in both clusters and performing failover operation"
         )
         # Stop leader daemon on both the clusters
         service_names = []
@@ -138,8 +138,27 @@ def run(**kw):
         with parallel() as p:
             p.spawn(mirror1.change_service_state, service_names[0], "start")
             p.spawn(mirror2.change_service_state, service_names[1], "start")
-            time.sleep(30)
-            for imagespec in image_spec_list:
-                p.spawn(mirror1.check_data, peercluster=mirror2, imagespec=imagespec)
+
+        # waiting for the service to start and to mirror the image
+        time.sleep(30)
+
+        with parallel() as p:
+            p.spawn(
+                mirror2.wait_for_status,
+                imagespec=rep_image_spec,
+                state_pattern="up+replaying",
+            )
+            p.spawn(
+                mirror2.wait_for_status,
+                imagespec=ec_image_spec,
+                state_pattern="up+replaying",
+            )
+
+        for imagespec in image_spec_list:
+            poolname, imagename = imagespec.split("/", 1)
+            # scheduling snapshots to mirror the data
+            mirror1.mirror_snapshot_schedule_add(poolname=poolname, imagename=imagename)
+            mirror1.verify_snapshot_schedule(imagespec=imagespec)
+            mirror1.check_data(mirror2, imagespec)
 
     return 0
