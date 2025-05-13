@@ -27,6 +27,7 @@ from ceph.parallel import parallel
 from ceph.utils import check_ceph_healthly
 from cli.cephadm.cephadm import CephAdm
 from mita.v2 import get_openstack_driver
+from tests.cephfs.exceptions import ValueMismatchError
 from utility.log import Log
 from utility.retry import retry
 
@@ -1781,6 +1782,7 @@ class FsUtils(object):
         )
         return cmd_out, cmd_rc
 
+    @retry(CommandFailed, tries=3, delay=10)
     def create_clone(
         self,
         client,
@@ -5658,6 +5660,7 @@ os.system('sudo systemctl start  network')
         )
         return fs_dump_info_dict
 
+    @retry(CommandFailed, tries=3, delay=10)
     def collect_fs_get_for_validation(self, client, fs_name):
         """
         Gets the output using fs get and collected required info
@@ -5671,14 +5674,19 @@ os.system('sudo systemctl start  network')
         fs_get_output = self.get_fsmap(client, fs_name)
         log.debug(fs_get_output)
 
-        status = (
-            self.fetch_value_from_json_output(
-                search_list=[fs_get_output],
-                match_key="name",
-                match_value=fs_name,
-                target_key="state",
-            )
-        ).split(":", 1)[1]
+        try:
+            status = (
+                self.fetch_value_from_json_output(
+                    search_list=[fs_get_output],
+                    match_key="name",
+                    match_value=fs_name,
+                    target_key="state",
+                )
+            ).split(":", 1)[1]
+        except Exception as e:
+            log.error("Failed to get status: {}".format(e))
+            raise CommandFailed
+
         fsname = self.fetch_value_from_json_output(
             search_list=[fs_get_output],
             match_key="name",
@@ -5715,6 +5723,7 @@ os.system('sudo systemctl start  network')
         )
         return fs_get_info_dict
 
+    @retry(ValueMismatchError, tries=3, delay=10)
     def validate_dicts(self, dicts, keys_to_check):
         """
         Validate values of specific keys across multiple dictionaries and dictionary of list.
@@ -5751,7 +5760,7 @@ os.system('sudo systemctl start  network')
                         )
                     else:
                         log.error(f"Key '{key}' mismatch: List values = {values}")
-                        return False
+                        raise ValueMismatchError
                 else:
                     # Compare values of the key across the dictionaries
                     # Rewriting values using set for single value
@@ -5762,7 +5771,7 @@ os.system('sudo systemctl start  network')
                         )
                     else:
                         log.error(f"Key '{key}' mismatch: Values = {values}")
-                        return False
+                        raise ValueMismatchError
         return True
 
     def rename_volume(self, client, old_name, new_name):

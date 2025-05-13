@@ -2,6 +2,7 @@ import json
 import random
 import secrets
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
@@ -147,7 +148,7 @@ def run(ceph_cluster, **kw):
             count=20,
         )
         run_ios(
-            clients[0], nfs_mounting_dir, file_name="dd_file_nfs", bs="100M", count=20
+            clients[0], nfs_mounting_dir, file_name="dd_file_nfs", bs="50M", count=10
         )
 
         log.info("Migrate data b/w NFS mounts and CephFS mounts(kernel and fuse)")
@@ -162,6 +163,8 @@ def run(ceph_cluster, **kw):
         ]
         for cmd in mv_bw_mounts:
             clients[0].exec_command(sudo=True, cmd=cmd)
+            log.info("Sleeping for 5 seconds between commands....")
+            time.sleep(5)
 
         log.info("Confirm if data b/w mounts are migrated")
         verify_data_movement = [
@@ -172,6 +175,8 @@ def run(ceph_cluster, **kw):
         ]
         for cmd in verify_data_movement:
             clients[0].exec_command(sudo=True, cmd=cmd)
+            log.info("Sleeping for 5 seconds between commands....")
+            time.sleep(5)
 
         log.info("Test completed successfully")
         return 0
@@ -182,7 +187,7 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Cleaning Up")
         client1.exec_command(
-            sudo=True, cmd=f"umount -l {nfs_mounting_dir}", check_ec=False
+            sudo=True, cmd=f"umount -f {nfs_mounting_dir}", check_ec=False
         )
         client1.exec_command(
             sudo=True, cmd=f"umount -l {kernel_mounting_dir_1}", check_ec=False

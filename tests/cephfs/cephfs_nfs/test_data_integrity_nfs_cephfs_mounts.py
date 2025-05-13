@@ -2,6 +2,7 @@ import json
 import random
 import secrets
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
@@ -131,6 +132,7 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True, cmd=f"echo -n {file_data} >> {kernel_mounting_dir_1}nfs_file_1"
         )
+        time.sleep(2)
         out, rc = clients[0].exec_command(
             sudo=True, cmd=f"cat {nfs_mounting_dir}nfs_file_1"
         )
@@ -162,6 +164,7 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True, cmd=f"echo -n {new_data} > {nfs_mounting_dir}nfs_file_1"
         )
+        time.sleep(2)
         out, rc = clients[0].exec_command(
             sudo=True, cmd=f"cat {kernel_mounting_dir_1}nfs_file_1"
         )
@@ -192,7 +195,7 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"rm -rf {nfs_mounting_dir}*", check_ec=False
         )
         client1.exec_command(
-            sudo=True, cmd=f"umount -l {nfs_mounting_dir}", check_ec=False
+            sudo=True, cmd=f"umount -f {nfs_mounting_dir}", check_ec=False
         )
         client1.exec_command(
             sudo=True, cmd=f"umount -l {kernel_mounting_dir_1}", check_ec=False

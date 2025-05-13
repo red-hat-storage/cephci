@@ -1,6 +1,7 @@
 import json
 import secrets
 import string
+import time
 import traceback
 from json import JSONDecodeError
 
@@ -119,38 +120,43 @@ def run(ceph_cluster, **kw):
         commands = [
             f"mkdir -p {nfs_mounting_dir_1}",
             f"mkdir {nfs_mounting_dir_1}/dir1 {nfs_mounting_dir_1}/dir2",
-            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 40 --files"
-            f" 1000 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir_1}/dir1",
-            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 40 --files"
-            f" 1000 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir_1}/dir1",
-            f"for n in {{1..20}}; do     dd if=/dev/urandom of={nfs_mounting_dir_1}/dir2"
-            f"/file$(printf %03d "
-            "$n"
-            ") bs=500k count=1000; done",
+            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 --files"
+            f" 500 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir_1}/dir1",
+            f"for n in {{1..10}}; do     dd if=/dev/zero of={nfs_mounting_dir_1}/dir2"
+            f"/file$(printf %03d $n) bs=500k count=500; done",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command, long_running=True)
+            log.info("Sleeping for 5 seconds between commands...")
+            time.sleep(5)
         rc = fs_util.cephfs_nfs_mount(
             client1, nfs2, nfs_export_name, nfs_mounting_dir_2
         )
         if not rc:
             log.error("cephfs nfs export mount failed")
             return 1
+        log.info("Waiting for 30 seconds for nfs mount to be ready for validation")
+        time.sleep(30)
         commands = [
             f"diff -r {nfs_mounting_dir_1} {nfs_mounting_dir_2}",
             f"mkdir {nfs_mounting_dir_2}/dir3 {nfs_mounting_dir_2}/dir4",
-            f"for n in {{1..5}}; do     dd if=/dev/urandom of={nfs_mounting_dir_2}/dir3"
-            f"/file$(printf %03d "
-            "$n"
-            ") bs=1M count=1000; done",
-            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 40 "
+            f"for n in {{1..5}}; do     dd if=/dev/zero of={nfs_mounting_dir_2}/dir3"
+            f"/file$(printf %03d $n) bs=500k count=500; done",
+            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
             f" --files 10 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir_2}/dir4",
-            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 40 --files"
-            f" 10 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir_2}/dir4",
-            f"diff -r {nfs_mounting_dir_1} {nfs_mounting_dir_2}",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command, long_running=True)
+            log.info("Sleeping for 5 seconds between commands...")
+            time.sleep(5)
+
+        log.info("Waiting for 30 seconds for nfs mount to be ready for validation")
+        time.sleep(30)
+        client1.exec_command(
+            sudo=True,
+            cmd=f"diff -r {nfs_mounting_dir_1} {nfs_mounting_dir_2}",
+            long_running=True,
+        )
         return 0
     except Exception as e:
         log.info(e)

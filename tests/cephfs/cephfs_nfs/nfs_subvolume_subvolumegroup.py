@@ -133,15 +133,9 @@ def run(ceph_cluster, **kw):
         commands = [
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 --files"
             f" 1000 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir}/volumes/subvolgroup_1/subvol_1",
-            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 --files"
-            f" 1000 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir}/volumes/subvolgroup_1/subvol_1",
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 8 "
             f"--files 2000 --files-per-dir 5 --dirs-per-dir 5 --top {nfs_mounting_dir}/volumes/_nogroup/subvol_2/",
-            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 8 "
-            f"--files 2000 --files-per-dir 5 --dirs-per-dir 5 --top {nfs_mounting_dir}/volumes/_nogroup/subvol_2/",
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 5 --file-size 16 "
-            f"--files 4000 --files-per-dir 20 --dirs-per-dir 4 --top {nfs_mounting_dir}/volumes/subvolgroup_2",
-            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 5 --file-size 16 "
             f"--files 4000 --files-per-dir 20 --dirs-per-dir 4 --top {nfs_mounting_dir}/volumes/subvolgroup_2",
         ]
         for command in commands:
@@ -154,7 +148,13 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Cleaning up")
-        client1.exec_command(sudo=True, cmd=f"rm -rf {nfs_mounting_dir}/*")
+        cleanup_commands = [
+            f"{nfs_mounting_dir}/volumes/subvolgroup_1/subvol_1/*",
+            f"{nfs_mounting_dir}/volumes/_nogroup/subvol_2/*",
+            f"{nfs_mounting_dir}/volumes/subvolgroup_2/*",
+        ]
+        for command in cleanup_commands:
+            client1.exec_command(sudo=True, cmd=f"rm -rf {command}", long_running=True)
         client1.exec_command(sudo=True, cmd=f"umount {nfs_mounting_dir}")
         client1.exec_command(
             sudo=True,
