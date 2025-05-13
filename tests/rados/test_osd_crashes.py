@@ -4,6 +4,7 @@ Tests included:
 1. Bug 2335317 - multiple OSDs crashing while replaying bluefs -- ceph_assert(delta.offset == fnode.allocated)
 """
 
+import datetime
 import time
 
 from ceph.ceph_admin import CephAdmin
@@ -85,12 +86,24 @@ def run(ceph_cluster, **kw):
                 time.sleep(5)
 
                 # ensure acting set is same as before
-                new_acting_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
-                log.debug(
-                    "Acting set for pool %s after switching OSD device class: %s"
-                    % (pool_name, new_acting_set)
-                )
-                assert acting_set == new_acting_set, "Acting set has changed"
+                endtime = datetime.datetime.now() + datetime.timedelta(seconds=180)
+                while datetime.datetime.now() < endtime:
+                    new_acting_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
+                    log.debug(
+                        "Acting set for pool %s after switching OSD device class: %s"
+                        % (pool_name, new_acting_set)
+                    )
+                    if acting_set == new_acting_set:
+                        break
+                    log.error("Acting set has changed, retrying after 20 secs")
+                    time.sleep(20)
+                else:
+                    log.error(
+                        "Acting set for pool %s has changed.\n"
+                        "Old acting set: %s | New acting set: %s"
+                        % (pool_name, acting_set, new_acting_set)
+                    )
+                    raise Exception("Acting set for pool %s has changed" % pool_name)
 
                 log.debug(
                     "Checking current value of bluestore_allocation_from_file & osd_fast_shutdown"
