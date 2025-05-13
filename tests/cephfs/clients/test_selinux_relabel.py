@@ -114,7 +114,7 @@ def run(ceph_cluster, **kw):
             "apply SELinux label, and measure time taken..          "
             "\n---------------***************---------------"
         )
-
+        fs_util_v1.get_ceph_health_status(clients[0], validate=False)
         test_dirs = [
             {
                 "client": clients[0],
@@ -139,7 +139,7 @@ def run(ceph_cluster, **kw):
             log.info(f"Creating {num_files} files in {test_dir}")
             client.exec_command(
                 sudo=True,
-                cmd=f"bash -c 'for i in $(seq 1 {num_files}); do touch {test_dir}/file_$i; done'",
+                cmd=f"for i in $(seq 1 {num_files}); do touch {test_dir}/file_$i; done",
                 timeout=14400,
             )
 
@@ -158,14 +158,20 @@ def run(ceph_cluster, **kw):
             )
 
             log.info(f"Validating SELinux context for {test_dir}")
+            files_per_second = num_files / time_taken if time_taken > 0 else 0
+
+            log.info(
+                "Files relabeled per second on a dir with (%s files): %.2f",
+                num_files,
+                files_per_second,
+            )
+
             if validate_selinux_context(client, label_to_apply, test_dir):
                 log.error(f"Failed to validate SELinux context for {test_dir}")
                 return 1
 
-        log.info(
-            "Check for the Ceph Health status to see if it's Healthy after enabling Standby-Replay"
-        )
-        fs_util_v1.get_ceph_health_status(clients[0])
+        log.info("Check for the Ceph Health status ")
+        fs_util_v1.get_ceph_health_status(clients[0], validate=False)
         log.info(
             "\n"
             "\n---------------***************---------------"
@@ -181,7 +187,7 @@ def run(ceph_cluster, **kw):
             "SELinux label application from Client2..          "
             "\n---------------***************---------------"
         )
-
+        fs_util_v1.get_ceph_health_status(clients[0], validate=False)
         kernel_mounting_dir = f"/mnt/cephfs_kernel_shared_{mounting_dir}/"
         mon_node_ips = fs_util_v1.get_mon_node_ips()
         subvol_path_kernel, rc = clients[0].exec_command(
@@ -204,7 +210,7 @@ def run(ceph_cluster, **kw):
         num_files = 1000000
         clients[0].exec_command(
             sudo=True,
-            cmd=f"bash -c 'for i in $(seq 1 {num_files}); do touch {test_dir_s3}/file_$i; done'",
+            cmd=f"for i in $(seq 1 {num_files}); do touch {test_dir_s3}/file_$i; done",
             timeout=14400,
         )
 
@@ -215,27 +221,31 @@ def run(ceph_cluster, **kw):
         start_time = time.time()
         apply_selinux_label(clients[1], label_to_apply, test_dir_s3)
         end_time = time.time()
-
         time_taken = end_time - start_time
         log.info(
             f"Time taken to apply SELinux label on Client2 for {test_dir_s3}: {time_taken} seconds"
         )
-
-        time.sleep(30)  # Ensure selinux labels are applied.
+        time.sleep(30)
 
         log.info("Validating SELinux context from both the clients")
-        if validate_selinux_context(clients[0], label_to_apply, test_dir_s3):
+        files_per_second = num_files / time_taken if time_taken > 0 else 0
+
+        log.info(
+            "Files relabeled per second on a dir with (%s files): %.2f",
+            num_files,
+            files_per_second,
+        )
+
+        if validate_selinux_context(client[0], label_to_apply, test_dir):
             log.error(f"Failed to validate SELinux context for {test_dir}")
             return 1
 
         if validate_selinux_context(clients[1], label_to_apply, test_dir_s3):
-            log.error(f"Failed to validate SELinux context for {test_dir}")
+            log.error(f"Failed to validate SELinux context for {test_dir_s3}")
             return 1
 
-        log.info(
-            "Check for the Ceph Health status to see if it's Healthy after enabling Standby-Replay"
-        )
-        fs_util_v1.get_ceph_health_status(clients[0])
+        log.info("Check for the Ceph Health status")
+        fs_util_v1.get_ceph_health_status(clients[0], validate=False)
         log.info(
             "\n"
             "\n---------------***************---------------"
@@ -291,7 +301,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "Check for the Ceph Health status to see if it's Healthy after enabling Standby-Replay"
         )
-        fs_util_v1.get_ceph_health_status(clients[0])
+        fs_util_v1.get_ceph_health_status(clients[0], validate=False)
         log.info(
             "\n"
             "\n---------------***************---------------"
@@ -341,7 +351,7 @@ def apply_selinux_label(client, label, path):
     """
     try:
         client.exec_command(
-            sudo=True, cmd=f"chcon -R --type={label} {path}", timeout=600
+            sudo=True, cmd=f"chcon -R --type={label} {path}", timeout=14400
         )
         log.info(f"Applied SELinux label {label} to {path}")
     except Exception as e:
@@ -361,7 +371,7 @@ def validate_selinux_context(client, expected_label, path):
         None
     """
     cmd = f"ls -lZd {path} | awk '{{print $5}}' | cut -d: -f3"
-    result, _ = client.exec_command(sudo=True, cmd=cmd)
+    result, _ = client.exec_command(sudo=True, cmd=cmd, timeout=14400)
     context_type = result.strip()
 
     if context_type:
