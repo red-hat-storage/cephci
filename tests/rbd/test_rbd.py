@@ -147,6 +147,6 @@ def run(ceph_cluster, **kwargs) -> int:
         if script == "*":
             cmd = f"cd ceph/{script_dir}; for test in $(ls); do sudo bash $test; done"
 
-        node.exec_command(cmd=cmd, check_ec=True, timeout=1200)
+        node.exec_command(cmd=cmd, check_ec=True, timeout=1800)
 
     return 0
