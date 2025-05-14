@@ -174,7 +174,7 @@ tests:
       abort-on-fail: false
       config:
         nfs_version: 4.1
-        clients: 4x
+        clients: 4
         setup: false
 
   - test:
