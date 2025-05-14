@@ -71,6 +71,10 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         default_fs = "cephfs"
+        fs_details = fs_util.get_fs_info(clients[0], default_fs)
+        if not fs_details:
+            fs_util.create_fs(clients[0], default_fs)
+
         if build.startswith("4"):
             # create EC pool
             list_cmds = [
