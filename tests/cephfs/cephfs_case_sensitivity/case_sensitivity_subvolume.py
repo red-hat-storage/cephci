@@ -1,8 +1,14 @@
+import os
 import traceback
 
 from cli.ceph.ceph import Ceph
 from tests.cephfs.cephfs_utilsV1 import FsUtils
-from tests.cephfs.exceptions import CharMapGetError, CharMapRemoveError, CharMapSetError
+from tests.cephfs.exceptions import (
+    CharMapGetError,
+    CharMapRemoveError,
+    CharMapSetError,
+    NormalizationValidationError,
+)
 from tests.cephfs.lib.cephfs_attributes_lib import CephFSAttributeUtilities
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 
@@ -30,7 +36,7 @@ def extract_case_and_normalization(info):
         dict: A dictionary containing 'casesensitive' and 'normalization' attributes.
     """
     return {
-        "casesensitive": not info.get("case_insensitive", ""),
+        "casesensitive": info.get("casesensitive", ""),
         "normalization": info.get("normalization", ""),
     }
 
@@ -720,6 +726,151 @@ def remove_charmap_and_validate():
         log.info("Passed: Failed as expected with error: {}".format(str(e)))
 
 
+def test_sv_creation_with_casesensitive_flags():
+    """Create subvolume using flags"""
+    log.info(" ** Creating subvolume with only casesensitive flag true **")
+    Ceph(client1).fs.sub_volume.create(
+        cephfs_vol,
+        cephfs_subvol_2,
+        **{"casesensitive=": "true"},
+    )
+
+    get_subvolume = Ceph(client1).fs.sub_volume.info(
+        cephfs_vol,
+        cephfs_subvol_2,
+    )
+
+    attr_util.validate_charmap_with_values(
+        extract_case_and_normalization(get_subvolume),
+        {"casesensitive": True, "normalization": "none"},
+    )
+
+    Ceph(client1).fs.sub_volume.rm(cephfs_vol, cephfs_subvol_2)
+
+    log.info(" ** Creating subvolume with only casesensitive flag false **")
+    Ceph(client1).fs.sub_volume.create(
+        cephfs_vol,
+        cephfs_subvol_2,
+        **{"casesensitive=": "false"},
+    )
+
+    get_charmap = Ceph(client1).fs.sub_volume.charmap.get(
+        cephfs_vol,
+        cephfs_subvol_2,
+    )
+
+    attr_util.validate_charmap_with_values(
+        get_charmap,
+        {
+            "casesensitive": False,
+            "normalization": "nfd",
+            "encoding": "utf8",
+        },
+    )
+
+    get_subvolume = Ceph(client1).fs.sub_volume.info(
+        cephfs_vol,
+        cephfs_subvol_2,
+    )
+
+    attr_util.validate_charmap_with_values(
+        extract_case_and_normalization(get_subvolume),
+        {"casesensitive": False, "normalization": "nfd"},
+    )
+
+    Ceph(client1).fs.sub_volume.rm(cephfs_vol, cephfs_subvol_2)
+
+
+def test_sv_creation_with_normalization_flags():
+    log.info(" ** Creating subvolume with only normalization flag **")
+    Ceph(client1).fs.sub_volume.create(
+        cephfs_vol,
+        cephfs_subvol_2,
+        **{"normalization": "nfkd"},
+    )
+
+    get_charmap = Ceph(client1).fs.sub_volume.charmap.get(
+        cephfs_vol,
+        cephfs_subvol_2,
+    )
+
+    attr_util.validate_charmap_with_values(
+        get_charmap,
+        {
+            "casesensitive": True,
+            "normalization": "nfkd",
+            "encoding": "utf8",
+        },
+    )
+
+    get_subvolume = Ceph(client1).fs.sub_volume.info(
+        cephfs_vol,
+        cephfs_subvol_2,
+    )
+
+    attr_util.validate_charmap_with_values(
+        extract_case_and_normalization(get_subvolume),
+        {"casesensitive": True, "normalization": "nfkd"},
+    )
+
+    sub_vol_path_2 = common_util.subvolume_get_path(
+        client1,
+        cephfs_vol,
+        subvolume_name=cephfs_subvol_2,
+    )
+
+    log.info("*** Mounting Subvolume 2 via FUSE and validating the normalization ***")
+    fuse_mounting_dir_2 = common_util.setup_fuse_mount(
+        client1,
+        cephfs_vol,
+        mount_path="/mnt/fuse_{}/".format(common_util.generate_mount_dir()),
+        subvolume_name=cephfs_subvol_2,
+        subvol_path=sub_vol_path_2,
+    )
+    log.info("Mounting dir for FUSE: {}".format(fuse_mounting_dir_2))
+
+    unicode_name = attr_util.generate_random_unicode_names()[0]
+    log.info("Unicode Dir Name: %s", unicode_name)
+
+    child_dir_path = os.path.join(fuse_mounting_dir_2, "test-1", unicode_name)
+    rel_child_dir = os.path.relpath(child_dir_path, fuse_mounting_dir_2)
+
+    # Removing the first slash for the subvolumes
+    actual_child_dir_root = os.path.join(
+        sub_vol_path_2.strip().lstrip("/"), rel_child_dir.split("/")[0]
+    )
+
+    attr_util.create_directory(client1, child_dir_path, force=True)
+    attr_util.validate_charmap(
+        client1,
+        fuse_mounting_dir_2,
+        {"casesensitive": True, "normalization": "nfkd", "encoding": "utf8"},
+    )
+    log.debug("Root Child Dir Path: {}".format(actual_child_dir_root))
+    log.debug("Unicode Name: {}".format(unicode_name))
+
+    if not attr_util.validate_normalization(
+        client1,
+        cephfs_vol,
+        actual_child_dir_root,
+        unicode_name,
+        "NFKD",
+    ):
+        raise NormalizationValidationError(
+            "Normalization validation failed for {}".format(
+                os.path.join(actual_child_dir_root, unicode_name)
+            )
+        )
+
+    log.info("** Cleanup ** ")
+
+    attr_util.delete_directory(client1, child_dir_path, recursive=True)
+    fs_util.client_clean_up(
+        "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir_2
+    )
+    Ceph(client1).fs.sub_volume.rm(cephfs_vol, cephfs_subvol_2)
+
+
 def run(ceph_cluster, **kw):
     try:
         test_data = kw.get("test_data")
@@ -743,7 +894,7 @@ def run(ceph_cluster, **kw):
             "\n---------------***************-----------------------------"
         )
         global client1, installer, common_util, attr_util, fs_util, smb_nodes, ibm_build
-        global cephfs_vol, cephfs_subvol, cephfs_clone_subvol, cephfs_subvol_group1
+        global cephfs_vol, cephfs_subvol, cephfs_subvol_2, cephfs_clone_subvol, cephfs_subvol_group1
         global cephfs_subvol_group2, cephfs_snap1, cephfs_rename_vol, cephfs_subvol_default
 
         attr_util = CephFSAttributeUtilities(ceph_cluster)
@@ -756,9 +907,10 @@ def run(ceph_cluster, **kw):
         smb_nodes = ceph_cluster.get_nodes("smb")
         fs_util.prepare_clients([client1], build)
 
-        cephfs_vol = "mani-fs-2"
-        cephfs_rename_vol = "mani-fs-2-renamed"
+        cephfs_vol = "cs-volume-1"
+        cephfs_rename_vol = "cs-volume-1-renamed"
         cephfs_subvol = "subvol1"
+        cephfs_subvol_2 = "subvol2"
         cephfs_subvol_default = "subvol2"
         cephfs_clone_subvol = "subvol-clone1"
         cephfs_subvol_group1 = "subvolgroup1"
@@ -872,6 +1024,24 @@ def run(ceph_cluster, **kw):
             "\n---------------***************-----------------------------"
         )
         remove_charmap_and_validate()
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------"
+            "\n  Usecase 14: Create subvolume using only case-sensitive flags and validate "
+            "\n---------------***************-----------------------------"
+        )
+
+        test_sv_creation_with_casesensitive_flags()
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------"
+            "\n  Usecase 15: Create subvolume using only normalization flags and validate "
+            "\n---------------***************-----------------------------"
+        )
+
+        test_sv_creation_with_normalization_flags()
 
         log.info("*** Passed: Completed Subvolume Charmap tests successfully ***")
         return 0

@@ -307,9 +307,6 @@ def test_snapshot_functionality_with_attributes():
     attr_util.set_attributes(
         client1, snap_fuse_mounting_dir, casesensitive=0, normalization="nfkc"
     )
-    fs_util.create_file_data(
-        client1, {snap_fuse_mounting_dir}, 3, snap_name, "snap_1_data "
-    )
     fs_util.create_snapshot(client1, fs_name, sv_name, snap_name, group_name=sv_group)
 
     if not attr_util.validate_snapshot_from_mount(
@@ -336,8 +333,14 @@ def test_snapshot_functionality_with_attributes():
             "Passed: Failed as Expected. Attributes should not be set on a snapshot directory"
         )
 
-    log.info("Removing the snapshot directory")
-    attr_util.delete_snapshots_from_mount(client1, snap_fuse_mounting_dir)
+    log.info("Removing the snapshot")
+    fs_util.remove_snapshot(
+        client1,
+        fs_name,
+        sv_name,
+        snap_name,
+        **{"group_name": sv_group},
+    )
 
     attr_util.set_attributes(
         client1, snap_fuse_mounting_dir, casesensitive=1, normalization="nfd"
@@ -1099,16 +1102,13 @@ def run(ceph_cluster, **kw):
             )
             test_subdirectory_inheritance_special_chars()
 
-            # # Able to set the charmap attribute when the snap folder exists
-            # # Discussing with Dev. Will map the BZ accordingly
-            # # Commenting for now since this is failing
-            # log.info(
-            #     "\n"
-            #     "\n---------------***************---------------------------------------------"
-            #     "\n   Usecase 8: Validate snapshot functionality after setting the attribute  "
-            #     "\n---------------***************---------------------------------------------"
-            # )
-            # test_snapshot_functionality_with_attributes()
+            log.info(
+                "\n"
+                "\n---------------***************---------------------------------------------"
+                "\n   Usecase 8: Validate snapshot functionality after setting the attribute  "
+                "\n---------------***************---------------------------------------------"
+            )
+            test_snapshot_functionality_with_attributes()
 
             log.info(
                 "\n"
