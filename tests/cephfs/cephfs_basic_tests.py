@@ -39,25 +39,28 @@ def run(ceph_cluster, **kw):
         mount_test_case(clients, kernel_mounting_dir)
 
         log.info("Cleaning up!-----")
+
+        # Clean up kernel mount
         rc = fs_util.client_clean_up(
-            [],
-            clients,
+            clients,  # kernel clients
+            [],  # no fuse clients
             kernel_mounting_dir,
             "umount",
         )
         if rc != 0:
-            raise CommandFailed("fuse clients cleanup failed")
-        log.info("Fuse clients cleaned up successfully")
+            raise CommandFailed("Kernel clients cleanup failed")
+        log.info("Kernel clients cleaned up successfully")
 
+        # Clean up fuse mount
         rc = fs_util.client_clean_up(
-            clients,
-            [],
+            [],  # no kernel clients
+            clients,  # fuse clients
             fuse_mounting_dir,
             "umount",
         )
         if rc != 0:
-            raise CommandFailed("kernel clients cleanup failed")
-        log.info("kernel clients cleaned up successfully")
+            raise CommandFailed("Fuse clients cleanup failed")
+        log.info("Fuse clients cleaned up successfully")
         return 0
 
     except Exception as e:
