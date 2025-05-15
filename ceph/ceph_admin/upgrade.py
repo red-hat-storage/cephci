@@ -6,6 +6,7 @@ from time import sleep
 from typing import Dict
 
 from ceph.ceph import CommandFailed
+from ceph.waiter import WaitUntil
 from utility.log import Log
 
 from .common import config_dict_to_string
@@ -57,7 +58,7 @@ class UpgradeMixin:
 
         return self.shell(args=cmd)
 
-    def upgrade_status(self: OrchProtocol):
+    def upgrade_status(self: OrchProtocol, timeout: int = 600, interval: int = 10):
         """
         Execute the command ceph orch status.
 
@@ -65,7 +66,28 @@ class UpgradeMixin:
             upgrade Status (Dict)
 
         """
-        out, _ = self.shell(args=["ceph", "orch", "upgrade", "status"])
+        # Retry upgrade command for interval time until it pass till timeout
+        for w in WaitUntil(timeout=timeout, interval=interval):
+            try:
+                out, _ = self.shell(args=["ceph", "orch", "upgrade", "status"])
+            except CommandFailed as e:
+                msg = f"Upgrade command status failed due to error - {e},"
+                msg += f"\n\nRetrying upgrade status after {interval}..."
+                LOG.info(msg)
+
+                # Continue in case command fails
+                continue
+
+            # Break in case no exception raised
+            break
+
+        # Check if command is even after timeout
+        if w.expired:
+            msg = f"Upgrade status failed even after {timeout} sec "
+            msg += "due to mgr loading issue. "
+            msg += "Refer Bzs 2314146, 2313471, 2361844."
+            raise CommandFailed(msg)
+
         try:
             return loads(out)
         except JSONDecodeError:
