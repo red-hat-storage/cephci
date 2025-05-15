@@ -1,0 +1,78 @@
+#conf/compaction/rbd/rbd-mirror-4node-1client.yaml
+tests:
+
+  - test:
+      name: test_rbd_mirror
+      module: test_rbd_mirror.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+            resize_to: 5G
+      polarion-id: CEPH-83573332
+      desc: Create RBD mirrored image in pools  and run IOs
+  - test:
+      name: test_rbd_mirror_image
+      module: test_rbd_mirror_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573619,CEPH-83573620
+      desc: Create RBD mirrored images and run IOs
+  - test:
+      name: test_rbd_mirror_rename_image
+      module: test_rbd_mirror_rename_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573614
+      desc: Rename primary image and check on secondary for this change
+  - test:
+      name: test_rbd_mirror_daemon_status
+      module: test_rbd_mirror_daemon_status.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            io-total: 200M
+      polarion-id: CEPH-83573760
+      desc: Verify rbd mirror and daemon status on cluster
+
+  - test:
+      name: test_rbd_mirror_snapshot_pool
+      module: test_rbd_mirror_snapshot.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            ec_pool_config:
+              mirrormode: snapshot
+              mode: image
+            rep_pool_config:
+              mirrormode: snapshot
+              mode: image
+            snapshot_schedule_level: "pool"
+      polarion-id: CEPH-83575375
+      desc: Create snapshot based RBD mirrored pools, schedule snapshots at pool level and verify
+
+  - test:
+      name: test_rbd_mirror_snapshot_cluster
+      module: test_rbd_mirror_snapshot.py
+      clusters:
+        ceph-rbd1:
+          config:
+            imagesize: 2G
+            ec_pool_config:
+              mirrormode: snapshot
+              mode: image
+            rep_pool_config:
+              mirrormode: snapshot
+              mode: image
+            snapshot_schedule_level: "cluster"
+      polarion-id: CEPH-83575376
+      desc: Create snapshot based RBD mirrored pools, schedule snapshots at cluster level and verify
