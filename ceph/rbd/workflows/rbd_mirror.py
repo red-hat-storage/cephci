@@ -355,7 +355,7 @@ def bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw):
     else:
         log.error("Peers were not added")
 
-    if kw["mirror_level"] == "namespace":
+    if kw.get("mirror_level") == "namespace":
         if (
             value(key="remote_namespace", dictionary=primary_pool_info)
             != kw["remote_namespace"]
