@@ -222,6 +222,18 @@ tests:
       desc: Verify forced recovery and healthy on a stretch configured cluster
 
   - test:
+      name: concurrent and parallel IOPS on an object
+      desc: Perform concurrent and parallel IOPs on one object
+      module: test_object_ops.py
+      config:
+        obj_sizes:
+          - 45
+          - 80
+          - 23
+          - 107
+      polarion-id: CEPH-83571710
+
+  - test:
       name: test stretch Cluster site down - Data site
       module: test_stretch_site_down.py
       polarion-id: CEPH-83574975
