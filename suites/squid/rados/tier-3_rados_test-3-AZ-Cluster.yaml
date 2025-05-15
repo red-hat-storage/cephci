@@ -216,6 +216,7 @@ tests:
         create_ec_pool: true
         create_re_pool: true
       desc: verify autoscaler flags functionality
+      comments: "Active bug 2361441"
 
   - test:
       name: Enable Stretch mode on pools
