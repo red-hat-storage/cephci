@@ -4,8 +4,10 @@ import traceback
 
 from pip._internal.exceptions import CommandError
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -34,6 +36,9 @@ def run(ceph_cluster, **kw):
         fs_name = "cephfs"
         log.info("Wait for Upgrade to start")
         time.sleep(120)
+        retry_exec_command = retry(CommandFailed, tries=3, delay=30)(
+            client1.exec_command
+        )
         # while True:
         start_time = time.time()
         while time.time() - start_time < 1800:
@@ -45,7 +50,7 @@ def run(ceph_cluster, **kw):
                 break
             mds_ls = fs_util.get_active_mdss(client1, fs_name=fs_name)
             for mds in mds_ls:
-                out, rc = client1.exec_command(
+                out, rc = retry_exec_command(
                     cmd=f"ceph mds fail {mds}", client_exec=True
                 )
                 log.info(out)
@@ -55,18 +60,18 @@ def run(ceph_cluster, **kw):
                         "2 Active MDS did not start after failing one MDS"
                     )
                 time.sleep(120)
-                out, rc = client1.exec_command(
+                out, rc = retry_exec_command(
                     cmd=f"ceph fs status {fs_name}", client_exec=True
                 )
                 log.info(f"Status of {fs_name}:\n {out}")
-                out, rc = client1.exec_command(cmd="ceph -s -f json", client_exec=True)
+                out, rc = retry_exec_command(cmd="ceph -s -f json", client_exec=True)
                 ceph_status = json.loads(out)
                 log.info(f"Ceph status: {json.dumps(ceph_status, indent=4)}")
                 if ceph_status["health"]["status"] == "HEALTH_ERR":
                     log.error("Ceph Health is NOT OK")
                     return 1
 
-        out, rc = client1.exec_command(sudo=True, cmd="ceph crash ls")
+        out, rc = retry_exec_command(sudo=True, cmd="ceph crash ls")
         if out:
             raise CommandError(f"Found Crash while Upgrade {out}")
         return 0
@@ -101,10 +106,10 @@ def wait_for_two_active_mds(client1, fs_name, max_wait_time=180, retry_interval=
         print("Timeout: Two active MDS not found within the specified time.")
     ```
     """
-
+    retry_exec_command = retry(CommandFailed, tries=3, delay=30)(client1.exec_command)
     start_time = time.time()
     while time.time() - start_time < max_wait_time:
-        out, rc = client1.exec_command(
+        out, rc = retry_exec_command(
             cmd=f"ceph fs status {fs_name} -f json", client_exec=True
         )
         log.info(out)
