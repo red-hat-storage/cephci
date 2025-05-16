@@ -424,7 +424,7 @@ def config_mirror(rbd_primary, rbd_secondary, is_secondary=False, **kw):
                 # Allow some other namespace to be mirrored to the default namespace of the remote pool
                 enable_config.update({"mode": "init-only"})
                 out = rbd_primary.mirror.pool.enable(**enable_config)
-                log.info("Output of RBD mirror pool enable: " + out)
+                log.info("Output of RBD mirror pool enable: %s", out)
                 enable_namespace_mirroring(
                     rbd_primary, rbd_secondary, poolname, **namespace_config
                 )
@@ -434,7 +434,7 @@ def config_mirror(rbd_primary, rbd_secondary, is_secondary=False, **kw):
                 enable_config.update({"mode": "init-only"})
                 enable_config.update({"cluster": ceph_cluster_secondary})
                 out = rbd_secondary.mirror.pool.enable(**enable_config)
-                log.info("Output of RBD mirror pool enable: " + out)
+                log.info("Output of RBD mirror pool enable: %s", out)
                 enable_namespace_mirroring(
                     rbd_primary, rbd_secondary, poolname, **namespace_config
                 )
