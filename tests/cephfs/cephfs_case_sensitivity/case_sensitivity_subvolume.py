@@ -4,6 +4,7 @@ import traceback
 from cli.ceph.ceph import Ceph
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.exceptions import (
+    CaseSensitivityValidationError,
     CharMapGetError,
     CharMapRemoveError,
     CharMapSetError,
@@ -125,33 +126,6 @@ def validate_svg_unsupported_charmaps():
     except CharMapSetError as e:
         log.info("Passed: Failed as expected with invalid value: {}".format(str(e)))
 
-    # BZ-2358289
-    # try:
-    #     Ceph(client1).fs.sub_volume_group.charmap.set(
-    #         cephfs_vol,
-    #         cephfs_subvol_group1,
-    #         **{
-    #             "normalization": "nd",
-    #         },
-    #     )
-    #     log.error("Charmap set should have failed with invalid value")
-    #     return 1
-    # except CharMapSetError as e:
-    #     log.info("Passed: Failed as expected with invalid value: {}".format(str(e)))
-
-    # try:
-    #     Ceph(client1).fs.sub_volume_group.charmap.set(
-    #         cephfs_vol,
-    #         cephfs_subvol_group1,
-    #         **{
-    #             "normalization": "none",
-    #         },
-    #     )
-    #     log.error("Charmap set should have failed with invalid value")
-    #     return 1
-    # except CharMapSetError as e:
-    #     log.info("Passed: Failed as expected with invalid value: {}".format(str(e)))
-
     get_charmap = Ceph(client1).fs.sub_volume_group.charmap.get(
         cephfs_vol, cephfs_subvol_group1
     )
@@ -231,18 +205,27 @@ def modify_charmap_svg2():
     )
 
 
-def sv1_create_and_mount():
+def sv1_mount(mount_type="fuse"):
     """Create subvolume1 under subvolume group 1 and mount across different clients."""
-    global fuse_mounting_dir, nfs_mounting_dir, smb_mounting_dir, nfs_params, smb_params
+    global fuse_mounting_dir, nfs_mounting_dir, smb_mounting_dir, nfs_params, smb_params, sub_vol_path_1
 
-    Ceph(client1).fs.sub_volume.create(
+    sub_vol_path_1 = common_util.subvolume_get_path(
+        client1,
         cephfs_vol,
-        cephfs_subvol,
-        **{"group-name": cephfs_subvol_group1, "mode": "0777"},
+        subvolume_name=cephfs_subvol,
+        subvolume_group=cephfs_subvol_group1,
     )
 
-    if ibm_build:
+    if ibm_build and mount_type == "smb":
         log.info("*** Mounting via SMB ***")
+
+        log.info("Removing the earmark from subvolume as a pre-requisite")
+        Ceph(client1).fs.sub_volume.earmark.remove(
+            volume=cephfs_vol,
+            subvolume_name=cephfs_subvol,
+            group_name=cephfs_subvol_group1,
+        )
+
         smb_mounting_dir = "/mnt/smb_{}/".format(common_util.generate_mount_dir())
         smb_params = {
             "smb_cluster_id": "smb-sv-1",
@@ -300,45 +283,41 @@ def sv1_create_and_mount():
             cifs_mount_point=smb_mounting_dir,
         )
 
-    sub_vol_path_1 = common_util.subvolume_get_path(
-        client1,
-        cephfs_vol,
-        subvolume_name=cephfs_subvol,
-        subvolume_group=cephfs_subvol_group1,
-    )
+    if mount_type == "fuse":
+        log.info("*** Mounting Subvolume via FUSE ***")
+        fuse_mounting_dir = common_util.setup_fuse_mount(
+            client1,
+            cephfs_vol,
+            mount_path="/mnt/fuse_{}/".format(common_util.generate_mount_dir()),
+            subvolume_name=cephfs_subvol,
+            subvol_path=sub_vol_path_1,
+        )
+        log.info("Mounting dir for FUSE: {}".format(fuse_mounting_dir))
 
-    log.info("*** Mounting Subvolume via FUSE ***")
-    fuse_mounting_dir = common_util.setup_fuse_mount(
-        client1,
-        cephfs_vol,
-        mount_path="/mnt/fuse_{}/".format(common_util.generate_mount_dir()),
-        subvolume_name=cephfs_subvol,
-        subvol_path=sub_vol_path_1,
-    )
-    log.info("Mounting dir for FUSE: {}".format(fuse_mounting_dir))
+    if mount_type == "nfs":
+        log.info("*** Mounting via NFS ***")
 
-    log.info("*** Mounting via NFS ***")
+        mds = fs_util.get_active_mdss(client1, cephfs_vol)
+        active_mds_hostnames = [i.split(".")[1] for i in mds]
+        nfs_server_name = active_mds_hostnames[0]
+        log.debug("Active MDS Hostname: {}".format(nfs_server_name))
 
-    mds = fs_util.get_active_mdss(client1, cephfs_vol)
-    active_mds_hostnames = [i.split(".")[1] for i in mds]
-    nfs_server_name = active_mds_hostnames[0]
-    log.debug("Active MDS Hostname: {}".format(nfs_server_name))
-
-    nfs_params = {
-        "nfs_cluster_name": "nfs-sv-1",
-        "nfs_server_name": nfs_server_name,
-        "binding": "/export_binding_nfs_sv_1",
-    }
-    nfs_mounting_dir = common_util.setup_nfs_mount(
-        client1,
-        cephfs_vol,
-        mount_path="/mnt/nfs_{}/".format(common_util.generate_mount_dir()),
-        subvol_path=sub_vol_path_1,
-        nfs_server_name=nfs_params.get("nfs_server_name"),
-        nfs_cluster_name=nfs_params.get("nfs_cluster_name"),
-        binding=nfs_params.get("binding"),
-    )
-    log.info("NFS Mounting dir: {}".format(nfs_mounting_dir))
+        nfs_params = {
+            "nfs_cluster_name": "nfs-sv-1",
+            "nfs_server_name": nfs_server_name,
+            "binding": "/export_binding_nfs_sv_1",
+        }
+        nfs_mounting_dir = common_util.setup_nfs_mount(
+            client1,
+            cephfs_vol,
+            mount_path="/mnt/nfs_{}/".format(common_util.generate_mount_dir()),
+            subvol_path=sub_vol_path_1,
+            subvolume_name=cephfs_subvol,
+            nfs_server_name=nfs_params.get("nfs_server_name"),
+            nfs_cluster_name=nfs_params.get("nfs_cluster_name"),
+            binding=nfs_params.get("binding"),
+        )
+        log.info("NFS Mounting dir: {}".format(nfs_mounting_dir))
 
 
 def validate_charmap_sv1():
@@ -675,6 +654,25 @@ def remove_charmap_and_validate():
     except CharMapRemoveError as e:
         log.info("Passed: Failed as expected with error: {}".format(str(e)))
 
+    log.info("Removing snapshot, files and re-test")
+    fs_util.remove_snapshot(
+        client1,
+        cephfs_vol,
+        cephfs_subvol,
+        cephfs_snap1,
+        **{"group_name": cephfs_subvol_group1},
+    )
+
+    log.info("Removing files..")
+    client1.exec_command(
+        sudo=True, cmd=f"rm -rf {fuse_mounting_dir}*", long_running=True, timeout=3600
+    )
+
+    Ceph(client1).fs.sub_volume.charmap.remove(
+        cephfs_vol, cephfs_subvol, **{"group-name": cephfs_subvol_group1}
+    )
+    log.info("Charmap removed successfully after deleting the snapshot")
+
     log.info("Removing charmaps from subvolume where dir does not exist")
     Ceph(client1).fs.sub_volume.charmap.remove(cephfs_vol, cephfs_subvol_default)
 
@@ -871,6 +869,166 @@ def test_sv_creation_with_normalization_flags():
     Ceph(client1).fs.sub_volume.rm(cephfs_vol, cephfs_subvol_2)
 
 
+def test_case_sensitive_nfs_smb(mount_type):
+    """Validate case sensitive flags across NFS and SMB."""
+
+    log.debug("FUSE Mouunt dir: {}".format(fuse_mounting_dir))
+    log.debug("NFS Mount dir: {}".format(nfs_mounting_dir))
+    log.debug("SMB Mount dir: {}".format(smb_mounting_dir))
+
+    if mount_type == "nfs":
+        mount_dir = nfs_mounting_dir
+    elif mount_type == "smb":
+        mount_dir = smb_mounting_dir
+
+    log.info("\n ** Validating for case sensitivity as True **\n")
+    Ceph(client1).fs.sub_volume.charmap.set(
+        cephfs_vol,
+        cephfs_subvol,
+        {
+            "casesensitive": "true",
+            "normalization": "nfd",
+        },
+        **{"group-name": cephfs_subvol_group1},
+    )
+
+    get_subvolume = Ceph(client1).fs.sub_volume.info(
+        cephfs_vol, cephfs_subvol, **{"group-name": cephfs_subvol_group1}
+    )
+
+    attr_util.validate_charmap_with_values(
+        extract_case_and_normalization(get_subvolume),
+        {"casesensitive": True, "normalization": "nfd"},
+    )
+
+    log.info("Creating directories with case-sensitive names")
+    folder_name_1 = "step-1"
+    folder_name_2 = "Step-1"
+    dir_path_1 = os.path.join(fuse_mounting_dir, folder_name_1)
+    attr_util.create_directory(client1, dir_path_1)
+    dir_path_2 = os.path.join(fuse_mounting_dir, folder_name_2)
+    attr_util.create_directory(client1, dir_path_2)
+
+    log.info("Validate the name exists in the {} directoy".format(mount_type))
+    if not os.path.isdir(os.path.join(mount_dir, folder_name_1)) and os.path.isdir(
+        os.path.join(mount_dir, folder_name_2)
+    ):
+        raise CaseSensitivityValidationError("Failed: NFS mount is not case sensitive")
+    log.info("Passed: Both directories exist in the {} mount".format(mount_type))
+
+    log.info("Removing the directories")
+    attr_util.delete_directory(client1, dir_path_1, recursive=True)
+    attr_util.delete_directory(client1, dir_path_2, recursive=True)
+
+    log.info("\n ** Validating for case sensitivity as False **\n")
+    Ceph(client1).fs.sub_volume.charmap.set(
+        cephfs_vol,
+        cephfs_subvol,
+        {
+            "casesensitive": "false",
+            "normalization": "nfd",
+        },
+        **{"group-name": cephfs_subvol_group1},
+    )
+
+    get_subvolume = Ceph(client1).fs.sub_volume.info(
+        cephfs_vol, cephfs_subvol, **{"group-name": cephfs_subvol_group1}
+    )
+
+    attr_util.validate_charmap_with_values(
+        extract_case_and_normalization(get_subvolume),
+        {"casesensitive": False, "normalization": "nfd"},
+    )
+
+    attr_util.create_directory(client1, dir_path_1)
+    try:
+        attr_util.create_directory(client1, dir_path_2)
+        log.error("Expected to fail as case sensitivity is False")
+        return 1
+    except Exception as e:
+        log.info("Passed: Failed as expected with error: {}".format(str(e)))
+
+    if not attr_util.check_ls_case_sensitivity(
+        client1, os.path.join(mount_dir, folder_name_1)
+    ):
+        raise CaseSensitivityValidationError(
+            "Failed: Folder does not behave in non-case sensitive manner"
+        )
+
+    log.info("Removing the directories")
+    attr_util.delete_directory(client1, dir_path_1, recursive=True)
+
+    log.info(
+        "Passed: Case sensitivity is working as expected for {} mount".format(
+            mount_type
+        )
+    )
+
+
+def test_normalization_nfs_smb(mount_type):
+    """Validate normalization flags across NFS and SMB."""
+    log.debug("FUSE Mouunt dir: {}".format(fuse_mounting_dir))
+    log.debug("NFS Mount dir: {}".format(nfs_mounting_dir))
+    log.debug("SMB Mount dir: {}".format(smb_mounting_dir))
+
+    if mount_type == "nfs":
+        mount_dir = nfs_mounting_dir
+    elif mount_type == "smb":
+        mount_dir = smb_mounting_dir
+
+    log.info("\n ** Validating for normalization as NFC **\n")
+    Ceph(client1).fs.sub_volume.charmap.set(
+        cephfs_vol,
+        cephfs_subvol,
+        {
+            "casesensitive": "true",
+            "normalization": "nfc",
+        },
+        **{"group-name": cephfs_subvol_group1},
+    )
+
+    get_subvolume = Ceph(client1).fs.sub_volume.info(
+        cephfs_vol, cephfs_subvol, **{"group-name": cephfs_subvol_group1}
+    )
+
+    attr_util.validate_charmap_with_values(
+        extract_case_and_normalization(get_subvolume),
+        {"casesensitive": True, "normalization": "nfc"},
+    )
+
+    log.info("Creating directories with normalization names")
+    unicode_name = attr_util.generate_random_unicode_names()[0]
+    log.info("Unicode Dir Name: %s", unicode_name)
+
+    child_dir_path = os.path.join(mount_dir, "test-1", unicode_name)
+    rel_child_dir = os.path.relpath(child_dir_path, mount_dir)
+
+    # Removing the first slash for the subvolumes
+    actual_child_dir_root = os.path.join(
+        sub_vol_path_1.strip().lstrip("/"), rel_child_dir.split("/")[0]
+    )
+
+    attr_util.create_directory(client1, child_dir_path, force=True)
+    log.debug("Root Child Dir Path: {}".format(actual_child_dir_root))
+    log.debug("Unicode Name: {}".format(unicode_name))
+
+    if not attr_util.validate_normalization(
+        client1,
+        cephfs_vol,
+        actual_child_dir_root,
+        unicode_name,
+        "NFC",
+    ):
+        raise NormalizationValidationError(
+            "Normalization validation failed for {}".format(
+                os.path.join(actual_child_dir_root, unicode_name)
+            )
+        )
+
+    log.info("Removing the directories")
+    attr_util.delete_directory(client1, child_dir_path, recursive=True)
+
+
 def run(ceph_cluster, **kw):
     try:
         test_data = kw.get("test_data")
@@ -958,8 +1116,19 @@ def run(ceph_cluster, **kw):
             "\n  Usecase 5: Create subvolume1 under subvolume group 1 and mount across different clients "
             "\n---------------***************-----------------------------"
         )
+        log.info("Creating subvolume under subvolume group 1")
+        Ceph(client1).fs.sub_volume.create(
+            cephfs_vol,
+            cephfs_subvol,
+            **{"group-name": cephfs_subvol_group1, "mode": "0777"},
+        )
 
-        sv1_create_and_mount()
+        log.info("Declaring global variables for reuse")
+        global fuse_mounting_dir, nfs_mounting_dir, smb_mounting_dir, nfs_params, smb_params
+        fuse_mounting_dir = nfs_mounting_dir = smb_mounting_dir = ""
+
+        log.info("Mounting Subvolume 1 via FUSE")
+        sv1_mount()
 
         log.info(
             "\n"
@@ -1043,6 +1212,49 @@ def run(ceph_cluster, **kw):
 
         test_sv_creation_with_normalization_flags()
 
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------"
+            "\n  Usecase 16: Validate case sensitive and normalization across NFS"
+            "\n---------------***************-----------------------------"
+        )
+
+        sv1_mount(mount_type="nfs")
+
+        log.info("\n ** TC: Validate case sensitive in NFS directories ** ")
+        test_case_sensitive_nfs_smb(mount_type="nfs")
+
+        log.info("\n ** TC: Validate normalization in NFS directories ** ")
+        test_normalization_nfs_smb(mount_type="nfs")
+
+        log.info("Unmounting and cleaning up the NFS mounts")
+        fs_util.client_clean_up(
+            "umount", kernel_clients=[client1], mounting_dir=nfs_mounting_dir
+        )
+
+        fs_util.remove_nfs_export(
+            client1,
+            nfs_params.get("nfs_cluster_name"),
+            nfs_params.get("binding"),
+        )
+
+        fs_util.remove_nfs_cluster(client1, nfs_params.get("nfs_cluster_name"))
+
+        if ibm_build:
+            log.info(
+                "\n"
+                "\n---------------***************-----------------------------"
+                "\n  Usecase 17: Validate case sensitive and normalization across SMB "
+                "\n---------------***************-----------------------------"
+            )
+            sv1_mount(mount_type="smb")
+
+            log.info("\n ** TC: Validate case sensitive in SMB directories ** ")
+            test_case_sensitive_nfs_smb(mount_type="smb")
+
+            log.info("\n ** TC: Validate normalization in SMB directories ** ")
+            test_normalization_nfs_smb(mount_type="smb")
+
         log.info("*** Passed: Completed Subvolume Charmap tests successfully ***")
         return 0
 
@@ -1064,19 +1276,7 @@ def run(ceph_cluster, **kw):
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )
 
-        log.info("Unmounting and cleaning up the NFS mounts")
-        fs_util.client_clean_up(
-            "umount", kernel_clients=[client1], mounting_dir=nfs_mounting_dir
-        )
-
-        fs_util.remove_nfs_export(
-            client1,
-            nfs_params.get("nfs_cluster_name"),
-            nfs_params.get("binding"),
-        )
-
-        fs_util.remove_nfs_cluster(client1, nfs_params.get("nfs_cluster_name"))
-        if ibm_build:
+        if ibm_build and smb_mounting_dir != "":
             log.info("Unmounting and cleaning up the SMB mounts")
             client1.exec_command(
                 sudo=True,
@@ -1098,13 +1298,6 @@ def run(ceph_cluster, **kw):
                 smb_params.get("installer"), smb_params.get("smb_cluster_id")
             )
 
-        log.info("Removing Subvolume and Subvolume Groups")
-        fs_util.remove_snapshot(
-            client1,
-            cephfs_vol,
-            cephfs_subvol,
-            cephfs_snap1,
-            **{"group_name": cephfs_subvol_group1},
-        )
-        Ceph(client1).fs.volume.rm(cephfs_vol, yes_i_really_mean_it=True)
+        log.info("Removing Volume")
+        fs_util.remove_fs(client1, cephfs_vol)
         log.info("Cleanup completed successfully.")
