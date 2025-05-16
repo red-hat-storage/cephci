@@ -486,22 +486,32 @@ def initial_rbd_config(ceph_cluster, **kw):
     for pool_type in pool_types:
         pool_config = getdict(config.get(pool_type))
         is_ec_pool = True if "ec" in pool_type else False
-        if create_pools_and_images(
-            rbd=rbd,
-            multi_pool_config=pool_config,
-            is_ec_pool=is_ec_pool,
-            ceph_version=ceph_version,
-            config=config,
-            client=client,
-            is_secondary=kw.get("is_secondary", False),
-            create_pool_parallely=config[pool_type].get("create_pool_parallely", False),
-            create_image_parallely=config[pool_type].get(
-                "create_image_parallely", False
-            ),
-            do_not_create_image=config[pool_type].get("do_not_create_image", False),
-        ):
+        retry = 0
+        while retry < 5:
+            if create_pools_and_images(
+                rbd=rbd,
+                multi_pool_config=pool_config,
+                is_ec_pool=is_ec_pool,
+                ceph_version=ceph_version,
+                config=config,
+                client=client,
+                is_secondary=kw.get("is_secondary", False),
+                create_pool_parallely=config[pool_type].get(
+                    "create_pool_parallely", False
+                ),
+                create_image_parallely=config[pool_type].get(
+                    "create_image_parallely", False
+                ),
+                do_not_create_image=config[pool_type].get("do_not_create_image", False),
+            ):
+                retry = retry + 1
+            else:
+                break
+
+        if retry == 5:
             log.error(f"RBD configuration failed for {pool_type}")
             return None
+
         # Create a group in case of group level mirroring.
         if kw.get("config").get(pool_type).get("mirror_level") == "group":
             create_mirror_group(rbd, client, pool_type, **kw)
