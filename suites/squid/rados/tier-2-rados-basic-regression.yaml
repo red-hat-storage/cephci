@@ -409,6 +409,7 @@ tests:
         create_ec_pool: true
         create_re_pool: true
       desc: verify autoscaler flags functionality
+      comments: active bug 2361441
 
 # RHOS-d run duration: 1 min
 # env: VM + BM

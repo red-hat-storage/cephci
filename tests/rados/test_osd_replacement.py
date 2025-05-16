@@ -63,8 +63,15 @@ def run(ceph_cluster, **kw):
         log.debug(destroyed_osd)
         if len(destroyed_osd) != 0:
             raise AssertionError("Cluster still has OSD(s) with destroyed status")
-        time.sleep(5)
-        assert rados_obj.fetch_osd_status(_osd_id=osd_id) == "up"
+
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=100)
+        while datetime.datetime.now() < endtime:
+            if rados_obj.fetch_osd_status(_osd_id=osd_id) == "up":
+                break
+            time.sleep(10)
+        else:
+            log.error("OSD.%s is not up even after 100 secs" % osd_id)
+            raise
 
         # set unmanaged to False for OSD
         log.info("Set OSD service unmanaged to false")
