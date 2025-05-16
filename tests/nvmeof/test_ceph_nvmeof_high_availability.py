@@ -298,6 +298,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
 
         # HA failover and failback
+        # import pdb
+        # pdb.set_trace()
         ha.run()
         return 0
     except Exception as err:
