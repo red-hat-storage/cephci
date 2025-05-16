@@ -1,0 +1,291 @@
+# RHCS 8.x sanity test suite for RGW daemon.
+# conf : conf/squid/rgw/tier-0_rgw.yaml
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        git_clone: true
+        git_node_role: rgw
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+# RGW REST sanity tests for bucket operations
+
+  - test:
+      abort-on-fail: true
+      config:
+        service: rgw
+        steps:
+          - config:
+              command: create_bucket_verify
+              args:
+                bucket: rgw-basic-bucket
+                uid: user1
+        verify:
+          - command: create_bucket_verify
+            expected:
+              - rgw-basic-bucket
+      desc: Create a basic bucket and verify it's listed
+      destroy-cluster: false
+      module: test_rgw_rest_sanity.py
+      name: Create and verify basic RGW bucket
+
+  - test:
+      abort-on-fail: true
+      config:
+        service: rgw
+        steps:
+          - config:
+              command: create_bucket_verify
+              args:
+                bucket: rgw-encrypted-bucket
+                uid: user2
+                encryption_state: true
+                encryption_type: SSE-KMS
+                key_id: my-kms-key
+        verify:
+          - command: create_bucket_verify
+            expected:
+              - rgw-encrypted-bucket
+      desc: Create encrypted RGW bucket and verify listing
+      destroy-cluster: false
+      module: test_rgw_rest_sanity.py
+      name: Encrypted bucket creation and listing
+
+  - test:
+      abort-on-fail: true
+      config:
+        service: rgw
+        steps:
+          - config:
+              command: create_bucket_verify
+              args:
+                bucket: rgw-lock-bucket
+                uid: user3
+                lock_enabled: true
+                lock_mode: COMPLIANCE
+                lock_retention_period_days: 30
+        verify:
+          - command: create_bucket_verify
+            expected:
+              - rgw-lock-bucket
+      desc: Create RGW bucket with object lock and verify
+      destroy-cluster: false
+      module: test_rgw_rest_sanity.py
+      name: Create bucket with object lock
+
+  - test:
+      abort-on-fail: true
+      config:
+        service: rgw
+        steps:
+          - config:
+              command: create_bucket_verify
+              args:
+                bucket: rgw-tagged-bucket
+                uid: user4
+                tags: "env=prod,team=qa"
+        verify:
+          - command: create_bucket_verify
+            expected:
+              - rgw-tagged-bucket
+      desc: Create RGW bucket with tags and verify
+      destroy-cluster: false
+      module: test_rgw_rest_sanity.py
+      name: Create bucket with tags
+
+  - test:
+      abort-on-fail: true
+      config:
+        service: rgw
+        steps:
+          - config:
+              command: create_bucket_verify
+              args:
+                bucket: rgw-replication-bucket
+                uid: user5
+                replication: true
+        verify:
+          - command: create_bucket_verify
+            expected:
+              - rgw-replication-bucket
+      desc: Create RGW bucket with replication enabled
+      destroy-cluster: false
+      module: test_rgw_rest_sanity.py
+      name: Create replicated bucket
+
+  - test:
+      abort-on-fail: true
+      config:
+        service: rgw
+        steps:
+          - config:
+              command: create_bucket_verify
+              args:
+                bucket: rgw-policy-bucket
+                uid: user6
+                bucket_policy: readonly
+        verify:
+          - command: create_bucket_verify
+            expected:
+              - rgw-policy-bucket
+      desc: Create RGW bucket with policy and verify
+      destroy-cluster: false
+      module: test_rgw_rest_sanity.py
+      name: Create bucket with policy
+
+  - test:
+      abort-on-fail: true
+      config:
+        service: rgw
+        steps:
+          - config:
+              command: create_bucket_verify
+              args:
+                bucket: rgw-acl-bucket
+                uid: user7
+                canned_acl: public-read
+        verify:
+          - command: create_bucket_verify
+            expected:
+              - rgw-acl-bucket
+      desc: Create RGW bucket with canned ACL and verify
+      destroy-cluster: false
+      module: test_rgw_rest_sanity.py
+      name: Create bucket with canned ACL
+
+  - test:
+      abort-on-fail: true
+      config:
+        service: rgw
+        steps:
+          - config:
+              command: create_bucket_verify
+              args:
+                uid: user8
+        verify:
+          - command: create_bucket_verify
+            expected: []
+      desc: Attempt bucket creation without name (should fail gracefully)
+      destroy-cluster: false
+      module: test_rgw_rest_sanity.py
+      name: Create bucket without name
+
+  - test:
+      abort-on-fail: true
+      config:
+        service: rgw
+        steps:
+          - config:
+              command: create_bucket_verify
+              args:
+                bucket: rgw-bulk1
+                uid: user9
+          - config:
+              command: create_bucket_verify
+              args:
+                bucket: rgw-bulk2
+                uid: user10
+          - config:
+              command: create_bucket_verify
+              args:
+                bucket: rgw-bulk3
+                uid: user11
+        verify:
+          - command: create_bucket_verify
+            expected:
+              - rgw-bulk1
+              - rgw-bulk2
+              - rgw-bulk3
+      desc: Create multiple RGW buckets and verify listing
+      destroy-cluster: false
+      module: test_rgw_rest_sanity.py
+      name: Bulk create buckets and verify
+
+  - test:
+      abort-on-fail: true
+      config:
+        service: rgw
+        steps:
+          - config:
+              command: create_bucket_verify
+              args: {}
+        verify:
+          - command: create_bucket_verify
+            expected: []
+      desc: List buckets when none exist
+      destroy-cluster: false
+      module: test_rgw_rest_sanity.py
+      name: List buckets when none are created
+
