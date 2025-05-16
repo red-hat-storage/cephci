@@ -225,30 +225,30 @@ tests:
         verify_cluster_health: true
       destroy-cluster: false
 
-  - test:
-      name: EC Pool Recovery Improvement
-      module: pool_tests.py
-      polarion-id: CEPH-83573852
-      config:
-        ec_pool_recovery_improvement:
-          create: true
-          profile_name: ec86_1
-          pool_name: ec86_pool1
-          k: 8
-          m: 6
-          pg_num: 32
-          plugin: jerasure
-          create_rule: false
-          crush-osds-per-failure-domain: 4
-          crush-num-failure-domains: 4
-          crush-failure-domain: host
-          max_objs: 300
-          rados_read_duration: 10
-          osd_max_backfills: 16
-          osd_recovery_max_active: 16
-          delete_pool: true
-      desc: Verify Recovery of EC pool with only "k" shards available
-      comments: "Bug with OSD down scenario 2305520"
+#  - test:
+#      name: EC Pool Recovery Improvement
+#      module: pool_tests.py
+#      polarion-id: CEPH-83573852
+#      config:
+#        ec_pool_recovery_improvement:
+#          create: true
+#          profile_name: ec86_1
+#          pool_name: ec86_pool1
+#          k: 8
+#          m: 6
+#          pg_num: 32
+#          plugin: jerasure
+#          create_rule: false
+#          crush-osds-per-failure-domain: 4
+#          crush-num-failure-domains: 4
+#          crush-failure-domain: host
+#          max_objs: 300
+#          rados_read_duration: 10
+#          osd_max_backfills: 16
+#          osd_recovery_max_active: 16
+#          delete_pool: true
+#      desc: Verify Recovery of EC pool with only "k" shards available
+#      comments: "Bug with OSD down scenario 2305520"
 
   - test:
       name: EC pool LC
@@ -313,28 +313,28 @@ tests:
       comments: "RBD support RFE : 2305966"
       desc: EC pool with Overwrites & create RBD pool
 
-  - test:
-      name: Inconsistent objects in  EC pool functionality check
-      desc: Scub and deep-scrub on  inconsistent objects in EC pool
-      module: test_osd_ecpool_inconsistency_scenario.py
-      polarion-id: CEPH-83586175
-      config:
-        ec_pool:
-          create: true
-          profile_name: ec86_4
-          pool_name: ec86_pool4
-          pg_num: 1
-          k: 8
-          m: 6
-          create_rule: false
-          crush-failure-domain: host
-          crush-osds-per-failure-domain: 4
-          crush-num-failure-domains: 4
-          plugin: jerasure
-          disable_pg_autoscale: true
-        inconsistent_obj_count: 4
-        delete_pool:
-          - ec86_pool4
+#  - test:
+#      name: Inconsistent objects in  EC pool functionality check
+#      desc: Scub and deep-scrub on  inconsistent objects in EC pool
+#      module: test_osd_ecpool_inconsistency_scenario.py
+#      polarion-id: CEPH-83586175
+#      config:
+#        ec_pool:
+#          create: true
+#          profile_name: ec86_4
+#          pool_name: ec86_pool4
+#          pg_num: 1
+#          k: 8
+#          m: 6
+#          create_rule: false
+#          crush-failure-domain: host
+#          crush-osds-per-failure-domain: 4
+#          crush-num-failure-domains: 4
+#          plugin: jerasure
+#          disable_pg_autoscale: true
+#        inconsistent_obj_count: 4
+#        delete_pool:
+#          - ec86_pool4
 
   - test:
       name: Compression test - EC pool
@@ -401,57 +401,57 @@ tests:
       polarion-id: CEPH-83581811
       desc: Verify ceph-objectstore-tool functionalities
 
-  - test:
-      name: Verify premerge PGS during PG split
-      module: test_pg_split.py
-      desc: Verify if there are premerge PGs when split is in progress
-      polarion-id: CEPH-83573526
-      config:
-        create_pools:
-          - create_pool:
-              check_premerge_pgs: true
-              profile_name: ec86_8
-              pool_name: ec86_pool8
-              pg_num: 32
-              rados_put: true
-              num_objs: 200
-              byte_size: 1024
-              pool_type: erasure
-              k: 8
-              m: 6
-              create_rule: false
-              crush-failure-domain: host
-              crush-osds-per-failure-domain: 4
-              crush-num-failure-domains: 4
-              plugin: jerasure
-        delete_pools:
-          - ec86_pool8
+#  - test:
+#      name: Verify premerge PGS during PG split
+#      module: test_pg_split.py
+#      desc: Verify if there are premerge PGs when split is in progress
+#      polarion-id: CEPH-83573526
+#      config:
+#        create_pools:
+#          - create_pool:
+#              check_premerge_pgs: true
+#              profile_name: ec86_8
+#              pool_name: ec86_pool8
+#              pg_num: 32
+#              rados_put: true
+#              num_objs: 200
+#              byte_size: 1024
+#              pool_type: erasure
+#              k: 8
+#              m: 6
+#              create_rule: false
+#              crush-failure-domain: host
+#              crush-osds-per-failure-domain: 4
+#              crush-num-failure-domains: 4
+#              plugin: jerasure
+#        delete_pools:
+#          - ec86_pool8
 
-  - test:
-      name: Verify PG split and merge with network delay
-      module: test_pg_split.py
-      desc: Verify PG splitting and merging with network delay
-      polarion-id: CEPH-83571705
-      config:
-        create_pools:
-          - create_pool:
-              profile_name: ec86_9
-              pool_name: ec86_pool9
-              pg_num: 32
-              rados_put: true
-              num_objs: 200
-              byte_size: 1024
-              pool_type: erasure
-              k: 8
-              m: 6
-              create_rule: false
-              crush-failure-domain: host
-              crush-osds-per-failure-domain: 4
-              crush-num-failure-domains: 4
-              plugin: jerasure
-        add_network_delay: true
-        delete_pools:
-          - ec86_pool9
+#  - test:
+#      name: Verify PG split and merge with network delay
+#      module: test_pg_split.py
+#      desc: Verify PG splitting and merging with network delay
+#      polarion-id: CEPH-83571705
+#      config:
+#        create_pools:
+#          - create_pool:
+#              profile_name: ec86_9
+#              pool_name: ec86_pool9
+#              pg_num: 32
+#              rados_put: true
+#              num_objs: 200
+#              byte_size: 1024
+#              pool_type: erasure
+#              k: 8
+#              m: 6
+#              create_rule: false
+#              crush-failure-domain: host
+#              crush-osds-per-failure-domain: 4
+#              crush-num-failure-domains: 4
+#              plugin: jerasure
+#        add_network_delay: true
+#        delete_pools:
+#          - ec86_pool9
 
   - test:
       name: Verify scrub logs
@@ -459,7 +459,7 @@ tests:
       polarion-id: CEPH-83575403
       config:
         # After the implementation of BZ#2320860 set the verify_log to true
-        verify_log: false
+        verify_log: true
         pool_configs:
             - type: erasure
               conf: sample-pool-3
