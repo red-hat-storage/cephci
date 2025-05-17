@@ -18,7 +18,14 @@ log = Log(__name__)
 
 
 def generate_test_case(
-    name, duration, status, err_type=None, err_msg=None, err_text=None, polarion_id=None
+    name,
+    duration,
+    status,
+    err_type=None,
+    err_msg=None,
+    err_text=None,
+    polarion_id=None,
+    testrail_id=None,
 ):
     """Create test case object.
 
@@ -50,6 +57,7 @@ def generate_test_case(
     if polarion_id:
         props = Properties()
         props.append(Property(name="polarion-testcase-id", value=polarion_id))
+        props.append(Property(name="test_id", value=testrail_id))
         test_case.append(props)
 
     return test_case
@@ -87,6 +95,7 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
     for tc in test_cases:
         test_name = tc["name"]
         pol_ids = tc.get("polarion-id")
+        testrail_id = tc.get("testrail-id")
         test_status = tc["status"]
         elapsed_time = tc.get("duration")
         err_type = tc.get("err_type")
@@ -105,6 +114,7 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
                         err_msg=err_msg,
                         err_text=err_text,
                         polarion_id=_id,
+                        testrail_id=testrail_id,
                     )
                 )
         else:
