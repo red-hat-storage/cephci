@@ -1,9 +1,9 @@
 #===============================================================================================
 # Tier-level: 2
-# Test-Suite: tier-2_rbd_upgrade_6x_to_8x.yaml
+# Test-Suite: tier-2_rbd_mirror_upgrade_5x_to_6x.yaml
 #
 # Cluster Configuration:
-#    cephci/conf/squid/rbd/5-node-2-clusters.yaml
+#    cephci/conf/quincy/rbd/5-node-2-clusters.yaml
 #    No of Clusters : 2
 #    Node 2 must to be a client node
 #===============================================================================================
@@ -25,7 +25,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    rhcs-version: 6.1
+                    rhcs-version: 5.3
                     release: "rc"
                     registry-url: registry.redhat.io
                     mon-ip: node1
@@ -53,6 +53,14 @@ tests:
                   service: osd
                   args:
                     all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+                        - node4
         ceph-rbd2:
           config:
             verify_cluster_health: true
@@ -61,7 +69,7 @@ tests:
                   command: bootstrap
                   service: cephadm
                   args:
-                    rhcs-version: 6.1
+                    rhcs-version: 5.3
                     release: "rc"
                     registry-url: registry.redhat.io
                     mon-ip: node1
@@ -89,6 +97,14 @@ tests:
                   service: osd
                   args:
                     all-available-devices: true
+              - config:
+                  command: apply
+                  service: rbd-mirror
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+                        - node4
       desc: RBD Mirror cluster deployment using cephadm
       destroy-clster: false
       module: test_cephadm.py
@@ -106,53 +122,22 @@ tests:
             copy_admin_keyring: true
         ceph-rbd2:
           config:
-            command: add
-            id: client.1
-            node: node2
-            install_packages:
-                - ceph-common
-            copy_admin_keyring: true
+              command: add
+              id: client.1
+              node: node2
+              install_packages:
+                  - ceph-common
+              copy_admin_keyring: true
       desc: Configure the client system 1
       destroy-cluster: false
       module: test_client.py
       name: configure client
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-rbd1:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply
-                  service: rbd-mirror
-                  args:
-                    placement:
-                      nodes:
-                        - node5
-                        - node4
-        ceph-rbd2:
-          config:
-            verify_cluster_health: true
-            steps:
-              - config:
-                  command: apply
-                  service: rbd-mirror
-                  args:
-                    placement:
-                      nodes:
-                        - node5
-                        - node4
-      desc: RBD Mirror daemon deployment using cephadm
-      destroy-clster: false
-      module: test_cephadm.py
-      name: deploy rbd-mirror daemon
 
   - test:
       abort-on-fail: true
-      desc: Multicluster upgrade to latest 8.x ceph version with rbd mirror daemon
+      desc: Multicluster upgrade with rbd mirror daemon
       module: test_cephadm_upgrade.py
-      name: multi-cluster ceph upgrade to latest 8.x ceph
+      name: multi-cluster ceph upgrade
       clusters:
         ceph-rbd1:
           config:

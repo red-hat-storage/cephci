@@ -1,6 +1,6 @@
 #===============================================================================================
 # Tier-level: 3
-# Test-Suite: tier-3_snap_mirroring_regression.yaml
+# Test-Suite: tier-3_snap_mirroring.yaml
 #
 # Cluster Configuration:
 #    cephci/conf/reef/rbd/5-node-2-clusters.yaml

@@ -1,9 +1,9 @@
 #===============================================================================================
 # Tier-level: 3
-# Test-Suite: tier-3_journal_mirroring_regression.yaml
+# Test-Suite: tier-3_journal_mirroring.yaml
 #
 # Cluster Configuration:
-#    cephci/conf/pacific/rbd/tier-1_rbd_mirror.yaml
+#    cephci/conf/reef/rbd/5-node-2-clusters.yaml
 #    No of Clusters : 2
 #    Node 2 must to be a client node
 #===============================================================================================
@@ -172,7 +172,7 @@ tests:
               num_images: 1
               size: 2G
               mode: pool # compulsory argument if mirroring needs to be setup
-              journal_delay:
+              journal_delay: #in seconds
                 - "600"
               io_size: 200M
             ec_pool_config:
