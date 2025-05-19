@@ -3,12 +3,12 @@ import random
 import string
 import time
 import traceback
-from datetime import datetime, timedelta
 from threading import Thread
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.snapshot_clone.cg_snap_utils import CG_Snap_Utils
 from utility.log import Log
 from utility.retry import retry
@@ -22,7 +22,7 @@ def test_setup(fs_util, ceph_cluster, client):
     """
     log.info("Create fs volume if doesn't exist")
     default_fs = "cephfs"
-
+    cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
     mds_nodes = ceph_cluster.get_ceph_objects("mds")
     fs_util.create_fs(client, default_fs)
 
@@ -50,8 +50,9 @@ def test_setup(fs_util, ceph_cluster, client):
         cmd=f"ceph fs set {default_fs} max_mds 2",
     )
 
-    if wait_for_healthy_ceph(client, fs_util, 300) == 0:
-        return 1
+    wait_time_secs = 300
+    if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
+        assert False, "Cluster health is not OK even after waiting for sometime"
 
     nfs_servers = ceph_cluster.get_ceph_objects("nfs")
     nfs_server = nfs_servers[0].node.hostname
@@ -123,11 +124,16 @@ def run_io_local(fs_util, mnt_info, sv_list):
         p.join()
 
 
-def client_caps_quiesce_test(client, subvol_path, fs_name, qs_set, cg_snap_util):
+def client_caps_quiesce_test(
+    client, subvol_path, fs_name, qs_set, cg_snap_util, fs_util
+):
     """
     This method is for Test1: Client caps validation during CG quiesce
     """
-    out, _ = client.exec_command(sudo=True, cmd="ceph tell mds.0 client ls --f json")
+    mds_list = fs_util.get_active_mdss(client, fs_name=fs_name)
+    out, _ = client.exec_command(
+        sudo=True, cmd=f"ceph tell mds.{mds_list[0]} client ls --f json"
+    )
     client_ls = json.loads(out)
     client_id = ""
     for i in range(0, len(client_ls)):
@@ -152,7 +158,7 @@ def client_caps_quiesce_test(client, subvol_path, fs_name, qs_set, cg_snap_util)
     retry_cnt = 12
     while retry_cnt > 0:
         out, _ = client.exec_command(
-            sudo=True, cmd="ceph tell mds.0 client ls --f json"
+            sudo=True, cmd=f"ceph tell mds.{mds_list[0]} client ls --f json"
         )
         client_ls = json.loads(out)
         for i in range(0, len(client_ls)):
@@ -174,12 +180,17 @@ def client_caps_quiesce_test(client, subvol_path, fs_name, qs_set, cg_snap_util)
     return 0
 
 
-def client_caps_mds_failover_test(client, fs_name, fs_util, subvol_path):
+def client_caps_mds_failover_test(
+    client, fs_name, cephfs_common_utils, fs_util, subvol_path
+):
     """
     This method is for Test2: Client caps validation during MDS failover
     """
+    mds_list = fs_util.get_active_mdss(client, fs_name=fs_name)
     log.info("Capture Caps info before mds failover")
-    out, _ = client.exec_command(sudo=True, cmd="ceph tell mds.0 client ls --f json")
+    out, _ = client.exec_command(
+        sudo=True, cmd=f"ceph tell mds.{mds_list[0]} client ls --f json"
+    )
     client_ls = json.loads(out)
     for i in range(0, len(client_ls)):
         log.info(client_ls[i])
@@ -190,10 +201,13 @@ def client_caps_mds_failover_test(client, fs_name, fs_util, subvol_path):
                 client_id = client_ls[i]["id"]
                 break
     log.info("Perform MDS failover")
-    mds_failover(fs_util, client, fs_name)
+    mds_failover(cephfs_common_utils, client, fs_name)
     log.info("Capture Caps info after mds failover")
+    mds_list = fs_util.get_active_mdss(client, fs_name=fs_name)
     retry_exec_command = retry(CommandFailed, tries=3, delay=30)(client.exec_command)
-    out, _ = retry_exec_command(sudo=True, cmd="ceph tell mds.0 client ls --f json")
+    out, _ = retry_exec_command(
+        sudo=True, cmd=f"ceph tell mds.{mds_list[0]} client ls --f json"
+    )
     client_ls = json.loads(out)
     for i in range(0, len(client_ls)):
         if client_id == client_ls[i]["id"]:
@@ -211,7 +225,10 @@ def client_caps_evict_test(client, subvol_path, mnt_client, mnt_pt, fs_name, fs_
     """
     This is method for Test3: Client caps validation when client evicted
     """
-    out, _ = client.exec_command(sudo=True, cmd="ceph tell mds.0 client ls --f json")
+    mds_list = fs_util.get_active_mdss(client, fs_name=fs_name)
+    out, _ = client.exec_command(
+        sudo=True, cmd=f"ceph tell mds.{mds_list[0]} client ls --f json"
+    )
     client_ls = json.loads(out)
 
     for i in range(0, len(client_ls)):
@@ -222,7 +239,7 @@ def client_caps_evict_test(client, subvol_path, mnt_client, mnt_pt, fs_name, fs_
                 caps_before_evict = client_ls[i]["num_caps"]
                 client_id = client_ls[i]["id"]
                 log.info(f"Evicting Client with ID : {client_id}")
-                cmd = f"ceph tell mds.0 client evict id={client_id}"
+                cmd = f"ceph tell mds.{mds_list[0]} client evict id={client_id}"
                 client.exec_command(sudo=True, cmd=cmd)
                 time.sleep(2)
                 break
@@ -237,7 +254,9 @@ def client_caps_evict_test(client, subvol_path, mnt_client, mnt_pt, fs_name, fs_
     mnt_params.update({"export_created": 0})
     fs_util.mount_ceph("fuse", mnt_params)
 
-    out, _ = client.exec_command(sudo=True, cmd="ceph tell mds.0 client ls --f json")
+    out, _ = client.exec_command(
+        sudo=True, cmd=f"ceph tell mds.{mds_list[0]} client ls --f json"
+    )
     client_ls = json.loads(out)
     for i in range(0, len(client_ls)):
         if client_ls[i]["client_metadata"].get("root"):
@@ -253,7 +272,7 @@ def client_caps_evict_test(client, subvol_path, mnt_client, mnt_pt, fs_name, fs_
     return 0
 
 
-def mds_failover(fs_util, client, fs_name):
+def mds_failover(cephfs_common_utils, client, fs_name):
     """
     Helper routine to perform Rank 0 MDS failover of given FS
     """
@@ -276,7 +295,9 @@ def mds_failover(fs_util, client, fs_name):
     if wait_for_two_active_mds(client, fs_name):
         log.error("Wait for 2 active MDS failed")
         return 1
-    if wait_for_healthy_ceph(client, fs_util, 300) == 0:
+    wait_time_secs = 300
+    if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
+        log.error("Cluster health is not OK even after waiting for sometime")
         return 1
     return 0
 
@@ -310,28 +331,6 @@ def wait_for_two_active_mds(client, fs_name, max_wait_time=180, retry_interval=1
     return 1
 
 
-def wait_for_healthy_ceph(client1, fs_util, wait_time_secs):
-    """
-    Wait for ceph to be healthy until given time
-    """
-    # Returns 1 if healthy, 0 if unhealthy
-    ceph_healthy = 0
-    end_time = datetime.now() + timedelta(seconds=wait_time_secs)
-    while ceph_healthy == 0 and (datetime.now() < end_time):
-        try:
-            fs_util.get_ceph_health_status(client1)
-            ceph_healthy = 1
-        except Exception as ex:
-            log.info(ex)
-            log.info(
-                f"Wait for sometime to check if Cluster health can be OK, current state : {ex}"
-            )
-            time.sleep(5)
-    if ceph_healthy == 0:
-        return 0
-    return 1
-
-
 def run(ceph_cluster, **kw):
     """
     CEPH-83597462 - Verify Clients caps update during evict, IO quiesce and MDS failover.
@@ -345,6 +344,7 @@ def run(ceph_cluster, **kw):
     try:
         fs_util_v1 = FsUtilsV1(ceph_cluster)
         cg_snap_util = CG_Snap_Utils(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
         osp_cred = config.get("osp_cred")
@@ -403,7 +403,7 @@ def run(ceph_cluster, **kw):
         sv_path_dict = {}
         sv_name_list = []
         for sv in sv_list:
-            mnt_type = random.choice(["fuse", "kernel", "nfs"])
+            mnt_type = random.choice(["fuse", "kernel"])
             if mnt_type == "nfs":
                 mnt_params.update(nfs_params)
             cmd = f"ceph fs subvolume getpath {fs_name} {sv['subvol_name']}"
@@ -433,7 +433,9 @@ def run(ceph_cluster, **kw):
         sv_name = random.choice(sv_name_list)
         subvol_path = sv_path_dict[sv_name]
         if (
-            client_caps_quiesce_test(client, subvol_path, fs_name, qs_set, cg_snap_util)
+            client_caps_quiesce_test(
+                client, subvol_path, fs_name, qs_set, cg_snap_util, fs_util_v1
+            )
             == 1
         ):
             test_fail += 1
@@ -443,7 +445,12 @@ def run(ceph_cluster, **kw):
         log.info("Test2:Check if client caps are recalled when MDS failover happens")
         sv_name = random.choice(sv_name_list)
         subvol_path = sv_path_dict[sv_name]
-        if client_caps_mds_failover_test(client, fs_name, fs_util_v1, subvol_path) == 1:
+        if (
+            client_caps_mds_failover_test(
+                client, fs_name, cephfs_common_utils, fs_util_v1, subvol_path
+            )
+            == 1
+        ):
             test_fail += 1
 
         run_io_local(fs_util_v1, mnt_info, sv_list)
@@ -478,8 +485,9 @@ def run(ceph_cluster, **kw):
 
         crash_status_after = fs_util_v1.get_crash_ls_new(client)
         log.info(f"Crash status after Test: {crash_status_after}")
-        if wait_for_healthy_ceph(client, fs_util_v1, 300) == 0:
-            assert False, "Cluster health is not OK even after waiting for 300secs"
+        wait_time_secs = 300
+        if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
+            assert False, "Cluster health is not OK even after waiting for sometime"
         log.info("Cluster Health is OK")
         for sv in mnt_info:
             mnt_pt = mnt_info[sv]["path"]

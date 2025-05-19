@@ -118,7 +118,7 @@ def run(ceph_cluster, **kw):
         for out in out_list:
             if "session_timeout" in out:
                 session_timeout = out.split("\t")[1]
-
+        out, rc = client1.exec_command(sudo=True, cmd="yum install -y net-tools")
         client1.upload_file(
             sudo=True,
             src="tests/cephfs/cephfs_bugs/network_disconnect.sh",
@@ -171,31 +171,33 @@ def run(ceph_cluster, **kw):
         log.info(out)
         if "file_srcdir" not in out:
             log.error("Client mountpoint is NOT active, session could be evicted")
+            for mds in mds_list:
+                out, _ = client1.exec_command(
+                    sudo=True, cmd=f"ceph tell mds.{mds} session ls --format json"
+                )
+                out = json.loads(out)
+                for session_item in out:
+                    if client_ip_addr in session_item["entity"]["addr"]["addr"]:
+                        log.info(f"Client session details for debugging:{session_item}")
+            return 1
+
+        log.info("Verify client sessions were not evicted")
+        for mds in mds_list:
             out, _ = client1.exec_command(
-                sudo=True, cmd="ceph tell mds.0 session ls --format json"
+                sudo=True, cmd=f"ceph tell mds.{mds} session ls --format json"
             )
             out = json.loads(out)
             for session_item in out:
                 if client_ip_addr in session_item["entity"]["addr"]["addr"]:
-                    log.info(f"Client session details for debugging:{session_item}")
-            return 1
-
-        log.info("Verify client sessions were not evicted")
-        out, _ = client1.exec_command(
-            sudo=True, cmd="ceph tell mds.0 session ls --format json"
-        )
-        out = json.loads(out)
-        for session_item in out:
-            if client_ip_addr in session_item["entity"]["addr"]["addr"]:
-                if session_item["state"] == "open":
-                    log.info(
-                        f"Client session {session_item['id']} is open, not evicted, as expected"
-                    )
-                else:
-                    log.error(
-                        f"Client session {session_item['id']} is evicted:{session_item}"
-                    )
-                    return 1
+                    if session_item["state"] == "open":
+                        log.info(
+                            f"Client session {session_item['id']} is open, not evicted, as expected"
+                        )
+                    else:
+                        log.error(
+                            f"Client session {session_item['id']} is evicted:{session_item}"
+                        )
+                        return 1
 
         return 0
 

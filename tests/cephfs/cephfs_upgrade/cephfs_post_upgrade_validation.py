@@ -1207,13 +1207,14 @@ def run(ceph_cluster, **kw):
         if test_status == 1:
             assert False, "CG quiesce post upgrade validation failed"
         log.info(" CG quiesce post upgrade validation succeeded \n")
-        # Upgrade all clients
-        for client in clients:
-            cmd = "yum install -y --nogpgcheck ceph-common ceph-fuse"
-            client.exec_command(sudo=True, cmd=cmd)
         return 0
 
     except Exception as e:
         log.info(traceback.format_exc())
         log.error(e)
         return 1
+    finally:
+        log.info("Upgrade all clients")
+        for client in clients:
+            cmd = "yum upgrade -y --nogpgcheck ceph-common ceph-fuse"
+            client.exec_command(sudo=True, cmd=cmd)
