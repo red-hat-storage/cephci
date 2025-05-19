@@ -24,9 +24,7 @@ def verify_group_mirroring_state(rbd, mirror_state, **group_kw):
     if mirror_state == "Enabled":
         (group_info, err) = rbd.group.info(**group_kw, format="json")
         if err:
-            log.error(
-                "Error in group info for group: " + group_kw["group"] + " err: " + err
-            )
+            log.error("Error in group info: " + err)
             return False
         if json.loads(group_info)["mirroring"]["state"] == "enabled":
             return True
@@ -43,9 +41,7 @@ def verify_group_image_list(rbd, **kw):
     """
     (group_image_list, err) = rbd.group.image.list(**kw, format="json")
     if err:
-        log.error(
-            "Error in group image list for group: " + kw["group"] + " err: " + err
-        )
+        log.error("Error in group image list: " + err)
         return False
     for spec in list(json.loads(group_image_list)):
         image_spec = spec["pool"] + "/" + spec["image"]
@@ -63,12 +59,7 @@ def enable_group_mirroring_and_verify_state(rbd, **group_kw):
     """
     (mirror_group_enable_status, err) = rbd.mirror.group.enable(**group_kw)
     if err:
-        raise Exception(
-            "Error in group mirror enable for group: "
-            + group_kw["group"]
-            + " err: "
-            + err
-        )
+        raise Exception("Error in group mirror enable: " + err)
     if (
         "Mirroring enabled" in mirror_group_enable_status
         and verify_group_mirroring_state(rbd, "Enabled", **group_kw)
@@ -87,12 +78,7 @@ def disable_group_mirroring_and_verify_state(rbd, **group_kw):
     """
     (group_mirroring_disable_status, err) = rbd.mirror.group.disable(**group_kw)
     if err:
-        raise Exception(
-            "Error in group mirror disable for group: "
-            + group_kw["group"]
-            + " err: "
-            + err
-        )
+        raise Exception("Error in group mirror disable: " + err)
     if (
         "Mirroring disabled" in group_mirroring_disable_status
         and verify_group_mirroring_state(rbd, "Disabled", **group_kw)
@@ -135,12 +121,7 @@ def remove_group_image_and_verify(rbd, **kw):
     """
     (group_image_remove_status, err) = rbd.group.image.rm(**kw)
     if err:
-        raise Exception(
-            "Error in group image remove for group: "
-            + kw["group-spec"]
-            + " err: "
-            + err
-        )
+        raise Exception("Error in group image remove: " + err)
     if (
         "cannot remove image from mirror enabled group" in group_image_remove_status
         and not verify_group_image_list(rbd, **kw)
@@ -155,6 +136,8 @@ def group_mirror_status_verify(
     rbd_secondary,
     primary_state,
     secondary_state,
+    *,
+    global_id=False,
     **group_kw
 ):
     """
@@ -167,9 +150,12 @@ def group_mirror_status_verify(
         rbd_secondary: rbd object of secondary cluster
         primary_state: mirroring state on primary group. for e.g 'up+stopped'
         secondary_state: mirroring state on secondary group for e.g 'up+replaying'
+        global_id: True if global ids of both clusters need to be verified
         **group_kw: Group spec <pool_name>/<group_name>
     """
-    if "namespace" in group_kw.keys():
+    if "group-spec" in group_kw.keys():
+        groupspec = group_kw["group-spec"]
+    elif "namespace" in group_kw.keys():
         groupspec = (
             group_kw["pool"] + "/" + group_kw["namespace"] + "/" + group_kw["group"]
         )
@@ -187,36 +173,30 @@ def group_mirror_status_verify(
         groupspec=groupspec,
         state_pattern=secondary_state,
     )
-    (group_mirror_status, err) = rbd_primary.mirror.group.status(
-        **group_kw, format="json"
-    )
-    if err:
-        raise Exception(
-            "Error in group mirror status for group: "
-            + group_kw["group"]
-            + " err: "
-            + err
+    if global_id is True:
+        (group_mirror_status, err) = rbd_primary.mirror.group.status(
+            **group_kw, format="json"
         )
-    log.info("Primary cluster group mirorr status: " + str(group_mirror_status))
-    primary_global_id = json.loads(group_mirror_status)["global_id"]
+        if err:
+            raise Exception(
+                "Error in group mirror status for group: " + groupspec + " err: " + err
+            )
+        log.info("Primary cluster group mirror status: " + str(group_mirror_status))
+        primary_global_id = json.loads(group_mirror_status)["global_id"]
 
-    (group_mirror_status, err) = rbd_secondary.mirror.group.status(
-        **group_kw, format="json"
-    )
-    if err:
-        raise Exception(
-            "Error in group mirror status for group: "
-            + group_kw["group"]
-            + " err: "
-            + err
+        (group_mirror_status, err) = rbd_secondary.mirror.group.status(
+            **group_kw, format="json"
         )
-    log.info("Secondary cluster group mirorr status: " + str(group_mirror_status))
-    secondary_global_id = json.loads(group_mirror_status)["global_id"]
-
-    if primary_global_id == secondary_global_id:
-        log.info("Global ids of both the clusters matched")
-    else:
-        raise Exception("Group Mirror status is not as expected")
+        if err:
+            raise Exception(
+                "Error in group mirror status for group: " + groupspec + " err: " + err
+            )
+        log.info("Secondary cluster group mirror status: " + str(group_mirror_status))
+        secondary_global_id = json.loads(group_mirror_status)["global_id"]
+        if primary_global_id == secondary_global_id:
+            log.info("Global ids of both the clusters matched")
+        else:
+            raise Exception("Global ids of both the clusters are not same")
 
 
 def wait_for_idle(rbd, **group_kw):
