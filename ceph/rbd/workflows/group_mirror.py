@@ -155,6 +155,8 @@ def group_mirror_status_verify(
     rbd_secondary,
     primary_state,
     secondary_state,
+    *,
+    global_id=False,
     **group_kw
 ):
     """
@@ -167,9 +169,12 @@ def group_mirror_status_verify(
         rbd_secondary: rbd object of secondary cluster
         primary_state: mirroring state on primary group. for e.g 'up+stopped'
         secondary_state: mirroring state on secondary group for e.g 'up+replaying'
+        global_id: True if global ids of both clusters need to be verified
         **group_kw: Group spec <pool_name>/<group_name>
     """
-    if "namespace" in group_kw.keys():
+    if "group-spec" in group_kw.keys():
+        groupspec = group_kw["group-spec"]
+    elif "namespace" in group_kw.keys():
         groupspec = (
             group_kw["pool"] + "/" + group_kw["namespace"] + "/" + group_kw["group"]
         )
@@ -187,36 +192,30 @@ def group_mirror_status_verify(
         groupspec=groupspec,
         state_pattern=secondary_state,
     )
-    (group_mirror_status, err) = rbd_primary.mirror.group.status(
-        **group_kw, format="json"
-    )
-    if err:
-        raise Exception(
-            "Error in group mirror status for group: "
-            + group_kw["group"]
-            + " err: "
-            + err
+    if global_id is True:
+        (group_mirror_status, err) = rbd_primary.mirror.group.status(
+            **group_kw, format="json"
         )
-    log.info("Primary cluster group mirorr status: " + str(group_mirror_status))
-    primary_global_id = json.loads(group_mirror_status)["global_id"]
+        if err:
+            raise Exception(
+                "Error in group mirror status for group: " + groupspec + " err: " + err
+            )
+        log.info("Primary cluster group mirror status: " + str(group_mirror_status))
+        primary_global_id = json.loads(group_mirror_status)["global_id"]
 
-    (group_mirror_status, err) = rbd_secondary.mirror.group.status(
-        **group_kw, format="json"
-    )
-    if err:
-        raise Exception(
-            "Error in group mirror status for group: "
-            + group_kw["group"]
-            + " err: "
-            + err
+        (group_mirror_status, err) = rbd_secondary.mirror.group.status(
+            **group_kw, format="json"
         )
-    log.info("Secondary cluster group mirorr status: " + str(group_mirror_status))
-    secondary_global_id = json.loads(group_mirror_status)["global_id"]
-
-    if primary_global_id == secondary_global_id:
-        log.info("Global ids of both the clusters matched")
-    else:
-        raise Exception("Group Mirror status is not as expected")
+        if err:
+            raise Exception(
+                "Error in group mirror status for group: " + groupspec + " err: " + err
+            )
+        log.info("Secondary cluster group mirror status: " + str(group_mirror_status))
+        secondary_global_id = json.loads(group_mirror_status)["global_id"]
+        if primary_global_id == secondary_global_id:
+            log.info("Global ids of both the clusters matched")
+        else:
+            raise Exception("Global ids of both the clusters are not same")
 
 
 def wait_for_idle(rbd, **group_kw):

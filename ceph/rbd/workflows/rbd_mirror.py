@@ -112,7 +112,7 @@ def wait_for_status(rbd, cluster_name, **kw):
                     "state",
                     json.loads(
                         rbd.mirror.group.status(
-                            **{"groupspec": kw.get("groupspec"), "format": "json"}
+                            **{"group-spec": kw.get("groupspec"), "format": "json"}
                         )[0]
                     ),
                 )
