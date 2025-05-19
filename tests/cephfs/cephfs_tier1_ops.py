@@ -2,8 +2,10 @@ import random
 import string
 import traceback
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -72,8 +74,9 @@ def run(ceph_cluster, **kw):
         fs_util.auth_list(clients)
         default_fs = "cephfs"
         fs_details = fs_util.get_fs_info(clients[0], default_fs)
+        retry_create_fs = retry(CommandFailed, tries=3, delay=30)(fs_util.create_fs)
         if not fs_details:
-            fs_util.create_fs(clients[0], default_fs)
+            retry_create_fs(clients[0], default_fs)
 
         if build.startswith("4"):
             # create EC pool
