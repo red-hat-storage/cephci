@@ -1,9 +1,9 @@
 #===============================================================================================
 # Tier-level: 3
-# Test-Suite: tier-3_journal_mirroring_regression.yaml
+# Test-Suite: tier-3_journal_mirroring.yaml
 #
 # Cluster Configuration:
-#    cephci/conf/quincy/rbd/5-node-2-clusters.yaml
+#    cephci/conf/pacific/rbd/tier-1_rbd_mirror.yaml
 #    No of Clusters : 2
 #    Node 2 must to be a client node
 #===============================================================================================

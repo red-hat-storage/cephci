@@ -1,6 +1,6 @@
 #===============================================================================================
 # Tier-level: 2
-# Test-Suite: tier-2_rbd_upgrade_7x_to_8x.yaml
+# Test-Suite: tier-2_rbd_mirror_upgrade_7x_to_8x.yaml
 #
 # Cluster Configuration:
 #    cephci/conf/squid/rbd/5-node-2-clusters.yaml
