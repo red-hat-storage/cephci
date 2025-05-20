@@ -146,7 +146,7 @@ def run(ceph_cluster, **kw):
 
         log.info("Setup Ephemeral Random pinning")
         cmd = "ceph config set mds mds_export_ephemeral_random true;"
-        cmd += "ceph config set mds mds_export_ephemeral_random_max 0.75"
+        cmd += "ceph config set mds mds_export_ephemeral_random_max 0.1"
         client1.exec_command(sudo=True, cmd=cmd)
 
         log.info("Get default fragmentation size on cluster")
@@ -163,9 +163,16 @@ def run(ceph_cluster, **kw):
         new_frag_size = out.strip()
         log.info(f"FS fragmentation size:{new_frag_size}")
 
-        fs_details = fs_util_v1.get_fs_info(client1, fs_name=default_fs)
-        if not fs_details:
-            fs_util_v1.create_fs(client1, default_fs)
+        log.info("Remove existing FS and create new FS")
+        out, rc = client1.exec_command(sudo=True, cmd="ceph fs ls --format json-pretty")
+        all_fs_info = json.loads(out)
+        for fs in all_fs_info:
+            fs_util_v1.remove_fs(client1, fs["name"])
+        time.sleep(10)
+        fs_util_v1.create_fs(client1, default_fs)
+        cmd = f'sleep 10;ceph orch apply mds {default_fs} --placement="label:mds";'
+        cmd += f"sleep 10;ceph fs set {default_fs} max_mds 2"
+        out, rc = client1.exec_command(sudo=True, cmd=cmd)
 
         out, rc = client1.exec_command(
             sudo=True, cmd="ceph config set mds debug_mds_quiesce 20"
@@ -2997,8 +3004,12 @@ def cg_mds_failover(fs_util, client, fs_name, repeat_cnt=1):
         )
         log.info(out)
         output = json.loads(out)
+        st1 = "standby"
+        st2 = "standby-replay"
         standby_mds = [
-            mds["name"] for mds in output["mdsmap"] if mds["state"] == "standby"
+            mds["name"]
+            for mds in output["mdsmap"]
+            if (mds["state"] == st1) or (mds["state"] == st2)
         ]
         sample_cnt = min(3, len(standby_mds))
         mds_to_fail = random.sample(mds_ls, sample_cnt)

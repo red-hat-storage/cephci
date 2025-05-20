@@ -186,6 +186,19 @@ def run(ceph_cluster, **kw):
             if "multi_fs" in test_case_name:
                 log.info("Verify that setup has atleast 2 Ceph FS")
                 total_fs = fs_util_v1.get_fs_details(client1)
+                fs_cnt = len(total_fs)
+                log.info(total_fs)
+                log.info(f"fs_cnt:{fs_cnt}")
+                for i in range(0, fs_cnt):
+                    fs_name = total_fs[i]["name"]
+                    cmd = f"ceph fs status {fs_name}"
+                    out, _ = client1.exec_command(
+                        sudo=True,
+                        cmd=cmd,
+                    )
+                    if "failed" in str(out):
+                        fs_to_rm = i
+                total_fs.pop(fs_to_rm)
                 if len(total_fs) == 1:
                     log.info("We need atleast two ceph FS to perform this test")
                     for i in range(1, 3):
@@ -827,6 +840,17 @@ def snap_sched_multi_fs(snap_test_params):
     mnt_path_fs = []
     log.info("Perform ceph fs ls to get the list")
     total_fs = fs_util.get_fs_details(client)
+    fs_cnt = len(total_fs)
+    for i in range(0, fs_cnt):
+        fs_name = total_fs[i]["name"]
+        cmd = f"ceph fs status {fs_name}"
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+        )
+        if "failed" in str(out):
+            fs_to_rm = i
+    total_fs.pop(fs_to_rm)
     log.info(total_fs)
     log.info(
         "Verify fs-name is prompted when snap-schedule is tried to create without fs-name"

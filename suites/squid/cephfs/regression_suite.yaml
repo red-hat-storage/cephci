@@ -677,11 +677,20 @@ tests:
       desc: Tests the file and byte attributes on the directory
       abort-on-fail: false
   - test:
-      name: Concurrent-clone-test
-      module: snapshot_clone.clone_threads.py
-      polarion-id: CEPH-83574592
-      desc: Concurrent-clone-test
+      name: snapshot_flag
+      module: snapshot_clone.snapshot_flag.py
+      polarion-id: CEPH-83573415
+      desc: Test to validate the cli - ceph fs set <fs_name> allow_new_snaps true
       abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "Enable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-enable-logs
+      config:
+       ENABLE_LOGS : 1
+       daemon_list : ['mds','mgr','client']
+       daemon_dbg_level : {'mds':10,'mgr':10,'client':10}
   - test:
       name: Clone_status
       module: snapshot_clone.clone_status.py
@@ -701,16 +710,42 @@ tests:
       desc: Retains the snapshots after deletig the subvolume
       abort-on-fail: false
   - test:
-      name: snapshot_flag
-      module: snapshot_clone.snapshot_flag.py
-      polarion-id: CEPH-83573415
-      desc: Test to validate the cli - ceph fs set <fs_name> allow_new_snaps true
-      abort-on-fail: false
-  - test:
       name: Remove_Subvolume_clone
       module: snapshot_clone.clone_remove_subvol.py
       polarion-id: CEPH-83573499
       desc: Clone a subvolume and remove the orginal volume and verify the contents in subvolume
+      abort-on-fail: false
+  - test:
+      name: subvolume_full_vol
+      module: snapshot_clone.clone_subvolume_full_vol.py
+      polarion-id: CEPH-83574724
+      desc: Clone a subvolume with full data in the subvolume
+      abort-on-fail: false
+  - test:
+      name: cancel the subvolume snapshot cloning
+      module: snapshot_clone.clone_cancel_in_progress.py
+      polarion-id: CEPH-83574681
+      desc: Try to cancel the snapshot while clonning is operating
+      abort-on-fail: false
+  - test:
+      name: Clone_attributes
+      module: snapshot_clone.clone_attributes.py
+      polarion-id: CEPH-83573524
+      desc: Retains the snapshots after deletig the subvolume
+      abort-on-fail: false
+  - test:
+      abort-on-fail: false
+      desc: "Disable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-disable-logs
+      config:
+       DISABLE_LOGS : 1
+       daemon_list : ['mds','mgr','client']
+  - test:
+      name: Concurrent-clone-test
+      module: snapshot_clone.clone_threads.py
+      polarion-id: CEPH-83574592
+      desc: Concurrent-clone-test
       abort-on-fail: false
   - test:
       name: Test Max Snapshot limit
@@ -731,12 +766,6 @@ tests:
       desc: Try writing the data to snap directory
       abort-on-fail: false
   - test:
-      name: Clone_attributes
-      module: snapshot_clone.clone_attributes.py
-      polarion-id: CEPH-83573524
-      desc: Retains the snapshots after deletig the subvolume
-      abort-on-fail: false
-  - test:
       name: cross_platform_snaps
       module: snapshot_clone.cross_platform_snaps.py
       polarion-id: CEPH-11319
@@ -755,22 +784,10 @@ tests:
       desc: Create a Snapshot, reboot the node and rollback the snapshot
       abort-on-fail: false
   - test:
-      name: subvolume_full_vol
-      module: snapshot_clone.clone_subvolume_full_vol.py
-      polarion-id: CEPH-83574724
-      desc: Clone a subvolume with full data in the subvolume
-      abort-on-fail: false
-  - test:
       name: snapshot_metadata
       module: snapshot_clone.snapshot_metadata.py
       polarion-id: CEPH-83575038
       desc: verify CRUD operation on metadata of subvolume's snapshot
-      abort-on-fail: false
-  - test:
-      name: cancel the subvolume snapshot clonning
-      module: snapshot_clone.clone_cancel_in_progress.py
-      polarion-id: CEPH-83574681
-      desc: Try to cancel the snapshot while clonning is operating
       abort-on-fail: false
   - test:
       name: snap_schedule_test
