@@ -102,7 +102,7 @@ class Group(Cli):
             See rbd help mirror group status for more supported keys
         """
         kw_copy = deepcopy(kw)
-        group_spec = kw_copy.pop("groupspec", "")
+        group_spec = kw_copy.pop("group-spec", "")
         cmd = f"{self.base_cmd} status {group_spec} {build_cmd_from_args(**kw_copy)}"
 
         return self.execute_as_sudo(cmd=cmd)
