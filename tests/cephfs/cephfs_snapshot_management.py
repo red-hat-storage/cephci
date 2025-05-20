@@ -3,6 +3,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -81,11 +82,13 @@ def run(ceph_cluster, **kw):
         )
         log.info("Make directory fot mounting")
         client1.exec_command(sudo=True, cmd="mkdir /mnt/mycephfs1")
-
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph-fuse -r {subvol_path.strip()} /mnt/mycephfs1 --client_fs {fs_name}",
+        retry_mount = retry(CommandFailed, tries=3, delay=30)(fs_util.fuse_mount)
+        retry_mount(
+            [client1],
+            "/mnt/mycephfs1",
+            extra_params=f" -r {subvol_path.strip()} --client_fs {fs_name}",
         )
+
         fs_util.create_file_data(client1, "/mnt/mycephfs1", 3, "snap1", "snap_1_data ")
         client1.exec_command(
             sudo=True,

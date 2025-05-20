@@ -430,6 +430,17 @@ def run(ceph_cluster, **kw):
             if "4." in rhbuild:
                 break
             fs_name = "cephfs-ec"
+            fs_details = fs_util.get_fs_info(client[0], fs_name)
+            if not fs_details:
+                list_cmds = [
+                    "ceph fs flag set enable_multiple true",
+                    "ceph osd pool create cephfs-data-ec 64 erasure",
+                    "ceph osd pool create cephfs-metadata 64",
+                    "ceph osd pool set cephfs-data-ec allow_ec_overwrites true",
+                    "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force",
+                ]
+                for cmd in list_cmds:
+                    client[1].exec_command(sudo=True, cmd=cmd)
             fs_count += 1
             client_number += 1
         for num in range(1, 5):
