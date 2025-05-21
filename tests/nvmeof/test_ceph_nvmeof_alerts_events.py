@@ -942,6 +942,76 @@ def test_ceph_83617404(ceph_cluster, config):
     LOG.info("CEPH-83617404 - NVMeoFMaxGatewayGroups validated successfully.")
 
 
+def test_ceph_83617622(ceph_cluster, config):
+    """[CEPH-83617622] - Warning at maximum number of subsystems reached in group
+
+    NVMeoFTooManySubsystems  Prometheus alert users to notify when user created
+    more than 128 subsystems in group
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        config: test case config
+    """
+
+    # There is an BZ for not raising alert when 128 subsystems are created
+    # https://bugzilla.redhat.com/show_bug.cgi?id=2362937
+    time_to_fire = config["time_to_fire"]
+    nqn_name = config["subsystems"][0]["nqn"]
+    intervel = 30
+    alert = "NVMeoFTooManySubsystems"
+    msg = "The number of subsystems defined to the gateway exceeds supported values on cluster "
+
+    # Deploy nvmeof service
+    LOG.info("deploy nvme service")
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+
+    # Configure subsystems
+    nvmegwcl1 = ha.gateways[0]
+    created_subsystems = list()
+    for i in range(0, 128):
+        subsystem = nqn_name + "." + str(i)
+        sub_args = {"subsystem": subsystem}
+        nvmegwcl1.subsystem.add(**{"args": {**sub_args, **{"no-group-append": True}}})
+        created_subsystems.append(subsystem)
+
+    # Check for alert
+    # NVMeoFTooManySubsystems prometheus alert should be firing
+    LOG.info(
+        "NVMeoFTooManySubsystems should be firing because we have created 128 subsystems in group"
+    )
+    events = PrometheusAlerts(ha.orch)
+    events.monitor_alert(alert, timeout=time_to_fire, interval=intervel, msg=msg)
+
+    # Delete few subsystems and check alert is in inactive state
+    LOG.info(
+        "Delete few subsystems and check NVMeoFTooManySubsystems is in inactive state"
+    )
+    selected_nqs_to_delete = created_subsystems[-9:]
+    for nqn in selected_nqs_to_delete:
+        sub_args = {"subsystem": nqn}
+        nvmegwcl1.subsystem.delete(
+            **{"args": {**sub_args}}
+        )
+
+    # Check for alert and it should be in inactive state
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    # Add the deleted nqns and check the alert is in firning state or not
+    LOG.info(
+        "Add 128 susbystems and check NVMeoFTooManySubsystems alert is in firning state"
+    )
+    for nqn in selected_nqs_to_delete:
+        sub_args = {"subsystem": nqn}
+        nvmegwcl1.subsystem.add(**{"args": {**sub_args, **{"no-group-append": True}}})
+
+    events.monitor_alert(alert, timeout=time_to_fire, interval=intervel, msg=msg)
+
+    LOG.info("CEPH-83617622 - NVMeoFTooManySubsystems validated successfully.")
+
+
 testcases = {
     "CEPH-83610948": test_ceph_83610948,
     "CEPH-83610950": test_ceph_83610950,
@@ -953,6 +1023,7 @@ testcases = {
     "CEPH-83617544": test_ceph_83617544,
     "CEPH-83616916": test_ceph_83616916,
     "CEPH-83617404": test_ceph_83617404,
+    "CEPH-83617622": test_ceph_83617622,
 }
 
 
