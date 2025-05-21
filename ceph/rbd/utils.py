@@ -62,6 +62,7 @@ def get_md5sum_rbd_image(**kw):
         "client": <client_node>
     }
     """
+
     if kw.get("image_spec"):
         export_spec = {
             "source-image-or-snap-spec": kw.get("image_spec"),
@@ -71,11 +72,19 @@ def get_md5sum_rbd_image(**kw):
         if "100% complete...done" not in out + err:
             log.error(f"Export failed for image {kw.get('image_spec')}")
             return None
-    return exec_cmd(
+
+    md5sum_hash = exec_cmd(
         output=True,
-        cmd=f"md5sum {kw['file_path']} && rm -f {kw['file_path']}",
+        cmd=f"md5sum {kw['file_path']}",
         node=kw.get("client"),
     ).split()[0]
+    if kw.get("remove_file") or "remove_file" not in kw.keys():
+        exec_cmd(
+            output=True,
+            cmd=f"rm -f {kw['file_path']}",
+            node=kw.get("client"),
+        )
+    return md5sum_hash
 
 
 def check_data_integrity(**kw):
