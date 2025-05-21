@@ -990,9 +990,7 @@ def test_ceph_83617622(ceph_cluster, config):
     selected_nqs_to_delete = created_subsystems[-9:]
     for nqn in selected_nqs_to_delete:
         sub_args = {"subsystem": nqn}
-        nvmegwcl1.subsystem.delete(
-            **{"args": {**sub_args}}
-        )
+        nvmegwcl1.subsystem.delete(**{"args": {**sub_args}})
 
     # Check for alert and it should be in inactive state
     events.monitor_alert(
