@@ -785,6 +785,8 @@ def run(args):
                     if "enable-fips-mode=" in _config:
                         config["enable_fips_mode"] = bool(_config.split("=")[1])
 
+                    if "enable-firewall=" in _config:
+                        config["enable_firewall"] = bool(_config.split("=")[1])
             config["ceph_docker_registry"] = docker_registry
             config["ceph_docker_image"] = docker_image
             config["ceph_docker_image_tag"] = docker_tag
