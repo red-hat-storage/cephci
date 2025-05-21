@@ -90,6 +90,8 @@ def test_add_remove_group_mirroring(
     for pool_type in pool_types:
         rbd_config = kw.get("config", {}).get(pool_type, {})
         multi_pool_config = deepcopy(getdict(rbd_config))
+        log.info("Running test CEPH-83611277 for %s", pool_type)
+
         # FIO Params Required for ODF workload exclusively in group mirroring
         fio = kw.get("config", {}).get("fio", {})
         io_config = {
@@ -103,7 +105,10 @@ def test_add_remove_group_mirroring(
             "invalidate": fio["ODF_CONFIG"]["invalidate"],
             "config": {
                 "file_size": fio["size"],
-                "file_path": ["/mnt/mnt_" + random_string(len=5) + "/file"],
+                "file_path": [
+                    "/mnt/mnt_" + random_string(len=5) + "/file",
+                    "/mnt/mnt_" + random_string(len=5) + "/file",
+                ],
                 "get_time_taken": True,
                 "operations": {
                     "fs": "ext4",
@@ -120,29 +125,22 @@ def test_add_remove_group_mirroring(
             group_config = {}
             if "data_pool" in pool_config.keys():
                 _ = pool_config.pop("data_pool")
-            group_config.update({"pool": pool})
 
+            group_spec = pool_config.get("group-spec")
+            group_config.update({"group-spec": group_spec})
+            image_spec = []
             for image, image_config in pool_config.items():
                 if "image" in image:
-                    # Add data to the images
-                    image_spec = []
-                    io_config["rbd_obj"] = rbd_primary
-                    io_config["client"] = client_primary
                     image_spec.append(pool + "/" + image)
-                    io_config["config"]["image_spec"] = image_spec
-                    (io, err) = krbd_io_handler(**io_config)
-                    if err:
-                        raise Exception(
-                            "Map, mount and run IOs failed for "
-                            + str(io_config["config"]["image_spec"])
-                        )
-                    else:
-                        log.info(
-                            "Map, mount and IOs successful for "
-                            + str(io_config["config"]["image_spec"])
-                        )
-
-            group_config.update({"group": pool_config.get("group")})
+            image_spec_copy = deepcopy(image_spec)
+            io_config["rbd_obj"] = rbd_primary
+            io_config["client"] = client_primary
+            io_config["config"]["image_spec"] = image_spec_copy
+            (io, err) = krbd_io_handler(**io_config)
+            if err:
+                raise Exception("Map, mount and run IOs failed for " + str(image_spec))
+            else:
+                log.info("Map, mount and IOs successful for " + str(image_spec))
 
             # Get Group Mirroring Status
             (group_mirror_status, err) = rbd_primary.mirror.group.status(**group_config)
@@ -155,7 +153,7 @@ def test_add_remove_group_mirroring(
                 mirror_state = "Enabled"
             log.info(
                 "Group "
-                + pool_config.get("group")
+                + pool_config.get("group-spec")
                 + " mirroring state is "
                 + mirror_state
             )
@@ -164,12 +162,12 @@ def test_add_remove_group_mirroring(
             image_size = kw.get("config", {}).get(pool_type, {}).get("size")
             image_name = "image_standalone"
             (image_create_status, err) = rbd_primary.create(
-                pool=group_config["pool"], image=image_name, size=image_size
+                pool=pool, image=image_name, size=image_size
             )
             if err:
                 raise Exception(
                     "Failed in enabling mirroring on standlaone image: "
-                    + group_config["pool"]
+                    + pool
                     + "/"
                     + image_name
                     + ", err: "
@@ -197,12 +195,12 @@ def test_add_remove_group_mirroring(
 
             # Enable mirroring on Image
             (image_mirror_status, err) = rbd_primary.mirror.image.enable(
-                pool=group_config["pool"], image=image_name, mode="snapshot"
+                pool=pool, image=image_name, mode="snapshot"
             )
             if err:
                 raise Exception(
                     "Failed in enabling mirroring on standlaone image: "
-                    + group_config["pool"]
+                    + pool
                     + "/"
                     + image_name
                     + " , err: "
@@ -214,12 +212,12 @@ def test_add_remove_group_mirroring(
             retry = 0
             while retry < 10:
                 (image_mirror_status, err) = rbd_primary.mirror.image.status(
-                    pool=group_config["pool"], image=image_name, format="json"
+                    pool=pool, image=image_name, format="json"
                 )
                 if err:
                     raise Exception(
                         "Failed to get image status on standlaone image: "
-                        + group_config["pool"]
+                        + pool
                         + "/"
                         + image_name
                         + " , err: "
@@ -245,10 +243,8 @@ def test_add_remove_group_mirroring(
                 add_group_image_and_verify(
                     rbd_primary,
                     **{
-                        "group-spec": group_config["pool"]
-                        + "/"
-                        + group_config["group"],
-                        "image-spec": group_config["pool"] + "/" + image_name,
+                        "group-spec": group_config.get("group-spec"),
+                        "image-spec": pool + "/" + image_name,
                     }
                 )
                 raise Exception(
@@ -263,7 +259,7 @@ def test_add_remove_group_mirroring(
                     raise Exception("Add group image failed with " + e)
 
             # Verfy size for image_standalone should match across both clusters
-            image_spec = [{"image": image_name, "pool": group_config["pool"]}]
+            image_spec = [{"image": image_name, "pool": pool}]
             image_spec = json.dumps(image_spec)
             compare_image_size_primary_secondary(rbd_primary, rbd_secondary, image_spec)
             log.info(
@@ -302,7 +298,7 @@ def test_add_remove_group_mirroring(
                 break
 
             group_image_kw = {
-                "group-spec": group_config["pool"] + "/" + group_config["group"],
+                "group-spec": group_config["group-spec"],
                 "image-spec": image_spec,
             }
             try:
@@ -382,7 +378,7 @@ def test_add_remove_group_mirroring(
             if err:
                 raise Exception("Getting group info failed : " + str(err))
             if (
-                json.loads(group_info_status)["group_name"] != group_config["group"]
+                json.loads(group_info_status)["group_name"] != pool_config.get("group")
                 or json.loads(group_info_status)["mirroring"]["state"] != "enabled"
                 or json.loads(group_info_status)["mirroring"]["mode"] != "snapshot"
                 or json.loads(group_info_status)["mirroring"]["primary"]
@@ -397,7 +393,7 @@ def test_add_remove_group_mirroring(
             if err:
                 raise Exception(
                     "Getting group image list failed for"
-                    + group_config["group"]
+                    + group_config["group-spec"]
                     + " : "
                     + str(err)
                 )
@@ -421,7 +417,7 @@ def test_add_remove_group_mirroring(
                 **group_config
             )
             log.info(
-                "Successfully verified group status on both clusters and global ids are matching"
+                "Successfully verified group status. Verified States Primary: up+stopped, Secondary: up+replaying"
             )
 
             # Validate the integrity of the data on secondary site-b
@@ -472,6 +468,7 @@ def run(**kw):
             pool_types,
             **kw
         )
+        log.info("Test add/remove images while group mirroring passed")
 
     except Exception as e:
         log.error(
