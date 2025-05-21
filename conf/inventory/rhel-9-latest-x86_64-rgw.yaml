@@ -1,9 +1,9 @@
 ---
-version_id: 9.5
+version_id: 9.6
 id: rhel
 instance:
   create:
-    image-name: RHEL-9.5.0-x86_64-ga-latest
+    image-name: RHEL-9.6.0-x86_64-ga-latest
     vm-size: ci.standard.medium
 
   setup: |
