@@ -299,15 +299,15 @@ tests:
         config-file-name: ../../s3cmd/configs/test_ratelimit_debt.yaml
       comments: known issue BZ 2301986
 
-  - test:
-      name: Test Ratelimit Division
-      desc: Test Ratelimit Division
-      polarion-id: CEPH-83574917
-      module: sanity_rgw.py
-      config:
-        script-name: ../s3cmd/test_rate_limit.py
-        config-file-name: ../../s3cmd/configs/test_ratelimit_split.yaml
-      comments: known issue BZ 2349530
+  # - test:
+  #     name: Test Ratelimit Division
+  #     desc: Test Ratelimit Division
+  #     polarion-id: CEPH-83574917
+  #     module: sanity_rgw.py
+  #     config:
+  #       script-name: ../s3cmd/test_rate_limit.py
+  #       config-file-name: ../../s3cmd/configs/test_ratelimit_split.yaml
+  #     comments: known issue RFE 2367726
 
   - test:
       name: Test ratelimit on bucket owner change
