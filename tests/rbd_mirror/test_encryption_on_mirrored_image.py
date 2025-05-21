@@ -218,6 +218,7 @@ def test_rbd_encryption(mirror_obj, pool, image, format, **kw):
             "clone_file_path": clone_file_path,
             "size": size,
             "format": format,
+            "remove_file": False,
         }
 
         encryption_config = test_encryption_between_image_and_clone(**test_config)
@@ -281,6 +282,7 @@ def test_rbd_encryption(mirror_obj, pool, image, format, **kw):
             "size": size,
             "file_path": parent_file_path,
             "encryption_config": parent_encryption_config,
+            "remove_file": False,
         }
 
         if mount_image_and_mirror_and_check_data(**mirror_config):

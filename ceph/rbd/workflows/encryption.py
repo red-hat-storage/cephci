@@ -516,6 +516,11 @@ def test_encryption_between_image_and_clone(**kw):
         "first": {"file_path": kw["parent_file_path"], "rbd": rbd, "client": client},
         "second": {"file_path": kw["clone_file_path"], "rbd": rbd, "client": client},
     }
+
+    if "remove_file" in kw.keys():
+        data_check_config["first"]["remove_file"] = kw.get("remove_file")
+        data_check_config["second"]["remove_file"] = kw.get("remove_file")
+
     if check_data_integrity(**data_check_config):
         log.error(f"Data inconsistency found between {image_spec} and {clone_spec}")
         return None
@@ -628,6 +633,10 @@ def mount_image_and_mirror_and_check_data(**kw):
             "client": mirror_client,
         },
     }
+    if "remove_file" in kw.keys():
+        data_check_config["first"]["remove_file"] = kw.get("remove_file")
+        data_check_config["second"]["remove_file"] = kw.get("remove_file")
+
     if check_data_integrity(**data_check_config):
         log.error(f"Data inconsistency found between {image_spec} and its mirror")
         return 1
