@@ -24,9 +24,7 @@ def verify_group_mirroring_state(rbd, mirror_state, **group_kw):
     if mirror_state == "Enabled":
         (group_info, err) = rbd.group.info(**group_kw, format="json")
         if err:
-            log.error(
-                "Error in group info for group: " + group_kw["group"] + " err: " + err
-            )
+            log.error("Error in group info: " + err)
             return False
         if json.loads(group_info)["mirroring"]["state"] == "enabled":
             return True
@@ -43,9 +41,7 @@ def verify_group_image_list(rbd, **kw):
     """
     (group_image_list, err) = rbd.group.image.list(**kw, format="json")
     if err:
-        log.error(
-            "Error in group image list for group: " + kw["group"] + " err: " + err
-        )
+        log.error("Error in group image list: " + err)
         return False
     for spec in list(json.loads(group_image_list)):
         image_spec = spec["pool"] + "/" + spec["image"]
@@ -63,12 +59,7 @@ def enable_group_mirroring_and_verify_state(rbd, **group_kw):
     """
     (mirror_group_enable_status, err) = rbd.mirror.group.enable(**group_kw)
     if err:
-        raise Exception(
-            "Error in group mirror enable for group: "
-            + group_kw["group"]
-            + " err: "
-            + err
-        )
+        raise Exception("Error in group mirror enable: " + err)
     if (
         "Mirroring enabled" in mirror_group_enable_status
         and verify_group_mirroring_state(rbd, "Enabled", **group_kw)
@@ -87,12 +78,7 @@ def disable_group_mirroring_and_verify_state(rbd, **group_kw):
     """
     (group_mirroring_disable_status, err) = rbd.mirror.group.disable(**group_kw)
     if err:
-        raise Exception(
-            "Error in group mirror disable for group: "
-            + group_kw["group"]
-            + " err: "
-            + err
-        )
+        raise Exception("Error in group mirror disable: " + err)
     if (
         "Mirroring disabled" in group_mirroring_disable_status
         and verify_group_mirroring_state(rbd, "Disabled", **group_kw)
@@ -135,12 +121,7 @@ def remove_group_image_and_verify(rbd, **kw):
     """
     (group_image_remove_status, err) = rbd.group.image.rm(**kw)
     if err:
-        raise Exception(
-            "Error in group image remove for group: "
-            + kw["group-spec"]
-            + " err: "
-            + err
-        )
+        raise Exception("Error in group image remove: " + err)
     if (
         "cannot remove image from mirror enabled group" in group_image_remove_status
         and not verify_group_image_list(rbd, **kw)
