@@ -7,11 +7,13 @@ import random
 import time
 
 from ceph.ceph_admin import CephAdmin
+from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.rados_bench import RadosBench
 from cli.utilities.utils import reboot_node
 from tests.rados.monitor_configurations import MonConfigMethods
+from tests.rados.rados_test_util import get_device_path
 from utility.log import Log
 
 log = Log(__name__)
@@ -473,5 +475,226 @@ def run(ceph_cluster, **kw):
         log.info(
             "Verification of OSD resiliency when 'bluefs_shared_alloc_size' "
             "is below 'bluestore_min_alloc_size' has been completed "
+        )
+        return 0
+
+    if config.get("stray_daemon_warning"):
+        doc = (
+            "\n# CEPH-83615076"
+            "\n Bugzilla trackers:"
+            "\n\t- Quincy: 2355037"
+            "\n\t- Reef: 2355044"
+            "\n\t- Squid: 2269003"
+            "\n Verify that there are no CEPHADM_STRAY_DAEMON warnings while replacing the OSD"
+            "\n\t This test validates the OSD lifecycle by executing a defined sequence of actions:"
+            "\n\t 1. Mark the selected OSD down and out."
+            "\n\t 2. Stop the OSD process."
+            "\n\t 3. Remove the OSD using `ceph orch osd rm` with --zap, --replace, and --force options."
+            "\n\t 4. Ensure the OSD no longer appears in the cluster via `get_osd_list()` output."
+            "\n\t 5. Verify no `CEPHADM_STRAY_DAEMON` warnings are raised post-removal."
+            "The test ensures the OSD is cleanly removed from the cluster's control plane and "
+            "that no residual daemon artifacts or health warnings persist."
+            "\nCluster health is verified at the end of the test to confirm it returns to `HEALTH_OK`."
+        )
+
+        log.info(doc)
+        log.info(
+            "Running test to verify that there are no CEPHADM_STRAY_DAEMON warnings while replacing the OSD"
+        )
+
+        try:
+            osd_devices = {}
+
+            test_map = [
+                {
+                    "desc": "Scenario 1: OSD Orchestrator service is managed | OSD replaced without zap",
+                    "unmanaged": False,
+                    "zap": False,
+                    "expectation": "As the device is not being zapped, the concerned OSD will be removed from"
+                    " the cluster, but its crush entry would be retained with a status change to "
+                    "'destroyed'. This OSD's entry will be removed from `ceph node ls` output. "
+                    "No 'CEPHADM_STRAY_DAEMON' warning should be generated on the cluster.",
+                },
+                {
+                    "desc": "Scenario 2: OSD Orchestrator service is unmanaged | OSD replaced without zap",
+                    "unmanaged": True,
+                    "zap": False,
+                    "expectation": "As the device is not being zapped, the concerned OSD will be removed from "
+                    "the cluster, but its crush entry would be retained with a status change to"
+                    " 'destroyed'. This OSD's entry will be removed from `ceph node ls` output."
+                    " No 'CEPHADM_STRAY_DAEMON' warning should be generated on the cluster.",
+                },
+                {
+                    "desc": "Scenario 3: OSD Orchestrator service is managed | OSD replaced with zap",
+                    "unmanaged": False,
+                    "zap": True,
+                    "expectation": "As the device is being zapped and replaced, the concerned OSD will be "
+                    "removed from the cluster, but its crush entry would be retained with a "
+                    "status change to 'destroyed' and device will be available for OSD "
+                    "re-deployment, hence the OSD will be added back and won't remain in "
+                    "destroyed state. This OSD's entry will NOT be removed from `ceph node ls` "
+                    "output. No 'CEPHADM_STRAY_DAEMON' warning should be generated on the cluster.",
+                },
+                {
+                    "desc": "Scenario 4: OSD Orchestrator service is unmanaged | OSD replaced with zap",
+                    "unmanaged": True,
+                    "zap": True,
+                    "expectation": "As the device is being zapped and replaced, the concerned OSD will be "
+                    "removed from the cluster, but its crush entry would be retained with a "
+                    "status change to 'destroyed' and device will be available for OSD "
+                    "re-deployment, however, as the service is unmanaged, the OSD would remain "
+                    "in 'destroyed' state. This OSD's entry will be removed from `ceph node ls` "
+                    "output. No 'CEPHADM_STRAY_DAEMON' warning should be generated on the cluster.",
+                },
+            ]
+
+            log.debug("Test map: \n", test_map)
+
+            for test in test_map:
+                log.info(test["desc"])
+                log.info(test["expectation"])
+
+                if rhbuild.startswith("8") and not (test["unmanaged"] or test["zap"]):
+                    log.info(
+                        "Skipping this Scenario as it fails in Squid. Bug: 2368108"
+                    )
+                    continue
+
+                assert rados_obj.set_service_managed_type(
+                    service_type="osd", unmanaged=test["unmanaged"]
+                )
+
+                # get the list of OSDs on the cluster
+                osd_list = rados_obj.get_osd_list(status="up")
+                log.debug(f"List of active OSDs: \n{osd_list}")
+
+                # choose an OSD at random
+                osd_id = random.choice(osd_list)
+                osd_host = rados_obj.fetch_host_node(
+                    daemon_type="osd", daemon_id=osd_id
+                )
+                assert utils.set_osd_out(ceph_cluster, osd_id=osd_id)
+                if not test["zap"]:
+                    dev_path = get_device_path(host=osd_host, osd_id=osd_id)
+                    if osd_devices.get(osd_host):
+                        osd_devices[osd_host].append(dev_path)
+                    else:
+                        osd_devices[osd_host] = [dev_path]
+                utils.osd_replace(ceph_cluster, osd_id=osd_id, zap=test["zap"])
+                time.sleep(15)
+
+                if test["zap"] and not test["unmanaged"]:
+                    """
+                    Scenario - 3
+                    As the device is being zapped and replaced, the concerned OSD will be removed from the cluster,
+                    but its crush entry would be retained with a status change to "destroyed" and device will be
+                    available for OSD re-deployment, hence the OSD will be added back and won't remain in destroyed
+                    state. This OSD's entry will NOT be removed from `ceph node ls` output. No "CEPHADM_STRAY_DAEMON"
+                    warning should be generated on the cluster.
+                    """
+                    endtime = datetime.datetime.now() + datetime.timedelta(seconds=300)
+                    while datetime.datetime.now() < endtime:
+                        if rados_obj.fetch_osd_status(_osd_id=osd_id) == "up":
+                            break
+                        log.info("OSD.%s yet to come up, sleeping for 30 secs" % osd_id)
+                        time.sleep(30)
+                    else:
+                        log.error(
+                            "OSD.%s did not get re-deployed within timeout" % osd_id
+                        )
+                        raise Exception(
+                            "OSD.%s did not get re-deployed within timeout" % osd_id
+                        )
+
+                    # destroyed OSD should get re-deployed and should be part of ceph node ls output
+                    node_ls_op = rados_obj.run_ceph_command(
+                        cmd="ceph node ls osd", client_exec=True
+                    )
+                    log.debug("ceph node ls osd output: ", node_ls_op)
+                    nodels_osd_list = [
+                        item for entry in node_ls_op.values() for item in entry
+                    ]
+                    assert int(osd_id) in nodels_osd_list, (
+                        "OSD.%s is expected to be part of ceph node ls" % osd_id
+                    )
+                else:
+                    endtime = datetime.datetime.now() + datetime.timedelta(seconds=100)
+                    while datetime.datetime.now() < endtime:
+                        # check status of OSD from ceph osd tree output
+                        destroyed_osds = rados_obj.get_osd_list(status="destroyed")
+                        if osd_id in destroyed_osds:
+                            log.info(
+                                "OSD.%s is in destroyed state. Proceeding to check ceph node ls"
+                                % osd_id
+                            )
+                            break
+                        log.error(
+                            "OSD.%s is not in destroyed state. Sleeping for 20 secs"
+                            % osd_id
+                        )
+                        time.sleep(20)
+                    else:
+                        log.error(
+                            "OSD.%s is not in destroyed state after 100 secs" % osd_id
+                        )
+                        raise Exception(
+                            "OSD.%s is not in destroyed state after 100 secs" % osd_id
+                        )
+
+                    # destroyed OSD should not be part of ceph node ls output
+                    node_ls_op = rados_obj.run_ceph_command(
+                        cmd="ceph node ls osd", client_exec=True
+                    )
+                    log.debug("ceph node ls osd output: ", node_ls_op)
+
+                    nodels_osd_list = [
+                        item for entry in node_ls_op.values() for item in entry
+                    ]
+                    assert int(osd_id) not in nodels_osd_list, (
+                        "OSD.%s not expected to be part of ceph node ls" % osd_id
+                    )
+
+                # ceph health should not contain 'CEPHADM_STRAY_DAEMON' warning
+                endtime = datetime.datetime.now() + datetime.timedelta(seconds=240)
+                while datetime.datetime.now() < endtime:
+                    health_detail = rados_obj.log_cluster_health()
+                    assert (
+                        "CEPHADM_STRAY_DAEMON" not in health_detail
+                    ), "CEPHADM_STRAY_DAEMON warning found"
+                    time.sleep(20)
+
+                log.info("Verification completed for " + test["desc"])
+
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            # log cluster health
+            rados_obj.log_cluster_health()
+            return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+            if not rhbuild.startswith("8"):
+                # zap all OSD device paths whose OSD was removed
+                for key, val in osd_devices.items():
+                    for dev in val:
+                        utils.zap_device(
+                            ceph_cluster=ceph_cluster,
+                            host=key.hostname,
+                            device_path=dev,
+                        )
+
+            time.sleep(60)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
+
+            # log cluster health
+            rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
+        log.info(
+            "Verification of CEPHADM_STRAY_DAEMON warnig for all combination completed"
         )
         return 0
