@@ -1,16 +1,22 @@
 import datetime
 import json
+import os
 import random
 import re
 import string
 import time
 import traceback
+from distutils.version import LooseVersion
 from multiprocessing import Value
 from threading import Thread
 
 from ceph.ceph import CommandFailed
+from cli.ceph.ceph import Ceph
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.exceptions import NormalizationValidationError
+from tests.cephfs.lib.cephfs_attributes_lib import CephFSAttributeUtilities
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.snapshot_clone.cephfs_cg_io import CG_snap_IO
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from tests.cephfs.snapshot_clone.cg_snap_utils import CG_Snap_Utils
@@ -1108,6 +1114,309 @@ def cg_quiesce_test(cg_quiesce_params):
         return 0
 
 
+def case_sensitivity_test(sensitivity_test_reqs):
+    """
+    Test Steps:
+        Validate the normalization and case sensitivity using the FUSE mount
+        Validate the case sensitivity using the subvolume operations
+    Args:
+        sensitivity_test_reqs as dict_type with below params,
+        sensitivity_test_reqs = {
+            "config" : pre_upgrade_config,
+            "fs_util" : fs_util,
+            "clients" : clients,
+            "vol_name" : default_fs
+        }
+    """
+    log.debug("Current config: {}".format(sensitivity_test_reqs))
+
+    vol_name = sensitivity_test_reqs["fs_name"]
+    subvol_name = "upgrade_sv_0"
+    subvol_group = "upgrade_svg_1"
+    log.debug(
+        "Volume name: {} \n Subvolume name: {} \n Subvolume group: {}".format(
+            vol_name, subvol_name, subvol_group
+        )
+    )
+
+    clients = sensitivity_test_reqs["clients"]
+    sensitivity_client_name = sensitivity_test_reqs["config"]["CephFS"][vol_name][
+        subvol_group
+    ][subvol_name]["mnt_client"]
+    client = [i for i in clients if i.node.hostname == sensitivity_client_name][0]
+    mount_point = sensitivity_test_reqs["config"]["CephFS"][vol_name][subvol_group][
+        subvol_name
+    ]["mnt_pt"]
+
+    sub_vol_path = common_util.subvolume_get_path(
+        client,
+        vol_name,
+        subvolume_name=subvol_name,
+        subvolume_group=subvol_group,
+    )
+    log.debug("Subvolume path: {}".format(sub_vol_path))
+
+    log.info(
+        "Remount the mount point, to refresh the ceph-fuse mount to use the latest version"
+    )
+
+    cmd = f"fusermount -u {mount_point} -z"
+    client.exec_command(sudo=True, cmd=cmd)
+
+    log.info(" *** Mounting Subvolume back via FUSE ***")
+    fuse_cmd = f"ceph-fuse -n client.{sensitivity_client_name} {mount_point} -r {sub_vol_path} --client_fs {vol_name}"
+    client.exec_command(sudo=True, cmd=fuse_cmd)
+
+    log.info("Validate the normalization and case sensitivity using the FUSE mount")
+    if not test_subvolume_non_default_group_fuse_mount(
+        client, mount_point, vol_name, sub_vol_path
+    ):
+        log.error(
+            "Failed to validate the normalization and case sensitivity using the FUSE mount"
+        )
+        return 1
+
+    log.info("Validate the case sensitivity using the subvolume operations")
+    if not sv_default_validate_charmap(client, vol_name):
+        log.error(
+            "Failed to validate the case sensitivity using the subvolume operations"
+        )
+        return 1
+
+    return 0
+
+
+def find_path_from_keys(obj, vol_name):
+    """
+    Recursively searches for a dictionary with keys 'mnt_pt' and 'mnt_client' in the given object.
+    Args:
+        obj (dict): The object to search through.
+        vol_name (str): The volume name to look for.
+    Returns:
+        list: The path to the found dictionary, or None if not found.
+        Eg: ['upgrade_svg_0', 'upgrade_sv_1']
+    """
+    stack = [
+        ([], obj["config"]["CephFS"][vol_name])
+    ]  # Initialize with path = [], object = full dict
+
+    while stack:
+        path, current = stack.pop()
+
+        if isinstance(current, dict):
+            if set(current.keys()) == {"mnt_pt", "mnt_client"}:
+                return path  # Found the matching dict
+
+            # Reverse keys to maintain left-to-right DFS
+            for key, value in reversed(current.items()):
+                stack.append((path + [key], value))
+
+        elif isinstance(current, list):
+            for idx in reversed(range(len(current))):
+                stack.append((path + [idx], current[idx]))
+
+    return None
+
+
+def test_subvolume_non_default_group_fuse_mount(
+    client1, mount_point, fs_name, sub_vol_path
+):
+    """
+    Validate the normalization and case sensitivity using the FUSE mount
+    Args:
+        client1: Client object
+        mount_point: Mount point of the subvolume
+        fs_name: Name of the CephFS volume
+        sub_vol_path: Path of the subvolume
+    Returns:
+        bool: True if validation is successful, False otherwise
+    """
+    normalization_types = ["nfkd", "nfkc", "nfd", "nfc"]
+    for norm_type in normalization_types:
+        log.info("Validating for Normalization: {}".format(norm_type))
+        dir_path = os.path.join(mount_point, "test-8")
+        attr_util.create_directory(client1, dir_path)
+
+        attr_util.set_attributes(
+            client1, dir_path, casesensitive=0, normalization=norm_type
+        )
+
+        attr_util.validate_charmap(
+            client1,
+            dir_path,
+            {"casesensitive": False, "normalization": norm_type, "encoding": "utf8"},
+        )
+
+        unicode_name = attr_util.generate_random_unicode_names()[0]
+        log.info("Unicode Dir Name: %s", unicode_name)
+
+        child_dir_path = os.path.join(dir_path, unicode_name)
+        rel_child_dir = os.path.relpath(child_dir_path, mount_point)
+
+        # Removing the first slash for the subvolumes
+        actual_child_dir_root = os.path.join(
+            sub_vol_path.strip().lstrip("/"), rel_child_dir.split("/")[0]
+        )
+
+        attr_util.create_directory(client1, child_dir_path)
+        attr_util.validate_charmap(
+            client1,
+            child_dir_path,
+            {"casesensitive": False, "normalization": norm_type, "encoding": "utf8"},
+        )
+
+        if not attr_util.validate_normalization(
+            client1,
+            fs_name,
+            actual_child_dir_root,
+            unicode_name,
+            norm_type.upper(),
+            casesensitive=False,
+        ):
+            raise NormalizationValidationError(
+                "Normalization validation failed for {} with norm_type {}".format(
+                    unicode_name, norm_type.upper()
+                )
+            )
+
+        log.info("** Cleanup ** ")
+        attr_util.delete_directory(client1, dir_path, recursive=True)
+
+        log.info(
+            "Passed: Validated subvolume with non-default sub volume group for normalization type {}".format(
+                norm_type.upper()
+            )
+        )
+
+    log.info("Validated for all normalization types")
+    return True
+
+
+def sv_default_validate_charmap(client1, cephfs_vol):
+    """
+    Validate the default charmaps for the subvolume
+    Args:
+        client1: Client object
+        cephfs_vol: Name of the CephFS volume
+    Returns:
+        bool: True if validation is successful, False otherwise
+    """
+    cephfs_subvol_default = "subvol_default_case_sensitivity"
+    try:
+        log.info("Validating charmaps for subvolume")
+
+        Ceph(client1).fs.sub_volume.create(
+            cephfs_vol,
+            cephfs_subvol_default,
+        )
+
+        Ceph(client1).fs.sub_volume.charmap.set(
+            cephfs_vol,
+            cephfs_subvol_default,
+            {
+                "normalization": "nfkc",
+                "casesensitive": "false",
+            },
+        )
+
+        get_charmap = Ceph(client1).fs.sub_volume.charmap.get(
+            cephfs_vol, cephfs_subvol_default
+        )
+
+        attr_util.validate_charmap_with_values(
+            get_charmap,
+            {
+                "casesensitive": False,
+                "normalization": "nfkc",
+                "encoding": "utf8",
+            },
+        )
+
+        Ceph(client1).fs.sub_volume.charmap.set(
+            cephfs_vol,
+            cephfs_subvol_default,
+            {
+                "normalization": "nfc",
+            },
+        )
+
+        get_charmap = Ceph(client1).fs.sub_volume.charmap.get(
+            cephfs_vol, cephfs_subvol_default
+        )
+
+        attr_util.validate_charmap_with_values(
+            get_charmap,
+            {
+                "casesensitive": False,
+                "normalization": "nfc",
+                "encoding": "utf8",
+            },
+        )
+
+        Ceph(client1).fs.sub_volume.charmap.set(
+            cephfs_vol,
+            cephfs_subvol_default,
+            {
+                "normalization": "nfd",
+            },
+        )
+
+        get_charmap = Ceph(client1).fs.sub_volume.charmap.get(
+            cephfs_vol, cephfs_subvol_default
+        )
+
+        attr_util.validate_charmap_with_values(
+            get_charmap,
+            {
+                "casesensitive": False,
+                "normalization": "nfd",
+                "encoding": "utf8",
+            },
+        )
+
+        Ceph(client1).fs.sub_volume.charmap.set(
+            cephfs_vol,
+            cephfs_subvol_default,
+            {
+                "normalization": "nfkd",
+            },
+        )
+
+        get_charmap = Ceph(client1).fs.sub_volume.charmap.get(
+            cephfs_vol, cephfs_subvol_default
+        )
+
+        attr_util.validate_charmap_with_values(
+            get_charmap,
+            {
+                "casesensitive": False,
+                "normalization": "nfkd",
+                "encoding": "utf8",
+            },
+        )
+
+        log.info(
+            "Validated subvolume charmaps for normalization types and casesensitivity"
+        )
+
+    except Exception as e:
+        log.error(
+            "Failed: Subvolume default charmaps validation with error: {}".format(e)
+        )
+        return False
+
+    finally:
+        log.info("Cleanup: Removing subvolume default charmaps")
+
+        Ceph(client1).fs.sub_volume.rm(
+            cephfs_vol,
+            cephfs_subvol_default,
+        )
+
+        log.info("Passed: Subvolume default charmaps validation")
+        return True
+
+
 def run(ceph_cluster, **kw):
     """
     Test Details:
@@ -1130,15 +1439,22 @@ def run(ceph_cluster, **kw):
     5. Auth rules : Verify existing auth rule for a client user works on new mount.
     6. MDS configuration : Verify MDS configuration remains unchanged after upgrade.
        Active and standby count remains same.
+    7. Post-upgrade CG quiesce feature validation
+    8. Validate the case sensitivity functional TC for the volume and subvolumes
     """
     try:
+        global common_util, attr_util
         fs_util = FsUtils(ceph_cluster)
         snap_util = SnapUtils(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
         default_fs = "cephfs"
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
+        config = kw.get("config")
+        build = config.get("rhbuild")
         cg_snap_util = CG_Snap_Utils(ceph_cluster)
         cg_snap_io = CG_snap_IO(ceph_cluster)
+        common_util = CephFSCommonUtils(ceph_cluster)
+        attr_util = CephFSAttributeUtilities(ceph_cluster)
         test_status = 0
         if fs_util.get_fs_info(clients[0], "cephfs_new"):
             default_fs = "cephfs_new"
@@ -1207,6 +1523,26 @@ def run(ceph_cluster, **kw):
         if test_status == 1:
             assert False, "CG quiesce post upgrade validation failed"
         log.info(" CG quiesce post upgrade validation succeeded \n")
+
+        if LooseVersion(build) >= LooseVersion("8.1"):
+            log.info(
+                "\n"
+                "\n---------------***************-----------------------------"
+                "\n  Test8: Post-upgrade Case Sensitivity Validation "
+                "\n---------------***************-----------------------------"
+            )
+            log.debug("Version of ceph {} is greater than 8.1".format(build))
+            log.info("Pre-requisite: Upgrade all clients")
+            for client in clients:
+                cmd = "yum upgrade -y --nogpgcheck ceph-common ceph-fuse"
+                client.exec_command(sudo=True, cmd=cmd)
+
+            test_status = case_sensitivity_test(test_reqs)
+            if test_status != 0:
+                log.error("Failed: Test 8: Post-upgrade Case Sensitivity Validation")
+                return 1
+            log.info(" Case sensitivity post upgrade validation succeeded \n")
+
         return 0
 
     except Exception as e:
