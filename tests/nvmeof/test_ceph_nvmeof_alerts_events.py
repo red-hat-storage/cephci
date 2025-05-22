@@ -1010,6 +1010,75 @@ def test_ceph_83617622(ceph_cluster, config):
     LOG.info("CEPH-83617622 - NVMeoFTooManySubsystems validated successfully.")
 
 
+def test_ceph_83617545(ceph_cluster, config):
+    """[CEPH-83617545] - Warning at maximum number of namespaces reached in group
+
+    NVMeoFTooManyNamespaces  Prometheus alert users to notify when user created
+    more than 1024 namespaces in group
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        config: test case config
+    """
+
+    # There is an BZ for not raising alert when 1024 namespaces are created
+    # https://bugzilla.redhat.com/show_bug.cgi?id=2362951
+    time_to_fire = config["time_to_fire"]
+    rbd_pool = config["rbd_pool"]
+    rbd_obj = config["rbd_obj"]
+    nqn_name = config["subsystems"][0]["nqn"]
+    intervel = 30
+    alert = "NVMeoFTooManyNamespaces"
+    msg = "The number of namespaces defined to the gateway exceeds supported values on cluster "
+
+    # Deploy nvmeof service
+    LOG.info("deploy nvme service")
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    nvmegwcl1 = ha.gateways[0]
+
+    # Configure subsystems
+    LOG.info("Configure subsystems")
+    with parallel() as p:
+        for subsys_args in config["subsystems"]:
+            subsys_args["ceph_cluster"] = ceph_cluster
+            p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+
+    # Check for alert
+    # NVMeoFTooManyNamespaces prometheus alert should be firing
+    LOG.info(
+        "NVMeoFTooManyNamespaces should be firing because we have created 1024 namespaces"
+    )
+    events = PrometheusAlerts(ha.orch)
+    events.monitor_alert(alert, timeout=time_to_fire, interval=intervel, msg=msg)
+
+    # Delete few subsystems and check alert is in inactive state
+    LOG.info(
+        "Delete few namespaces and check NVMeoFTooManyNamespaces is in inactive state"
+    )
+
+    sub1_args = {"subsystem": nqn_name}
+    nvmegwcl1.namespace.delete(**{"args": {**sub1_args, **{"nsid": 1}}})
+
+    # Check for alert and it should be in inactive state
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    # Add the namespaces upto 1024 and check alert is in firing state or not
+    LOG.info("Add the namespaces upto 1024 and check alert is in firing state or not")
+    image = f"image-{generate_unique_id(4)}"
+    rbd_obj.create_image(rbd_pool, image, "10G")
+
+    img_args = {"rbd-pool": rbd_pool, "rbd-image": image, "nsid": 1}
+    nvmegwcl1.namespace.add(**{"args": {**sub1_args, **img_args}})
+
+    #  Check for the alert
+    events.monitor_alert(alert, timeout=time_to_fire, interval=intervel, msg=msg)
+
+    LOG.info("CEPH-83617545 - NVMeoFTooManyNamespaces validated successfully.")
+
+
 testcases = {
     "CEPH-83610948": test_ceph_83610948,
     "CEPH-83610950": test_ceph_83610950,
@@ -1022,6 +1091,7 @@ testcases = {
     "CEPH-83616916": test_ceph_83616916,
     "CEPH-83617404": test_ceph_83617404,
     "CEPH-83617622": test_ceph_83617622,
+    "CEPH-83617545": test_ceph_83617545,
 }
 
 
