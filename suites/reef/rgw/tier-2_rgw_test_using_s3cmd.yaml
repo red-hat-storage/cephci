@@ -320,3 +320,12 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_multipart_upload_with_failed_parts_using_s3cmd_and_boto3.yaml
+
+  - test:
+      name: Setting Public acl to the bucket
+      desc: Setting Public acl to the bucket
+      polarion-id: CEPH-83619036
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_setting_public_acl.yaml
