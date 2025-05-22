@@ -970,7 +970,7 @@ def test_ceph_83617622(ceph_cluster, config):
     nvmegwcl1 = ha.gateways[0]
     created_subsystems = list()
     for i in range(0, 128):
-        subsystem = nqn_name + "." + str(i)
+        subsystem = f"{nqn_name}.{i}"
         sub_args = {"subsystem": subsystem}
         nvmegwcl1.subsystem.add(**{"args": {**sub_args, **{"no-group-append": True}}})
         created_subsystems.append(subsystem)
@@ -997,9 +997,9 @@ def test_ceph_83617622(ceph_cluster, config):
         alert, timeout=time_to_fire, state="inactive", interval=intervel
     )
 
-    # Add the deleted nqns and check the alert is in firning state or not
+    # Add the deleted nqns and check the alert is in firing state or not
     LOG.info(
-        "Add 128 susbystems and check NVMeoFTooManySubsystems alert is in firning state"
+        "Add 128 susbystems and check NVMeoFTooManySubsystems alert is in firing state"
     )
     for nqn in selected_nqs_to_delete:
         sub_args = {"subsystem": nqn}

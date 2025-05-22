@@ -355,5 +355,5 @@ tests:
       desc: Prometheus alert for number of subsystems defined to the gateway exceeds supported values
       destroy-cluster: false
       module: test_ceph_nvmeof_alerts_events.py
-      name: Validate NVMeoFTooManySubsystems alert when user created more than 128 subsystems in group
+      name: Validate NVMeoFTooManySubsystems alert
       polarion-id: CEPH-83617622
