@@ -44,20 +44,24 @@ def run(ceph_cluster, **kw):
         client1_ip = clients[0].node.ip_address
         client2_ip = clients[1].node.ip_address
         default_fs = "cephfs"
+        list_cmds = [
+            "ceph fs flag set enable_multiple true",
+            "ceph osd pool create cephfs-data-ec 64 erasure",
+            "ceph osd pool create cephfs-metadata 64",
+            "ceph osd pool set cephfs-data-ec allow_ec_overwrites true",
+            "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force",
+        ]
+        if fs_util.get_fs_info(clients[0], "cephfs-ec"):
+            for cmd in list_cmds:
+                clients[0].exec_command(sudo=True, cmd=cmd)
+
         if build.startswith("4"):
-            # create EC pool
-            list_cmds = [
-                "ceph fs flag set enable_multiple true",
-                "ceph osd pool create cephfs-data-ec 64 erasure",
-                "ceph osd pool create cephfs-metadata 64",
-                "ceph osd pool set cephfs-data-ec allow_ec_overwrites true",
-                "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force",
-            ]
             if fs_util.get_fs_info(clients[0], "cephfs_new"):
                 default_fs = "cephfs_new"
                 list_cmds.append("ceph fs volume create cephfs")
-            for cmd in list_cmds:
-                clients[0].exec_command(sudo=True, cmd=cmd)
+                clients[0].exec_command(
+                    sudo=True, cmd=f"ceph fs volume create {default_fs}"
+                )
 
         log.info("Create SubVolumeGroups on each filesystem")
         subvolumegroup_list = [
