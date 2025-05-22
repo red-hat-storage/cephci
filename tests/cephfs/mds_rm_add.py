@@ -111,7 +111,7 @@ def run(ceph_cluster, get_fs_info=None, **kw):
             if test_data
             else False
         )
-        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_name = "cephfs-add-rm" if not erasure else "cephfs-add-rm-ec"
         fs_details = fs_util.get_fs_info(client1, fs_name)
 
         if not fs_details:

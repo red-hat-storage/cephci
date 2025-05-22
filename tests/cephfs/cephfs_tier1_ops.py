@@ -78,20 +78,24 @@ def run(ceph_cluster, **kw):
         if not fs_details:
             retry_create_fs(clients[0], default_fs)
 
+        list_cmds = [
+            "ceph fs flag set enable_multiple true",
+            "ceph osd pool create cephfs-data-ec 64 erasure",
+            "ceph osd pool create cephfs-metadata 64",
+            "ceph osd pool set cephfs-data-ec allow_ec_overwrites true",
+            "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force",
+        ]
+        if fs_util.get_fs_info(clients[0], "cephfs-ec"):
+            for cmd in list_cmds:
+                clients[0].exec_command(sudo=True, cmd=cmd)
+
         if build.startswith("4"):
-            # create EC pool
-            list_cmds = [
-                "ceph fs flag set enable_multiple true",
-                "ceph osd pool create cephfs-data-ec 64 erasure",
-                "ceph osd pool create cephfs-metadata 64",
-                "ceph osd pool set cephfs-data-ec allow_ec_overwrites true",
-                "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force",
-            ]
             if fs_util.get_fs_info(clients[0], "cephfs_new"):
                 default_fs = "cephfs_new"
                 list_cmds.append("ceph fs volume create cephfs")
-            for cmd in list_cmds:
-                clients[0].exec_command(sudo=True, cmd=cmd)
+                clients[0].exec_command(
+                    sudo=True, cmd=f"ceph fs volume create {default_fs}"
+                )
         log.info("Create 2 SubVolumeGroups on each file system")
         subvolumegroup_list = [
             {"vol_name": default_fs, "group_name": "subvolgroup_1"},
@@ -156,6 +160,7 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",fs={default_fs}",
         )
 
         subvol_path, rc = clients[0].exec_command(
@@ -165,7 +170,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [clients[0]],
             fuse_mounting_dir_1,
-            extra_params=f" -r {subvol_path.strip()}",
+            extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
 
         log.info(
@@ -183,6 +188,7 @@ def run(ceph_cluster, **kw):
             kernel_mounting_dir_2,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path.strip()}",
+            extra_params=f",fs={default_fs}",
         )
 
         subvol_path, rc = clients[1].exec_command(
@@ -193,7 +199,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [clients[1]],
             fuse_mounting_dir_2,
-            extra_params=f" -r {subvol_path.strip()}",
+            extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
 
         log.info(
@@ -367,7 +373,7 @@ def run(ceph_cluster, **kw):
         fs_util.fuse_mount(
             [clients[1]],
             fuse_mounting_dir_5,
-            extra_params=f" -r {subvol_path.strip()}",
+            extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
         clients[1].exec_command(
             sudo=True,
