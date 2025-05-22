@@ -1,5 +1,6 @@
 from ceph.ceph_admin.orch import Orch
 from cli.cephadm.cephadm import CephAdm
+from cli.utilities.operations import wait_for_cluster_health
 from utility.log import Log
 
 log = Log(__name__)
@@ -34,8 +35,10 @@ def run(ceph_cluster, **kw):
     action = config.get("action")
     node = ceph_cluster.get_nodes(role="mon")[0]
     orch = Orch(cluster=ceph_cluster, **config)
+    client = ceph_cluster.get_nodes(role="client")
     # Check cluster health before upgrade
-    if CephAdm(node).ceph.health() != "HEALTH_OK":
+    health = wait_for_cluster_health(client, "HEALTH_OK", 300, 10)
+    if not health:
         raise StaggeredUpgradeError("Cluster not in 'HEALTH_OK' state")
     # Set osd flags
     for flag in osd_flags:
@@ -100,6 +103,7 @@ def run(ceph_cluster, **kw):
         if CephAdm(node).ceph.osd.unset(flag):
             raise StaggeredUpgradeError("Unable to set osd flag")
     # Check cluster health after upgrade
-    if CephAdm(node).ceph.health() != "HEALTH_OK":
+    health = wait_for_cluster_health(client, "HEALTH_OK", 300, 10)
+    if not health:
         raise StaggeredUpgradeError("Cluster not in 'HEALTH_OK' state")
     return 0
