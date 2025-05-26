@@ -161,18 +161,22 @@ def run(ceph_cluster, **kw):
         )
         clone2_path = out.rstrip()
         commands = [
-            f"diff -r {nfs_mounting_dir}{subvolume1_path} {nfs_mounting_dir}{subvolume1_path}/.snap/_snap1*",
-            f"diff -r {nfs_mounting_dir}{subvolume2_path} {nfs_mounting_dir}{subvolume2_path}/.snap/_snap2*",
-            f"diff -r {nfs_mounting_dir}{subvolume1_path} {nfs_mounting_dir}{clone1_path}",
-            f"diff -r {nfs_mounting_dir}{subvolume2_path} {nfs_mounting_dir}{clone2_path}",
+            rf"rsync -ani {nfs_mounting_dir}{subvolume1_path} \
+        {nfs_mounting_dir}{subvolume1_path}/.snap/_snap1* | grep -qv '^\.'",
+            rf"rsync -ani {nfs_mounting_dir}{subvolume2_path} \
+        {nfs_mounting_dir}{subvolume2_path}/.snap/_snap2* | grep -qv '^\.'",
+            rf"rsync -ani {nfs_mounting_dir}{subvolume1_path} \
+        {nfs_mounting_dir}{clone1_path} | grep -qv '^\.'",
+            rf"rsync -ani {nfs_mounting_dir}{subvolume2_path} \
+        {nfs_mounting_dir}{clone2_path} | grep -qv '^\.'",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
         log.info("Test completed successfully")
         return 0
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
     finally:
         log.info("Cleaning up")
@@ -186,13 +190,23 @@ def run(ceph_cluster, **kw):
             cmd=f"ceph fs subvolume snapshot rm {fs_name} subvolume2 snap2",
             check_ec=False,
         )
-        client1.exec_command(sudo=True, cmd=f"rm -rf {nfs_mounting_dir}/*")
-        client1.exec_command(sudo=True, cmd=f"umount {nfs_mounting_dir}")
-        client1.exec_command(
-            sudo=True, cmd=f"rm -rf {nfs_mounting_dir}/", check_ec=False
-        )
-        client1.exec_command(
-            sudo=True,
-            cmd=f"ceph nfs export delete {nfs_name} {nfs_export_name}",
-            check_ec=False,
-        )
+
+        rm_paths = [
+            f"{nfs_mounting_dir}{subvolume1_path}",
+            f"{nfs_mounting_dir}{subvolume2_path}",
+        ]
+
+        try:
+            for path in rm_paths:
+                client1.exec_command(sudo=True, cmd=f"rm -rf {path}/*", check_ec=False)
+        except TimeoutError as e:
+            log.error("Failed to remove the subvolume data with error: %s", e)
+            log.error(traceback.format_exc())
+        finally:
+            client1.exec_command(sudo=True, cmd=f"umount -f {nfs_mounting_dir}")
+
+            client1.exec_command(
+                sudo=True,
+                cmd=f"ceph nfs export delete {nfs_name} {nfs_export_name}",
+                check_ec=False,
+            )

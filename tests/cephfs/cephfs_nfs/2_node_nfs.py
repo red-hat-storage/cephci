@@ -138,7 +138,7 @@ def run(ceph_cluster, **kw):
         log.info("Waiting for 30 seconds for nfs mount to be ready for validation")
         time.sleep(30)
         commands = [
-            f"diff -r {nfs_mounting_dir_1} {nfs_mounting_dir_2}",
+            rf"rsync -ani {nfs_mounting_dir_1} {nfs_mounting_dir_2} | grep -qv '^\.'",
             f"mkdir {nfs_mounting_dir_2}/dir3 {nfs_mounting_dir_2}/dir4",
             f"for n in {{1..5}}; do     dd if=/dev/zero of={nfs_mounting_dir_2}/dir3"
             f"/file$(printf %03d $n) bs=500k count=500; done",
@@ -154,7 +154,7 @@ def run(ceph_cluster, **kw):
         time.sleep(30)
         client1.exec_command(
             sudo=True,
-            cmd=f"diff -r {nfs_mounting_dir_1} {nfs_mounting_dir_2}",
+            cmd=rf"rsync -ani {nfs_mounting_dir_1} {nfs_mounting_dir_2} | grep -qv '^\.'",
             long_running=True,
         )
         return 0
