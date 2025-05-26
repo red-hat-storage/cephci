@@ -1,0 +1,112 @@
+#===============================================================================================
+#-------------------------------------
+#---    Test Suite for Nfs Ganesha ---
+#-------------------------------------
+# Conf: conf/squid/nfs/1admin-7node-3client.yaml
+# Smoke test cases for
+#    - Bootstrap
+#    - Host management
+#    - Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+#    - Test NFS server with SPECstorage benchmark
+#
+#===============================================================================================
+tests:
+  - test:
+      name: Setup Upstream NFS and Ceph
+      module: nfs_setup_upstream_with_bootstrap.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          attach_ip_address: true
+          labels: apply-all-labels
+        command: add_hosts
+        service: host
+      desc: "Adding hosts to the cluster using labels and IP information."
+      destroy-cluster: false
+      module: test_host.py
+      name: "Test host add with labels and IP"
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          all-available-devices: true
+        command: apply
+        service: osd
+      desc: "Deploying OSD daemons using all-available-devices option."
+      destroy-cluster: false
+      module: test_osd.py
+      name: "Test apply osd with all-available-devices option"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Test nfs server with SPECstorage workload SWBUILD
+      module: upstream_nfs_spec_storage.py
+      desc: Test nfs server performance with SPECstorage workload SWBUILD
+      polarion-id:
+      abort-on-fail: false
+      config:
+        mount_point: /mnt/nfs
+        nfs_version: 4.1
+        benchmark: SWBUILD
+        load: 1
+        incr_load: 1
+        num_runs: 1
+        clients:
+          - client1
+        benchmark_defination:
+          Warmup_time: 30
+          Dir_count: 15
+          Files_per_dir: 30
+          File_size: 3k
+          Instances: 4

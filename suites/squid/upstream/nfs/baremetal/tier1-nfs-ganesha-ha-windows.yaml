@@ -1,0 +1,104 @@
+#===============================================================================================
+#----------------------------------------
+#---Test Suite for Nfs Ganesha with HA windows clients---
+#----------------------------------------
+# Note: NFS-Ganesha with HA support only baremetal cluster
+# test suite: suites/squid/nfs/baremetal/tier1-nfs-ganesha-ha-windows.yaml
+#    - Bootstrap RHCS 8 cluster
+#    - Deploy NFS-Ganesha with HA using spec file
+#    - Verify NFS-Ganesha HA scenarios with windows clients
+#===============================================================================================
+tests:
+  - test:
+      name: NFS Ganesha test HA with RO volume option windows client
+      desc: Verify failover with readonly export
+      polarion-id: CEPH-83581312
+      module: nfs_verify_ha_readonly_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        servers: 2
+        ha: true
+        vip: 10.8.130.231/21
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS Ganesha test HA with export delete windows client
+      desc: Verify failover with export delete
+      polarion-id: CEPH-83581309
+      module: nfs_ha_export_delete_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        servers: 2
+        ha: true
+        vip: 10.8.130.231/21
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS Ganesha test HA with modify file  windows client
+      desc: Verify failover with modify file
+      polarion-id: CEPH-83581311
+      module: nfs_ha_reboot_with_file_modify.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        servers: 2
+        ha: true
+        vip: 10.8.130.231/21
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS Ganesha test HA with file delete operation
+      desc: Verify failover with file delete operation in parallel
+      polarion-id: CEPH-83581310
+      module: nfs_failover_with_rm_operation_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        servers: 2
+        ha: true
+        vip: 10.8.130.231/21
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false
+
+  - test:
+      name: NFS Ganesha test HA with update client permission operation
+      desc: Verify ha with update client permission operation in parallel
+      polarion-id: CEPH-83581313
+      module: nfs_ha_client_update_permission_windows.py
+      config:
+        nfs_version: 3
+        linux_clients: 1
+        servers: 2
+        ha: true
+        vip: 10.8.130.231/21
+        windows_clients:
+          - ip: 10.70.46.29
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+          - ip: 10.70.45.133
+            hostname: DESKTOP-TJEJHP2
+            user: manishasaini
+            password: Redhat
+      abort-on-fail: false

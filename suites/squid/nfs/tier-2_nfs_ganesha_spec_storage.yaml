@@ -12,66 +12,34 @@
 #===============================================================================================
 tests:
   - test:
+      name: Setup Upstream NFS and Ceph
+      module: nfs_setup_upstream_with_bootstrap.py
       abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
-      module: install_prereq.py
-      name: setup pre-requisites
 
   - test:
       abort-on-fail: true
       config:
-        steps:
-          - config:
-              command: bootstrap
-              service: cephadm
-              args:
-                mon-ip: node1
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-          - config:
-              command: apply
-              service: rgw
-              pos_args:
-                - rgw.1
-              args:
-                placement:
-                  label: rgw
-          - config:
-              args:
-                - "ceph fs volume create cephfs"
-              command: shell
-          - config:
-              args:
-                placement:
-                  label: mds
-              base_cmd_args:
-                verbose: true
-              command: apply
-              pos_args:
-                - cephfs
-              service: mds
-          - config:
-              args:
-                - "ceph osd pool create rbd"
-              command: shell
-          - config:
-              args:
-                - "rbd pool init rbd"
-              command: shell
-      desc: bootstrap and deploy services.
+        args:
+          attach_ip_address: true
+          labels: apply-all-labels
+        command: add_hosts
+        service: host
+      desc: "Adding hosts to the cluster using labels and IP information."
       destroy-cluster: false
-      polarion-id: CEPH-83573713
-      module: test_cephadm.py
-      name: Deploy cluster using cephadm
+      module: test_host.py
+      name: "Test host add with labels and IP"
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          all-available-devices: true
+        command: apply
+        service: osd
+      desc: "Deploying OSD daemons using all-available-devices option."
+      destroy-cluster: false
+      module: test_osd.py
+      name: "Test apply osd with all-available-devices option"
 
   - test:
       abort-on-fail: true
@@ -79,9 +47,6 @@ tests:
         command: add
         id: client.1
         node: node4
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -94,9 +59,6 @@ tests:
         command: add
         id: client.2
         node: node5
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -109,9 +71,6 @@ tests:
         command: add
         id: client.3
         node: node6
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -124,9 +83,6 @@ tests:
         command: add
         id: client.4
         node: node7
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -148,38 +104,6 @@ tests:
         num_runs: 1
         clients:
           - client1
-          - client2
-          - client3
-          - client4
-        benchmark_defination:
-          Warmup_time: 30
-          Dir_count: 15
-          Files_per_dir: 30
-          File_size: 3k
-          Instances: 4
-
-  - test:
-      name: Test nfs scale with spec storage
-      module: nfs_verify_scale.py
-      desc: Test nfs scale setup with spec storage io tool
-      polarion-id:
-      abort-on-fail: false
-      config:
-        execution_type: parallel
-        num_of_servers: 1
-        num_of_exports: 4
-        num_of_clients: 4
-        exports_per_client: 1
-        nfs_version: 4.1
-        benchmark: SWBUILD
-        load: 1
-        incr_load: 1
-        num_runs: 1
-        clients:
-          - client1
-          - client2
-          - client3
-          - client4
         benchmark_defination:
           Warmup_time: 30
           Dir_count: 15

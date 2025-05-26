@@ -11,67 +11,34 @@
 #
 #===============================================================================================
 tests:
-  - test:
-      abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
-      module: install_prereq.py
-      name: setup pre-requisites
 
+  - test:
+      name: Setup Upstream NFS and Ceph
+      module: nfs_setup_upstream_with_bootstrap.py
+      abort-on-fail: true
   - test:
       abort-on-fail: true
       config:
-        steps:
-          - config:
-              command: bootstrap
-              service: cephadm
-              args:
-                mon-ip: node1
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-          - config:
-              command: apply
-              service: rgw
-              pos_args:
-                - rgw.1
-              args:
-                placement:
-                  label: rgw
-          - config:
-              args:
-                - "ceph fs volume create cephfs"
-              command: shell
-          - config:
-              args:
-                placement:
-                  label: mds
-              base_cmd_args:
-                verbose: true
-              command: apply
-              pos_args:
-                - cephfs
-              service: mds
-          - config:
-              args:
-                - "ceph osd pool create rbd"
-              command: shell
-          - config:
-              args:
-                - "rbd pool init rbd"
-              command: shell
-      desc: bootstrap and deploy services.
+        args:
+          attach_ip_address: true
+          labels: apply-all-labels
+        command: add_hosts
+        service: host
+      desc: "Adding hosts to the cluster using labels and IP information."
       destroy-cluster: false
-      polarion-id: CEPH-83573713
-      module: test_cephadm.py
-      name: Deploy cluster using cephadm
+      module: test_host.py
+      name: "Test host add with labels and IP"
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          all-available-devices: true
+        command: apply
+        service: osd
+      desc: "Deploying OSD daemons using all-available-devices option."
+      destroy-cluster: false
+      module: test_osd.py
+      name: "Test apply osd with all-available-devices option"
 
   - test:
       abort-on-fail: true
@@ -79,9 +46,6 @@ tests:
         command: add
         id: client.1
         node: node4
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -94,9 +58,6 @@ tests:
         command: add
         id: client.2
         node: node5
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -109,9 +70,6 @@ tests:
         command: add
         id: client.3
         node: node6
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -124,9 +82,6 @@ tests:
         command: add
         id: client.4
         node: node7
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -155,25 +110,27 @@ tests:
         clients: 3
         file_count: 100
 
-  - test:
-     name: Nfs export with client permission
-     module: nfs_client_permission_export
-     desc: Test nfs export with authorized client mount
-     polarion-id: CEPH-83578394
-     abort-on-fail: false
-     config:
-       nfs_version: 4.2
-       clients: 2
+# SKIP : Need to analyse the client mount issue when specified in conf
+#  - test:
+#     name: Nfs export with client permission
+#     module: nfs_client_permission_export.py
+#     desc: Test nfs export with authorized client mount
+#     polarion-id: CEPH-83578394
+#     abort-on-fail: false
+#     config:
+#       nfs_version: 4.2
+#       clients: 2
 
-  - test:
-     name: Nfs Test File Truncate
-     module: nfs_file_truncate.py
-     desc: Perform file truncate operation from clients
-     polarion-id: CEPH-83577598
-     abort-on-fail: false
-     config:
-       nfs_version: 4.2
-       clients: 2
+#  SKIP : Need to analyse the dd getting stuck issue
+#  - test:
+#     name: Nfs Test File Truncate
+#     module: nfs_file_truncate.py
+#     desc: Perform file truncate operation from clients
+#     polarion-id: CEPH-83577598
+#     abort-on-fail: false
+#     config:
+#       nfs_version: 4.2
+#       clients: 2
 
   - test:
       name: Nfs Verify multiple parallel io and lookups
@@ -226,46 +183,48 @@ tests:
         clients: 3
         operation: verify_non_existing_file
 
-  - test:
-      name: Nfs verify export unexport while nfs share is in use
-      module: nfs_verify_stress.py
-      desc: Stress by performing admin ops like exports unexports while clients are actively using the NFS shares.
-      polarion-id: CEPH-83575994
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 3
-
+# SKIP : Skipping as it used ceph nfs command for export conf get
+#  - test:
+#      name: Nfs verify export unexport while nfs share is in use
+#      module: nfs_verify_stress.py
+#      desc: Stress by performing admin ops like exports unexports while clients are actively using the NFS shares.
+#      polarion-id: CEPH-83575994
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 3
+#
   - test:
       name: Nfs Ganesha copy operations
       module: test_file_ops_copy.py
       desc: Perform file and dir copy and lookups in parallel
       polarion-id: CEPH-83577595
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         nfs_version: 4.2
         clients: 3
-        num_files: 100
-        num_dirs: 100
+        num_files: 1000
+        num_dirs: 1000
 
   - test:
       name: Nfs Ganesha rename operations
       module: test_file_ops_renames.py
       desc: Perform file and dir renaming and lookups in parallel
       polarion-id: CEPH-83577594
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         nfs_version: 4.2
         clients: 3
-        num_files: 100
-        num_dirs: 100
+        num_files: 1000
+        num_dirs: 1000
 
-  - test:
-      name: Nfs Ganesha test multi mount versions
-      module: nfs_verify_multi_mount_version.py
-      desc: Perform different mount versions on clients and validate the behavior
-      polarion-id: CEPH-83577595
-      abort-on-fail: true
-      config:
-        clients: 3
-        nfs_version: [4.2: 2, 3: 1]  # Out of the 3 clients, 2 will be mounted with v4.2 and other with v3
+# SKIP : Mount v3 not supported upstream
+#  - test:
+#      name: Nfs Ganesha test multi mount versions
+#      module: nfs_verify_multi_mount_version.py
+#      desc: Perform different mount versions on clients and validate the behavior
+#      polarion-id: CEPH-83577595
+#      abort-on-fail: false
+#      config:
+#        clients: 3
+#        nfs_version: [4.2: 2, 3: 1]  # Out of the 3 clients, 2 will be mounted with v4.2 and other with v3

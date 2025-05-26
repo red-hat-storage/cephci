@@ -60,6 +60,22 @@ def run(ceph_cluster, **kw):
         out, _ = clients[0].exec_command(cmd=cmd, sudo=True, timeout=600)
         if "FailureException" in out:
             OperationFailedError(f"Failed to run {cmd} on {clients[0].hostname}")
+
+        # Parse test output to detect failures
+        failed_tests = []
+        allowed_failures = {"EID9", "SEQ6"}
+
+        for line in out.splitlines():
+            line = line.strip()
+            if line.endswith(": FAILURE"):
+                test_id = line.split()[0]
+                if test_id not in allowed_failures:
+                    failed_tests.append(test_id)
+
+        if failed_tests:
+            log.error(f"Unexpected pynfs test failures: {failed_tests}")
+            return 1
+
     except Exception as e:
         log.error(f"Failed to run pynfs on {clients[0].hostname}, Error: {e}")
         return 1

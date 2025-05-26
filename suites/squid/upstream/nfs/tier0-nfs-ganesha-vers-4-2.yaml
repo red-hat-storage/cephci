@@ -1,0 +1,407 @@
+#===============================================================================================
+#-------------------------------------
+#---    Test Suite for Nfs Ganesha vers 4.2 ---
+#-------------------------------------
+# Conf: conf/squid/nfs/1admin-7node-3client.yaml
+# Smoke test cases for
+#    - Bootstrap
+#    - Host management
+#    - Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+#    - Test NFS cluster and export create
+#
+#===============================================================================================
+tests:
+  - test:
+      name: Setup Upstream NFS and Ceph
+      module: nfs_setup_upstream_with_bootstrap.py
+      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          attach_ip_address: true
+          labels: apply-all-labels
+        command: add_hosts
+        service: host
+      desc: "Adding hosts to the cluster using labels and IP information."
+      destroy-cluster: false
+      module: test_host.py
+      name: "Test host add with labels and IP"
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          all-available-devices: true
+        command: apply
+        service: osd
+      desc: "Deploying OSD daemons using all-available-devices option."
+      destroy-cluster: false
+      module: test_osd.py
+      name: "Test apply osd with all-available-devices option"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Nfs Ganesha File Lock
+      module: upstream_nfs_verify_file_lock.py
+      desc: Perform locking on same file from 2 different clients
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+
+#   Skipping the test for failure analysis
+#  - test:
+#      name: Nfs Ganesha Bonnie
+#      module: nfs_verify_bonnie.py
+#      desc: Perform bonnie tests on the Nfs cluster
+#      polarion-id: CEPH-83581050
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 4
+
+  - test:
+      name: Nfs Verify Readdir Ops
+      module: upstream_nfs_verify_readdir_ops.py
+      desc: Perform readir operation from clients
+      polarion-id: CEPH-83577590
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 4
+
+  - test:
+      name: Verify create file, create soflink and lookups from nfs clients
+      module: upstream_nfs_verify_file_ops_soft_links.py
+      desc: Verify create file, create soflink and lookups from nfs clients
+      polarion-id: CEPH-83577596
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+
+  - test:
+      name: Nfs Verify File Operations
+      module: upstream_nfs_verify_file_operations.py
+      desc: Change the ownership (user and group) of files within the NFS export
+      polarion-id: CEPH-83577601
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : change_ownership
+          client03 : perform_lookups
+
+  - test:
+      name: Nfs Verify File Operations
+      module: upstream_nfs_verify_file_operations.py
+      desc: Set different file permissions (read, write, execute) for files within the NFS
+      polarion-id: CEPH-83577602
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : change_permission
+          client03 : perform_lookups
+
+  - test:
+      name: Nfs export Readonly parameter
+      module: upstream_test_export_readonly.py
+      desc: Test NFS export with Readonly
+      polarion-id: CEPH-83578392
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Nfs export rootsquash permission
+      module: upstream_test_export_rootsquash.py
+      desc: Test NFS export with rootsquash
+      polarion-id: CEPH-83578393
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Nfs Verify locks over nfs mount with root_squash enabled
+      module: upstream_nfs_verify_file_lock_root_squash.py
+      desc: Perform lock on file with root_squash enabled
+      polarion-id: CEPH-83578386
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 4
+
+  - test:
+      name: NFS-Ganesha export config to mount with RO
+      desc: Verify edit export config to mount with RO
+      module: upstream_nfs_edit_export_config_with_ro.py
+      polarion-id: CEPH-83578395
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+# SKIP : Need to analyse why client specified in conf is failing
+#  - test:
+#      name: NFS-Ganesha export config to mount with 1 client access
+#      desc: Verify edit the export config to mount with allow access to only 1 client
+#      module: nfs_edit_export_config_with_1client_access.py
+#      polarion-id: CEPH-83578397
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
+
+# ToDo: Needs to revisit the test steps. Moving it out of ci runs till test steps verified
+#  - test:
+#      name: Nfs access file from  with root-squash enabled
+#      module: nfs_verify_file_access_with_rootsquash.py
+#      desc: Test NFS file access with root-squash enabled
+#      polarion-id: CEPH-83577604
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 4
+
+  - test:
+      name: Nfs Verify setuid bit set on a file
+      module: upstream_nfs_verify_setuid_bit.py
+      desc: Verify setuid bit set on a file
+      polarion-id:
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 3
+        file_count: 100
+        operations:
+          client01 : create_files
+          client02 : setuid_bit
+          client03 : perform_lookups
+
+  - test:
+      name: NFS-Ganesha test setfattr and getfattr operations
+      desc: Verify setting and fetching the extended attributes from NFS
+      module: upstream_test_nfs_get_set_attr_operation.py
+      polarion-id: CEPH-83591737
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Nfs verify setting and deleting multiple xttar on file
+      module: upstream_nfs_multiple_xattr_set_and_delete.py
+      desc: Test setting up and deleting multiple xattr on single file
+      polarion-id: CEPH-83591993, CEPH-83591994
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Nfs verify multiple extended attribute with parallel clients access
+      module: upstream_nfs_set_retrieve_xattr_multi_client.py
+      desc: Test multiple extended attribute with multiple clients
+      polarion-id: CEPH-83592377
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+
+  - test:
+      name: Nfs verify extended attributes are preserved across filesystem operations
+      module: upstream_nfs_test_xattr_across_file_operations.py
+      desc: Test the extended attributes are preserved across filesystem operations copy and move file
+      polarion-id: CEPH-83592378
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+  - test:
+      name: Nfs verify extended attributes on readonly file
+      module: upstream_nfs_verify_xattr_readonly_file.py
+      desc: Test the extended attributes on the readonly file
+      polarion-id: CEPH-83592397
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+
+# SKIP
+#  - test:
+#      name: Nfs Ganesha test extended attributes with rootsquash enabled
+#      module: test_nfs_extended_attribute_rootsquash.py
+#      desc: Perform extended attribute test with rootsquash user
+#      polarion-id: CEPH-83597603
+#      abort-on-fail: false
+#      config:
+#        clients: 1
+#        nfs_version: 4.2
+
+# SKIP: SELINUX for centos needs check
+#  - test:
+#      name: NFS-Ganesha test setting selinux context on file
+#      desc: Verify selinux label is set on NFS mount
+#      module: nfs_test_setting_selinux_context.py
+#      polarion-id: CEPH-83593098
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
+##
+#  - test:
+#      name: NFS-Ganesha test selinux lable with move operation
+#      desc: Verify selinux label is preserved when file is moved
+#      module: nfs_test_selinux_context_moving_files.py
+#      polarion-id: CEPH-83593099
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
+#
+#  - test:
+#      name: NFS-Ganesha test selinux context with hardlink and softlink file
+#      desc: Verify selinux label on hardlink and softlink file
+#      module: test_nfs_selinux_context_symlinks.py
+#      polarion-id: CEPH-83593151
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+#
+#  - test:
+#      name: NFS-Ganesha test selinux context set via mount command
+#      desc: Verify selinux label set directly on NFS mount point
+#      module: test_nfs_selinux_label_while_mounting.py
+#      polarion-id: CEPH-83593152
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+# SKIP : The dd commands fails to complete, needs analysis
+#  - test:
+#      name: NFS-Ganesha test disk utilization with different file sizes
+#      desc: Verify space allocation with different file sizes
+#      module: nfs_test_space_allocation_diff_sizes.py
+#      polarion-id: CEPH-83593414
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+# SKIP : The dd commands fails to complete, needs analysis
+#  - test:
+#      name: NFS-Ganesha system correctly handles allocation requests beyond the current EOF
+#      desc: Verify space allocation beyond file size
+#      module: nfs_test_allocation_beyond_size.py
+#      polarion-id: CEPH-83593489
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+
+# SKIP : Not valid for upstream
+#  - test:
+#      name: NFS-Ganesha test cmount_path param in export file
+#      desc: Verify cmount_path entry in export file
+#      module: nfs_validate_cmount_path_export_conf.py
+#      polarion-id: CEPH-83593816
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+#
+# SKIP : The dd commands fails to complete, needs analysis
+#  - test:
+#      name: NFS-Ganesha test partial deallocation
+#      desc: Verify space deallocation operation via truncate
+#      module: test_nfs_partial_deallocation.py
+#      polarion-id: CEPH-83594590
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
+
+  - test:
+      name: Nfs Ganesha test multi mount versions - 4.1 and 4.2 simultaneous mount
+      module: upstream_nfs_multi_mount_version_4x.py
+      desc: Perform mount with 4.1 and 4.2 versions on multiple client
+      polarion-id: CEPH-83597604
+      abort-on-fail: true
+      config:
+        clients: 2
+        nfs_version: [4.1: 1, 4.2: 1]

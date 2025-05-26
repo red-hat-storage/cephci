@@ -1,0 +1,206 @@
+#===============================================================================================
+#-------------------------------------
+#---    Test Suite for Nfs Ganesha ---
+#-------------------------------------
+# Conf: conf/squid/nfs/1admin-7node-3client.yaml
+# Smoke test cases for
+#    - Bootstrap
+#    - Host management
+#    - Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+#    - Test tier1 scenarios
+#
+#===============================================================================================
+tests:
+
+  - test:
+      name: Setup Upstream NFS and Ceph
+      module: nfs_setup_upstream_with_bootstrap.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          attach_ip_address: true
+          labels: apply-all-labels
+        command: add_hosts
+        service: host
+      desc: "Adding hosts to the cluster using labels and IP information."
+      destroy-cluster: false
+      module: test_host.py
+      name: "Test host add with labels and IP"
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          all-available-devices: true
+        command: apply
+        service: osd
+      desc: "Deploying OSD daemons using all-available-devices option."
+      destroy-cluster: false
+      module: test_osd.py
+      name: "Test apply osd with all-available-devices option"
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.2
+        node: node5
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.3
+        node: node6
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.4
+        node: node7
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Nfs Verify symbolic links inherit appropriate permissions and not allow unauthorized access
+      module: upstream_nfs_verify_symbolic_links_permissions.py
+      desc: Verify symbolic links inherit appropriate permissions and not allow unauthorized access
+      polarion-id: CEPH-83575975
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
+  - test:
+      name: Verify owner of a symbolic link and the owner of the target file can be different users
+      module: upstream_nfs_verify_symbolic_links_users.py
+      desc: Verify owner of a symbolic link and the owner of the target file can be different users
+      polarion-id: CEPH-83575972
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
+  - test:
+      name: Nfs Verify file mv operation
+      module: upstream_nfs_verify_read_write_operations.py
+      desc: Verify mv is denied with a permission error when tried on readonly nfs share
+      polarion-id: CEPH-83575932
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        operation: mv_file
+
+  - test:
+      name: Nfs Verify file mv and replace opertaion
+      module: upstream_nfs_verify_read_write_operations.py
+      desc: Verify mv is overwrites the content of the existing file with same name
+      polarion-id: CEPH-83575934
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        operation: mv_file_overwrite
+
+  - test:
+      name: Nfs Verify symbolic links create to file on other file system
+      module: upstream_nfs_verify_symbolic_links_file_other_file_system.py
+      desc: Verify NFS behavior when attempting to create symbolic links to files residing on other file systems with different protocols (e.g., NFS to local filesystem)
+      polarion-id: CEPH-83575969
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
+  - test:
+      name: Nfs Verify hard links correctly reference the same inode as the original file.
+      module: upstream_nfs_verify_hard_links_inode.py
+      desc: Verify creation of hard links within an NFS share and verify that they correctly reference the same inode as the original file.
+      polarion-id: CEPH-83575960
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
+  - test:
+      name: Nfs Verify multi depth dir creations
+      module: upstream_nfs_verify_multi_depth_dir_and_permissions.py
+      desc: Verify creating nested mutli depth directories on nfs share
+      polarion-id: CEPH-83575983
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        dir_depth: 10
+        dirs_per_depth: 5
+
+  - test:
+      name: Nfs Verify default permissions
+      module: upstream_nfs_verify_multi_depth_dir_and_permissions.py
+      desc: Verify newly created files and dirs on an NFS share inherit default permissions.
+      polarion-id: CEPH-83576012
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+        operation: default_permissions
+
+
+  - test:
+      name: Verify renaming a file that has one or more hard or symbolic links associated with it.
+      module: upstream_nfs_hard_symbolic_links_rename.py
+      desc: Test NFS behavior when renaming a file that has one or more hard or symbolic links associated with it.
+      polarion-id: CEPH-83575974
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
+
+  - test:
+      name: Nfs Ganesha rename operations
+      module: upstream_test_file_ops_renames.py
+      desc: Perform file and dir renaming and lookups in parallel
+      polarion-id: CEPH-83577594
+      abort-on-fail: true
+      config:
+        nfs_version: 4.1
+        clients: 3
+        num_files: 1000
+        num_dirs: 1000
+
+  - test:
+      name: Verify when deleting a file with one or more hard links and verify that the remaining hard links are still valid.
+      module: upstream_nfs_hard_links_delete_file.py
+      desc: Test NFS behavior when deleting a file with one or more hard links and verify that the remaining hard links are still valid.
+      polarion-id: CEPH-83575964
+      abort-on-fail: false
+      config:
+        nfs_version: 4.1
+        clients: 1
