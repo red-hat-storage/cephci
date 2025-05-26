@@ -85,7 +85,7 @@ def run(ceph_cluster, **kw):
             "ceph osd pool set cephfs-data-ec allow_ec_overwrites true",
             "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force",
         ]
-        if fs_util.get_fs_info(clients[0], "cephfs-ec"):
+        if not fs_util.get_fs_info(clients[0], "cephfs-ec"):
             for cmd in list_cmds:
                 clients[0].exec_command(sudo=True, cmd=cmd)
 

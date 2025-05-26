@@ -1214,16 +1214,24 @@ class FsUtils(object):
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=nfs_cmd, check_ec=kwargs.get("check_ec", True)
         )
+
         if validate:
             out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-        try:
-            nfs_clusters = json.loads(out.strip())  # Ensure proper JSON parsing
-        except json.JSONDecodeError:
-            log.error(f"Failed to parse NFS cluster list output: {out.strip()}")
-            raise CommandFailed("Invalid JSON output from 'ceph nfs cluster ls'")
+            output = out.strip()
 
-        if nfs_cluster_name not in nfs_clusters:
-            raise CommandFailed(f"Creation of NFS cluster: {nfs_cluster_name} failed")
+            # Attempt to parse JSON first
+            try:
+                nfs_clusters = json.loads(output)
+            except json.JSONDecodeError:
+                # Fallback: treat plain string output as single cluster name
+                nfs_clusters = [
+                    line.strip() for line in output.splitlines() if line.strip()
+                ]
+
+            if nfs_cluster_name not in nfs_clusters:
+                raise CommandFailed(
+                    f"Creation of NFS cluster: {nfs_cluster_name} failed"
+                )
 
         return cmd_out, cmd_rc
 

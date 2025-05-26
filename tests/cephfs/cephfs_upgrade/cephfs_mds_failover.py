@@ -85,7 +85,7 @@ def run(ceph_cluster, **kw):
         pass
 
 
-def wait_for_two_active_mds(client1, fs_name, max_wait_time=180, retry_interval=10):
+def wait_for_two_active_mds(client1, fs_name, max_wait_time=600, retry_interval=20):
     """
     Wait until two active MDS (Metadata Servers) are found or the maximum wait time is reached.
 
