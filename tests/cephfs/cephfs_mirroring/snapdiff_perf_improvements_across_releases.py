@@ -140,6 +140,7 @@ def run(ceph_cluster, **kw):
         overall_start = time.time()
         log.info("Starting file creation in all I/O directories...")
 
+        cloud_type = config.get("cloud_type")
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
@@ -148,6 +149,7 @@ def run(ceph_cluster, **kw):
                     path,
                     10,
                     1,
+                    cloud_type,
                 )
                 for path in io_dir_paths.values()
             ]
