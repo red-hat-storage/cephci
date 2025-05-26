@@ -179,7 +179,6 @@ class SensitiveLogFilter(logging.Filter):
         "access_key",
         "keyring",
         "password",
-        "passwd",
         "token",
     ]
 

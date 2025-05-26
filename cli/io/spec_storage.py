@@ -28,9 +28,11 @@ class SpecStorage(Cli):
         """
         try:
             # Install prerequiste packages
-            Package(self.primary_client).install("sshpass", nogpgcheck=True)
-            for package in self.packages:
-                Package(self.primary_client).pip_install(package)
+            # Package(self.primary_client).install("sshpass", nogpgcheck=True)
+            # for package in self.packages:
+            #     Package(self.primary_client).pip_install(package)
+            cmd = "dnf install -y sshpass"
+            self.execute(sudo=True, cmd=cmd)
 
             # Add SpecStorage tool
             self.execute(sudo=True, cmd=f"mkdir -p {self.install_dest}")
@@ -89,7 +91,7 @@ class SpecStorage(Cli):
             # Update clients with mount point
             client_mountpoints = "CLIENT_MOUNTPOINTS="
             for client in clients:
-                client_mountpoints += f"{client.hostname}:{nfs_mount} "
+                client_mountpoints += f"{client.ip_address}:{nfs_mount} "
             cmd = f"echo {client_mountpoints.rstrip()} >> {self.install_dest}/{self.config}"
             self.execute(sudo=True, cmd=cmd)
 
@@ -160,6 +162,7 @@ class SpecStorage(Cli):
             f" -r {self.install_dest}/{self.config}"
             f" -s {benchmark}-{self.outputlog}-{last_path_component}"
         )
+        print(cmd)
         return self.execute(sudo=True, long_running=True, cmd=cmd, timeout=5400)
 
     def append_to_csv(self, output_file, metrics):

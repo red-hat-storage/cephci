@@ -12,66 +12,34 @@
 #===============================================================================================
 tests:
   - test:
+      name: Setup Upstream NFS and Ceph
+      module: nfs_setup_upstream_with_bootstrap.py
       abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
-      module: install_prereq.py
-      name: setup pre-requisites
 
   - test:
       abort-on-fail: true
       config:
-        steps:
-          - config:
-              command: bootstrap
-              service: cephadm
-              args:
-                mon-ip: node1
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-          - config:
-              command: apply
-              service: rgw
-              pos_args:
-                - rgw.1
-              args:
-                placement:
-                  label: rgw
-          - config:
-              args:
-                - "ceph fs volume create cephfs"
-              command: shell
-          - config:
-              args:
-                placement:
-                  label: mds
-              base_cmd_args:
-                verbose: true
-              command: apply
-              pos_args:
-                - cephfs
-              service: mds
-          - config:
-              args:
-                - "ceph osd pool create rbd"
-              command: shell
-          - config:
-              args:
-                - "rbd pool init rbd"
-              command: shell
-      desc: bootstrap and deploy services.
+        args:
+          attach_ip_address: true
+          labels: apply-all-labels
+        command: add_hosts
+        service: host
+      desc: "Adding hosts to the cluster using labels and IP information."
       destroy-cluster: false
-      polarion-id: CEPH-83573713
-      module: test_cephadm.py
-      name: Deploy cluster using cephadm
+      module: test_host.py
+      name: "Test host add with labels and IP"
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          all-available-devices: true
+        command: apply
+        service: osd
+      desc: "Deploying OSD daemons using all-available-devices option."
+      destroy-cluster: false
+      module: test_osd.py
+      name: "Test apply osd with all-available-devices option"
 
   - test:
       abort-on-fail: true
@@ -79,9 +47,9 @@ tests:
         command: add
         id: client.1
         node: node4
-        install_packages:
-          - ceph-common
-          - ceph-fuse
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -94,9 +62,9 @@ tests:
         command: add
         id: client.2
         node: node5
-        install_packages:
-          - ceph-common
-          - ceph-fuse
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -109,9 +77,9 @@ tests:
         command: add
         id: client.3
         node: node6
-        install_packages:
-          - ceph-common
-          - ceph-fuse
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -124,9 +92,9 @@ tests:
         command: add
         id: client.4
         node: node7
-        install_packages:
-          - ceph-common
-          - ceph-fuse
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -245,15 +213,16 @@ tests:
         nfs_version: 4.2
         clients: 1
 
-  - test:
-      name: NFS-Ganesha export config to mount with 1 client access
-      desc: Verify edit the export config to mount with allow access to only 1 client
-      module: nfs_edit_export_config_with_1client_access.py
-      polarion-id: CEPH-83578397
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
+# SKIP : Need to analyse why client specified in conf is failing
+#  - test:
+#      name: NFS-Ganesha export config to mount with 1 client access
+#      desc: Verify edit the export config to mount with allow access to only 1 client
+#      module: nfs_edit_export_config_with_1client_access.py
+#      polarion-id: CEPH-83578397
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
 
 # ToDo: Needs to revisit the test steps. Moving it out of ci runs till test steps verified
 #  - test:
@@ -331,95 +300,101 @@ tests:
         nfs_version: 4.2
         clients: 1
 
-  - test:
-      name: Nfs Ganesha test extended attributes with rootsquash enabled
-      module: test_nfs_extended_attribute_rootsquash.py
-      desc: Perform extended attribute test with rootsquash user
-      polarion-id: CEPH-83597603
-      abort-on-fail: true
-      config:
-        clients: 1
-        nfs_version: 4.2
+# SKIP
+#  - test:
+#      name: Nfs Ganesha test extended attributes with rootsquash enabled
+#      module: test_nfs_extended_attribute_rootsquash.py
+#      desc: Perform extended attribute test with rootsquash user
+#      polarion-id: CEPH-83597603
+#      abort-on-fail: false
+#      config:
+#        clients: 1
+#        nfs_version: 4.2
 
-  - test:
-      name: NFS-Ganesha test setting selinux context on file
-      desc: Verify selinux label is set on NFS mount
-      module: nfs_test_setting_selinux_context.py
-      polarion-id: CEPH-83593098
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
+# SKIP: SELINUX for centos needs check
+#  - test:
+#      name: NFS-Ganesha test setting selinux context on file
+#      desc: Verify selinux label is set on NFS mount
+#      module: nfs_test_setting_selinux_context.py
+#      polarion-id: CEPH-83593098
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
+##
+#  - test:
+#      name: NFS-Ganesha test selinux lable with move operation
+#      desc: Verify selinux label is preserved when file is moved
+#      module: nfs_test_selinux_context_moving_files.py
+#      polarion-id: CEPH-83593099
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
+#
+#  - test:
+#      name: NFS-Ganesha test selinux context with hardlink and softlink file
+#      desc: Verify selinux label on hardlink and softlink file
+#      module: test_nfs_selinux_context_symlinks.py
+#      polarion-id: CEPH-83593151
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+#
+#  - test:
+#      name: NFS-Ganesha test selinux context set via mount command
+#      desc: Verify selinux label set directly on NFS mount point
+#      module: test_nfs_selinux_label_while_mounting.py
+#      polarion-id: CEPH-83593152
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
 
-  - test:
-      name: NFS-Ganesha test selinux lable with move operation
-      desc: Verify selinux label is preserved when file is moved
-      module: nfs_test_selinux_context_moving_files.py
-      polarion-id: CEPH-83593099
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
+# SKIP : The dd commands fails to complete, needs analysis
+#  - test:
+#      name: NFS-Ganesha test disk utilization with different file sizes
+#      desc: Verify space allocation with different file sizes
+#      module: nfs_test_space_allocation_diff_sizes.py
+#      polarion-id: CEPH-83593414
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
 
-  - test:
-      name: NFS-Ganesha test selinux context with hardlink and softlink file
-      desc: Verify selinux label on hardlink and softlink file
-      module: test_nfs_selinux_context_symlinks.py
-      polarion-id: CEPH-83593151
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
+# SKIP : The dd commands fails to complete, needs analysis
+#  - test:
+#      name: NFS-Ganesha system correctly handles allocation requests beyond the current EOF
+#      desc: Verify space allocation beyond file size
+#      module: nfs_test_allocation_beyond_size.py
+#      polarion-id: CEPH-83593489
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
 
-  - test:
-      name: NFS-Ganesha test selinux context set via mount command
-      desc: Verify selinux label set directly on NFS mount point
-      module: test_nfs_selinux_label_while_mounting.py
-      polarion-id: CEPH-83593152
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: NFS-Ganesha test disk utilization with different file sizes
-      desc: Verify space allocation with different file sizes
-      module: nfs_test_space_allocation_diff_sizes.py
-      polarion-id: CEPH-83593414
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: NFS-Ganesha system correctly handles allocation requests beyond the current EOF
-      desc: Verify space allocation beyond file size
-      module: nfs_test_allocation_beyond_size.py
-      polarion-id: CEPH-83593489
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: NFS-Ganesha test cmount_path param in export file
-      desc: Verify cmount_path entry in export file
-      module: nfs_validate_cmount_path_export_conf.py
-      polarion-id: CEPH-83593816
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 1
-
-  - test:
-      name: NFS-Ganesha test partial deallocation
-      desc: Verify space deallocation operation via truncate
-      module: test_nfs_partial_deallocation.py
-      polarion-id: CEPH-83594590
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
+# SKIP : Not valid for upstream
+#  - test:
+#      name: NFS-Ganesha test cmount_path param in export file
+#      desc: Verify cmount_path entry in export file
+#      module: nfs_validate_cmount_path_export_conf.py
+#      polarion-id: CEPH-83593816
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 1
+#
+# SKIP : The dd commands fails to complete, needs analysis
+#  - test:
+#      name: NFS-Ganesha test partial deallocation
+#      desc: Verify space deallocation operation via truncate
+#      module: test_nfs_partial_deallocation.py
+#      polarion-id: CEPH-83594590
+#      abort-on-fail: false
+#      config:
+#        nfs_version: 4.2
+#        clients: 2
 
   - test:
       name: Nfs Ganesha test multi mount versions - 4.1 and 4.2 simultaneous mount

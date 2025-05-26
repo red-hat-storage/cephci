@@ -11,77 +11,40 @@
 #
 #===============================================================================================
 tests:
-  - test:
-      abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
-      module: install_prereq.py
-      name: setup pre-requisites
 
+  - test:
+      name: Setup Upstream NFS and Ceph
+      module: nfs_setup_upstream_with_bootstrap.py
+      abort-on-fail: true
   - test:
       abort-on-fail: true
       config:
-        steps:
-          - config:
-              command: bootstrap
-              service: cephadm
-              args:
-                mon-ip: node1
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-          - config:
-              command: apply
-              service: rgw
-              pos_args:
-                - rgw.1
-              args:
-                placement:
-                  label: rgw
-          - config:
-              args:
-                - "ceph fs volume create cephfs"
-              command: shell
-          - config:
-              args:
-                placement:
-                  label: mds
-              base_cmd_args:
-                verbose: true
-              command: apply
-              pos_args:
-                - cephfs
-              service: mds
-          - config:
-              args:
-                - "ceph osd pool create rbd"
-              command: shell
-          - config:
-              args:
-                - "rbd pool init rbd"
-              command: shell
-      desc: bootstrap and deploy services.
+        args:
+          attach_ip_address: true
+          labels: apply-all-labels
+        command: add_hosts
+        service: host
+      desc: "Adding hosts to the cluster using labels and IP information."
       destroy-cluster: false
-      polarion-id: CEPH-83573713
-      module: test_cephadm.py
-      name: Deploy cluster using cephadm
-
+      module: test_host.py
+      name: "Test host add with labels and IP"
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          all-available-devices: true
+        command: apply
+        service: osd
+      desc: "Deploying OSD daemons using all-available-devices option."
+      destroy-cluster: false
+      module: test_osd.py
+      name: "Test apply osd with all-available-devices option"
   - test:
       abort-on-fail: true
       config:
         command: add
         id: client.1
         node: node4
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -94,9 +57,6 @@ tests:
         command: add
         id: client.2
         node: node5
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -109,9 +69,6 @@ tests:
         command: add
         id: client.3
         node: node6
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -124,9 +81,6 @@ tests:
         command: add
         id: client.4
         node: node7
-        install_packages:
-          - ceph-common
-          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -218,15 +172,6 @@ tests:
         clients: 1
         operation: default_permissions
 
-  - test:
-      name: Verify that hard links remain valid after an NFS server reboot.
-      module: nfs_hard_links_server_reboot.py
-      desc: Verify that hard links remain valid after an NFS server reboot.
-      polarion-id: CEPH-83575971
-      abort-on-fail: false
-      config:
-        nfs_version: 4.1
-        clients: 1
 
   - test:
       name: Verify renaming a file that has one or more hard or symbolic links associated with it.

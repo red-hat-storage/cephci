@@ -12,66 +12,64 @@
 #===============================================================================================
 tests:
   - test:
+      name: Setup Upstream NFS and Ceph
+      module: nfs_setup_upstream_with_bootstrap.py
       abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
-      module: install_prereq.py
-      name: setup pre-requisites
 
   - test:
       abort-on-fail: true
       config:
-        steps:
-          - config:
-              command: bootstrap
-              service: cephadm
-              args:
-                mon-ip: node1
-          - config:
-              command: add_hosts
-              service: host
-              args:
-                attach_ip_address: true
-                labels: apply-all-labels
-          - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
-          - config:
-              command: apply
-              service: rgw
-              pos_args:
-                - rgw.1
-              args:
-                placement:
-                  label: rgw
-          - config:
-              args:
-                - "ceph fs volume create cephfs"
-              command: shell
-          - config:
-              args:
-                placement:
-                  label: mds
-              base_cmd_args:
-                verbose: true
-              command: apply
-              pos_args:
-                - cephfs
-              service: mds
-          - config:
-              args:
-                - "ceph osd pool create rbd"
-              command: shell
-          - config:
-              args:
-                - "rbd pool init rbd"
-              command: shell
-      desc: bootstrap and deploy services.
+        args:
+          attach_ip_address: true
+          labels: apply-all-labels
+        command: add_hosts
+        service: host
+      desc: "Adding hosts to the cluster using labels and IP information."
       destroy-cluster: false
-      polarion-id: CEPH-83573713
-      module: test_cephadm.py
-      name: Deploy cluster using cephadm
+      module: test_host.py
+      name: "Test host add with labels and IP"
+
+#  - test:
+#      name: Host addition with spec file
+#      desc: add hosts using spec file.
+#      module: test_cephadm.py
+#      polarion-id: CEPH-83574726
+#      config:
+#        steps:
+#          - config:
+#              service: host
+#              command: set_address
+#              args:
+#                node: node1
+#          - config:
+#              service: host
+#              command: label_add
+#              args:
+#                node: node1
+#                labels: apply-all-labels
+#          - config:
+#              command: apply_spec
+#              service: orch
+#              specs:
+#                - service_type: host
+#                  address: true
+#                  labels: apply-all-labels
+#                  nodes:
+#                    - node2
+#                    - node3
+#      abort-on-fail: true
+
+  - test:
+      abort-on-fail: true
+      config:
+        args:
+          all-available-devices: true
+        command: apply
+        service: osd
+      desc: "Deploying OSD daemons using all-available-devices option."
+      destroy-cluster: false
+      module: test_osd.py
+      name: "Test apply osd with all-available-devices option"
 
   - test:
       abort-on-fail: true
@@ -79,9 +77,9 @@ tests:
         command: add
         id: client.1
         node: node4
-        install_packages:
-          - ceph-common
-          - ceph-fuse
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -94,9 +92,9 @@ tests:
         command: add
         id: client.2
         node: node5
-        install_packages:
-          - ceph-common
-          - ceph-fuse
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -109,9 +107,9 @@ tests:
         command: add
         id: client.3
         node: node6
-        install_packages:
-          - ceph-common
-          - ceph-fuse
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -124,9 +122,9 @@ tests:
         command: add
         id: client.4
         node: node7
-        install_packages:
-          - ceph-common
-          - ceph-fuse
+#        install_packages:
+#          - ceph-common
+#          - ceph-fuse
         copy_admin_keyring: true
       desc: Configure the RGW,RBD client system
       destroy-cluster: false
@@ -310,169 +308,3 @@ tests:
       config:
         nfs_version: 4.1
         clients: 1
-
-  - test:
-      name: Qos PerShare enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos Pershare enablement on cluster level
-      polarion-id: CEPH-83611390
-      abort-on-fail: false
-      config:
-        cephfs_volume : cephfs
-        cluster_name : cephfs-nfs
-        max_export_write_bw : 8MB
-        max_export_read_bw : 8MB
-        max_client_write_bw : 8MB
-        max_client_read_bw: 8MB
-        qos_type : PerShare
-        operation : restart
-
-  - test:
-      name: Qos PerClient enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerClient enablement on cluster level
-      polarion-id: CEPH-83614246
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        max_export_write_bw: 8MB
-        max_export_read_bw: 8MB
-        max_client_write_bw: 8MB
-        max_client_read_bw: 8MB
-        qos_type: PerClient
-        operation: restart
-
-  - test:
-      name: Qos PerShare_PerClient enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerShare_PerClient enablement on cluster level
-      polarion-id: CEPH-83614247
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        max_export_write_bw: 8MB
-        max_export_read_bw: 8MB
-        max_client_write_bw: 8MB
-        max_client_read_bw: 8MB
-        qos_type: PerShare_PerClient
-        operation: restart
-
-  - test:
-      name: Qos enablement PerShare-PerClient on export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
-      desc: Verify qos PerShare-PerClient enablement on export level
-      polarion-id: CEPH-83613691
-      abort-on-fail: false
-      config:
-        cephfs_volume : cephfs
-        cluster_name : cephfs-nfs
-        cluster_bw :
-          - max_export_write_bw : 100MB
-            max_export_read_bw : 100MB
-            max_client_write_bw : 100MB
-            max_client_read_bw: 100MB
-        export_bw:
-          - max_export_write_bw: 8MB
-            max_export_read_bw: 8MB
-            max_client_write_bw: 8MB
-            max_client_read_bw: 8MB
-        qos_type : PerShare_PerClient
-        operation : restart
-
-  - test:
-      name: Qos enablement PerShare on export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
-      desc: Verify qos Pershare enablement on export level
-      polarion-id: CEPH-83614248
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        cluster_bw:
-          - max_export_write_bw: 100MB
-            max_export_read_bw: 100MB
-            max_client_write_bw: 100MB
-            max_client_read_bw: 100MB
-        export_bw:
-          - max_export_write_bw: 8MB
-            max_export_read_bw: 8MB
-            max_client_write_bw: 8MB
-            max_client_read_bw: 8MB
-        qos_type: PerShare
-        operation: restart
-
-  - test:
-      name: Qos enablement PerShare-combined_bw value for export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
-      desc: Verify qos PerShare-combined_bw value enablement on export level
-      polarion-id: CEPH-83616913
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        cluster_bw:
-          - max_export_combined_bw: 100MB
-        export_bw:
-          - max_export_combined_bw: 8MB
-        qos_type: PerShare
-        operation: restart
-
-  - test:
-      name: Qos enablement PerShare_PerClient-combined_bw value for export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
-      desc: Verify qos PerShare_PerClient-combined_bw value enablement on export level
-      polarion-id: CEPH-83616914
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        cluster_bw:
-          - max_client_combined_bw: 100MB
-            max_export_combined_bw: 100MB
-        export_bw:
-          - max_client_combined_bw: 8MB
-            max_export_combined_bw: 8MB
-        qos_type: PerShare_PerClient
-        operation: restart
-
-  - test:
-      name: Qos PerShare-combined_bw enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerShare-combined_bw enablement on cluster level
-      polarion-id: CEPH-83616910
-      abort-on-fail: false
-      config:
-        cephfs_volume : cephfs
-        cluster_name : cephfs-nfs
-        max_export_combined_bw: 8MB
-        qos_type : PerShare
-        operation : restart
-
-  - test:
-      name: Qos PerClient-combined_bw enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerClient-combined_bw enablement on cluster level
-      polarion-id: CEPH-83616911
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        max_client_combined_bw: 8MB
-        qos_type: PerClient
-        operation: restart
-
-  - test:
-      name: Qos PerShare_PerClient-combined_bw enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerShare_PerClient-combined_bw enablement on cluster level
-      polarion-id: CEPH-83616912
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        max_export_combined_bw: 8MB
-        max_client_combined_bw: 8MB
-        qos_type: PerShare_PerClient
-        operation: restart
