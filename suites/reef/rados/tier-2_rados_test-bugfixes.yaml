@@ -259,6 +259,8 @@ tests:
 
   - test:
       name: Verify that there are no CEPHADM_STRAY_DAEMON warning while replacing the osd
-      module: test_No_Cephadm_Stray_Daemon.py
+      module: test_bug_fixes.py
+      config:
+        stray_daemon_warning: true
       polarion-id: CEPH-83615076
       desc: No CEPHADM_STRAY_DAEMON warning while replacing the osd
