@@ -1423,17 +1423,21 @@ class CephfsMirroringUtils(object):
 
         return mount_paths, subvol_paths
 
-    def create_files_for_snapdiff(self, client, dir_path, num_files, size_gb):
+    def create_files_for_snapdiff(
+        self, client, dir_path, num_files, size, cloud_type=None
+    ):
         """
         Uploads and executes the generate_large_file.py script on the remote client.
 
         :param client: Remote client object
         :param dir_path: Directory where files should be created
         :param num_files: Number of files to create
-        :param size_gb: Size of each file in GB
+        :param size: Size of each file (int)
+        :param cloud_type: Optional cloud type to determine size unit
         """
         generate_file_script = "generate_files_for_snapdiff.py"
         remote_path = f"/root/{generate_file_script}"
+        unit = "MB" if cloud_type in ["ibmc", "openstack"] else "GB"
 
         client.upload_file(
             sudo=True,
@@ -1441,15 +1445,14 @@ class CephfsMirroringUtils(object):
             dst=remote_path,
         )
 
-        client.exec_command(
-            sudo=True,
-            cmd=f"python3 {remote_path} {dir_path} {num_files} {size_gb}",
-            timeout=14400,
-        )
+        cmd = f"python3 {remote_path} {dir_path} {num_files} {size} {unit}"
+        client.exec_command(sudo=True, cmd=cmd, timeout=14400)
+
         log.info(
-            "Completed creation of %s files, each of size %s GB, on all the Paths",
+            "Completed creation of %s files, each of size %s %s, on all the Paths",
             num_files,
-            size_gb,
+            size,
+            unit,
         )
 
     def modify_files_for_snapdiff(

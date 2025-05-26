@@ -1,34 +1,44 @@
 import os
 import sys
 
-if len(sys.argv) != 4:
+if len(sys.argv) not in [4, 5]:
     print(
-        "Usage: python generate_multiple_files.py <directory_path> <number_of_files> <size_in_GB>"
+        "Usage: python generate_multiple_files.py <directory_path> <number_of_files> <size> [unit: MB|GB]"
     )
     sys.exit(1)
 
 directory_path = sys.argv[1]
 number_of_files = int(sys.argv[2])
-target_gb = int(sys.argv[3])
+target_size = int(sys.argv[3])
+unit = sys.argv[4].upper() if len(sys.argv) == 5 else "GB"
 
-# Loop to create multiple files
+if unit not in ["GB", "MB"]:
+    print("Error: Unit must be either 'GB' or 'MB'")
+    sys.exit(1)
+
+# Convert size to bytes
+if unit == "GB":
+    target_bytes = target_size * 1024 * 1024 * 1024
+else:  # MB
+    target_bytes = target_size * 1024 * 1024
+
+
+# Create files
 for file_index in range(1, number_of_files + 1):
-    # Generate filename for each file
     filename = os.path.join(
-        directory_path, f"generated_file_{target_gb}GB_{file_index}.txt"
+        directory_path, f"generated_file_{target_size}{unit}_{file_index}.txt"
     )
 
     size = 0
-    target = target_gb * 1024 * 1024 * 1024  # Convert GB to bytes
     line_number = 1
 
     with open(filename, "w") as f:
-        while size < target:
-            line = f"Creating file of {target_gb}GB and this is the line number {line_number}\n"
+        while size < target_bytes:
+            line = f"Creating file of {target_size}{unit} and this is the line number {line_number}\n"
             f.write(line)
             size += len(line)
             line_number += 1
 
-    print(f"File {file_index} created successfully: {filename} ({target_gb} GB)")
+    print(f"File {file_index} created successfully: {filename} ({target_size} {unit})")
 
 print("All files created successfully!")

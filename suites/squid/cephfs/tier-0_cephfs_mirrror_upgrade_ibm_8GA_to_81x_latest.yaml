@@ -158,6 +158,7 @@ tests:
         ceph1:
           config:
             name: Validate snapshot synchronisation perf improvements
+            cloud_type: "ibmc"
             source_fs: "cephfs_snapdiff_pre"
             target_fs: "cephfs_rem_snapdiff_pre"
             result_file: "snapshot_sync_info_v7.csv"
@@ -226,6 +227,7 @@ tests:
         ceph1:
           config:
             name: Validate snapshot synchronisation perf improvements
+            cloud_type: "ibmc"
             source_fs: "cephfs_snapdiff_post"
             target_fs: "cephfs_rem_snapdiff_post"
             result_file: "snapshot_sync_info_v8.csv"
