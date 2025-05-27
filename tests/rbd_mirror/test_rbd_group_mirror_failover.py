@@ -1,6 +1,6 @@
 """
 Module to verify :
-  -  Verify failover failback during orderly and non-orderly shutdown (without namespace)
+  -  Verify failover failback during orderly and non-orderly shutdown
 
 Test case covered:
 CEPH-83613277 - Verify failover failback during orderly and non-orderly shutdown
@@ -12,7 +12,7 @@ Pre-requisites :
 
 Test Case Flow:
 Step 1: Deploy Two ceph cluster on version 8.1 or above
-Step 2: Create RBD pool ‘pool_1’ on both sites
+Step 2: Create RBD pool ‘pool_1’ on both sites with/without namespace
 Step 3: Enable Image mode mirroring on pool_1 on both sites
 Step 4: Bootstrap the storage cluster peers (Two-way)
 Step 5: Create 2 RBD images in pool_1
@@ -37,10 +37,11 @@ Step 23: demote site-b
 Step 24: Perform resync
 Step 25: Validate md5sum should match both clusters
 Step 26: Verify group mirror status
-Step 27: Repeat above on EC pool
+Step 27: Repeat above on EC pool with or without namespace
 Step 28: Cleanup the images, file and pools
 """
 
+import random
 import time
 from copy import deepcopy
 
@@ -53,6 +54,7 @@ from ceph.rbd.workflows.group_mirror import (
     wait_for_idle,
 )
 from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
+from ceph.rbd.workflows.namespace import enable_namespace_mirroring
 from utility.log import Log
 
 log = Log(__name__)
@@ -123,7 +125,15 @@ def test_group_mirroring_failover(
             image_spec = []
             for image, image_config in pool_config.items():
                 if "image" in image:
-                    image_spec.append(pool + "/" + image)
+                    if "namespace" in pool_config:
+                        image_spec.append(
+                            pool + "/" + pool_config.get("namespace") + "/" + image
+                        )
+                        enable_namespace_mirroring(
+                            rbd_primary, rbd_secondary, pool, **pool_config
+                        )
+                    else:
+                        image_spec.append(pool + "/" + image)
             image_spec_copy = deepcopy(image_spec)
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
@@ -430,7 +440,7 @@ def test_group_mirroring_failover(
 
 def run(**kw):
     """
-    This test verifies failover failback during orderly and non-orderly shutdown (without namespace)
+    This test verifies failover failback during orderly and non-orderly shutdown
     Args:
         kw: test data
     Returns:
@@ -439,7 +449,13 @@ def run(**kw):
     """
     try:
         pool_types = ["rep_pool_config", "ec_pool_config"]
-        kw.get("config").update({"grouptype": kw.get("config").get("grouptype")})
+        grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
+        if not kw.get("config").get("grouptype"):
+            for pooltype in pool_types:
+                group_type = grouptypes.pop(random.randrange(len(grouptypes)))
+                kw.get("config").get(pooltype).update({"grouptype": group_type})
+                log.info("Choosing Group type on %s - %s", pooltype, group_type)
+
         mirror_obj = initial_mirror_config(**kw)
         mirror_obj.pop("output", [])
         for val in mirror_obj.values():
