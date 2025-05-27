@@ -528,14 +528,21 @@ def run(ceph_cluster, **kw):
                     )
                 rados_obj.bench_write(**entry)
 
-                if not rados_obj.set_pool_property(
-                    pool=entry["pool_name"],
-                    props="pg_num_min",
-                    value=entry["pg_num_min"],
-                ):
-                    log.error("Could not set the pg_min_size on the pool")
+                endtime = datetime.datetime.now() + datetime.timedelta(seconds=180)
+                while datetime.datetime.now() < endtime:
+                    if rados_obj.set_pool_property(
+                        pool=entry["pool_name"],
+                        props="pg_num_min",
+                        value=entry["pg_num_min"],
+                    ):
+                        break
+                    log.error(
+                        "Could not set the pg_min_size on the pool. Trying after 30 secs"
+                    )
+                    time.sleep(30)
+                else:
                     raise Exception(
-                        f"Could not set the pg_min_size on the pool {entry['pool_name']}"
+                        f"Could not set the pg_min_size on the pool {entry['pool_name']} even after 180 secs"
                     )
 
                 rados_obj.delete_pool(pool=entry["pool_name"])
