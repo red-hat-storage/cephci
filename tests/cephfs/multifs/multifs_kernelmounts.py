@@ -2,7 +2,6 @@ import random
 import string
 import traceback
 
-from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
@@ -38,21 +37,12 @@ def run(ceph_cluster, **kw):
             )
             return 1
         client1 = clients[0]
-        host_list = [
-            client1.node.hostname.replace("node7", "node2"),
-            client1.node.hostname.replace("node7", "node3"),
-        ]
-        hosts = " ".join(host_list)
-        fs_name = "cephfs_new"
-        fs_util.create_fs(
-            client1, vol_name=fs_name, placement=f"2 {hosts}", check_ec=False
-        )
 
-        for host in host_list:
-            if not fs_util.wait_for_mds_deamon(
-                client=client1, process_name=fs_name, host=host
-            ):
-                raise CommandFailed(f"Failed to start MDS on particular nodes {host}")
+        fs_name = "cephfs_fstab_kernel"
+        fs_util.create_fs(client1, vol_name=fs_name)
+        if not fs_util.wait_for_mds_process(client1, fs_name):
+            log.error("Failed to create MDS for the filesystem {}".format(fs_name))
+            return 1
         total_fs = fs_util.get_fs_details(client1)
         if len(total_fs) < 2:
             log.error(
@@ -106,7 +96,7 @@ def run(ceph_cluster, **kw):
 
         commands = [
             "ceph config set mon mon_allow_pool_delete true",
-            "ceph fs volume rm cephfs_new --yes-i-really-mean-it",
+            f"ceph fs volume rm {fs_name} --yes-i-really-mean-it",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
