@@ -156,13 +156,25 @@ def run(ceph_cluster, **kw):
         log.info(f"The health status after the repair is ::{health_check}")
         assert health_check
         log.info("The inconsistent objects are repaired")
-        # Checking for the inconsistent pg's
-        inconsistent_pg_list = rados_obj.get_inconsistent_pg_list(pool_name)
-        if any(pg_id in search for search in inconsistent_pg_list):
-            log.info("After repair the inconsistent pg exists in the list ")
+        # Wait time
+        timeout = 200
+        notFound = 0
+        while timeout:
+            # Checking for the inconsistent pg's
+            inconsistent_pg_list = rados_obj.get_inconsistent_pg_list(pool_name)
+            if any(pg_id in search for search in inconsistent_pg_list):
+                log.info("Checking for the inconsistent list in the PG...")
+                time.sleep(2)
+                timeout = timeout - 1
+            else:
+                log.info("After repair the inconsistent pg not exists in the list")
+                notFound = 1
+                break
+
+        if timeout == 0 and notFound == 0:
+            log.error("After repair the inconsistent pg exists in the list ")
             return 1
-        else:
-            log.error("After repair the inconsistent pg not exists in the list")
+        return 0
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
@@ -180,4 +192,3 @@ def run(ceph_cluster, **kw):
         if rados_obj.check_crash_status():
             log.error("Test failed due to crash at the end of test")
             return 1
-    return 0
