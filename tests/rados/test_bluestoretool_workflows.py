@@ -379,6 +379,7 @@ def run(ceph_cluster, **kw):
                 log.error(err)
                 raise Exception(f"OSD addition on {node13_obj.hostname} failed")
             time.sleep(30)
+            assert service_obj.add_osds_to_managed_service()
 
             node13_osds = rados_obj.collect_osd_daemon_ids(osd_node=node13_obj)
             log.info(f"OSD IDs on {node13_obj.hostname}: {node13_osds}")

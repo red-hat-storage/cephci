@@ -315,6 +315,133 @@ class ServiceabilityMethods:
                     service_type="osd", service_name=service
                 )
 
+    def unmanaged_osd_service_exists(self) -> bool:
+        """
+        Method to check if the cluster has unmanaged service based OSDs
+        Args:
+        Returns:
+            unmanaged service based OSDs exist -> True
+            unmanaged service based OSDs do not exist -> False
+        """
+        out = self.rados_obj.list_orch_services(service_type="osd", export=True)
+        for _service in out:
+            if not (
+                _service.get("placement", False) or _service.get("service_id", False)
+            ):
+                log.info("Service %s not managed", _service)
+                return True
+        log.info("All OSD daemons are managed by named service")
+        return False
+
+    def get_cephadm_managable_osd_specs(self) -> list:
+        """
+        Method to get the valid OSD specs that are present in the cluster.
+        Args:
+        returns:
+            List of names of OSD specs that are valid
+        """
+        return [
+            name["service_id"]
+            for name in self.rados_obj.list_orch_services(
+                service_type="osd", export=True
+            )
+            if ("placement" and "service_id") in name
+        ]
+
+    def get_osd_spec(self, osd_id) -> str:
+        """
+        method to get the name of spec, to which a particular OSD belongs
+        Args:
+            osd_id: OSD ID whose spec is needed
+        Returns:
+            name of the spec
+        """
+        osd_metadata = self.rados_obj.get_daemon_metadata(
+            daemon_type="osd", daemon_id=osd_id
+        )
+        return osd_metadata.get("osdspec_affinity", None)
+
+    def add_osds_to_managed_service(self, osds: list = None, spec: str = None) -> bool:
+        """
+        Method to identify non-managed OSDs and then add them back to managed state under existing OSD specs
+        Args:
+            osds: list of OSDs to be set to managed state
+            spec: name of the spec that needs to be used for setting OSD to manage.
+        Returns:
+            Pass -> True
+            fail -> False
+
+        Note : if osds list is provided, Only those osds will be added to managed and check if the cluster,
+        is free of unmanaged OSDs.
+
+        Note : If no OSDs are provided, we add all OSDs to managed host by host,
+        until we're left with no unmanaged osds on cluster.
+
+        Note: If Spec is not provided, 1st available - managed OSD spec name would be used
+        """
+        if not float(self.rhbuild.split("-")[0]) >= 8.1:
+            log.info(
+                "Feature not backport-ed on versions lower than 8.1. Skipping workflow"
+                "Tests running on build : %s",
+                self.rhbuild,
+            )
+            return True
+
+        if not self.unmanaged_osd_service_exists():
+            log.info(
+                "No un-manage-able placement spec based OSDs exist on the cluster on the start of test"
+            )
+
+        if spec and spec not in self.get_cephadm_managable_osd_specs():
+            log.error("Passed spec does not exist on the cluster")
+            log.error(
+                f"Spec name passed : {spec}, names on the Cluster : {self.get_cephadm_managable_osd_specs()}"
+            )
+            return False
+
+        def set_osds_managed(osd_list):
+            set_managed_raw = "ceph orch osd set-spec-affinity"
+            osd_args = " ".join(str(osd) for osd in osd_list)
+            placement = spec if spec else self.get_cephadm_managable_osd_specs()[0]
+            log.debug("Placement spec chosen for movement : %s", placement)
+            final_cmd = f"{set_managed_raw} osd.{placement} {osd_args}"
+            self.rados_obj.client.exec_command(sudo=True, cmd=final_cmd)
+
+        if osds:
+            set_osds_managed(osds)
+            time.sleep(10)
+            for osd_id in osds:
+                if not self.get_osd_spec(osd_id=osd_id):
+                    log.error(
+                        "un-manage-able placement spec based OSDs exist on cluster even after adding the provided osds."
+                        "\nOffending OSD : %s",
+                        osd_id,
+                    )
+                    return False
+            log.info(
+                "All OSDs part of list has been added to a managed OSD service. pass"
+            )
+            return True
+
+        else:
+            log.info(
+                "No list passed. Setting the set-affinity command on all the OSDs that do not have a valid service name"
+            )
+            osd_daemons = self.rados_obj.get_osd_list(status="in")
+            unmanaged_spec_osds = []
+            for osd_id in osd_daemons:
+                if not self.get_osd_spec(osd_id=osd_id):
+                    log.debug("OSD ID %s in  un-manage-able placement spec", osd_id)
+                    unmanaged_spec_osds.append(osd_id)
+            if unmanaged_spec_osds:
+                set_osds_managed(unmanaged_spec_osds)
+                time.sleep(10)
+            if self.unmanaged_osd_service_exists():
+                log.info("All OSDs not set to manage-able placement spec")
+                return False
+            log.info("Completed running set-managed for all OSDs without correct spec")
+            return True
+
     def drain_host(self, host_obj, zap=True, keep_conf=False):
         """
         Method to execution drain on a particular host

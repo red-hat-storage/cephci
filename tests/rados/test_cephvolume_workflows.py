@@ -139,9 +139,7 @@ def run(ceph_cluster, **kw):
                 )
 
                 log.info("Setting OSD service to unmanaged")
-                utils.set_osd_devices_unmanaged(
-                    ceph_cluster=ceph_cluster, osd_id=osd_id, unmanaged=True
-                )
+                rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
 
                 log.info(
                     "Successfully set OSD service to unmanaged\n"
@@ -299,8 +297,8 @@ def run(ceph_cluster, **kw):
 
                 log.info("Setting OSD service to managed")
                 if len(cluster_osds):
-                    utils.set_osd_devices_unmanaged(
-                        ceph_cluster, cluster_osds[0], unmanaged=False
+                    rados_obj.set_service_managed_type(
+                        service_type="osd", unmanaged=False
                     )
 
                 log.info(
@@ -361,7 +359,7 @@ def run(ceph_cluster, **kw):
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
 
-        utils.set_osd_devices_unmanaged(ceph_cluster, cluster_osds[0], unmanaged=False)
+        rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
 
         # log cluster health
         rados_obj.log_cluster_health()

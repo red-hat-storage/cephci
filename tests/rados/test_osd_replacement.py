@@ -43,7 +43,7 @@ def run(ceph_cluster, **kw):
         osd_hostname = osd_metadata["hostname"]
 
         # set unmanaged to True for OSD
-        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
+        rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
         # Replace the OSD
         utils.osd_replace(ceph_cluster, osd_id)
 
@@ -75,7 +75,7 @@ def run(ceph_cluster, **kw):
 
         # set unmanaged to False for OSD
         log.info("Set OSD service unmanaged to false")
-        utils.set_osd_devices_unmanaged(ceph_cluster, osd_list[0], unmanaged=False)
+        rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
 
         # Second workflow where unmanaged is not set to True
         # Cluster will recover and add the new OSD on the same device itself
@@ -124,7 +124,7 @@ def run(ceph_cluster, **kw):
             out, err = cephadm.shell(
                 [f"ceph orch daemon add osd {osd_hostname}:{osd_device}"]
             )
-        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
+        rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
 
         # log cluster health
         rados_obj.log_cluster_health()

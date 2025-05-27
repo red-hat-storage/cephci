@@ -3,6 +3,7 @@ import traceback
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from tests.rados.rados_test_util import (
     create_pools,
     get_device_path,
@@ -38,6 +39,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     client_node = ceph_cluster.get_nodes(role="client")[0]
+    service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
 
     log.info("Running osd in progress rebalance tests")
     try:
@@ -53,10 +55,13 @@ def run(ceph_cluster, **kw):
         host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
         should_not_be_empty(host, "Failed to fetch host details")
         dev_path = get_device_path(host, osd_id)
-        log.debug(
-            f"osd1 device path  : {dev_path}, osd_id : {osd_id}, host.hostname : {host.hostname}"
+        target_osd1_spec_name = service_obj.get_osd_spec(osd_id=osd_id)
+        log_lines = (
+            f"\nosd2 device path  : {dev_path},\n osd_id : {osd_id},\n hostname : {host.hostname},\n"
+            f"Target OSD Spec : {target_osd1_spec_name}"
         )
-        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
+        log.debug(log_lines)
+        rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
         method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
         utils.osd_remove(ceph_cluster, osd_id, zap=True)
@@ -67,12 +72,16 @@ def run(ceph_cluster, **kw):
         host1 = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id1)
         should_not_be_empty(host1, "Failed to fetch host details")
         dev_path1 = get_device_path(host1, osd_id1)
-        log.debug(
-            f"osd2 device path  : {dev_path1}, osd_id : {osd_id1}, host.hostname : {host1.hostname}"
+        target_osd2_spec_name = service_obj.get_osd_spec(osd_id=osd_id1)
+        log_lines = (
+            f"\nosd2 device path  : {dev_path},\n osd_id : {osd_id1},\n hostname : {host1.hostname},\n"
+            f"Target OSD Spec : {target_osd2_spec_name}"
         )
+        log.debug(log_lines)
         method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id1)
         utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
         method_should_succeed(wait_for_device_rados, host, osd_id, action="add")
+        assert service_obj.add_osds_to_managed_service()
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
 
         acting_pg_set1 = rados_obj.get_pg_acting_set(pool_name=pool["pool_name"])
@@ -96,16 +105,22 @@ def run(ceph_cluster, **kw):
         active_osd_list = rados_obj.get_osd_list(status="up")
         log.info(f"List of active OSDs: \n{active_osd_list}")
         if osd_id not in active_osd_list:
-            utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
             utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
             method_should_succeed(wait_for_device_rados, host, osd_id, action="add")
+            assert service_obj.add_osds_to_managed_service(
+                osds=[osd_id], spec=target_osd1_spec_name
+            )
 
         if osd_id1 not in active_osd_list:
-            utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
             utils.add_osd(ceph_cluster, host1.hostname, dev_path1, osd_id1)
             method_should_succeed(wait_for_device_rados, host1, osd_id1, action="add")
+            assert service_obj.add_osds_to_managed_service(
+                osds=[osd_id1], spec=target_osd2_spec_name
+            )
 
-        utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=False)
+        rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
         rados_obj.change_recovery_threads(config=pool, action="rm")
         if config.get("delete_pools"):
             for name in config["delete_pools"]:
