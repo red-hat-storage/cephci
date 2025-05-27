@@ -65,13 +65,30 @@ def run(ceph_cluster, **kw):
             )
             fs_util.create_subvolume(client1, f"{fs_name}", f"subvol_{subvol_name}")
             run_ios(client1, kernel_mounting_dir_1)
-            fs_util.remove_subvolume(client1, f"{fs_name}", f"subvol_{subvol_name}")
 
         return 0
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
         return 1
+
+    finally:
+        log.info("Perform Cleanup")
+
+        try:
+            client1.exec_command(sudo=True, cmd=f"umount -f {kernel_mounting_dir_1}")
+        except Exception as e:
+            log.warning(f"Failed to unmount {kernel_mounting_dir_1}: {e}")
+
+        try:
+            client1.exec_command(sudo=True, cmd=f"rm -rf {kernel_mounting_dir_1}")
+        except Exception as e:
+            log.warning(f"Failed to remove directory {kernel_mounting_dir_1}: {e}")
+
+        try:
+            fs_util.remove_subvolume(client1, fs_name, f"subvol_{subvol_name}")
+        except Exception as e:
+            log.warning(f"Failed to remove subvolume 'subvol_{subvol_name}': {e}")
 
 
 def run_ios(client, mounting_dir):
