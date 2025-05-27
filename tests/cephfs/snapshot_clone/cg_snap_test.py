@@ -170,10 +170,9 @@ def run(ceph_cluster, **kw):
             fs_util_v1.remove_fs(client1, fs["name"])
         time.sleep(10)
         fs_util_v1.create_fs(client1, default_fs)
-        cmd = f'sleep 10;ceph orch apply mds {default_fs} --placement="label:mds";'
+        cmd = rf"sleep 10;ceph orch apply mds {default_fs} --placement='label:mds';"
         cmd += f"sleep 10;ceph fs set {default_fs} max_mds 2"
         out, rc = client1.exec_command(sudo=True, cmd=cmd)
-
         out, rc = client1.exec_command(
             sudo=True, cmd="ceph config set mds debug_mds_quiesce 20"
         )
