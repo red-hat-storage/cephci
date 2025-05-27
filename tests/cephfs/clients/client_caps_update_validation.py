@@ -196,7 +196,7 @@ def client_caps_mds_failover_test(
         log.info(client_ls[i])
         if client_ls[i]["client_metadata"].get("root"):
             sv_path = client_ls[i]["client_metadata"]["root"]
-            if sv_path in subvol_path:
+            if sv_path in subvol_path and sv_path != "/":
                 caps_before_mds_fail = client_ls[i]["num_caps"]
                 client_id = client_ls[i]["id"]
                 break
@@ -235,7 +235,7 @@ def client_caps_evict_test(client, subvol_path, mnt_client, mnt_pt, fs_name, fs_
         log.info(client_ls[i])
         if client_ls[i]["client_metadata"].get("root"):
             sv_path = client_ls[i]["client_metadata"]["root"]
-            if sv_path in subvol_path:
+            if sv_path in subvol_path and sv_path != "/":
                 caps_before_evict = client_ls[i]["num_caps"]
                 client_id = client_ls[i]["id"]
                 log.info(f"Evicting Client with ID : {client_id}")
@@ -261,7 +261,7 @@ def client_caps_evict_test(client, subvol_path, mnt_client, mnt_pt, fs_name, fs_
     for i in range(0, len(client_ls)):
         if client_ls[i]["client_metadata"].get("root"):
             sv_path = client_ls[i]["client_metadata"]["root"]
-            if sv_path in subvol_path:
+            if sv_path in subvol_path and sv_path != "/":
                 caps_after_evict = client_ls[i]["num_caps"]
     log.info(
         f"Client Caps Before Evict : {caps_before_evict},Clients Caps After Evict : {caps_after_evict}"

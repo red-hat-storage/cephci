@@ -262,7 +262,7 @@ class CG_snap_IO(object):
                     try:
                         client.exec_command(
                             sudo=True,
-                            cmd=f"setfattr -n ceph.dir.pin.random -v 0.75 {qs_mnt_pt}",
+                            cmd=f"setfattr -n ceph.dir.pin.random -v 0.1 {qs_mnt_pt}",
                             timeout=15,
                         )
                     except Exception as ex:
@@ -1376,8 +1376,8 @@ class CG_snap_IO(object):
                     f"linux_cmds {io_type} timedout after 30secs on {mnt_pt},end_time - {end_time} : {ex}"
                 )
             elif "Timeout opening channel" in str(ex):
-                log.error(
-                    f"linux_cmds {io_type} returns error on {mnt_pt},end_time - {end_time} : {ex}"
+                log.info(
+                    f"linux_cmds {io_type} returns infra error on {mnt_pt},end_time - {end_time} : {ex}"
                 )
                 return (0, end_time)
             else:
@@ -1433,7 +1433,7 @@ class CG_snap_IO(object):
                 )
                 log.info(f"linux_cmds {io_type} cmd op : {out}")
             end_time = time.time()
-            log.error(f"linux_cmds {io_type} passed on {mnt_pt},end_time - {end_time}")
+            log.info(f"linux_cmds {io_type} passed on {mnt_pt},end_time - {end_time}")
             return (0, end_time)
         except BaseException as ex:
             log.info(ex)
