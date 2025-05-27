@@ -610,6 +610,7 @@ tests:
       polarion-id: CEPH-83573870
       desc: Create 2 Filesystem with default values on different MDS daemons
       abort-on-fail: false
+      comments: BZ-2368774
   - test:
       name: creation of multiple file systems
       module: multifs.multifs_multiplefs.py

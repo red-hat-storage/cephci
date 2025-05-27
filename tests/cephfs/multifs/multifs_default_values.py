@@ -31,6 +31,7 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
 
         clients = ceph_cluster.get_ceph_objects("client")
+        mds_hostnames = [node.hostname for node in ceph_cluster.get_nodes(role="mds")]
         build = config.get("build", config.get("rhbuild"))
 
         fs_util.prepare_clients(clients, build)
@@ -43,22 +44,24 @@ def run(ceph_cluster, **kw):
             return 1
         fs_list = ["cephfs_df_fs_1", "cephfs_df_fs_2"]
         client1 = clients[0]
-        host_list = [
-            client1.node.hostname.replace("node7", "node2"),
-            client1.node.hostname.replace("node7", "node3"),
-        ]
+        host_list = mds_hostnames[:2]
         hosts = " ".join(host_list)
 
-        host_list_1 = [
-            client1.node.hostname.replace("node7", "node2"),
-            client1.node.hostname.replace("node7", "node4"),
-        ]
+        host_list_1 = mds_hostnames[-2:]
         hosts_1 = " ".join(host_list_1)
         fs_host_list = [host_list, host_list_1]
         fs_util.create_fs(client1, vol_name=fs_list[0], placement=f"2 {hosts}")
-        fs_util.wait_for_mds_process(client1, fs_list[0])
+        if not fs_util.wait_for_mds_process(client1, fs_list[0]):
+            log.error(
+                "Failed to create MDS for the first filesystem {}".format(fs_list[0])
+            )
+            return 1
         fs_util.create_fs(client1, vol_name=fs_list[1], placement=f"2 {hosts_1}")
-        fs_util.wait_for_mds_process(client1, fs_list[1])
+        if not fs_util.wait_for_mds_process(client1, fs_list[1]):
+            log.error(
+                "Failed to create MDS for the second filesystem {}".format(fs_list[1])
+            )
+            return 1
         for fs, host_ls in zip(fs_list, fs_host_list):
             validate_services_placements(client1, f"mds.{fs}", host_ls)
 
@@ -87,8 +90,8 @@ def run(ceph_cluster, **kw):
         )
         return 0
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
     finally:
         fs_util.client_clean_up(
