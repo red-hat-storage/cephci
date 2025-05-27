@@ -48,15 +48,11 @@ def run(ceph_cluster, **kw):
         dir_name = "dir"
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
-        if not build.startswith(("3", "4", "5")):
-            if not fs_util.validate_fs_info(clients[0], "cephfs"):
-                log.error("FS info Validation failed")
-                return 1
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
         )
-        fs_name = "cephfs" if not erasure else "cephfs-ec"
+        fs_name = "cephfs-basic-ops" if not erasure else "cephfs--basic-ops-ec"
         fs_details = fs_util.get_fs_info(clients[0], fs_name)
 
         if not fs_details:
