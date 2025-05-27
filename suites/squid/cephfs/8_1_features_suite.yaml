@@ -1,6 +1,8 @@
 ---
 tests:
   ######################################################################################################################
+  # Conf File : conf/squid/cephfs/tier-2_cephfs_7-node-cluster.yaml
+  # Features Covered - case-insensitive,fscrypt
   # Pre-Requisites
   # Cluster Deployment
   # Configure 4 Cephfs clients
@@ -151,7 +153,7 @@ tests:
   ######################################################################################################################
   # Conf File : conf/squid/cephfs/tier-2_cephfs_7-node-cluster.yaml
   # Features Covered
-  # fscrypt basic functional tests - lifecycle,empty_dir and metadata
+  # fscrypt basic,functional,negative tests
   ######################################################################################################################
   - test:
       abort-on-fail: false
@@ -160,3 +162,17 @@ tests:
       module: cephfs_fscrypt.test_fscrypt_basic.py
       name: "fscrypt_basic"
       polarion-id: CEPH-83607378
+  - test:
+      abort-on-fail: false
+      desc: "Verify fscrypt functional tests - fscrypt_enctag,fscrypt_datapath,fscrypt_xttrs,fscrypt_file_types"
+      destroy-cluster: false
+      module: cephfs_fscrypt.test_fscrypt_functional.py
+      name: "fscrypt_functional"
+      polarion-id: CEPH-83619943
+  - test:
+      abort-on-fail: false
+      desc: "Verify fscrypt negative tests - filename_len,key_remove,key_remove_diff_clients,wrong_key_msg_validate"
+      destroy-cluster: false
+      module: cephfs_fscrypt.test_fscrypt_negative.py
+      name: "fscrypt_negative"
+      polarion-id: CEPH-83607406

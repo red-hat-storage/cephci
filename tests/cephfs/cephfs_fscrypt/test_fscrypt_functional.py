@@ -1,157 +1,51 @@
-import datetime
 import random
+import re
 import string
 import time
 import traceback
 
 from ceph.ceph import CommandFailed
-from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1
-from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.lib.fscrypt_utils import FscryptUtils
 from utility.log import Log
 
 log = Log(__name__)
-global cg_test_io_status
-
-
-def test_setup(fs_util, ceph_cluster, default_fs, client):
-    """
-    This method is Setup to create test configuration - subvolumegroup,subvolumes,nfs servers
-    """
-    log.info("Create fs volume if the volume is not there")
-
-    fs_details = fs_util.get_fs_info(client, default_fs)
-    fs_vol_created = 0
-    if not fs_details:
-        fs_util.create_fs(client, default_fs)
-        fs_vol_created = 1
-
-    nfs_servers = ceph_cluster.get_ceph_objects("nfs")
-    nfs_server = nfs_servers[0].node.hostname
-    nfs_name = "cephfs-nfs"
-
-    client.exec_command(
-        sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
-    )
-    if wait_for_process(client=client, process_name=nfs_name, ispresent=True):
-        log.info("ceph nfs cluster created successfully")
-    else:
-        raise CommandFailed("Failed to create nfs cluster")
-
-    log.info(
-        "Create subvolumegroup, Create subvolume in subvolumegroup and default group"
-    )
-    subvolumegroup = {"vol_name": default_fs, "group_name": "subvolgroup_1"}
-    fs_util.create_subvolumegroup(client, **subvolumegroup)
-    sv_list = []
-    for i in range(1, 3):
-        sv_def = {
-            "vol_name": default_fs,
-            "subvol_name": f"sv_def_{i}",
-            "size": "5368706371",
-        }
-        fs_util.create_subvolume(client, **sv_def)
-        sv_list.append(sv_def)
-    sv_non_def = {
-        "vol_name": default_fs,
-        "subvol_name": "sv_non_def_1",
-        "group_name": "subvolgroup_1",
-        "size": "5368706371",
-    }
-    fs_util.create_subvolume(client, **sv_non_def)
-    sv_list.append(sv_non_def)
-    setup_params = {
-        "fs_name": default_fs,
-        "subvolumegroup": subvolumegroup,
-        "sv_list": sv_list,
-        "nfs_name": nfs_name,
-        "nfs_server": nfs_server,
-        "fs_vol_created": fs_vol_created,
-    }
-    return setup_params
-
-
-def fscrypt_mount(fs_util, fs_name, client, client1, sv_list, nfs_params):
-    """
-    This method is to run mount on test subvolumes
-    """
-    try:
-        mounting_dir = "".join(
-            random.choice(string.ascii_lowercase + string.digits)
-            for _ in list(range(4))
-        )
-
-        mnt_type_list = ["kernel", "fuse", "nfs"]
-        mount_details = {}
-
-        for sv in sv_list:
-            sv_name = sv["subvol_name"]
-            mount_details.update({sv_name: {}})
-            cmd = f"ceph fs subvolume getpath {fs_name} {sv_name}"
-            if sv.get("group_name"):
-                cmd += f" {sv['group_name']}"
-
-            subvol_path, rc = client.exec_command(
-                sudo=True,
-                cmd=cmd,
-            )
-
-            mnt_path = subvol_path.strip()
-            mnt_path = subvol_path
-            nfs_export_name = f"/export_{sv_name}_" + "".join(
-                random.choice(string.digits) for i in range(3)
-            )
-            mount_params = {
-                "fs_util": fs_util,
-                "client": client1,
-                "mnt_path": mnt_path,
-                "fs_name": fs_name,
-                "export_created": 0,
-                "nfs_export_name": nfs_export_name,
-                "nfs_server": nfs_params["nfs_server"],
-                "nfs_name": nfs_params["nfs_name"],
-            }
-
-            for mnt_type in mnt_type_list:
-                mounting_dir, _ = fs_util.mount_ceph(mnt_type, mount_params)
-                mount_details[sv_name].update({mnt_type: {"mountpoint": mounting_dir}})
-                if mnt_type == "nfs":
-                    mount_details[sv_name][mnt_type].update(
-                        {"nfs_export": nfs_export_name}
-                    )
-
-        return mount_details
-    except Exception as ex:
-        log.error(ex)
-        return 1
 
 
 def run(ceph_cluster, **kw):
     """
-    FScrypt functional tests - Polarion TC CEPH-83607378
+    FScrypt Functional tests - Polarion TC CEPH-83619943
     ------------------------   -------------------------
-    Type - Sanity / Lifecycle
+    Workflow1: Enctag Validation
+    1.Create FS volume and subvolumes across default and non-default groups, 1 in default and 1 in non-default
+      Use enctag field in subvolume create cli for one of the subvolumes
+    2.Mount subvolumes with Fuse client
+    4.Run CRUD ops on enctag using cli 'fs subvolume enctag...'
+    5.Set enctag again on subvolumes.Perform fscrypt setup on mount point of subvolumes
+    5.fscrypt encrypt on test directory.Repeat step3
+    6.fscrypt lock testdir, Repeat step3
 
-    1.Create FS volume and subvolumes across default and non-default groups, 2 in default and 1 in non-default
-    2.Mount subvolumes with kernel client
-    3.Create 2 test directories in each subvolumes
-    4.Perform fscrypt setup on mount point of one subvolume from each group
-    5.Perform fscrypt encrypt on 2 test directories of subvolumes where fscrypt setup done
-    6.In test directories across all subvolumes, add directories with depth as 10 and breadth as 5
-    and 2 files in each dir
-    7.Run FIO on each file in continuous mode until execution run time in background
-    8.On subvolume mount points where fscrypt is setup, perform below ops,
-        a.fscrypt encrypt ( this internally creates protector and policy and attaches to encryption path)
-        b.Validate file and directories(store file and directory names before lock) - name and content
-        c.fscrypt lock and validate file and dir names are encrypted, file contents are encrypted
-        d.fscrypt unlock and validate file and dir names are readable, file contents are readable.
-        e.fscrypt purge - To remove encryption on test directories
+    Workflow2: Data Path testing on FScrypt encrypted directory
+    Test writing data with small, half write on previous block and trailing on new block
+    Test writing data with huge hole, half write on previous block and trailing on new block
+    Test writing data past many holes on offset 0 of block
+    Test simple rmw
+    Test copy smaller file -> larger file gets new file size
+    Test overwrite/cp displays effective_size and not real size
+    Test lchown to ensure target is set
+    Test 900m hole 100m data write
+    Test 200M overwrite of 1G file
+    Test truncate down from 1GB
+    Test invalidate cache on truncate
 
-    Type - Functional
+    Workflow3: New fscrypt xttrs validation
+    Verify new xattrs ceph.fscrypt.file and ceph.fscrypt.encname
+
+    Workflow4: Encryption on diff file types - Sparse files, symlinks,regular data files,image,video
+    Add all file stypes as dataset into encrypt directory and validation encryption in locked and unlocked mode
 
     Clean Up:
-        Delete data in test directories
         Unmount subvolumes
         Remove subvolumes and subvolumegroup
         Remove FS volume if created
@@ -159,6 +53,7 @@ def run(ceph_cluster, **kw):
     try:
         test_data = kw.get("test_data")
         fs_util = FsUtilsv1(ceph_cluster, test_data=test_data)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         erasure = (
             FsUtilsv1.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -169,8 +64,9 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         if len(clients) < 2:
-            log.info(
-                f"This test requires minimum 2 client nodes.This has only {len(clients)} clients"
+            log.error(
+                "This test requires minimum 2 client nodes.This has only %s clients",
+                len(clients),
             )
             return 1
 
@@ -181,25 +77,27 @@ def run(ceph_cluster, **kw):
         default_fs = default_fs if not erasure else "cephfs-ec"
         cleanup = config.get("cleanup", 1)
         client = clients[0]
-        client1 = clients[1]
         log.info("checking Pre-requisites")
-        log.info("Verify Cluster is healthy before test")
-        if wait_for_healthy_ceph(client, fs_util, 300) == 0:
-            client1.exec_command(
-                sudo=True,
-                cmd="ceph fs status;ceph status -s;ceph health detail",
-            )
-            assert False, "Cluster health is not OK even after waiting for 300secs"
-
+        for client_tmp in clients:
+            if cephfs_common_utils.client_mount_cleanup(client_tmp):
+                log.error("Client old mountpoints cleanup didn't suceed")
+                fs_util.reboot_node(client_tmp)
         log.info("Setup test configuration")
-        setup_params = test_setup(fs_util, ceph_cluster, default_fs, client)
+        setup_params = cephfs_common_utils.test_setup(default_fs, client)
         fs_name = setup_params["fs_name"]
         log.info("Mount subvolumes")
-        mount_details = fscrypt_mount(
-            fs_util, fs_name, client, client1, setup_params["sv_list"]
-        )
+        mount_details = cephfs_common_utils.test_mount(clients, setup_params)
+        log.info("Verify Cluster is healthy before test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
         test_case_name = config.get("test_name", "all_tests")
-        test_functional = ["fscrypt_lifecycle_test"]
+        test_functional = [
+            "fscrypt_enctag",
+            "fscrypt_datapath",
+            "fscrypt_xttrs",
+            "fscrypt_file_types",
+        ]
 
         if test_case_name in test_functional:
             test_list = [test_case_name]
@@ -209,7 +107,7 @@ def run(ceph_cluster, **kw):
         fscrypt_test_params = {
             "ceph_cluster": ceph_cluster,
             "fs_name": fs_name,
-            "fs_util": fs_util,
+            "cephfs_common_utils": cephfs_common_utils,
             "fscrypt_util": fscrypt_util,
             "clients": clients,
             "setup_params": setup_params,
@@ -225,11 +123,12 @@ def run(ceph_cluster, **kw):
 
             if test_status == 1:
                 result_str = f"Test {test_name} failed"
-                assert False, result_str
+                log.error(result_str)
+                return 1
             else:
                 result_str = f"Test {test_name} passed"
                 log.info(result_str)
-            time.sleep(30)  # Wait before next test start
+            time.sleep(10)  # Wait before next test start
         return 0
     except Exception as e:
         log.error(e)
@@ -238,341 +137,544 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean Up in progess")
         wait_time_secs = 300
-        if wait_for_healthy_ceph(client, fs_util, wait_time_secs) == 0:
-            client.exec_command(
-                sudo=True,
-                cmd="ceph fs status;ceph status -s;ceph health detail",
-            )
+        if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
             assert (
                 False
             ), f"Cluster health is not OK even after waiting for {wait_time_secs}secs"
 
         if cleanup:
-            for sv_name in mount_details:
-                for mnt_type in mount_details[sv_name]:
-                    mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
-                    cmd = f"umount -l {mountpoint}"
-                    client1.exec_command(
-                        sudo=True,
-                        cmd=cmd,
-                    )
-                    if mnt_type == "nfs":
-                        nfs_export = mount_details[sv_name][mnt_type]["nfs_export"]
-                        cmd = f"ceph nfs export rm {setup_params['nfs_name']} {nfs_export}"
-                        client.exec_command(
-                            sudo=True,
-                            cmd=cmd,
-                        )
-            client.exec_command(
-                sudo=True,
-                cmd=f"ceph nfs cluster delete {setup_params['nfs_name']}",
-                check_ec=False,
-            )
-            sv_list = setup_params["sv_list"]
-            for i in range(len(sv_list)):
-                subvol_name = sv_list[i]["subvol_name"]
-                fs_name = sv_list[i]["vol_name"]
-                fs_util.remove_subvolume(
-                    client,
-                    fs_name,
-                    subvol_name,
-                    validate=True,
-                    group_name=sv_list[i].get("group_name", None),
-                )
-                if sv_list[i].get("group_name"):
-                    group_name = sv_list[i]["group_name"]
-            fs_util.remove_subvolumegroup(client, default_fs, group_name, validate=True)
+            cephfs_common_utils.test_cleanup(client, setup_params, mount_details)
+            fs_util.remove_fs(client, fs_name)
 
 
 def fscrypt_test_run(fscrypt_test_params):
-    if fscrypt_test_params["test_case"] == "fscrypt_lifecycle_test":
-        test_status = fscrypt_lifecycle(fscrypt_test_params)
-        return test_status
+    """
+    Test runner utility
+    Required params:
+    testcase name, test params in below format,
+    fscrypt_test_params = {
+            "ceph_cluster": ceph_cluster,
+            "fs_name": fs_name,
+            "cephfs_common_utils": cephfs_common_utils,
+            "fscrypt_util": fscrypt_util,
+            "clients": clients,
+            "setup_params": setup_params,
+            "mount_details": mount_details,
+        }
+    """
+    fscrypt_tests = {
+        "fscrypt_enctag": fscrypt_enctag,
+        "fscrypt_datapath": fscrypt_datapath,
+        "fscrypt_xttrs": fscrypt_xttrs,
+        "fscrypt_file_types": fscrypt_file_types,
+    }
+    test_case = fscrypt_test_params["test_case"]
+    test_status = fscrypt_tests[test_case](fscrypt_test_params)
+    return test_status
 
 
-def fscrypt_lifecycle(fscrypt_test_params):
-    log.info("FScrypt lifecycle test across Kernel, Ceph-fuse and NFS mountpoints")
+def fscrypt_enctag(fscrypt_test_params):
+    """
+    Test workflow - CRUD ops for Enctag
+    """
+    log.info("CRUD ops for Enctag")
     fscrypt_util = fscrypt_test_params["fscrypt_util"]
-
     clients = fscrypt_test_params["clients"]
-
+    cephfs_common_utils = fscrypt_test_params["cephfs_common_utils"]
     mount_details = fscrypt_test_params["mount_details"]
-    test_status = 0
+    setup_params = fscrypt_test_params["setup_params"].copy()
+    fs_name = fscrypt_test_params["fs_name"]
+    client = clients[0]
+    log.info("Use enctag field in subvolume create cli")
+    rand_str = "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in list(range(4))
+    )
+    sv_enc_tag = {
+        "vol_name": fs_name,
+        "subvol_name": "sv_enc_tag",
+        "enctag": f"enc_tag_{rand_str}",
+    }
+    cephfs_common_utils.create_subvolume(client, **sv_enc_tag)
+    sv_non_def_enc_tag = {
+        "vol_name": fs_name,
+        "subvol_name": "sv_non_def_enc_tag",
+        "enctag": f"enc_tag_{rand_str}",
+        "group_name": setup_params["subvolumegroup"]["group_name"],
+    }
+    cephfs_common_utils.create_subvolume(client, **sv_non_def_enc_tag)
+    sv_list = [sv_enc_tag, sv_non_def_enc_tag]
+    sv_list_tmp = setup_params["sv_list"]
+    sv_list_tmp.extend(sv_list)
+    fscrypt_test_params["setup_params"].update({"sv_list": sv_list_tmp})
+    setup_params["sv_list"] = sv_list
+    mnt_details = cephfs_common_utils.test_mount(clients, setup_params)
+    mount_details.update(mnt_details)
+    log.info("Run CRUD ops on enctag")
+    if enc_tag_crud_ops(client, cephfs_common_utils, sv_list):
+        return 1
+    log.info(
+        "Set enctag again on subvolumes.Perform fscrypt setup on mount point of subvolumes"
+    )
+    enc_tag_crud_ops(client, cephfs_common_utils, sv_list, ["set"])
+    for sv in sv_list:
+        sv_name = sv["subvol_name"]
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(4))
+        )
+        mnt_client = mnt_details[sv_name]["fuse"]["mnt_client"]
+        mnt_pt = mnt_details[sv_name]["fuse"]["mountpoint"]
+        if fscrypt_util.setup(mnt_client, mnt_pt):
+            return 1
+        encrypt_path = f"{mnt_pt}/testdir_{rand_str}"
+        cmd = f"mkdir {encrypt_path}"
+        mnt_client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        encrypt_args = {
+            "protector_source": random.choice(["custom_passphrase", "raw_key"])
+        }
+        log.info("fscrypt encrypt on test directory")
+        encrypt_params = fscrypt_util.encrypt(
+            mnt_client, encrypt_path, mnt_pt, **encrypt_args
+        )
+        log.info("Run CRUD ops on enctag")
+        if enc_tag_crud_ops(client, cephfs_common_utils, [sv]):
+            return 1
+        log.info("fscrypt lock testdir")
+        if fscrypt_util.lock(mnt_client, encrypt_path):
+            return 1
+        log.info("Run CRUD ops on enctag")
+        if enc_tag_crud_ops(client, cephfs_common_utils, [sv]):
+            return 1
+        protector_id = encrypt_params["protector_id"]
+        unlock_args = {"key": encrypt_params["key"]}
+        if fscrypt_util.unlock(
+            mnt_client, encrypt_path, mnt_pt, protector_id, **unlock_args
+        ):
+            return 1
+    return 0
 
-    client1 = clients[1]
 
+def fscrypt_datapath(fscrypt_test_params):
+    """
+    Test workflow - Data Path testing on FScrypt encrypted directory
+    """
+    log.info("FScrypt data path testing")
+    fscrypt_util = fscrypt_test_params["fscrypt_util"]
+    mount_details = fscrypt_test_params["mount_details"]
+
+    Test1 = "Test writing data with small, half write on previous block and trailing on new block"
+    Test2 = "Test writing data with huge hole, half write on previous block and trailing on new block"
+    Test3 = "Test writing data past many holes on offset 0 of block"
+    Test4 = "Test simple rmw"
+    Test5 = "Test copy smaller file -> larger file gets new file size"
+    Test6 = "Test overwrite/cp displays effective_size and not real size"
+    Test7 = "Test lchown to ensure target is set"
+    Test8 = "Test 900m hole 100m data write"
+    Test9 = "Test 200M overwrite of 1G file"
+    Test10 = "Test truncate down from 1GB"
+    Test11 = "Test invalidate cache on truncate"
+
+    def data_path_test1(client, test_path):
+        src_file = f"{test_path}/../testfile"
+        dst_file = f"{test_path}/dp_test1"
+        cmd = f"python -c 'print('s' * 5529)' > {src_file};"
+        cmd += f"ls -l {src_file};"
+        cmd += f"dd of={dst_file} bs=1 if={src_file} seek=3379;"
+        cmd += f"ls -l {dst_file}"
+        client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        cmd = f"python -c 'print('t' * 4033)' > {src_file};"
+        cmd += f"ls -l {src_file};"
+        cmd += f"dd of={dst_file} bs=1 if={src_file} seek=4127;"
+        cmd += f"ls -l {dst_file}"
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        log.info(out)
+        return 0
+
+    def data_path_test2(client, test_path):
+        src_file = f"{test_path}/../testfile"
+        dst_file = f"{test_path}/dp_test2"
+        cmd = f"python -c 'print('s' * 4096)' > {src_file};"
+        cmd += f"ls -l {src_file};"
+        cmd += f"dd of={dst_file} bs=1 if={src_file} seek=2147477504;"
+        cmd += f"ls -l {dst_file}"
+        client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        cmd = f"python -c 'print('t' * 8)' > {src_file};"
+        cmd += f"ls -l {src_file};"
+        cmd += f"dd of={dst_file} bs=1 if={src_file} seek=12;"
+        cmd += f"ls -l {dst_file}"
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        log.info(out)
+        return 0
+
+    def data_path_test3(client, test_path):
+        src_file = f"{test_path}/../testfile"
+        dst_file = f"{test_path}/dp_test3"
+        cmd = f"python -c 'print('s' * 3192)' > {src_file};"
+        cmd += f"ls -l {src_file};"
+        cmd += f"dd of={dst_file} bs=1 if={src_file} seek=60653568;"
+        cmd += f"ls -l {dst_file}"
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        log.info(out)
+        return 0
+
+    def data_path_test4(client, test_path):
+        src_file = f"{test_path}/../testfile"
+        dst_file = f"{test_path}/dp_test4"
+        cmd = f"python -c 'print('s' * 32)' > {src_file};"
+        cmd += f"ls -l {src_file};"
+        cmd += f"dd of={dst_file} bs=1 if={src_file} seek=0;"
+        cmd += f"ls -l {dst_file}"
+        client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        cmd = f"python -c 'print('t' * 8)' > {src_file};"
+        cmd += f"ls -l {src_file};"
+        cmd += f"dd of={dst_file} bs=1 if={src_file} seek=8;"
+        cmd += f"ls -l {dst_file}"
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        log.info(out)
+        return 0
+
+    def data_path_test5(client, test_path):
+        f1 = f"{test_path}/dp_test5_f1"
+        f2 = f"{test_path}/dp_test5_f2"
+        cmd = f"touch {f1};truncate -s 1048576 {f1};"
+        cmd += f"touch {f2};truncate -s 1024 {f2};"
+        cmd += f"cp -f {f2} {f1};"
+        client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        cmd = f"ls -sh {f1}"
+        cmd += "| awk '{ print $1 }'"
+        f1_size, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        cmd = f"ls -sh {f2}"
+        cmd += "| awk '{ print $1 }'"
+        f2_size, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        log.info("f1_size - %s,f2_size - %s", f1_size, f2_size)
+        if str(f1_size) != str(f2_size):
+            raise Exception("File size not correct after small_file to large_file copy")
+        return 0
+
+    def data_path_test6(client, test_path):
+        f1 = f"{test_path}/dp_test6_f1"
+        cmd = f"touch {f1};truncate -s 68686 {f1};"
+        client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        cmd = f"ls -sh {f1}"
+        cmd += "| awk '{ print $1 }'"
+        f1_size, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        log.info(f1_size)
+        if "68K" not in str(f1_size):
+            raise Exception("File size not correct after truncate")
+        return 0
+
+    def data_path_test7(client, test_path):
+        f1 = f"{test_path}/dp_test7_symlink"
+        cmd = f"cp /var/log/messages {test_path}/../;ln -s {test_path}/../messages {f1};ls -l {f1};"
+        cmd += f"chown cephuser:cephuser {f1}"
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        log.info(out)
+        cmd = f"ls -lh {test_path}/../messages"
+        cmd += "| awk '{ print $3 }'"
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=f"ls -l {test_path}/../messages",
+            check_ec=False,
+        )
+        if "cephuser" not in str(out):
+            raise Exception("chown on symlink file failed")
+        return 0
+
+    def data_path_test8(client, test_path):
+        f1 = f"{test_path}/../dp_test8_f1"
+        f2 = f"{test_path}/dp_test8_f2"
+        client.exec_command(
+            sudo=True,
+            cmd=f"truncate -s 1g {f1}",
+            check_ec=False,
+        )
+        cmd = f"dd of={f2} bs=1M if={f1} seek=900"
+        client.exec_command(
+            sudo=True, cmd=cmd, check_ec=False, long_running=True, timeout=600
+        )
+        return 0
+
+    def data_path_test9(client, test_path):
+        f1 = f"{test_path}/dp_test9_f1"
+        client.exec_command(
+            sudo=True,
+            cmd=f"truncate -s 1g {f1}",
+            check_ec=False,
+        )
+        cmd = f"dd if=/dev/urandom of={f1} seek=400 count=200 bs=1M"
+        client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        return 0
+
+    def data_path_test10(client, test_path):
+        f1 = f"{test_path}/dp_test10_f1"
+        cmd = f"truncate -s 1024M {f1};ls -l {f1};truncate -s 900M {f1};ls -l {f1};"
+        cmd += f"truncate -s 400M {f1};ls -l {f1};truncate -s 1M {f1};ls -l {f1};"
+        client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        cmd = f"ls -sh {f1}"
+        cmd += "| awk '{ print $1 }'"
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        log.info(out)
+        if "1.0M" not in str(out):
+            raise Exception("truncate down to 1M from 1G didn't suceed")
+        return 0
+
+    def data_path_test11(client, test_path):
+        f1 = f"{test_path}/dp_test11_f1"
+        cmd = f"echo ab > {f1};truncate -s 1 {f1};cat {f1}"
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        log.info(out)
+        if str(out) != "a":
+            raise Exception("Cache invalidate by truncate didn't suceed")
+        return 0
+
+    test_cmds = {
+        Test1: data_path_test1,
+        Test2: data_path_test2,
+        Test3: data_path_test3,
+        Test4: data_path_test4,
+        Test5: data_path_test5,
+        Test6: data_path_test6,
+        Test7: data_path_test7,
+        Test8: data_path_test8,
+        Test9: data_path_test9,
+        Test10: data_path_test10,
+        Test11: data_path_test11,
+    }
+    encrypt_info = fscrypt_util.encrypt_dir_setup(mount_details)
     test_status = 0
-    mnt_type = "kernel"
-    log.info("Create 2 test directories in each subvolume")
+    for test_case in test_cmds:
+        sv_name = random.choice(list(mount_details.keys()))
+        mnt_client = mount_details[sv_name]["fuse"]["mnt_client"]
+        encrypt_path = encrypt_info[sv_name]["path"]
+        log.info("\n\nStarting Data Path Test - %s\n", test_case)
+        try:
+            test_cmds[test_case](mnt_client, encrypt_path)
+        except CommandFailed as ex:
+            log.error("Data path test %s failed with error - %s", test_case, ex)
+            test_status = 1
+    return test_status
+
+
+def fscrypt_xttrs(fscrypt_test_params):
+    """
+    Test workflow - New fscrypt xttrs validation
+    Verify new xattrs ceph.fscrypt.file and ceph.fscrypt.encname
+    """
+    log.info(
+        "Verify new xattrs ceph.fscrypt.auth, ceph.fscrypt.file and ceph.fscrypt.encname"
+    )
+    fscrypt_util = fscrypt_test_params["fscrypt_util"]
+    mount_details = fscrypt_test_params["mount_details"]
+    encrypt_info = fscrypt_util.encrypt_dir_setup(mount_details)
     for sv_name in mount_details:
-        mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
-        for i in range(2):
-            cmd = f"mkdir {mountpoint}/fscrypt_testdir_{i}"
-            client1.exec_command(
+        encrypt_path = encrypt_info[sv_name]["path"]
+        mnt_client = mount_details[sv_name]["fuse"]["mnt_client"]
+        cmd = f"cp /var/log/messages {encrypt_path}/;"
+        mnt_client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        file_path = f"{encrypt_path}/messages"
+        # Add code when File xttr ceph.fscrypt.encname is available
+        patterns = {
+            "ceph.fscrypt.file": r"ceph.fscrypt.file=0\S+AAAAAAA=",
+            "ceph.fscrypt.auth": r"ceph.fscrypt.auth=\S+",
+        }
+        for xttr in ["ceph.fscrypt.auth", "ceph.fscrypt.file"]:
+            cmd = f"getfattr -n {xttr} {file_path}"
+            out, _ = mnt_client.exec_command(
                 sudo=True,
                 cmd=cmd,
                 check_ec=False,
             )
-    log.info("fscrypt setup on mountpoint of one subvolume from each group")
-    sv_from_def_grp = 0
-    fscrypt_sv = {}
-    for sv_name in mount_details:
-        if "sv_def" in sv_name:
-            sv_from_def_grp += 1
-        mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
-        if sv_from_def_grp <= 1 or "sv_non_def" in sv_name:
-            test_status = fscrypt_util.setup(client1, mountpoint)
-            fscrypt_sv.update({sv_name: {}})
-            if test_status == 1:
-                log.error(f"FScrypt setup on {mountpoint} failed for {sv_name}")
-                return 1
-
-    log.info(
-        "fscrypt encrypt on 2 test directories of subvolumes where fscrypt setup done"
-    )
-    for sv_name in fscrypt_sv:
-        mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
-        encrypt_path_list = []
-        for i in range(2):
-            encrypt_path = f"{mountpoint}/fscrypt_testdir_{i}"
-
-            encrypt_params = fscrypt_util.encrypt(client1, encrypt_path, mountpoint)
-            encrypt_path_dict = {
-                "encrypt_path_info": {
-                    "encrypt_params": encrypt_params,
-                    "encrypt_path": encrypt_path,
-                }
-            }
-            encrypt_path_list.append(encrypt_path_dict)
-            if encrypt_params == 1:
-                log.error(f"Encrypt on {mountpoint} failed for {sv_name}")
-                return 1
-        fscrypt_sv[sv_name].update({"encrypt_path_list": encrypt_path_list})
-
-    log.info(
-        "In encrypt path,add directories with depth as 10 and breadth as 5 and 2 files in each dir"
-    )
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        encrypt_path_list_new = []
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            file_list = add_dataset(client1, encrypt_path)
-            fscrypt_sv[sv_name].update({"file_list": file_list})
-            encrypt_dict["encrypt_path_info"].update({"file_list": file_list})
-            encrypt_path_list_new.append(encrypt_dict)
-        fscrypt_sv[sv_name].update({"encrypt_path_list": encrypt_path_list_new})
-
-    log.info("Validate file and directory names,file contents and ops before encrypt")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            fscrypt_util.validate_fscrypt(client1, "unlock", encrypt_path)
-
-    log.info("fscrypt lock")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            file_list = encrypt_dict["encrypt_path_info"]["file_list"]
-            test_status += fscrypt_util.lock(client1, encrypt_path)
-            cmd = f"find {encrypt_path}"
-            out, _ = client1.exec_command(sudo=True, cmd=cmd)
             log.info(out)
-            for file_path in file_list:
-                if file_path in out:
-                    log.error(
-                        f"fscrypt lock has not suceeded for file and dir names:{out}"
-                    )
-                    test_status += 1
-
-    log.info("Validate file and directory names,file contents and ops in locked state")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            fscrypt_util.validate_fscrypt(client1, "lock", encrypt_path)
-
-    log.info("fscrypt unlock")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            encrypt_params = encrypt_dict["encrypt_path_info"]["encrypt_params"]
-            protector_id = encrypt_params["protector_id"]
-            mnt_pt = mount_details[sv_name][mnt_type]["mountpoint"]
-            test_status += fscrypt_util.unlock(
-                client1, encrypt_path, mnt_pt, protector_id
+            out_list = out.split("\n")
+            log.info(out_list)
+            search_str = [line for line in out_list if xttr in line][0]
+            exp_str = patterns[xttr]
+            match = re.fullmatch(exp_str, search_str)
+            if not match:
+                log.error(
+                    "FScrypt File xttr %s format is incorrect for file %s",
+                    xttr,
+                    file_path,
+                )
+                return 1
+            log.info(
+                "FScrypt File xttr %s format is correct for file %s", xttr, file_path
             )
-            cmd = f"find {encrypt_path}"
-            out, _ = client1.exec_command(sudo=True, cmd=cmd)
-            for file_path in file_list:
-                if encrypt_path in file_path:
-                    if file_path not in out:
-                        log.error(
-                            "fscrypt unlock has not suceeded for file and dir names:%s not in %s",
-                            file_path,
-                            out,
-                        )
-                        test_status += 1
-
-    # Read of encrypt path after unlock issue : https://issues.redhat.com/browse/RHEL-79046
-    """
-    log.info("Validate file and directory names,file contents and ops in unlocked state")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]['encrypt_path_list']
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict['encrypt_path_info']['encrypt_path']
-            fscrypt_util.validate_fscrypt(client1,'unlock',encrypt_path)
-    """
-
-    log.info("fscrypt purge")
-    for sv_name in fscrypt_sv:
-        mnt_pt = mount_details[sv_name][mnt_type]["mountpoint"]
-        test_status += fscrypt_util.purge(client1, mnt_pt)
-
-    log.info("Validate file and directory names,file contents and ops in locked state")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            fscrypt_util.validate_fscrypt(client1, "lock", encrypt_path)
-
-    log.info("fscrypt unlock after purge")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            encrypt_params = encrypt_dict["encrypt_path_info"]["encrypt_params"]
-            protector_id = encrypt_params["protector_id"]
-            mnt_pt = mount_details[sv_name][mnt_type]["mountpoint"]
-            test_status += fscrypt_util.unlock(
-                client1, encrypt_path, mnt_pt, protector_id
-            )
-            cmd = f"find {encrypt_path}"
-            out, _ = client1.exec_command(sudo=True, cmd=cmd)
-            for file_path in file_list:
-                if encrypt_path in file_path:
-                    if file_path not in out:
-                        log.error(
-                            "fscrypt unlock has not suceeded for file and dir names:%s not in %s",
-                            file_path,
-                            out,
-                        )
-                        test_status += 1
-
-    # Read of encrypt path after unlock issue : https://issues.redhat.com/browse/RHEL-79046
-    """
-    log.info("Validate file and directory names,file contents and ops in unlocked state")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]['encrypt_path_list']
-        for encrypt_dict in encrypt_path_list:
-            encrypt_path = encrypt_dict['encrypt_path_info']['encrypt_path']
-            fscrypt_util.validate_fscrypt(client1,'unlock',encrypt_path)
-    """
-
-    log.info("fscrypt metadata destroy for policy and protector")
-    for sv_name in fscrypt_sv:
-        encrypt_path_list = fscrypt_sv[sv_name]["encrypt_path_list"]
-        for encrypt_dict in encrypt_path_list:
-            encrypt_params = encrypt_dict["encrypt_path_info"]["encrypt_params"]
-            protector_id = encrypt_params["protector_id"]
-            mnt_pt = mount_details[sv_name][mnt_type]["mountpoint"]
-            protector_params = {"id": protector_id}
-            protector_id = fscrypt_util.metadata_ops(
-                client1, "destroy", "protector", mnt_pt, **protector_params
-            )
-            policy_id = encrypt_params["policy_id"]
-            policy_params = {"id": policy_id}
-            policy_id = fscrypt_util.metadata_ops(
-                client1, "destroy", "policy", mnt_pt, **policy_params
-            )
-    if test_status:
-        return 1
-
     return 0
 
 
-def wait_for_healthy_ceph(client1, fs_util, wait_time_secs):
-    # Returns 1 if healthy, 0 if unhealthy
-    ceph_healthy = 0
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=wait_time_secs)
-    while ceph_healthy == 0 and (datetime.datetime.now() < end_time):
-        try:
-            fs_util.get_ceph_health_status(client1)
-            ceph_healthy = 1
-        except Exception as ex:
-            log.info(ex)
-            log.info(
-                f"Wait for sometime to check if Cluster health can be OK, current state : {ex}"
+def fscrypt_file_types(fscrypt_test_params):
+    """
+    Test workflow - Encryption on diff file types - Sparse files, symlinks,regular data files,image,video
+    Add all file types as dataset into encrypt directory and validation encryption in locked and unlocked mode
+    """
+    log.info(
+        "Encryption on diff file types - Sparse files, symlinks,regular data files,image,video"
+    )
+    fscrypt_util = fscrypt_test_params["fscrypt_util"]
+    mount_details = fscrypt_test_params["mount_details"]
+    encrypt_info = fscrypt_util.encrypt_dir_setup(mount_details)
+    sv_name = random.choice(list(mount_details.keys()))
+    mnt_client = mount_details[sv_name]["fuse"]["mnt_client"]
+    mnt_pt = mount_details[sv_name]["fuse"]["mountpoint"]
+    encrypt_params = encrypt_info[sv_name]["encrypt_params"]
+    protector_id = encrypt_params["protector_id"]
+    encrypt_path = encrypt_info[sv_name]["path"]
+    add_file_types(mnt_client, encrypt_path)
+    log.info("Validate files in unlocked mode")
+    if fscrypt_util.validate_fscrypt(mnt_client, "unlock", encrypt_path):
+        return 1
+    log.info("Lock the encrypt_path")
+    fscrypt_util.lock(mnt_client, encrypt_path)
+    log.info("Validate lock status on each file type")
+    if fscrypt_util.validate_fscrypt(mnt_client, "lock", encrypt_path):
+        return 1
+    log.info("Unlock the encrypt_path")
+    unlock_args = {"key": encrypt_params["key"]}
+    fscrypt_util.unlock(mnt_client, encrypt_path, mnt_pt, protector_id, **unlock_args)
+    log.info("Validate files in unlocked mode")
+    if fscrypt_util.validate_fscrypt(mnt_client, "unlock", encrypt_path):
+        return 1
+    return 0
+
+
+# HELPER ROUTINES
+def enc_tag_crud_ops(client, cephfs_common_utils, sv_list, ops=["set", "get", "rm"]):
+    """
+    This helper routine invokes enc_tag testlib with prerequisites and op_type and returns
+    0 - success , 1 - failure
+    """
+    for sv in sv_list:
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(4))
+        )
+        enc_args = {
+            "enc_tag": f"enc_tag_{rand_str}",
+            "group_name": sv.get("group_name", None),
+            "fs_name": sv["vol_name"],
+        }
+        for op in ops:
+            op_status = cephfs_common_utils.enc_tag(
+                client, op, sv["subvol_name"], **enc_args
             )
-            time.sleep(5)
+            return (
+                1 if op_status == 1 else log.info("enc_tag %s status:%s", op, op_status)
+            )
+    return 0
 
-    if ceph_healthy == 0:
-        return 0
-    return 1
 
-
-def add_dataset(client, encrypt_path):
+def add_file_types(mnt_client, encrypt_path):
     """
-    This method is to add add files using dd to directory path created as - mix(depth-10,breadth-5)
-    Also to add some test files used for validation in lock/unlock states
+    This helper routine adds different file types to given encrypt path including
+    sparse,hard and soft links,image,video and audio files
     """
-    file_list = []
+    rand_str = "".join(
+        random.choice(string.ascii_lowercase + string.digits) for _ in list(range(4))
+    )
+    subdir1 = f"{encrypt_path}/data_dir1_{rand_str}"
+    subdir2 = f"{encrypt_path}/data_dir2_{rand_str}"
+    subdir3 = f"{encrypt_path}/data_dir3_{rand_str}"
+    image_path = (
+        "https://github.com/yavuzceliker/sample-images/blob/main/images/image-1.jpg"
+    )
+    video_path = "http://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerJoyrides.mp4"
+    audio_path = "https://voiceage.com/wbsamples/in_mono/Chorus.wav"
+    cmd = f"mkdir {subdir1};mkdir {subdir2};yum install -y --nogpgcheck wget"
+    mnt_client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+    sl_cmds = f"ln -s /var/log/messages {encrypt_path}/softlink_messages1;"
+    sl_cmds += f"ln -s /var/log/messages {encrypt_path}/softlink_messages2;"
+    hl_cmds = f"ln /var/log/messages {encrypt_path}/hardlink_messages1;"
+    hl_cmds += f"ln /var/log/messages {encrypt_path}/hardlink_messages2"
+    sp_cmds = f"truncate -s 1m {encrypt_path}/sparse_file_1m;truncate -s 10k {encrypt_path}/sparse_file_10k;"
+    sp_cmds += f"truncate -s 1g {encrypt_path}/sparse_file_1g;truncate -s 3k {encrypt_path}/sparse_file_3k"
 
-    log.info("Add directory with multi-level breadth and depth")
-    dir_path = f"{encrypt_path}/"
-
-    # multi-depth
-    for i in range(1, 11):
-        dir_path += f"dir_{i}/"
-    cmd = f"mkdir -p {dir_path}"
-    client.exec_command(sudo=True, cmd=cmd)
-    for i in range(2):
-        file_path = f"{dir_path}dd_file_2m_{i}"
-        file_list.append(file_path)
-    # multi-breadth
-    dir_path = f"{encrypt_path}"
-    for i in range(2, 6):
-        cmd = f"mkdir {dir_path}/dir_{i}/"
-        client.exec_command(sudo=True, cmd=cmd)
-        for j in range(2):
-            file_path = f"{dir_path}/dir_{i}/dd_file_2m_{j}"
-            file_list.append(file_path)
-
-    for file_path in file_list:
-        client.exec_command(
-            sudo=True,
-            cmd=f"dd bs=1M count=2 if=/dev/urandom of={file_path}",
+    file_type_cmds = {
+        "soft_link": sl_cmds,
+        "hard_link": hl_cmds,
+        "image": f"cd {subdir1};wget {image_path};cd {subdir2};wget {image_path};cd {subdir3};wget {image_path}",
+        "video": f"cd {subdir1};wget {video_path};cd {subdir2};wget {video_path};cd {subdir3};wget {video_path}",
+        "audio": f"cd {subdir1};wget {audio_path};cd {subdir2};wget {audio_path};cd {subdir3};wget {audio_path}",
+        "sparse": sp_cmds,
+    }
+    for file_type in file_type_cmds:
+        mnt_client.exec_command(
+            sudo=True, cmd=f"{file_type_cmds[file_type]}", check_ec=False
         )
-
-    log.info("Add directory with files used for lock/unlock tests")
-    linux_files = ["/var/log/messages", "/var/log/cloud-init.log", "/var/log/dnf.log"]
-    for i in range(1, 25):
-        linux_file = random.choice(linux_files)
-        file_path = f"{encrypt_path}/testfile_{i}"
-        client.exec_command(
-            sudo=True,
-            cmd=f"dd bs=1M count=2 if={linux_file} of={file_path}",
-        )
-
-    return file_list
-
-
-def fscrypt_io(client, file_list, run_time):
-
-    def fscrypt_fio(client, file_path):
-        client.exec_command(
-            sudo=True,
-            cmd=f"fio --name={file_path} --ioengine=libaio --size 2M --rw=write --bs=1M --direct=1 "
-            f"--numjobs=1 --iodepth=5 --runtime=10",
-            timeout=20,
-            long_running=True,
-        )
-
-    end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
-    while datetime.datetime.now() < end_time:
-        with parallel() as p:
-            for file_path in file_list:
-                p.spawn(fscrypt_fio, client, file_path, validate=False)
+    return 0

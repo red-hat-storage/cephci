@@ -73,15 +73,27 @@ def run(ceph_cluster, **kw):
         cleanup = config.get("cleanup", 1)
         client = clients[0]
         log.info("checking Pre-requisites")
-        log.info("Verify Cluster is healthy before test")
-        if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
-            log.error("Cluster health is not OK even after waiting for 300secs")
-            return 1
+        for client_tmp in clients:
+            for mnt_prefix in [
+                "/mnt/cephfs_",
+                "/mnt/fuse_",
+                "/mnt/kernel_",
+                "/mnt/nfs_",
+            ]:
+                if cephfs_common_utils.client_mount_cleanup(
+                    client_tmp, mnt_prefix=mnt_prefix
+                ):
+                    log.error("Client old mountpoints cleanup didn't suceed")
+                    fs_util.reboot_node(client_tmp)
         log.info("Setup test configuration")
         setup_params = cephfs_common_utils.test_setup(default_fs, client)
         fs_name = setup_params["fs_name"]
         log.info("Mount subvolumes")
         mount_details = cephfs_common_utils.test_mount(clients, setup_params)
+        log.info("Verify Cluster is healthy before test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
         test_case_name = config.get("test_name", "all_tests")
         test_functional = [
             "fscrypt_lifecycle",
@@ -128,9 +140,9 @@ def run(ceph_cluster, **kw):
         wait_time_secs = 300
         if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
             assert False, "Cluster health is not OK even after waiting for sometime"
-
         if cleanup:
             cephfs_common_utils.test_cleanup(client, setup_params, mount_details)
+            fs_util.remove_fs(client, fs_name)
 
 
 def fscrypt_test_run(fscrypt_test_params):
@@ -226,7 +238,8 @@ def fscrypt_lifecycle(fscrypt_test_params):
         encrypt_path_list_new = []
         for encrypt_dict in encrypt_path_list:
             encrypt_path = encrypt_dict["encrypt_path_info"]["encrypt_path"]
-            file_list = fscrypt_util.add_dataset(client1, encrypt_path)
+            kwargs = {"extra_files": 25}
+            file_list = fscrypt_util.add_dataset(client1, encrypt_path, **kwargs)
             fscrypt_sv[sv_name].update({"file_list": file_list})
             encrypt_dict["encrypt_path_info"].update({"file_list": file_list})
             encrypt_path_list_new.append(encrypt_dict)
