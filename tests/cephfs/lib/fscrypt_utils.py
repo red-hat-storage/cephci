@@ -861,6 +861,42 @@ class FscryptUtils(object):
             test_status += 1
         return test_status
 
+    def encrypt_dir_setup(self, mount_details):
+        """
+        This method assists in creating a encrypted directory under given mountpoint
+        Required params:
+        mount_details - A dict object which is a return variable from cephfs_common_lib.test_mount
+        including mount details for each subvol
+        """
+        encrypt_info = {}
+        for sv_name in mount_details:
+            encrypt_info.update({sv_name: {}})
+            mnt_pt = mount_details[sv_name]["fuse"]["mountpoint"]
+            mnt_client = mount_details[sv_name]["fuse"]["mnt_client"]
+            if self.setup(mnt_client, mnt_pt):
+                return 1
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(4))
+            )
+            encrypt_path = f"{mnt_pt}/testdir_{rand_str}"
+            encrypt_info[sv_name].update({"path": encrypt_path})
+            cmd = f"mkdir {encrypt_path}"
+            mnt_client.exec_command(
+                sudo=True,
+                cmd=cmd,
+                check_ec=False,
+            )
+            encrypt_args = {
+                "protector_source": random.choice(["custom_passphrase", "raw_key"])
+            }
+            log.info("fscrypt encrypt on test directory")
+            encrypt_params = self.encrypt(
+                mnt_client, encrypt_path, mnt_pt, **encrypt_args
+            )
+            encrypt_info[sv_name].update({"encrypt_params": encrypt_params})
+        return encrypt_info
+
     # HELPER ROUTINES #
     def get_file_list(self, client, path):
         """
