@@ -143,3 +143,25 @@ def run(ceph_cluster, **kw):
         log.error(e)
         log.error(traceback.format_exc())
         return 1
+    finally:
+        if kernel_mounting_dir_1:
+            log.info(f"Unmounting and removing directory: {kernel_mounting_dir_1}")
+
+            try:
+                client1.exec_command(sudo=True, cmd=f"rm -rf {kernel_mounting_dir_1}/*")
+            except Exception as e:
+                log.warning(
+                    f"Failed to delete contents of {kernel_mounting_dir_1}: {e}"
+                )
+
+            try:
+                client1.exec_command(
+                    sudo=True, cmd=f"umount -f {kernel_mounting_dir_1}"
+                )
+            except Exception as e:
+                log.warning(f"Failed to unmount {kernel_mounting_dir_1}: {e}")
+
+            try:
+                client1.exec_command(sudo=True, cmd=f"rm -rf {kernel_mounting_dir_1}")
+            except Exception as e:
+                log.warning(f"Failed to remove directory {kernel_mounting_dir_1}: {e}")

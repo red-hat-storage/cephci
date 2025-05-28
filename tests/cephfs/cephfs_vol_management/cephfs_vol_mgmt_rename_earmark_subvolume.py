@@ -106,7 +106,7 @@ def run(ceph_cluster, **kw):
             cmd=f"ceph orch apply mds {fs_name} --placement='3 {hosts}'",
             check_ec=False,
         )
-        fuse_mounting_dir_1 = f"/mnt/cephfs_fuse_{ran_string}"
+        fuse_mounting_dir_1 = f"/mnt/cephfs_fuse_{ran_string}/"
         fs_util.fuse_mount(
             [client1], fuse_mounting_dir_1, extra_params=f" --client_fs {fs_name}"
         )
@@ -627,6 +627,10 @@ def run(ceph_cluster, **kw):
             "\n---------------***************-------------------------------------------------------"
             "\n"
         )
+        client1.exec_command(
+            sudo=True, cmd=f"rm -rf {fuse_mounting_dir_1}/*", check_ec=False
+        )
+
         client1.exec_command(
             sudo=True, cmd=f"umount {fuse_mounting_dir_1}", check_ec=False
         )

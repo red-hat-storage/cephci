@@ -149,7 +149,30 @@ def run(ceph_cluster, **kw):
             ]:
                 p.spawn(fs_util.run_ios, clients[0], i)
 
+        return 0
+
+    except Exception as e:
+        log.error(e)
+        log.error(traceback.format_exc())
+        return 1
+    finally:
         log.info("Clean up the system")
+        for mount_dir in [kernel_mounting_dir_1, fuse_mounting_dir_1]:
+            try:
+                clients[0].exec_command(sudo=True, cmd=f"rm -rf {mount_dir}/*")
+            except Exception as e:
+                log.warning(f"Failed to delete contents of {mount_dir}: {e}")
+
+            try:
+                clients[0].exec_command(sudo=True, cmd=f"umount -f {mount_dir}")
+            except Exception as e:
+                log.warning(f"Failed to unmount {mount_dir}: {e}")
+
+            try:
+                clients[0].exec_command(sudo=True, cmd=f"rm -rf {mount_dir}")
+            except Exception as e:
+                log.warning(f"Failed to remove mount dir {mount_dir}: {e}")
+
         for subvolume in subvolume_list:
             fs_util.remove_subvolume(clients[0], **subvolume)
 
@@ -159,9 +182,10 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
         )
-        return 0
-
-    except Exception as e:
-        log.error(e)
-        log.error(traceback.format_exc())
-        return 1
+        log.info("Remove data pools attached to each of the filesystem")
+        rm_pool_from_FS = [
+            "ceph fs rm_data_pool cephfs cephfs-new-data-pool",
+            "ceph fs rm_data_pool cephfs-ec cephfs-new-data-pool-ec",
+        ]
+        for cmd in rm_pool_from_FS:
+            clients[0].exec_command(sudo=True, cmd=cmd)
