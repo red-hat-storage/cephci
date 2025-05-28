@@ -90,7 +90,7 @@ tests:
             serial: 1
             max_ns: 100
             bdevs:
-            - count: 20
+            - count: 10
               size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
@@ -99,25 +99,7 @@ tests:
             serial: 1
             max_ns: 100
             bdevs:
-            - count: 20
-              size: 8G
-            listener_port: 4420
-            listeners: [node6, node7, node8, node9]
-            allow_host: "*"
-          - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
-            max_ns: 100
-            bdevs:
-            - count: 20
-              size: 8G
-            listener_port: 4420
-            listeners: [node6, node7, node8, node9]
-            allow_host: "*"
-          - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
-            max_ns: 100
-            bdevs:
-            - count: 20
+            - count: 10
               size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9]
@@ -158,7 +140,7 @@ tests:
             serial: 1
             max_ns: 100
             bdevs:
-            - count: 20
+            - count: 10
               size: 8G
             listener_port: 4420
             listeners: [node6, node7]
@@ -167,25 +149,7 @@ tests:
             serial: 1
             max_ns: 100
             bdevs:
-            - count: 20
-              size: 8G
-            listener_port: 4420
-            listeners: [node6, node7]
-            allow_host: "*"
-          - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
-            max_ns: 100
-            bdevs:
-            - count: 20
-              size: 8G
-            listener_port: 4420
-            listeners: [node6, node7]
-            allow_host: "*"
-          - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
-            max_ns: 100
-            bdevs:
-            - count: 20
+            - count: 10
               size: 8G
             listener_port: 4420
             listeners: [node6, node7]
@@ -236,7 +200,7 @@ tests:
             serial: 1
             max_ns: 100
             bdevs:
-            - count: 20
+            - count: 10
               size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
@@ -245,25 +209,7 @@ tests:
             serial: 1
             max_ns: 100
             bdevs:
-            - count: 20
-              size: 8G
-            listener_port: 4420
-            listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
-            allow_host: "*"
-          - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
-            max_ns: 100
-            bdevs:
-            - count: 20
-              size: 8G
-            listener_port: 4420
-            listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
-            allow_host: "*"
-          - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
-            max_ns: 100
-            bdevs:
-            - count: 20
+            - count: 10
               size: 8G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
@@ -306,7 +252,7 @@ tests:
             serial: 1
             max_ns: 2048
             bdevs:
-            - count: 20
+            - count: 10
               size: 8G                              # auto NS load balancing for namespace addition would be verified here
             listener_port: 4420
             listeners: [node4, node5, node6, node7]
@@ -315,25 +261,7 @@ tests:
             serial: 1
             max_ns: 2048
             bdevs:
-            - count: 20
-              size: 8G
-            listener_port: 4420
-            listeners: [node4, node5, node6, node7]
-            allow_host: "*"
-          - nqn: nqn.2016-06.io.spdk:cnode3
-            serial: 1
-            max_ns: 2048
-            bdevs:
-            - count: 20
-              size: 8G
-            listener_port: 4420
-            listeners: [node4, node5, node6, node7]
-            allow_host: "*"
-          - nqn: nqn.2016-06.io.spdk:cnode4
-            serial: 1
-            max_ns: 2048
-            bdevs:
-            - count: 20
+            - count: 10
               size: 8G
             listener_port: 4420
             listeners: [node4, node5, node6, node7]
@@ -348,8 +276,6 @@ tests:
               subsystems:
                 - nqn.2016-06.io.spdk:cnode1
                 - nqn.2016-06.io.spdk:cnode2
-                - nqn.2016-06.io.spdk:cnode3
-                - nqn.2016-06.io.spdk:cnode4
           - ns_add:
               subsystems:
                 - nqn: nqn.2016-06.io.spdk:cnode1
@@ -360,20 +286,10 @@ tests:
                   bdevs:
                     - count: 5
                       size: 8G
-                - nqn: nqn.2016-06.io.spdk:cnode3
-                  bdevs:
-                    - count: 5
-                      size: 8G
-                - nqn: nqn.2016-06.io.spdk:cnode4
-                  bdevs:
-                    - count: 5
-                      size: 8G
           - ns_del:
               count: 3
               subsystems:
                 - nqn.2016-06.io.spdk:cnode2
-                - nqn.2016-06.io.spdk:cnode3
-                - nqn.2016-06.io.spdk:cnode4
       desc: 4GW 1GWgroup namespace load balancing
       destroy-cluster: false
       module: test_ceph_nvmeof_loadbalancing.py
