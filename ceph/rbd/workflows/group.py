@@ -361,7 +361,17 @@ def create_mirror_group(rbd, client, pool_type, **kw):
     for pool, pool_config in multi_pool_config.items():
         group = "group_" + pool.split("_")[-1]
         group_config = {"client": client, "pool": pool, "group": group}
-        grouptype = kw.get("config").get("grouptype", "single_pool_without_namespace")
+        grouptype = None
+        if kw.get("config").get("grouptype"):
+            grouptype = kw.get("config").get(
+                "grouptype", "single_pool_without_namespace"
+            )
+        elif kw.get("config").get(pool_type).get("grouptype"):
+            grouptype = (
+                kw.get("config")
+                .get(pool_type)
+                .get("grouptype", "single_pool_without_namespace")
+            )
         if grouptype in {"single_pool_with_namespace", "multi_pool_with_namespace"}:
             if not kw.get("config", {}).get(pool_type, {}).get("group-namespace"):
                 # Create namespace only on the primary site.

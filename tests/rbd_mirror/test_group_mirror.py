@@ -64,6 +64,7 @@ Step 25: Cleanup the images, file and pools
 """
 
 import json
+import random
 import time
 from copy import deepcopy
 
@@ -81,6 +82,7 @@ from ceph.rbd.workflows.group_mirror import (
     wait_for_idle,
 )
 from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
+from ceph.rbd.workflows.namespace import enable_namespace_mirroring
 from tests.rbd_mirror import rbd_mirror_utils as rbdmirror
 from utility.log import Log
 
@@ -154,7 +156,21 @@ def test_group_mirroring(
             image_spec = []
             for image, image_config in pool_config.items():
                 if "image" in image:
-                    image_spec.append(pool + "/" + image)
+                    if "namespace" in pool_config:
+                        image_spec.append(
+                            pool + "/" + pool_config.get("namespace") + "/" + image
+                        )
+                    else:
+                        image_spec.append(pool + "/" + image)
+            pool_spec = None
+            if "namespace" in pool_config:
+                enable_namespace_mirroring(
+                    rbd_primary, rbd_secondary, pool, **pool_config
+                )
+                pool_spec = pool + "/" + pool_config.get("namespace")
+            else:
+                pool_spec = pool
+
             image_spec_copy = deepcopy(image_spec)
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
@@ -267,6 +283,35 @@ def test_group_mirroring(
                 "Successfully verified md5sum of all images matches across both clusters"
             )
 
+            disable_group_mirroring_and_verify_state(rbd_primary, **group_config)
+
+            out, err = rbd_secondary.group.list(**{"pool-spec": pool_spec})
+            if out:
+                raise Exception(
+                    "group is listed on the secondary cluster after disabling group mirroring on primary: %s",
+                    out,
+                )
+            else:
+                log.info(
+                    "Group deleted on secondary when group mirroring is disabled on primary"
+                )
+
+            enable_group_mirroring_and_verify_state(rbd_primary, **group_config)
+            rbd_primary.group.remove(**group_config)
+            out, err = rbd_primary.group.list(**{"pool-spec": pool_spec})
+            if out:
+                raise Exception("group listed on primary after deleting: %s", out)
+            else:
+                log.info("Group removed on primary")
+            out, err = rbd_secondary.group.list(**{"pool-spec": pool_spec})
+            if out:
+                raise Exception(
+                    "Group is listed on the secondary cluster after removing on primary: %s",
+                    out,
+                )
+            else:
+                log.info("Group removed on secondary when group is removed on primary")
+
 
 def test_group_renaming_with_mirroring(
     rbd_primary,
@@ -333,7 +378,20 @@ def test_group_renaming_with_mirroring(
             image_spec = []
             for image, image_config in pool_config.items():
                 if "image" in image:
-                    image_spec.append(pool + "/" + image)
+                    if "namespace" in pool_config:
+                        image_spec.append(
+                            pool + "/" + pool_config.get("namespace") + "/" + image
+                        )
+                    else:
+                        image_spec.append(pool + "/" + image)
+            if "namespace" in pool_config:
+                enable_namespace_mirroring(
+                    rbd_primary, rbd_secondary, pool, **pool_config
+                )
+                pool_spec = pool + "/" + pool_config.get("namespace")
+            else:
+                pool_spec = pool
+
             image_spec_copy = deepcopy(image_spec)
             io_config["rbd_obj"] = rbd_primary
             io_config["client"] = client_primary
@@ -372,7 +430,7 @@ def test_group_renaming_with_mirroring(
             out, err = rbd_primary.group.rename(
                 **{
                     "source-group-spec": group_config["group-spec"],
-                    "dest-group-spec": f"{pool}/{group_new}",
+                    "dest-group-spec": f"{pool_spec}/{group_new}",
                 }
             )
             if err:
@@ -383,11 +441,11 @@ def test_group_renaming_with_mirroring(
                     + err
                 )
             else:
-                log.info("Successfully renamed group to " + pool + "/" + group_new)
+                log.info("Successfully renamed group to " + pool_spec + "/" + group_new)
 
             # Update New group name in group_config
-            group_config.update({"group-spec": pool + "/" + group_new})
-
+            group_config.update({"group-spec": pool_spec + "/" + group_new})
+            time.sleep(60)
             # Wait for group mirroring to complete
             wait_for_idle(rbd_primary, **group_config)
             log.info(
@@ -528,9 +586,14 @@ def run(**kw):
         }
         operation = kw.get("config").get("operation")
         if operation in operation_mapping:
-            pool_types = ["rep_pool_config", "ec_pool_config"]
             log.info("Running Consistency Group Mirroring across two clusters")
-            kw.get("config").update({"grouptype": kw.get("config").get("grouptype")})
+            pool_types = ["rep_pool_config", "ec_pool_config"]
+            grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
+            if not kw.get("config").get("grouptype"):
+                for pooltype in pool_types:
+                    group_type = grouptypes.pop(random.randrange(len(grouptypes)))
+                    kw.get("config").get(pooltype).update({"grouptype": group_type})
+                    log.info("Choosing Group type on %s - %s", pooltype, group_type)
             mirror_obj = initial_mirror_config(**kw)
             mirror_obj.pop("output", [])
             for val in mirror_obj.values():
