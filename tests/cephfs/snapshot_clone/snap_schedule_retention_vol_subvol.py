@@ -189,6 +189,7 @@ def run(ceph_cluster, **kw):
                 fs_cnt = len(total_fs)
                 log.info(total_fs)
                 log.info(f"fs_cnt:{fs_cnt}")
+                fs_to_rm = None
                 for i in range(0, fs_cnt):
                     fs_name = total_fs[i]["name"]
                     cmd = f"ceph fs status {fs_name}"
@@ -198,7 +199,8 @@ def run(ceph_cluster, **kw):
                     )
                     if "failed" in str(out):
                         fs_to_rm = i
-                total_fs.pop(fs_to_rm)
+                if fs_to_rm is not None:
+                    total_fs.pop(fs_to_rm)
                 if len(total_fs) == 1:
                     log.info("We need atleast two ceph FS to perform this test")
                     for i in range(1, 3):
