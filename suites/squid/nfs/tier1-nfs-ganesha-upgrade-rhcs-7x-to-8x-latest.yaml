@@ -178,6 +178,20 @@ tests:
         setup: false
 
   - test:
+      name: nfs multiple operations - pre_upgrade
+      module: test_nfs_multiple_operations_for_upgrade.py
+      desc: nfs multiple operations before upgrade create, delete, write, read, rename
+      polarion-id: CEPH-83620035
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        setup: false
+        file_count: 50
+        dd_command_size_in_M: 10
+        operation: before_upgrade
+
+  - test:
       name: Upgrade cluster to latest RHCS 8.x
       desc: Upgrade cluster to latest RHCS 8.x
       module: test_cephadm_upgrade.py
@@ -188,6 +202,20 @@ tests:
         base_cmd_args:
           verbose: true
         verify_cluster_health: true
+
+  - test:
+      name: nfs multiple operations - post_upgrade
+      module: test_nfs_multiple_operations_for_upgrade.py
+      desc: nfs multiple operations after upgrade create, delete, write, read, rename
+      polarion-id: CEPH-83620035
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 2
+        setup: false
+        file_count: 50
+        dd_command_size_in_M: 10
+        operation: after_upgrade
 
   - test:
       name: Nfs Verify rm write lookups in parellel from multi clients
