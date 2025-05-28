@@ -1079,6 +1079,90 @@ def test_ceph_83617545(ceph_cluster, config):
     LOG.info("CEPH-83617545 - NVMeoFTooManyNamespaces validated successfully.")
 
 
+def test_ceph_83617640(ceph_cluster, config):
+    """[CEPH-83617640] - Warning at maximum number of namespaces reached in group
+
+    NVMeoFVersionMismatch alert will notify the user when user is having 
+    different nvme-of gateway releases active on cluster
+
+    Args:
+        ceph_cluster: Ceph cluster object
+        config: test case config
+    """
+
+    time_to_fire = config["time_to_fire"]
+    rbd_pool = config["rbd_pool"]
+    nvme_diff_version = config["nvme_diff_version"]
+    intervel = 600
+    alert = "NVMeoFVersionMismatch"
+    msg = "Too many different NVMe-oF gateway releases active on cluster "
+
+    # Deploy nvmeof service
+    LOG.info("deploy nvme service")
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+
+    # Configure subsystems
+    LOG.info("Configure subsystems")
+    with parallel() as p:
+        for subsys_args in config["subsystems"]:
+            subsys_args["ceph_cluster"] = ceph_cluster
+            p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+
+    # Check for alert
+    # NVMeoFVersionMismatch prometheus alert should be in inactive state
+    LOG.info(
+        "NVMeoFVersionMismatch should in inactive state"
+    )
+    events = PrometheusAlerts(ha.orch)
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    # Get the image version of nvmeof daemon
+    LOG.info("Get the current nvmeof image version")
+    get_version, _ = ha.orch.shell(
+        args=["ceph", "config",  "get", "mgr", "mgr/cephadm/container_image_nvmeof"]
+    )
+
+    initial_verions_of_nvme = get_version.strip()
+    LOG.info(f"Initial version of nvme is {initial_verions_of_nvme}")
+
+    # Set the different nvmeof version so that alert will be active
+    # ceph config set mgr mgr/cephadm/container_image_nvmeof  < container image >
+    LOG.info(f"Set ceph config set mgr mgr/cephadm/container_image_nvmeof  {nvme_diff_version}")
+    output, _ = ha.orch.shell(
+        args=["ceph", "config", "set", "mgr", "mgr/cephadm/container_image_nvmeof", f"{nvme_diff_version}"]
+    )
+
+    # Redeploy NVMeOF daemon
+    LOG.info("Redeploy NVMeof daemon")
+    ha.daemon_redeploy(ha.gateways[0])
+
+    # Check if alert is in firing state or not
+    LOG.info("Check for firing state of alert")
+    events.monitor_alert(alert, timeout=time_to_fire, interval=intervel, msg=msg)
+
+    # Set the initial version of nvmeof image
+    LOG.info("Set the initial version of nvmeof image")
+    output, _ = ha.orch.shell(
+        args=["ceph", "config", "set", "mgr", "mgr/cephadm/container_image_nvmeof", f"{initial_verions_of_nvme}"]
+    )
+
+    # Redeploy all the nvme daemons
+    LOG.info("Redeploy all the nvme daemons")
+    for gateway in ha.gateways:
+        ha.daemon_redeploy(gateway)
+    
+    # Check alert is in inactive state or not
+    LOG.info("Check alert is in inactive state or not")
+    events.monitor_alert(
+        alert, timeout=time_to_fire, state="inactive", interval=intervel
+    )
+
+    LOG.info("CEPH-83617640 - NVMeoFVersionMismatch validated successfully.")
+
+
 testcases = {
     "CEPH-83610948": test_ceph_83610948,
     "CEPH-83610950": test_ceph_83610950,
@@ -1092,6 +1176,7 @@ testcases = {
     "CEPH-83617404": test_ceph_83617404,
     "CEPH-83617622": test_ceph_83617622,
     "CEPH-83617545": test_ceph_83617545,
+    "CEPH-83617640": test_ceph_83617640,
 }
 
 
