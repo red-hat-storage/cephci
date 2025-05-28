@@ -54,6 +54,9 @@ class CephfsScaleUtils(object):
         subvolume_name,
         subvolume_group_name,
         mount_type,
+        nfs_cluster_name=None,
+        nfs_server=None,
+        nfs_server_ip=None,
     ):
         """
         Create subvolumes and mount them using the specified mount type.
@@ -64,13 +67,19 @@ class CephfsScaleUtils(object):
         :param default_fs: Default file system name
         :param subvolume_name: Base name for subvolumes
         :param subvolume_group_name: Name of the subvolume group
-        :param mount_type: Type of mount to use ("fuse" or "kernel")
+        :param mount_type: Type of mount to use ("fuse", "kernel", or "nfs")
+        :param nfs_cluster_name: Name of the NFS cluster (required if mount_type is "nfs")
+        :param nfs_server: NFS server IP or hostname (required if mount_type is "nfs")
         :return: List of dictionaries containing client, mount path, and subvolume name
         """
 
         if not clients:
             log.error("Clients list is empty. Aborting operation.")
             return []
+        if mount_type == "nfs" and (not nfs_cluster_name or not nfs_server):
+            log.error("NFS cluster name or server not provided for NFS mount.")
+            return []
+
         log.info(
             f"Received {len(clients)} clients for subvolume creation and mounting."
         )
@@ -78,91 +87,85 @@ class CephfsScaleUtils(object):
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
         )
-        subvolume_list = [
-            {
-                "vol_name": default_fs,
-                "subvol_name": f"{subvolume_name}_{x + 1}",
-                "group_name": subvolume_group_name,
-            }
-            for x in range(subvolume_count)
-        ]
-
-        for subvolume in subvolume_list:
-            subvolume_name = subvolume["subvol_name"]
-            fs_util_v1.create_subvolume(clients[0], **subvolume)
+        subvolume_list = []
+        for idx in range(1, subvolume_count + 1):
+            name = f"{subvolume_name}_{idx}"
+            fs_util_v1.create_subvolume(
+                clients[0], default_fs, name, group_name=subvolume_group_name
+            )
             fs_util_v1.enable_distributed_pin_on_subvolumes(
                 clients[0],
                 default_fs,
                 subvolume_group_name,
-                subvolume_name,
+                name,
                 pin_type="distributed",
                 pin_setting=1,
             )
+            subvolume_list.append(name)
 
+        # Divide subvolumes across clients
         subvols_per_client = subvolume_count // len(clients)
-        remainder_subvols = subvolume_count % len(clients)
+        remainder = subvolume_count % len(clients)
+        start_idx = 0
         mount_paths = []
 
-        start_idx = 0
-        for i in range(len(clients)):
-            end_idx = (
-                start_idx + subvols_per_client + (1 if i < remainder_subvols else 0)
-            )
-            if mount_type == "fuse":
-                for subvolume in subvolume_list[start_idx:end_idx]:
-                    fuse_mounting_dir = (
-                        f"/mnt/cephfs_fuse{mounting_dir}_{subvolume['subvol_name']}/"
-                    )
-                    subvol_path_fuse, _ = clients[i].exec_command(
-                        sudo=True,
-                        cmd=f"ceph fs subvolume getpath {subvolume['vol_name']} "
-                        f"{subvolume['subvol_name']} {subvolume['group_name']}",
-                    )
+        for i, client in enumerate(clients):
+            end_idx = start_idx + subvols_per_client + (1 if i < remainder else 0)
+            assigned_subvols = subvolume_list[start_idx:end_idx]
+
+            for sv in assigned_subvols:
+                # Get subvolume path
+                subvol_path, _ = client.exec_command(
+                    sudo=True,
+                    cmd=f"ceph fs subvolume getpath {default_fs} {sv} {subvolume_group_name}",
+                )
+                subvol_path = subvol_path.strip()
+
+                # Define mount directory
+                mount_dir = f"/mnt/cephfs_{mount_type}{mounting_dir}_{sv}/"
+                client.exec_command(sudo=True, cmd=f"mkdir -p {mount_dir}")
+
+                if mount_type == "fuse":
                     fs_util_v1.fuse_mount(
-                        [clients[i]],
-                        fuse_mounting_dir,
-                        extra_params=f" -r {subvol_path_fuse.strip()} --client_fs {default_fs}",
-                    )
-                    mount_paths.append(
-                        {
-                            "client": clients[i],
-                            "mount_path": fuse_mounting_dir,
-                            "subvolume_name": subvolume["subvol_name"],
-                        }
-                    )
-                    log.info(
-                        f"Mounted subvolume {subvolume['subvol_name']} on Fuse at "
-                        f"{fuse_mounting_dir} for {clients[i].node.hostname}"
+                        [client],
+                        mount_dir,
+                        extra_params=f" -r {subvol_path} --client_fs {default_fs}",
                     )
 
-            if mount_type == "kernel":
-                for subvolume in subvolume_list[start_idx:end_idx]:
-                    kernel_mounting_dir = (
-                        f"/mnt/cephfs_kernel{mounting_dir}_{subvolume['subvol_name']}/"
-                    )
-                    subvol_path, _ = clients[i].exec_command(
-                        sudo=True,
-                        cmd=f"ceph fs subvolume getpath {subvolume['vol_name']} "
-                        f"{subvolume['subvol_name']} {subvolume['group_name']}",
-                    )
+                elif mount_type == "kernel":
+                    mon_ips = ",".join(fs_util_v1.get_mon_node_ips())
                     fs_util_v1.kernel_mount(
-                        [clients[i]],
-                        kernel_mounting_dir,
-                        ",".join(fs_util_v1.get_mon_node_ips()),
-                        sub_dir=f"{subvol_path.strip()}",
+                        [client],
+                        mount_dir,
+                        mon_ips,
+                        sub_dir=subvol_path,
                         extra_params=f",fs={default_fs}",
                     )
-                    mount_paths.append(
-                        {
-                            "client": clients[i],
-                            "mount_path": kernel_mounting_dir,
-                            "subvolume_name": subvolume["subvol_name"],
-                        }
+
+                elif mount_type == "nfs":
+                    binding = f"/export_{sv}"
+                    fs_util_v1.create_nfs_export(
+                        client,
+                        nfs_cluster_name,
+                        binding,
+                        default_fs,
+                        path=subvol_path,
                     )
-                    log.info(
-                        f"Mounted subvolume {subvolume['subvol_name']} on kernel at "
-                        f"{kernel_mounting_dir} for {clients[i].node.hostname}"
+                    fs_util_v1.cephfs_nfs_mount(
+                        client, nfs_server_ip, binding, mount_dir
                     )
+
+                else:
+                    log.error(f"Invalid mount type: {mount_type}")
+                    return 1
+
+                mount_paths.append(
+                    {"client": client, "mount_path": mount_dir, "subvolume_name": sv}
+                )
+                log.info(
+                    f"Mounted subvolume {sv} using {mount_type} at {mount_dir} for {client.node.hostname}"
+                )
+
             start_idx = end_idx
 
         return mount_paths
@@ -470,7 +473,7 @@ class CephfsScaleUtils(object):
                 client.exec_command(
                     sudo=True,
                     cmd=f"bash /root/create_large_file.sh {mount_path}",
-                    long_running=True,
+                    timeout=36000,
                 )
                 log.info(
                     f"IO operation completed on {mount_path} from client {client.node.hostname}"

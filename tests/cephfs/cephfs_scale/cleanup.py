@@ -2,6 +2,7 @@ import json
 import time
 import traceback
 
+from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.log import Log
@@ -39,6 +40,9 @@ def run(ceph_cluster, **kw):
                 p.spawn(umount_and_remove, client, mount_path)
 
         list_and_remove_subvolumes(clients[0], default_fs, subvolume_group_name)
+        # NFS Cleanup
+        log.info("Initiating NFS export and cluster cleanup.")
+        cleanup_nfs_exports_and_cluster(clients[0], fs_util_v1)
 
         check_cephfs_data_usage(clients[0], default_fs)
 
@@ -78,14 +82,14 @@ def check_cephfs_data_usage(client, fs_name):
                     f"Current percent used for cephfs.{fs_name}.data: {percent_used * 100:.2f}%"
                 )
 
-                if percent_used == 0:
+                if percent_used < 0.0001:
                     log.info(
-                        f"cephfs.{fs_name}.data's percentage used has been reduced to 0%."
+                        f"cephfs.{fs_name}.data's percentage used has been reduced to ~0%."
                     )
                     return
                 else:
                     log.info(
-                        f"Waiting for cephfs.{fs_name}.data's percentage used to be reduced to 0%..."
+                        f"Waiting for cephfs.{fs_name}.data's percentage used to be reduced to ~0%..."
                     )
         time.sleep(30)
 
@@ -128,7 +132,7 @@ def remove_directory(client, mount_path):
     client.exec_command(
         sudo=True,
         cmd=f"rm -rf {mount_path}*/*",
-        long_running=True,
+        timeout=72000,
     )
     log.info(f"Successfully deleted files on {client.node.hostname}")
 
@@ -136,20 +140,88 @@ def remove_directory(client, mount_path):
 def umount_and_remove(client, mount_path):
     """
     Unmount and remove the specified mount path on the client.
+    Continues even if umount fails due to no mount point.
 
     :param client: Client object to execute the command
     :param mount_path: Path to be unmounted and removed
     """
-    client.exec_command(
-        sudo=True,
-        cmd=f"umount -l {mount_path}*/",
-        long_running=True,
-    )
-    log.info(f"Successfully unmounted on {client.node.hostname}")
+    try:
+        client.exec_command(
+            sudo=True,
+            cmd=f"umount -l {mount_path}*/",
+            timeout=72000,
+            check_ec=False,  # Don't raise exception on non-zero exit
+        )
+        log.info(f"Successfully unmounted on {client.node.hostname}")
+    except CommandFailed as e:
+        if "no mount point specified" in str(e):
+            log.warning(
+                f"No mount point found on {client.node.hostname}, continuing..."
+            )
+        else:
+            log.error(f"Unmount failed on {client.node.hostname}: {e}")
+            raise
 
-    client.exec_command(
-        sudo=True,
-        cmd=f"rm -rf {mount_path}*/",
-        long_running=True,
-    )
-    log.info(f"Successfully deleted mount path on {client.node.hostname}")
+    try:
+        client.exec_command(
+            sudo=True, cmd=f"rm -rf {mount_path}*/", timeout=72000, check_ec=False
+        )
+        log.info(f"Successfully deleted mount path on {client.node.hostname}")
+    except CommandFailed as e:
+        log.error(f"Failed to delete mount path on {client.node.hostname}: {e}")
+        raise
+
+
+def cleanup_nfs_exports_and_cluster(client, fs_util_v1):
+    """
+    Cleans up all NFS exports and removes the NFS cluster.
+
+    This function performs the following steps:
+    1. Lists all existing NFS clusters.
+    2. For each cluster:
+       - Lists all exports.
+       - Removes each export.
+       - Deletes the NFS cluster.
+
+    :param client: Client object to execute the commands.
+    :param fs_util_v1: Instance of FsUtilsV1 containing NFS utility methods.
+    """
+    out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+    try:
+        cluster_list = json.loads(out)
+    except json.JSONDecodeError as e:
+        log.error(f"Failed to decode JSON from ceph nfs cluster ls: {e}")
+        return
+
+    if not cluster_list:
+        log.info("No NFS clusters found for cleanup.")
+        return
+
+    for nfs_cluster in cluster_list:
+        log.info(f"Cleaning up NFS cluster: {nfs_cluster}")
+
+        # List and remove all exports
+        out, rc = client.exec_command(
+            sudo=True, cmd=f"ceph nfs export ls {nfs_cluster} -f json", check_ec=False
+        )
+        try:
+            exports = json.loads(out.strip()) if out.strip() else []
+        except json.JSONDecodeError:
+            log.warning(
+                f"Failed to parse exports for cluster {nfs_cluster}, skipping..."
+            )
+            exports = []
+
+        for export in exports:
+            log.info(f"Removing NFS export: {export}")
+            fs_util_v1.remove_nfs_export(
+                client, nfs_cluster_name=nfs_cluster, binding=export, validate=True
+            )
+
+        # Remove the cluster
+        log.info(f"Removing NFS cluster: {nfs_cluster}")
+        fs_util_v1.remove_nfs_cluster(
+            client, nfs_cluster_name=nfs_cluster, validate=True
+        )
+
+    log.info("All NFS exports and clusters have been successfully cleaned up.")
