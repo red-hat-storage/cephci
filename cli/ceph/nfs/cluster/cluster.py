@@ -46,14 +46,34 @@ class Cluster(Cli):
         """
         List the NFS clusters and return as a Python list
         """
-        cmd = f"{self.base_cmd} ls"
+        cmd = f"{self.base_cmd} ls --format json"
         out = self.execute(sudo=True, cmd=cmd)
 
         # Extract stdout if tuple (output, err)
-        stdout = out[0].strip() if isinstance(out, tuple) else str(out).strip()
+        if isinstance(out, tuple):
+            out = out[0].strip()
 
+        # Convert JSON string to Python list
         try:
-            # Parse JSON output to Python list
-            return json.loads(stdout)
-        except json.JSONDecodeError as e:
-            raise ValueError(f"Failed to parse cluster list. Output: {stdout}") from e
+            return json.loads(out)
+        except json.JSONDecodeError:
+            raise ValueError("Failed to parse JSON output")
+
+    def info(self, name):
+        """
+        Get information about a specific NFS cluster
+        Args:
+            name (str): Name of the cluster
+        """
+        cmd = f"{self.base_cmd} info {name} --format json"
+        out = self.execute(sudo=True, cmd=cmd)
+
+        # Extract stdout if tuple (output, err)
+        if isinstance(out, tuple):
+            out = out[0].strip()
+
+        # Convert JSON string to Python dictionary
+        try:
+            return json.loads(out)
+        except json.JSONDecodeError:
+            raise ValueError("Failed to parse JSON output")
