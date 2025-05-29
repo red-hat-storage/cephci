@@ -1,0 +1,323 @@
+# Suite contains tests to be run after upgrade [brownfield deployment]
+# Use cluster-conf file: conf/squid/rados/7-node-cluster.yaml
+# RHOS-d run duration: 100 mins
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                # IBM 7.1 z1
+                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-7-rhel9:7-78"
+                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/\
+                  IBM-CEPH-7.1-202407312217.ci.0/IBM-CEPH-7.1-202407312217.ci.0-rhel9.repo"
+                # deploying old build to verify obj snap deletion
+                mon-ip: node1
+                orphan-initial-daemons: true
+                allow-fqdn-hostname: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node6
+                  limit: 2            # no of daemons
+                  sep: " "            # separator to be used for placements
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          pool: rbd_rep_pool
+          image: rbd_rep_image
+          size: 10G
+        io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+      desc: Perform rgw tests
+
+  - test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293"
+
+  - test:
+      name: nfs-ganesha_with_cephfs
+      module: nfs-ganesha_basics.py
+      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+      polarion-id: CEPH-83574439
+      abort-on-fail: false
+
+  - test:
+      name: "issue repro-obj snap and pool snap deletion"
+      module: test_pool_snap.py
+      desc: obj snap deletion when pool snapshot is deleted on unfixed build
+      polarion-id: CEPH-83602685
+      config:
+        issue_reproduction: true
+
+  - test:
+      name: "issue repro-osd recovery with allocator file corruption"
+      module: test_osd_crashes.py
+      desc: setup osd failure due to allocator file corruption
+      polarion-id: CEPH-83609785
+      config:
+        verify_allocator_corruption:
+           issue_reproduction: true
+        pool_config:
+           pool_name: osd-alloc-pool
+           pg_num: 1
+           pg_num_max: 1
+           pool_type: replicated
+      comments: "8.1 bug-2338097"
+
+  - test:
+      name: Upgrade cluster to 7.1z2 ceph version
+      desc: Upgrade cluster to 7.1z2 version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        args:
+          # IBM 7.1 z2
+          custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-7-rhel9:7-96"
+          custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/\
+            IBM-CEPH-7.1-202411010109.ci.0/IBM-CEPH-7.1-202411010109.ci.0-rhel9.repo"
+      abort-on-fail: false
+
+  - test:
+      name: "issue repro-osd recovery with allocator file corruption"
+      module: test_osd_crashes.py
+      desc: OSD fails with ceph_assert post upgrade
+      polarion-id: CEPH-83609785
+      config:
+        verify_allocator_corruption:
+           check_assert: true
+        pool_config:
+           pool_name: osd-alloc-pool
+
+  - test:
+      name: Upgrade cluster to latest 8.x ceph version
+      desc: Upgrade cluster to latest version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: "verify fix-osd recovery with allocator file corruption"
+      module: test_osd_crashes.py
+      desc: failed osd recovery due to allocator file corruption during upgrade
+      polarion-id: CEPH-83609785
+      config:
+        verify_allocator_corruption:
+          verify_fix: true
+
+  - test:
+      name: "verify fix-obj snap and pool snap deletion"
+      module: test_pool_snap.py
+      desc: obj snap deletion when pool snapshot is deleted on fixed build
+      polarion-id: CEPH-83602685
+      config:
+        verify_fix: true
+
+  - test:
+      name: Test configuration Assimilation
+      module: test_config_assimilation.py
+      polarion-id: CEPH-83573480
+      config:
+        cluster_conf_path: "conf/squid/rados/test-confs/cluster-configs"
+        Verify_config_parameters:
+          configurations:
+            - config-1:
+                section: "mon"
+                name: "mon_cluster_log_to_syslog"
+                value: "true"
+            - config-2:
+                section: "osd"
+                name: "debug_osd"
+                value: "5/5"
+            - config-3:
+                section: "mgr"
+                name: "mgr_stats_period"
+                value: "10"
+            - config-4:
+                section: "mgr"
+                name: "debug_mgr"
+                value: "5/5"
+            - config-5:
+                section: "mds"
+                name: "mds_op_history_size"
+                value: "40"
+      desc: Verify config assimilation into ceph mon configuration database
+
+  # Running basic rbd and rgw tests after upgrade
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          pool: rbd_rep_pool
+          image: rbd_rep_image
+          size: 10G
+        io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+          script-name: test_multitenant_user_access.py
+          config-file-name: test_multitenant_access.yaml
+          timeout: 300
+      desc: Perform rgw tests
+
+  - test:
+      abort-on-fail: false
+      desc: "cephfs basic operations"
+      module: cephfs_basic_tests.py
+      name: cephfs-basics
+      polarion-id: "CEPH-11293"
+
+  - test:
+      name: nfs-ganesha_with_cephfs
+      module: nfs-ganesha_basics.py
+      desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
+      polarion-id: CEPH-83574439
+      abort-on-fail: false
+
+  - test:
+      name: prometheus metadata
+      module: test_brownfield.py
+      desc: Fetch and verify ceph version for various daemons post upgrade
+      polarion-id: CEPH-83581346
+      config:
+       prometheus_metrics:
+         daemons:
+           - mon
+           - osd
+           - mgr
+
+  - test:
+      name: ceph-bluestore-tool utility
+      module: test_bluestoretool_workflows.py
+      polarion-id: CEPH-83571692
+      desc: Verify ceph-bluestore-tool functionalities
+
+#  Uncomment test case once stabilisation is completed
+#  CI stabilisation: https://issues.redhat.com/browse/RHCEPHQE-19549
+#  - test:
+#      name: ceph-objectstore-tool utility
+#      module: test_objectstoretool_workflows.py
+#      polarion-id: CEPH-83581811
+#      desc: Verify ceph-objectstore-tool functionalities

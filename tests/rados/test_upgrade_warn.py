@@ -97,6 +97,8 @@ def run(ceph_cluster, **kw):
         # available only for RH network.
         _rhcs_version = args.get("rhcs-version", None)
         _rhcs_release = args.get("release", None)
+        _custom_image = args.get("custom_image", None)
+        _custom_repo = args.get("custom_repo", None)
         if _rhcs_release and _rhcs_version:
             curr_ver, _ = cephadm_obj.shell(args=["ceph version | awk '{print $3}'"])
             log.debug(
@@ -121,9 +123,23 @@ def run(ceph_cluster, **kw):
             config["args"]["rhcs-version"] = _rhcs_version
             config["args"]["release"] = _rhcs_release
             config["args"]["image"] = config["container_image"]
+        elif _custom_image and _custom_repo:
+            _registry, _image_name = _custom_image.split(":")[0].split("/", 1)
+            _image_tag = _custom_image.split(":")[-1]
+            _base_url = _custom_repo
 
-            # initiate a new object with updated config
-            cluster_obj = Orch(cluster=ceph_cluster, **config)
+            # The cluster object is configured so that the values are persistent till
+            # an upgrade occurs. This enables us to execute the test in the right
+            # context.
+            config["base_url"] = _base_url
+            config["container_image"] = f"{_registry}/{_image_name}:{_image_tag}"
+            config["ceph_docker_registry"] = _registry
+            config["ceph_docker_image"] = _image_name
+            config["ceph_docker_image_tag"] = _image_tag
+            config["args"]["image"] = config["container_image"]
+
+        # initiate a new object with updated config
+        cluster_obj = Orch(cluster=ceph_cluster, **config)
 
         # Remove existing repos
         rm_repo_cmd = (
