@@ -145,64 +145,18 @@ def test_non_default_to_default_namespace_mirroring(
                             "interval": interval,
                             "namespace": namespace,
                         }
-
-                        # Pool-Level Snapshot Schedule (interval: 1m)
-                        pool_schedule_config = {
-                            "pool": pool,
-                            "interval": "1m",
-                        }
-                        out, err = add_snapshot_scheduling(rbd_primary, **pool_schedule_config)
-                        if verify_snapshot_schedule(rbd_primary, pool, None, interval="1m"):
-                            raise Exception(f"Snapshot schedule verification failed at pool-level for {pool}")
-
-                        # Namespace-Level Snapshot Schedule (interval: 2m)
-                        if namespace:
-                            namespace_schedule_config = {
-                                "pool": pool,
-                                "namespace": namespace,
-                                "interval": "2m",
-                            }
-                            out, err = add_snapshot_scheduling(rbd_primary, **namespace_schedule_config)
-                            if verify_snapshot_schedule(rbd_primary, pool, namespace, interval="2m"):
-                                raise Exception(
-                                    f"Snapshot schedule verification failed at namespace-level for {pool}/{namespace}"
-                                )
-
-                        # Image-Level Snapshot Schedule (interval: 3m)
-                        image_schedule_config = {
-                            "pool": pool,
-                            "image": image,
-                            "interval": "3m",
-                        }
-                        if namespace:
-                            image_schedule_config["namespace"] = namespace
-
-                        out, err = add_snapshot_scheduling(rbd_primary, **image_schedule_config)
-                        if verify_snapshot_schedule(
-                            rbd_primary,
-                            pool,
-                            image,
-                            namespace=namespace if namespace else None,
-                            interval="3m",
-                        ):
+                        # Adding snapshot schedules to the images in namespace
+                        out, err = add_snapshot_scheduling(
+                            rbd_primary, **snap_schedule_config
+                        )
+                        if err:
                             raise Exception(
-                                f"Snapshot schedule verification failed at image-level for {pool}/{namespace}/{image}"
-                                if namespace
-                                else f"Snapshot schedule verification failed at image-level for {pool}/{image}"
+                                "Adding snapshot schedule failed with error " + err
                             )
-
-                    #     # Adding snapshot schedules to the images in namespace
-                    #     out, err = add_snapshot_scheduling(
-                    #         rbd_primary, **snap_schedule_config
-                    #     )
-                    #     if err:
-                    #         raise Exception(
-                    #             "Adding snapshot schedule failed with error " + err
-                    #         )
-                    # # Verify snapshot schedules are effective on the namespaces
-                    # verify_namespace_snapshot_schedule(
-                    #     rbd_primary, pool, namespace, interval=interval, image=image
-                    # )
+                    # Verify snapshot schedules are effective on the namespaces
+                    verify_namespace_snapshot_schedule(
+                        rbd_primary, pool, namespace, interval=interval, image=image
+                    )
 
                 pri_image_spec = f"{pool}/{namespace}/{image}"
                 sec_image_spec = f"{pool}/{image}"
@@ -593,7 +547,7 @@ def test_default_to_non_default_namespace_mirroring(
 
 def run(**kw):
     """
-    Test to verify non-default to default and default to non-default namespace mirroring
+    Test to verify non-default to default namespace mirroring
     Args:
         kw: Key/value pairs of configuration information to be used in the test
             Example::
