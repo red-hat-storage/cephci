@@ -152,7 +152,6 @@ tests:
       clusters:
         ceph-rbd1:
           config:
-            grouptype: single_pool_without_namespace
             operation: CEPH-83610860
             rep_pool_config:
               rbd_mirror_group: true
@@ -227,46 +226,7 @@ tests:
       clusters:
         ceph-rbd1:
           config:
-            grouptype: single_pool_without_namespace
             operation: CEPH-83611278
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            fio:
-              size: 1G
-              runtime: 60
-              ODF_CONFIG:
-                num_jobs: 4
-                iodepth: 32
-                rwmixread: 70
-                direct: 1
-                invalidate: 1
-                io_type: randrw
-
-  - test:
-      abort-on-fail: true
-      desc: Verify Consistency group mirroring with namespace images
-      name: Test Consistency Group Mirroring with images in namespace
-      module: test_namespace_group_mirror.py
-      polarion-id: CEPH-83613293
-      clusters:
-        ceph-rbd1:
-          config:
-            grouptype: single_pool_with_namespace
-            operation: CEPH-83613293
             rep_pool_config:
               rbd_mirror_group: true
               num_pools: 1
@@ -305,44 +265,6 @@ tests:
           config:
             grouptype: single_pool_with_namespace
             operation: CEPH-83613294
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            fio:
-              size: 1G
-              runtime: 60
-              ODF_CONFIG:
-                num_jobs: 4
-                iodepth: 32
-                rwmixread: 70
-                direct: 1
-                invalidate: 1
-                io_type: randrw
-
-  - test:
-      abort-on-fail: true
-      desc: Verify Group Renaming while mirroring in progress (with namespace)
-      name: Test Group Renaming while mirroring in progress
-      module: test_namespace_group_mirror.py
-      polarion-id: CEPH-83613295
-      clusters:
-        ceph-rbd1:
-          config:
-            grouptype: single_pool_with_namespace
-            operation: CEPH-83613295
             rep_pool_config:
               rbd_mirror_group: true
               num_pools: 1
