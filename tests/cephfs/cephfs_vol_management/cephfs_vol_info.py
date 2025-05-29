@@ -160,7 +160,23 @@ def run(ceph_cluster, **kw):
         return 1
 
     finally:
-        log.info("cleanup")
+        log.info("Clean up the system")
+        for mount_dir in [kernel_mounting_dir_1, fuse_mounting_dir_1]:
+            try:
+                clients[0].exec_command(sudo=True, cmd=f"rm -rf {mount_dir}/*")
+            except Exception as e:
+                log.warning(f"Failed to delete contents of {mount_dir}: {e}")
+
+            try:
+                clients[0].exec_command(sudo=True, cmd=f"umount -f {mount_dir}")
+            except Exception as e:
+                log.warning(f"Failed to unmount {mount_dir}: {e}")
+
+            try:
+                clients[0].exec_command(sudo=True, cmd=f"rm -rf {mount_dir}")
+            except Exception as e:
+                log.warning(f"Failed to remove mount dir {mount_dir}: {e}")
+
         fs_util.remove_fs(client1, volume_name)
 
 
