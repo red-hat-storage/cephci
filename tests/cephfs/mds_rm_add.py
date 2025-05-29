@@ -158,8 +158,32 @@ def run(ceph_cluster, get_fs_info=None, **kw):
         log.error(traceback.format_exc())
         return 1
     finally:
-        client1.exec_command(sudo=True, cmd=f"rm -rf {kernel_mount_dir}/*")
-        client1.exec_command(sudo=True, cmd=f"umount {kernel_mount_dir}")
-        client1.exec_command(sudo=True, cmd=f"umount {fuse_mount_dir}")
-        client1.exec_command(sudo=True, cmd=f"rm -rf {kernel_mount_dir}/")
-        client1.exec_command(sudo=True, cmd=f"rm -rf {fuse_mount_dir}/")
+        try:
+            client1.exec_command(sudo=True, cmd=f"rm -rf {kernel_mount_dir}/*")
+        except Exception as e:
+            log.warning(f"Failed to delete contents of {kernel_mount_dir}: {e}")
+
+        try:
+            client1.exec_command(sudo=True, cmd=f"umount {kernel_mount_dir}")
+        except Exception as e:
+            log.warning(f"Failed to unmount {kernel_mount_dir}: {e}")
+
+        try:
+            client1.exec_command(sudo=True, cmd=f"rm -rf {kernel_mount_dir}/")
+        except Exception as e:
+            log.warning(f"Failed to remove {kernel_mount_dir}: {e}")
+
+        try:
+            client1.exec_command(sudo=True, cmd=f"rm -rf {fuse_mount_dir}/*")
+        except Exception as e:
+            log.warning(f"Failed to delete contents of {fuse_mount_dir}: {e}")
+
+        try:
+            client1.exec_command(sudo=True, cmd=f"umount -f {fuse_mount_dir}")
+        except Exception as e:
+            log.warning(f"Failed to unmount {fuse_mount_dir}: {e}")
+
+        try:
+            client1.exec_command(sudo=True, cmd=f"rm -rf {fuse_mount_dir}/")
+        except Exception as e:
+            log.warning(f"Failed to remove {fuse_mount_dir}: {e}")

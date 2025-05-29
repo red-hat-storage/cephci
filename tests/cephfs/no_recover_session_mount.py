@@ -142,7 +142,8 @@ def run(ceph_cluster, **kw):
         command = f"mount -t ceph {mon_node_ip}:/ {mount_dir_2} -o name=admin"
         client2.exec_command(sudo=True, cmd=command)
         client2.exec_command(sudo=True, cmd=f"rm -rf {mount_dir_2}/*")
-        client2.exec_command(sudo=True, cmd=f"umount {mount_dir_2}")
+        client2.exec_command(sudo=True, cmd=f"umount -f {mount_dir_2}")
+        client2.exec_command(sudo=True, cmd=f"rm -rf {mount_dir_2}")
         ip, rc = client1.exec_command(
             sudo=True, cmd="ifconfig eth0 | grep 'inet ' | awk '{{print $2}}'"
         )
@@ -164,4 +165,15 @@ def run(ceph_cluster, **kw):
             client = blocked_client[0]
             log.info(f"client_list - {client}")
             client1.exec_command(sudo=True, cmd=f"ceph osd blocklist rm {client}")
-        client1.exec_command(sudo=True, cmd=f"umount {mount_dir}")
+            try:
+                client1.exec_command(sudo=True, cmd=f"rm -rf {mount_dir}/*")
+            except Exception as e:
+                log.warning(f"Failed to delete contents of {mount_dir}: {e}")
+            try:
+                client1.exec_command(sudo=True, cmd=f"umount -f {mount_dir}")
+            except Exception as e:
+                log.warning(f"Failed to unmount {mount_dir}: {e}")
+            try:
+                client1.exec_command(sudo=True, cmd=f"rm -rf {mount_dir}")
+            except Exception as e:
+                log.warning(f"Failed to remove directory {mount_dir}: {e}")
