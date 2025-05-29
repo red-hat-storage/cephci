@@ -80,14 +80,16 @@ def run(ceph_cluster, **kw):
                 group_name=subvol_group_name,
             )
 
-        mount_paths, subvol_paths = fs_mirroring_utils.mount_subvolumes_snapdiff(
-            source_client=source_clients[0],
-            fs_util_ceph1=fs_util_ceph1,
-            default_fs=source_fs,
-            subvolume_names=subvolume_names,
-            subvol_group_name=subvol_group_name,
-            nfs_server=nfs_server,
-            nfs_name=nfs_name,
+        mount_paths, subvol_paths, export_binding = (
+            fs_mirroring_utils.mount_subvolumes_snapdiff(
+                source_client=source_clients[0],
+                fs_util_ceph1=fs_util_ceph1,
+                default_fs=source_fs,
+                subvolume_names=subvolume_names,
+                subvol_group_name=subvol_group_name,
+                nfs_server=nfs_server,
+                nfs_name=nfs_name,
+            )
         )
         log.info(f"Mount Paths : {mount_paths}")
         log.info(f"Sub Volume Paths : {subvol_paths}")
@@ -123,7 +125,7 @@ def run(ceph_cluster, **kw):
                 f"/volumes/{subvol_group_name}/{subvol_path_without_uuid}",
             )
 
-        fsid = fs_mirroring_utils.get_fsid(cephfs_mirror_node[0])
+        fsid = fs_util_ceph1.get_fsid(source_clients[0])
         daemon_name = fs_mirroring_utils.get_daemon_name(source_clients[0])
         asok_file = fs_mirroring_utils.get_asok_file(
             cephfs_mirror_node[0], fsid, daemon_name
@@ -141,14 +143,29 @@ def run(ceph_cluster, **kw):
         log.info("Starting file creation in all I/O directories...")
 
         cloud_type = config.get("cloud_type")
+        num_of_files = config.get("num_of_files")
+        file_size = config.get("file_size")
+
+        generate_file_script = "generate_files_for_snapdiff.py"
+        src_path = (
+            f"tests/cephfs/cephfs_mirroring/snapdiff_scripts/{generate_file_script}"
+        )
+        dst_path = f"/root/{generate_file_script}"
+
+        source_clients[0].upload_file(
+            sudo=True,
+            src=src_path,
+            dst=dst_path,
+        )
+
         with concurrent.futures.ThreadPoolExecutor() as executor:
             futures = [
                 executor.submit(
                     fs_mirroring_utils.create_files_for_snapdiff,
                     source_clients[0],
                     path,
-                    10,
-                    1,
+                    num_of_files,
+                    file_size,
                     cloud_type,
                 )
                 for path in io_dir_paths.values()
@@ -229,33 +246,113 @@ def run(ceph_cluster, **kw):
             "csv_file": csv_file,
         }
 
+        modify_script = "modify_file_at_10_random_offsets.py"
+        source_clients[0].upload_file(
+            sudo=True,
+            src=f"tests/cephfs/cephfs_mirroring/snapdiff_scripts/{modify_script}",
+            dst="/root/modify_file_at_10_random_offsets.py",
+        )
+
         # Run incremental snapshots
+        # Run 4 write-mode snapshots
         fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
             fs_util_ceph1,
             num_files=1,
-            snap_suffix="inc1",
-            label_suffix="1",
+            snap_suffix="w1",
+            label_suffix="write_1",
+            mode="write",
             **common_args,
         )
         fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
             fs_util_ceph1,
             num_files=2,
-            snap_suffix="inc2",
-            label_suffix="2",
+            snap_suffix="w2",
+            label_suffix="write_2",
+            mode="write",
             **common_args,
         )
         fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
             fs_util_ceph1,
             num_files=5,
-            snap_suffix="inc3",
-            label_suffix="3",
+            snap_suffix="w3",
+            label_suffix="write_3",
+            mode="write",
             **common_args,
         )
         fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
             fs_util_ceph1,
             num_files=10,
-            snap_suffix="inc4",
-            label_suffix="4",
+            snap_suffix="w4",
+            label_suffix="write_4",
+            mode="write",
+            **common_args,
+        )
+
+        # Run 4 read-mode snapshots
+        fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
+            fs_util_ceph1,
+            num_files=1,
+            snap_suffix="r1",
+            label_suffix="read_1",
+            mode="read",
+            **common_args,
+        )
+        fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
+            fs_util_ceph1,
+            num_files=2,
+            snap_suffix="r2",
+            label_suffix="read_2",
+            mode="read",
+            **common_args,
+        )
+        fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
+            fs_util_ceph1,
+            num_files=5,
+            snap_suffix="r3",
+            label_suffix="read_3",
+            mode="read",
+            **common_args,
+        )
+        fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
+            fs_util_ceph1,
+            num_files=10,
+            snap_suffix="r4",
+            label_suffix="read_4",
+            mode="read",
+            **common_args,
+        )
+
+        # Run 4 remove-mode snapshots
+        fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
+            fs_util_ceph1,
+            num_files=1,
+            snap_suffix="rm1",
+            label_suffix="remove_1",
+            mode="remove",
+            **common_args,
+        )
+        fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
+            fs_util_ceph1,
+            num_files=2,
+            snap_suffix="rm2",
+            label_suffix="remove_2",
+            mode="remove",
+            **common_args,
+        )
+        fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
+            fs_util_ceph1,
+            num_files=5,
+            snap_suffix="rm3",
+            label_suffix="remove_3",
+            mode="remove",
+            **common_args,
+        )
+        fs_mirroring_utils.modify_and_create_snapshot_snapdiff(
+            fs_util_ceph1,
+            num_files=10,
+            snap_suffix="rm4",
+            label_suffix="remove_4",
+            mode="remove",
             **common_args,
         )
 
@@ -267,7 +364,21 @@ def run(ceph_cluster, **kw):
     finally:
         if config.get("cleanup", True):
             log.info("Delete the snapshots")
-            snap_suffixes = ["initial", "inc1", "inc2", "inc3", "inc4"]
+            snap_suffixes = [
+                "initial",
+                "w1",
+                "w2",
+                "w3",
+                "w4",
+                "r1",
+                "r2",
+                "r3",
+                "r4",
+                "rm1",
+                "rm2",
+                "rm3",
+                "rm4",
+            ]
             client_types = {
                 "kernel": "Kernel",
                 "fuse": "Fuse",
@@ -308,6 +419,13 @@ def run(ceph_cluster, **kw):
                     source_fs,
                     f"/volumes/{subvol_group_name}/{subvol_path_without_uuid}",
                 )
+
+            if export_binding:
+                fs_util_ceph1.remove_nfs_export(
+                    source_clients[0], nfs_name, export_binding, validate=True
+                )
+
+            fs_util_ceph1.remove_nfs_cluster(source_clients[0], nfs_name, validate=True)
 
             log.info("Destroy CephFS Mirroring setup.")
             fs_mirroring_utils.destroy_cephfs_mirroring(
