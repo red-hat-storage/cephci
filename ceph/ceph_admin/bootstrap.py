@@ -33,6 +33,7 @@ def construct_registry(
         cls (CephAdmin): class object
         registry (Str): registry name
         json_file (Bool): registry credentials in JSON file (default:False)
+        ibm_build: flag to fetch IBM registry creds
 
     Example::
 
@@ -210,7 +211,9 @@ class BootstrapMixin:
         _rhcs_release = args.pop("release", None)
         if _rhcs_release and _rhcs_version:
             _platform = "-".join(rhbuild.split("-")[1:])
-            _details = fetch_build_artifacts(_rhcs_release, _rhcs_version, _platform)
+            _details = fetch_build_artifacts(
+                _rhcs_release, _rhcs_version, _platform, ibm_build=ibm_build
+            )
 
             # The cluster object is configured so that the values are persistent till
             # an upgrade occurs. This enables us to execute the test in the right

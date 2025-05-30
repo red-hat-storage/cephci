@@ -99,6 +99,7 @@ def run(ceph_cluster, **kw):
         _rhcs_release = args.get("release", None)
         _custom_image = args.get("custom_image", None)
         _custom_repo = args.get("custom_repo", None)
+        _ibm_build = config.get("ibm_build", False)
         if _rhcs_release and _rhcs_version:
             curr_ver, _ = cephadm_obj.shell(args=["ceph version | awk '{print $3}'"])
             log.debug(
@@ -107,7 +108,7 @@ def run(ceph_cluster, **kw):
             )
             _platform = "-".join(rhbuild.split("-")[1:])
             _base_url, _registry, _image_name, _image_tag = fetch_build_artifacts(
-                _rhcs_release, _rhcs_version, _platform
+                _rhcs_release, _rhcs_version, _platform, ibm_build=_ibm_build
             )
 
             # The cluster object is configured so that the values are persistent till

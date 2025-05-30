@@ -447,11 +447,18 @@ def run(args):
     docker_image = args.get("--docker-image")
     docker_tag = args.get("--docker-tag")
     kernel_repo = args.get("--kernel-repo")
+    custom_config = args.get("--custom-config")
+    custom_config_file = args.get("--custom-config-file")
+
+    if custom_config:
+        for _config in custom_config:
+            if "ibm-build=" in _config:
+                ibm_build = bool(_config.split("=")[1])
 
     if not check_build_overrides(base_url, docker_registry, docker_image, docker_tag):
         if build and build not in ["released"]:
             base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
-                build, rhbuild, platform, upstream_build
+                build, rhbuild, platform, upstream_build, ibm_build
             )
     else:
         build = None
@@ -479,8 +486,6 @@ def run(args):
     filestore = args.get("--filestore")
     ec_pool_vals = args.get("--use-ec-pool")
     skip_version_compare = args.get("--skip-version-compare")
-    custom_config = args.get("--custom-config")
-    custom_config_file = args.get("--custom-config-file")
     xunit_results = args.get("--xunit-results")
 
     enable_eus = args.get("--enable-eus")
