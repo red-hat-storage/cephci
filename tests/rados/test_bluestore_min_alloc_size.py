@@ -9,6 +9,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
@@ -30,6 +31,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
+    service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
     custom_min_alloc_size = config.get("custom_min_alloc_size", 8192)
     default_min_alloc_size = config.get("default_min_alloc_size", 4096)
 
@@ -207,12 +209,14 @@ def run(ceph_cluster, **kw):
                 )
                 should_not_be_empty(test_host, "Failed to fetch host details")
                 dev_path = get_device_path(test_host, target_osd)
-                log.debug(
-                    f"osd device path  : {dev_path}, osd_id : {target_osd}, hostname : {test_host.hostname}"
+                target_osd_spec_name = service_obj.get_osd_spec(osd_id=target_osd)
+                log_lines = (
+                    f"\nosd device path  : {dev_path},\n osd_id : {target_osd},\n hostname : {test_host.hostname},\n"
+                    f"Target OSD Spec : {target_osd_spec_name}"
                 )
-                utils.set_osd_devices_unmanaged(
-                    ceph_cluster, target_osd, unmanaged=True
-                )
+                log.debug(log_lines)
+
+                rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
                 method_should_succeed(utils.set_osd_out, ceph_cluster, target_osd)
                 method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
                 log.debug("Cluster clean post draining of OSD for removal")
@@ -237,6 +241,9 @@ def run(ceph_cluster, **kw):
                 utils.add_osd(ceph_cluster, test_host.hostname, dev_path, target_osd)
                 method_should_succeed(
                     wait_for_device_rados, test_host, target_osd, action="add"
+                )
+                assert service_obj.add_osds_to_managed_service(
+                    osds=[target_osd], spec=target_osd_spec_name
                 )
                 time.sleep(30)
 

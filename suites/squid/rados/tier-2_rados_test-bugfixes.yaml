@@ -266,3 +266,11 @@ tests:
         stray_daemon_warning: true
       polarion-id: CEPH-83615076
       desc: No CEPHADM_STRAY_DAEMON warning while replacing the osd
+
+  - test:
+      name: Verify that OSDs can be added-moved to new spec
+      module: test_bug_fixes.py
+      config:
+        test_osd_spec_update: true
+      polarion-id: CEPH-83615839
+      desc: Verify that OSDs can be added-moved to new spec

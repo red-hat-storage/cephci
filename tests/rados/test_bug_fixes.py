@@ -11,10 +11,13 @@ from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.rados_bench import RadosBench
+from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from cli.utilities.utils import reboot_node
 from tests.rados.monitor_configurations import MonConfigMethods
-from tests.rados.rados_test_util import get_device_path
+from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
+from utility.utils import method_should_succeed
 
 log = Log(__name__)
 
@@ -37,6 +40,7 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
+    service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
     client_node = ceph_cluster.get_nodes(role="client")[0]
     bench_obj = RadosBench(mon_node=cephadm, clients=client_node)
     osd_nodes = ceph_cluster.get_nodes(role="osd")
@@ -696,5 +700,116 @@ def run(ceph_cluster, **kw):
                 return 1
         log.info(
             "Verification of CEPHADM_STRAY_DAEMON warnig for all combination completed"
+        )
+        return 0
+
+    if config.get("test_osd_spec_update"):
+        doc = (
+            "\n# bug : https://bugzilla.redhat.com/show_bug.cgi?id=2304314"
+            "\n Verify that OSDs can be added/moved to new spec"
+            "\n\t 1. Deploy a cluster with at least 1 mon, mgr, OSD, and RGW each"
+            "\n\t 2. Remove 1 OSD daemon, note the daemon ID"
+            "\n\t 3. Add back the OSD via ceph orch daemon add command"
+            "\n\t 4. Note the OSD service created for the new OSD is unmanaged"
+            "\n\t 5. Move the OSD to the older managed service"
+        )
+
+        log.info(doc)
+        log.info("Running test to Verify that OSDs can be added/moved to new spec")
+
+        try:
+            if float(rhbuild.split("-")[0]) < 8.1:
+                log.info("Passing without execution, BZ yet to be backported")
+                return 0
+
+            target_osd = random.choice(rados_obj.get_osd_list(status="UP"))
+            host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=target_osd)
+            osd_spec_name = service_obj.get_osd_spec(osd_id=target_osd)
+            dev_path = get_device_path(host, target_osd)
+            log_msg = (
+                f"\nSelected OSD for test : \n"
+                f"osd device path  : {dev_path},\n osd_id : {target_osd},\n host.hostname : {host.hostname}\n"
+                f"OSD spec : {osd_spec_name}\n"
+            )
+            log.info(log_msg)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
+            utils.osd_remove(ceph_cluster, target_osd)
+            method_should_succeed(wait_for_clean_pg_sets, rados_obj)
+            method_should_succeed(
+                utils.zap_device, ceph_cluster, host.hostname, dev_path
+            )
+            method_should_succeed(
+                wait_for_device_rados, host, target_osd, action="remove"
+            )
+
+            # Adding the removed OSD back and checking the cluster status
+            utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
+            method_should_succeed(wait_for_device_rados, host, target_osd, action="add")
+            log.debug("Completed addition of the OSD back to cluster.")
+
+            # Checking if the newly added OSD is without placement
+            if not service_obj.unmanaged_osd_service_exists():
+                log.info(
+                    "No un-manage-able placement spec present on the cluster"
+                    "Proceeding to change the OSD spec to original one if the "
+                    "placement has been changed during the OSD add"
+                )
+            else:
+                log.info(
+                    "un-manage-able placement spec based OSD present on the cluster post addition"
+                )
+            time.sleep(10)
+            new_osd_spec_name = service_obj.get_osd_spec(osd_id=target_osd)
+            log.info("OSD spec post replacement is %s", new_osd_spec_name)
+
+            if osd_spec_name != new_osd_spec_name:
+                log.info(
+                    "OSD default spec changed post removal & addition."
+                    "Moving the service back to original placement"
+                )
+                # Trying to set the OSD back to managed
+                assert service_obj.add_osds_to_managed_service(
+                    osds=[target_osd], spec=osd_spec_name
+                )
+                time.sleep(10)
+                new_osd_spec_name = service_obj.get_osd_spec(osd_id=target_osd)
+                log.info(
+                    "OSD spec post replacement and subsequent movement is %s",
+                    new_osd_spec_name,
+                )
+                # Currently OSD metadta is not updated with the spec change. Open discussion in progress.
+                # if osd_spec_name != new_osd_spec_name:
+                #     log.error("Spec could not be updated for the OSD : %s", target_osd)
+                #     return 1
+
+            log.info("The OSD was successfully moved to original spec.")
+
+            # Checking cluster health after OSD removal
+            method_should_succeed(rados_obj.run_pool_sanity_check)
+            log.info(
+                f"Addition of OSD : {target_osd} back into the cluster was successful, and the health is good!"
+            )
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
+
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            # log cluster health
+            rados_obj.log_cluster_health()
+            return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
+            # log cluster health
+            rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
+
+        log.info(
+            "Verification that OSDs can be added/moved to new spec has been completed"
         )
         return 0

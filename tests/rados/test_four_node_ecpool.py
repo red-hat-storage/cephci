@@ -339,10 +339,13 @@ def run(ceph_cluster, **kw):
             host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=target_osd)
             should_not_be_empty(host, "Failed to fetch host details")
             dev_path = get_device_path(host, target_osd)
-            log.debug(
-                f"osd device path  : {dev_path}, osd_id : {target_osd}, host.hostname : {host.hostname}"
+            target_osd_spec_name = service_obj.get_osd_spec(osd_id=target_osd)
+            log_lines = (
+                f"\nosd device path  : {dev_path},\n osd_id : {target_osd},\n hostname : {host.hostname},\n"
+                f"Target OSD Spec : {target_osd_spec_name}"
             )
-            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=True)
+            log.debug(log_lines)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
             method_should_succeed(utils.set_osd_out, ceph_cluster, target_osd)
             method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
             log.debug("Cluster clean post draining of OSD for removal")
@@ -370,6 +373,9 @@ def run(ceph_cluster, **kw):
             log.debug("Adding the removed OSD back and checking the cluster status")
             utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
             method_should_succeed(wait_for_device_rados, host, target_osd, action="add")
+            assert service_obj.add_osds_to_managed_service(
+                osds=[target_osd], spec=target_osd_spec_name
+            )
             time.sleep(30)
             log.debug(
                 "Completed addition of OSD post removal. Checking for inactive PGs post OSD addition"
@@ -390,7 +396,7 @@ def run(ceph_cluster, **kw):
                 f"Addition of OSD : {target_osd} back into the cluster was successful, and the health is good!"
             )
 
-            utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
             log.info("Completed the removal and addition of OSD daemons")
 
         if config.get("remove_host", True):

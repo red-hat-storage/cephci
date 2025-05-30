@@ -11,6 +11,7 @@ import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from ceph.utils import get_node_by_id
 from utility.log import Log
 
@@ -22,6 +23,7 @@ def run(ceph_cluster, **kw):
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_object = RadosOrchestrator(node=cephadm)
+    service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
     osd_falg_status = 0
 
     try:
@@ -48,6 +50,7 @@ def run(ceph_cluster, **kw):
                         break
                     time.sleep(30)
                     log.info("Waiting for 30 seconds to check the OSD configuration")
+            assert service_obj.add_osds_to_managed_service()
 
             if osd_falg_status == 0:
                 log.error("Any of the devices are not configured as OSDs")

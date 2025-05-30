@@ -226,7 +226,7 @@ def run(ceph_cluster, **kw):
             )
 
             # set osd service to unmanaged
-            utils.set_osd_devices_unmanaged(ceph_cluster, osd_id, unmanaged=True)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
 
             org_weight = osd_df_stats["nodes"][0]["crush_weight"]
             osd_host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
@@ -244,7 +244,7 @@ def run(ceph_cluster, **kw):
 
             out, _ = cephadm.shell(["ceph config set osd osd_crush_initial_weight 0"])
             # set osd service to managed
-            utils.set_osd_devices_unmanaged(ceph_cluster, osd_list[-1], unmanaged=False)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
             assert wait_for_device_rados(host=osd_host, osd_id=osd_id, action="add")
             assert utils.set_osd_in(ceph_cluster, all=True)
 
@@ -316,7 +316,7 @@ def run(ceph_cluster, **kw):
             if df_config.get("delete_pool"):
                 rados_obj.delete_pool(pool=pool_name)
             # set osd service to managed
-            utils.set_osd_devices_unmanaged(ceph_cluster, osd_list[-1], unmanaged=False)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
@@ -370,7 +370,7 @@ def run(ceph_cluster, **kw):
             log.info("MAX_AVAIL on the cluster are as per expectation")
 
             # set osd service to unmanaged
-            utils.set_osd_devices_unmanaged(ceph_cluster, "1", unmanaged=True)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
 
             # add backup hosts to the cluster
             service_obj.add_new_hosts(add_nodes=["node12", "node13"], deploy_osd=False)
@@ -420,6 +420,7 @@ def run(ceph_cluster, **kw):
                     log.error(f"OSD addition on {node_obj.hostname} failed")
                     log.error(err)
                     raise Exception(f"OSD addition on {node_obj.hostname} failed")
+                assert service_obj.add_osds_to_managed_service()
 
             time.sleep(30)
             post_osd_list = rados_obj.get_osd_list(status="up")
@@ -553,7 +554,7 @@ def run(ceph_cluster, **kw):
                 return 1
             rados_obj.change_recovery_threads(config=config, action="rm")
             # set osd service to managed
-            utils.set_osd_devices_unmanaged(ceph_cluster, "1", unmanaged=False)
+            rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
 
             # log cluster health
             rados_obj.log_cluster_health()

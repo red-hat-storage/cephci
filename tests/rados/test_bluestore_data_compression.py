@@ -19,6 +19,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
+from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
@@ -42,6 +43,7 @@ def run(ceph_cluster, **kw):
     pool_prefix = "compression_test"
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     client_node = ceph_cluster.get_nodes(role="client")[0]
+    service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
     pool_obj = PoolFunctions(node=cephadm)
     scenarios_to_run = config.get(
         "scenarios_to_run",
@@ -1249,11 +1251,15 @@ def run(ceph_cluster, **kw):
         test_host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=target_osd)
         should_not_be_empty(test_host, "Failed to fetch host details")
         dev_path = get_device_path(test_host, target_osd)
-        log.debug(
-            f"osd device path  : {dev_path}, osd_id : {target_osd}, hostname : {test_host.hostname}"
-        )
+        target_osd_spec_name = service_obj.get_osd_spec(osd_id=target_osd)
 
-        utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=True)
+        log_lines = (
+            f"\nosd device path  : {dev_path},\n osd_id : {target_osd},\n hostname : {test_host.hostname},\n"
+            f"Target OSD Spec : {target_osd_spec_name}"
+        )
+        log.debug(log_lines)
+
+        rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
         method_should_succeed(utils.set_osd_out, ceph_cluster, target_osd)
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
         log.debug("Cluster clean post draining of OSD for removal")
@@ -1346,6 +1352,9 @@ def run(ceph_cluster, **kw):
         method_should_succeed(
             wait_for_device_rados, test_host, target_osd, action="add"
         )
+        assert service_obj.add_osds_to_managed_service(
+            osds=[target_osd], spec=target_osd_spec_name
+        )
         time.sleep(30)
         log.debug(
             "Completed addition of OSD post removal. Checking for inactive PGs post OSD addition"
@@ -1356,7 +1365,7 @@ def run(ceph_cluster, **kw):
         log.info(
             f"Addition of OSD : {target_osd} back into the cluster was successful, and the health is good!"
         )
-        utils.set_osd_devices_unmanaged(ceph_cluster, target_osd, unmanaged=False)
+        rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
         log.info("Completed the removal and addition of OSD daemons")
 
         log_info_msg = (
