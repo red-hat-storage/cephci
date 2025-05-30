@@ -4,6 +4,7 @@ This is cephfs utilsV1 extension to include further common reusable methods for 
 """
 
 import datetime
+import json
 import random
 import secrets
 import string
@@ -463,3 +464,87 @@ class CephFSCommonUtils(FsUtils):
             return 1
 
         return mount_path
+
+    def enc_tag(
+        self, client, op_type, subvol, enc_tag="cephfs_enctag", validate=True, **kwargs
+    ):
+        """
+        This method is to set,get or remove the enctag in subvolume command
+        Required_params:
+        op_type : This could be get,set or rm , Type - str
+        subvol : Subvolume name where enc_tag needs to be updated
+        Optional_params:
+        fs_name: FS name, default - 'cephfs' , type - str
+        group_name : If subvol belongs to non-default group,specify group name
+        enc_tag : Value for enctag field, Type - str, default - "cephfs_enctag"
+
+        Returns: Upon sucess - 0 for op_type set/rm, enc_tag string if op_type is get,1 upon failure
+        """
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(4))
+        )
+
+        cmd = f"ceph fs subvolume enctag {op_type} {kwargs['fs_name']} {subvol}"
+        if kwargs.get("group_name"):
+            cmd += f" --group_name {kwargs['group_name']}"
+        if op_type == "set":
+            cmd += f" --enctag {enc_tag}_{rand_str}"
+        out, _ = client.exec_command(
+            sudo=True,
+            cmd=cmd,
+            check_ec=False,
+        )
+        if op_type == "get":
+            enc_tag_val = out.strip()
+            return enc_tag_val
+        if validate:
+            cmd = f"ceph fs subvolume info {kwargs['fs_name']} {subvol} --f json"
+            if kwargs.get("group_name"):
+                cmd += f" --group_name {kwargs['group_name']}"
+            out, _ = client.exec_command(sudo=True, cmd=cmd, check_ec=False)
+            parsed_data = json.loads(out)
+            if op_type == "set":
+                if enc_tag in parsed_data.get("enctag", None):
+                    log.info("%s set on %s", enc_tag, subvol)
+                    return 0
+                else:
+                    log.error(("%s NOT set on %s", enc_tag, subvol))
+                    return 1
+            elif op_type == "rm":
+                if parsed_data.get("enctag", None):
+                    log.error(
+                        "enc_tag %s not removed on %s", parsed_data["enctag"], subvol
+                    )
+                    return 1
+                else:
+                    log.info(
+                        ("enc_tag %s removed on %s", parsed_data["enctag"], subvol)
+                    )
+                    return 0
+        return 0
+
+    def client_mount_cleanup(self, client, mount_path_prefix="/mnt/cephfs_"):
+        """
+        Unmount and remove the specified mount path on the client.
+        :param client: Client object to execute the command
+        :param mount_path_prefix: Path prefix to be unmounted and removed
+        """
+        try:
+            client.exec_command(
+                sudo=True,
+                cmd=f"umount -l {mount_path_prefix}*/",
+            )
+            log.info(f"Successfully unmounted on {client.node.hostname}")
+
+            client.exec_command(
+                sudo=True,
+                cmd=f"rm -rf {mount_path_prefix}*/",
+            )
+            log.info(f"Successfully deleted mount path on {client.node.hostname}")
+            return 0
+        except CommandFailed as ex:
+            if "Command exceed the allocated execution time" in str(ex):
+                return 1
+            elif "not mounted" in str(ex):
+                return 0
