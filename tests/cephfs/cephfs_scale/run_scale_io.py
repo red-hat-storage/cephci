@@ -92,6 +92,26 @@ def run(ceph_cluster, **kw):
                 )
                 log.info(f"Ceph fs status after enabling standby-replay : {result}")
 
+        # nfs_servers = ceph_cluster.get_ceph_objects("nfs")
+        # nfs_server = nfs_servers[0].node.hostname
+        nfs_server = "extensa023"
+        nfs_name = "cephfs-nfs"
+        nfs_server_ip = "10.1.172.123"
+        # nfs_server_ip = nfs_servers[0].node.ipaddress
+        # log.info(f"NFS Server IP Adderess ; {nfs_server_ip}")
+
+        try:
+            fs_util_v1.create_nfs(
+                clients[0],
+                nfs_name,
+                validate=False,
+                placement="1 %s" % nfs_server,
+            )
+            log.info("NFS cluster %s created successfully." % nfs_name)
+        except CommandFailed as e:
+            log.error("Failed to create NFS cluster: %s" % e)
+            return 1
+
         subvolume_group_name = "subvolgroup1"
         subvolume_name = "subvol"
         subvolume_count = config.get("num_of_subvolumes")
@@ -151,6 +171,9 @@ def run(ceph_cluster, **kw):
             subvolume_name,
             subvolume_group_name,
             mount_type,
+            nfs_cluster_name=nfs_name if mount_type == "nfs" else None,
+            nfs_server=nfs_server if mount_type == "nfs" else None,
+            nfs_server_ip=nfs_server_ip if mount_type == "nfs" else None,
         )
 
         fs_scale_utils.collect_logs(
@@ -229,8 +252,6 @@ def run(ceph_cluster, **kw):
             log.info("Stop logging the Ceph Cluster Cluster status to a log dir")
             fs_scale_utils.stop_all_logging()
             daemon_list = ["mds", "osd", "mgr", "mon"]
-            log_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
-            log.info(f"log path:{log_dir}")
             log.info(f"Check for crash from : {daemon_list}")
             fs_system_utils.crash_check(
                 clients[0], crash_copy=1, daemon_list=daemon_list
