@@ -22,6 +22,8 @@ def read_csv(file_path):
     data = {}
     try:
         with open(file_path, mode="r") as file:
+            next(file)  # Skip "Ceph Version: ..."
+            next(file)  # Skip blank line
             reader = csv.DictReader(file)
             for row in reader:
                 data[row["Snapshot Name"]] = float(row["Sync Duration"])
@@ -33,31 +35,31 @@ def read_csv(file_path):
     return data
 
 
-def compare_sync_duration(data_v7, data_v8):
+def compare_sync_duration(data_v_n_1, data_v_n):
     """
-    Compares the sync duration values between two versions of snapshot data (v7 and v8).
+    Compares the sync duration values between two versions of snapshot data (v_n_1 and v_n).
 
-    If the sync duration in version 8 is greater than in version 7, a warning is logged.
-    If the sync duration in version 8 is smaller than in version 7, an info log is added.
+    If the sync duration in v_n is greater than in v_n_1, a warning is logged.
+    If the sync duration in v_n is smaller than in v_n_1, an info log is added.
     If the durations are equal, an info log is added.
-    If a snapshot is missing in version 8, a warning is logged.
+    If a snapshot is missing in v_n, a warning is logged.
 
-    :param data_v7: Dictionary of sync durations for version 7.
-    :param data_v8: Dictionary of sync durations for version 8.
+    :param data_v_n_1: Dictionary of sync durations for version n-1.
+    :param data_v_n: Dictionary of sync durations for version n.
     :return: None
     """
-    for snapshot_name, sync_duration_v7 in data_v7.items():
-        sync_duration_v8 = data_v8.get(snapshot_name)
+    for snapshot_name, sync_duration_v_n_1 in data_v_n_1.items():
+        sync_duration_v_n = data_v_n.get(snapshot_name)
 
-        if sync_duration_v8 is not None:
-            if sync_duration_v8 > sync_duration_v7:
+        if sync_duration_v_n is not None:
+            if sync_duration_v_n > sync_duration_v_n_1:
                 log.warning(
-                    f"Sync duration increased for {snapshot_name}: {sync_duration_v7} -> {sync_duration_v8}. "
+                    f"Sync duration increased for {snapshot_name}: {sync_duration_v_n_1} -> {sync_duration_v_n}. "
                     f"Validate the results manually"
                 )
-            elif sync_duration_v8 < sync_duration_v7:
+            elif sync_duration_v_n < sync_duration_v_n_1:
                 log.info(
-                    f"Sync duration decreased for {snapshot_name}: {sync_duration_v7} -> {sync_duration_v8}. "
+                    f"Sync duration decreased for {snapshot_name}: {sync_duration_v_n_1} -> {sync_duration_v_n}. "
                     f"Performance improvements are seen."
                 )
             else:
@@ -69,20 +71,20 @@ def compare_sync_duration(data_v7, data_v8):
 def run(ceph_cluster, **kw):
     try:
         config = kw.get("config")
-        csv_version_7 = config.get("result_filev7")
-        csv_version_8 = config.get("result_filev8")
+        csv_file_v_n_1 = config.get("result_file_v_n_1")
+        csv_file_v_n = config.get("result_file_v_n")
 
-        v7_path = os.path.join(log_dir, csv_version_7)
-        v8_path = os.path.join(log_dir, csv_version_8)
+        path_v_n_1 = os.path.join(log_dir, csv_file_v_n_1)
+        path_v_n = os.path.join(log_dir, csv_file_v_n)
 
-        result_v7 = read_csv(v7_path)
-        result_v8 = read_csv(v8_path)
+        result_v_n_1 = read_csv(path_v_n_1)
+        result_v_n = read_csv(path_v_n)
 
-        if result_v7 is None or result_v8 is None:
+        if result_v_n_1 is None or result_v_n is None:
             log.error("Error reading one or both CSV files. Exiting.")
             return 1
 
-        compare_sync_duration(result_v7, result_v8)
+        compare_sync_duration(result_v_n_1, result_v_n)
         log.info("Validation completed successfully.")
 
         return 0

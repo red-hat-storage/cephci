@@ -1398,11 +1398,12 @@ class CephfsMirroringUtils(object):
             }
 
             if mount_type == "nfs":
+                export_binding = f"/nfs_export_{''.join(secrets.choice(string.digits) for _ in range(3))}"
                 mount_params.update(
                     {
                         "nfs_server": nfs_server,
                         "nfs_name": nfs_name,
-                        "nfs_export_name": f"/nfs_export_{''.join(secrets.choice(string.digits) for _ in range(3))}",
+                        "nfs_export_name": export_binding,
                         "export_created": export_created,
                     }
                 )
@@ -1421,7 +1422,7 @@ class CephfsMirroringUtils(object):
                 subvol_path[subvol_index:] if subvol_index != -1 else subvol_path
             )
 
-        return mount_paths, subvol_paths
+        return mount_paths, subvol_paths, export_binding
 
     def create_files_for_snapdiff(
         self, client, dir_path, num_files, size, cloud_type=None
@@ -1439,20 +1440,15 @@ class CephfsMirroringUtils(object):
         remote_path = f"/root/{generate_file_script}"
         unit = "MB" if cloud_type in ["ibmc", "openstack"] else "GB"
 
-        client.upload_file(
-            sudo=True,
-            src=f"tests/cephfs/cephfs_mirroring/snapdiff_scripts/{generate_file_script}",
-            dst=remote_path,
-        )
-
         cmd = f"python3 {remote_path} {dir_path} {num_files} {size} {unit}"
         client.exec_command(sudo=True, cmd=cmd, timeout=14400)
 
         log.info(
-            "Completed creation of %s files, each of size %s %s, on all the Paths",
+            "Completed creation of %s files, each of size %s %s, on  Paths %s",
             num_files,
             size,
             unit,
+            dir_path,
         )
 
     def modify_files_for_snapdiff(
@@ -1470,12 +1466,6 @@ class CephfsMirroringUtils(object):
         """
         modify_script = "modify_file_at_10_random_offsets.py"
         remote_path = f"/root/{modify_script}"
-
-        client.upload_file(
-            sudo=True,
-            src=f"tests/cephfs/cephfs_mirroring/snapdiff_scripts/{modify_script}",
-            dst=remote_path,
-        )
 
         cmd = f"python3 {remote_path} {dir_path} --file-count {num_files} --mode {mode} --length {length}"
         if mode == "write" and bytes_size:
@@ -1711,6 +1701,7 @@ class CephfsMirroringUtils(object):
         filesystem_id,
         peer_uuid,
         csv_file,
+        mode,
     ):
         """
         Modify files and create incremental snapshots for kernel, fuse, and nfs mounts.
@@ -1724,20 +1715,28 @@ class CephfsMirroringUtils(object):
         )
         for mount_type in ["kernel", "fuse", "nfs"]:
             dir_path = io_dir_paths[mount_type]
-            self.modify_files_for_snapdiff(
-                source_clients[0],
-                dir_path,
-                num_files,
-                mode="write",
-                length=5,
-                bytes_size="1M",
-            )
-            self.modify_files_for_snapdiff(
-                source_clients[0], dir_path, num_files, mode="read", length=5
-            )
-            self.modify_files_for_snapdiff(
-                source_clients[0], dir_path, num_files, mode="remove", length=5
-            )
+
+            if mode == "write":
+                self.modify_files_for_snapdiff(
+                    source_clients[0],
+                    dir_path,
+                    num_files,
+                    mode="write",
+                    length=5,
+                    bytes_size="1M",
+                )
+            elif mode == "read":
+                self.modify_files_for_snapdiff(
+                    source_clients[0], dir_path, num_files, mode="read", length=5
+                )
+            elif mode == "remove":
+                self.modify_files_for_snapdiff(
+                    source_clients[0], dir_path, num_files, mode="remove", length=5
+                )
+            else:
+                log.warning(
+                    f"Unsupported mode: {mode}, skipping modification for {mount_type}"
+                )
 
         # Step 2: Create snapshots
         for mount_type in ["kernel", "fuse", "nfs"]:
