@@ -1065,3 +1065,37 @@ def get_process_info(node, process="", awk=""):
         cmd = cmd + " | awk {{'print $" + f"{awk}" + "'}}"
     out, _ = node.exec_command(cmd=cmd, sudo=True)
     return out.split("\n")
+
+
+def enable_firewall(node):
+    """Enable Firewall on node
+
+    Args:
+        node (CephNode): Ceph Node Object
+    """
+    # Set Firewall commands
+    enable_firewall = "systemctl enable --now firewalld"
+
+    # Enable Firewall mode
+    _, err = node.exec_command(cmd=enable_firewall, sudo=True)
+    if err:
+        log.error(f"Failed to enable firewall Error -\n{err}")
+        return False
+    return True
+
+
+def is_firewall_enabled(node):
+    """Check for firewall on node
+
+    Args:
+        node (CephNode): Ceph Node Object
+    """
+    # Check Firewall command
+    check_firewall_enable = "systemctl is-enabled firewalld"
+
+    # Check for Firewall status
+    out, _ = node.exec_command(cmd=check_firewall_enable, sudo=True)
+    if "enabled" not in out:
+        log.error(f"Firewall is disabled on node '{node.hostname}'")
+        return False
+    return True
