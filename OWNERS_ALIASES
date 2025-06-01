@@ -1,0 +1,74 @@
+---
+# Based on the information reference from
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+aliases:
+
+# Complete ownership of the repository
+  cephci-admins:
+    - sunilkumarn417
+    - AmarnatReddy
+    - psathyan
+
+  # Members of Ceph Infra team
+  ceph-infra-team:
+    - krishnaramaswamy
+
+  # members of RBD team
+  ceph-block-team:
+    - Manohar-Murthy
+    - sunilangadi2
+    - manasagowri
+    - rahullepakshi
+    - HaruChebrolu
+    - jprakash-redhat
+    - sunilkumarn417
+    - krishnaramaswamy
+
+  # Members of CI team
+  ceph-ci-team:
+    - pavankumarag
+    - vdas-redhat
+    - vamahaja
+    - obannak
+    - tintumathew10
+    - Adarsha1999
+    - deepssin
+
+  # Members of DMFG
+  ceph-dmfg-team:
+    - vdas-redhat
+    - sayaleeraut
+    - adityaramteke
+    - vinpapnoi
+    - msainiRedhat
+    - MohitBis
+    - pranavprakash20
+
+  # Members of FS
+  ceph-fs-team:
+    - neha-gangadhar
+    - sumabai
+    - hkadam134
+    - Manimaran-MM
+    - AmarnatReddy
+
+  # Members of rados
+  ceph-rados-team:
+    - neha-gangadhar
+    - pdhiran
+    - SrinivasaBharath
+    - harshkumarRH
+    - Divya-78
+    - s-vipin
+
+  # Members of RGW
+  ceph-rgw-team:
+    - mkasturi18
+    - viduship
+    - TejasC88
+    - ckulal
+    - anrao19
+    - hmaheswa
+    - Sohan-Singh
+    - manisha-reddem
