@@ -1,0 +1,16 @@
+---
+# Based on the information found 
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - veera-raghava-reddy
+  - cephci-admins
+
+reviewers:
+  - ceph-ci-team
+  - ceph-infra-team
+  - ceph-block-team
+  - ceph-rgw-team
+  - ceph-rados-team
+  - ceph-fs-team
+  - ceph-dmfg-team
