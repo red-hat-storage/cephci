@@ -678,6 +678,7 @@ def run(args):
     sys.path.append(os.path.abspath("tests/upgrades"))
     sys.path.append(os.path.abspath("tests/ceph_volume"))
     sys.path.append(os.path.abspath("tests/nvmeof"))
+    sys.path.append(os.path.abspath("tests/rgw/rest"))
     sys.path.append(os.path.abspath("tests/nvmeof/rest"))
     sys.path.append(os.path.abspath("tests/nfs"))
     sys.path.append(os.path.abspath("tests/smb"))
