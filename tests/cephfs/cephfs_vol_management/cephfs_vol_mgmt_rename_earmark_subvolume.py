@@ -12,7 +12,7 @@ log = Log(__name__)
 ceph fs volume rename <start_volume> <new_start_volume> [--yes-i-really-mean-it]
 # Delete Scenarios
 1. Create a volume
-2. Try to delete the volume wihh mon_allow_pool_delete to false
+2. Try to delete the volume with mon_allow_pool_delete to false
 3. Check volume delete fails and validate the error message
 4. Set mon_allow_pool_delete to true
 5. Delete the volume and check if the volume is deleted
@@ -592,8 +592,18 @@ def run(ceph_cluster, **kw):
             sub_path, _ = client1.exec_command(
                 sudo=True, cmd=f"ceph fs subvolume getpath {fs_name} {subfs_name}"
             )
+            client1.exec_command(
+                sudo=True,
+                cmd=f"mkdir {fuse_mounting_dir_1}{sub_path.strip()}/run_ios_{subfs_name}",
+                check_ec=False,
+            )
             with parallel() as p:
-                p.spawn(fs_util.run_ios(client1, f"{fuse_mounting_dir_1}{sub_path}"))
+                p.spawn(
+                    fs_util.run_ios(
+                        client1,
+                        f"{fuse_mounting_dir_1}{sub_path.strip()}/run_ios_{subfs_name}",
+                    )
+                )
             # Set earmark
             fs_util.set_subvolume_earmark(
                 client1, fs_name, subfs_name, earmark="nfs.share5"
@@ -647,14 +657,6 @@ def run(ceph_cluster, **kw):
             )
         fs_name = f"cephfs5_{ran_string}"
         subvol_group_name = f"mygroup_{ran_string}"
-        subvolume_name = f"subvol15_{ran_string}"
-        # client1.exec_command(
-        #     sudo=True,
-        #     cmd=f"ceph fs subvolume rm {fs_name} subvol6_{ran_string} --group_name mygroup_{ran_string}",
-        # )
-        client1.exec_command(
-            sudo=True, cmd=f"ceph fs subvolume rm {fs_name} {subvolume_name} "
-        )
         group_rm_list = [
             f"cephfs3_subvolumegroup_{ran_string}",
             f"mygroup_{ran_string}",

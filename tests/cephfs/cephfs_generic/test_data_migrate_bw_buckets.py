@@ -187,7 +187,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True,
             cmd=f"dd if=/dev/urandom of={fuse_mounting_dir_1}/test_1.txt bs=1G count=1",
-            long_running=True,
+            timeout=3600,
         )
         df_utilization_root1_step_1, rc = client1.exec_command(
             sudo=True, cmd="ceph osd df root1 -f json"

@@ -1101,7 +1101,6 @@ class CG_snap_IO(object):
                     cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
                     f"--operation {i} --threads 1 --file-size 1024 "
                     f"--files 50 --top {dir_path}",
-                    long_running=True,
                     timeout=20,
                 )
                 log.info(f"smallfile write output for {i} on {dir_path}:{out_list}")
@@ -1223,7 +1222,6 @@ class CG_snap_IO(object):
                 cmd=f"fio --name={file_path} --ioengine=libaio --size 100k --rw=write --bs=64k --direct=0 "
                 f"--numjobs=1 --iodepth=5 --runtime=10",
                 timeout=20,
-                long_running=True,
             )
             end_time = time.time()
             log.info(f"fio write passed on {file_path},end_time - {end_time}")
@@ -1276,7 +1274,6 @@ class CG_snap_IO(object):
                     sudo=True,
                     cmd=f"python3 /home/cephuser/Crefi/crefi.py "
                     f"-n 50 --max 100k --min 10k -t {file_type} -b 2 -d 2 --multi --fop {i} -T 2 {dir_path}",
-                    long_running=True,
                     timeout=20,
                 )
                 log.info(f"after crefi_io cmd on {dir_path}:{out_list}")

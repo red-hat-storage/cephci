@@ -73,7 +73,7 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"python3 /root/multithreaded_file_writer.py {fuse_mount_dir};",
                 check_ec=False,
-                long_running=True,
+                timeout=3600,
             )
             time.sleep(10)
             p.spawn(get_ceph_health_detail, client1)

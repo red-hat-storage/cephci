@@ -81,7 +81,7 @@ def run(ceph_cluster, **kw):
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
             f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{kernel_mounting_dir_1}",
-            long_running=True,
+            timeout=600,
         )
         result, rc = clients[0].exec_command(
             sudo=True, cmd=f"ceph fs status {default_fs} --format json-pretty"

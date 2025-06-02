@@ -124,7 +124,7 @@ def unlink_file(client1, client2, file_name, lock_from_mount_dir, validate_from=
         sudo=True,
         cmd=f"python3 /home/cephuser/file_lock_utility.py {lock_from_mount_dir}{file_name} lock "
         f"--timeout 120 &> /dev/null &",
-        long_running=True,
+        timeout=3600,
     )
     out, rc = client2.exec_command(
         sudo=True,

@@ -335,6 +335,12 @@ tests:
       name: "nfs_multiple_export_using_single_conf"
       polarion-id: "CEPH-83575082"
   - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: cephfs_clean_up.py
+      name: "setup Cleanup after the test suite"
+  #cephfs_vol_management
+  - test:
       name: subvolumegroup creation on desired data pool
       module: cephfs_vol_management.cephfs_vol_mgmt_subvolgroup_pool_layout.py
       polarion-id: CEPH-83574164
@@ -484,6 +490,11 @@ tests:
       polarion-id: CEPH-83606764
       desc: Validate the volume info command and ensure the output is accurate.
       abort-on-fail: false
+  - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: cephfs_clean_up.py
+      name: "setup Cleanup after the test suite"
   ######################################################################################################################
   # Tier-1_fs
   ######################################################################################################################
@@ -537,6 +548,11 @@ tests:
       module: fs_kernel_mount_options.py
       name: fs_kernel_mount_options
       polarion-id: "CEPH-83575389"
+  - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: cephfs_clean_up.py
+      name: "setup Cleanup after the test suite"
   ######################################################################################################################
   # Suite File Name : tier-2_fs_mutlifs_quota_snaphost.yaml
   # Features Covered
@@ -618,6 +634,11 @@ tests:
       desc: Create 4-5 Filesystem randomly on different MDS daemons
       abort-on-fail: false
   - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: cephfs_clean_up.py
+      name: "setup Cleanup after the test suite"
+  - test:
       name: Files-quota-test
       module: quota.quota_files.py
       polarion-id: CEPH-83573399
@@ -677,6 +698,11 @@ tests:
       polarion-id: CEPH-83573406
       desc: Tests the file and byte attributes on the directory
       abort-on-fail: false
+  - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: cephfs_clean_up.py
+      name: "setup Cleanup after the test suite"
   - test:
       name: snapshot_flag
       module: snapshot_clone.snapshot_flag.py
@@ -824,6 +850,11 @@ tests:
       polarion-id: CEPH-83600860
       desc: Validate Verify Kernel and FUSE Mount Behavior with Snapshot Scheduling and MDS Restarts
       abort-on-fail: false
+  - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: cephfs_clean_up.py
+      name: "setup Cleanup after the test suite"
   ######################################################################################################################
   # Suite File Name : tier-2_cephfs_test-clients.yaml
   # Features Covered
@@ -1028,6 +1059,11 @@ tests:
       module: clients.client_root_squash_non_root_user.py
       name: client_root_squash_non_root_user
       polarion-id: "CEPH-83602912"
+  - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: cephfs_clean_up.py
+      name: "setup Cleanup after the test suite"
   ######################################################################################################################
   # Suite File Name : tier-1_cephfs_cg_quiesce.yaml
   # Features Covered

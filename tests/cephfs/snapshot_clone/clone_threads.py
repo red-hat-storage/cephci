@@ -134,7 +134,7 @@ def run(ceph_cluster, **kw):
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4000 "
             f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{fuse_mounting_dir_1}",
-            long_running=True,
+            timeout=3600,
         )
         snapshot = {
             "vol_name": default_fs,

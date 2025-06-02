@@ -85,7 +85,7 @@ def run(ceph_cluster, **kw):
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
             f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{fuse_mount_dir}",
-            long_running=True,
+            timeout=3600,
         )
         log.info("Make OSD laggy")
         mds_list = fs_util.get_active_mdss(clients[0], fs_name)

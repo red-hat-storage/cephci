@@ -17,7 +17,7 @@ log = Log(__name__)
 
 def run_io_commands(client, io_commands):
     for command in io_commands:
-        client.exec_command(sudo=True, cmd=command, long_running=True)
+        client.exec_command(sudo=True, cmd=command, timeout=3600)
 
 
 def start_io_time(fs_util, client1, mounting_dir, timeout=300):
@@ -149,7 +149,7 @@ def run(ceph_cluster, **kw):
         ]
 
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=3600)
 
         with parallel() as p:
             p.spawn(

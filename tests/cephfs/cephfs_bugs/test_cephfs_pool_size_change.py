@@ -124,7 +124,7 @@ def run(ceph_cluster, **kw):
             f"ceph osd pool set {metadata_pool} pg_autoscale_mode off",
         ]
         for command in commands:
-            clients[0].exec_command(sudo=True, cmd=command, long_running=True)
+            clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
         data_pool_pg_num, rc = clients[0].exec_command(
             sudo=True, cmd=f"ceph osd pool get {data_pool} pg_num | awk '{{print $2}}'"
         )
@@ -146,7 +146,7 @@ def run(ceph_cluster, **kw):
             f"--files 1000 --files-per-dir 10 --top {kernel_mount_dir}/dir2",
         ]
         for command in commands:
-            clients[0].exec_command(sudo=True, cmd=command, long_running=True)
+            clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
         log.info("Checking for heartbeat map timeout issue")
         rc = fs_util.heartbeat_map(mdss[0])
         if rc == 1:
@@ -219,13 +219,13 @@ def run(ceph_cluster, **kw):
                     f"ceph osd pool set {metadata_pool} pg_autoscale_mode warn",
                 ]
                 for command in commands:
-                    clients[0].exec_command(sudo=True, cmd=command, long_running=True)
+                    clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
             else:
                 commands = [
                     f"ceph osd pool set {data_pool} pg_autoscale_mode on",
                     f"ceph osd pool set {metadata_pool} pg_autoscale_mode on",
                 ]
                 for command in commands:
-                    clients[0].exec_command(sudo=True, cmd=command, long_running=True)
+                    clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
         for mount_point in mount_points:
             clients[0].exec_command(sudo=True, cmd=f"rm -rf {mount_point}")

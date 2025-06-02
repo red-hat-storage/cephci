@@ -499,7 +499,7 @@ class SnapUtils(object):
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 "
                 f"--file-size 400 --files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
                 f"{io_path}{small_file_dir_name}",
-                long_running=True,
+                timeout=3600,
             )
             i += 1
             time.sleep(30)

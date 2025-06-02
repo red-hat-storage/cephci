@@ -174,7 +174,7 @@ def run(ceph_cluster, **kw):
             f"diff -qr {nfspath} {fuse_mounting_dir_1}_dd_file_nfs2",
         ]
         for cmd in verify_data_movement:
-            clients[0].exec_command(sudo=True, cmd=cmd)
+            clients[0].exec_command(sudo=True, cmd=cmd, timeout=1200)
             log.info("Sleeping for 5 seconds between commands....")
             time.sleep(5)
 

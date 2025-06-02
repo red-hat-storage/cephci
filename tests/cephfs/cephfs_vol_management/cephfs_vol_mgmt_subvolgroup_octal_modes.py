@@ -208,6 +208,7 @@ def run(ceph_cluster, **kw):
                 [clients[0]],
                 kernel_mounting_dir_1,
                 ",".join(mon_node_ips),
+                extra_params=f",fs={default_fs}",
             )
             fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
             subvol_path, rc = clients[0].exec_command(
@@ -217,6 +218,7 @@ def run(ceph_cluster, **kw):
             fs_util.fuse_mount(
                 [clients[0]],
                 fuse_mounting_dir_1,
+                extra_params=f" --client_fs {default_fs}",
             )
 
             kernel_mounting_dir_2 = f"/mnt/cephfs_kernel{mounting_dir}_2/"
@@ -230,6 +232,7 @@ def run(ceph_cluster, **kw):
                 [clients[0]],
                 kernel_mounting_dir_2,
                 ",".join(mon_node_ips),
+                extra_params=f",fs={default_fs}",
             )
             fuse_mounting_dir_2 = f"/mnt/cephfs_fuse{mounting_dir}_2/"
             subvol_path, rc = clients[0].exec_command(
@@ -239,6 +242,7 @@ def run(ceph_cluster, **kw):
             fs_util.fuse_mount(
                 [clients[0]],
                 fuse_mounting_dir_2,
+                extra_params=f" --client_fs {default_fs}",
             )
 
             kernel_mounting_dir_3 = f"/mnt/cephfs_kernel{mounting_dir}_EC_1/"
@@ -348,16 +352,8 @@ def run(ceph_cluster, **kw):
 
         log.info("Run IO's")
         with parallel() as p:
-            for i in [
-                kernel_mounting_dir_1,
-                fuse_mounting_dir_1,
-                kernel_mounting_dir_2,
-                fuse_mounting_dir_2,
-            ]:
-                p.spawn(fs_util.run_ios, clients[0], i)
-
-            for i in [kernel_mounting_dir_3, fuse_mounting_dir_3]:
-                p.spawn(fs_util.run_ios, clients[1], i)
+            p.spawn(fs_util.run_ios, clients[0], kernel_mounting_dir_1)
+            p.spawn(fs_util.run_ios, clients[1], fuse_mounting_dir_3)
 
         log.info("Clean up the system")
         for subvolume in subvolume_list:

@@ -166,7 +166,6 @@ def add_dataset(client, mounting_dir):
             cmd=f"fio --name={file_path} --ioengine=libaio --size 2M --rw=write --bs=1M --direct=1 "
             f"--numjobs=1 --iodepth=5 --runtime=10",
             timeout=20,
-            long_running=True,
         )
     return file_list
 
@@ -219,7 +218,6 @@ def validate_after_recovery(client, file_list, inode_details):
             cmd=f"fio --name={file_path} --ioengine=libaio --size 2M --rw=readwrite --bs=1M --direct=1 "
             f"--numjobs=1 --iodepth=5 --runtime=10",
             timeout=20,
-            long_running=True,
         )
 
 

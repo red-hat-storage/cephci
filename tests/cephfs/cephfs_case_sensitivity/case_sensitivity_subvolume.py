@@ -664,9 +664,7 @@ def remove_charmap_and_validate():
     )
 
     log.info("Removing files..")
-    client1.exec_command(
-        sudo=True, cmd=f"rm -rf {fuse_mounting_dir}*", long_running=True, timeout=3600
-    )
+    client1.exec_command(sudo=True, cmd=f"rm -rf {fuse_mounting_dir}*", timeout=3600)
 
     Ceph(client1).fs.sub_volume.charmap.remove(
         cephfs_vol, cephfs_subvol, **{"group-name": cephfs_subvol_group1}

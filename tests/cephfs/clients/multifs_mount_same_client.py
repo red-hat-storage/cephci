@@ -73,7 +73,7 @@ def run(ceph_cluster, **kw):
                 f"--files 1000 --files-per-dir 10 --top {fuse_mount_dir}/dir2",
             ]
             for command in commands:
-                err = client1.exec_command(sudo=True, cmd=command, long_running=True)
+                err = client1.exec_command(sudo=True, cmd=command, timeout=3600)
                 if err:
                     return 1
         return 0

@@ -779,7 +779,6 @@ def io_test_workflow_7(
         client.exec_command(
             sudo=True,
             cmd=cmd,
-            long_running=True,
             timeout=3600,
         )
 
@@ -1145,7 +1144,6 @@ def io_test_workflow_11(run_time, log_path, cleanup, clients, fs_system_utils, s
         client.exec_command(
             sudo=True,
             cmd=cmd,
-            long_running=True,
             timeout=3600,
         )
         if cleanup == 1:
@@ -1230,7 +1228,6 @@ def run_cmd(cmd, client, logger):
         client.exec_command(
             sudo=True,
             cmd=cmd,
-            long_running=True,
             timeout=3600,
         )
     except BaseException as ex:

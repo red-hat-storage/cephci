@@ -155,7 +155,7 @@ def run(ceph_cluster, **kw):
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create "
                 f"--threads {threads} --file-size {file_size} --files {files} --response-times Y --top "
                 f"{fuse_mount_dir}/fuse_ios",
-                long_running=True,
+                timeout=3600,
             )
 
             # Mounting Subvolume2 on Kernel
@@ -188,7 +188,7 @@ def run(ceph_cluster, **kw):
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create "
                 f"--threads {threads} --file-size {file_size} --files {files} --response-times Y --top "
                 f"{kernel_mount_dir}/kernel_ios",
-                long_running=True,
+                timeout=3600,
             )
 
             # Mounting Subvolume3 on nfs
@@ -247,7 +247,7 @@ def run(ceph_cluster, **kw):
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create "
                 f"--threads {threads} --file-size {file_size} --files {files} --response-times Y --top "
                 f"{nfs_mounting_dir}/nfs_dir",
-                long_running=True,
+                timeout=3600,
             )
 
             # Mounting Subvolume4 on Kernel - Run dbench

@@ -88,7 +88,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True,
             cmd=f"dd if=/dev/zero of={fuse_mounting_dir_1}/testfile bs=1M count=1024",
-            long_running=True,
+            timeout=300,
         )
         fs_volume_info_dict = fs_util.collect_fs_volume_info_for_validation(
             client1, volume_name, human_readable=False
@@ -123,7 +123,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True,
             cmd=f"dd if=/dev/zero of={kernel_mounting_dir_1}/testfile bs=1M count=1024",
-            long_running=True,
+            timeout=300,
         )
         volume_info = fs_util.collect_fs_volume_info_for_validation(
             client1, volume_name, human_readable=False

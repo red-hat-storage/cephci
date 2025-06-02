@@ -97,12 +97,13 @@ def run(ceph_cluster, **kw):
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 5 --file-size 1024 "
             f"--files 2048 --top "
             f"{kernel_mounting_dir_1}",
-            long_running=True,
+            timeout=3600,
         )
         client1.exec_command(
             sudo=True,
             cmd=f"dd if=/dev/zero of={kernel_mounting_dir_1}/file_5gb bs=1M count=5000",
-            long_running=True,
+            timeout=3600,
+            check_ec=False,
         )
         c_out2, c_err2 = client1.exec_command(
             sudo=True,

@@ -90,7 +90,6 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd=f"python3 smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 --files 1000 "
                 f"--files-per-dir 10 --dirs-per-dir 2 --top {client_info['mounting_dir']}{dir1}",
-                long_running=True,
                 timeout=300,
             )
             return_counts = fs_util.io_verify(client)
@@ -156,7 +155,6 @@ def run(ceph_cluster, **kw):
                 " --file-size 4 --files 1000 "
                 "--files-per-dir 10 --dirs-per-dir 2"
                 " --top %s%s" % (client_info["mounting_dir"], dir1),
-                long_running=True,
                 timeout=300,
             )
             return_counts = fs_util.io_verify(client)
@@ -170,7 +168,6 @@ def run(ceph_cluster, **kw):
                 " --file-size 4 --files 1000 "
                 "--files-per-dir 10 --dirs-per-dir 2"
                 " --top %s%s" % (client_info["mounting_dir"], dir1),
-                long_running=True,
                 timeout=300,
             )
             return_counts = fs_util.io_verify(client)
