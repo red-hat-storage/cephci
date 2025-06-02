@@ -12,6 +12,8 @@ reviewers:
   - rahullepakshi
   - jprakash-redhat
   - krishnaramaswamy
+  - chaitanyadommeti
+  - aarsharm
 
 labels:
   - isci
