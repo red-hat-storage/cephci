@@ -438,6 +438,7 @@ tests:
       name: Buckets and Objects test
       desc: test_Mbuckets_with_Nobjects_download on secondary
       polarion-id: CEPH-14237
+      comments: Bug-2358517, known Issue in 8.0
       module: sanity_rgw_multisite.py
       clusters:
         ceph-sec:
