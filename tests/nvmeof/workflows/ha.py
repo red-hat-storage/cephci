@@ -14,7 +14,7 @@ from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id, get_openstack_driver
 from ceph.waiter import WaitUntil
-from tests.nvmeof.workflows.initiator import NVMeInitiator
+from tests.nvmeof.workflows.initiator import NVMeInitiator, validate_initiator
 from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
 from tests.nvmeof.workflows.nvme_utils import deploy_nvme_service
 from utility.log import Log
@@ -994,66 +994,6 @@ class HighAvailability:
 
         LOG.info("IO Validation is Successfull on all RBD images..")
 
-    @retry((IOError, TimeoutError, CommandFailed), tries=7, delay=2)
-    def fetch_gw_paths(self, gateway, client, ns_device):
-        """
-        Fetch the optimized and inaccessible paths for the namespaces
-        serviced by a particular gateway.
-
-        Args:
-            gateway: gateway object
-            ana_id: ana group id of the namespaces
-        """
-        gw_paths = client.fetch_anastate(ns_device)
-        LOG.info(f"Gateway paths : {log_json_dump(gw_paths)}")
-
-        if not gw_paths.get("optimized"):
-            raise IOError(
-                f"Namespace is not optimized for {gateway.daemon_name} at {client} initiator"
-            )
-
-        return gw_paths
-
-    def validate_initiator(self, gateway, namespaces_gw, failed_gw=None):
-        """Check whether all namespaces serviced by a particular gateway are optimized
-        for that gateway at the initiator and also during failover, check if the failed
-        gateway is inaccessible at the initiator.
-
-        Args:
-            gateway: gateway object
-            namespaces_gw: namespaces related to the gateway
-            failed_gw: failed gateway object
-        """
-        for client in self.clients:
-            for ns in namespaces_gw:
-                ns_device = client.fetch_device_for_namespace(ns.get("uuid"))
-                if not ns_device:
-                    raise Exception(
-                        f"Namespace {ns.get('uuid')} is not available at {client} initiator"
-                    )
-
-                gw_paths = self.fetch_gw_paths(gateway, client, ns_device)
-
-                if len(gw_paths.get("optimized")) > 1:
-                    raise Exception(
-                        f"Namespace {ns.get('uuid')} has more than one at optimized paths {client} initiator"
-                    )
-                gw_ip = gateway.node.ip_address
-                if gw_paths.get("optimized")[0] != gw_ip:
-                    raise Exception(
-                        f"Namespace {ns.get('uuid')} is not optimized for {gateway.daemon_name} at {client} initiator"
-                    )
-                if failed_gw and failed_gw.node.ip_address not in gw_paths.get(
-                    "inaccessible"
-                ):
-                    raise Exception(
-                        f"Namespace {ns.get('uuid')} is not inaccessible for {failed_gw.daemon_name} \
-                        at {client} initiator"
-                    )
-        LOG.info(
-            f"All namespaces are optimized for all initiators for gateway {gateway.daemon_name}"
-        )
-
     def validate_init_namespace_masking(
         self,
         command,
@@ -1307,9 +1247,12 @@ class HighAvailability:
                         )
                         ns_list = [ns.get("list") for ns in namespaces_gw]
                         ns_info = [ns.get("info") for ns in namespaces_gw]
+                        LOG.info(
+                            f"Namespaces for failed gateway {gw.node.ip_address} before failover are {ns_list}"
+                        )
                         namespaces.extend(ns_info)
                         all_failed_ns.update({gw.ana_group_id: ns_list})
-                        self.validate_initiator(gw, ns_list)
+                        validate_initiator(self.clients, gw, ns_list)
 
                     self.validate_io(namespaces)
 
@@ -1326,7 +1269,8 @@ class HighAvailability:
                             failed_gw = result.pop("failed-gw", None)
                             if not failed_gw:
                                 raise Exception("Faileover failed")
-                            active = self.get_optimized_state(failed_gw.ana_group_id)
+                        for gw in fail_gws:
+                            active = self.get_optimized_state(gw.ana_group_id)
                             active_gw = list(active[0])[0]
                             LOG.info(log_json_dump(result))
                             active_gw_obj = [
@@ -1334,8 +1278,19 @@ class HighAvailability:
                                 for gw in self.gateways
                                 if gw.daemon_name in active_gw
                             ][0]
-                            ns_list = all_failed_ns.get(failed_gw.ana_group_id)
-                            self.validate_initiator(active_gw_obj, ns_list, failed_gw)
+                            LOG.info(
+                                f"Active gateway after failover for {gw.node.ip_address} is \
+                                    {active_gw_obj.node.ip_address}"
+                            )
+                            namespaces_gw = self.fetch_namespaces(
+                                active_gw_obj, [gw.ana_group_id], get_list=True
+                            )
+                            ns_list = [ns.get("list") for ns in namespaces_gw]
+                            LOG.info(
+                                f"Namespaces for failed gateway {gw.node.ip_address} after \
+                                    failover are {ns_list}"
+                            )
+                            validate_initiator(self.clients, active_gw_obj, ns_list, gw)
                         self.validate_io(namespaces)
 
                     # Fail Back
@@ -1350,12 +1305,19 @@ class HighAvailability:
                                 LOG.info(log_json_dump(result))
                                 if not failed_gw:
                                     raise Exception("Failback failed")
-                                ns_list = all_failed_ns.get(failed_gw.ana_group_id)
-                                self.validate_initiator(failed_gw, ns_list)
-                            self.validate_io(namespaces)
-
+                                namespaces_gw = self.fetch_namespaces(
+                                    failed_gw, [failed_gw.ana_group_id], get_list=True
+                                )
+                                ns_list = [ns.get("list") for ns in namespaces_gw]
+                                LOG.info(
+                                    f"Namespaces for failed gateway {failed_gw.node.ip_address} after \
+                                        failback are {ns_list}"
+                                )
+                                LOG.info(
+                                    f"Active gateway after failback is {failed_gw.node.ip_address}"
+                                )
+                                validate_initiator(self.clients, failed_gw, ns_list)
                         time.sleep(20)
-
         except BaseException as err:  # noqa
             raise Exception(err)
         finally:
