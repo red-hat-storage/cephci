@@ -24,6 +24,8 @@ aliases:
     - jprakash-redhat
     - sunilkumarn417
     - krishnaramaswamy
+    - chaitanyadommeti
+    - aarsharm
 
   # Members of CI team
   ceph-ci-team:
