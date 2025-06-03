@@ -191,7 +191,7 @@ def run(ceph_cluster, **kw):
 
         # "ceph tell osd.1 compact" does not print elapsed_time
         # in 8.1. BZ https://bugzilla.redhat.com/show_bug.cgi?id=2351352
-        if rhbuild.split("-")[0] != "8.1":
+        if float(rhbuild.split("-")[0]) < 8.1:
             assert "elapsed_time" in out
         time.sleep(10)
 
@@ -229,7 +229,7 @@ def run(ceph_cluster, **kw):
 
         # "ceph tell osd.1 compact" does not print elapsed_time
         # in 8.1. BZ https://bugzilla.redhat.com/show_bug.cgi?id=2351352
-        if rhbuild.split("-")[0] != "8.1":
+        if float(rhbuild.split("-")[0]) < 8.1:
             assert "elapsed_time" in out
         time.sleep(10)
 
