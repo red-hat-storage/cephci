@@ -351,8 +351,9 @@ tests:
         netsplit_site: DC1
         tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
+        set_debug: true
       desc: Test stretch Cluster netsplit scenario between data sites
-      comments: Active bug with netsplit scenarios - 2318975
+      comments: Intermittent Active bug with netsplit scenarios - 2318975
 
   - test:
       name: Netsplit Scenarios data-tiebreaker sites
@@ -363,7 +364,6 @@ tests:
         netsplit_site: tiebreaker
         tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
-        set_debug: true
       desc: Test stretch Cluster netsplit scenario between data site and tiebreaker site
 
   - test:

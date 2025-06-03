@@ -38,6 +38,7 @@ def run(ceph_cluster, **kw):
     bluestore_obj = BluestoreToolWorkflows(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     omap_config = config["omap_config"]
+    rhbuild = config.get("rhbuild")
 
     log.info("Running test case to verify bluefs space utilization is under control")
 
@@ -114,7 +115,11 @@ def run(ceph_cluster, **kw):
             args=[f"ceph tell osd.{primary_osd} compact"], timeout=1200
         )
         log.info(out)
-        assert "elapsed_time" in out, "OSD Compaction output not as expected"
+
+        # "ceph tell osd.1 compact" does not print elapsed_time
+        # in 8.1. BZ https://bugzilla.redhat.com/show_bug.cgi?id=2351352
+        if float(rhbuild.split("-")[0]) < 8.1:
+            assert "elapsed_time" in out, "OSD Compaction output not as expected"
         time.sleep(5)
 
         # log ceph tell osd.# perf dump bluefs

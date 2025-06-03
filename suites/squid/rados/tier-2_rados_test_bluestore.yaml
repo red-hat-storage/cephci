@@ -177,8 +177,11 @@ tests:
       config:
         scenarios_to_run:
           - scenario-1
-          - scenario-2
-          - scenario-3
+          # To be uncommented after behaviour is clarified
+          # by dev. Task to uncomment
+          # https://issues.redhat.com/browse/RHCEPHQE-20207
+          # - scenario-2
+          # - scenario-3
           - scenario-4
 
   - test:
