@@ -122,22 +122,31 @@ def initiators(ceph_cluster, gateway, config):
     if not targets:
         raise Exception(f"NVMe Targets not found on {client.hostname}")
     LOG.debug(targets)
+
+    rhel_version = initiator.distro_version()
+    if rhel_version == "9.5":
+        paths = [target["DevicePath"] for target in targets]
+    elif rhel_version == "9.6":
+        paths = [
+            f"/dev/{ns['NameSpace']}"
+            for device in targets
+            for subsys in device.get("Subsystems", [])
+            for ns in subsys.get("Namespaces", [])
+        ]
+
     results = []
     io_args = {"size": "100%"}
     if config.get("io_args"):
         io_args = config["io_args"]
     with parallel() as p:
-        for target in targets:
+        for path in paths:
             _io_args = {}
             if io_args.get("test_name"):
-                test_name = (
-                    f"{io_args['test_name']}-"
-                    f"{target['DevicePath'].replace('/', '_')}"
-                )
+                test_name = f"{io_args['test_name']}-" f"{path.replace('/', '_')}"
                 _io_args.update({"test_name": test_name})
             _io_args.update(
                 {
-                    "device_name": target["DevicePath"],
+                    "device_name": f"/dev/{path}",
                     "client_node": client,
                     "long_running": True,
                     "cmd_timeout": "notimeout",

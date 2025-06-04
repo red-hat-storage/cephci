@@ -95,12 +95,32 @@ class NVMeCLI(Cli):
         Return:
             Dict: Dict of SPDK drives else empty list
         """
+        # check if rhel version is 8 or 9
+        out, _ = self.execute(sudo=True, cmd="cat /etc/os-release | grep VERSION_ID")
+        rhel_version = out.split("=")[1].strip().strip('"')
         json_kwargs = {"output-format": "json"}
         out, _ = self.list(**json_kwargs)
         devs = json.loads(out)["Devices"]
-        return [
-            dev for dev in devs if dev["ModelNumber"].startswith("Ceph bdev Controller")
-        ]
+
+        if rhel_version == "9.5":
+            return [
+                dev
+                for dev in devs
+                if dev["ModelNumber"].startswith("Ceph bdev Controller")
+            ]
+
+        elif rhel_version == "9.6":
+            devices = []
+            for dev in devs:
+                for subsys in dev.get("Subsystems", []):
+                    for ctrl in subsys.get("Controllers", []):
+                        if ctrl.get("ModelNumber", "").startswith(
+                            "Ceph bdev Controller"
+                        ):
+                            devices.append(dev)
+            return devices
+
+        return []
 
     def disconnect(self, **kwargs):
         """Disconnect controller connected to the subsystem.

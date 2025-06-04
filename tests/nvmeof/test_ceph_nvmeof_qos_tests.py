@@ -198,11 +198,22 @@ def trigger_fio(ceph_cluster, config, io_mode, key):
             raise Exception(f"NVMe Targets not found on {client.hostname}")
         LOG.debug(targets)
 
+        rhel_version = initiator.distro_version()
+        if rhel_version == "9.5":
+            paths = [target["DevicePath"] for target in targets]
+        elif rhel_version == "9.6":
+            paths = [
+                f"/dev/{ns['NameSpace']}"
+                for device in targets
+                for subsys in device.get("Subsystems", [])
+                for ns in subsys.get("Namespaces", [])
+            ]
+
         with parallel() as p:
-            for target in targets:
+            for path in paths:
                 try:
                     _io_args = {
-                        "device_name": target["DevicePath"],
+                        "device_name": path,
                         "client_node": client,
                         "long_running": True,
                         "io_type": io_mode,
@@ -215,9 +226,7 @@ def trigger_fio(ceph_cluster, config, io_mode, key):
                         _io_args.update({"rwmixread": "50"})
                     p.spawn(run_fio, **_io_args)
                 except Exception as fio_err:
-                    LOG.error(
-                        f"Error running FIO on target {target['DevicePath']}: {fio_err}"
-                    )
+                    LOG.error(f"Error running FIO on target {path}: {fio_err}")
                     results.append(f"Failed: {fio_err}")
 
             for op in p:

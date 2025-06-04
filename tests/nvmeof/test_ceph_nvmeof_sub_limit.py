@@ -55,9 +55,20 @@ def run_io(ceph_cluster, node, config, io):
     if not targets:
         raise Exception(f"NVMe Targets not found on {client.hostname}")
     LOG.debug(targets)
-    for target in targets:
+
+    rhel_version = initiator.distro_version()
+    if rhel_version == "9.5":
+        paths = [target["DevicePath"] for target in targets]
+    elif rhel_version == "9.6":
+        paths = [
+            f"/dev/{ns['NameSpace']}"
+            for device in targets
+            for subsys in device.get("Subsystems", [])
+            for ns in subsys.get("Namespaces", [])
+        ]
+    for path in paths:
         io_args = {
-            "device_name": target["DevicePath"],
+            "device_name": path,
             "client_node": client,
             "run_time": "10",
             "long_running": True,
