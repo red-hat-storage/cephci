@@ -228,7 +228,7 @@ def validate_initiator(clients, gateway, namespaces_gw, failed_gw=None):
         devices = client.fetch_lsblk_nvme_devices_dict()
         if not devices:
             raise Exception(f"NVMe devices are not available at {client} initiator")
-        gw_paths = fetch_paths_for_namespaces(gateway, client, namespaces_gw, devices)
+        gw_paths = fetch_paths_for_namespaces(client, namespaces_gw, devices)
         for paths in gw_paths:
             if len(paths.get("paths").get("optimized")) > 1:
                 raise Exception(
