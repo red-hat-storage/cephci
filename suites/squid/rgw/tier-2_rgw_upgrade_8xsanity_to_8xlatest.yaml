@@ -13,7 +13,6 @@ tests:
       abort-on-fail: true
       config:
         verify_cluster_health: true
-        
         steps:
           - config:
               command: bootstrap
