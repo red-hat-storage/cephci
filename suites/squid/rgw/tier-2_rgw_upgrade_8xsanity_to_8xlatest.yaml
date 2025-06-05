@@ -13,13 +13,14 @@ tests:
       abort-on-fail: true
       config:
         verify_cluster_health: true
+        
         steps:
           - config:
               command: bootstrap
               service: cephadm
               args:
                 rhcs-version: 8.1
-                release: sanity
+                release: rc
                 registry-url: registry.redhat.io
                 mon-ip: node1
                 orphan-initial-daemons: true
