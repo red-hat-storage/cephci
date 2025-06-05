@@ -144,20 +144,29 @@ class NVMeInitiator(Initiator):
     def start_fio(self):
         """Start FIO on the all targets on client node."""
         targets = self.list_devices()
+
+        rhel_version = self.distro_version()
+        if rhel_version.endswith("9.5"):
+            paths = [target["DevicePath"] for target in targets]
+        elif rhel_version == "9.6":
+            paths = [
+                f"/dev/{ns['NameSpace']}"
+                for device in targets
+                for subsys in device.get("Subsystems", [])
+                for ns in subsys.get("Namespaces", [])
+            ]
+
         results = []
         io_args = {"size": "100%"}
         with parallel() as p:
-            for target in targets:
+            for path in paths:
                 _io_args = {}
                 if io_args.get("test_name"):
-                    test_name = (
-                        f"{io_args['test_name']}-"
-                        f"{target['DevicePath'].replace('/', '_')}"
-                    )
+                    test_name = f"{io_args['test_name']}-" f"{path.replace('/', '_')}"
                     _io_args.update({"test_name": test_name})
                 _io_args.update(
                     {
-                        "device_name": target["DevicePath"],
+                        "device_name": path,
                         "client_node": self.node,
                         "long_running": True,
                         "cmd_timeout": "notimeout",

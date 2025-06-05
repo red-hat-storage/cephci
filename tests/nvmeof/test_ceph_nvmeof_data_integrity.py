@@ -139,7 +139,10 @@ def initiators(ceph_cluster, gateway, config):
     if not targets:
         raise Exception(f"NVMe Targets not found on {client.hostname}")
     LOG.debug(targets)
-    return targets
+
+    # Get distro version of an initiator
+    rhel_version = initiator.distro_version()
+    return targets, rhel_version
 
 
 def disconnect_initiator(ceph_cluster, node):
@@ -236,14 +239,26 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     )
 
         if config.get("initiators"):
-            targets = initiators(ceph_cluster, nvmegwcli, config["initiators"])
+            targets, rhel_version = initiators(
+                ceph_cluster, nvmegwcli, config["initiators"]
+            )
             LOG.info(f"Targets discovered: {targets}")
 
+            if rhel_version == "9.5":
+                paths = [target["DevicePath"] for target in targets]
+            elif rhel_version == "9.6":
+                paths = [
+                    f"/dev/{ns['NameSpace']}"
+                    for device in targets
+                    for subsys in device.get("Subsystems", [])
+                    for ns in subsys.get("Namespaces", [])
+                ]
+
             # verifying data integrity on NVMe targets
-            for target in targets:
+            for path in paths:
                 nvme = generate_unique_id(length=4)
                 mount_point = f"/mnt/{nvme}"  # Change this to the desired mount point
-                create_filesystem_and_mount(rbd_obj, target["DevicePath"], mount_point)
+                create_filesystem_and_mount(rbd_obj, path, mount_point)
                 # FIO command to run on NVMe targets
                 fio_command = (
                     f"fio --ioengine=sync --refill_buffers=1 "
@@ -262,9 +277,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 # unmount the device
                 rbd_obj.exec_cmd(cmd=f"umount {mount_point}", sudo=True)
                 # mount the NVMe target
-                rbd_obj.exec_cmd(
-                    cmd=f"mount {target['DevicePath']} {mount_point}", sudo=True
-                )
+                rbd_obj.exec_cmd(cmd=f"mount {path} {mount_point}", sudo=True)
                 # Run FIO for reading the files
                 LOG.info("Running FIO for read operations.")
                 cmd_read = f"sudo {fio_command} --name=readiops --rw=randread"
@@ -277,11 +290,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 # Compare md5sum values
                 if md5sum_write == md5sum_read:
                     LOG.info(
-                        f"Data integrity verified successfully for target {target['DevicePath']}."
+                        f"Data integrity verified successfully for target /dev/{path}."
                     )
                 else:
                     LOG.error(
-                        f"Data integrity verification failed for target {target['DevicePath']}."
+                        f"Data integrity verification failed for target /dev/{path}."
                     )
                     return 1
                 # copy the file to the local system
@@ -303,11 +316,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 # Compare md5sum values
                 if md5sum_write == md5sum_copy:
                     LOG.info(
-                        f"Data integrity verified successfully for copy and compare on {target['DevicePath']}."
+                        f"Data integrity verified successfully for copy and compare on /dev/{path}."
                     )
                 else:
                     LOG.error(
-                        f"Data integrity verification failed for copy and compare on {target['DevicePath']}."
+                        f"Data integrity verification failed for copy and compare on /dev/{path}."
                     )
                     return 1
                 # reboot the client node
@@ -319,13 +332,24 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 time.sleep(10)
                 # Connect to Initiator
                 if config.get("initiators"):
-                    targets = initiators(ceph_cluster, nvmegwcli, config["initiators"])
+                    targets, rhel_version = initiators(
+                        ceph_cluster, nvmegwcli, config["initiators"]
+                    )
                     LOG.info(f"Targets discovered: {targets}")
+
+                    if rhel_version == "9.5":
+                        paths = [target["DevicePath"] for target in targets]
+                    elif rhel_version == "9.6":
+                        paths = [
+                            f"/dev/{ns['NameSpace']}"
+                            for device in targets
+                            for subsys in device.get("Subsystems", [])
+                            for ns in subsys.get("Namespaces", [])
+                        ]
+
+                path = paths[0]
                 # mount the NVMe target
-                target = targets[0]
-                rbd_obj.exec_cmd(
-                    cmd=f"mount {target['DevicePath']} {mount_point}", sudo=True
-                )
+                rbd_obj.exec_cmd(cmd=f"mount {path} {mount_point}", sudo=True)
                 # Calculate md5sum after reboot
                 md5sum_reboot = rbd_obj.exec_cmd(
                     cmd=f"md5sum {mount_point}/test1.txt", sudo=True
@@ -333,11 +357,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 # Compare md5sum values
                 if md5sum_write == md5sum_reboot:
                     LOG.info(
-                        f"Data integrity verified successfully after reboot on {target['DevicePath']}."
+                        f"Data integrity verified successfully after reboot on /dev/{path}."
                     )
                 else:
                     LOG.error(
-                        f"Data integrity verification failed after reboot on {target['DevicePath']}."
+                        f"Data integrity verification failed after reboot on /dev/{path}."
                     )
                     return 1
 
