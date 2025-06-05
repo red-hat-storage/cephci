@@ -357,10 +357,14 @@ tests:
       desc: Setting vault configs for sse-s3 on multisite
       module: exec.py
       name: set sse-s3 vault configs on multisite
+
   - test:
-      config:
-        script-name: test_sse_s3_kms_with_vault.py
-        config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
       desc: sse_s3_per_bucket_enc_multipart_upload
       module: sanity_rgw_multisite.py
       name: sse_s3_per_bucket_enc_multipart_upload
@@ -382,7 +386,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            set-env: true
             script-name: test_sse_s3_kms_with_vault.py
             config-file-name: test_sse_s3_per_object_versioninig_enabled.yaml
       desc: test_sse_s3_per_object_with_versioning
