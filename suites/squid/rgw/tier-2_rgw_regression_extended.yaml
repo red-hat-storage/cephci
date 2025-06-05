@@ -13,9 +13,9 @@ tests:
 
   - test:
       abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
+      desc: Install software pre requisites for cluster deployment
       module: install_prereq.py
-      name: setup pre-requisites
+      name: setup pre requisites
 
   - test:
       abort-on-fail: true
@@ -53,7 +53,7 @@ tests:
                     - node3
                     - node4
                     - node5
-      desc: bootstrap with registry-url option and deployment services.
+      desc: bootstrap with registry url option and deployment services
       destroy-cluster: false
       polarion-id: CEPH-83573713
       module: test_cephadm.py
@@ -83,9 +83,9 @@ tests:
           - node3:80
           - node4:80
           - node5:80
-      desc: "Configure HAproxy"
+      desc: Configure HAproxy
       module: haproxy.py
-      name: "Configure HAproxy"
+      name: Configure HAproxy
 
   - test:
       name: Test BucketNotification with users in same tenant and different tenant
@@ -101,8 +101,8 @@ tests:
         config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
 
   - test:
-      name: Test non-current deletion via s3cmd
-      desc: Test non-current deletion via s3cmd
+      name: Test non current deletion via s3cmd
+      desc: Test non current deletion via s3cmd
       polarion-id: CEPH-83573543
       module: sanity_rgw.py
       config:
@@ -260,11 +260,12 @@ tests:
       module: exec.py
       name: Create 2 rgw accounts
       polarian-id: CEPH-83591683
+
   - test:
       abort-on-fail: false
       config:
         branch: ceph-squid
-      desc: Run the external S3test suites.
+      desc: Run the external S3test suites
       destroy-cluster: false
       module: test_s3.py
       name: execute s3tests
@@ -306,8 +307,8 @@ tests:
         config-file-name: test_bi_put_with_incomplete_multipart_upload.yaml
 
   - test:
-      name: Test anonymous PUT to bucket with public-read-write ACL
-      desc: Test anonymous PUT to bucket with public-read-write ACL
+      name: Test anonymous PUT to bucket with public read write ACL
+      desc: Test anonymous PUT to bucket with public read write ACL
       polarion-id: CEPH-83604473
       module: sanity_rgw.py
       config:
@@ -315,8 +316,8 @@ tests:
         config-file-name: ../../aws/configs/test_public_read_write_acl.yaml
 
   - test:
-      name: Test Inditex hotfix bz, CORS presigned put url
-      desc: CORS ACL's prevents access to buckets with presigned PUT URI's with ACL private header
+      name: Test Inditex hotfix bz CORS presigned put url
+      desc: CORS ACLs prevents access to buckets with presigned PUT URIs with ACL private header
       polarion-id: CEPH-83604475
       module: sanity_rgw.py
       config:
@@ -351,8 +352,8 @@ tests:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_public_access_block_post_bucket_policy.yaml
   - test:
-      name: test public access block - BlockPublicAcls
-      desc: test public access block - BlockPublicAcls
+      name: test public access block BlockPublicAcls
+      desc: test public access block BlockPublicAcls
       polarion-id: CEPH-83575582
       module: sanity_rgw.py
       config:
@@ -360,16 +361,16 @@ tests:
         config-file-name: test_public_access_block_acl.yaml
       comments: known issue - Bug 2344639
   - test:
-      name: test public access block - IgnorePublicAcls
-      desc: test public access block - IgnorePublicAcls
+      name: test public access block IgnorePublicAcls
+      desc: test public access block IgnorePublicAcls
       polarion-id: CEPH-83575582
       module: sanity_rgw.py
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_public_access_block_ignore_acl.yaml
   - test:
-      name: test public access block - RestrictPublicBuckets
-      desc: test public access block - RestrictPublicBuckets
+      name: test public access block RestrictPublicBuckets
+      desc: test public access block RestrictPublicBuckets
       polarion-id: CEPH-83575582
       module: sanity_rgw.py
       config:
@@ -379,7 +380,7 @@ tests:
 
   - test:
       name: Dynamic Resharding tests without bucket delete
-      desc: Resharding test - dynamic without bucket delete
+      desc: Resharding test dynamic without bucket delete
       polarion-id: CEPH-83571740 # also applies to ceph-11479, ceph-11477
       module: sanity_rgw.py
       config:
@@ -389,7 +390,7 @@ tests:
 
   - test:
       name: Manual Resharding tests without bucket delete
-      desc: Resharding test - manual without bucket delete
+      desc: Resharding test manual without bucket delete
       polarion-id: CEPH-83571740
       module: sanity_rgw.py
       config:

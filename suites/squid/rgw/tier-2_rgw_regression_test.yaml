@@ -9,9 +9,9 @@
 tests:
   - test:
       abort-on-fail: true
-      desc: Install software pre-requisites for cluster deployment.
+      desc: Install software pre requisites for cluster deployment
       module: install_prereq.py
-      name: setup pre-requisites
+      name: setup pre requisites
 
   - test:
       abort-on-fail: true
@@ -63,7 +63,7 @@ tests:
                     - node3
                     - node4
                     - node5
-      desc: RHCS cluster deployment using cephadm.
+      desc: RHCS cluster deployment using cephadm
       destroy-cluster: false
       module: test_cephadm.py
       name: deploy cluster
@@ -71,7 +71,7 @@ tests:
 
   - test:
       name: Monitoring Services deployment
-      desc: Add monitoring services using spec file.
+      desc: Add monitoring services using spec file
       module: test_cephadm.py
       polarion-id: CEPH-83574727
       config:
@@ -193,7 +193,7 @@ tests:
 
   - test:
       name: Test suspension of versioning
-      desc: test_versioning_suspend
+      desc: test versioning suspend
       polarion-id: CEPH-14263
       module: sanity_rgw.py
       config:
@@ -433,7 +433,7 @@ tests:
   # multipart test
   - test:
       name: multipart upload cancel reupload
-      desc: Test multipart upload->cancel->reupload
+      desc: Test multipart upload cancel reupload
       polarion-id: CEPH-14266
       module: sanity_rgw.py
       config:
@@ -487,8 +487,8 @@ tests:
         config-file-name: test_rgw_mfa_incorrect_syntax.yaml
 
   - test:
-      name: Test s3_copy_obj on user with admin flag through AWS
-      desc: TESCO-Segfault with s3CopyObj with admin user
+      name: Test s3 copy obj on user with admin flag through AWS
+      desc: TESCO Segfault with s3CopyObj with admin user
       polarion-id: CEPH-83575562
       module: sanity_rgw.py
       config:
@@ -639,8 +639,8 @@ tests:
         config-file-name: ../../s3_swift/configs/test_swift_acl_with_keystone.yaml
 
   - test:
-      name: test_bi_purge for a bucket
-      desc: test bi_purge should not error
+      name: test bi purge for a bucket
+      desc: test bi purge should not error
       module: sanity_rgw.py
       polarion-id: CEPH-83575234
       config:
@@ -649,7 +649,7 @@ tests:
 
   - test:
       name: Indexless buckets
-      desc: Indexless (blind) buckets
+      desc: Indexless blind buckets
       polarion-id: CEPH-10354 # also applies to CEPH-10357
       module: sanity_rgw.py
       config:
@@ -659,8 +659,8 @@ tests:
 
   # Swift Static Large Object
   - test:
-      name: test_swift_static_large_object_expiration
-      desc: test_swift_static_large_object_expiration
+      name: test swift static large object expiration
+      desc: test swift static large object expiration
       polarion-id: CEPH-9726
       module: sanity_rgw.py
       config:
