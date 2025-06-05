@@ -329,3 +329,13 @@ tests:
       config:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_setting_public_acl.yaml
+
+  - test:
+      name: test create existing bucket with rgw_bucket_eexist_override set
+      desc: test create existing bucket with rgw config rgw_bucket_eexist_override
+      polarion-id: CEPH-83620440
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_create_bucket_for_existing_bucket.yaml
+        run-on-haproxy: true
