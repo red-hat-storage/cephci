@@ -308,8 +308,8 @@ class MonConfigMethods:
                     and kwargs.get("location_value") not in entry["mask"]
                 ):
                     continue
-                entry["value"] = str(entry["value"]).strip("\n").strip()
-                kwargs["value"] = str(kwargs["value"]).strip("\n").strip()
+                entry["value"] = str(entry["value"]).strip("\n").strip("0").strip()
+                kwargs["value"] = str(kwargs["value"]).strip("\n").strip("0").strip()
                 if not entry["value"].lower() == kwargs["value"].lower():
                     log.error(
                         f"Value for config: {entry['name']} does not match in the ceph config\n"
