@@ -582,12 +582,15 @@ class CephFSCommonUtils(FsUtils):
         output = json.loads(out)
         st1 = "standby"
         st2 = "standby-replay"
-        standby_mds = [
-            mds["name"]
-            for mds in output["mdsmap"]
-            if (mds["state"] == st1) or (mds["state"] == st2)
+        standby_replay_mds = [
+            mds["name"] for mds in output["mdsmap"] if (mds["state"] == st2)
         ]
-        sample_cnt = min(3, len(standby_mds))
+        sample_cnt = min(3, len(standby_replay_mds))
+        if len(standby_replay_mds) == 0:
+            standby_mds = [
+                mds["name"] for mds in output["mdsmap"] if (mds["state"] == st1)
+            ]
+            sample_cnt = min(3, len(standby_mds))
         mds_to_fail = random.sample(mds_ls, sample_cnt)
         for mds in mds_to_fail:
             out, rc = client.exec_command(cmd=f"ceph mds fail {mds}", client_exec=True)
