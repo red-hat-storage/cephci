@@ -1,4 +1,5 @@
 import json
+import random
 import re
 import secrets
 import string
@@ -11,6 +12,8 @@ from ceph.parallel import parallel
 from cli.cephadm.cephadm import CephAdm
 from cli.utilities.utils import get_service_id
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
+from tests.cephfs.lib.fscrypt_utils import FscryptUtils
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster
@@ -920,6 +923,34 @@ def workflow4(ceph_cluster):
     log.info("Standby-replay successfully replaced failed MDS")
 
 
+def add_fscrypt_config(client, ceph_cluster):
+    """
+    This method adds fscrypt config to a fuse mountpoint
+    """
+    global fscrypt_util, fscrypt_params
+    test_status = 0
+    fscrypt_util = FscryptUtils(ceph_cluster)
+    mnt_pt = random.choice(fuse_mount_dir)
+    mnt_info = {}
+    mnt_info.update({"any_sv": {"fuse": {"mnt_client": client, "mountpoint": mnt_pt}}})
+    encrypt_info = fscrypt_util.encrypt_dir_setup(mnt_info)
+    encrypt_path = encrypt_info["any_sv"]["path"]
+    encrypt_params = encrypt_info["any_sv"]["encrypt_params"]
+    fscrypt_util.add_dataset(client, encrypt_path)
+    test_status = fscrypt_util.lock(client, encrypt_path)
+    protector_id = encrypt_params["protector_id"]
+    unlock_args = {"key": encrypt_params["key"]}
+    test_status += fscrypt_util.unlock(
+        client, encrypt_path, mnt_pt, protector_id, **unlock_args
+    )
+    fscrypt_params = {
+        "encrypt_path": encrypt_path,
+        "encrypt_params": encrypt_params,
+        "mountpoint": mnt_pt,
+    }
+    return test_status
+
+
 def run(ceph_cluster, **kw):
     """
     pre-requisites:
@@ -969,8 +1000,17 @@ def run(ceph_cluster, **kw):
         tc = "CEPH-83607848"
         log.info(f"Running CephFS tests: {tc}")
         fs_util = FsUtils(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
+        log.info("Cleanup stale mounts, required for fscrypt test")
+        for client_tmp in clients:
+            for mnt_prefix in ["/mnt/cephfs_", "/mnt/fuse", "/mnt/kernel", "/mnt/nfs"]:
+                if cephfs_common_utils.client_mount_cleanup(
+                    client_tmp, mount_path_prefix=mnt_prefix
+                ):
+                    log.error("Client mount cleanup didn't suceed")
+                    fs_util.reboot_node(client_tmp)
         if not fs_util.get_fs_info(client1):
             fs_util.create_fs(client1, "cephfs_1")
         fs_util.auth_list([client1])
@@ -987,6 +1027,10 @@ def run(ceph_cluster, **kw):
         )
         install_tools(client1)
         mount_subvolumes(ceph_cluster)
+        fscrypt_test = True
+        if add_fscrypt_config(client1, ceph_cluster):
+            log.error("FScrypt config create failed")
+            fscrypt_test = False
         with parallel() as p:
             for i in range(len(io_list)):
                 p.spawn(fs_util.run_ios(client1, f"{io_list[i]}/", ["dd"]))
@@ -999,6 +1043,17 @@ def run(ceph_cluster, **kw):
         workflow2(ceph_cluster)
         workflow3(ceph_cluster)
         workflow4(ceph_cluster)
+        if fscrypt_test:
+            mnt_pt = fscrypt_params["mountpoint"]
+            encrypt_path = fscrypt_params["encrypt_path"]
+            encrypt_params = fscrypt_params["encrypt_params"]
+            if fscrypt_util.validate_fscrypt_with_lock_unlock(
+                client1, mnt_pt, encrypt_path, encrypt_params
+            ):
+                log.error(
+                    "FAIL:FScrypt config validation after Vol rename scenarios Failed"
+                )
+                return 1
         return 0
     except Exception as e:
         log.error(e)
@@ -1012,6 +1067,8 @@ def run(ceph_cluster, **kw):
             check_ec=False,
         )
         log.info("####cleanup####")
+        for mnt_pt in io_list:
+            client1.exec_command(sudo=True, cmd=f"umount -l {mnt_pt}", check_ec=False)
         client1.exec_command(
             sudo=True, cmd="ceph nfs cluster delete cephfs-nfs", check_ec=False
         )
