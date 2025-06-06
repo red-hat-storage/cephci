@@ -65,11 +65,33 @@ CEPH-83612872:
 18. Verify data consistency using md5sum checksum from primary and secondary
 19.  Repeat the above test on EC pool
 20. Cleanup the images, namespace, pools along with disk cleanup.
+
+CEPH-83613949:
+1. Create a pool  on both clusters:
+2. Create namespaces ns1_p in pool1 on cluster2:
+3. Enable non-default namespace mirroring on with "init-only" mirror mode on cluster-2
+   # rbd mirror pool enable --pool pool1 init-only
+   # rbd mirror pool enable pool1/ns1_p image --remote-namespace ' '
+   Enable default namespace image mode mirroring on cluster-1
+   # rbd mirror pool enable --pool pool1 image --remote-namespace ns1_p
+4. Set up peering between the two clusters in two-way mode
+5. Verify mirroring is configured successfully using below command on both clusters
+6. Create an image in the empty(default) namespace on cluster1 and enable snapshot-based mirroring:
+7. Verify image mirroring status for the default namespace image
+8. Add a snapshot schedule for the mirrored image in pool level for replicated pool
+9. Initiate I/O operations on the image using rbd bench or fio or file mount
+10. Wait till snapshot schedule interval set like above 1m
+11. Verify that data is mirrored from the primary to the secondary cluster
+12. Verify data consistency using md5sum checksum from primary and secondary
+13. Repeat the above test steps on Erasure Coded (EC) pool with non-default to
+    default configuration with snapshot schedule in namespace level
+14. Cleanup the images, namespace, pools along with disk cleanup.
 """
 
 import ast
 import time
 
+from ceph.parallel import parallel
 from ceph.rbd.initial_config import initial_mirror_config
 from ceph.rbd.utils import check_data_integrity, getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
@@ -545,9 +567,235 @@ def test_default_to_non_default_namespace_mirroring(
     return 0
 
 
+def test_multi_snap_scheduling_namespace_mirroring(
+    pri_config, sec_config, pool_types, **kw
+):
+    log.info(
+        "Starting CEPH-83613949 - Namespace-based Mirroring with"
+        + " Multi-Level Snapshot Scheduling"
+    )
+
+    rbd_primary = pri_config.get("rbd")
+    rbd_secondary = sec_config.get("rbd")
+    client_primary = pri_config.get("client")
+    client_secondary = sec_config.get("client")
+
+    for pool_type in pool_types:
+        rbd_config = kw.get("config", {}).get(pool_type, {})
+        multi_pool_config = getdict(rbd_config)
+
+        for pool, pool_config in multi_pool_config.items():
+            multi_image_config = getdict(pool_config)
+            namespace = pool_config.get("namespace")
+            remote_namespace = pool_config.get("remote_namespace")
+            image_status_map = {}
+
+            # Enable mirroring on all images first
+            for image, image_config_val in multi_image_config.items():
+                pri_image_spec = (
+                    "{}/{}/{}".format(pool, namespace, image)
+                    if namespace
+                    else "{}/{}".format(pool, image)
+                )
+                sec_image_spec = (
+                    "{}/{}/{}".format(pool, remote_namespace, image)
+                    if remote_namespace
+                    else "{}/{}".format(pool, image)
+                )
+
+                # Enable mirroring on image
+                image_enable_config = {
+                    "pool": pool,
+                    "image": image,
+                    "mirrormode": "snapshot",
+                    "namespace": namespace,
+                    "remote_namespace": remote_namespace,
+                }
+                enable_image_mirroring(pri_config, sec_config, **image_enable_config)
+
+                # Wait for mirroring to be established
+                wait_for_status(
+                    rbd=rbd_primary,
+                    cluster_name=pri_config.get("cluster").name,
+                    imagespec=pri_image_spec,
+                    state_pattern="up+stopped",
+                )
+                wait_for_status(
+                    rbd=rbd_secondary,
+                    cluster_name=sec_config.get("cluster").name,
+                    imagespec=sec_image_spec,
+                    state_pattern="up+replaying",
+                )
+
+                image_status_map[image] = {
+                    "pri_image_spec": pri_image_spec,
+                    "sec_image_spec": sec_image_spec,
+                    "image_config_val": image_config_val,
+                }
+
+            # Add snapshot schedule only once per config (not per image)
+            if image_status_map:
+                first_image = next(iter(image_status_map))
+                image_config_val = image_status_map[first_image]["image_config_val"]
+                if image_config_val.get(
+                    "snap_schedule_levels"
+                ) and image_config_val.get("snap_schedule_intervals"):
+                    for level, interval in zip(
+                        image_config_val["snap_schedule_levels"],
+                        image_config_val["snap_schedule_intervals"],
+                    ):
+                        snap_schedule_config = {
+                            "pool": pool,
+                            "level": level,
+                            "interval": interval,
+                        }
+                        # Add namespace if required
+                        if level == "namespace":
+                            snap_schedule_config["namespace"] = namespace
+                        # Add image if required
+                        if level == "image":
+                            snap_schedule_config["namespace"] = namespace
+                            snap_schedule_config["image"] = first_image
+
+                        out, err = add_snapshot_scheduling(
+                            rbd_primary, **snap_schedule_config
+                        )
+                        if err:
+                            raise Exception(
+                                "Adding snapshot schedule failed for {}: {}".format(
+                                    pri_image_spec, err
+                                )
+                            )
+
+            # Snapshot schedule verification - run only once per pool
+            if image_status_map:
+                # Use the first image's config as reference
+                first_image = next(iter(image_status_map))
+                image_config_val = image_status_map[first_image]["image_config_val"]
+
+                if image_config_val.get(
+                    "snap_schedule_levels"
+                ) and image_config_val.get("snap_schedule_intervals"):
+                    for level, interval in zip(
+                        image_config_val["snap_schedule_levels"],
+                        image_config_val["snap_schedule_intervals"],
+                    ):
+                        verify_args = {
+                            "rbd": rbd_primary,
+                            "pool": pool,
+                            "interval": interval,
+                        }
+                        if level == "namespace":
+                            verify_args["namespace"] = namespace
+                        elif level == "image":
+                            verify_args["namespace"] = namespace
+                            verify_args["image"] = first_image
+
+                        if verify_snapshot_schedule(**verify_args):
+                            raise Exception(
+                                "Snapshot schedule verification failed at {} level for {} "
+                                "with interval: {}".format(level, first_image, interval)
+                            )
+
+            # Run I/O on all primary images in parallel
+
+            fio = kw.get("config", {}).get("fio", {})
+            io_configs = []
+            for img, stat in image_status_map.items():
+                io_config = {
+                    "size": fio["size"],
+                    "do_not_create_image": True,
+                    "num_jobs": fio["ODF_CONFIG"]["num_jobs"],
+                    "iodepth": fio["ODF_CONFIG"]["iodepth"],
+                    "rwmixread": fio["ODF_CONFIG"]["rwmixread"],
+                    "direct": fio["ODF_CONFIG"]["direct"],
+                    "invalidate": fio["ODF_CONFIG"]["invalidate"],
+                    "config": {
+                        "file_size": fio["size"],
+                        "file_path": ["/mnt/mnt_" + random_string(len=5) + "/file"],
+                        "get_time_taken": True,
+                        "operations": {
+                            "fs": "ext4",
+                            "io": True,
+                            "mount": True,
+                            "map": True,
+                        },
+                        "cmd_timeout": 2400,
+                        "io_type": fio["ODF_CONFIG"]["io_type"],
+                        "image_spec": [stat["pri_image_spec"]],
+                    },
+                    "rbd_obj": rbd_primary,
+                    "client": client_primary,
+                }
+                io_configs.append(io_config)
+
+            try:
+                # Run I/O in parallel execution
+                with parallel() as p:
+                    for io_config in io_configs:
+                        p.spawn(krbd_io_handler, **io_config)
+            except Exception as e:
+                raise Exception(f"I/O spawning or execution failed: {e}")
+
+            log.info("All I/O completed successfully")
+
+            # Wait for snapshot interval to elapse
+            interval = image_config_val["snap_schedule_intervals"][-1]
+            time.sleep(int(interval[:-1]) * 120)
+
+            # Validate data consistency in parallel for all images
+            data_integrity_specs = []
+            for img, stat in image_status_map.items():
+                data_integrity_specs.append(
+                    {
+                        "first": {
+                            "image_spec": stat["pri_image_spec"],
+                            "rbd": rbd_primary,
+                            "client": client_primary,
+                            "file_path": "/tmp/{}".format(random_string(len=3)),
+                        },
+                        "second": {
+                            "image_spec": stat["sec_image_spec"],
+                            "rbd": rbd_secondary,
+                            "client": client_secondary,
+                            "file_path": "/tmp/{}".format(random_string(len=3)),
+                        },
+                    }
+                )
+
+            try:
+                with parallel() as p:
+                    for spec in data_integrity_specs:
+                        p.spawn(check_data_integrity, **spec)
+            except Exception as e:
+                raise Exception(f"Data integrity check spawn failed: {e}")
+
+            log.info("Data is consistent from primary and secondary")
+
+        # Log test case success for this pool
+        namespace_mirror_type = rbd_config.get("namespace_mirror_type")
+
+        # Extract unique snapshot levels from all images
+        snap_schedule_level = list(
+            set(
+                level
+                for status in image_status_map.values()
+                for level in status["image_config_val"].get("snap_schedule_levels", [])
+            )
+        )
+
+        log.info(
+            "Test passed for pool_type: {}, namespace_mirror_type: {}, snap_schedule_level: {}".format(
+                pool_type, namespace_mirror_type, snap_schedule_level
+            )
+        )
+
+    return 0
+
+
 def run(**kw):
     """
-    Test to verify non-default to default namespace mirroring
+    Test to verify default and non-default namespace mirroring test scenarios
     Args:
         kw: Key/value pairs of configuration information to be used in the test
             Example::
@@ -579,6 +827,7 @@ def run(**kw):
         test_map = {
             "CEPH-83612860": test_non_default_to_default_namespace_mirroring,
             "CEPH-83612872": test_default_to_non_default_namespace_mirroring,
+            "CEPH-83613949": test_multi_snap_scheduling_namespace_mirroring,
         }
 
         test_func = kw["config"]["test_function"]
