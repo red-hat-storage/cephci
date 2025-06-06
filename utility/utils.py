@@ -1455,7 +1455,9 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
     )
 
 
-def fetch_build_artifacts(build, ceph_version, platform, upstream_build=None):
+def fetch_build_artifacts(
+    build, ceph_version, platform, upstream_build=None, ibm_build=False
+):
     """Retrieves build details from magna002.ceph.redhat.com.
 
     if "{build}" is "upstream"  "{build}.yaml" would be file name
@@ -1467,12 +1469,15 @@ def fetch_build_artifacts(build, ceph_version, platform, upstream_build=None):
         build: build section to be fetched
         platform: OS distribution name with major Version(ex., rhel-8)
         upstream_build: upstream build(ex., pacific/quincy)
+        ibm_build: flag to decide if IBM artifact needs to be fetched
     Returns:
         base_url, container_registry, image-name, image-tag
     """
     try:
         recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
         filename = f"RHCEPH-{ceph_version}.yaml"
+        if ibm_build:
+            filename = f"IBMCEPH-{ceph_version}.yaml"
         if build == "upstream":
             version = str(upstream_build).upper() if upstream_build else "MAIN"
             filename = f"UPSTREAM-{version}.yaml"
