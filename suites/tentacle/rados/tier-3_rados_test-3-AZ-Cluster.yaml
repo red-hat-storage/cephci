@@ -1,0 +1,301 @@
+# Use cluster-conf file: conf/tentacle/rados/3AZ-cluster-rhos-1.yaml
+# 3 AZ cluster deployment tests
+# can be part of regression/weekly
+tests:
+  - test:
+      name: Install ceph pre-requisites
+      desc: installation of ceph pre-requisites
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Cephadm Bootstrap with apply-spec
+      desc: Apply spec in Bootstrap with host location attributes
+      module: test_bootstrap.py
+      polarion-id: CEPH-83609796
+      config:
+        command: bootstrap
+        base_cmd_args:
+          verbose: true
+        args:
+          mon-ip: node1
+          rhcs-version: 8.0
+          release: rc
+          ssh-user: cephuser
+          apply-spec:
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node1
+                - node2
+                - node3
+              location:
+                root: default
+                datacenter: DC1
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node4
+                - node5
+                - node6
+              location:
+                root: default
+                datacenter: DC2
+            - service_type: host
+              address: true
+              labels: apply-all-labels
+              nodes:
+                - node7
+                - node8
+                - node9
+              location:
+                root: default
+                datacenter: DC3
+            - service_type: mon
+              spec:
+                crush_locations:
+                  node1:
+                    - datacenter=DC1
+                  node2:
+                    - datacenter=DC1
+                  node3:
+                    - datacenter=DC1
+                  node4:
+                    - datacenter=DC2
+                  node5:
+                    - datacenter=DC2
+                  node6:
+                    - datacenter=DC2
+                  node7:
+                    - datacenter=DC3
+                  node8:
+                    - datacenter=DC3
+                  node9:
+                    - datacenter=DC3
+              placement:
+                label: mon
+            - service_type: mgr
+              placement:
+                label: mgr
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Service deployment with spec
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: all-available-devices
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"                         # boolean as string
+          - config:
+              command: shell
+              args: # display OSD tree
+                - "ceph osd tree"
+
+  - test:
+        name: MDS Service deployment with spec
+        desc: Add MDS services using spec file
+        module: test_cephadm.py
+        polarion-id: CEPH-83574728
+        config:
+          steps:
+            - config:
+                command: shell
+                args: # arguments to ceph orch
+                  - ceph
+                  - fs
+                  - volume
+                  - create
+                  - cephfs
+            - config:
+                command: apply_spec
+                service: orch
+                validate-spec-services: true
+                specs:
+                  - service_type: mds
+                    service_id: cephfs
+                    placement:
+                      label: mds
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node10
+        install_packages:
+          - ceph-common
+          - ceph-base
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps: # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+      abort-on-fail: true
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Config checks
+      module: rados_prep.py
+      polarion-id: CEPH-83574529
+      config:
+        cluster_configuration_checks:
+          configure: true
+          disable_check_list:
+            - osd_mtu_size
+            - osd_linkspeed
+            - kernel_security
+          enable_check_list:
+            - kernel_security
+            - osd_linkspeed
+      desc: Enable Cluster Configuration checks
+
+# RHOS-d run duration: 1 min
+# env: VM + BM
+  - test:
+      name: config source changes log
+      module: test_mon_config_history.py
+      polarion-id: CEPH-83573479
+      desc: Config sources - Verify config source changes in the log
+
+# RHOS-d run duration: 1 min
+# env: VM + BM
+  - test:
+      name: config source changes reset
+      module: test_mon_config_reset.py
+      polarion-id: CEPH-83573478
+      desc: Config sources - Verify config source changes and reset config
+
+# RHOS-d run duration: 8 mins
+  - test:
+      name: autoscaler flags
+      module: test_pg_autoscale_flag.py
+      polarion-id: CEPH-83574794
+      config:
+        pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+        create_ec_pool: true
+        create_re_pool: true
+      desc: verify autoscaler flags functionality
+      comments: "Active bug 2361441"
+
+  - test:
+      name: Enable Stretch mode on pools
+      module: pool_tests.py
+      polarion-id: CEPH-83609796
+      config:
+        enable_3AZ_stretch_pools:
+          pool_name: test-pool-11
+          stretch_bucket: datacenter
+          rule_name: 3az_rule
+      desc: Enable 3 AZ stretch mode on all pools of the cluster
+
+  - test:
+      name: Upgrade ceph cluster
+      desc: Upgrade cluster to latest version and check health warn
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83609797
+      config:
+        verify_warning: false
+        verify_daemons: true
+        verify_cluster_usage: false
+      abort-on-fail: true
+
+  - test:
+      name: Enable Stretch mode on pool post upgrade
+      module: pool_tests.py
+      polarion-id: CEPH-83609796
+      config:
+        enable_3AZ_stretch_pools:
+          pool_name: test-pool-12
+          stretch_bucket: datacenter
+          rule_name: 3az_rule
+          pool_list:
+            - test-pool-12
+      desc: Enable 3 AZ stretch mode on new pools of the cluster post upgrade
+
+  - test:
+      name: Site-down Scenarios
+      module: test_stretch_n_az_site_down_scenarios.py
+      polarion-id: CEPH-83609869
+      config:
+        pool_name: test_stretch_pool6
+        stretch_bucket: datacenter
+        rule_name: 3az_rule
+      desc: Test stretch site down scenarios in 3 AZ cluster
+
+  - test:
+      name: Maintenance mode Scenarios
+      module: test_stretch_n_az_site_down_scenarios.py
+      polarion-id: CEPH-83609871
+      config:
+        pool_name: test_stretch_pool7
+        stretch_bucket: datacenter
+        rule_name: 3az_rule
+        scenarios_to_run:
+          - scenario-8
+          - scenario-9
+          - scenario-10
+      desc: Test stretch site maintenance mode scenarios in 3 AZ cluster
+
+  - test:
+      name: Negative Scenarios
+      module: test_stretch_n_az_negative_scenarios.py
+      polarion-id: CEPH-83609872
+      config:
+        stretch_bucket: datacenter
+        rule_name: 3az_rule
+      desc: negative scenarios with stretch pool enable command
+
+  - test:
+      name: Netsplit Scenarios data-data sites
+      module: test_stretch_n-az_netsplit_scenarios.py
+      polarion-id: CEPH-83609870
+      config:
+        pool_name: test_stretch_pool7
+        stretch_bucket: datacenter
+        netsplit_site_1: DC1
+        netsplit_site_2: DC3
+        delete_pool: true
+        rule_name: 3az_rule
+      desc: Test stretch Cluster netsplit scenario between data site and tiebreaker site
+      comments: Bugzilla for feature 2318936, 2316900

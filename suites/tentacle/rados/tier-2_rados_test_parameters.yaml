@@ -1,0 +1,225 @@
+#################################################################################
+# Checking various parameters in RHCS7
+#--------------------------------------------------------------------------------
+# Cluster Configuration: conf/tentacle/rados/7-node-cluster.yaml
+#--------------------------------------------------------------------------------
+# Test Steps:
+#--------------------------------------------------------------------------------
+# - Deploy RHCS 8 cluster in RHEL 9
+# - Check the MSGRV2 parameters
+# - Check the MSGRV2 paramters and Mclock parameters
+#--------------------------------------------------------------------------------
+#################################################################################
+# RHOS-d run duration: 190 mins
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                       # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Ceph bluestore_min_alloc_size tests
+      desc: Modification of Ceph bluestore_min_alloc_size before OSD deployment
+      polarion-id: CEPH-83594019
+      module: test_bluestore_min_alloc_size.py
+      config:
+        pre_deployment_config_changes: true
+        custom_min_alloc_size: 8192
+        default_min_alloc_size: 4096
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true"                     # boolean as string
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Ceph bluestore_min_alloc_size tests
+      desc: Modification of Ceph bluestore_min_alloc_size After OSD deployment
+      polarion-id: CEPH-83594019
+      module: test_bluestore_min_alloc_size.py
+      config:
+        post_deployment_config_verification: true
+        custom_min_alloc_size: 8192
+        default_min_alloc_size: 4096
+
+  - test:
+      name: Ceph MSGRV2 paramter check in 9.x
+      desc: MSGRV2 parameter check in 9.x
+      polarion-id: CEPH-83574890
+      module: test_config_parameter_chk.py
+      config:
+        scenario: msgrv2_6x
+        ini-file: conf/tentacle/rados/test-confs/rados_config_parameters.ini
+
+  - test:
+      name: Mclock sleep parameter check
+      desc: Mclock sleep parameter check
+      polarion-id: CEPH-83574903
+      module: test_config_parameter_chk.py
+      config:
+        scenario: mclock_sleep
+        ini-file: conf/tentacle/rados/test-confs/rados_config_parameters.ini
+
+  - test:
+      name: Mclock default,reservation,limit and weight parameter check
+      desc: Mclock default,reservation,limit and weight parameter check
+      polarion-id: CEPH-83574902
+      module: test_config_parameter_chk.py
+      config:
+        scenario: mclock_chg_chk
+        ini-file: conf/tentacle/rados/test-confs/rados_config_parameters.ini
+
+  - test:
+      name: Check RocksDB compression default value
+      desc: Check that RocksDB compression value is kLZ4Compression
+      polarion-id: CEPH-83582326
+      module: test_config_parameter_chk.py
+      config:
+        scenario: rocksdb_compression
+
+  - test:
+      name: replica-1 non-resilient pools
+      module: test_replica1.py
+      polarion-id: CEPH-83575297
+      config:
+       replica-1: true
+      desc: Test replica-1 non-resilient pools
+
+# test should run in succession with previous test(replica-1 non-resilient pools)
+# as it needs replica-1 pools to be present on the cluster
+  - test:
+      name: EIO flag on replica-1 non-resilient pools
+      module: test_replica1.py
+      polarion-id: CEPH-83582009, CEPH-83582010
+      config:
+        eio: true
+      desc: Test EIO flag on replica-1 non-resilient pools
