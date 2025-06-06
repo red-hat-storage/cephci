@@ -41,71 +41,116 @@ def add_snapshot_scheduling(rbd, **kw):
     return out, err
 
 
-def verify_snapshot_schedule(rbd, pool, image, interval="1m", **kw):
+def verify_snapshot_schedule(
+    rbd, pool, image=None, interval="1m", namespace=None, **kw
+):
     """
-    This will verify the snapshot roll overs on the image
-    snapshot based mirroring is enabled
+    Verify snapshot schedule on an image or namespace or pool level,
+    where snapshot-based mirroring is enabled.
+
     Args:
-        pool: pool name
-        image: image name
-        interval : this is interval and specified in min
+        rbd         : RBD object to run commands
+        pool        : Pool name
+        interval    : Schedule interval string like "1m"
+        image       : (Optional) Image name
+        namespace   : (Optional) Namespace name
+
     Returns:
         0 if snapshot schedule is verified successfully
-        1 if fails
+        1 if verification fails
     """
+
     try:
-        status_spec = {"pool": pool, "image": image, "format": "json"}
+        # Build status_spec based on scope
+        status_spec = {"pool": pool, "format": "json"}
+        # Namespace level schedule
+        if namespace:
+            status_spec["namespace"] = namespace
+        # Image level schedule
+        if image:
+            status_spec["image"] = image
+
+        # List snapshot schedules
         out, err = rbd.mirror.snapshot.schedule.ls(**status_spec)
         if err:
             log.error(
-                f"Error while fetching snapshot schedule list for image {pool}/{image}"
+                f"Error fetching snapshot schedule list for {pool}"
+                f"{'/' + namespace if namespace else ''}"
+                f"{'/' + image if image else ''}"
             )
             return 1
 
         schedule_list = json.loads(out)
         schedule_present = [
-            schedule for schedule in schedule_list if schedule["interval"] == interval
+            schedule
+            for schedule in schedule_list
+            if schedule.get("interval") == interval
         ]
         if not schedule_present:
             log.error(
-                f"Snapshot schedule not listed for image {pool}/{image} at interval {interval}"
+                f"Snapshot schedule NOT found at interval {interval} for "
+                f"{pool}{'/' + namespace if namespace else ''}{'/' + image if image else ''}"
             )
             return 1
 
-        output, err = rbd.mirror.image.status(**status_spec)
-        if err:
-            log.error(
-                f"Error while fetching mirror image status for image {pool}/{image}"
-            )
-            return 1
-        json_dict = json.loads(output)
-        log.info(f"Image status : \n {json_dict}")
-        snapshot_ids = [i["id"] for i in json_dict.get("snapshots")]
-        log.info(f"snapshot_ids Before : {snapshot_ids}")
-        interval_int = int(interval[:-1])
-        time.sleep(interval_int * 120)
-        output, err = rbd.mirror.image.status(**status_spec)
-        if err:
-            log.error(
-                f"Error while fetching mirror image status for image {pool}/{image}"
-            )
-            return 1
-        json_dict = json.loads(output)
-        log.info(f"Image status : \n {json_dict}")
-        snapshot_ids_1 = [i["id"] for i in json_dict.get("snapshots")]
-        log.info(f"snapshot_ids After : {snapshot_ids_1}")
-        if snapshot_ids != snapshot_ids_1:
-            log.info(
-                f"Snapshot schedule verification successful for image {pool}/{image}"
-            )
-            return 0
-        log.error(f"Snapshot schedule verification failed for image {pool}/{image}")
-        return 1
+        # validate snapshot schedule on the mirrored images
+        out, err = rbd.ls(**status_spec)
+        image_list = ast.literal_eval(out.strip())
+        for image in image_list:
+            # Rebuild image status_spec for mirror image status query
+            image_status_spec = {"pool": pool, "image": image, "format": "json"}
+            if namespace:
+                image_status_spec["namespace"] = namespace
+
+            # Check initial snapshot state
+            output, err = rbd.mirror.image.status(**image_status_spec)
+            if err:
+                log.error(
+                    f"Error fetching mirror image status for {pool}/{namespace or ''}/{image}: {err}"
+                )
+                return 1
+
+            json_dict = json.loads(output)
+            log.info(f"Initial image mirror status: \n{json_dict}")
+            snapshot_ids = [snap["id"] for snap in json_dict.get("snapshots", [])]
+            log.info(f"Snapshot IDs before interval: {snapshot_ids}")
+
+            # Wait for snapshots to mirror in remote cluster
+            interval_int = int(interval[:-1])
+            time.sleep(interval_int * 120)
+
+            # Check snapshot state again
+            output, err = rbd.mirror.image.status(**image_status_spec)
+            if err:
+                log.error(
+                    f"Error fetching mirror image status after interval for {pool}/{namespace or ''}/{image}: {err}"
+                )
+                return 1
+
+            json_dict = json.loads(output)
+            log.info(f"Post-wait image mirror status: \n{json_dict}")
+            snapshot_ids_after = [snap["id"] for snap in json_dict.get("snapshots", [])]
+            log.info(f"Snapshot IDs after interval: {snapshot_ids_after}")
+
+            if snapshot_ids != snapshot_ids_after:
+                log.info(
+                    f"Snapshot schedule verification successful for {pool}/"
+                    f"{namespace + '/' if namespace else ''}{image}"
+                )
+            else:
+                log.error(
+                    f"Snapshot schedule verification failed for {pool}/"
+                    f"{namespace + '/' if namespace else ''}{image}"
+                )
+                return 1
+
     except Exception as e:
         log.error(
-            f"Snapshot verification failed for image {pool}/{image} with error {e}"
+            f"Snapshot schedule verification failed for {pool}/"
+            f"{namespace + '/' if namespace else ''}{image if image else ''} with error: {e}"
         )
         return 1
+    return 0
 
 
 def run_io_verify_snap_schedule_single_image(**kw):
