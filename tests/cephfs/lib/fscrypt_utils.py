@@ -4,13 +4,11 @@ It contains methods to run fscrypt cli options - setup,encrypt,lock,unlock,purge
 
 """
 
-import datetime
 import random
 import re
 import string
 import time
 
-from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
@@ -861,10 +859,97 @@ class FscryptUtils(object):
             test_status += 1
         return test_status
 
+    def encrypt_dir_setup(self, mount_details):
+        """
+        This method assists in creating a encrypted directory under given mountpoint
+        Required params:
+        mount_details - A dict object which is a return variable from cephfs_common_lib.test_mount
+        including mount details for each subvol
+        """
+        encrypt_info = {}
+        for sv_name in mount_details:
+            encrypt_info.update({sv_name: {}})
+            mnt_pt = mount_details[sv_name]["fuse"]["mountpoint"]
+            mnt_client = mount_details[sv_name]["fuse"]["mnt_client"]
+            if self.setup(mnt_client, mnt_pt):
+                return 1
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(4))
+            )
+            encrypt_path = f"{mnt_pt}/testdir_{rand_str}"
+            encrypt_info[sv_name].update({"path": encrypt_path})
+            cmd = f"mkdir {encrypt_path}"
+            mnt_client.exec_command(
+                sudo=True,
+                cmd=cmd,
+                check_ec=False,
+            )
+            encrypt_args = {
+                "protector_source": random.choice(["custom_passphrase", "raw_key"])
+            }
+            log.info("fscrypt encrypt on test directory")
+            encrypt_params = self.encrypt(
+                mnt_client, encrypt_path, mnt_pt, **encrypt_args
+            )
+            encrypt_info[sv_name].update({"encrypt_params": encrypt_params})
+        return encrypt_info
+
+    def is_encrypted(self, file_path, old_file_path, mnt_client):
+        """
+        This helper validates if given file_path is encrypted by comparing the file chars with old_file_path
+        Params:
+        file_path - current file after fscrypt lock
+        old_file_path - file before fscrypt lock
+        Returns:
+        True if encrypted, False if not encrypted
+        """
+        cmd = f"basename {file_path}| wc -c"
+        out, _ = mnt_client.exec_command(sudo=True, cmd=cmd)
+        charcount_new = out.strip()
+        cmd = f"basename {old_file_path}| wc -c"
+        out, _ = mnt_client.exec_command(sudo=True, cmd=cmd)
+        charcount_old = out.strip()
+        log.info(charcount_new)
+        log.info(charcount_old)
+        if int(charcount_new) != int(charcount_old):
+            return True
+        return False
+
+    def verify_encryption(self, mnt_client, encrypt_path, old_file_list, sampling=True):
+        """
+        This helper validates all files in given encrypt_path for encrypted filename, returns 0 if encrypted else 1
+        Params:
+        mnt_client - Client object
+        encrypt_path - Path within which files to be verified for encryption
+        old_file_list - List of files before fscrypt lock
+        Returns:
+        0 if all files in given path is encrypted, else 1
+        """
+        files_list = self.get_file_list(mnt_client, encrypt_path)
+        file_cnt = len(files_list)
+        if sampling:
+            file_cnt = min(5, len(files_list))
+        encrypted_files = []
+        for i in range(0, file_cnt):
+            if self.is_encrypted(files_list[i], old_file_list[i], mnt_client):
+                encrypted_files.append(files_list[i])
+            i += 1
+        if len(encrypted_files) != file_cnt:
+            log.info(
+                "Some files are not encrypted, Encrypted - %s, Expected - %s",
+                len(encrypted_files),
+                len(files_list),
+            )
+            return 1
+        return 0
+
     # HELPER ROUTINES #
     def get_file_list(self, client, path):
         """
         This helper method is to provide list of files in path
+        Returns:
+        files in list format
         """
         cmd = f"find {path} -maxdepth 1 -type f"
         out, _ = client.exec_command(sudo=True, cmd=cmd)
@@ -924,7 +1009,7 @@ class FscryptUtils(object):
                     )
         return fscrypt_info
 
-    def add_dataset(self, client, encrypt_path):
+    def add_dataset(self, client, encrypt_path, **kwargs):
         """
         This method is to add add files using dd to directory path created as - mix(depth-10,breadth-5)
         Also to add some test files used for validation in lock/unlock states
@@ -963,7 +1048,8 @@ class FscryptUtils(object):
             "/var/log/cloud-init.log",
             "/var/log/dnf.log",
         ]
-        for i in range(1, 25):
+        file_cnt = kwargs.get("extra_files", 5)
+        for i in range(1, file_cnt + 1):
             linux_file = random.choice(linux_files)
             file_path = f"{encrypt_path}/testfile_{i}"
             client.exec_command(
@@ -972,19 +1058,3 @@ class FscryptUtils(object):
             )
 
         return file_list
-
-    def fscrypt_io(client, file_list, run_time):
-        def fscrypt_fio(client, file_path):
-            client.exec_command(
-                sudo=True,
-                cmd=f"fio --name={file_path} --ioengine=libaio --size 2M --rw=write --bs=1M --direct=1 "
-                f"--numjobs=1 --iodepth=5 --runtime=10",
-                timeout=20,
-                long_running=True,
-            )
-
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
-        while datetime.datetime.now() < end_time:
-            with parallel() as p:
-                for file_path in file_list:
-                    p.spawn(fscrypt_fio, client, file_path, validate=False)
