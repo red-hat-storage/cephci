@@ -73,6 +73,7 @@ tests:
       desc: Create a basic bucket and verify its listed
       module: test_rgw_rest_sanity.py
       name: Create and verify basic RGW bucket
+      polarian-id: CEPH-83573505
       config:
         args:
           rgw1:
