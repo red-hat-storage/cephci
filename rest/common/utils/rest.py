@@ -65,17 +65,18 @@ class REST(object):
         Returns
           Returns REST object instance.
         """
-        self.headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/vnd.ceph.api.v1.0+json",
-        }
+        if "accept" in kwargs.keys():
+            self.headers = {"Accept": kwargs.get("accept")}
+        else:
+            self.headers = {"Accept": "application/vnd.ceph.api.v1.0+json"}
+        self.headers.update({"Content-Type": "application/json"})
         self._config = Config()
         self._ip = kwargs.get("ip", None)
         if not self._ip:
             raise ValueError("Invalid IP address '%s'." % self._ip)
 
         self._username = kwargs.get("username", "admin")
-        self._password = kwargs.get("password", "admin123")
+        self._password = kwargs.get("password", "admin@123")
         self._port = kwargs.get("port", 8443)
         base_url = f"https://{self._ip}:{self._port}"
         self._base_uri = kwargs.get("base_uri", base_url)
