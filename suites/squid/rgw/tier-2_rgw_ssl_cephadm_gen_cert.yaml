@@ -171,7 +171,7 @@ tests:
               - "ceph config set client.rgw rgw_verify_ssl False"
               - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_verify_ssl False"
               - "ceph orch restart {service_name:shared.pri}"
-              - "ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt"
+              - "ceph_version=$(ceph version | cut -d ' ' -f 3 | cut -d '-' -f 1); if [ \"$ceph_version\" = \"19.2.0\" ]; then ceph orch cert-store get cert cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; else ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; fi"
               - "sudo yum install -y sshpass"
               - "sleep 20"
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-sec#node5}:/etc/pki/ca-trust/source/anchors/"
@@ -193,7 +193,7 @@ tests:
               - "ceph orch restart {service_name:shared.sec}"
               - "sudo yum install -y sshpass"
               - "sleep 120"
-              - "ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt"
+              - "ceph_version=$(ceph version | cut -d ' ' -f 3 | cut -d '-' -f 1); if [ \"$ceph_version\" = \"19.2.0\" ]; then ceph orch cert-store get cert cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; else ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; fi"
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node5}:/etc/pki/ca-trust/source/anchors/"
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node6}:/etc/pki/ca-trust/source/anchors/"
       desc: Setting up RGW multisite replication environment
