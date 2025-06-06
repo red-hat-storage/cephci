@@ -143,7 +143,6 @@ def mds_cache_io(path, client):
     client.exec_command(
         sudo=True,
         cmd=cmd,
-        long_running=True,
         timeout=3600,
     )
 

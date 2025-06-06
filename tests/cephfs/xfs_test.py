@@ -124,7 +124,6 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd="cd /root/xfstests-dev && ./check -d -T -g quick -e ceph.exclude",
             check_ec=False,
-            long_running=True,
             timeout=7200,
         )
         log.info("XFS tests completed successfully")

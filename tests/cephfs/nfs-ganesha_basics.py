@@ -115,7 +115,7 @@ def run(ceph_cluster, **kw):
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
                 f"{nfs_mounting_dir}{dir_name}",
-                long_running=True,
+                timeout=300,
             )
 
             log.info("Removing nfs-ganesha mount dir on client:")
@@ -202,14 +202,14 @@ def run(ceph_cluster, **kw):
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
                 f"{mounting_dir}{dir_name}",
-                long_running=True,
+                timeout=300,
             )
             nfs_client[0].exec_command(
                 sudo=True,
                 cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 "
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
                 f"{mounting_dir}{dir_name}",
-                long_running=True,
+                timeout=300,
             )
             log.info("Cleaning up")
             nfs_client[0].exec_command(sudo=True, cmd=f"rm -rf {mounting_dir}*")

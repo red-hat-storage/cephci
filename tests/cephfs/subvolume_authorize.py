@@ -353,7 +353,9 @@ def run(ceph_cluster, **kw):
                 f"dd if={fuse_mount_dir}/file  of=~/file2 bs=10M count=10",
             ]
             for command in commands:
-                err = client[0].exec_command(sudo=True, cmd=command, long_running=True)
+                err = client[0].exec_command(
+                    sudo=True, cmd=command, long_running=True, timeout=300
+                )
                 if err:
                     log.error(f"Permissions set for {client_name} is not working")
                     return 1

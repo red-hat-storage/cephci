@@ -95,7 +95,7 @@ def run(ceph_cluster, **kw):
             f"rm -rf {fs2_kernel_mount_dir}/*",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=3600)
         log.info(f"Run IO's on {fs1}")
         commands = [
             f"mkdir {fs1_kernel_mount_dir}/dir1",
@@ -104,14 +104,14 @@ def run(ceph_cluster, **kw):
             f"dd if=/dev/urandom of={fs1_kernel_mount_dir}/file1 bs=4M count=1000; done",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=3600)
         log.info(f"Copy {fs1} data to local directory")
         commands = [
             "mkdir /home/cephuser/cephfs_backup",
             f"cp {fs1_kernel_mount_dir}/* -R /home/cephuser/cephfs_backup/",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=3600)
         log.info(f"Verifying {fs2} has no data after IO's on {fs1}")
         output, rc = client1.exec_command(sudo=True, cmd=f"ls {fs2_kernel_mount_dir}")
         if "" == output:
@@ -131,17 +131,17 @@ def run(ceph_cluster, **kw):
             f"dd if=/dev/urandom of={fs2_kernel_mount_dir}/file2 bs=1M count=1000; done",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=3600)
         log.info(f"Copy {fs2} data to another local directory")
         commands = [
             "mkdir /home/cephuser/cephfs_ec_backup",
             f"cp {fs2_kernel_mount_dir}/* -R /home/cephuser/cephfs_ec_backup/",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=3600)
         log.info(f"Verifying data consistency in {fs1} after IO's on {fs2}")
         command = f"diff -qr {fs1_kernel_mount_dir} /home/cephuser/cephfs_backup/"
-        rc = client1.exec_command(sudo=True, cmd=command, long_running=True)
+        rc = client1.exec_command(sudo=True, cmd=command, timeout=3600)
         if rc == 0:
             log.info(f"Data is consistent in {fs1}")
         else:
@@ -156,9 +156,9 @@ def run(ceph_cluster, **kw):
         ]
         log.info(f"Verifying data consistency in {fs2} after IO's on {fs1}")
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=3600)
         command = f"diff -qr {fs2_kernel_mount_dir} /home/cephuser/cephfs_ec_backup/"
-        rc = client1.exec_command(sudo=True, cmd=command, long_running=True)
+        rc = client1.exec_command(sudo=True, cmd=command, timeout=3600)
         if rc == 0:
             log.info(f"Data is consistent in {fs2}")
         else:

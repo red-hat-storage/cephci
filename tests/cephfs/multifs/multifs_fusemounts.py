@@ -73,16 +73,16 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
-            f"--files 100 --files-per-dir 10 --dirs-per-dir 1 --top "
+            f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{fuse_mounting_dir_1}",
-            long_running=True,
+            timeout=3600,
         )
         client1.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
-            f"--files 100 --files-per-dir 10 --dirs-per-dir 1 --top "
+            f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{fuse_mounting_dir_2}",
-            long_running=True,
+            timeout=3600,
         )
         fs_util.reboot_node(client1)
         out, rc = client1.exec_command(cmd="mount")
@@ -99,16 +99,16 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
-            f"--files 100 --files-per-dir 10 --dirs-per-dir 1 --top "
+            f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{fuse_mounting_dir_1}/io_after_reboot",
-            long_running=True,
+            timeout=3600,
         )
         client1.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
-            f"--files 100 --files-per-dir 10 --dirs-per-dir 1 --top "
+            f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{fuse_mounting_dir_2}/io_after_reboot",
-            long_running=True,
+            timeout=3600,
         )
         return 0
     except Exception as e:

@@ -101,7 +101,7 @@ class FSIO(object):
                 f"do python3 /home/cephuser/smallfile/smallfile_cli.py "
                 f"--operation $i --threads {io_params['threads']} --file-size {io_params['file-size']} "
                 f"--files {io_params['files']} --top {io_path} ; done",
-                long_running=True,
+                timeout=3600,
             )
 
         def file_extract():
@@ -125,7 +125,6 @@ class FSIO(object):
             client.exec_command(
                 sudo=True,
                 cmd=f"cd {io_path};tar -xJf linux.tar.xz",
-                long_running=True,
                 timeout=3600,
             )
             log.info(f"untar suceeded on {mounting_dir}")
@@ -189,7 +188,7 @@ class FSIO(object):
                 sudo=True,
                 cmd=f"dd if=/dev/{io_params['input_type']} of={file_path} bs={io_params['bs']} "
                 f"count={io_params['count']}",
-                long_running=True,
+                timeout=3600,
             )
 
         def iozone():
@@ -250,7 +249,7 @@ class FSIO(object):
             client.exec_command(
                 sudo=True,
                 cmd=cmd,
-                long_running=True,
+                timeout=3600,
             )
 
         def dbench():
@@ -300,7 +299,7 @@ class FSIO(object):
             client.exec_command(
                 sudo=True,
                 cmd=f"dbench {io_params['clients']} -t {io_params['duration']} -D {io_path}",
-                long_running=True,
+                timeout=3600,
             )
 
         def postgresIO():
@@ -346,7 +345,7 @@ class FSIO(object):
                     f"podman exec -it {io_params['container_name']} bash -c "
                     f"'pgbench -i --scale={io_params['scale']} -U pguser -d {io_params['db_name']}'"
                 ),
-                long_running=True,
+                timeout=3600,
             )
 
             # Creating tables and populating data based on the scale factor
@@ -359,7 +358,7 @@ class FSIO(object):
                     f"-T {io_params['duration']} "
                     f"-U postgres -d {io_params['db_name']}'"
                 ),
-                long_running=True,
+                timeout=3600,
             )
 
         io_tool_map = {

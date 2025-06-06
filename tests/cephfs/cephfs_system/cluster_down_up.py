@@ -172,7 +172,7 @@ def run(ceph_cluster, **kw):
         ]
 
         for command in commands:
-            clients[0].exec_command(sudo=True, cmd=command, long_running=True)
+            clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
 
         log.info("Shutting down the cluster")
         for client in clients:
@@ -239,7 +239,7 @@ def run(ceph_cluster, **kw):
         )
 
         for command in commands:
-            clients[0].exec_command(sudo=True, cmd=command, long_running=True)
+            clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
         return 0
 
     except Exception as e:

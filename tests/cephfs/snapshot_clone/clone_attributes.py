@@ -98,9 +98,9 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
-            f"--files 100 --files-per-dir 10 --dirs-per-dir 1 --top "
+            f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{kernel_mounting_dir_1}",
-            long_running=True,
+            timeout=3600,
         )
         fs_util.set_quota_attrs(clients[0], 9999, 999, kernel_mounting_dir_1)
         quota_attrs = fs_util.get_quota_attrs(clients[0], kernel_mounting_dir_1)
@@ -117,9 +117,9 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
-            f"--files 100 --files-per-dir 10 --dirs-per-dir 1 --top "
+            f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{kernel_mounting_dir_1}/iteration_2",
-            long_running=True,
+            timeout=3600,
         )
         snapshot_2 = {
             "vol_name": default_fs,

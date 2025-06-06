@@ -77,7 +77,7 @@ def run(ceph_cluster, **kw):
             f"--operation create --threads 10 --file-size 1 "
             f"--files 10000 --files-per-dir 100000 --dirs-per-dir 50 --top "
             f"{kernel_mounting_dir_1}/{mounting_dir}",
-            long_running=True,
+            timeout=3600,
         )
         result, rc = clients[0].exec_command(
             sudo=True, cmd=f"ceph fs status {default_fs} --format json-pretty"

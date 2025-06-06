@@ -56,7 +56,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True,
             cmd=f"dd if=/dev/zero of={kernel_mounting_dir}" + ".txt bs=5M count=1000",
-            long_running=True,
+            timeout=3600,
         )
         for i in range(10):
             dir_name_generate = "".join(

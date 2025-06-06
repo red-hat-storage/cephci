@@ -1123,8 +1123,8 @@ class FsUtils(object):
             client.exec_command(
                 sudo=True,
                 cmd=f"rm -rf {mounting_dir}*",
-                long_running=True,
                 timeout=3600,
+                check_ec=False,
             )
 
             if "umount" in args:
@@ -1134,7 +1134,11 @@ class FsUtils(object):
                 else:
                     log.info("Unmounting Kernel client:")
                     cmd = f"umount {mounting_dir} -l"
-                client.exec_command(sudo=True, cmd=cmd)
+                client.exec_command(
+                    sudo=True,
+                    cmd=cmd,
+                    check_ec=False,
+                )
                 log.info("Removing mounting directory:")
                 client.exec_command(sudo=True, cmd=f"rmdir {mounting_dir}")
 
@@ -1150,18 +1154,7 @@ class FsUtils(object):
                         sudo=True,
                         cmd=f"ceph auth del client.{kwargs.get('client_name', client.node.hostname)}",
                     )
-                client.exec_command(
-                    cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
-                    " -name 'Crefi' -name 'smallfile' -delete",
-                    long_running=True,
-                    timeout=3600,
-                )
-                client.exec_command(
-                    cmd="cd /home/cephuser && ls -a | grep -v 'authorized_keys' |"
-                    "xargs sudo rm -f",
-                    long_running=True,
-                    timeout=3600,
-                )
+
                 client.exec_command(sudo=True, cmd="iptables -F", check_ec=False)
 
         return 0
@@ -2173,9 +2166,7 @@ class FsUtils(object):
                 command = "python3 /home/cephuser/smallfile/smallfile_cli.py "
                 f"--operation create --threads 1 --file-size 100  --files  {num_of_files} "
                 f"--top {mounting_dir}{dir_name}_{num}"
-                client.exec_command(
-                    sudo=True, cmd=command, long_running=True, timeout=300
-                )
+                client.exec_command(sudo=True, cmd=command, timeout=300)
                 self.return_counts = self.io_verify(client)
             break
         return self.return_counts, 0
@@ -3014,15 +3005,34 @@ os.system('sudo systemctl start  network')
 
     def run_ios(self, client, mounting_dir, io_tools=["dd", "smallfile"], file_name=""):
         def smallfile():
-            client.exec_command(
-                sudo=True,
-                cmd=f"for i in create read append read delete create overwrite rename delete-renamed mkdir rmdir "
-                f"create symlink stat chmod ls-l delete cleanup  ; "
-                f"do python3 /home/cephuser/smallfile/smallfile_cli.py "
-                f"--operation $i --threads 8 --file-size 10240 "
-                f"--files 10 --top {mounting_dir} ; done",
-                long_running=True,
-            )
+            operations = [
+                "create",
+                "read",
+                "append",
+                "read",
+                "delete",
+                "create",
+                "overwrite",
+                "rename",
+                "delete-renamed",
+                "mkdir",
+                "rmdir",
+                "create",
+                "symlink",
+                "stat",
+                "chmod",
+                "ls-l",
+                "delete",
+                "cleanup",
+            ]
+
+            for op in operations:
+                cmd = (
+                    f"python3 /home/cephuser/smallfile/smallfile_cli.py "
+                    f"--operation {op} --threads 8 --file-size 10240 "
+                    f"--files 10 --top {mounting_dir}"
+                )
+                client.exec_command(sudo=True, cmd=cmd, timeout=600)
 
         def file_extract():
             client.exec_command(
@@ -3045,7 +3055,7 @@ os.system('sudo systemctl start  network')
                 sudo=True,
                 cmd=f"dd if=/dev/zero of={mounting_dir}{client.node.hostname}_dd_{file_name} bs=100M "
                 f"count=5",
-                long_running=True,
+                timeout=600,
             )
 
         io_tool_map = {
@@ -3182,7 +3192,6 @@ os.system('sudo systemctl start  network')
             client.exec_command(
                 sudo=True,
                 cmd=f"cd {io_path};tar -xJf linux.tar.xz",
-                long_running=True,
                 timeout=3600,
             )
             log.info(f"untar suceeded on {mounting_dir}")
@@ -3246,7 +3255,7 @@ os.system('sudo systemctl start  network')
                 sudo=True,
                 cmd=f"dd if=/dev/{io_params['input_type']} of={file_path} bs={io_params['bs']} "
                 f"count={io_params['count']}",
-                long_running=True,
+                timeout=3600,
             )
 
         io_tool_map = {
@@ -3477,11 +3486,9 @@ os.system('sudo systemctl start  network')
                     ]
                     if build.endswith("7") or build.startswith("3"):
                         cmd = "yum install -y " + " ".join(pkgs)
-                        node.exec_command(sudo=True, cmd=cmd, long_running=True)
+                        node.exec_command(sudo=True, cmd=cmd, timeout=3600)
 
-                    node.exec_command(
-                        sudo=True, cmd="pip3 install xattr", long_running=True
-                    )
+                    node.exec_command(sudo=True, cmd="pip3 install xattr", timeout=3600)
 
                 out, rc = node.exec_command(sudo=True, cmd="ls /home/cephuser")
                 log.info("ls /home/cephuser : {}".format(out))
@@ -3557,11 +3564,11 @@ os.system('sudo systemctl start  network')
             cmd="cd /home/cephuser/; git clone {}".format(
                 "https://github.com/yogesh-mane/Crefi.git"
             ),
-            long_running=True,
+            timeout=3600,
         )
 
         # Setup Crefi pre-requisites : pyxattr
-        node.exec_command(sudo=True, cmd="pip3 install pyxattr", long_running=True)
+        node.exec_command(sudo=True, cmd="pip3 install pyxattr", timeout=3600)
 
     def generate_all_combinations(
         self, client, ioengine, mount_dir, workloads, sizes, iodepth_values, numjobs
@@ -3860,7 +3867,7 @@ os.system('sudo systemctl start  network')
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
             f"--files 10 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{mount_path}/{dir_name}",
-            long_running=True,
+            timeout=3600,
         )
 
     @retry(CommandFailed, tries=3, delay=60)
@@ -5003,7 +5010,6 @@ os.system('sudo systemctl start  network')
                 client.exec_command(
                     sudo=True,
                     cmd=cmd,
-                    long_running=True,
                     timeout=3600,
                 )
 
@@ -5023,7 +5029,6 @@ os.system('sudo systemctl start  network')
                     client.exec_command(
                         sudo=True,
                         cmd=cmd,
-                        long_running=True,
                         timeout=3600,
                     )
                 except CommandFailed as ex:

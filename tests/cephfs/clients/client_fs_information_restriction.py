@@ -69,7 +69,7 @@ def run(ceph_cluster, **kw):
             f"ceph orch apply mds {fs3} --placement='2 {mds1} {mds2}'",
         ]
         for command in commands:
-            err = clients[0].exec_command(sudo=True, cmd=command, long_running=True)
+            err = clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
             if err:
                 return 1
             wait_for_process(client=clients[0], process_name=fs3, ispresent=True)

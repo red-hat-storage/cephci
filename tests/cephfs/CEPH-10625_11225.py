@@ -303,7 +303,6 @@ def run(ceph_cluster, **kw):
                         cmd=f"python3 smallfile/smallfile_cli.py --operation {op} --threads 10 --file-size 4 "
                         f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
                         f"{client_info['mounting_dir']}{dir_name}",
-                        long_running=True,
                         timeout=300,
                     )
         log.info("Cleaning up!-----")

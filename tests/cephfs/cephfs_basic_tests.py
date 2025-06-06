@@ -94,7 +94,7 @@ def mount_test_case(clients, mounting_dir):
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
             f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{mounting_dir}{dir1}",
-            long_running=True,
+            timeout=3600,
         )
         client.exec_command(
             sudo=True, cmd=f"cp -r  {mounting_dir}{dir1}/* {mounting_dir}{dir2}/"

@@ -1274,12 +1274,11 @@ finally:
                 total_of_files = range_diff * num_of_files
                 client.exec_command(
                     sudo=True,
-                    cmd="python3 smallfile/smallfile_cli.py "
+                    cmd="python3 /home/cephuser/smallfile/smallfile_cli.py "
                     "--operation create --threads 1 "
                     "--file-size 4 --files %d "
                     "--files-per-dir %d --top %s%s"
                     % (total_of_files, total_of_files, mounting_dir, dir_name),
-                    long_running=True,
                     timeout=300,
                 )
                 self.return_counts = self.io_verify(client)
@@ -1321,7 +1320,6 @@ finally:
                             dir_name,
                             num,
                         ),
-                        long_running=True,
                         timeout=300,
                     )
                     self.return_counts = self.io_verify(client)
@@ -2314,20 +2312,22 @@ mds standby for rank = 1
                 client.exec_command(
                     sudo=True,
                     cmd="find %s -type f -delete" % mounting_dir,
-                    long_running=True,
                     timeout=3600,
+                    check_ec=False,
                 )
                 client.exec_command(
                     sudo=True,
                     cmd="rm -rf %s*" % mounting_dir,
-                    long_running=True,
                     timeout=3600,
+                    check_ec=False,
                 )
                 if args:
                     if "umount" in args:
                         log.info("Unmounting fuse client:")
                         client.exec_command(
-                            sudo=True, cmd="fusermount -u %s -z" % mounting_dir
+                            sudo=True,
+                            cmd="fusermount -u %s -z" % mounting_dir,
+                            check_ec=False,
                         )
                         FsUtils.wait_until_umount_succeeds(client, mounting_dir)
                         log.info("Removing mounting directory:")
@@ -2336,6 +2336,7 @@ mds standby for rank = 1
                         client.exec_command(
                             sudo=True,
                             cmd="rm -rf /etc/ceph/ceph.client.%s.keyring" % client_name,
+                            check_ec=False,
                         )
                         log.info("Removing permissions:")
                         client.exec_command(
@@ -2344,14 +2345,14 @@ mds standby for rank = 1
                         client.exec_command(
                             cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
                             " -name 'Crefi' -name 'smallfile' -delete",
-                            long_running=True,
                             timeout=3600,
+                            check_ec=False,
                         )
                         client.exec_command(
                             cmd="cd /home/cephuser && ls -a | grep -v 'authorized_keys' |"
                             "xargs sudo rm -f",
-                            long_running=True,
                             timeout=3600,
+                            check_ec=False,
                         )
                         client.exec_command(
                             sudo=True, cmd="iptables -F", check_ec=False
@@ -2364,14 +2365,14 @@ mds standby for rank = 1
                     client.exec_command(
                         sudo=True,
                         cmd="find %s -type f -delete" % mounting_dir,
-                        long_running=True,
                         timeout=3600,
+                        check_ec=False,
                     )
                     client.exec_command(
                         sudo=True,
                         cmd="rm -rf %s*" % mounting_dir,
-                        long_running=True,
                         timeout=3600,
+                        check_ec=False,
                     )
                     if args:
                         if "umount" in args:
@@ -2396,14 +2397,14 @@ mds standby for rank = 1
                             client.exec_command(
                                 cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
                                 " -name 'Crefi' -name 'smallfile' -delete",
-                                long_running=True,
                                 timeout=3600,
+                                check_ec=False,
                             )
                             client.exec_command(
                                 cmd="cd /home/cephuser && ls -a | grep -v 'authorized_keys' | "
                                 "xargs sudo rm -f",
-                                long_running=True,
                                 timeout=3600,
+                                check_ec=False,
                             )
 
         else:
@@ -2412,14 +2413,14 @@ mds standby for rank = 1
                 client.exec_command(
                     sudo=True,
                     cmd="find %s -type f -delete" % mounting_dir,
-                    long_running=True,
                     timeout=3600,
+                    check_ec=False,
                 )
                 client.exec_command(
                     sudo=True,
                     cmd="rm -rf %s*" % mounting_dir,
-                    long_running=True,
                     timeout=3600,
+                    check_ec=False,
                 )
                 if args:
                     if "umount" in args:
@@ -2443,14 +2444,13 @@ mds standby for rank = 1
                         client.exec_command(
                             cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
                             "-name 'Crefi' -name 'smallfile' -delete",
-                            long_running=True,
                             timeout=3600,
                         )
                         client.exec_command(
                             cmd="cd /home/cephuser && ls -a | grep -v 'authorized_keys' | "
                             "xargs sudo rm -f",
-                            long_running=True,
                             timeout=3600,
+                            check_ec=False,
                         )
                         client.exec_command(
                             sudo=True, cmd="iptables -F", check_ec=False
@@ -2463,14 +2463,14 @@ mds standby for rank = 1
                     client.exec_command(
                         sudo=True,
                         cmd="find %s -type f -delete" % mounting_dir,
-                        long_running=True,
                         timeout=3600,
+                        check_ec=False,
                     )
                     client.exec_command(
                         sudo=True,
                         cmd="rm -rf %s*" % mounting_dir,
-                        long_running=True,
                         timeout=3600,
+                        check_ec=False,
                     )
                     if args:
                         if "umount" in args:
@@ -2493,19 +2493,6 @@ mds standby for rank = 1
                                 sudo=True,
                                 cmd="ceph auth del client.%s" % client.node.hostname,
                             )
-                            client.exec_command(
-                                cmd="find /home/cephuser -type f -not -name 'authorized_keys' "
-                                "-name 'Crefi' -name 'smallfile' -delete",
-                                long_running=True,
-                                timeout=3600,
-                            )
-                            client.exec_command(
-                                cmd="cd /home/cephuser && ls -a | grep -v 'authorized_keys' | "
-                                "xargs sudo rm -f",
-                                long_running=True,
-                                timeout=3600,
-                            )
-
         return 0
 
     def mds_cleanup(self, mds_nodes, dir_fragmentation):
