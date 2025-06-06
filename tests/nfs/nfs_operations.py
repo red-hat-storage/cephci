@@ -1,4 +1,6 @@
 import json
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from threading import Thread
 from time import sleep
@@ -670,3 +672,118 @@ def check_nfs_daemons_removed(client):
         except Exception as e:
             print(f"Unexpected error: {e}")
             break
+
+
+def create_nfs_via_file_and_verify(installer_node, nfs_objects, timeout):
+    """
+    Create a temporary YAML file with NFS Ganesha configuration.
+    Args:
+        installer_node: The node where the NFS Ganesha configuration will be applied.
+        nfs_objects: List of NFS Ganesha configuration objects.
+    Returns:
+        str: Path to the temporary YAML file.
+    """
+    temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+    spec_file = installer_node.remote_file(
+        sudo=True, file_name=temp_file.name, file_mode="wb"
+    )
+    spec = yaml.dump_all(nfs_objects, sort_keys=False, indent=2).encode("utf-8")
+    spec_file.write(spec)
+    spec_file.flush()
+
+    try:
+        pos_args = []
+        CephAdm(installer_node, mount="/tmp/").ceph.orch.apply(
+            input=temp_file.name, check_ec=True, pos_args=pos_args
+        )
+        verify_nfs_ganesha_service(node=installer_node, timeout=timeout)
+        log.info("NFS Ganesha spec file applied successfully.")
+        return True
+    except Exception as err:
+        log.error(f"Failed to apply NFS Ganesha spec file: {err}")
+
+
+def verify_nfs_ganesha_service(node, timeout):
+    """
+    Verify the status of NFS Ganesha service.
+    Args:
+        node: Installer Node.
+    Returns:
+        bool: True if the service is in the expected state, False otherwise.
+    """
+    interval = 5
+
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        result = json.loads(
+            CephAdm(node).ceph.orch.ls(format="json", service_type="nfs")
+        )
+        if all(x["status"]["running"] == x["status"]["size"] for x in result):
+            log.info(
+                "\n"
+                + "=" * 30
+                + "\n"
+                + "NFS Ganesha service is up and running. Time taken : -- %s seconds \n"
+                + "=" * 30,
+                w._attempt * w.interval,
+            )
+            log.info("sleep(20)  # Allow some time for the service to stabilize")
+            sleep(20)  # Allow some time for the service to stabilize
+            return True
+        else:
+            log.info(
+                "\n \n NFS Ganesha service is not running as expected, retrying...... "
+                "Time remaining : -- %s seconds \n", timeout - (w._attempt * w.interval),
+            )
+            log.debug("Current status: %s", result)
+    log.error("\n NFS Ganesha service is not running as expected.")
+    if w.expired:
+        raise OperationFailedError(
+            "NFS daemons check failed Timeout expired. -- %s seconds" % timeout
+        )
+
+
+def delete_nfs_clusters_in_parallel(installer_node, timeout):
+    """
+    Delete NFS clusters in batch.
+    Args:
+        installer_node: The node where the NFS Ganesha configuration will be applied.
+        nfs_objects: List of NFS Ganesha configuration objects.
+    """
+    clusters = CephAdm(installer_node).ceph.nfs.cluster.ls()
+    with ThreadPoolExecutor(max_workers=None) as executor:
+        futures = [
+            executor.submit(
+                CephAdm(installer_node).ceph.nfs.cluster.delete,
+                cluster,
+            )
+            for cluster in clusters
+        ]
+        for future in futures:
+            future.result()
+    log.info("All NFS clusters deletion initiated.")
+    # Check if any NFS Ganesha service is still running
+    for w in WaitUntil(timeout=timeout, interval=5):
+        result = json.loads(
+            CephAdm(installer_node).ceph.orch.ls(format="json", service_type="nfs")
+        )
+        if all(x["status"]["running"] == 0 for x in result) or not result:
+            log.info(
+                "\n"
+                + "=" * 30
+                + "\n"
+                + "All NFS Ganesha services are down. Time taken : -- %s seconds \n"
+                + "=" * 30,
+                w._attempt * w.interval,
+            )
+            return True
+        else:
+            log.error(
+                "\n \n NFS Ganesha services are still running after deletion trying again...... "
+                "Time remaining : -- %s seconds \n", timeout - (w._attempt * w.interval),
+            )
+            log.debug("Current status: %s", result)
+    if w.expired:
+        raise OperationFailedError(
+            "NFS Ganesha services are still running after deletion. Timeout expired. -- %s seconds"
+            % timeout
+        )

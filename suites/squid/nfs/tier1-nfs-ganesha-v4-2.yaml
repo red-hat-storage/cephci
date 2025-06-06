@@ -292,3 +292,24 @@ tests:
         nfs_version: 4.2
         earmark: smb
         operation: wrong_earmark
+
+  - test:
+      name: deploy multiple nfs ganesha servers concurrently
+      desc: Deploy multiple nfs ganesha servers concurrently and verify
+      polarion-id: CEPH-83621553
+      module: test_deploy_multiple_nfs_ganesha.py
+      config:
+        nfs_version: 4.2
+        clients: 4
+        port: 2049
+        number_of_clusters : 2
+        timeout : 100
+        nfs_instance_number: 6
+        spec:
+          service_type: nfs
+          service_id: nfs
+          placement:
+            host_pattern: '*'
+          spec:
+            port: 50000
+            monitoring_port: 60000
