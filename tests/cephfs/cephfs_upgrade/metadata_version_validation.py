@@ -1,5 +1,6 @@
 import json
 import traceback
+from distutils.version import LooseVersion
 
 from utility.log import Log
 
@@ -35,25 +36,11 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"stat {ceph_version_path}", check_ec=False
         )
 
-        def version_compare(v1, v2):
-            arr1 = v1.split(".")[:-1]
-            arr2 = v2.split(".")[:-1]
-            n = len(arr1)
-            m = len(arr2)
-            arr1 = [int(i) for i in arr1]
-            arr2 = [int(i) for i in arr2]
-            if n > m:
-                for i in range(m, n):
-                    arr2.append(0)
-            elif m > n:
-                for i in range(n, m):
-                    arr1.append(0)
-            for i in range(len(arr1)):
-                if arr1[i] > arr2[i]:
-                    return 1
-                elif arr2[i] > arr1[i]:
-                    return -1
-            return 0
+        def version_compare(v2, v1):
+            if LooseVersion(v2) > LooseVersion(v1):
+                return 0  # Upgrade sucess
+            else:
+                return 1  # Upgrade fail
 
         if out0:
             log.info("Loading previous ceph versions")
@@ -69,12 +56,10 @@ def run(ceph_cluster, **kw):
             for daemon in check_list:
                 pre_version = str(pre_data[daemon]).split()[2]
                 cur_version = str(upgraded_data[daemon]).split()[2]
-                log.info(f"Previous ceph {daemon} version is {pre_version}")
-                log.info(f"Current ceph {daemon} version is {cur_version}")
-                pre_version = pre_version.replace("-", ".")
-                cur_version = cur_version.replace("-", ".")
+                log.info("Previous ceph %s version is %s", daemon, pre_version)
+                log.info("Current ceph %s version is %s", daemon, cur_version)
                 result = version_compare(cur_version, pre_version)
-                if result == -1 or result == 0:
+                if result == 1:
                     fail_daemon.append(daemon)
                     log.error(f"Upgrade failed for {daemon}")
             before_file.close()
