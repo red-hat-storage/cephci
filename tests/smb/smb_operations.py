@@ -425,7 +425,7 @@ def verify_smb_service(node, service_name):
         CephAdm(node).ceph.orch.ls(service_type=service_name, format="json-pretty")
     )[0]
     # Check smb service is up
-    timeout, interval = 90, 30
+    timeout, interval = 300, 60
     for w in WaitUntil(timeout=timeout, interval=interval):
         out = json.loads(
             CephAdm(node).ceph.orch.ls(service_type=service_name, format="json-pretty")
