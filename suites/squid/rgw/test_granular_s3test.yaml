@@ -1,0 +1,183 @@
+# ======================================================================================
+# Cluster Configuration:
+#    cephci/conf/squid/rgw/tier-0_rgw.yaml
+#
+#    5-Node cluster(RHEL-7.9 and above)
+#    3 MONS, 2 MGR, 4 OSD and 1 RGW service daemon(s)
+#
+# ======================================================================================
+
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node3:80
+          - node4:80
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
+      abort-on-fail: false
+      config:
+        commands:
+          - "radosgw-admin account create --account-id RGW22222222222222222 --account-name Account2 --email account2@ceph.com"
+          - "radosgw-admin account create --account-id RGW11111111111111111 --account-name Account1  --email account1@ceph.com"
+          - "radosgw-admin user create --account-id RGW11111111111111111 --uid testacct1root --account-root --display-name 'Account1Root' --access-key  AAAAAAAAAAAAAAAAAAaa --secret aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+          - "radosgw-admin user create --account-id RGW22222222222222222 --uid testacct2root --account-root --display-name 'Account2Root' --access-key BBBBBBBBBBBBBBBBBBbb --secret bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+          - "radosgw-admin zone modify --enable-feature notification_v2"
+          - "radosgw-admin zonegroup modify --enable-feature notification_v2"
+          - "ceph orch restart rgw.rgw.1"
+      desc: Create 2 rgw accounts
+      module: exec.py
+      name: Create 2 rgw accounts
+      polarian-id: CEPH-83591683
+
+  - test:
+      abort-on-fail: false
+      config:
+        branch: ceph-squid
+        execute_granular: true
+        path: test_s3
+        skip_setup : false
+      desc: Run the Granular external S3test suites test s3
+      destroy-cluster: false
+      module: test_s3.py
+      name: execute s3tests suites test s3
+      polarion-id: CEPH-83575225 #CEPH-83591682 #CEPH-83591676
+
+  - test:
+      abort-on-fail: false
+      config:
+        branch: ceph-squid
+        execute_granular: true
+        path: test_iam
+        skip_setup : true
+      desc: Run the Granular external S3test suites test iam
+      destroy-cluster: false
+      module: test_s3.py
+      name: execute s3tests suites test iam
+      polarion-id: CEPH-83575225 #CEPH-83591682 #CEPH-83591676
+
+  - test:
+      abort-on-fail: false
+      config:
+        branch: ceph-squid
+        execute_granular: true
+        path: test_s3select
+        skip_setup : true
+      desc: Run the Granular external S3test suites test s3select
+      destroy-cluster: false
+      module: test_s3.py
+      name: execute s3tests suites test s3select
+      polarion-id: CEPH-83575225 #CEPH-83591682 #CEPH-83591676
+
+  - test:
+      abort-on-fail: false
+      config:
+        branch: ceph-squid
+        execute_granular: true
+        path: test_sts
+        skip_setup : true
+      desc: Run the Granular external S3test suites test sts
+      destroy-cluster: false
+      module: test_s3.py
+      name: execute s3tests suites test sts
+      polarion-id: CEPH-83575225 #CEPH-83591682 #CEPH-83591676
+
+  - test:
+      abort-on-fail: false
+      config:
+        branch: ceph-squid
+        execute_granular: true
+        path: test_headers
+        skip_setup : true
+      desc: Run the Granular external S3test suites test headers
+      destroy-cluster: false
+      module: test_s3.py
+      name: execute s3tests suites test headers
+      polarion-id: CEPH-83575225 #CEPH-83591682 #CEPH-83591676
+
+  - test:
+      abort-on-fail: false
+      config:
+        branch: ceph-squid
+        execute_granular: true
+        path: test_sns
+        skip_setup : true
+        skip_teardown : false
+      desc: Run the Granular external S3test suites test sns
+      destroy-cluster: false
+      module: test_s3.py
+      name: execute s3tests suites test sns
+      polarion-id: CEPH-83575225 #CEPH-83591682 #CEPH-83591676
