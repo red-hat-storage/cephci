@@ -449,6 +449,7 @@ def run(args):
     kernel_repo = args.get("--kernel-repo")
     custom_config = args.get("--custom-config")
     custom_config_file = args.get("--custom-config-file")
+    ibm_build = False
 
     if custom_config:
         for _config in custom_config:
