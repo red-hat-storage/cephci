@@ -1007,7 +1007,12 @@ class HighAvailability:
             client = NVMeInitiator(initiator_node, self.gateways[0])
             client.disconnect_all()  # Reconnect NVMe targets
             client.connect_targets(config={"nqn": "connect-all"})
-            serial_to_namespace = defaultdict(list)
+            serial_to_namespace = defaultdict(set)
+
+            out, _ = initiator_node.exec_command(
+                sudo=True, cmd="cat /etc/os-release | grep VERSION_ID"
+            )
+            rhel_version = out.split("=")[1].strip().strip('"')
 
             @retry(
                 IOError,
@@ -1015,21 +1020,30 @@ class HighAvailability:
                 delay=3,
             )
             def execute_nvme_command(client_node):
-                devices_output, _ = client_node.exec_command(
+                devices_json, _ = client_node.exec_command(
                     cmd="nvme list --output-format=json", sudo=True
                 )
-                return devices_output
+                return json.loads(devices_json)["Devices"]
 
-            devices_json = json.loads(execute_nvme_command(initiator_node))
-            devices = devices_json.get("Devices", [])
-            if not devices:
+            devices_json = execute_nvme_command(initiator_node)
+            if not devices_json:
                 LOG.info(f"No devices found on node {node}")
                 continue
 
-            for device in devices:
-                key = device["NameSpace"]
-                value = int(device["SerialNumber"])
-                serial_to_namespace[key].append(value)
+            for device in devices_json:
+                if rhel_version == "9.5":
+                    key = device["NameSpace"]
+                    value = int(device["SerialNumber"])
+                    serial_to_namespace[key].add(value)
+                elif rhel_version == "9.6":
+                    for subsys in device.get("Subsystems", []):
+                        for controller in subsys.get("Controllers", []):
+                            if controller.get("ModelNumber") == "Ceph bdev Controller":
+                                serial = controller.get("SerialNumber", "")
+                                value = int(serial)
+                                for ns in subsys.get("Namespaces", []):
+                                    key = ns.get("NSID")
+                                    serial_to_namespace[key].add(value)
 
             def subsystem_nsid_found(dictionary, key, value):
                 return key in dictionary and value in dictionary[key]
@@ -1098,7 +1112,7 @@ class HighAvailability:
                 if (
                     expected_visibility == "False"
                 ):  # If expected visibility is False, devices should be empty
-                    if devices_json.get("Devices"):  # Check if Devices is not empty
+                    if devices_json:  # Check if Devices is not empty
                         LOG.error(
                             f"Expected no devices for initiator {node}, but found: {devices_json}"
                         )
@@ -1110,7 +1124,7 @@ class HighAvailability:
                 elif (
                     expected_visibility == "True"
                 ):  # If expected visibility is True, devices should not be empty
-                    if not devices_json.get("Devices"):
+                    if not devices_json:
                         LOG.error(
                             f"Expected devices to be visible for node {node}, but found none."
                         )
@@ -1119,15 +1133,28 @@ class HighAvailability:
                         )
                     else:
                         # Log Namespace and SerialNumber from each device
-                        for device in devices_json.get("Devices", []):
-                            namespace = device.get("NameSpace", None)
-                            serial_number = device.get("SerialNumber", None)
-                            LOG.info(
-                                f"Namespace: {namespace}, SerialNumber: {serial_number}"
-                            )
+                        for device in devices_json:
+                            if rhel_version == "9.5":
+                                namespace = device.get("NameSpace", None)
+                                serial_number = device.get("SerialNumber", None)
+                            elif rhel_version == "9.6":
+                                for subsys in device.get("Subsystems", []):
+                                    for controller in subsys.get("Controllers", []):
+                                        if (
+                                            controller.get("ModelNumber")
+                                            == "Ceph bdev Controller"
+                                        ):
+                                            serial_number = int(
+                                                controller.get("SerialNumber", "")
+                                            )
+                                            for ns in subsys.get("Namespaces", []):
+                                                namespace = ns.get("NSID")
+                                                LOG.info(
+                                                    f"Namespace: {namespace}, SerialNumber: {serial_number}"
+                                                )
 
                         LOG.info(
-                            f"Validated - {len(devices_json['Devices'])} devices found on {node}"
+                            f"Validated - {len(devices_json)} devices found on {node}"
                         )
 
     def validate_namespace_masking(
