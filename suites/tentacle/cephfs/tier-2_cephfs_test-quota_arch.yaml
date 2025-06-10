@@ -1,0 +1,219 @@
+---
+#=======================================================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_cephfs_test-quota.yaml
+# Conf file : conf/pacific/cephfs/tier_0_fs.yaml
+# Test-Case Covered:
+#	CEPH-83573399	Test to validate the quota.max_files  Create a FS and create 10 directories and
+#                   mount them on kernel client and fuse client(5 mounts each)  Set max files quota to a number(say 50)
+#                   add up to that number of files to that directory and  verify if the set quota limit is working fine.
+#                   Similarly set different limit on different directories and  verify quota.
+#   CEPH-83573400     Test to validate the increase in quota limit once it reaches the max limit. (files)
+#                     Create a FS and create 10 directories and mount them on kernel client and fuse client(5 mounts
+#                     each). Set max file quota to a number(say 50) and add up to that number of files to that directory
+#                     and verify if the set quota limit is working fine.
+#                     Increase the set quota limit to more that what was set
+#                     earlier and add more files and verify.
+#                     Similarly set different limit on different directories,increase
+#                     the limit and verify it’s functionality and verify quota
+#   CEPH-83573405     Test to validate the removal of quota_max_files
+#                     Create a FS and create 10 directories and mount them on kernel client and fuse client
+#                     Set max files quota to a number(say 50) and add up to that number of files to that directory and
+#                     verify if the set quota limit is working fine. Remove the quota once it reaches the max number of
+#                     files and try adding more files, verify if set quota is removed. Repeat the procedure for few more
+#                     times.
+#   CEPH-83573402     Test to validate the quota.max_bytes
+#                     Create a FS and create 10 directories and mount them on kernel client and fuse client
+#                     Set max bytes quota to a number(say 5gb) and add up to that number of files to that directory and
+#                     verify if the set quota limit is working fine.
+#                     Similarly set different limit on different directories and verify quota.
+#   CEPH-83573401     Test to validate the increase in quota limit once it reaches the max limit. (bytes)
+#                     Create a FS and create 10 directories and mount them on kernel client and fuse client(5 mounts
+#                     each). Set max bytes quota to a number(say 1Gb) and fill data until it reaches the limit and
+#                     verify if the set quota limit is working fine.
+#                     Increase the set quota limit to more that what was set earlier and
+#                     fill more data and verify. Similarly set different limit on different directories, increase
+#                     the limit and verify it’s functionality and verify quota.
+#   CEPH-83573407     Negative : Test to validate the decrease in quota limit once it reaches the max limit. (bytes)
+#                     Create a FS and create 10 directories and mount them on kernel client and fuse client
+#                     Set max bytes quota to a number(say 1Gb) and fill data until it reaches the limit and
+#                     verify if the set quota limit is working fine.
+#                     Try setting the quota limit to lesser than what was set
+#                     earlier, setting quota lesser that the space occupied shouldn’t be allowed. Repeat the same
+#                     procedures for 5-10 times.
+#   CEPH-83573409     Test to validate the removal of quota_max_bytes
+#                     Create a FS and create 10 directories and mount them on kernel client and fuse client
+#                     Set max bytes quota to a number and fill data until it reaches the limit,verify if the set
+#                     quota limit is working fine. Remove the quota once it reaches the max bytes and try adding more
+#                     data, verify if set quota is removed. Repeat the procedure for few more times.
+#   CEPH-83573408     Test to validate the quota remains intact even after rebooting the Node.
+#                     Create a FS and create 10 directories and mount them on kernel client and fuse client(5 mounts
+#                     each). Set max bytes quota to a number(say 1Gb) and also set max files quota and verify if
+#                     the set quota limit is working fine by filling max number of files and also by filling data to reach
+#                     the max limit. Reboot the node , once the node is up verify if the set quota remains or not.
+#   CEPH-83573406     Test to validate the combination of quota_max_bytes and quota_max_files
+#                     Create a FS and create 10 directories and mount them on kernel client and fuse client
+#                     Set max bytes quota to a number(say 1Gb) and also set max files quota  and verify if the set
+#                     quota limit is working fine by filling max number of files and also by filling data to reach max
+#                     limit. Increase the limit to higher number and add data and files again. Repeat this for few more
+#                     times.
+#=======================================================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                registry-url: registry.redhat.io
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+      polarion-id: ~
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+        node: node7
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      name: Files-quota-test
+      module: quota.quota_files.py
+      polarion-id: CEPH-83573399
+      desc: Tests the file attributes on the directory
+      abort-on-fail: false
+  - test:
+        name: Files-quota-increase-test
+        module: quota.quota_files_increase.py
+        polarion-id: CEPH-83573400
+        desc: Tests the increase of file attributes  on the directory
+        abort-on-fail: false
+  - test:
+      name: Files-quota-decrease-test
+      module: quota.quota_files_decrease.py
+      polarion-id: CEPH-83573403
+      desc: Tests the increase of file attributes  on the directory
+      abort-on-fail: false
+  - test:
+      name: Files-quota-remove-test
+      module: quota.quota_files_remove.py
+      polarion-id: CEPH-83573405
+      desc: Tests the remove of file attributes on the directory
+      abort-on-fail: false
+  - test:
+        name: Bytes-quota-test
+        module: quota.quota_bytes.py
+        polarion-id: CEPH-83573402
+        desc: Tests the Byte attributes on the directory
+        abort-on-fail: false
+  - test:
+      name: Bytes-quota-increase-test
+      module: quota.quota_bytes_increase.py
+      polarion-id: CEPH-83573401
+      desc: Tests the increase of Byte attributes  on the directory
+      abort-on-fail: false
+  - test:
+      name: Bytes-quota-decrease-test
+      module: quota.quota_bytes_decrease.py
+      polarion-id: CEPH-83573407
+      desc: Tests the decrease of Byte attributes  on the directory
+      abort-on-fail: false
+  - test:
+      name: Bytes-quota-remove-test
+      module: quota.quota_bytes_remove.py
+      polarion-id: CEPH-83573409
+      desc: Tests the remove of Byte attributes on the directory
+      abort-on-fail: false
+  - test:
+        name: Quota-Reboot-test
+        module: quota.quota_reboot.py
+        polarion-id: CEPH-83573408
+        desc: Tests the remove of Byte attributes on the directory
+        abort-on-fail: false
+  - test:
+      name: Quota-file-byte-test
+      module: quota.quota_files_bytes.py
+      polarion-id: CEPH-83573406
+      desc: Tests the file and byte attributes on the directory
+      abort-on-fail: false
