@@ -169,7 +169,6 @@ tests:
            pg_num: 1
            pg_num_max: 1
            pool_type: replicated
-      comments: "8.1 bug-2338097"
 
   - test:
       name: Upgrade cluster to 7.1z2 ceph version
