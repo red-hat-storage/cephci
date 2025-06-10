@@ -87,8 +87,8 @@ def run(ceph_cluster, **kw):
         fs_util.kernel_mount([client1], test_mount_point, ",".join(mon_node_ips))
         fs_util.kernel_mount([client1], scratch_mount_point, ",".join(mon_node_ips))
         # create subdirectory in the mounted directory
-        client1.exec_command(sudo=True, cmd=f"mkdir {test_mount_point}/aa")
-        client1.exec_command(sudo=True, cmd=f"mkdir {scratch_mount_point}/bb")
+        client1.exec_command(sudo=True, cmd=f"mkdir {test_mount_point}/{rand}_a")
+        client1.exec_command(sudo=True, cmd=f"mkdir {scratch_mount_point}/{rand}_b")
         # get admin key
         admin_key, _ = client1.exec_command(
             sudo=True, cmd="ceph auth get-key client.admin"
@@ -97,8 +97,8 @@ def run(ceph_cluster, **kw):
         export TEST_DIR={test_mount_point}
         export SCRATCH_MNT={scratch_mount_point}
         export FSTYP=ceph
-        export TEST_DEV={mon_node_ips[0]}:/aa
-        export SCRATCH_DEV={mon_node_ips[1]}:/bb
+        export TEST_DEV={mon_node_ips[0]}:/{rand}_a
+        export SCRATCH_DEV={mon_node_ips[1]}:/{rand}_b
 
         COMMON_OPTIONS="name=admin"
         COMMON_OPTIONS+=",secret={admin_key}"
