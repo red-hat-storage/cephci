@@ -35,6 +35,7 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
+        client1 = clients[0]
         log.info("checking Pre-requisites")
         if len(clients) < 1:
             log.error(
@@ -42,23 +43,21 @@ def run(ceph_cluster, **kw):
             )
             return 1
         log.info("Installing required packages for make")
-        clients[0].exec_command(
-            sudo=True, cmd='dnf groupinstall "Development Tools" -y'
-        )
+        client1.exec_command(sudo=True, cmd='dnf groupinstall "Development Tools" -y')
         fs_util_v1.prepare_clients(clients, build)
         fs_util_v1.auth_list(clients)
         default_fs = "cephfs" if not erasure else "cephfs-ec"
         # if "cephfs" does not exsit, create it
-        fs_details = fs_util_v1.get_fs_info(clients[0], default_fs)
+        fs_details = fs_util_v1.get_fs_info(client1, default_fs)
         if not fs_details:
-            fs_util_v1.create_fs(clients[0], default_fs)
+            fs_util_v1.create_fs(client1, default_fs)
         subvolume_group_name = "subvol_group1"
         subvolume_name = "subvol"
         subvolumegroup = {
             "vol_name": default_fs,
             "group_name": subvolume_group_name,
         }
-        fs_util_v1.create_subvolumegroup(clients[0], **subvolumegroup)
+        fs_util_v1.create_subvolumegroup(client1, **subvolumegroup)
         subvolume_list = [
             {
                 "vol_name": default_fs,
@@ -72,7 +71,7 @@ def run(ceph_cluster, **kw):
             },
         ]
         for subvolume in subvolume_list:
-            fs_util_v1.create_subvolume(clients[0], **subvolume)
+            fs_util_v1.create_subvolume(client1, **subvolume)
 
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
@@ -82,12 +81,12 @@ def run(ceph_cluster, **kw):
 
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
         mon_node_ips = fs_util_v1.get_mon_node_ips()
-        subvol_path_kernel, rc = clients[0].exec_command(
+        subvol_path_kernel, rc = client1.exec_command(
             sudo=True,
             cmd=f"ceph fs subvolume getpath {default_fs} {subvolume_name}_1 {subvolume_group_name}",
         )
         fs_util_v1.kernel_mount(
-            [clients[0]],
+            [client1],
             kernel_mounting_dir_1,
             ",".join(mon_node_ips),
             sub_dir=f"{subvol_path_kernel.strip()}",
@@ -95,12 +94,12 @@ def run(ceph_cluster, **kw):
         )
 
         fuse_mounting_dir_1 = f"/mnt/cephfs_fuse{mounting_dir}_1/"
-        subvol_path_fuse, rc = clients[0].exec_command(
+        subvol_path_fuse, rc = client1.exec_command(
             sudo=True,
             cmd=f"ceph fs subvolume getpath {default_fs} {subvolume_name}_2 {subvolume_group_name}",
         )
         fs_util_v1.fuse_mount(
-            [clients[0]],
+            [client1],
             fuse_mounting_dir_1,
             extra_params=f" -r {subvol_path_fuse.strip()} --client_fs {default_fs}",
         )
@@ -119,18 +118,18 @@ def run(ceph_cluster, **kw):
                 f"cd {directory}fsstress/ && wget {fsstress_url}",
                 f"chmod 777 {directory}fsstress/fsstress.sh",
             ]
-            run_commands(clients[0], commands)
+            run_commands(client1, commands)
         iterations = 50
         log.info(
             f"run fsstress on kernel and fuse in parallel for {iterations} iterations"
         )
         for _ in range(iterations):
             for directory in [kernel_mounting_dir_1, fuse_mounting_dir_1]:
-                clients[0].exec_command(
+                client1.exec_command(
                     sudo=True, cmd=f"sh {directory}fsstress/fsstress.sh"
                 )
                 time.sleep(10)
-                clients[0].exec_command(
+                client1.exec_command(
                     sudo=True, cmd=f"rm -rf {directory}fsstress/fsstress/"
                 )
             time.sleep(10)
@@ -142,16 +141,16 @@ def run(ceph_cluster, **kw):
     finally:
         log.error("Clean up the system")
         fs_util_v1.client_clean_up(
-            "umount", kernel_clients=[clients[0]], mounting_dir=kernel_mounting_dir_1
+            "umount", kernel_clients=[client1], mounting_dir=kernel_mounting_dir_1
         )
 
         fs_util_v1.client_clean_up(
-            "umount", fuse_clients=[clients[0]], mounting_dir=fuse_mounting_dir_1
+            "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir_1
         )
 
         for subvolume in subvolume_list:
-            fs_util_v1.remove_subvolume(clients[0], **subvolume)
+            fs_util_v1.remove_subvolume(client1, **subvolume)
 
         fs_util_v1.remove_subvolumegroup(
-            clients[0], default_fs, subvolume_group_name, force=True
+            client1, default_fs, subvolume_group_name, force=True
         )

@@ -56,8 +56,7 @@ def run(ceph_cluster, **kw):
             out, rc = nfs_client[0].exec_command(
                 sudo=True, cmd="ceph fs ls | awk {' print $2'} "
             )
-            fs_name = out.rstrip()
-            fs_name = fs_name.strip(",")
+            fs_name = out.strip().splitlines()[0].rstrip(",")
             nfs_export_name = "/export1"
             path = "/"
             nfs_server_name = nfs_server[0].node.hostname
