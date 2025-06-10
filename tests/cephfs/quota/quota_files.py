@@ -78,7 +78,7 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True,
             cmd=f"rm -rf {root_folder_fuse_mount}*;mkdir {root_folder_fuse_mount}test_fuse;",
-            timeout=600,
+            timeout=900,
         )
         fs_util.set_quota_attrs(
             clients[0], 20, 10000000, f"{root_folder_fuse_mount}test_fuse"
