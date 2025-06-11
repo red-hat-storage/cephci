@@ -1605,25 +1605,25 @@ class RadosOrchestrator:
 
         # If the OSD is stopped and started multiple times, the fail-count can increase
         # and the service cannot come up, without resetting the fail-count of the service.
+        service_name = f"ceph-{cluster_fsid}@osd.{target}.service"
 
         # Executing command to reset the fail count on the host and sleeping for 5 seconds
-        cmd = "systemctl reset-failed"
+        cmd = f"systemctl reset-failed {service_name}"
         host.exec_command(sudo=True, cmd=cmd)
-        time.sleep(5)
+        time.sleep(15)
 
         # Executing command to perform desired action.
-        cmd = f"systemctl {action} ceph-{cluster_fsid}@osd.{target}.service"
+        cmd = f"systemctl {action} {service_name}"
         log.info(
             f"Performing {action} on osd-{target} on host {host.hostname}. Command {cmd}"
         )
-        host.exec_command(sudo=True, cmd=cmd)
+        host.exec_command(sudo=True, cmd=cmd, check_ec=False)
         # verifying the osd state
         start_time = datetime.datetime.now()
         timeout_time = start_time + datetime.timedelta(seconds=timeout)
         time.sleep(5)
 
         systemctl_timeout = 120
-        service_name = f"ceph-{cluster_fsid}@osd.{target}.service"
         status_command = f"systemctl is-active {service_name}"
         for _ in range(3):
             status_output, _, _, _ = host.exec_command(

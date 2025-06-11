@@ -68,6 +68,7 @@ tests:
                   placement:
                     label: osd
                   spec:
+                    method: raw
                     data_devices:
                       rotational: 1
                       limit: 3
