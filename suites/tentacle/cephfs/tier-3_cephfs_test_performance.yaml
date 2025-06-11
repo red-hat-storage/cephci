@@ -1,0 +1,215 @@
+---
+#=======================================================================================================================
+# Tier-level: 3
+# Test-Suite: cephfs_test_performance
+# Conf file : conf/pacific/cephfs/tier-2_cephfs_9-node-cluster.yaml
+# Description - This test suite contains tests which covers cephfs performance scenarios
+# Test-Case Covered:
+  # CEPH-10560 - CephFS performance between Fuse and kernel client.
+  # CEPH-11220 - Mount CephFS on multiple clients, perform write from one client and read the
+  #               same data from other clients
+  # CEPH-11221 - Mount CephFS on multiple clients and run Stress IO from all clients on same directory
+  # CEPH-11222 - Mount CephFS on multiple clients and run Stress IO from all clients on different directories
+#=======================================================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      polarion-id:
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:          # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-data-ec
+                - "64"
+                - erasure
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - create
+                - cephfs-metadata
+                - "64"
+          - config:
+              command: shell
+              args:
+                - ceph
+                - osd
+                - pool
+                - set
+                - cephfs-data-ec
+                - allow_ec_overwrites
+                - "true"
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - ceph
+                - fs
+                - new
+                - cephfs-ec
+                - cephfs-metadata
+                - cephfs-data-ec
+                - --force
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:          # arguments to ceph orch
+                verbose: true
+              pos_args:
+                - cephfs              # name of the filesystem
+              args:
+                placement:
+                  label: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node8
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node9
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node10
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node11
+      desc: "Configure the Cephfs client system 4"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  - test:
+      name: CephFS performance between Fuse and kernel client.
+      module: cephfs_perf.fuse_kernel_performance.py
+      polarion-id: CEPH-10560
+      desc: CephFS performance between Fuse and kernel client.
+      abort-on-fail: false
+  - test:
+      name: CephFS-IO Read and Write from 2 different Clients
+      module: cephfs_perf.cephfs_io_read_write_from_diff_clients.py
+      polarion-id: CEPH-11220
+      desc: Mount CephFS on multiple clients, read and write same file from 2 different clients.
+      abort-on-fail: false
+  - test:
+      name: CephFS-IO Read and Write from multiple different clients
+      module: cephfs_perf.cephfs_io_read_write_from_multiple_clients.py
+      polarion-id: CEPH-11221
+      desc: Mount CephFS on multiple clients, perform IO ,fill cluster upto 30%, read and write from multiple clients
+      abort-on-fail: false
+  - test:
+      name: cephfs-stressIO
+      module: cephfs_perf.cephfs_stress_io_from_multiple_clients.py
+      polarion-id: CEPH-11222
+      config:
+        num_of_osds: 12
+      desc: Mount CephFS on multiple clients,
+      abort-on-fail: false

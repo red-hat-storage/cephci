@@ -1,0 +1,344 @@
+---
+#=======================================================================================================================
+# Tier-level: 2
+# Test-Suite: tier-2_cephfs_test-nfs.yaml
+# Conf file : conf/pacific/cephfs/tier-2_cephfs_9-node-cluster
+# Test-Case Covered:
+# CEPH-83574028 - Ensure the path of the nfs export is displayed properly.
+# CEPH-83574024 - Ensure Snapshot and cloning works on nfs exports
+# CEPH-83574027 - Ensure creation of Subvolgroups, subvolumes works on NFS exports and run IO from nfs clients
+# CEPH-83574003 - Export the nfs share with cli with RO access
+# CEPH-83574015 - verify if nfs cluster can be deleted. and recreate with the same name works.
+# CEPH-83574022 - Create NFS cluster with 2 Nodes. 1 nfs daemon per node and Ensure the exports are accessible via
+#                 all the NFS nodes in the cluster. and has same data
+# CEPH-83574026 - zip unzip files continuously on a nfs share
+# CEPH-83573993 - Export the nfs share with cli using an existing path created using subvolume
+# CEPH-11309 - Export and import data between NFS and CephFS
+# CEPH-11312 - Test data integrity between cephfs & nfs mounts
+# CEPH-83573995 - Create cephfs nfs export on existing path
+# CEPH-11310 -  Run IOs by mounting same subvolume with all the three mounts
+# CEPH-11314 - Backup and restore data using existing NFS backup tools
+# CEPH-83573992 - Verifying ceph nfs ls export with --detailed option and info with cluster_id
+# CEPH-83574013 - nfs cluster host changes and verification
+# CEPH-83575825 - NFS  File Operations: File/Directory copy b/w local FS and NFS and verify the data integrity
+# CEPH-83575937 - File Operations - File attributes changes and validate whether the same is retained after moving
+#                  b/w nfs mounts and local fs
+#=======================================================================================================================
+tests:
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        steps:
+          -
+            config:
+              args:
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+              base_cmd_args:
+                verbose: true
+              command: bootstrap
+              service: cephadm
+          -
+            config:
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+              command: add_hosts
+              service: host
+          -
+            config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          -
+            config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
+          -
+            config:
+              args:
+                all-available-devices: true
+              command: apply
+              service: osd
+          -
+            config:
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+              command: shell
+          -
+            config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - ceph
+                - fs
+                - set
+                - cephfs
+                - max_mds
+                - "2"
+              command: shell
+          - config:
+              args:
+                - ceph
+                - config
+                - set
+                - mds
+                - defer_client_eviction_on_laggy_osds
+                - "false"
+              command: shell
+        verify_cluster_health: true
+      desc: "Execute the cluster deployment workflow."
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: "cluster deployment"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.1
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node8
+      desc: "Configure the Cephfs client system 1"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.2
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node9
+      desc: "Configure the Cephfs client system 2"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.3
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node10
+      desc: "Configure the Cephfs client system 3"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      config:
+        command: add
+        copy_admin_keyring: true
+        id: client.4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        node: node11
+      desc: "Configure the Cephfs client system 4"
+      destroy-cluster: false
+      module: test_client.py
+      name: "configure client"
+  -
+    test:
+      abort-on-fail: true
+      desc: "test cephfs nfs export path"
+      module: cephfs_nfs.nfs_export_path.py
+      name: "cephfs nfs export path"
+      polarion-id: "CEPH-83574028"
+  -
+    test:
+      abort-on-fail: false
+      desc: "test cephfs nfs snapshot clone operations"
+      module: cephfs_nfs.nfs_snaphshot_clone.py
+      name: "cephfs nfs snapshot clone operations"
+      polarion-id: "CEPH-83574024"
+  -
+    test:
+      abort-on-fail: false
+      desc: "test cephfs nfs subvolume & subvolumegroup operations"
+      module: cephfs_nfs.nfs_subvolume_subvolumegroup.py
+      name: "cephfs nfs subvolume & subvolumegroup operations"
+      polarion-id: "CEPH-83574027"
+  -
+    test:
+      abort-on-fail: false
+      desc: "test cephfs nfs read only export"
+      module: cephfs_nfs.read_only_nfs_export.py
+      name: "cephfs nfs read only export"
+      polarion-id: "CEPH-83574003"
+  -
+    test:
+      abort-on-fail: false
+      desc: "test recreation of cephfs nfs cluster with same name"
+      module: cephfs_nfs.recreate_same_name_nfs.py
+      name: "recreate same name nfs cluster"
+      polarion-id: "CEPH-83574015"
+  -
+    test:
+      abort-on-fail: false
+      desc: "test creation of 2 node nfs cluster"
+      module: cephfs_nfs.2_node_nfs.py
+      name: "2 node nfs cluster"
+      polarion-id: "CEPH-83574022"
+  -
+    test:
+      abort-on-fail: false
+      desc: "test zipping & unzipping files on nfs export continuously"
+      module: cephfs_nfs.zip_unzip_files_nfs.py
+      name: "zipping & unzipping files on nfs export"
+      polarion-id: "CEPH-83574026"
+  -
+    test:
+      abort-on-fail: false
+      desc: "test cephfs nfs export for cephfs subvolume"
+      module: cephfs_nfs.subvolume_export.py
+      name: "cephfs nfs export for subvolume"
+      polarion-id: "CEPH-83573993"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Create cephfs nfs export on non-existing directory"
+      module: cephfs_nfs.nfs_non_exist_export_path.py
+      name: "Create cephfs nfs export on non-existing directory"
+      polarion-id: "CEPH-83573669"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Export and import data between NFS and CephFS"
+      module: cephfs_nfs.move_data_bw_nfs_and_cephfs_mounts.py
+      name: "Move Data bw nfs and cephfs exports"
+      polarion-id: "CEPH-11309"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Test data integrity between cephfs & nfs mounts"
+      module: cephfs_nfs.test_data_integrity_nfs_cephfs_mounts.py
+      name: "data integrity between cephfs & nfs mounts"
+      polarion-id: "CEPH-11312"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Create cephfs nfs export on existing path"
+      module: cephfs_nfs.existing_path_nfs_export.py
+      name: "existing path cephfs nfs export"
+      polarion-id: "CEPH-83573995"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Run IOs by mounting same subvolume with all the three mounts"
+      module: cephfs_nfs.nfs_fuse_kernel_same_subvolume.py
+      name: "Mount same volume on fuse,kernel and nfs and runIOs"
+      polarion-id: "CEPH-11310"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Backup and restore data using existing NFS backup tools"
+      module: cephfs_nfs.data_backup_restore_bw_nfs_and_local_mounts.py
+      name: "backup and restore data bw nfs exports and local dir"
+      polarion-id: "CEPH-11314"
+  -
+    test:
+      abort-on-fail: false
+      desc: "Verifying ceph nfs ls export with --detailed option and info with cluster_id"
+      module: cephfs_nfs.nfs_info_cluster_id_and_ls_export_detailed.py
+      name: "nfs ls export verification and info with cluster_id"
+      polarion-id: "CEPH-83573992"
+      comments: "No Clarity on the implementation"
+  - test:
+      abort-on-fail: false
+      desc: "Apply various number of hosts to nfs cluster and verify the changes"
+      module: cephfs_nfs.nfs_update_cluster_node_changes.py
+      name: "nfs cluster host changes and verification"
+      polarion-id: "CEPH-83574013"
+  - test:
+      abort-on-fail: false
+      desc: "test cephfs nfs with io and network failures"
+      module: cephfs_nfs.nfs_io_network_failures.py
+      name: "cephfs nfs with io and network failures"
+      polarion-id: "CEPH-83574020"
+  - test:
+      abort-on-fail: false
+      desc: "test cephfs nfs mount with fstab entry"
+      module: cephfs_nfs.nfs_mount_with_fstab.py
+      name: "cephfs nfs mount with fstab entry"
+      polarion-id: "CEPH-83574025"
+  - test:
+      abort-on-fail: false
+      desc: "test cephfs nfs RO and RW export"
+      module: cephfs_nfs.nfs_ro_rw_access.py
+      name: "cephfs nfs RO and RW export"
+      polarion-id: "CEPH-83574001"
+  - test:
+      abort-on-fail: false
+      desc: "test cephfs nfs RO and RW export"
+      module: cephfs_nfs.nfs_export_config.py
+      name: "cephfs nfs export creation using config file"
+      polarion-id: "CEPH-83574008"
+  - test:
+      abort-on-fail: false
+      desc: "test cephfs nfs config reset"
+      module: cephfs_nfs.nfs_config_reset.py
+      name: "cephfs nfs export creation using config file"
+      polarion-id: "CEPH-83573999"
+  - test:
+      abort-on-fail: false
+      desc: "modifying_nfs_cluster_invalid_value"
+      module: cephfs_nfs.modifying_nfs_cluster_invalid_value.py
+      name: "modifying_nfs_cluster_invalid_value"
+      polarion-id: "CEPH-83574014"
+  - test:
+      abort-on-fail: false
+      desc: "nfs_file_transfer_bw_nfs_and_localfs"
+      module: cephfs_nfs.test_cephfs_nfs_transfer_file_bw_nfs_and_localfs.py
+      name: "nfs_file_transfer_bw_nfs_and_localfs"
+      polarion-id: "CEPH-83575825"
+  - test:
+      abort-on-fail: false
+      desc: "nfs_file_attributes_retention_bw_nfs_and_localfs"
+      module: cephfs_nfs.test_cephfs_nfs_file_attributes_retention.py
+      name: "nfs_file_attributes_retention_bw_nfs_and_localfs"
+      polarion-id: "CEPH-83575937"
+  - test:
+      abort-on-fail: false
+      desc: "nfs_multiple_export_using_single_conf"
+      module: cephfs_nfs.nfs_multiple_export_using_single_conf.py
+      name: "nfs_multiple_export_using_single_conf"
+      polarion-id: "CEPH-83575082"
