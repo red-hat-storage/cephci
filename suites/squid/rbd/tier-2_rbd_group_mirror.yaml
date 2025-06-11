@@ -316,3 +316,43 @@ tests:
               size: 0
               mode: image
               mirror_level: group
+
+  - test:
+      abort-on-fail: true
+      desc: >
+        Verify group level consistency after primary site
+        disaster during data syncing
+      name: >
+        Verify group level data consistency
+        on secondary after primary site disaster
+      module: test_rbd_group_consistency.py
+      polarion-id: CEPH-83613291
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 100M
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 100M
+              mode: image
+              mirror_level: group
+            io_small:
+              io-type: write
+              io-size_init: 20M
+              io_size: 40M
+              io-threads: 16
+            io_large:
+              io-type: write
+              io-size_init: 1G
+              io_size: 9G
+              io-threads: 16
