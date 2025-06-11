@@ -24,6 +24,7 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         build = config.get("build", config.get("rhbuild"))
+        num_of_osds = config.get("num_of_osds")
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         log.info("checking Pre-requisites")
@@ -93,7 +94,7 @@ def run(ceph_cluster, **kw):
             client1,
             num_of_osds,
             build,
-            child_dir,
+            [child_dir],
         )
 
         attr_util.validate_charmap(
