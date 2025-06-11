@@ -476,27 +476,6 @@ tests:
         pool_configs_path: "conf/squid/rados/test-confs/pool-configurations.yaml"
       desc: Verify that scrub & deep-scrub logs are captured in OSD logs
 
-#  - test:
-#      name: Autoscaler test - pool target size ratio
-#      module: pool_tests.py
-#      polarion-id: CEPH-83573424
-#      config:
-#        verify_pool_target_ratio:
-#          configurations:
-#            pool-1:
-#              profile_name: ec86_10
-#              pool_name: ec86_pool10
-#              pool_type: erasure
-#              pg_num: 32
-#              k: 2
-#              m: 2
-#              crush-failure-domain: host
-#              plugin: jerasure
-#              target_size_ratio: 0.8
-#              rados_write_duration: 50
-#              rados_read_duration: 10
-#              delete_pool: true
-#      desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
 
 #  - test:
 #      name: Autoscaler test - pool pg_num_min
