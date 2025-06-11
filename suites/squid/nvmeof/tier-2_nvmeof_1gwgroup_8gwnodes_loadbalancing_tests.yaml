@@ -424,7 +424,7 @@ tests:
         cleanup:
           - pool
           - gateway
-      desc: Warning at maximum number of namespaces reached at subsystem.
+      desc: Test load balancing for namespace addition and deletion with same LB group.
       destroy-cluster: false
       module: test_ceph_nvmeof_loadbalancing.py
       name: Test load balancing for namespace addition and deletion with same LB group.
