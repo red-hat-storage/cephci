@@ -944,6 +944,40 @@ class FscryptUtils(object):
             return 1
         return 0
 
+    def validate_fscrypt_with_lock_unlock(
+        self, mnt_client, mnt_pt, encrypt_path, encrypt_params
+    ):
+        """
+        This method validates file encryption in lock and unlock state.
+        Required:
+        mnt_client : Client object of mountpoint
+        mnt_pt : FScrypt setup mountpoint
+        encrypt_path : Encrypted path to be validated
+        encrypt_params : Dict object with encryption params as below,
+        encrypt_params : { 'protector_id':protector_id,
+                           'key' : key}
+        Returns:
+        0 if suceeds,1 if fails
+        """
+        validate_status = 0
+        file_list = self.get_file_list(mnt_client, encrypt_path)
+        log.info("Fscrypt lock on %s", encrypt_path)
+        validate_status = self.lock(mnt_client, encrypt_path)
+        validate_status += self.verify_encryption(mnt_client, encrypt_path, file_list)
+        unlock_args = {"key": encrypt_params["key"]}
+        protector_id = encrypt_params["protector_id"]
+        log.info("FScrypt unlock on %s", encrypt_path)
+        validate_status += self.unlock(
+            mnt_client, encrypt_path, mnt_pt, protector_id, **unlock_args
+        )
+        if not self.verify_encryption(mnt_client, encrypt_path, file_list):
+            log.error("Files are encrypted after unlock")
+            validate_status += 1
+        if validate_status > 0:
+            log.error("FScrypt verify on mountpoint %s failed", mnt_pt)
+            return 1
+        return 0
+
     # HELPER ROUTINES #
     def get_file_list(self, client, path):
         """
