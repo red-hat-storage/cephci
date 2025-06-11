@@ -79,7 +79,7 @@ tests:
           - ceph-common
           - samba-client
           - cifs-utils
-      copy_admin_keyring: true
+        copy_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
 
@@ -101,3 +101,70 @@ tests:
         path: "/"
         smb_conf:
           - vfs objects: ceph_snapshots
+
+  - test:
+      name: Verify .snap directory is accessible on share.
+      desc: Verify .snap directory is accessible on share.
+      module: smb_vss_operations.py
+      polarion-id: CEPH-83619083
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [ sv1 ]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [ share1 ]
+        path: "/"
+        cifs_mount_point: "/mnt/smb"
+        operations:
+          - access_snap
+
+  - test:
+      name: Verify snapshot creation on SMB share and list snapshots.
+      desc: Verify snapshot creation on SMB share and list snapshots.
+      module: smb_vss_operations.py
+      polarion-id: CEPH-83620070
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [ sv1 ]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [ share1 ]
+        path: "/"
+        cifs_mount_point: "/mnt/smb"
+        snapshot: snap1
+        operations:
+          - create_snapshot
+          - list_snapshot
+
+  - test:
+      name: Update file after creating snapshot and verify the content of the file in snapshot.
+      desc: Update file after creating snapshot and verify the content of the file in snapshot.
+      module: smb_vss_operations.py
+      polarion-id: CEPH-83620072
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [ sv1 ]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [ share1 ]
+        path: "/"
+        cifs_mount_point: "/mnt/smb"
+        snapshot: snapshot1
+        operations:
+          - create_file
+          - create_snapshot
+          - list_snapshot
+          - update_file
+          - verify_snapshot_content
