@@ -19,18 +19,18 @@ tests:
         verify_cluster_health: true
         steps:
           - config:
-              rhcs-version: 7.1
-              release: rc
-              command: bootstrap
-              orphan-initial-daemons: true
-              skip-monitoring-stack: true
               service: cephadm
+              command: bootstrap
               base_cmd_args:
                 verbose: true
               args:
+                rhcs-version: 7.1
+                release: rc
                 registry-url: registry.redhat.io
                 mon-ip: node1
                 allow-fqdn-hostname: true
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
           - config:
               command: add_hosts
               service: host
