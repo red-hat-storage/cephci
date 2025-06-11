@@ -225,6 +225,7 @@ tests:
       polarion-id: CEPH-83574439
       abort-on-fail: false
 
+# TBD : Enhancement might be needed for this test
   - test:
       name: Verify stretch Cluster
       module: stretch_cluster.py
