@@ -163,9 +163,19 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
             _conn_cmd = {**_cmd_args, **conn_port}
             LOG.debug(initiator.connect(**_conn_cmd))
             targets = initiator.list_spdk_drives()
+            rhel_version = initiator.distro_version()
             if not targets:
                 raise Exception(f"NVMe Targets not found on {client.hostname}")
-            _target = targets[0]["DevicePath"]
+            if rhel_version == "9.5":
+                _target = targets[0]["DevicePath"]
+            elif rhel_version == "9.6":
+                paths = [
+                    f"/dev/{ns['NameSpace']}"
+                    for device in targets
+                    for subsys in device.get("Subsystems", [])
+                    for ns in subsys.get("Namespaces", [])
+                ]
+                _target = paths[0]
             if not verify:
                 return _target
             client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
@@ -353,9 +363,19 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
         targets = initiator.list_spdk_drives()
+        rhel_version = initiator.distro_version()
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
-        _target = targets[0]["DevicePath"]
+        if rhel_version == "9.5":
+            _target = targets[0]["DevicePath"]
+        elif rhel_version == "9.6":
+            paths = [
+                f"/dev/{ns['NameSpace']}"
+                for device in targets
+                for subsys in device.get("Subsystems", [])
+                for ns in subsys.get("Namespaces", [])
+            ]
+            _target = paths[0]
 
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
         client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
@@ -447,9 +467,19 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
         targets = initiator.list_spdk_drives()
+        rhel_version = initiator.distro_version()
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
-        _target = targets[0]["DevicePath"]
+        if rhel_version == "9.5":
+            _target = targets[0]["DevicePath"]
+        elif rhel_version == "9.6":
+            paths = [
+                f"/dev/{ns['NameSpace']}"
+                for device in targets
+                for subsys in device.get("Subsystems", [])
+                for ns in subsys.get("Namespaces", [])
+            ]
+            _target = paths[0]
 
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
         client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
@@ -464,9 +494,19 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
         initiator.configure()
         LOG.debug(initiator.connect(**_cmd_args))
         targets = initiator.list_spdk_drives()
+        rhel_version = initiator.distro_version()
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
-        _target = targets[0]["DevicePath"]
+        if rhel_version == "9.5":
+            _target = targets[0]["DevicePath"]
+        elif rhel_version == "9.6":
+            paths = [
+                f"/dev/{ns['NameSpace']}"
+                for device in targets
+                for subsys in device.get("Subsystems", [])
+                for ns in subsys.get("Namespaces", [])
+            ]
+            _target = paths[0]
         client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
         client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
         LOG.info("Validation of CEPH-83576087 is successful.")
@@ -548,9 +588,19 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
         targets = initiator.list_spdk_drives()
+        rhel_version = initiator.distro_version()
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
-        _target = targets[0]["DevicePath"]
+        if rhel_version == "9.5":
+            _target = targets[0]["DevicePath"]
+        elif rhel_version == "9.6":
+            paths = [
+                f"/dev/{ns['NameSpace']}"
+                for device in targets
+                for subsys in device.get("Subsystems", [])
+                for ns in subsys.get("Namespaces", [])
+            ]
+            _target = paths[0]
 
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
         client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
@@ -656,9 +706,19 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
         targets = initiator.list_spdk_drives()
+        rhel_version = initiator.distro_version()
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
-        _target = targets[0]["DevicePath"]
+        if rhel_version == "9.5":
+            _target = targets[0]["DevicePath"]
+        elif rhel_version == "9.6":
+            paths = [
+                f"/dev/{ns['NameSpace']}"
+                for device in targets
+                for subsys in device.get("Subsystems", [])
+                for ns in subsys.get("Namespaces", [])
+            ]
+            _target = paths[0]
 
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
         client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
