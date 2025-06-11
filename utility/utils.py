@@ -1842,6 +1842,22 @@ def configure_kafka_security(rgw_node, cloud_type):
     rgw_node.exec_command(sudo=True, cmd=f"ceph orch restart {rgw_name}")
 
 
+def config_keystone(rgw_node, cloud_type):
+    """Set the keystone config option on the cluster at startup"""
+    if cloud_type == "openstack":
+        keystone_server = "http://10.0.209.121:5000"
+    elif cloud_type == "ibmc":
+        keystone_server = "http://10.245.64.4:5000"
+
+    out = rgw_node.exec_command(sudo=True, cmd="ceph orch ls | grep rgw")
+    rgw_name = out[0].split()[0]
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"ceph config set client.{rgw_name} rgw_keystone_url {keystone_server}",
+    )
+    rgw_node.exec_command(sudo=True, cmd=f"ceph orch restart {rgw_name}")
+
+
 def method_should_succeed(function, *args, **kwargs):
     """
     Wrapper function to verify the return value of executed method.
