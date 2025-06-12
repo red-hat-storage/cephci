@@ -1,0 +1,322 @@
+"""
+Module to verify :
+  -  Add or remove group mirror snapshot schedule when client is blocklisted
+
+Test case covered:
+CEPH-83613275 - Add or remove group mirror snapshot schedule when client is blocklisted
+
+Pre-requisites :
+1. Cluster must be up in 8.1 and above and running with capacity to create pool
+2. We need atleast one client node with ceph-common package,
+   conf and keyring files
+
+Test Case Flow:
+Step 1: Deploy Two ceph cluster on version 8.1 or above
+Step 2: Create RBD pool ‘pool_1’ on both sites with/without namespace
+Step 3: Enable Image mode mirroring on pool_1 on both sites
+Step 4: Bootstrap the storage cluster peers (Two-way)
+Step 5: Create 2 RBD images in pool_1
+Step 6: Add data to the images
+Step 7: Create Consistency group
+Step 8: Add Images in the consistency group
+Step 9: Enable Mirroring for the group
+Step 10: Add mirror group snapshot schedule
+Step 11: Blocklist the client
+Step 12: Add another group mirror snapshot schedule
+step 13: Removing the group mirror snapshot schedule when client is blocklisted
+step 14: Remove the client from blocklisting
+step 15: verify the snapshot schedules
+step 16: Repeat above on EC pool with or without namespace.
+Step 17: Cleanup rbd test objects like pool, images, groups etc
+"""
+
+import random
+import time
+from copy import deepcopy
+
+from ceph.rbd.initial_config import initial_mirror_config
+from ceph.rbd.utils import exec_cmd, getdict, random_string
+from ceph.rbd.workflows.cleanup import cleanup
+from ceph.rbd.workflows.group_mirror import (
+    enable_group_mirroring_and_verify_state,
+    verify_group_snapshot_ls,
+    verify_group_snapshot_schedule,
+    wait_for_idle,
+)
+from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
+from ceph.rbd.workflows.namespace import enable_namespace_mirroring
+from ceph.rbd.workflows.snap_scheduling import add_snapshot_scheduling
+from utility.log import Log
+
+log = Log(__name__)
+
+
+def test_group_consistency(
+    rbd_primary,
+    rbd_secondary,
+    client_primary,
+    client_secondary,
+    primary_cluster,
+    secondary_cluster,
+    pool_types,
+    **kw,
+):
+    """
+    Test Add or remove group mirror snapshot schedule when client is blocklisted
+    Args:
+        rbd_primary: RBD object of primary cluster
+        rbd_secondary: RBD objevct of secondary cluster
+        client_primary: client node object of primary cluster
+        client_secondary: client node object of secondary cluster
+        primary_cluster: Primary cluster object
+        secondary_cluster: Secondary cluster object
+        pool_types: Replication pool or EC pool
+        **kw: any other arguments
+    """
+
+    for pool_type in pool_types:
+        rbd_config = kw.get("config", {}).get(pool_type, {})
+        multi_pool_config = deepcopy(getdict(rbd_config))
+        log.info("Running test CEPH-83613275  for %s", pool_type)
+        # FIO Params Required for ODF workload exclusively in group mirroring
+        fio = kw.get("config", {}).get("fio", {})
+        io_config = {
+            "size": fio["size"],
+            "do_not_create_image": True,
+            "num_jobs": fio["ODF_CONFIG"]["num_jobs"],
+            "iodepth": fio["ODF_CONFIG"]["iodepth"],
+            "rwmixread": fio["ODF_CONFIG"]["rwmixread"],
+            "direct": fio["ODF_CONFIG"]["direct"],
+            "invalidate": fio["ODF_CONFIG"]["invalidate"],
+            "config": {
+                "file_size": fio["size"],
+                "file_path": [
+                    "/mnt/mnt_" + random_string(len=5) + "/file",
+                    "/mnt/mnt_" + random_string(len=5) + "/file",
+                ],
+                "get_time_taken": True,
+                "operations": {
+                    "fs": "ext4",
+                    "io": True,
+                    "mount": True,
+                    "map": True,
+                },
+                "cmd_timeout": 2400,
+                "io_type": fio["ODF_CONFIG"]["io_type"],
+            },
+        }
+        for pool, pool_config in multi_pool_config.items():
+            group_config = {}
+            if "data_pool" in pool_config.keys():
+                _ = pool_config.pop("data_pool")
+            group_spec = pool_config.get("group-spec")
+            group_config.update({"group-spec": group_spec})
+
+            image_spec = []
+            for image, image_config in pool_config.items():
+                if "image" in image:
+                    if "namespace" in pool_config:
+                        pool_spec = pool + "/" + pool_config.get("namespace") + "/"
+                    else:
+                        pool_spec = pool + "/"
+                    image_spec.append(pool_spec + image)
+            if "namespace" in pool_config:
+                enable_namespace_mirroring(
+                    rbd_primary, rbd_secondary, pool, **pool_config
+                )
+
+            image_spec_copy = deepcopy(image_spec)
+            io_config["rbd_obj"] = rbd_primary
+            io_config["client"] = client_primary
+            io_config["config"]["image_spec"] = image_spec_copy
+            (io, err) = krbd_io_handler(**io_config)
+            if err:
+                raise Exception("Map, mount and run IOs failed for " + str(image_spec))
+            else:
+                log.info("Map, mount and IOs successful for " + str(image_spec))
+
+            # Enable Group Mirroring and Verify
+            enable_group_mirroring_and_verify_state(
+                rbd_primary, **{"group-spec": group_spec}
+            )
+
+            # Wait for group mirroring to complete
+            wait_for_idle(rbd_primary, **{"group-spec": group_spec})
+            log.info("Data replay state is idle for all images in the group")
+
+            snap_schedule_config = {
+                "pool": pool,
+                "image": image,
+                "level": "group",
+                "group": pool_config.get("group"),
+                "interval": "1m",
+            }
+            if "namespace" in pool_config:
+                snap_schedule_config.update({"namespace": pool_config.get("namespace")})
+
+            out, err = add_snapshot_scheduling(rbd_primary, **snap_schedule_config)
+            if err:
+                raise Exception(
+                    "Failed to add group snapshot schedule of 1m before blocklist"
+                )
+            log.info("Added group snapshot schedule of 1m before client blocklist")
+            snap_schedule_config.update({"interval": "3m"})
+            out, err = add_snapshot_scheduling(rbd_primary, **snap_schedule_config)
+            if err:
+                raise Exception("Failed to add group snapshot schedule of 3m")
+            log.info("Added group snapshot schedule of 3m before client blocklist")
+            if exec_cmd(
+                node=client_primary,
+                cmd=f"ceph osd blocklist add {client_primary.ip_address}",
+            ):
+                raise Exception(
+                    "Failed to blocklist the client %s", client_primary.ip_address
+                )
+            log.info("Client successfully blocklisted")
+
+            snap_schedule_config.update({"interval": "2m"})
+            out, err = add_snapshot_scheduling(rbd_primary, **snap_schedule_config)
+            if err:
+                raise Exception(
+                    "Failed to add group snapshot schedule of 2m after cliet blocklist"
+                )
+            log.info("Added group snapshot schedule of 2m after client blocklist")
+
+            snap_schedule_rm_config = deepcopy(snap_schedule_config)
+            snap_schedule_rm_config.update({"interval": "3m"})
+            snap_schedule_rm_config.pop("image")
+            snap_schedule_rm_config.pop("level")
+            out, err = rbd_primary.mirror.group.snapshot.schedule.remove_(
+                **snap_schedule_rm_config
+            )
+            if err:
+                raise Exception(
+                    "Failed to remove group snapshot schedule of 3m after client blocklist"
+                )
+            log.info("Removed group snapshot schedule of 3m after client blocklist")
+
+            status_spec = {
+                "pool": pool,
+                "group": pool_config.get("group"),
+                "format": "json",
+            }
+            if "namespace" in pool_config:
+                status_spec.update({"namespace": pool_config.get("namespace")})
+            else:
+                group_spec = pool + "/" + pool_config.get("group")
+
+            if verify_group_snapshot_ls(rbd_primary, group_spec, "1m", **status_spec):
+                raise Exception("Failed to verify group snapshot schedule of 1m")
+            log.info(
+                "Verified Snapshot schedule of 1m set before client blocklisting is preserved"
+            )
+
+            if verify_group_snapshot_ls(rbd_primary, group_spec, "2m", **status_spec):
+                raise Exception("Failed to verify group snapshot schedule of 2m")
+            log.info("Verified Snapshot schedule of 2m set after client blocklisting")
+
+            if exec_cmd(
+                node=client_primary,
+                cmd=f"ceph osd blocklist rm {client_primary.ip_address}",
+            ):
+                raise Exception(
+                    "Failed to remove the client %s from blocklisting",
+                    client_primary.ip_address,
+                )
+            log.info(
+                "Removed the client %s from blocklisting", client_primary.ip_address
+            )
+            time.sleep(10)
+            if verify_group_snapshot_schedule(
+                rbd_primary,
+                pool,
+                pool_config.get("group"),
+                "1m",
+                namespace=pool_config.get("namespace"),
+            ):
+                raise Exception("Failed to verify Snapshot creation as per 1m schedule")
+            if verify_group_snapshot_schedule(
+                rbd_primary,
+                pool,
+                pool_config.get("group"),
+                "2m",
+                namespace=pool_config.get("namespace"),
+            ):
+                raise Exception("Failed to verify Snapshot creation as per 2m schedule")
+
+            snap_schedule_rm_config.update({"interval": "1m"})
+            out, err = rbd_primary.mirror.group.snapshot.schedule.remove_(
+                **snap_schedule_rm_config
+            )
+            if err:
+                raise Exception("Failed to remove group snapshot schedule of 1m")
+            log.info("Removed group snapshot schedule of 1m ")
+
+            snap_schedule_rm_config.update({"interval": "2m"})
+            out, err = rbd_primary.mirror.group.snapshot.schedule.remove_(
+                **snap_schedule_rm_config
+            )
+            if err:
+                raise Exception("Failed to remove group snapshot schedule of 2m")
+            log.info("Removed group snapshot schedule of 2m")
+
+
+def run(**kw):
+    """
+    This test verifies add or remove group mirror snapshot schedule when client is blocklisted
+    Args:
+        kw: test data
+    Returns:
+        int: The return value. 0 for success, 1 otherwise
+
+    """
+    try:
+        pool_types = ["rep_pool_config", "ec_pool_config"]
+        grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
+        if not kw.get("config").get("grouptype"):
+            for pooltype in pool_types:
+                group_type = grouptypes.pop(random.randrange(len(grouptypes)))
+                kw.get("config").get(pooltype).update({"grouptype": group_type})
+                log.info("Choosing Group type on %s - %s", pooltype, group_type)
+        mirror_obj = initial_mirror_config(**kw)
+        mirror_obj.pop("output", [])
+        for val in mirror_obj.values():
+            if not val.get("is_secondary", False):
+                rbd_primary = val.get("rbd")
+                client_primary = val.get("client")
+                primary_cluster = val.get("cluster")
+            else:
+                rbd_secondary = val.get("rbd")
+                client_secondary = val.get("client")
+                secondary_cluster = val.get("cluster")
+
+        pool_types = list(mirror_obj.values())[0].get("pool_types")
+        test_group_consistency(
+            rbd_primary,
+            rbd_secondary,
+            client_primary,
+            client_secondary,
+            primary_cluster,
+            secondary_cluster,
+            pool_types,
+            **kw,
+        )
+        log.info(
+            "Test verifying add or remove group mirror snapshot schedule when client is blocklisted passed"
+        )
+    except Exception as e:
+        log.error(
+            "Test verifying add or remove group mirror snapshot schedule when client is blocklisted failed"
+            + str(e)
+        )
+        return 1
+
+    finally:
+        exec_cmd(
+            node=client_primary,
+            cmd=f"ceph osd blocklist rm {client_primary.ip_address}",
+        )
+        log.info("Removed the client %s from blocklisting", client_primary.ip_address)
+        cleanup(pool_types=pool_types, multi_cluster_obj=mirror_obj, **kw)
+
+    return 0
