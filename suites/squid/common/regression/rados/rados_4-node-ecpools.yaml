@@ -512,6 +512,7 @@ tests:
               pool_type: erasure
               k: 8
               m: 6
+              pg_num: 32
               create_rule: false
               crush-osds-per-failure-domain: 4
               crush-num-failure-domains: 4

@@ -9,6 +9,7 @@ Tests included:
 """
 
 import datetime
+import math
 import random
 import re
 import time
@@ -514,6 +515,11 @@ def run(ceph_cluster, **kw):
         log.debug("Verifying pg_num_min on pools")
         target_configs = config["verify_pg_num_min"]["configurations"]
         try:
+            log.debug(
+                "Setting the default autoscaler mode to on, making sure that the Pool created will have "
+                "PG Autoscaler enabled on it."
+            )
+            rados_obj.configure_pg_autoscaler(default_mode="on")
             # Creating pools and starting the test
             for entry in target_configs.values():
                 log.debug(f"Creating {entry['pool_type']} pool on the cluster")
@@ -526,23 +532,41 @@ def run(ceph_cluster, **kw):
                         rados_obj.create_pool,
                         **entry,
                     )
+                time.sleep(10)
+                pg_num_min = entry.get("pg_num_min", 1)
                 rados_obj.bench_write(**entry)
-
                 endtime = datetime.datetime.now() + datetime.timedelta(seconds=180)
                 while datetime.datetime.now() < endtime:
-                    if rados_obj.set_pool_property(
+                    pg_num_on_pool = int(
+                        rados_obj.get_pool_property(
+                            pool=entry["pool_name"], props="pg_num"
+                        )["pg_num"]
+                    )
+                    log.debug("PG num on pool : %s", pg_num_on_pool)
+                    if pg_num_on_pool > 1:
+                        pg_num_min = math.ceil(pg_num_on_pool / 2)
+                        break
+                    time.sleep(5)
+
+                try:
+                    if not rados_obj.set_pool_property(
                         pool=entry["pool_name"],
                         props="pg_num_min",
-                        value=entry["pg_num_min"],
+                        value=pg_num_min,
                     ):
-                        break
-                    log.error(
-                        "Could not set the pg_min_size on the pool. Trying after 30 secs"
+                        raise Exception("Could not set the pg_min_size on the pool.")
+                except Exception as err:
+                    log.debug(
+                        "Could not set the pg_min_size on the pool. must have hit a exception"
                     )
-                    time.sleep(30)
-                else:
+                    log.debug(err)
+                if pg_num_min != int(
+                    rados_obj.get_pool_property(
+                        pool=entry["pool_name"], props="pg_num_min"
+                    )["pg_num_min"]
+                ):
                     raise Exception(
-                        f"Could not set the pg_min_size on the pool {entry['pool_name']} even after 180 secs"
+                        f"Could not set the pg_min_size on the pool {entry['pool_name']}"
                     )
 
                 rados_obj.delete_pool(pool=entry["pool_name"])
