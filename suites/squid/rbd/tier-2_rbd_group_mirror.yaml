@@ -316,3 +316,29 @@ tests:
               size: 0
               mode: image
               mirror_level: group
+
+  - test:
+      abort-on-fail: true
+      desc: Verify negative test cases Consistency group
+      name: Test negative test cases Consistency Group Mirroring
+      module: test_group_mirror_neg_case.py
+      polarion-id: CEPH-83614238
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
