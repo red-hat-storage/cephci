@@ -554,7 +554,6 @@ class HighAvailability:
 
                         # Find optimized path
                         if active:
-                            end_counter, end_time = get_current_timestamp()
                             LOG.info(
                                 f"{list(active[0])} is new and only Active GW for failed {hostname}"
                             )
@@ -567,6 +566,7 @@ class HighAvailability:
                         f"[ {hostname} ] Scale down of NVMeofGW service failed after 60s timeout.."
                     )
 
+            end_counter, end_time = get_current_timestamp()
             LOG.info(
                 f"[ {hostname} ] Total time taken to scale down - {end_counter - start_counter} seconds"
             )
