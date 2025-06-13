@@ -138,7 +138,7 @@ def group_mirror_status_verify(
     secondary_state,
     *,
     global_id=False,
-    **group_kw
+    **group_kw,
 ):
     """
     Verify Group mirror Status is matching the expected state passed as argument and Also
@@ -234,3 +234,103 @@ def wait_for_idle(rbd, **group_kw):
         raise Exception(
             "Replay state is not idle for image " + image + " even after 300 seconds"
         )
+
+
+def verify_group_snapshot_schedule(rbd, pool, group, interval="1m", **kw):
+    """
+    This will verify the group snapshot rolls over when the group
+    snapshot based mirroring is enabled
+    - verifies the 'schedule ls' has the expected interval listed
+    - verifies the group snapshot gets created as per the schedule
+    Args:
+        rbd: rbd object
+        pool: pool name
+        group: group name
+        interval : this is interval and specified in min
+        kw: optional args
+    Returns:
+        0 if snapshot schedule is verified successfully
+        1 if fails
+    """
+    try:
+        namespace = kw.get("namespace", "")
+        status_spec = {"pool": pool, "group": group, "format": "json"}
+        group_spec = None
+        if namespace:
+            status_spec.update({"namespace": namespace})
+            group_spec = pool + "/" + namespace + "/" + group
+        else:
+            group_spec = pool + "/" + group
+
+        verify_group_snapshot_ls(rbd, group_spec, interval, **status_spec)
+        output, err = rbd.mirror.group.status(**status_spec)
+        if err:
+            log.error(
+                "Error while fetching mirror group status for group %s", group_spec
+            )
+            return 1
+        json_dict = json.loads(output)
+        log.info(f"Group status : \n {json_dict}")
+        snapshot_names = [i["name"] for i in json_dict.get("snapshots")]
+        log.info(f"Group snapshot_names Before : {snapshot_names}")
+        interval_int = int(interval[:-1])
+        wait_time = interval_int * 120
+        log.info("Waiting for %s sec for snapshot to be rolled over", wait_time)
+        time.sleep(wait_time)
+        output, err = rbd.mirror.group.status(**status_spec)
+        if err:
+            log.error(
+                "Error while fetching mirror group status for group %s", group_spec
+            )
+            return 1
+        json_dict = json.loads(output)
+        log.info(f"Group status : \n {json_dict}")
+        snapshot_names_1 = [i["name"] for i in json_dict.get("snapshots")]
+        log.info(f"Group snapshot_names After : {snapshot_names_1}")
+        if snapshot_names != snapshot_names_1:
+            log.info(
+                "Snapshot schedule verification successful for group %s", group_spec
+            )
+            return 0
+        log.error("Snapshot schedule verification failed for group %s", group_spec)
+        return 1
+    except Exception as e:
+        log.error(
+            "Snapshot verification failed for group %s with error %s", group_spec, e
+        )
+        return 1
+
+
+def verify_group_snapshot_ls(rbd, group_spec, interval, **status_spec):
+    """
+    This will verify the group snapshot list in the scheduler when the group
+    snapshot based mirroring is enabled
+    Args:
+        rbd: rbd object
+        group_spec: group spec
+        interval: this is interval and specified in min
+        status_spec: pool, namespace and group details
+    Returns:
+        0 if snapshot schedule is verified successfully
+        1 if fails
+    """
+    out, err = rbd.mirror.group.snapshot.schedule.ls(**status_spec)
+    if err:
+        log.error(
+            "Error while fetching snapshot schedule list for group  %s, %s",
+            group_spec,
+            err,
+        )
+        return 1
+
+    schedule_list = json.loads(out)
+    schedule_present = [
+        schedule for schedule in schedule_list if schedule["interval"] == interval
+    ]
+    if not schedule_present:
+        log.error(
+            "Snapshot schedule not listed for group %s at interval %s",
+            group_spec,
+            interval,
+        )
+        return 1
