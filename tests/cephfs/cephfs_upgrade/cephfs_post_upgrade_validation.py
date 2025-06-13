@@ -14,13 +14,15 @@ from ceph.ceph import CommandFailed
 from cli.ceph.ceph import Ceph
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
-from tests.cephfs.exceptions import NormalizationValidationError
+from tests.cephfs.exceptions import FsBaseException, NormalizationValidationError
 from tests.cephfs.lib.cephfs_attributes_lib import CephFSAttributeUtilities
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
+from tests.cephfs.lib.fscrypt_utils import FscryptUtils
 from tests.cephfs.snapshot_clone.cephfs_cg_io import CG_snap_IO
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from tests.cephfs.snapshot_clone.cg_snap_utils import CG_Snap_Utils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -1013,27 +1015,35 @@ def cg_quiesce_test(cg_quiesce_params):
         log.info(
             "Copy the contents from pre-upgrade snapshots to AFS on existing subvolumes"
         )
+
+        @retry(CommandFailed, tries=6, delay=5)
+        def get_snapshot(snap_list):
+            snap_name = random.choice(snap_list)
+            cmd = f"cd {mnt_pt}/.snap;ls -d _{snap_name}*"
+            out, rc = cg_io_client.exec_command(sudo=True, cmd=cmd)
+            if snap_name in str(out):
+                return snap_name
+            return 1
+
         for qs_member in qs_member_dict2:
             mnt_pt = qs_member_dict2[qs_member]["mount_point"]
             if qs_info.get(qs_member):
                 if qs_info[qs_member].get("snap_list"):
-                    retry_cnt = 0
                     rand_str = "".join(
                         random.choice(string.ascii_lowercase + string.digits)
                         for _ in list(range(3))
                     )
                     cmd = f"mkdir {mnt_pt}/new_dir_{rand_str};"
+                    out, _ = cg_io_client.exec_command(sudo=True, cmd=cmd)
+                    snap_list = qs_info[qs_member]["snap_list"]
+                    snap_name = get_snapshot(snap_list)
+                    if snap_name == 1:
+                        log.error("Snapshot required for restore op doesn't exist")
+                        test_fail = 1
+                        break
+                    cmd = f"cp -r {mnt_pt}/.snap/_{snap_name}*/* {mnt_pt}/new_dir_{rand_str}/"
                     out, rc = cg_io_client.exec_command(sudo=True, cmd=cmd)
-                    while retry_cnt < 5:
-                        snap_list = qs_info[qs_member]["snap_list"]
-                        snap_name = random.choice(snap_list)
-                        cmd = f"cp -r {mnt_pt}/.snap/*{snap_name}*/* {mnt_pt}/new_dir_{rand_str}/"
-                        try:
-                            out, rc = cg_io_client.exec_command(sudo=True, cmd=cmd)
-                            retry_cnt = 5
-                        except BaseException as ex:
-                            if "No such file or directory" in str(ex):
-                                retry_cnt += 1
+                    log.info(out)
                     cmd = (
                         f"diff {mnt_pt}/.snap/*{snap_name}* {mnt_pt}/new_dir_{rand_str}"
                     )
@@ -1414,6 +1424,117 @@ def sv_default_validate_charmap(client1, cephfs_vol):
         return True
 
 
+def fscrypt_test(fscrypt_params):
+    """
+    Test Steps:
+    1. Verify fscrypt setup on existing mountpoints, new mountpoint on existing subvolume.
+    2. Verify fscrypt setup on new subvolume
+    3. Verify enctag CRUD ops on existing subvolume
+    4. Run fscrypt basic cmds - lock,unlock and validate encryption for 1 & 2
+    """
+    config = fscrypt_params["config"]
+    vol_name = fscrypt_params.get("vol_name", "cephfs")
+    fs_util = fscrypt_params["fs_util"]
+    clients = fscrypt_params["clients"]
+    sv_info = {}
+
+    def get_client_obj(client_name):
+        for client in clients:
+            if client.node.hostname == client_name:
+                return client
+
+    for svg in config["CephFS"][vol_name]:
+        if "svg" in svg:
+            for sv in config["CephFS"][vol_name][svg]:
+                sv_data = config["CephFS"][vol_name][svg][sv]
+                if "fuse" in sv_data["mnt_pt"]:
+                    sv_info.update({sv: {}})
+                    client_name = sv_data["mnt_client"]
+                    mnt_client = get_client_obj(client_name)
+                    sv_info[sv].update(
+                        {
+                            "fuse": {
+                                "mountpoint": sv_data["mnt_pt"],
+                                "mnt_client": mnt_client,
+                            },
+                            "group_name": svg,
+                            "vol_name": vol_name,
+                        }
+                    )
+
+    # test_objs = ['existing_mountpoint','new_mountpoint_existing_subvol','new_mountpoint_new_subvol']
+    # existing_mountpoint test disabled until BZ 2371669 is addressed
+    log.info(sv_info)
+    test_objs = ["new_mountpoint_existing_subvol", "new_mountpoint_new_subvol"]
+
+    @retry((FsBaseException, CommandFailed), tries=10, delay=1)
+    def get_test_sv(sv_info):
+        sv_name = random.choice(list(sv_info.keys()))
+        group_name = sv_info[sv_name]["group_name"]
+        vol_name = sv_info[sv_name]["vol_name"]
+        cmd = f"ceph fs subvolume getpath {vol_name} {sv_name} {group_name}"
+        clients[0].exec_command(sudo=True, cmd=cmd)
+        if sv_info[sv_name].get("fuse"):
+            return sv_name
+        raise FsBaseException("Failed to get subvolume with fuse mountpoint")
+
+    for test_obj in test_objs:
+        mount_details = {}
+        log.info("Setup %s for fscrypt testing", test_obj)
+        sv_name = get_test_sv(sv_info)
+        mnt_client = sv_info[sv_name]["fuse"]["mnt_client"]
+        mnt_pt = sv_info[sv_name]["fuse"]["mountpoint"]
+        vol_name = sv_info[sv_name]["vol_name"]
+        group_name = sv_info[sv_name]["group_name"]
+        if test_obj != "existing_mountpoint":
+            if test_obj == "new_mountpoint_new_subvol":
+                sv_name = "new_fscrypt_sv"
+                subvolume = {
+                    "vol_name": vol_name,
+                    "subvol_name": sv_name,
+                    "group_name": group_name,
+                }
+                fs_util.create_subvolume(mnt_client, **subvolume)
+            elif test_obj == "new_mountpoint_existing_subvol":
+                mnt_client.exec_command(
+                    sudo=True,
+                    cmd=f"umount -l {mnt_pt}",
+                )
+            subvol_path, rc = mnt_client.exec_command(
+                sudo=True,
+                cmd=f"ceph fs subvolume getpath {vol_name} {sv_name} {group_name}",
+            )
+            subvol_path = subvol_path.strip()
+            fuse_mounting_dir_1 = f"/mnt/{sv_name}_post_upgrade_fscrypt_fuse"
+            fs_util.fuse_mount(
+                [mnt_client],
+                fuse_mounting_dir_1,
+                extra_params=f"-r {subvol_path} --client_fs {vol_name}",
+            )
+            sv_info.update(
+                {
+                    sv_name: {
+                        "fuse": {
+                            "mnt_client": mnt_client,
+                            "mountpoint": fuse_mounting_dir_1,
+                        },
+                        "vol_name": vol_name,
+                        "group_name": group_name,
+                    }
+                }
+            )
+
+        mount_details.update({sv_name: sv_info[sv_name]})
+        log.info(mount_details)
+
+        log.info("Verify fscrypt setup on %s", test_obj)
+        encrypt_info = fscrypt_util.encrypt_dir_setup(mount_details)
+        if fscrypt_lifecycle(mount_details, encrypt_info) > 0:
+            log.error("Fscrypt on %s failed", test_obj)
+            return 1
+    return 0
+
+
 def run(ceph_cluster, **kw):
     """
     Test Details:
@@ -1440,7 +1561,7 @@ def run(ceph_cluster, **kw):
     8. Validate the case sensitivity functional TC for the volume and subvolumes
     """
     try:
-        global common_util, attr_util
+        global common_util, attr_util, fscrypt_util
         fs_util = FsUtils(ceph_cluster)
         snap_util = SnapUtils(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
@@ -1452,6 +1573,7 @@ def run(ceph_cluster, **kw):
         cg_snap_io = CG_snap_IO(ceph_cluster)
         common_util = CephFSCommonUtils(ceph_cluster)
         attr_util = CephFSAttributeUtilities(ceph_cluster)
+        fscrypt_util = FscryptUtils(ceph_cluster)
         test_status = 0
         if fs_util.get_fs_info(clients[0], "cephfs_new"):
             default_fs = "cephfs_new"
@@ -1477,7 +1599,9 @@ def run(ceph_cluster, **kw):
         log.info(
             f"\n\n {space_str} Test1 CEPH-83575098 : Post-upgrade NFS Validation\n"
         )
+
         nfs_test(test_reqs)
+
         log.info("NFS post upgrade validation succeeded \n")
         log.info(
             f"\n\n {space_str}Test2 : Post-upgrade Snapshot and Schedule Validation\n"
@@ -1540,6 +1664,18 @@ def run(ceph_cluster, **kw):
                 return 1
             log.info(" Case sensitivity post upgrade validation succeeded \n")
 
+            log.info(
+                "\n"
+                "\n---------------***************-----------------------------"
+                "\n  Test9: Post-upgrade FScrypt Validation "
+                "\n---------------***************-----------------------------"
+            )
+            test_status = fscrypt_test(test_reqs)
+            if test_status != 0:
+                log.error("Failed: Test 9: Post-upgrade FScrypt Validation")
+                return 1
+            log.info(" FScrypt post upgrade validation succeeded \n")
+
         return 0
 
     except Exception as e:
@@ -1551,3 +1687,49 @@ def run(ceph_cluster, **kw):
         for client in clients:
             cmd = "yum upgrade -y --nogpgcheck ceph-common ceph-fuse"
             client.exec_command(sudo=True, cmd=cmd)
+
+
+# HELPER ROUTINES
+
+
+def fscrypt_lifecycle(sv_info, encrypt_info):
+    """
+    This method performs,
+      - fscrypt lifecycle ops - add dataset to encrypt path, lock and unlock, validate encryption when locked
+      - Verify enctag subvolume cmd option with CRUD ops
+    Required:
+    sv_info - dict object with mount_details, vol_name and group_name
+    encrypt_info - Encrypted path, and encrypt params like protector_id, keyring file
+    Returns:
+    0 - Success, 1 - Failure
+    """
+    ops = ["set", "get", "rm"]
+    test_status = 0
+    for sv_name in sv_info:
+        encrypt_path = encrypt_info[sv_name]["path"]
+        encrypt_params = encrypt_info[sv_name]["encrypt_params"]
+        mnt_pt = sv_info[sv_name]["fuse"]["mountpoint"]
+        mnt_client = sv_info[sv_name]["fuse"]["mnt_client"]
+        fscrypt_util.add_dataset(mnt_client, encrypt_path)
+        test_status += fscrypt_util.validate_fscrypt_with_lock_unlock(
+            mnt_client, mnt_pt, encrypt_path, encrypt_params
+        )
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(4))
+        )
+        enc_args = {
+            "enc_tag": f"enc_tag_{rand_str}",
+            "group_name": sv_info[sv_name].get("group_name", None),
+            "fs_name": sv_info[sv_name]["vol_name"],
+        }
+        for op in ops:
+            op_status = common_util.enc_tag(mnt_client, op, sv_name, **enc_args)
+
+            if op_status == 1:
+                return 1
+            else:
+                log.info("enc_tag %s status:%s", op, op_status)
+    if test_status != 0:
+        return 1
+    return 0

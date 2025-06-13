@@ -154,10 +154,10 @@ class FscryptUtils(object):
             )
             log.info(out)
         except BaseException as ex:
-            if "is already setup for use" in str(ex):
+            if "already setup for use" in str(ex):
                 log.info("FScrypt setup already exists for %s", mnt_pt)
             else:
-                log.error("Unexpected error during fscrypt setup")
+                log.error("Unexpected error during fscrypt setup - %s", str(ex))
                 return 1
         if validate:
             try:
