@@ -129,6 +129,52 @@ def remove_group_image_and_verify(rbd, **kw):
         raise Exception("cannot remove image from mirror enabled group")
 
 
+def create_group_add_images(rbd, **kw):
+    """
+    Create groups, images and add images to group
+    Args:
+      rbd: RBD object
+      **kw:
+      no_of_group: int value, number of groups to be created
+      no_of_images_in_each_group: int value, number of images to be created and added to each group
+      size_of_image: Size of each image created
+      pool_spec: pool spec (with or without namespace)
+    """
+    res = {}
+    for i in range(0, kw["no_of_group"]):
+        group_spec = f"{kw['pool_spec']}/group{i+1}"
+        group_create, err = rbd.group.create(**{"group-spec": group_spec})
+        if err:
+            raise Exception("Error in group creation: " + err)
+
+        # Create Image and add to the group
+        group_image = []
+        for i in range(0, kw["no_of_images_in_each_group"]):
+            image_spec = f"{kw['pool_spec']}/image{i+1}"
+            image_create, err = rbd.create(
+                **{
+                    "image-spec": image_spec,
+                    "size": kw["size_of_image"],
+                }
+            )
+            if err:
+                raise Exception("Error in image creation: " + err)
+
+            # Add Image to group
+            add_group_image_and_verify(
+                rbd, **{"group-spec": group_spec, "image-spec": image_spec}
+            )
+            log.info(
+                "Successfully verified image "
+                + image_spec
+                + " is added to the group "
+                + group_spec
+            )
+            group_image.append(image_spec)
+            res[group_spec] = group_image
+    return res
+
+
 def group_mirror_status_verify(
     primary_cluster,
     secondary_cluster,
@@ -138,7 +184,7 @@ def group_mirror_status_verify(
     secondary_state,
     *,
     global_id=False,
-    **group_kw
+    **group_kw,
 ):
     """
     Verify Group mirror Status is matching the expected state passed as argument and Also
