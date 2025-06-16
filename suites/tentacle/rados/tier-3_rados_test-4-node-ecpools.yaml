@@ -22,7 +22,7 @@ tests:
                 verbose: true
               args:
                 mon-ip: node1
-                rhcs-version: 8.0
+                rhcs-version: 7.1
                 release: rc
 
   - test:
@@ -174,15 +174,6 @@ tests:
                 - mon
                 - mon_osd_down_out_subtree_limit
                 - host
-          - config:
-              command: shell
-              args:
-                - ceph
-                - config
-                - set
-                - osd
-                - osd_async_recovery_min_cost
-                - "1099511627776"
 
   - test:
       name: Upgrade cluster to latest 9.x ceph version
