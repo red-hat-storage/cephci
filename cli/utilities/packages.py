@@ -186,6 +186,7 @@ class SubscriptionManager(Cli):
             baseurl (str): base URL for content
             force (bool): register the system even if it is already registered
         """
+
         cmd = f"{self.base_cmd} register --username {username} --password {password}"
         if serverurl:
             cmd += f" --serverurl {serverurl}"
@@ -200,6 +201,28 @@ class SubscriptionManager(Cli):
             raise SubscriptionManagerError(
                 "Failed to register node(s) to subscription manager"
             )
+
+    def clean(self):
+        """
+        Cleans all local subscription data: entitlements, certs, identity.
+
+        Raises:
+            SubscriptionManagerError: if clean fails.
+        """
+        self.execute(sudo=True, long_running=True, cmd=f"{self.base_cmd} clean")
+
+    def cleanup_subscription_files(self):
+        """
+        Remove residual subscription-related certificate and identity files.
+
+        This method removes files that are not cleaned by `subscription-manager clean`,
+        such as consumer and product certificates.
+
+        Raises:
+            SubscriptionManagerError: if the file cleanup command fails.
+        """
+        cmd = "rm -rf /etc/pki/consumer /etc/pki/product"
+        self.execute(sudo=True, long_running=True, cmd=cmd)
 
     def unregister(self):
         """Unregister this system from the Customer Portal or another subscription management service."""
