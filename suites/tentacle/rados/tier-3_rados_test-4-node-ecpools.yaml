@@ -22,7 +22,7 @@ tests:
                 verbose: true
               args:
                 mon-ip: node1
-                rhcs-version: 8.0
+                rhcs-version: 7.1
                 release: rc
 
   - test:
@@ -174,15 +174,21 @@ tests:
                 - mon
                 - mon_osd_down_out_subtree_limit
                 - host
-          - config:
-              command: shell
-              args:
-                - ceph
-                - config
-                - set
-                - osd
-                - osd_async_recovery_min_cost
-                - "1099511627776"
+
+  - test:
+      name: Upgrade cluster to 8.0 ceph version
+      desc: Upgrade cluster to 8.0 version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        args:
+          rhcs-version: 8.0
+          release: rc
+      abort-on-fail: false
 
   - test:
       name: Upgrade cluster to latest 9.x ceph version
