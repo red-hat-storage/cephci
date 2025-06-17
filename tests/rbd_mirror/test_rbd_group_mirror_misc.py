@@ -1,15 +1,18 @@
 """
 Module to verify :
-  -  Add or remove group mirror snapshot schedule when client is blocklisted
+  - Add or remove group mirror snapshot schedule when client is blocklisted
+  - Image level & pool level promote/demote when group mirroring is enabled/disabled
 
 Test case covered:
 CEPH-83613275 - Add or remove group mirror snapshot schedule when client is blocklisted
+CEPH-83614239 - Image level & pool level promote/demote when group mirroring is enabled/disabled
 
 Pre-requisites :
 1. Cluster must be up in 8.1 and above and running with capacity to create pool
 2. We need atleast one client node with ceph-common package,
    conf and keyring files
 
+CEPH-83613275:
 Test Case Flow:
 Step 1: Deploy Two ceph cluster on version 8.1 or above
 Step 2: Create RBD pool ‘pool_1’ on both sites with/without namespace
@@ -28,6 +31,32 @@ step 14: Remove the client from blocklisting
 step 15: verify the snapshot schedules
 step 16: Repeat above on EC pool with or without namespace.
 Step 17: Cleanup rbd test objects like pool, images, groups etc
+
+CEPH-83614239:
+Test Case Flow:
+Step 1: Deploy Two ceph cluster on version 8.1 or above
+Step 2: Create RBD pool ‘pool_1’ on both sites with/without namespace
+Step 3: Enable Image mode mirroring on pool_1 on both sites
+Step 4: Bootstrap the storage cluster peers (Two-way)
+Step 5: Create 2 RBD images in pool_1
+Step 6: Add data to the images
+Step 7: Create Consistency group
+Step 8: Add Images in the consistency group
+Step 9: Enable Mirroring for the group
+Step 10: Wait for replication to complete
+Step 11: Demote site-a image1, should fail
+Step 12: Promote image1 at site-b, should fail
+Step 13: Demote pool_1 at site-a, should fail
+Step 14: Promote pool_1 at site-b, should fail
+Step 15: Disable group mirroring
+Step 16: Remove image from group
+Step 17: Enable mirroring on images
+Step 18: Demote site-a image1, should succeed
+Step 19:  Promote image1 at site-b, should succeed
+Step 20: Demote pool_1 at site-b, should demote all images in pool_1
+Step 21: Promote pool_1 at site-a, should promote all images in pool_1
+Step 22: Repeat above on EC pool with or without namespace
+Step 23: Cleanup the images, file and pools
 """
 
 import random
@@ -38,7 +67,9 @@ from ceph.rbd.initial_config import initial_mirror_config
 from ceph.rbd.utils import exec_cmd, getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.group_mirror import (
+    disable_group_mirroring_and_verify_state,
     enable_group_mirroring_and_verify_state,
+    remove_group_image_and_verify,
     verify_group_snapshot_ls,
     verify_group_snapshot_schedule,
     wait_for_idle,
@@ -261,17 +292,186 @@ def test_group_consistency(
             log.info("Removed group snapshot schedule of 2m")
 
 
+def test_rbd_group_mirror_unsupported_ops(
+    rbd_primary,
+    rbd_secondary,
+    client_primary,
+    client_secondary,
+    primary_cluster,
+    secondary_cluster,
+    pool_types,
+    **kw,
+):
+    """
+    Image level & pool level promote/demote when group mirroring is enabled/disabled
+    Args:
+        rbd_primary: RBD object of primary cluster
+        rbd_secondary: RBD objevct of secondary cluster
+        client_primary: client node object of primary cluster
+        client_secondary: client node object of secondary cluster
+        primary_cluster: Primary cluster object
+        secondary_cluster: Secondary cluster object
+        pool_types: Replication pool or EC pool
+        **kw: any other arguments
+    """
+
+    for pool_type in pool_types:
+        rbd_config = kw.get("config", {}).get(pool_type, {})
+        multi_pool_config = deepcopy(getdict(rbd_config))
+        log.info("Running test CEPH-83614239  for %s", pool_type)
+
+        for pool, pool_config in multi_pool_config.items():
+            group_config = {}
+            if "data_pool" in pool_config.keys():
+                _ = pool_config.pop("data_pool")
+            group_spec = pool_config.get("group-spec")
+            group_config.update({"group-spec": group_spec})
+
+            image_spec = []
+            for image, image_config in pool_config.items():
+                if "image" in image:
+                    if "namespace" in pool_config:
+                        pool_spec = pool + "/" + pool_config.get("namespace")
+                    else:
+                        pool_spec = pool
+                    image_spec.append(pool_spec + "/" + image)
+            if "namespace" in pool_config:
+                enable_namespace_mirroring(
+                    rbd_primary, rbd_secondary, pool, **pool_config
+                )
+
+            # Enable Group Mirroring and Verify
+            enable_group_mirroring_and_verify_state(
+                rbd_primary, **{"group-spec": group_spec}
+            )
+
+            # Wait for group mirroring to complete
+            wait_for_idle(rbd_primary, **{"group-spec": group_spec})
+            log.info("Data replay state is idle for all images in the group")
+
+            out, err = rbd_primary.mirror.image.demote(**{"image-spec": image_spec[0]})
+            if "cannot demote an image that is member of a group" in err:
+                log.info("Failed to demote image on site-A as image is member of group")
+            else:
+                raise Exception(
+                    "Demote image on site-A is successful when image is member of group"
+                )
+
+            out, err = rbd_secondary.mirror.image.promote(
+                **{"image-spec": image_spec[0]}
+            )
+            if "cannot promote an image that is member of a group" in err:
+                log.info("Failed to promote image as image is part of group")
+            else:
+                raise Exception(
+                    "Promote image is successful when image is member of group"
+                )
+
+            out, err = rbd_primary.mirror.pool.demote(**{"pool": pool})
+            if "Demoted 0 mirrored images" in out:
+                log.info(
+                    "Failed to Demote pool on site-A as images are members of group"
+                )
+            else:
+                raise Exception(
+                    "Demote pool is successful when images are members of group"
+                )
+
+            out, err = rbd_secondary.mirror.pool.promote(**{"pool": pool})
+            if "Promoted 0 mirrored images" in out:
+                log.info(
+                    "Failed to promote pool on site-B as images are members of group"
+                )
+            else:
+                raise Exception(
+                    "Promote pool on site-B is successful when images are members of group"
+                )
+
+            disable_group_mirroring_and_verify_state(
+                rbd_primary, **{"group-spec": group_spec}
+            )
+
+            remove_group_image_and_verify(
+                rbd_primary, **{"group-spec": group_spec, "image-spec": image_spec[0]}
+            )
+
+            out, err = rbd_primary.mirror.image.enable(
+                **{"image-spec": image_spec[0], "mode": "snapshot"}
+            )
+            if err:
+                raise Exception(
+                    "Enable image on site-A failed when image is not a member of group"
+                )
+
+            if "Mirroring enabled" in out:
+                log.info(
+                    "Enable image on site-A is successful when image is not a member of group"
+                )
+
+            time.sleep(10)
+            out, err = rbd_primary.mirror.image.demote(**{"image-spec": image_spec[0]})
+            if err:
+                raise Exception(
+                    "Demote image failed when image is not a member of group"
+                )
+            if "Image demoted to non-primary" in out:
+                log.info(
+                    "Demote image is successful when image is not a member of group"
+                )
+
+            time.sleep(10)
+            out, err = rbd_secondary.mirror.image.promote(
+                **{"image-spec": image_spec[0]}
+            )
+            if err:
+                raise Exception(
+                    "Promote image on site-B failed when image is not a member of group"
+                )
+            if "Image promoted to primary" in out:
+                log.info(
+                    "Promote image on site-B is successful when image is not a member of group"
+                )
+
+            out, err = rbd_secondary.mirror.pool.demote(**{"pool-spec": pool_spec})
+            if err:
+                raise Exception(
+                    "Demote pool on site-B failed when image is not a member of group"
+                )
+            if "Demoted 1 mirrored images" in out:
+                log.info(
+                    "Demote pool is successful when image is not a member of group"
+                )
+
+            out, err = rbd_primary.mirror.pool.promote(**{"pool-spec": pool_spec})
+            if err:
+                raise Exception(
+                    "Promote pool on site-A failed when image is not a member of group"
+                )
+            if "Promoted 1 mirrored images" in out:
+                log.info(
+                    "Promote pool successful on site-A when image is not a member of group"
+                )
+
+
 def run(**kw):
     """
-    This test verifies add or remove group mirror snapshot schedule when client is blocklisted
+    This test verifies:
+    - add or remove group mirror snapshot schedule when client is blocklisted
+    - Image level & pool level promote/demote when group mirroring is enabled/disabled
     Args:
         kw: test data
     Returns:
         int: The return value. 0 for success, 1 otherwise
 
     """
+    test_name = kw["run_config"]["test_name"][:-2:].replace("_", " ")
     try:
         pool_types = ["rep_pool_config", "ec_pool_config"]
+        test_map = {
+            "CEPH-83613275": test_group_consistency,
+            "CEPH-83614239": test_rbd_group_mirror_unsupported_ops,
+        }
+
         grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]
         if not kw.get("config").get("grouptype"):
             for pooltype in pool_types:
@@ -291,32 +491,34 @@ def run(**kw):
                 secondary_cluster = val.get("cluster")
 
         pool_types = list(mirror_obj.values())[0].get("pool_types")
-        test_group_consistency(
-            rbd_primary,
-            rbd_secondary,
-            client_primary,
-            client_secondary,
-            primary_cluster,
-            secondary_cluster,
-            pool_types,
-            **kw,
-        )
-        log.info(
-            "Test verifying add or remove group mirror snapshot schedule when client is blocklisted passed"
-        )
+        test_func = kw["config"]["operation"]
+        if test_func in test_map:
+            test_map[test_func](
+                rbd_primary,
+                rbd_secondary,
+                client_primary,
+                client_secondary,
+                primary_cluster,
+                secondary_cluster,
+                pool_types,
+                **kw,
+            )
+
+        log.info("Test %s passed", test_name)
+
     except Exception as e:
-        log.error(
-            "Test verifying add or remove group mirror snapshot schedule when client is blocklisted failed"
-            + str(e)
-        )
+        log.error("Test %s failed with error %s", test_name, e)
         return 1
 
     finally:
-        exec_cmd(
-            node=client_primary,
-            cmd=f"ceph osd blocklist rm {client_primary.ip_address}",
-        )
-        log.info("Removed the client %s from blocklisting", client_primary.ip_address)
+        if "blocklist" in test_name:
+            exec_cmd(
+                node=client_primary,
+                cmd=f"ceph osd blocklist rm {client_primary.ip_address}",
+            )
+            log.info(
+                "Removed the client %s from blocklisting", client_primary.ip_address
+            )
         cleanup(pool_types=pool_types, multi_cluster_obj=mirror_obj, **kw)
 
     return 0
