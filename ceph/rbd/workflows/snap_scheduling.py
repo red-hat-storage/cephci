@@ -13,6 +13,13 @@ log = Log(__name__)
 def add_snapshot_scheduling(rbd, **kw):
     """
     Add snapshot scheduling to an rbd mirror cluster
+
+    Args:
+        rbd: RBD object
+        kw: Dictionary with keys - pool, image, level,
+        group (optional), namespace (optional), interval
+    Returns:
+        Tuple (out, err) from the executed command
     """
     pool = kw.get("pool")
     image = kw.get("image")
@@ -23,20 +30,75 @@ def add_snapshot_scheduling(rbd, **kw):
 
     if level == "cluster":
         out, err = rbd.mirror.snapshot.schedule.add_(interval=interval)
+
     elif level == "pool":
         out, err = rbd.mirror.snapshot.schedule.add_(pool=pool, interval=interval)
+
     elif level == "group":
         group_kw = {"pool": pool, "interval": interval, "group": group}
         if namespace:
-            group_kw.update({"namespace": namespace})
+            group_kw["namespace"] = namespace
         out, err = rbd.mirror.group.snapshot.schedule.add_(**group_kw)
-    elif level == "namespace" and kw.get("namespace", ""):
+
+    elif level == "namespace":
         namespace_kw = {"pool": pool, "interval": interval, "namespace": namespace}
         out, err = rbd.mirror.snapshot.schedule.add_(**namespace_kw)
+
     else:
-        out, err = rbd.mirror.snapshot.schedule.add_(
-            pool=pool, image=image, interval=interval
-        )
+        # Default case: treat it as image-level snapshot schedule
+        # If pool is not specified, assume default pool "rbd"
+        pool = pool or "rbd"
+
+        image_kw = {"pool": pool, "image": image, "interval": interval}
+        if namespace:
+            image_kw["namespace"] = namespace
+
+        out, err = rbd.mirror.snapshot.schedule.add_(**image_kw)
+
+    return out, err
+
+
+def remove_snapshot_scheduling(rbd, **kw):
+    """
+    Remove snapshot scheduling from an rbd mirror cluster
+
+    Args:
+        rbd: RBD object
+        kw: Dictionary with keys - pool, image, level,
+        group (optional), namespace (optional), interval
+    Returns:
+        Tuple (out, err) from the executed command
+    """
+    pool = kw.get("pool")
+    image = kw.get("image")
+    level = kw.get("level")
+    group = kw.get("group", "")
+    namespace = kw.get("namespace", "")
+    interval = kw.get("interval")
+
+    if level == "cluster":
+        out, err = rbd.mirror.snapshot.schedule.rm(interval=interval)
+
+    elif level == "pool":
+        out, err = rbd.mirror.snapshot.schedule.remove_(pool=pool, interval=interval)
+
+    elif level == "group":
+        group_kw = {"pool": pool, "interval": interval, "group": group}
+        if namespace:
+            group_kw["namespace"] = namespace
+        out, err = rbd.mirror.group.snapshot.schedule.remove_(**group_kw)
+
+    elif level == "namespace":
+        namespace_kw = {"pool": pool, "interval": interval, "namespace": namespace}
+        out, err = rbd.mirror.snapshot.schedule.remove_(**namespace_kw)
+
+    else:
+        # Default case: treat it as image-level snapshot schedule
+        pool = pool or "rbd"
+        image_kw = {"pool": pool, "image": image, "interval": interval}
+        if namespace:
+            image_kw["namespace"] = namespace
+        out, err = rbd.mirror.snapshot.schedule.remove_(**image_kw)
 
     return out, err
 
