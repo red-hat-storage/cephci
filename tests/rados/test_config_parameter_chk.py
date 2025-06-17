@@ -49,22 +49,57 @@ def run(ceph_cluster, **kw):
         osd_list = random.sample(osd_list, 10)
     log.info(f"The parameters are checking on {osd_list} osds")
     if config.get("scenario") == "msgrv2_5x":
-        ini_file = config.get("ini-file")
-        config_info.read(ini_file)
-        msgr_parameter = config_info.items("MSGRV2")
-        result = config_param_checker(mon_object, osd_list, msgr_parameter)
-        if result:
-            log.error("The MSGRV2 parameters are exist in the 5.x build")
+        try:
+            ini_file = config.get("ini-file")
+            config_info.read(ini_file)
+            msgr_parameter = config_info.items("MSGRV2")
+            result = config_param_checker(mon_object, osd_list, msgr_parameter)
+            if result:
+                log.error("The MSGRV2 parameters are exist in the 5.x build")
+                raise Exception("parameter value is not correct in the 5.x build")
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            # log cluster health
+            rados_object.log_cluster_health()
             return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+            # log cluster health
+            rados_object.log_cluster_health()
+            # check for crashes after test execution
+            if rados_object.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         return 0
+
     if config.get("scenario") == "msgrv2_6x":
-        ini_file = config.get("ini-file")
-        config_info.read(ini_file)
-        msgr_parameter = config_info.items("MSGRV2")
-        result = config_param_checker(mon_object, osd_list, msgr_parameter)
-        if not result:
-            log.error("The MSGRV2 parameter value is not correct in the 6.x build")
+        try:
+            ini_file = config.get("ini-file")
+            config_info.read(ini_file)
+            msgr_parameter = config_info.items("MSGRV2")
+            result = config_param_checker(mon_object, osd_list, msgr_parameter)
+            if not result:
+                log.error("The MSGRV2 parameter value is not correct in the 6.x build")
+                raise Exception("parameter value is not correct in the 6.x build")
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            # log cluster health
+            rados_object.log_cluster_health()
             return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+            # log cluster health
+            rados_object.log_cluster_health()
+            # check for crashes after test execution
+            if rados_object.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         return 0
 
     # Checking all sleep parameters in mclock profiles

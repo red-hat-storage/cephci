@@ -32,7 +32,11 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from cli.utilities.operations import wait_for_osd_daemon_state
-from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
+from tests.rados.rados_test_util import (
+    get_device_path,
+    wait_for_daemon_status,
+    wait_for_device_rados,
+)
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_stretch_site_down import (
     get_stretch_site_hosts,
@@ -721,6 +725,14 @@ def run(ceph_cluster, **kw):
             utils.add_osd(ceph_cluster, test_host.hostname, dev_path, target_osd)
             method_should_succeed(
                 wait_for_device_rados, test_host, target_osd, action="add"
+            )
+            method_should_succeed(
+                wait_for_daemon_status,
+                host=host,
+                daemon_type="osd",
+                daemon_id=target_osd,
+                status="running",
+                timeout=60,
             )
             assert service_obj.add_osds_to_managed_service(
                 osds=[target_osd], spec=target_osd_spec_name
