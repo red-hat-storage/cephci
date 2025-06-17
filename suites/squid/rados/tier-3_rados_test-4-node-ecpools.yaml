@@ -22,7 +22,7 @@ tests:
                 verbose: true
               args:
                 mon-ip: node1
-                rhcs-version: 8.0
+                rhcs-version: 7.1
                 release: rc
 
   - test:
@@ -159,6 +159,7 @@ tests:
         log_to_file: true
       desc: Change config options to enable logging to file
 
+# osd_async_recovery_min_cost bug fixed. commenting the config in suite
   - test:
       name: Set configs for 4 node cluster
       desc: Set configs for 4 node cluster
@@ -174,15 +175,15 @@ tests:
                 - mon
                 - mon_osd_down_out_subtree_limit
                 - host
-          - config:
-              command: shell
-              args:
-                - ceph
-                - config
-                - set
-                - osd
-                - osd_async_recovery_min_cost
-                - "1099511627776"
+#          - config:
+#              command: shell
+#              args:
+#                - ceph
+#                - config
+#                - set
+#                - osd
+#                - osd_async_recovery_min_cost
+#                - "1099511627776"
 
   - test:
       name: Upgrade cluster to latest 8.x ceph version
