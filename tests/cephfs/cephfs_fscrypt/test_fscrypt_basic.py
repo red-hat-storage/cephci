@@ -81,7 +81,7 @@ def run(ceph_cluster, **kw):
                 "/mnt/nfs_",
             ]:
                 if cephfs_common_utils.client_mount_cleanup(
-                    client_tmp, mnt_prefix=mnt_prefix
+                    client_tmp, mount_path_prefix=mnt_prefix
                 ):
                     log.error("Client old mountpoints cleanup didn't suceed")
                     fs_util.reboot_node(client_tmp)
