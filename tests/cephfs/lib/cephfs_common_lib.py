@@ -34,7 +34,7 @@ class CephFSCommonUtils(FsUtils):
         self.ceph_cluster = ceph_cluster
         super().__init__(ceph_cluster)
 
-    def wait_for_healthy_ceph(self, client, wait_time):
+    def wait_for_healthy_ceph(self, client, wait_time=300):
         """
         This method will run ceph status and if its not HEALTH_OK, will wait for wait_time for it to be healthy
         Args:

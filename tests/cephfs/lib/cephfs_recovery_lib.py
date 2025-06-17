@@ -8,7 +8,9 @@ import datetime
 import json
 import time
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -31,6 +33,7 @@ class FSRecovery(object):
         self.clients = ceph_cluster.get_ceph_objects("client")
         self.installer = ceph_cluster.get_nodes(role="installer")[0]
         self.fs_util = FsUtils(ceph_cluster)
+        self.cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
 
     def fs_recovery(
         self, client, active_mds_ranks, fs_name="cephfs", debug_mds=None, **kwargs
@@ -82,7 +85,11 @@ class FSRecovery(object):
         log.info("Start scrub ops")
         self.scrub_ops(client, active_mdses)
         log.info("Check Ceph Status after FS recovery")
-        self.fs_util.get_ceph_health_status(client)
+        if self.cephfs_common_utils.wait_for_healthy_ceph(client, 600):
+            log.error("Cluster health is not OK even after waiting for 5 mins.")
+            raise CommandFailed(
+                "Cluster health is not OK even after waiting for 5 mins."
+            )
         return 0
 
     def data_scan(
