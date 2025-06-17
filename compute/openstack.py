@@ -37,42 +37,24 @@ LOG = Log(__name__)
 socket.setdefaulttimeout(280)
 
 
-def get_openstack_driver(
-    username: str,
-    password: str,
-    auth_url: str,
-    auth_version: str,
-    tenant_name: str,
-    tenant_domain_id: str,
-    service_region: str,
-    domain_name: str,
-    api_version: Optional[str] = "2.2",
-) -> Union[NodeDriver, OpenStack_2_NodeDriver]:
+def get_openstack_driver(**creds) -> Union[NodeDriver, OpenStack_2_NodeDriver]:
     """
     Return the client that can interact with the OpenStack cloud.
 
     Args:
-        username:           The name of the user to be set for the session.
-        password:           The password of the provided user.
-        auth_url:           The endpoint that can authenticate the user.
-        auth_version:       The API version to be used for authentication.
-        tenant_name:        The name of the user's project.
-        tenant_domain_id:   The ID of the user's project.
-        service_region:     The realm to be used.
-        domain_name:        The authentication domain to be used.
-        api_version:        The API Version to be used for communication.
+        **creds: Key-value pairs that are required to authenticate the user.
     """
     openstack = get_driver(Provider.OPENSTACK)
     return openstack(
-        username,
-        password,
-        api_version=api_version,
-        ex_force_auth_url=auth_url,
-        ex_force_auth_version=auth_version,
-        ex_tenant_name=tenant_name,
-        ex_force_service_region=service_region,
-        ex_domain_name=domain_name,
-        ex_tenant_domain_id=tenant_domain_id,
+        creds["username"],
+        creds["password"],
+        api_version=creds.get("api_version", "2.2"),
+        ex_force_auth_url=creds["auth_url"],
+        ex_force_auth_version=creds["auth_version"],
+        ex_tenant_name=creds["tenant_name"],
+        ex_force_service_region=creds["service_region"],
+        ex_domain_name=creds["domain_name"],
+        ex_tenant_domain_id=creds["tenant_domain_id"],
     )
 
 
@@ -102,14 +84,7 @@ class CephVMNodeV2:
 
     def __init__(
         self,
-        username: str,
-        password: str,
-        auth_url: str,
-        auth_version: str,
-        tenant_name: str,
-        tenant_domain_id: str,
-        service_region: str,
-        domain_name: str,
+        os_cred: dict,
         node_name: Optional[str] = None,
     ) -> None:
         """
@@ -118,26 +93,11 @@ class CephVMNodeV2:
         The co
 
         Args:
-            username:   The name of the user to be set for the session.
-            password:   The password of the provided user.
-            auth_url:   The endpoint that can authenticate the user.
-            auth_version:   The version to be used for authentication.
-            tenant_name:    The name of the user's project.
-            tenant_domain_id:   The ID of the user's project.
-            service_region: The realm to be used.
-            domain_name:    The authentication domain to be used.
+            os_cred:    Key-value pairs that are required to authenticate the user.
             node_name:      The name of the node to be retrieved.
         """
-        self.driver = get_openstack_driver(
-            username=username,
-            password=password,
-            auth_url=auth_url,
-            auth_version=auth_version,
-            tenant_name=tenant_name,
-            tenant_domain_id=tenant_domain_id,
-            service_region=service_region,
-            domain_name=domain_name,
-        )
+        self._os_cred = os_cred
+        self.driver = get_openstack_driver(**os_cred)
         self.node: Optional[Node] = None
 
         # CephVM attributes
@@ -152,9 +112,9 @@ class CephVMNodeV2:
         if node_name:
             self.node = self._get_node(name=node_name)
 
-        if "rhos-d" in auth_url:
+        if "rhos-d" in self._os_cred["auth_url"]:
             self.default_network_names = self.default_rhosd_network_names
-        elif "rhos-01" in auth_url:
+        elif "rhos-01" in self._os_cred["auth_url"]:
             self.default_network_names = self.default_rhos01_network_names
         else:
             self.default_network_names = None
@@ -200,7 +160,7 @@ class CephVMNodeV2:
                 networks=vm_network,
             )
 
-            self._wait_until_vm_state_running()
+            self._wait_until_vm_state(target_state="running")
 
             if no_of_volumes:
                 self._create_attach_volumes(no_of_volumes, size_of_disks)
@@ -249,6 +209,54 @@ class CephVMNodeV2:
     def get_private_ip(self) -> str:
         """Return the private IP address of the VM."""
         return self.node.private_ips[0] if self.node else ""
+
+    def shutdown(self, wait: bool = False) -> None:
+        """
+        Gracefully power off the VM associated with this instance.
+        Args:
+            wait:   True if the method should wait until the VM is powered off.
+        """
+        try:
+            LOG.info(f"Initiating shutdown of node: {self.node.name}")
+            self.driver.ex_stop_node(self.node)
+            if wait:
+                try:
+                    self._wait_until_vm_state(target_state="stopped")
+                except NodeError as e:
+                    LOG.error(f"Error while waiting for VM to stop with error: {e}")
+                    raise
+        except (ResourceNotFound, NetworkOpFailure, NodeError, VolumeOpFailure):
+            raise
+
+    def power_on(self) -> None:
+        """
+        Power on the VM associated with this instance.
+        """
+        try:
+            LOG.info(f"Powering on node: {self.node.name}")
+            self.driver.ex_start_node(self.node)
+            self._wait_until_vm_state(target_state="running")
+        except (ResourceNotFound, NetworkOpFailure, NodeError, VolumeOpFailure):
+            raise
+
+    def __getstate__(self) -> dict:
+        """
+        Prepare the object state for pickling.
+        Sanitizes unserializable fields like drivers.
+        """
+        state = dict(self.__dict__)
+        state["driver"] = None
+        if "node" in state and hasattr(state["node"], "driver"):
+            state["node"].driver = None
+        return state
+
+    def __setstate__(self, state) -> None:
+        self.__dict__.update(state)
+        try:
+            self.driver = get_openstack_driver(**self._os_cred)
+        except Exception as e:
+            LOG.warning(f"Failed to restore OpenStack driver: {e}")
+            self.driver = None
 
     # Private methods to the object
     def _get_node(self, name: str) -> Node:
@@ -433,22 +441,28 @@ class CephVMNodeV2:
 
         raise ResourceNotFound(f"No networks had free IP addresses: {network_names}.")
 
-    def _wait_until_vm_state_running(self):
-        """Wait till the VM moves to running state."""
+    def _wait_until_vm_state(self, target_state: str, timeout: int = 1200):
+        """
+        Wait until the VM reaches the specified state.
+
+        Args:
+            target_state (str): The desired final state (e.g., 'running', 'stopped').
+            timeout (int): Maximum wait time in seconds.
+        """
         start_time = datetime.now()
-        end_time = start_time + timedelta(seconds=1200)
+        end_time = start_time + timedelta(seconds=timeout)
 
         node = None
         while end_time > datetime.now():
             sleep(5)
             node = self.driver.ex_get_node_details(self.node.id)
 
-            if node.state == "running":
-                end_time = datetime.now()
-                duration = (end_time - start_time).total_seconds()
+            if node.state == target_state:
+                duration = (datetime.now() - start_time).total_seconds()
                 LOG.info(
-                    "%s moved to running state in %d seconds.",
+                    "%s moved to %s state in %d seconds.",
                     self.node.name,
+                    target_state,
                     int(duration),
                 )
                 return
@@ -461,7 +475,9 @@ class CephVMNodeV2:
                 )
                 raise NodeError(msg)
 
-        raise NodeError(f"{node.name} is in {node.state} state.")
+        raise NodeError(
+            f"{node.name} did not reach {target_state}. Final state: {node.state}"
+        )
 
     def _create_attach_volumes(self, no_of_volumes: int, size_of_disk: int) -> None:
         """
@@ -562,11 +578,6 @@ class CephVMNodeV2:
     def floating_ips(self) -> List[str]:
         """Return the list of floating IP's"""
         return self.node.public_ips if self.node else []
-
-    @property
-    def public_ip_address(self) -> str:
-        """Return the public IP address of the node."""
-        return self.node.public_ips[0]
 
     @property
     def hostname(self) -> str:
