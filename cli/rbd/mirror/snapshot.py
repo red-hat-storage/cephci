@@ -1,5 +1,8 @@
+from copy import deepcopy
+
 from cli import Cli
 from cli.rbd.mirror.schedule import Schedule
+from cli.utilities.utils import build_cmd_from_args
 
 
 class Snapshot(Cli):
@@ -11,3 +14,9 @@ class Snapshot(Cli):
         super(Snapshot, self).__init__(nodes)
         self.base_cmd = base_cmd + " snapshot"
         self.schedule = Schedule(nodes, self.base_cmd)
+
+    def add(self, **kw):
+        kw_copy = deepcopy(kw)
+        group_spec = kw_copy.pop("group-spec", "")
+        cmd = f"{self.base_cmd} {group_spec} {build_cmd_from_args(**kw_copy)}"
+        return self.execute_as_sudo(cmd=cmd)
