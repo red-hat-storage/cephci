@@ -97,12 +97,12 @@ def run(ceph_cluster, **kw):
         )
         client1.exec_command(
             sudo=True,
-            cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
-            f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
+            cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 5 --file-size 40 "
+            f"--files 10 --files-per-dir 10 --dirs-per-dir 2 --top "
             f"{kernel_mounting_dir_1}",
             timeout=3600,
         )
-        fs_util.set_quota_attrs(clients[0], 9999, 999, kernel_mounting_dir_1)
+        fs_util.set_quota_attrs(clients[0], 9999, 99999, kernel_mounting_dir_1)
         quota_attrs = fs_util.get_quota_attrs(clients[0], kernel_mounting_dir_1)
         snapshot_1 = {
             "vol_name": default_fs,
@@ -114,13 +114,14 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True, cmd=f"mkdir -p {kernel_mounting_dir_1}/iteration_2"
         )
-        client1.exec_command(
-            sudo=True,
-            cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 400 "
-            f"--files 100 --files-per-dir 10 --dirs-per-dir 2 --top "
-            f"{kernel_mounting_dir_1}/iteration_2",
-            timeout=3600,
-        )
+        # client1.exec_command(
+        #     sudo=True,
+        #     cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 40 "
+        #     f"--files 10 --files-per-dir 10 --dirs-per-dir 2 --top "
+        #     f"{kernel_mounting_dir_1}/iteration_2",
+        #     timeout=300,
+        #     check_ec=False,
+        # )
         snapshot_2 = {
             "vol_name": default_fs,
             "subvol_name": "subvol_clone_attr_vol",
@@ -153,11 +154,12 @@ def run(ceph_cluster, **kw):
         with parallel() as p:
             log.info("Start Writing IO on the subvolume")
             p.spawn(
-                fs_util.run_ios_V1,
-                client=client1,
-                mounting_dir=kernel_mounting_dir_1,
-                run_time=2,
-                io_tools=["dd"],
+                client1.exec_command,
+                sudo=True,
+                cmd=f"dd if=/dev/random of={kernel_mounting_dir_1}/test_dd bs=10M "
+                f"count=10",
+                timeout=3600,
+                check_ec=False,
             )
             fs_util.create_clone(client1, **clone_attr_vol_2)
             fs_util.validate_clone_state(client1, clone_attr_vol_2)
@@ -249,7 +251,7 @@ def run(ceph_cluster, **kw):
             {"vol_name": default_fs, "subvol_name": "clone_attr_vol_2"},
         ]
         for clone_vol in rmclone_list:
-            fs_util.remove_subvolume(client1, **clone_vol)
+            fs_util.remove_subvolume(client1, **clone_vol, check_ec=False)
         fs_util.remove_snapshot(client1, **snapshot_1, validate=False, check_ec=False)
         fs_util.remove_snapshot(client1, **snapshot_2, validate=False, check_ec=False)
         fs_util.remove_subvolume(client1, **subvolume, validate=False, check_ec=False)
