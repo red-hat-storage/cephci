@@ -13,6 +13,7 @@ from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
+from tests.nfs.nfs_utils import mount_retry
 from utility.log import Log
 
 log = Log(__name__)
@@ -92,16 +93,10 @@ def setup_nfs_cluster(
     for version, clients in mount_versions.items():
         for client in clients:
             client.create_dirs(dir_path=nfs_mount, sudo=True)
-            if Mount(client).nfs(
-                mount=nfs_mount,
-                version=version,
-                port=port,
-                server=nfs_server,
-                export="{0}_{1}".format(export, i),
+            if mount_retry(
+                clients, i, nfs_mount, version, port, nfs_server, export_name
             ):
-                raise OperationFailedError(
-                    "Failed to mount nfs on %s" % client.hostname
-                )
+                log.info("Mount succeeded on %s" % client.hostname)
             i += 1
             sleep(1)
     log.info("Mount succeeded on all clients")
@@ -453,7 +448,7 @@ def cleanup_custom_nfs_cluster_multi_export_client(
 
     Ceph(clients[0]).nfs.cluster.delete(nfs_name)
     sleep(30)
-    check_nfs_daemons_removed(clients[0])
+    check_nfs_daemons_removed(clients[0], nfs_name)
 
     # Delete the subvolume
     for i in range(len(clients)):
@@ -658,14 +653,17 @@ def removeattr(client, file_path, attribute_name):
     return out
 
 
-def check_nfs_daemons_removed(client):
+def check_nfs_daemons_removed(client, nfs_name=None):
     """
     Check if NFS daemons are removed.
     Wait until there are no NFS daemons listed by 'ceph orch ls'.
     """
     while True:
         try:
-            cmd = "ceph orch ls | grep nfs"
+            if nfs_name is not None:
+                cmd = f"ceph orch ls | grep {nfs_name}"
+            else:
+                cmd = "ceph orch ls | grep nfs"
             out = client.exec_command(sudo=True, cmd=cmd)
 
             if out:
@@ -748,14 +746,13 @@ def verify_nfs_ganesha_service(node, timeout):
         )
 
 
-def delete_nfs_clusters_in_parallel(installer_node, timeout):
+def delete_nfs_clusters_in_parallel(installer_node, timeout, clusters):
     """
     Delete NFS clusters in batch.
     Args:
         installer_node: The node where the NFS Ganesha configuration will be applied.
         nfs_objects: List of NFS Ganesha configuration objects.
     """
-    clusters = CephAdm(installer_node).ceph.nfs.cluster.ls()
     with ThreadPoolExecutor(max_workers=None) as executor:
         futures = [
             executor.submit(
@@ -772,6 +769,8 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout):
         result = json.loads(
             CephAdm(installer_node).ceph.orch.ls(format="json", service_type="nfs")
         )
+        result = [x for x in result if x["service_id"].startswith("nfs")]
+        log.debug(" \n Current status of NFS Ganesha services: %s \n", result)
         if all(x["status"]["running"] == 0 for x in result) or not result:
             log.info(
                 "\n"
@@ -781,6 +780,8 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout):
                 + "=" * 30,
                 w._attempt * w.interval,
             )
+            log.info("sleep(20)  # Allow some time for the service to stabilize")
+            sleep(20)  # Allow some time for the service to stabilize
             return True
         else:
             log.error(
@@ -794,3 +795,69 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout):
             "NFS Ganesha services are still running after deletion. Timeout expired. -- %s seconds"
             % timeout
         )
+
+
+def create_export_and_mount_for_existing_nfs_cluster(
+    clients,
+    nfs_export,
+    nfs_mount,
+    export_num,
+    fs_name,
+    nfs_name,
+    fs,
+    port,
+    version="4.0",
+    ha=False,
+    vip=None,
+    nfs_server=None,
+):
+
+    client_export_mount_dict = exports_mounts_perclient(
+        clients, nfs_export, nfs_mount, export_num
+    )
+    for client_num in range(len(clients)):
+        for export_num in range(
+            len(client_export_mount_dict[clients[client_num]]["export"])
+        ):
+            export_name = client_export_mount_dict[clients[client_num]]["export"][
+                export_num
+            ]
+            mount_name = client_export_mount_dict[clients[client_num]]["mount"][
+                export_num
+            ]
+            Ceph(clients[client_num]).nfs.export.create(
+                fs_name=fs_name,
+                nfs_name=nfs_name,
+                nfs_export=export_name,
+                fs=fs,
+            )
+            sleep(1)
+            # Get the mount versions specific to clients
+            mount_versions = _get_client_specific_mount_versions(version, clients)
+            # Step 4: Perform nfs mount
+            # If there are multiple nfs servers provided, only one is required for mounting
+            if isinstance(nfs_server, list):
+                nfs_server = nfs_server[0]
+            if ha:
+                nfs_server = vip.split("/")[0]  # Remove the port
+            for version, clients in mount_versions.items():
+                clients[client_num].create_dirs(dir_path=mount_name, sudo=True)
+
+                if not mount_retry(
+                    clients,
+                    client_num,
+                    mount_name,
+                    version,
+                    port,
+                    nfs_server,
+                    export_name,
+                    ha=ha,
+                ):
+                    log.info(f"Mount failed, {mount_name}")
+                    raise OperationFailedError(
+                        "Failed to mount nfs on %s" % clients[client_num].hostname
+                    )
+                sleep(1)
+        log.info("Mount succeeded on all clients")
+
+    return client_export_mount_dict
