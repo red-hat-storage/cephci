@@ -594,40 +594,37 @@ def run(ceph_cluster, **kw):
             log.info(out)
             assert f"/var/lib/ceph/osd/ceph-{osd_id}/" in out
 
+            osd_id = random.choice(osd_list)
+            osd_metadata = ceph_cluster.get_osd_metadata(
+                osd_id=int(osd_id), client=client
+            )
+            osd_meta_devices = osd_metadata["devices"].split(",")
             # Execute ceph-bluestore-tool show-label --dev <device>
-            for device in ["block", "db", "wal"]:
-                osd_id = random.choice(osd_list)
+            for device in osd_meta_devices:
                 osd_node = rados_obj.fetch_host_node(
                     daemon_type="osd", daemon_id=str(osd_id)
                 )
-                lvm_list, _ = osd_node.exec_command(
-                    sudo=True,
-                    cmd=f"cephadm shell -- ceph-volume lvm list {osd_id} --format json",
+                dev = f"/dev/{device}"
+
+                log.info(
+                    f"\n ----------------------------------------"
+                    f"\n Dump label content for device {dev} for OSD {osd_id}"
+                    f"\n ----------------------------------------"
                 )
-                lvm_json = json.loads(lvm_list)
-                dev = lvm_json[f"{osd_id}"][0]["tags"]["ceph.block_device"]
-                device_type = lvm_json[f"{osd_id}"][0]["type"]
-                if device in device_type:
-                    log.info(
-                        f"\n --------------------"
-                        f"\n Dump label content for {device_type} device {dev} for OSD {osd_id}"
-                        f"\n --------------------"
-                    )
-                    out = bluestore_obj.show_label(osd_id=osd_id, device=dev)
-                    log.info(out)
-                    assert dev in out
+                out = bluestore_obj.show_label(osd_id=osd_id, device=dev)
+                log.info(out)
+                assert dev in out
 
             # Execute ceph-bluestore-tool prime-osd-dir --dev <main_device> --path <osd_path>
             osd_id = random.choice(osd_list)
             osd_node = rados_obj.fetch_host_node(
                 daemon_type="osd", daemon_id=str(osd_id)
             )
-            lvm_list, _ = osd_node.exec_command(
-                sudo=True,
-                cmd=f"cephadm shell -- ceph-volume lvm list {osd_id} --format json",
+
+            osd_metadata = ceph_cluster.get_osd_metadata(
+                osd_id=int(osd_id), client=client
             )
-            lvm_json = json.loads(lvm_list)
-            dev = lvm_json[f"{osd_id}"][0]["tags"]["ceph.block_device"]
+            dev = f"{osd_metadata['osd_data']}/block"
             log.info(
                 f"\n --------------------"
                 f"\n Generate the content for an OSD data directory "
