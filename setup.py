@@ -10,9 +10,9 @@ except ImportError:
 setup(
     name="cephci",
     version="0.1",
-    description="Ceph CI tests that run in jenkins using openstack provider",
-    author="Vasu Kulkarni",
-    author_email="vasu@redhat.com",
+    description="A test framework to evaluate Ceph.",
+    author="Ceph QE Team",
+    author_email="cephci@redhat.com",
     install_requires=[
         "apache-libcloud>=3.3.0",
         "cryptography",
