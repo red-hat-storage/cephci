@@ -154,8 +154,8 @@ tests:
         write_iteration: 10
         delete_pool: true
 
-  # Below test is currently failing, BZ raised #2214864
-  # will be un-commented once fix is available
+  # Below test is currently failing, BZ raised #2214864 - Closed - Not a bug
+  # We have to reproduce the issue in a Replica-1 Cluster, and if we hit the same issue, we can re-open it.
 #  - test:
 #      name: Perform IOPS on a Cluster with full OSDs
 #      desc: Verify posibility of IOPS on a Cluster with full OSDs

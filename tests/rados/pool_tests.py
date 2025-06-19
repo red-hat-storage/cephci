@@ -53,6 +53,7 @@ def run(ceph_cluster, **kw):
             if not rados_obj.bench_write(**ec_config):
                 log.error("Failed to write objects into the EC Pool")
                 return 1
+
             rados_obj.bench_read(**ec_config)
             log.info("Created the EC Pool, Finished writing data into the pool")
 
@@ -69,17 +70,35 @@ def run(ceph_cluster, **kw):
             log.info(
                 f"Killing m, i.e {ec_config['m']} OSD's from acting set to verify recovery"
             )
+            osd_tree_init = rados_obj.run_ceph_command(cmd="ceph osd tree")
+            get_crush_weight = lambda output, test_id: next(
+                entry["crush_weight"]
+                for entry in output["nodes"]
+                if entry["id"] == test_id
+            )
+
             stop_osds = [acting_pg_set.pop() for _ in range(ec_config["m"])]
             for osd_id in stop_osds:
                 if not rados_obj.change_osd_state(action="stop", target=osd_id):
                     log.error(f"Unable to stop the OSD : {osd_id}")
                     return 1
 
+                # Applying WA for MSR rule based pools, as per : 2305520
+                if ec_config.get("crush-osds-per-failure-domain"):
+                    log.info(
+                        "Running test on a MSR pool. As a WA, setting the CRUSH weight on all stopped OSDs to 0"
+                    )
+                    cmd = f"ceph osd crush reweight osd.{osd_id} 0"
+                    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                    time.sleep(5)
+
             log.info("Stopped 'm' number of OSD's from, starting to wait for recovery")
             rados_obj.change_recovery_threads(config=ec_config, action="set")
 
             # Sleeping for 25 seconds ( "osd_heartbeat_grace": "20" ) for osd's to be marked down
             time.sleep(25)
+
+            log.debug("Recovery will start once the OSDs are marked out of the cluster")
 
             # Waiting for up to 2.5 hours for the recovery to complete and PG's to enter active + Clean state
             res = wait_for_clean_pg_sets(rados_obj, test_pool=ec_config["pool_name"])
@@ -99,22 +118,40 @@ def run(ceph_cluster, **kw):
                 )
                 return 1
             log.info(f" Acting set of the pool consists of OSD's : {acting_pg_set}")
-            # Changing recovery threads back to default
-            rados_obj.change_recovery_threads(config=ec_config, action="rm")
 
             log.debug("Starting the stopped OSD's")
             for osd_id in stop_osds:
+                if ec_config.get("crush-osds-per-failure-domain"):
+                    log.info(
+                        "Running test on a MSR pool. As a WA, reverting the CRUSH weight on all stopped OSDs back to "
+                        "original value"
+                    )
+                    cmd = f"ceph osd crush reweight osd.{osd_id} {get_crush_weight(osd_tree_init, osd_id)}"
+                    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                    time.sleep(5)
+
                 if not rados_obj.change_osd_state(action="restart", target=osd_id):
                     log.error(f"Unable to restart the OSD : {osd_id}")
                     return 1
 
-            # Sleep for 5 seconds for OSD's to join the cluster
-            time.sleep(5)
+            # Sleep for 30 seconds for OSD's to join the cluster
+            time.sleep(30)
+
+            # Waiting for up to 2.5 hours for the recovery to complete and PG's to enter active + Clean state
+            res = wait_for_clean_pg_sets(rados_obj, test_pool=ec_config["pool_name"])
+            if not res:
+                log.error(
+                    "PG's in cluster are not active + Clean after Starting M osds"
+                )
+                return 1
+            # Changing recovery threads back to default
+            rados_obj.change_recovery_threads(config=ec_config, action="rm")
 
             # Deleting the pool created
             if not rados_obj.delete_pool(pool=ec_config["pool_name"]):
                 log.error(f"the pool {ec_config['pool_name']} could not be deleted")
                 return 1
+
         except Exception as e:
             log.error(f"Failed with exception: {e.__doc__}")
             log.exception(e)

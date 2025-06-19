@@ -1045,6 +1045,21 @@ class RadosOrchestrator:
                 return False
         return True
 
+    def get_osd_crush_weight(self, osd_id: int) -> float:
+        """
+        Method to get the CRUSH weight of the given OSD
+        Args:
+            osd_id: OSD ID
+        Returns:
+            Crush weight of OSD
+        """
+        cmd = "ceph osd tree"
+        out = self.run_ceph_command(cmd=cmd)
+        for entry in out["nodes"]:
+            if int(entry["id"]) == osd_id:
+                return entry["crush_weight"]
+        log.error("Provided OSD ID could not be found")
+
     def reweight_crush_items(self, **kwargs) -> bool:
         """
         Performs Re-weight of various CRUSH items, based on key-value pairs sent
