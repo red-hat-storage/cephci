@@ -73,9 +73,7 @@ def run(ceph_cluster, **kw):
                 f"--files 1000 --files-per-dir 10 --top {fuse_mount_dir}/dir2",
             ]
             for command in commands:
-                err = client1.exec_command(sudo=True, cmd=command, timeout=3600)
-                if err:
-                    return 1
+                client1.exec_command(sudo=True, cmd=command, timeout=3600)
         return 0
 
     except Exception as e:
@@ -85,7 +83,7 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Cleaning up the system")
         client1.exec_command(sudo=True, cmd=f"rm -rf {mount_points[0]}/*")
-        client1.exec_command(sudo=True, cmd=f"rm -rf {mount_points[2]}/*")
+        client1.exec_command(sudo=True, cmd=f"rm -rf {mount_points[1]}/*")
         for client in clients:
             for mount_point in mount_points:
                 client.exec_command(sudo=True, cmd=f"umount {mount_point}")

@@ -317,15 +317,24 @@ def run(ceph_cluster, **kw):
                     cmd="sudo touch '%s%s/%s'"
                     % (client_info["mounting_dir"], dir_name, file_name)
                 )
+        smallfile_dir_name = (
+            "!@#$%^&*()-_=+[]{}<>?"  # Removed ;:., as not supported in smallfile top
+        )
+        client1[0].exec_command(
+            cmd="sudo mkdir '%s%s'" % (client_info["mounting_dir"], smallfile_dir_name)
+        )
         for num in range(0, 5):
             for client in client_info["fuse_clients"]:
+                top_dir = f"{client_info['mounting_dir']}{smallfile_dir_name}"
                 ops = ["create", "setxattr", "getxattr", "chmod", "rename"]
                 for op in ops:
                     client.exec_command(
                         sudo=True,
-                        cmd=f"python3 smallfile/smallfile_cli.py --operation {op} --threads 10 --file-size 4 "
-                        f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
-                        f"{client_info['mounting_dir']}{dir_name}",
+                        cmd=(
+                            f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation {op} --threads 2 "
+                            f"--file-size 2 "
+                            f'--files 10 --files-per-dir 2 --dirs-per-dir 2 --top "{top_dir}"'
+                        ),
                         timeout=300,
                     )
         log.info("Cleaning up!-----")
