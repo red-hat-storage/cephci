@@ -48,7 +48,7 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw["config"]
     args = config.get("args", {})
-    timeout = config.get("timeout", 1800)
+    timeout = config.get("timeout", 3600)
     rhbuild = config.get("rhbuild")
     cephadm_obj = CephAdmin(cluster=ceph_cluster, **config)
     cluster_obj = Orch(cluster=ceph_cluster, **config)
@@ -264,6 +264,10 @@ def run(ceph_cluster, **kw):
                 "Upgrade in progress, sleeping for 5 seconds and checking cluster state again"
             )
             time.sleep(5)
+        else:
+            log_err_msg = f"Upgrade was not completed on the cluster within {timeout}"
+            log.error(log_err_msg)
+            raise Exception("Upgrade not complete")
 
         if not upgrade_complete:
             log.error("Upgrade was not completed on the cluster. Fail")
@@ -369,6 +373,11 @@ def run(ceph_cluster, **kw):
         msg = f"time when upgrade test was ended : {end_time}"
         log.info(msg)
         time.sleep(10)
+
+        log_dump = (
+            f"ceph versions: {rados_obj.run_ceph_command(cmd='ceph versions')} \n"
+        )
+        log.info(log_dump)
 
         # log cluster health
         rados_obj.log_cluster_health()

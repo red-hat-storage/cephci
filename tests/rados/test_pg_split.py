@@ -10,6 +10,7 @@ from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from tests.rados.rados_test_util import (
     create_pools,
     get_device_path,
+    wait_for_daemon_status,
     wait_for_device_rados,
     write_to_pools,
 )
@@ -148,7 +149,14 @@ def run(ceph_cluster, **kw):
             # Adding the removed OSD back and checking the cluster status
             utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
             method_should_succeed(wait_for_device_rados, host, target_osd, action="add")
-            time.sleep(20)
+            method_should_succeed(
+                wait_for_daemon_status,
+                host=host,
+                daemon_type="osd",
+                daemon_id=osd_id,
+                status="running",
+                timeout=60,
+            )
             assert service_obj.add_osds_to_managed_service(
                 osds=[target_osd], spec=target_osd_spec_name
             )
@@ -321,6 +329,14 @@ def run(ceph_cluster, **kw):
                     wait_for_device_rados, host, target_osd, action="add"
                 )
                 time.sleep(10)
+                method_should_succeed(
+                    wait_for_daemon_status,
+                    host=host,
+                    daemon_type="osd",
+                    daemon_id=osd_id,
+                    status="running",
+                    timeout=60,
+                )
             assert service_obj.add_osds_to_managed_service()
             rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
 
