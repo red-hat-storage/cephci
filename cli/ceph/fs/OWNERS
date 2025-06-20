@@ -1,0 +1,14 @@
+---
+# Based on the information found
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - Manimaran-MM
+
+reviewers:
+  - neha-gangadhar
+  - sumabai
+  - hkadam134
+
+labels:
+  - Ceph-FS

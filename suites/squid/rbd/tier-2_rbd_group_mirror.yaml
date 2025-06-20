@@ -390,7 +390,7 @@ tests:
       name: >
         Add or remove group mirror snapshot schedule when
         client is blocklisted
-      module: test_rbd_group_mirror_client_blocklist.py
+      module: test_rbd_group_mirror_misc.py
       polarion-id: CEPH-83613275
       clusters:
         ceph-rbd1:
@@ -411,6 +411,7 @@ tests:
               size: 4G
               mode: image
               mirror_level: group
+            operation: CEPH-83613275
             fio:
               size: 1G
               ODF_CONFIG:
@@ -457,6 +458,35 @@ tests:
                 direct: 1
                 invalidate: 1
                 io_type: randrw
+
+  - test:
+      abort-on-fail: true
+      desc: verify unsupported operations on group mirror
+      name: >
+        Image, pool level promote, demote when group
+        mirroring is enabled, disabled
+      module: test_rbd_group_mirror_misc.py
+      polarion-id: CEPH-83614239
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            operation: CEPH-83614239
 
   - test:
       abort-on-fail: true

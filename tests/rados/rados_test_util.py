@@ -220,3 +220,44 @@ def wait_for_device_rados(host, osd_id, action: str, timeout: int = 900) -> bool
         )
         time.sleep(120)
     return False
+
+
+def wait_for_daemon_status(
+    host, daemon_type: str, daemon_id: str, status: str, timeout: int = 900
+) -> bool:
+    """
+    Waiting for the device to be removed/added based on the action
+    Args:
+        host: CephNode object
+        status: status of daemon. "running" "stopped" "unknown"
+        timeout: wait timeout in seconds
+        daemon_id: (str) id of the daemo. --daemon-id 1 passed in 'ceph orch ps --daemon-type osd --daemon-id 1'
+        daaemon_type: (str) type of daemon. --daemon-type osd as passed in
+            'ceph orch ps --daemon-type osd --daemon-id 1'
+    Returns:  True -> pass, False -> fail
+    """
+    base_cmd = f"cephadm shell -- ceph orch ps --daemon-type {daemon_type} --daemon-id {daemon_id} -f json"
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+    while end_time > datetime.datetime.now():
+        out, _ = host.exec_command(cmd=f"{base_cmd}", sudo=True, pretty_print=True)
+        ceph_orch_ps = json.loads(out)
+
+        if ceph_orch_ps and ceph_orch_ps[0]["status_desc"] == status:
+            log_info_msg = f"Status of {daemon_type}.{daemon_id} is {status}"
+            log.info(log_info_msg)
+            break
+        else:
+            sleep_duration_in_seconds = 10
+            log_info_msg = f"\n Current status of {daemon_type}.{daemon_id} is {ceph_orch_ps[0]['status_desc']}"
+            f"\n Expected status of {daemon_type}.{daemon_id} is {status}"
+            f"\n Retrying after {sleep_duration_in_seconds} seconds."
+            log.info(log_info_msg)
+            time.sleep(sleep_duration_in_seconds)
+    else:
+        log_error_msg = (
+            f"\n Status of {daemon_type}.{daemon_id} is not changed to {status}"
+        )
+        f"\n after {timeout} seconds."
+        log.error(log_error_msg)
+        return False
+    return True

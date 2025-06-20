@@ -1,0 +1,14 @@
+---
+# Based on the information found 
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - Manohar-Murthy
+  - chaitanyadommeti
+
+reviewers:
+  - aarsharm
+  - sunilangadi2
+
+labels:
+  - RBD

@@ -1,4 +1,6 @@
 # Suite contains basic tier-2 rados tests
+
+# Test suite not actively run. Tests merged with other suites.
 tests:
   - test:
       name: setup install pre-requisistes

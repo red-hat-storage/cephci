@@ -7,6 +7,8 @@ CEPH-83574971 - Adding and Removing Mons to the Cluster after stretch deployment
 
 """
 
+import datetime
+import time
 from collections import namedtuple
 
 from ceph.ceph_admin import CephAdmin
@@ -186,11 +188,23 @@ def run(ceph_cluster, **kw):
                 log.error("Could not add data site mon service")
                 raise Exception("mon service not added error")
 
-            quorum = mon_obj.get_mon_quorum_hosts()
-            if mon_host.hostname not in quorum:
-                log.error(
-                    f"selected host : {mon_host.hostname} mon is not present as part of Quorum post addition"
-                )
+            start_time = datetime.datetime.now()
+            timeout_time = start_time + datetime.timedelta(seconds=60)
+            while datetime.datetime.now() <= timeout_time:
+                quorum = mon_obj.get_mon_quorum_hosts()
+                if mon_host.hostname in quorum:
+                    log.error(
+                        f"selected host : {mon_host.hostname} mon is present as part of Quorum post addition"
+                    )
+                    break
+                else:
+                    sleep_duration_in_seconds = 10
+                    log.error(
+                        f"selected host : {mon_host.hostname} mon is not present as part of Quorum post addition"
+                        f"retrying after {sleep_duration_in_seconds}"
+                    )
+                    time.sleep(sleep_duration_in_seconds)
+            else:
                 raise Exception("Mon not in quorum error post addition")
 
             log.info("A data site mon was removed and added back. Pass")
