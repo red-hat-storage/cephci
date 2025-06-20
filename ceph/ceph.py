@@ -1376,8 +1376,10 @@ class SSHConnectionManager(object):
 
     def __getstate__(self):
         pickle_dict = self.__dict__.copy()
-        del pickle_dict["_SSHConnectionManager__transport"]
-        del pickle_dict["_SSHConnectionManager__client"]
+        if pickle_dict.get("_SSHConnectionManager__transport"):
+            del pickle_dict["_SSHConnectionManager__transport"]
+        if pickle_dict.get("_SSHConnectionManager__client"):
+            del pickle_dict["_SSHConnectionManager__client"]
         return pickle_dict
 
 
@@ -1763,8 +1765,6 @@ class CephNode(object):
 
     def __getstate__(self):
         d = dict(self.__dict__)
-        if d.get("vm_node"):
-            del d["vm_node"]
 
         if d.get("rssh"):
             del d["rssh"]
