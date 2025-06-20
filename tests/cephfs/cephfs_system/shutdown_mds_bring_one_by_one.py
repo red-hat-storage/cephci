@@ -1,10 +1,12 @@
 import json
 import random
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
+from ceph.utils import find_vm_node_by_hostname
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.io.fs_io import fs_io
 from utility.log import Log
@@ -51,23 +53,6 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph orch apply mds {fs_name} --placement='3 {hosts}'",
         )
-        osp_cred = config.get("osp_cred")
-        if config.get("cloud-type") == "openstack":
-            os_cred = osp_cred.get("globals").get("openstack-credentials")
-            params = {}
-            params["username"] = os_cred["username"]
-            params["password"] = os_cred["password"]
-            params["auth_url"] = os_cred["auth-url"]
-            params["auth_version"] = os_cred["auth-version"]
-            params["tenant_name"] = os_cred["tenant-name"]
-            params["service_region"] = os_cred["service-region"]
-            params["domain_name"] = os_cred["domain"]
-            params["tenant_domain_id"] = os_cred["tenant-domain-id"]
-            params["cloud_type"] = "openstack"
-        elif config.get("cloud-type") == "ibmc":
-            pass
-        else:
-            pass
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -132,7 +117,8 @@ def run(ceph_cluster, **kw):
             print(mds.node.hostname)
             if mds.node.hostname == first_shut:
                 bringup_mds.append(mds)
-                fs_util.node_power_off(node=mds.node, sleep_time=150, **params)
+                target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                target_node.shutdown(wait=True)
         # updating mds
         out2 = client1.exec_command(sudo=True, cmd=find_mdsmap)
         output2 = json.loads(out2[0])
@@ -149,7 +135,8 @@ def run(ceph_cluster, **kw):
         if standby_mds[0] not in up_mds2:
             log.info(up_mds2)
             for mds in bringup_mds:
-                fs_util.node_power_on(node=mds.node, sleep_time=150, **params)
+                target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                target_node.power_on()
             raise CommandFailed(
                 f"Standby mds {standby_mds[0]} is not promoted to active"
             )
@@ -167,18 +154,24 @@ def run(ceph_cluster, **kw):
                     if mds["name"].split(".")[1] == mdss.node.hostname:
                         log.info(f'shutting down {mds["name"]}')
                         bringup_mds.append(mdss)
-                        fs_util.node_power_off(node=mdss.node, sleep_time=150, **params)
+                        target_node = find_vm_node_by_hostname(
+                            ceph_cluster, mdss.node.hostname
+                        )
+                        target_node.shutdown(wait=True)
                         break
         out4 = client1.exec_command(sudo=True, cmd=find_mdsmap)
         output4 = json.loads(out4[0])
         mdsmap4 = output4["mdsmap"]
         log.info(f"mdsmap4={mdsmap4}")
         for bring in bringup_mds:
-            fs_util.node_power_on(node=bring.node, sleep_time=150, **params)
+            target_node = find_vm_node_by_hostname(ceph_cluster, bring.node.hostname)
+            target_node.power_on()
         # check if the mds is restarted
+        time.sleep(5)
         out5 = client1.exec_command(sudo=True, cmd=find_mdsmap)
         output5 = json.loads(out5[0])
         mdsmap5 = output5["mdsmap"]
+        log.debug("Output of mdsmap5: {}".format(mdsmap5))
         for mds in mdsmap5:
             if mds["state"] == "failed":
                 raise CommandFailed(f"mds {mds['name']} is not in active state")
