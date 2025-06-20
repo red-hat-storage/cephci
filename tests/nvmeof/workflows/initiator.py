@@ -158,7 +158,8 @@ class NVMeInitiator(Initiator):
 
         results = []
         io_args = {"size": "100%"}
-        with parallel() as p:
+        # Use max_workers to ensure all FIO processes can start simultaneously
+        with parallel(max_workers=len(paths) + 4) as p:
             for path in paths:
                 _io_args = {}
                 if io_args.get("test_name"):

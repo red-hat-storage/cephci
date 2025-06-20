@@ -297,7 +297,16 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
     initiators = config.get("initiators")
     io_tasks = []
-    executor = ThreadPoolExecutor()
+    # Set max_workers to accommodate all FIO processes per initiator
+    num_devices = sum(
+        [(i.get("bdevs", [])[0].get("count", 0)) for i in config.get("subsystems", [])]
+    )
+    max_workers = (
+        len(initiators) * num_devices if initiators else num_devices
+    )  # 20 devices + 10 buffer per initiator
+    executor = ThreadPoolExecutor(
+        max_workers=max_workers,
+    )
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():
