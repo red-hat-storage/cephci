@@ -1,7 +1,9 @@
 import re
 
+from ceph.ceph import CommandFailed
 from cli import Cli
 from cli.utilities.utils import verify_execution_status
+from utility.retry import retry
 
 RPM_QUERY_ERROR_MSG = "package {} is not installed"
 RPM_REGEX = r"Version\s+:\s+(\d+\.\d+)"
@@ -217,6 +219,42 @@ class SubscriptionManager(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def clean(self):
+        """
+        Cleans all local subscription data: entitlements, certs, identity.
+
+        Raises:
+            SubscriptionManagerError: if clean fails.
+        """
+        self.execute(sudo=True, long_running=False, cmd=f"{self.base_cmd} clean")
+
+    def cleanup_subscription_files(self):
+        """
+        Remove residual subscription-related certificate and identity files.
+
+        Raises:
+            SubscriptionManagerError: if the file cleanup command fails.
+        """
+        cmd = "rm -rf /etc/pki/consumer /etc/pki/product"
+        self.execute(sudo=True, long_running=True, cmd=cmd)
+
+    @retry(CommandFailed, tries=5, delay=30)
+    def set(self, version):
+        """
+        Set the subscription-manager release version.
+
+        Args:
+            version (str): The RHEL release version to set (e.g., "8.6", "9.2").
+
+        Raises:
+            SubscriptionManagerError: If setting the release fails.
+        """
+        cmd = f"{self.base_cmd} release --set={version}"
+        if self.execute(sudo=True, cmd=cmd):
+            raise SubscriptionManagerError(
+                f"Failed to set subscription release to {version}"
+            )
 
 
 class Repos(Cli):

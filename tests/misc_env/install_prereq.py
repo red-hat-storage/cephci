@@ -1,14 +1,12 @@
 import base64
 import json
-import re
 import time
 
+import cli.utilities.repos as repos
+import cli.utilities.subscription_manager as sm
 from ceph.parallel import parallel
 from ceph.utils import config_ntp, update_ca_cert
-from ceph.waiter import WaitUntil
 from cli.utilities.packages import Package
-from cli.utilities.packages import SubscriptionManager as sm
-from cli.utilities.packages import SubscriptionManagerError
 from cli.utilities.utils import (
     enable_fips_mode,
     is_fips_mode_enabled,
@@ -158,21 +156,21 @@ def install_prereq(
             ceph.exec_command(cmd="sudo systemctl restart NetworkManager.service")
 
         if not skip_subscription:
-            if not setup_subscription_manager(ceph, "cdn"):
+            if not sm.setup_subscription_manager(ceph, "cdn"):
                 log.info("Trying to subscribe to stage server")
-                setup_subscription_manager(ceph, "stage")
+                sm.setup_subscription_manager(ceph, "stage")
 
-            status = subscription_manager_status(ceph)
+            status = sm.subscription_manager_status(ceph)
             if status == "Unknown" or skip_enabling_rhel_rpms:
                 log.info("Enabling local RHEL repositories")
                 if not setup_local_repos(ceph):
                     raise RepoConfigError("Failed to enable local RHEL repositories")
 
             elif enable_eus:
-                enable_rhel_eus_rpms(ceph, distro_ver)
+                repos.enable_rhel_eus_rpms(ceph, distro_ver)
 
             else:
-                enable_rhel_rpms(ceph, distro_ver)
+                repos.enable_rhel_rpms(ceph, distro_ver)
 
         if repo:
             setup_addition_repo(ceph, repo)
@@ -258,47 +256,6 @@ def setup_addition_repo(ceph, repo):
     ceph.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
 
 
-def setup_subscription_manager(ceph, server, timeout=300, interval=60):
-    # Get configuration details from `~/.cephci.yaml`
-    configs = get_cephci_config()
-
-    # Get credentials and validate
-    creds = configs.get(f"{server}_credentials")
-    if not creds:
-        raise ConfigNotFoundError(f"{server} credentials are not provided")
-
-    # Subscribe to server
-    for w in WaitUntil(timeout=timeout, interval=interval):
-        try:
-            sm(ceph).register(
-                username=creds.get("username"),
-                password=creds.get("password"),
-                serverurl=creds.get("serverurl"),
-                baseurl=creds.get("baseurl"),
-                force=True,
-            )
-            log.info(f"Subscribed to {server} server successfully")
-            return True
-        except SubscriptionManagerError:
-            log.info(f"Failed to subscribe to {server} server. Retrying")
-
-    if w.expired:
-        log.info(f"Failed to subscribe to {server} server.")
-
-    return False
-
-
-def subscription_manager_status(ceph):
-    expr = ".*Overall Status:(.*).*"
-    status = sm(ceph).status()
-
-    match = re.search(expr, status)
-    if not match:
-        raise SubscriptionManagerError("Unexpected subscription manager status")
-
-    return match.group(0)
-
-
 def setup_local_repos(ceph):
     # Get configuration details from `~/.cephci.yaml`
     configs = get_cephci_config()
@@ -322,67 +279,6 @@ def setup_local_repos(ceph):
 
     log.info("Added local RHEL repos successfully")
     return True
-
-
-def enable_rhel_rpms(ceph, distro_ver):
-    """
-    Setup cdn repositories for rhel systems
-    Args:
-        ceph:       cluster instance
-        distro_ver: distro version details
-    """
-
-    repos = {
-        "7": ["rhel-7-server-rpms", "rhel-7-server-extras-rpms"],
-        "8": ["rhel-8-for-x86_64-appstream-rpms", "rhel-8-for-x86_64-baseos-rpms"],
-        "9": ["rhel-9-for-x86_64-appstream-rpms", "rhel-9-for-x86_64-baseos-rpms"],
-    }
-
-    ceph.exec_command(sudo=True, cmd=f"subscription-manager release --set {distro_ver}")
-
-    for repo in repos.get(distro_ver[0]):
-        ceph.exec_command(
-            sudo=True,
-            cmd="subscription-manager repos --enable={r}".format(r=repo),
-            long_running=True,
-        )
-
-
-def enable_rhel_eus_rpms(ceph, distro_ver):
-    """
-    Setup cdn repositories for rhel systems
-    reference: http://wiki.test.redhat.com/CEPH/SubscriptionManager
-    Args:
-        distro_ver:     distro version - example: 7.7
-        ceph:           ceph object
-    """
-
-    eus_repos = {"7": ["rhel-7-server-eus-rpms", "rhel-7-server-extras-rpms"]}
-
-    for repo in eus_repos.get(distro_ver[0]):
-        ceph.exec_command(
-            sudo=True,
-            cmd="subscription-manager repos --enable={r}".format(r=repo),
-            long_running=True,
-        )
-
-    rhel_major_version = distro_ver[0]
-
-    if rhel_major_version == "7":
-        # We only support one EUS release for RHEL 7:
-        release = "7.7"
-    else:
-        raise NotImplementedError("cannot set EUS repos for %s", rhel_major_version)
-
-    cmd = f"subscription-manager release --set={release}"
-
-    ceph.exec_command(
-        sudo=True,
-        cmd=cmd,
-        long_running=True,
-    )
-
-    ceph.exec_command(sudo=True, cmd="yum clean all", long_running=True)
 
 
 def registry_login(ceph, distro_ver, test_data=None):
