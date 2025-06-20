@@ -373,6 +373,7 @@ tests:
               size: 100M
               mode: image
               mirror_level: group
+            operation: CEPH-83613291
             io_small:
               io-type: write
               io-size_init: 20M
@@ -518,3 +519,43 @@ tests:
               size: 4G
               mode: image
               mirror_level: group
+
+  - test:
+      abort-on-fail: true
+      desc: Verify data is consistent for both manual and scheduled snapshots
+      name: >
+        Verify mirror group snapshot schedule & manual mirror
+        group snapshot for consistency
+      module: test_rbd_group_mirror_consistency.py
+      polarion-id: CEPH-83610861
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            ec_pool_config:
+              rbd_mirror_group: true
+              num_pools: 1
+              num_images: 2
+              do_not_create_image: true
+              size: 4G
+              mode: image
+              mirror_level: group
+            snap_schedule_interval: 1m
+            operation: CEPH-83610861
+            fio:
+              size: 1G
+              runtime: 60
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
