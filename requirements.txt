@@ -1,10 +1,7 @@
 -e .
-cos-aspera; python_version == '3.6'
-python-openstackclient
-xmltodict
-tfacon
-uplink
-awscli
-pylero
-python-dotenv
-smbprotocol
+xmltodict == 0.14.2
+tfacon == 1.1.4
+uplink == 0.9.7
+pylero == 0.1.1
+python-dotenv == 1.1.0
+smbprotocol == 1.15.0
