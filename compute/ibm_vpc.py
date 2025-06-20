@@ -178,7 +178,7 @@ class CephVMNodeIBM:
     @property
     def ip_address(self) -> str:
         """Return the private IP address of the node."""
-        return self.node["primary_network_interface"]["primary_ipv4_address"]
+        return self.node["primary_network_interface"]["primary_ip"]["address"]
 
     @property
     def floating_ips(self) -> List[str]:
@@ -428,7 +428,7 @@ class CephVMNodeIBM:
                 i
                 for i in records_a
                 if i["rdata"]["ip"]
-                == self.node["primary_network_interface"]["primary_ipv4_address"]
+                == self.node["primary_network_interface"]["primary_ip"]["address"]
             ]
             if records_ip:
                 self.dns_service.update_resource_record(
@@ -440,7 +440,7 @@ class CephVMNodeIBM:
                 )
 
             a_record = ResourceRecordInputRdataRdataARecord(
-                self.node["primary_network_interface"]["primary_ipv4_address"]
+                self.node["primary_network_interface"]["primary_ip"]["address"]
             )
             self.dns_service.create_resource_record(
                 instance_id=dns_svc_id,
@@ -459,7 +459,7 @@ class CephVMNodeIBM:
                 dnszone_id=dns_zone_id,
                 type="PTR",
                 ttl=900,
-                name=self.node["primary_network_interface"]["primary_ipv4_address"],
+                name=self.node["primary_network_interface"]["primary_ip"]["address"],
                 rdata=ptr_record,
             )
 
