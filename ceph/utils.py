@@ -50,7 +50,11 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
         log.warning("Failed to retrieve instances")
         return 1
 
-    instances = [i for i in resp.get_result()["instances"] if pattern in i["name"]]
+    instances = [
+        i
+        for i in resp.get_result()["instances"]
+        if pattern in i["name"] and not i["name"].startswith("dnd")
+    ]
     log.info(f"Cleaning up instances : {instances}")
 
     while "next" in resp.get_result().keys():
@@ -60,7 +64,9 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
             log.warning("Failed to fetch instance details, breaking out.")
             break
         instance_list = [
-            i for i in resp.get_result()["instances"] if pattern in i["name"]
+            i
+            for i in resp.get_result()["instances"]
+            if pattern in i["name"] and not i["name"].startswith("dnd")
         ]
         instances += instance_list
 
