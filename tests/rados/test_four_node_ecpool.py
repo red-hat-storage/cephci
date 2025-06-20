@@ -17,7 +17,11 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from tests.rados.monitor_configurations import MonConfigMethods
-from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
+from tests.rados.rados_test_util import (
+    get_device_path,
+    wait_for_daemon_status,
+    wait_for_device_rados,
+)
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 from utility.utils import method_should_succeed, should_not_be_empty
@@ -373,6 +377,14 @@ def run(ceph_cluster, **kw):
             log.debug("Adding the removed OSD back and checking the cluster status")
             utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
             method_should_succeed(wait_for_device_rados, host, target_osd, action="add")
+            method_should_succeed(
+                wait_for_daemon_status,
+                host=host,
+                daemon_type="osd",
+                daemon_id=target_osd,
+                status="running",
+                timeout=60,
+            )
             assert service_obj.add_osds_to_managed_service(
                 osds=[target_osd], spec=target_osd_spec_name
             )

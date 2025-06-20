@@ -101,7 +101,7 @@ def run(ceph_cluster, **kw):
             f"mkdir {fs1_kernel_mount_dir}/dir1",
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
             f"--files 1000 --files-per-dir 10 --top {fs1_kernel_mount_dir}/dir1",
-            f"dd if=/dev/urandom of={fs1_kernel_mount_dir}/file1 bs=4M count=1000; done",
+            f"dd if=/dev/urandom of={fs1_kernel_mount_dir}/file1 bs=4M count=1000",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command, timeout=3600)
@@ -128,7 +128,7 @@ def run(ceph_cluster, **kw):
             f"mkdir {fs2_kernel_mount_dir}/dir2",
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
             f"--files 1000 --files-per-dir 10 --top {fs2_kernel_mount_dir}/dir2",
-            f"dd if=/dev/urandom of={fs2_kernel_mount_dir}/file2 bs=1M count=1000; done",
+            f"dd if=/dev/urandom of={fs2_kernel_mount_dir}/file2 bs=1M count=1000",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command, timeout=3600)
@@ -141,29 +141,19 @@ def run(ceph_cluster, **kw):
             client1.exec_command(sudo=True, cmd=command, timeout=3600)
         log.info(f"Verifying data consistency in {fs1} after IO's on {fs2}")
         command = f"diff -qr {fs1_kernel_mount_dir} /home/cephuser/cephfs_backup/"
-        rc = client1.exec_command(sudo=True, cmd=command, timeout=3600)
-        if rc == 0:
-            log.info(f"Data is consistent in {fs1}")
-        else:
-            log.error(f"Data is inconsistent in {fs1}")
-            return 1
+        client1.exec_command(sudo=True, cmd=command, timeout=3600)
         log.info(f"Run IO's on {fs1}")
         commands = [
             f"mkdir {fs1_kernel_mount_dir}/dir3",
             f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
             f"--files 1000 --files-per-dir 10 --top {fs1_kernel_mount_dir}/dir3",
-            f"dd if=/dev/urandom of={fs1_kernel_mount_dir}/file3 bs=8M count=1000; done",
+            f"dd if=/dev/urandom of={fs1_kernel_mount_dir}/file3 bs=8M count=1000",
         ]
         log.info(f"Verifying data consistency in {fs2} after IO's on {fs1}")
         for command in commands:
             client1.exec_command(sudo=True, cmd=command, timeout=3600)
         command = f"diff -qr {fs2_kernel_mount_dir} /home/cephuser/cephfs_ec_backup/"
-        rc = client1.exec_command(sudo=True, cmd=command, timeout=3600)
-        if rc == 0:
-            log.info(f"Data is consistent in {fs2}")
-        else:
-            log.error(f"Data is inconsistent in {fs2}")
-            return 1
+        client1.exec_command(sudo=True, cmd=command, timeout=3600)
         return 0
 
     except Exception as e:

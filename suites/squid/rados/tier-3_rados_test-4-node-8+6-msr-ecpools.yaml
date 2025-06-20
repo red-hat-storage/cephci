@@ -225,30 +225,30 @@ tests:
         verify_cluster_health: true
       destroy-cluster: false
 
-#  - test:
-#      name: EC Pool Recovery Improvement
-#      module: pool_tests.py
-#      polarion-id: CEPH-83573852
-#      config:
-#        ec_pool_recovery_improvement:
-#          create: true
-#          profile_name: ec86_1
-#          pool_name: ec86_pool1
-#          k: 8
-#          m: 6
-#          pg_num: 32
-#          plugin: jerasure
-#          create_rule: false
-#          crush-osds-per-failure-domain: 4
-#          crush-num-failure-domains: 4
-#          crush-failure-domain: host
-#          max_objs: 300
-#          rados_read_duration: 10
-#          osd_max_backfills: 16
-#          osd_recovery_max_active: 16
-#          delete_pool: true
-#      desc: Verify Recovery of EC pool with only "k" shards available
-#      comments: "Bug with OSD down scenario 2305520"
+  - test:
+      name: EC Pool Recovery Improvement
+      module: pool_tests.py
+      polarion-id: CEPH-83573852
+      config:
+        ec_pool_recovery_improvement:
+          create: true
+          profile_name: ec86_1
+          pool_name: ec86_pool1
+          k: 8
+          m: 6
+          pg_num: 32
+          plugin: jerasure
+          create_rule: false
+          crush-osds-per-failure-domain: 4
+          crush-num-failure-domains: 4
+          crush-failure-domain: host
+          max_objs: 300
+          rados_read_duration: 10
+          osd_max_backfills: 16
+          osd_recovery_max_active: 16
+          delete_pool: true
+      desc: Verify Recovery of EC pool with only "k" shards available
+      comments: "Bug with OSD down scenario 2305520"
 
   - test:
       name: EC pool LC
@@ -282,36 +282,37 @@ tests:
           - ec86_pool2
       desc: Create, modify & delete EC pools and run IO
 
-  - test:
-      name: EC pool with Overwrites
-      module: rados_prep.py
-      polarion-id: CEPH-83571730
-      config:
-        ec_pool:
-          create: true
-          profile_name: ec86_3
-          pool_name: ec86_pool3
-          app_name: rbd
-          pg_num: 32
-          erasure_code_use_overwrites: "true"
-          k: 8
-          m: 6
-          create_rule: false
-          crush-osds-per-failure-domain: 4
-          crush-num-failure-domains: 4
-          plugin: jerasure
-          crush-failure-domain: host
-          max_objs: 300
-          rados_read_duration: 10
-          test_overwrites_pool: true
-          metadata_pool: re_pool_overwrite
-          image_name: image_ec_pool
-          image_size: 100M
-        delete_pools:
-          - ec86_pool3
-          - re_pool_overwrite
-      comments: "RBD support RFE : 2305966"
-      desc: EC pool with Overwrites & create RBD pool
+# Commented until bug fix : 2305966
+#  - test:
+#      name: EC pool with Overwrites
+#      module: rados_prep.py
+#      polarion-id: CEPH-83571730
+#      config:
+#        ec_pool:
+#          create: true
+#          profile_name: ec86_3
+#          pool_name: ec86_pool3
+#          app_name: rbd
+#          pg_num: 32
+#          erasure_code_use_overwrites: "true"
+#          k: 8
+#          m: 6
+#          create_rule: false
+#          crush-osds-per-failure-domain: 4
+#          crush-num-failure-domains: 4
+#          plugin: jerasure
+#          crush-failure-domain: host
+#          max_objs: 300
+#          rados_read_duration: 10
+#          test_overwrites_pool: true
+#          metadata_pool: re_pool_overwrite
+#          image_name: image_ec_pool
+#          image_size: 100M
+#        delete_pools:
+#          - ec86_pool3
+#          - re_pool_overwrite
+#      comments: "RBD support RFE : 2305966"
+#      desc: EC pool with Overwrites & create RBD pool
 
 #  - test:
 #      name: Inconsistent objects in  EC pool functionality check
