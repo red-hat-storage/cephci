@@ -213,4 +213,3 @@ tests:
           k: 2
           m: 2
           pg_num: 1
-          plugin: jerasure

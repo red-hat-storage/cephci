@@ -170,7 +170,6 @@ tests:
           pg_num: 1
           k: 2
           m: 2
-          plugin: jerasure
           disable_pg_autoscale: true
         inconsistent_obj_count: 4
         debug_enable: False
@@ -250,7 +249,6 @@ tests:
               pg_num_max: 1
               k: 3
               m: 2
-              plugin: jerasure
               crush-failure-domain: osd
 
   - test:

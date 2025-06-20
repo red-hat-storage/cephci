@@ -264,7 +264,6 @@ tests:
             pg_num: 32
             k: 2
             m: 2
-            plugin: jerasure
             crush-failure-domain: host
           compression_config:
             compression_mode: aggressive

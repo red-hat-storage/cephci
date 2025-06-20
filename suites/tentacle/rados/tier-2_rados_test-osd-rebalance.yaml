@@ -179,5 +179,4 @@ tests:
 #            pg_num: 1
 #            k: 4
 #            m: 2
-#            plugin: jerasure
 #            disable_pg_autoscale: true

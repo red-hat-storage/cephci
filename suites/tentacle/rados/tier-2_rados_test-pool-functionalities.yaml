@@ -187,7 +187,6 @@ tests:
               pg_num: 32
               k: 2
               m: 2
-              plugin: jerasure
               crush-failure-domain: osd
               target_size_ratio: 0.8
               max_objs: 300
@@ -243,7 +242,6 @@ tests:
               pg_num: 32
               k: 8
               m: 3
-              plugin: jerasure
               crush-failure-domain: osd
               pg_num_min: 16
               max_objs: 300

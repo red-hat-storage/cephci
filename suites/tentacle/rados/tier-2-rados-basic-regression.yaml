@@ -434,7 +434,6 @@ tests:
           pool_name: ec_profile_test
           k: 2
           m: 2
-          plugin: jerasure
           max_objs: 300
           rados_read_duration: 10
           crush-failure-domain: host

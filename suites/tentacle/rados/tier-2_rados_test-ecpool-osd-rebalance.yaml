@@ -110,7 +110,6 @@ tests:
           pool_name: ec_profile_test
           k: 2
           m: 2
-          plugin: jerasure
           max_objs: 300
           rados_read_duration: 10
           crush-failure-domain: host
@@ -130,9 +129,8 @@ tests:
               rados_put: true
               pg_num: 32
               pgp_num: 32
-              k: 3
+              k: 2
               m: 2
-              plugin: jerasure
               crush-failure-domain: host
         delete_pools:
           - ec_pool_9212
@@ -208,7 +206,6 @@ tests:
               pg_num: 32
               k: 8
               m: 3
-              plugin: jerasure
               rados_put: true
           - create_pool:
               create: true
@@ -217,10 +214,8 @@ tests:
               rados_put: true
               pg_num: 32
               pgp_num: 32
-              k: 8
-              m: 4
-              plugin: jerasure
-
+              k: 2
+              m: 2
         delete_pools:
           - repool_1
           - repool_2
@@ -268,7 +263,6 @@ tests:
               pg_num: 32
               k: 4
               m: 2
-              plugin: jerasure
               max_objs: 300
               rados_read_duration: 10
           - create_pool:
