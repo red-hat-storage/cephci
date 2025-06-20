@@ -326,6 +326,7 @@ tests:
       clusters:
         ceph-rbd1:
           config:
+            operation: CEPH-83614238
             rep_pool_config:
               rbd_mirror_group: true
               num_pools: 1

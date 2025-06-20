@@ -91,7 +91,7 @@ def run(args: Dict):
             return 1
 
         ip_address = [
-            i["primary_network_interface"]["primary_ipv4_address"] for i in instances
+            i["primary_network_interface"]["primary_ip"]["address"] for i in instances
         ]
 
         for record in records["resource_records"]:
