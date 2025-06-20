@@ -11,7 +11,7 @@ class Cluster(Cli):
         self.base_cmd = f"{base_cmd} cluster"
         self.qos = Qos(nodes, self.base_cmd)
 
-    def create(self, name, nfs_server, ha=False, vip=None):
+    def create(self, name, nfs_server, ha=False, vip=None, active_standby=False):
         """
         Perform create operation for nfs cluster
         Args:
@@ -19,9 +19,12 @@ class Cluster(Cli):
             nfs_server (list,tuple): Name of the server on which NFS Cluster to be created
             ha (bool): Flag to check if HA is required
             vip (str): Vip for the HA cluster
+            active_standby (bool): Flag to check if active standby is required
         """
         nfs_server = nfs_server if type(nfs_server) in (list, tuple) else [nfs_server]
         nfs_server = " ".join(nfs_server)
+        if active_standby and ha:
+            nfs_server = "1 " + nfs_server
         cmd = f"{self.base_cmd} create {name} '{nfs_server}'"
         if ha:
             cmd += f" --ingress --virtual-ip {vip}"
