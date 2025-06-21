@@ -13,6 +13,13 @@ log = Log(__name__)
 def add_snapshot_scheduling(rbd, **kw):
     """
     Add snapshot scheduling to an rbd mirror cluster
+
+    Args:
+        rbd: RBD object
+        kw: Dictionary with keys - pool, image, level,
+        group (optional), namespace (optional), interval
+    Returns:
+        Tuple (out, err) from the executed command
     """
     pool = kw.get("pool")
     image = kw.get("image")
@@ -23,20 +30,34 @@ def add_snapshot_scheduling(rbd, **kw):
 
     if level == "cluster":
         out, err = rbd.mirror.snapshot.schedule.add_(interval=interval)
+
     elif level == "pool":
         out, err = rbd.mirror.snapshot.schedule.add_(pool=pool, interval=interval)
+
     elif level == "group":
         group_kw = {"pool": pool, "interval": interval, "group": group}
         if namespace:
-            group_kw.update({"namespace": namespace})
+            group_kw["namespace"] = namespace
         out, err = rbd.mirror.group.snapshot.schedule.add_(**group_kw)
-    elif level == "namespace" and kw.get("namespace", ""):
+
+    elif level == "namespace":
+        if not namespace:
+            raise ValueError("Namespace level scheduling requires a namespace")
         namespace_kw = {"pool": pool, "interval": interval, "namespace": namespace}
         out, err = rbd.mirror.snapshot.schedule.add_(**namespace_kw)
+
+    elif level == "image":
+        image_kw = {
+            "pool": pool,
+            "image": image,
+            "interval": interval,
+        }
+        if namespace:
+            image_kw["namespace"] = namespace
+        out, err = rbd.mirror.snapshot.schedule.add_(**image_kw)
+
     else:
-        out, err = rbd.mirror.snapshot.schedule.add_(
-            pool=pool, image=image, interval=interval
-        )
+        raise ValueError(f"Unsupported schedule level: {level}")
 
     return out, err
 
