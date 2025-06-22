@@ -1,6 +1,7 @@
 import re
 
 from cli import Cli
+from cli.exceptions import OperationFailedError
 from cli.utilities.utils import verify_execution_status
 
 RPM_QUERY_ERROR_MSG = "package {} is not installed"
@@ -217,6 +218,32 @@ class SubscriptionManager(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def clean(self):
+        """Cleans all local subscription data: entitlements, certs, identity.
+
+        Raises:
+            SubscriptionManagerError: if clean fails.
+        """
+        cmd = f"{self.base_cmd} clean"
+
+        if self.execute(sudo=True, long_running=True, cmd=cmd):
+            raise OperationFailedError("Failed to clean repositories.")
+
+    def set(self, version):
+        """Set the subscription-manager release version.
+
+        Args:
+            version (str): The RHEL release version to set (e.g., "8.6", "9.2").
+
+        Raises:
+            SubscriptionManagerError: If setting the release fails.
+        """
+        cmd = f"{self.base_cmd} release --set={version}"
+        if self.execute(sudo=True, long_running=True, cmd=cmd):
+            raise OperationFailedError(
+                f"Failed to set subscription release to {version}."
+            )
 
 
 class Repos(Cli):
