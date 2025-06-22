@@ -1,7 +1,9 @@
 import re
 
+from ceph.ceph import CommandFailed
 from cli import Cli
 from cli.utilities.utils import verify_execution_status
+from utility.retry import retry
 
 RPM_QUERY_ERROR_MSG = "package {} is not installed"
 RPM_REGEX = r"Version\s+:\s+(\d+\.\d+)"
@@ -218,11 +220,37 @@ class SubscriptionManager(Cli):
             return out[0].strip()
         return out
 
+    def clean(self):
+        """
+        Cleans all local subscription data: entitlements, certs, identity.
+
+        Raises:
+            SubscriptionManagerError: if clean fails.
+        """
+        self.execute(sudo=True, long_running=False, cmd=f"{self.base_cmd} clean")
+
+    @retry(CommandFailed, tries=5, delay=30)
+    def set(self, version):
+        """
+        Set the subscription-manager release version.
+
+        Args:
+            version (str): The RHEL release version to set (e.g., "8.6", "9.2").
+
+        Raises:
+            SubscriptionManagerError: If setting the release fails.
+        """
+        cmd = f"{self.base_cmd} release --set={version}"
+        if self.execute(sudo=True, cmd=cmd):
+            raise SubscriptionManagerError(
+                f"Failed to set subscription release to {version}"
+            )
+
 
 class Repos(Cli):
     """This module provides CLI interface to perform subscription manager repo operations."""
 
-    def __init__(self, nodes, base_cmd):
+    def __init__(self, nodes, base_cmd="subscription-manager"):
         super(Repos, self).__init__(nodes)
 
         self.base_cmd = f"{base_cmd} repos"
