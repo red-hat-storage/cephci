@@ -128,6 +128,7 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
     props.append(Property(name="polarion-group-id", value=test_group_id))
     xml.append(props)
     xml.add_testsuite(suite)
-    xml.write(xml_file, pretty=True)
+    with open(xml_file, "w", encoding="utf-8") as f:
+        xml.write(f, pretty=True)
 
     log.info(f"xUnit result file created: {xml_file}")
