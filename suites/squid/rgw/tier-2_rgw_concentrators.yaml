@@ -1,3 +1,8 @@
+# Test suite for evaluating RGW with concentrator deployment + scenarios.
+#
+# This suite deploys rgw with concentrator i.e local haproxy [local haproxy + multiple rgw's]
+# The deployment is evaluated by running IOs across the environments.
+# conf : conf/squid/rgw/tier-0_rgw.yaml
 tests:
   - test:
       abort-on-fail: true
