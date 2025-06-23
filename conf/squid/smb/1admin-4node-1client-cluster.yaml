@@ -32,6 +32,7 @@ globals:
       node3:
         role:
           - mon
+          - mgr
           - osd
           - node-exporter
           - crash
