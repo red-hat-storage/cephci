@@ -1112,7 +1112,17 @@ class HighAvailability:
                 if (
                     expected_visibility == "False"
                 ):  # If expected visibility is False, devices should be empty
-                    if devices_json:  # Check if Devices is not empty
+                    # Determine if devices list is empty (no Namespaces in any Subsystem)
+                    devices_json_empty = (
+                        all(
+                            not subsys.get("Namespaces")  # True if empty or missing
+                            for device in devices_json
+                            for subsys in device.get("Subsystems", [])
+                        )
+                        if rhel_version == "9.6"
+                        else not devices_json
+                    )
+                    if not devices_json_empty:  # Check if Devices is not empty
                         LOG.error(
                             f"Expected no devices for initiator {node}, but found: {devices_json}"
                         )
@@ -1124,7 +1134,16 @@ class HighAvailability:
                 elif (
                     expected_visibility == "True"
                 ):  # If expected visibility is True, devices should not be empty
-                    if not devices_json:
+                    devices_json_empty = (
+                        all(
+                            not subsys.get("Namespaces")  # True if empty or missing
+                            for device in devices_json
+                            for subsys in device.get("Subsystems", [])
+                        )
+                        if rhel_version == "9.6"
+                        else not devices_json
+                    )
+                    if devices_json_empty:
                         LOG.error(
                             f"Expected devices to be visible for node {node}, but found none."
                         )
