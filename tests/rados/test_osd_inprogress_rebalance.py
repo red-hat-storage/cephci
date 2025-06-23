@@ -7,10 +7,11 @@ from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from tests.rados.rados_test_util import (
     create_pools,
     get_device_path,
+    wait_for_daemon_status,
     wait_for_device_rados,
     write_to_pools,
 )
-from tests.rados.stretch_cluster import wait_for_clean_pg_sets, wait_for_daemon_status
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_9281 import do_rados_get
 from utility.log import Log
 from utility.utils import method_should_succeed, should_not_be_empty
