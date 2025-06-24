@@ -361,12 +361,19 @@ class ServiceabilityMethods:
         )
         return osd_metadata.get("osdspec_affinity", None)
 
-    def add_osds_to_managed_service(self, osds: list = None, spec: str = None) -> bool:
+    def add_osds_to_managed_service(
+        self,
+        osds: list = None,
+        spec: str = None,
+        remove_services_without_daemons: bool = False,
+    ) -> bool:
         """
         Method to identify non-managed OSDs and then add them back to managed state under existing OSD specs
         Args:
             osds: list of OSDs to be set to managed state
             spec: name of the spec that needs to be used for setting OSD to manage.
+            remove_services_without_daemons: ( type: bool ) If set to True, any OSD service managing with 0
+                daemons will be removed
         Returns:
             Pass -> True
             fail -> False
@@ -439,6 +446,14 @@ class ServiceabilityMethods:
             if self.unmanaged_osd_service_exists():
                 log.info("All OSDs not set to manage-able placement spec")
                 return False
+            if remove_services_without_daemons:
+                if (
+                    self.rados_obj.remove_empty_service_spec(service_type="osd")
+                    is False
+                ):
+                    log.info("Could not remove empty service spec")
+                    return False
+
             log.info("Completed running set-managed for all OSDs without correct spec")
             return True
 
