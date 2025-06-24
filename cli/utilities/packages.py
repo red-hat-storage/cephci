@@ -60,6 +60,25 @@ class Package(Cli):
             return out[0].strip()
         return out
 
+    def repolist(self, enabled=False, disabled=False):
+        """list a package installed
+
+        Args:
+            enabled (bool): list enabled repositories
+            disabled (bool): list disabled repositories
+        """
+        cmd = f"{self.manager} repolist"
+        if enabled:
+            cmd += " --enabled"
+
+        if disabled:
+            cmd += " --disabled"
+
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
+
     def install(self, pkg, nogpgcheck=False, env_vars={}):
         """install a package or packages
 
@@ -165,6 +184,42 @@ class Package(Cli):
             return 0
         else:
             return 1
+
+
+class YumConfigManager(Cli):
+    """This module provides CLI interface for Yum configuration management."""
+
+    def __init__(self, nodes):
+        super(YumConfigManager, self).__init__(nodes)
+
+        self.base_cmd = "yum-config-manager"
+
+    def add_repo(self, repo):
+        """add a repository
+
+        Args:
+            repo (str): repo to be added
+        """
+        cmd = f"{self.base_cmd} --add-repo {repo}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+
+    def setopt(self, repo_id, config, save=True):
+        """Set a configuration option for a repository.
+
+        Args:
+            repo_id (str): The ID of the repository.
+            config (str): The configuration option to set.
+            save (bool): Whether to save the configuration.
+        """
+        cmd = f"{self.base_cmd} --setopt={repo_id}.{config}"
+        if save:
+            cmd += " --save"
+
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
 
 
 class SubscriptionManager(Cli):

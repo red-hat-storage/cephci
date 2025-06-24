@@ -65,7 +65,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
         [--ubuntu-repo <repo>]
-        [--add-repo <repo>]
+        [--add-repo <repo>]...
         [--kernel-repo <repo>]
         [--store | --reuse <file>]
         [--skip-cluster]
@@ -769,9 +769,7 @@ def run(args):
                 skip_version_compare = config.get("skip_version_compare")
 
             if args.get("--add-repo"):
-                repo = args.get("--add-repo")
-                if repo.startswith("http"):
-                    config["add-repo"] = repo
+                config["add-repo"] = args.get("--add-repo")
 
             config["build_type"] = build
             config["enable_eus"] = enable_eus
