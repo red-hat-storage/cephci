@@ -361,12 +361,19 @@ class ServiceabilityMethods:
         )
         return osd_metadata.get("osdspec_affinity", None)
 
-    def add_osds_to_managed_service(self, osds: list = None, spec: str = None) -> bool:
+    def add_osds_to_managed_service(
+        self,
+        osds: list = None,
+        spec: str = None,
+        remove_empty_service_spec: bool = False,
+    ) -> bool:
         """
         Method to identify non-managed OSDs and then add them back to managed state under existing OSD specs
         Args:
             osds: list of OSDs to be set to managed state
             spec: name of the spec that needs to be used for setting OSD to manage.
+            remove_empty_service_spec: ( type: bool, default: false ) If set to True, any OSD service managing with 0
+                daemons will be removed
         Returns:
             Pass -> True
             fail -> False
@@ -439,6 +446,14 @@ class ServiceabilityMethods:
             if self.unmanaged_osd_service_exists():
                 log.info("All OSDs not set to manage-able placement spec")
                 return False
+            if remove_empty_service_spec:
+                if (
+                    self.rados_obj.remove_empty_service_spec(service_type="osd")
+                    is False
+                ):
+                    log.info("Could not remove empty service spec")
+                    return False
+
             log.info("Completed running set-managed for all OSDs without correct spec")
             return True
 
@@ -471,18 +486,23 @@ class ServiceabilityMethods:
         # enable faster recovery
         self.rados_obj.change_recovery_threads(config={}, action="set")
 
-        self.cephadm.shell(args=[cmd])
+        self.cephadm.shell(args=[cmd], print_output=True, pretty_print=True)
         # Sleeping for 2 seconds for drain to have started
         time.sleep(2)
         log.debug("Started drain operation on node : " + host_obj.hostname)
 
+        timeout_in_seconds = 3600
+        end_time = datetime.datetime.now() + datetime.timedelta(
+            seconds=timeout_in_seconds
+        )
+        drain_success = False
         status_cmd = "ceph orch osd rm status"
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=3600)
-        drain_success = True
+        # TBD: Add checks for 8.1 BZs
+        # https://bugzilla.redhat.com/show_bug.cgi?id=2375839
         while end_time > datetime.datetime.now():
             try:
                 drain_ops = self.rados_obj.run_ceph_command(
-                    cmd=status_cmd, client_exec=True
+                    cmd=status_cmd, client_exec=True, print_output=True
                 )
                 for entry in drain_ops:
                     if entry["drain_done_at"] is None or entry["draining"]:
@@ -494,20 +514,32 @@ class ServiceabilityMethods:
                             "drain process for OSD %s is still going on"
                             % entry["osd_id"]
                         )
-                        if end_time < datetime.datetime.now():
-                            log.error(
-                                "Could not drain OSD %s within timeout"
-                                % entry["osd_id"]
-                            )
-                            drain_success = False
-                        log.info("Sleeping for 120 seconds and checking again....")
-                        time.sleep(120)
-                    log.info("Drain operation completed for OSD %s" % entry["osd_id"])
-                log.info("Drain operations completed on host : " + host_obj.hostname)
-                break
+                log.info("Sleeping for 20 seconds and checking again....")
+                time.sleep(20)
             except json.JSONDecodeError:
                 log.info("Drain operations completed on host : " + host_obj.hostname)
-                break
+                # Add checks for 8.1 OSD process not removed.
+                if self.rados_obj.check_daemon_exists_on_host(host_obj.hostname):
+                    log.info(
+                        "Drain operations not completed on host : " + host_obj.hostname
+                    )
+                    log.info("Sleeping for 20 seconds and checking again....")
+                    time.sleep(20)
+                else:
+                    log.info(
+                        "Drain operations completed on host : " + host_obj.hostname
+                    )
+                    drain_success = True
+                    break
+
+        if drain_success is False:
+            log.info(
+                "Drain operations not completed on host : "
+                + host_obj.hostname
+                + " with timeout of "
+                + str(timeout_in_seconds)
+                + " seconds"
+            )
 
         if self.rhbuild.split(".")[0] < "7":
             # zap all devices on the removed host
