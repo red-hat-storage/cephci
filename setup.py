@@ -23,7 +23,7 @@ setup(
         "ibm-cloud-networking-services==0.25.0",
         "jinja_markdown==1.210911",
         "jinja2==3.1.6",
-        "junitparser==3.2.0",
+        "junitparser==4.0.2",
         "paramiko==3.5.1",
         "plotly==6.1.2",
         "pyyaml==6.0.2",
