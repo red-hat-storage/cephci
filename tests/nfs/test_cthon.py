@@ -9,10 +9,11 @@ from nfs_operations import (
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.io.cthon import Cthon
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
-
+@retry(OperationFailedError, tries=4, delay=10, backoff=2)
 def run_cthon_tests(client, exports, mounts, nfs_node_ip, cthon_obj):
     """
     Run Cthon tests for a client on assigned exports.
@@ -48,10 +49,13 @@ def run(ceph_cluster, **kw):
     clients = ceph_cluster.get_nodes(role="client")
 
     nfs_node = nfs_nodes[0]
-    nfs_mount = "/mnt/nfs"
-    nfs_export = "/export"
+    nfs_mount = config.get("nfs_mount", "/mnt/nfs")
+    nfs_export = config.get("nfs_export", "/export")
     num_exports = int(config.get("total_num_exports", 1))
     num_clients = int(config.get("clients", 1))
+    longevity = config.get("longevity", False)
+    longevity_loop = int(config.get("longevity_loop", 1))
+    nfs_name = config.get("nfs_name", "cephfs-nfs")
     # batch_size = int(config.get("max_batch_size", 10))
 
     # Validate client count
@@ -69,7 +73,7 @@ def run(ceph_cluster, **kw):
             nfs_node.hostname,
             config.get("port", "2049"),
             config.get("nfs_version", "4.0"),
-            nfs_name="cephfs-nfs",
+            nfs_name=nfs_name,
             fs="cephfs",
             fs_name="cephfs",
             ceph_cluster=ceph_cluster,
@@ -90,22 +94,24 @@ def run(ceph_cluster, **kw):
         log.info("Dependencies installed successfully.")
 
         # Run Cthon tests in parallel
-        with ThreadPoolExecutor(max_workers=None) as executor:
-            futures = [
-                executor.submit(
-                    run_cthon_tests,
-                    clients[i],
-                    client_export_mount_dict[clients[i]]["export"],
-                    client_export_mount_dict[clients[i]]["mount"],
-                    nfs_node.ip_address,
-                    Cthon(clients[i]),
-                )
-                for i in range(num_clients)
-            ]
-            for future in futures:
-                future.result()  # Wait for all tests to complete
+        for loop in range(longevity_loop if longevity else 1):
+            log.info("\n \n" + "=" * 30 + f" \n Running Loop {loop + 1} \n " + "=" * 30)
+            with ThreadPoolExecutor(max_workers=None) as executor:
+                futures = [
+                    executor.submit(
+                        run_cthon_tests,
+                        clients[i],
+                        client_export_mount_dict[clients[i]]["export"],
+                        client_export_mount_dict[clients[i]]["mount"],
+                        nfs_node.ip_address,
+                        Cthon(clients[i]),
+                    )
+                    for i in range(num_clients)
+                ]
+                for future in futures:
+                    future.result()  # Wait for all tests to complete
 
-        log.info("All Cthon tests completed successfully.")
+            log.info("All Cthon tests completed successfully.")
 
         return 0
     except Exception as e:
@@ -117,6 +123,6 @@ def run(ceph_cluster, **kw):
             cthon_obj = Cthon(client)
             cthon_obj.cleanup()
         cleanup_custom_nfs_cluster_multi_export_client(
-            clients, nfs_mount, "cephfs-nfs", nfs_export, num_exports
+            clients, nfs_mount, nfs_name, nfs_export, num_exports
         )
         log.info("Cleanup completed.")

@@ -10,36 +10,12 @@ from tests.nfs.nfs_operations import (
     _get_client_specific_mount_versions,
     exports_mounts_perclient,
 )
-from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
-    create_file,
-    delete_file,
-    read_from_file_using_dd_command,
-    rename_file,
-    write_to_file_using_dd_command,
-)
+from tests.nfs.nfs_utils import mount_retry, create_file, write_to_file_using_dd_command, \
+    read_from_file_using_dd_command, rename_file, delete_file
+
 from utility.log import Log
-from utility.retry import retry
 
 log = Log(__name__)
-
-
-@retry(OperationFailedError, tries=3, delay=5, backoff=2)
-def mount_retry(
-    clients, client_num, mount_name, version, port, nfs_server, export_name
-):
-    if Mount(clients[client_num]).nfs(
-        mount=mount_name,
-        version=version,
-        port=port,
-        server=nfs_server,
-        export=export_name,
-    ):
-        return True
-    else:
-        raise OperationFailedError(
-            "Failed to mount nfs on %s" % clients[client_num].hostname
-        )
-
 
 def create_export_and_mount_for_existing_nfs_cluster(
     clients,
@@ -87,13 +63,11 @@ def create_export_and_mount_for_existing_nfs_cluster(
             for version, clients in mount_versions.items():
                 clients[client_num].create_dirs(dir_path=mount_name, sudo=True)
 
-                if Mount(clients[client_num]).nfs(
-                    mount=mount_name,
-                    version=version,
-                    port=port,
-                    server=nfs_server,
-                    export=export_name,
+                # data = mount_retry(clients,client_num,mount_name,version,port,nfs_server,export_name)
+                if not mount_retry(
+                        clients, client_num, nfs_mount, version, port, nfs_server, export_name, ha=ha
                 ):
+                    log.info(f"Mount failed, {mount_name}")
                     raise OperationFailedError(
                         "Failed to mount nfs on %s" % clients[client_num].hostname
                     )
@@ -281,6 +255,10 @@ def run(ceph_cluster, **kw):
     file_count = int(config.get("file_count", "100"))
     dd_command_size_in_M = config.get("dd_command_size_in_M", "100")
     export_num = config.get("exports_number", 1)
+    nfs_cluster_name = config.get("nfs_cluster_name", None)
+    ha = config.get("ha", False)
+    vip = config.get("vip", None)
+    active_standby = config.get("active_standby", False)
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
@@ -290,7 +268,8 @@ def run(ceph_cluster, **kw):
     client = clients[0]  # Select only the required number of clients
 
     # 1. pick the existing NFS cluster
-    nfs_cluster_name = Ceph(client).nfs.cluster.ls()[0]
+    if nfs_cluster_name is None:
+        nfs_cluster_name = Ceph(client).nfs.cluster.ls()[0]
     nfs_hostname = Ceph(client).nfs.cluster.info(nfs_cluster_name)[nfs_cluster_name][
         "backend"
     ][0]["hostname"]
@@ -305,7 +284,7 @@ def run(ceph_cluster, **kw):
             # 3. mount to clients
             client_export_mount_dict = create_export_and_mount_for_existing_nfs_cluster(
                 clients,
-                f"/export/nfs_{nfs_cluster_name}",
+                f"/export_nfs_{nfs_cluster_name}",
                 f"/mnt/nfs_{nfs_cluster_name}",
                 export_num,
                 fs_name="cephfs",
@@ -313,8 +292,9 @@ def run(ceph_cluster, **kw):
                 fs="cephfs",
                 port=port,
                 version=version,
-                ha=False,
+                ha=ha,
                 nfs_server=nfs_hostname,
+                vip=vip,
             )
 
             # 4. perform Create, read, rename, copy, read/write using DD command and deletion

@@ -2,80 +2,11 @@ from concurrent.futures import ThreadPoolExecutor
 
 from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
+from tests.nfs.nfs_utils import create_file, permission_to_directory, write_to_file_using_dd_command, \
+    read_from_file_using_dd_command, rename_file, delete_file, perform_lookups
 from utility.log import Log
 
 log = Log(__name__)
-
-
-def create_file(client, nfs_mount, file_name):
-    """Create a file in the NFS mount point"""
-    try:
-        cmd = f"touch {nfs_mount}/{file_name}"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File - {0} created successfully".format(file_name))
-    except Exception as e:
-        log.error(f"Failed to create file {file_name}: {e}")
-        raise OperationFailedError(f"Failed to create file {file_name}: {e}")
-
-
-def delete_file(client, nfs_mount, file_name):
-    """Delete a file in the NFS mount point"""
-    try:
-        cmd = f"rm -rf {nfs_mount}/{file_name}"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File - {0} deleted successfully".format(file_name))
-    except Exception as e:
-        log.error(f"Failed to delete file {file_name}: {e}")
-        raise OperationFailedError(f"Failed to delete file {file_name}: {e}")
-
-
-def rename_file(client, nfs_mount, old_name, new_name):
-    """Rename a file in the NFS mount point"""
-    try:
-        cmd = f"mv {nfs_mount}/{old_name} {nfs_mount}/{new_name}"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File renamed successfully")
-    except Exception as e:
-        log.error(f"Failed to rename file {old_name} to {new_name}: {e}")
-        raise OperationFailedError(
-            f"Failed to rename file {old_name} to {new_name}: {e}"
-        )
-
-
-def write_to_file_using_dd_command(client, nfs_mount, file_name, size):
-    """Write to a file in the NFS mount point using dd command"""
-    try:
-        cmd = f"dd if=/dev/zero of={nfs_mount}/{file_name} bs={size}M count=5"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File written successfully")
-    except Exception as e:
-        log.error(f"Failed to write to file {file_name}: {e}")
-        raise OperationFailedError(f"Failed to write to file {file_name}: {e}")
-
-
-def read_from_file_using_dd_command(client, nfs_mount, file_name, size):
-    """Read from a file in the NFS mount point using dd command"""
-    try:
-        cmd = f"dd if={nfs_mount}/{file_name} of=/dev/null bs={size}M count=5"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File read successfully")
-    except Exception as e:
-        log.error(f"Failed to read from file {file_name}: {e}")
-        raise OperationFailedError(f"Failed to read from file {file_name}: {e}")
-
-
-def permission_to_directory(client, nfs_mount):
-    """Provide permission to directory"""
-    try:
-        cmd = f"chmod 777 {nfs_mount}"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("Permission provided successfully")
-    except Exception as e:
-        log.error(f"Failed to provide permission to directory {nfs_mount}: {e}")
-        raise OperationFailedError(
-            f"Failed to provide permission to directory {nfs_mount}: {e}"
-        )
-
 
 def create_nfs_cluster(
     clients,
@@ -88,6 +19,9 @@ def create_nfs_cluster(
     nfs_export,
     fs,
     ceph_cluster=None,
+    ha=False,
+    vip=None,
+    active_standby=False,
 ):
     """Create NFS cluster"""
     try:
@@ -104,6 +38,9 @@ def create_nfs_cluster(
             nfs_export,
             fs,
             ceph_cluster=ceph_cluster,
+            ha=ha,
+            vip=vip,
+            active_standby=active_standby,
         )
     except Exception as e:
         raise ConfigError(f"Failed to create NFS cluster: {e}")
@@ -123,6 +60,10 @@ def run(ceph_cluster, **kw):
     no_clients = int(config.get("clients", "2"))
     file_count = int(config.get("file_count", "100"))
     dd_command_size_in_M = config.get("dd_command_size_in_M", "100")
+    nfs_name = config.get("cluster_name", "cephfs-nfs")
+    ha = bool(config.get("ha", False))
+    vip = config.get("vip", None)
+    active_standby = bool(config.get("active_standby", False))
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
@@ -131,13 +72,14 @@ def run(ceph_cluster, **kw):
     clients = clients[:no_clients]  # Select only the required number of clients
     nfs_node = nfs_nodes[0]
     fs_name = "cephfs"
-    nfs_name = "cephfs-nfs"
     nfs_export = "/export"
     nfs_mount = "/mnt/nfs"
     fs = "cephfs"
     old_file_name = "old_file"
     new_file_name = "new_file"
     nfs_server_name = nfs_node.hostname
+    if ha:
+        nfs_server_name = [nfs_node.hostname for nfs_node in nfs_nodes[0:2]]
 
     try:
         if operation == "before_upgrade":
@@ -153,6 +95,9 @@ def run(ceph_cluster, **kw):
                 nfs_export,
                 fs,
                 ceph_cluster=ceph_cluster,
+                ha=ha,
+                vip=vip,
+                active_standby=active_standby,
             )
             # Create file in parellel using ThreadPoolExecutor
             log.info("Creating files in parallel using ThreadPoolExecutor")
@@ -172,6 +117,12 @@ def run(ceph_cluster, **kw):
             log.info("All files created successfully")
 
         elif operation == "after_upgrade":
+            for client in clients:
+                # Mount NFS after upgrade
+                perform_lookups(
+                    client,
+                    nfs_mount
+                )
             old_file_name, new_file_name = new_file_name, old_file_name
             # Create file in parellel using ThreadPoolExecutor
             log.info(
