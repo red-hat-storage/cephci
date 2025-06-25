@@ -217,6 +217,14 @@ def run(ceph_cluster, **kw):
         rados_obj.log_cluster_health()
 
         # Scenario 4: Checking OSD and ceph logs for the warning generated
+        """
+        OSD logs generated :\n
+        Mar 25 14:29:21 ceph-pdhiran-qb3m0z-node2 ceph-osd[24436]:\n
+            bluestore.MempoolThread fragmentation_score=0.056921 took=0.002537s
+        Mar 25 14:31:21 ceph-pdhiran-qb3m0z-node2 ceph-osd[24436]:\n
+            bluestore.MempoolThread fragmentation_score=0.056921 took=0.002666s
+        """
+
         def process_osd_logs(log_data: str):
             pattern = re.compile(
                 r"([A-Za-z]{3} \d{1,2} \d{2}:\d{2}:\d{2}) .*?"

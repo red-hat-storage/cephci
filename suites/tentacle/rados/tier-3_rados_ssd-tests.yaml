@@ -133,7 +133,6 @@ tests:
               byte_size: 256
               k: 4
               m: 2
-              plugin: jerasure
               max_objs: 300
               rados_read_duration: 10
               crush-failure-domain: osd
@@ -215,7 +214,6 @@ tests:
           pg_num: 16
           k: 4
           m: 2
-          plugin: jerasure
           max_objs: 300
           rados_read_duration: 10
           crush-failure-domain: osd
