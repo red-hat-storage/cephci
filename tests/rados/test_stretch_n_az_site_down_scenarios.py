@@ -110,9 +110,22 @@ def run(ceph_cluster, **kw):
             )
 
             for warning in health_warns:
-                if not rados_obj.check_health_warning(warning=warning):
-                    log.error(
-                        "Expected health warning : %s not found on the cluster", warning
+                for _ in range(3):
+                    if rados_obj.check_health_warning(warning=warning):
+                        log.info(
+                            "Expected health warning : %s found on the cluster", warning
+                        )
+                        break
+                    log.info(
+                        "Expected health warning : %s not found on the cluster\n"
+                        "Retrying after 20 seconds",
+                        warning,
+                    )
+                    time.sleep(20)
+                else:
+                    log.info(
+                        "Expected health warning : %s not found on the cluster after retries",
+                        warning,
                     )
                     return False
                 log.debug("Warning : %s present on the cluster", warning)
