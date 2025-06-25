@@ -38,6 +38,7 @@ def run(ceph_cluster, **kw):
         fs_util = FsUtils(ceph_cluster)
         snap_util = SnapUtils(ceph_cluster)
         config = kw.get("config")
+        test_data = kw.get("test_data")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
         log.info("checking Pre-requisites")
@@ -89,7 +90,6 @@ def run(ceph_cluster, **kw):
         upgrade_config = None
         vol_list = [default_fs, "cephfs-ec"]
         ceph_config["CephFS"] = {}
-        ceph_config["NFS"] = {}
         for vol_name in vol_list:
             ceph_config["CephFS"][vol_name] = {}
         with open(
@@ -351,8 +351,11 @@ def run(ceph_cluster, **kw):
                 if LooseVersion(ceph_version_1) >= LooseVersion("17.2.6")
                 else ["2M", "1h", "7d", "4w"]
             )
-            snap_params["retention"] = "5M5h5d4w"
-
+            snap_params["retention"] = (
+                "5m5h5d4w"
+                if LooseVersion(ceph_version_1) >= LooseVersion("17.2.6")
+                else "5M5h5d4w"
+            )
             cmd = f"ceph fs subvolume getpath {sv['vol_name']} {sv['subvol_name']} "
             cmd += f"{sv['group_name']}"
             retry_exec = retry(CommandFailed, tries=3, delay=60)(
@@ -445,11 +448,13 @@ def run(ceph_cluster, **kw):
             ceph_config["CephFS"][vol_name].update(
                 {"active_mds": mds_list, "standby_mds": standby_list}
             )
-
-        if "nautilus" not in ceph_version["version"]:
+        ceph_version_2 = get_ceph_version_from_cluster(clients[0])
+        ibm_build = fs_util.get_custom_config_value(test_data, "ibm-build")
+        if LooseVersion(ceph_version_2) >= LooseVersion("18.2.1") and ibm_build:
             nfs_server = ceph_cluster.get_ceph_objects("nfs")
             nfs_client = ceph_cluster.get_ceph_objects("client")
             fs_util.auth_list(nfs_client, recreate=False)
+            ceph_config["NFS"] = {}
             nfs_name = "cephfs-nfs"
             fs_name = default_fs
             nfs_export_name = "/export1"
@@ -469,18 +474,12 @@ def run(ceph_cluster, **kw):
             else:
                 raise CommandFailed("Failed to create nfs cluster")
             # Create cephfs nfs export
-            if "5.0" in build:
-                nfs_client[0].exec_command(
-                    sudo=True,
-                    cmd=f"ceph nfs export create cephfs {fs_name} {nfs_name} "
-                    f"{nfs_export_name} path={path}",
-                )
-            else:
-                nfs_client[0].exec_command(
-                    sudo=True,
-                    cmd=f"ceph nfs export create cephfs {nfs_name} "
-                    f"{nfs_export_name} {fs_name} path={path}",
-                )
+
+            nfs_client[0].exec_command(
+                sudo=True,
+                cmd=f"ceph nfs export create cephfs {nfs_name} "
+                f"{nfs_export_name} {fs_name} path={path}",
+            )
 
             # Verify ceph nfs export is created
             out, rc = nfs_client[0].exec_command(
@@ -535,57 +534,6 @@ def run(ceph_cluster, **kw):
                 f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
                 f"{nfs_mounting_dir}{dir_name}",
                 long_running=True,
-            )
-
-        else:
-            clients = ceph_cluster.get_ceph_objects("client")
-            nfs_server = [clients[0]]
-            nfs_client = [clients[1]]
-
-            rc = fs_util.nfs_ganesha_install(nfs_server[0])
-            if rc == 0:
-                log.info("NFS ganesha installed successfully")
-            else:
-                raise CommandFailed("NFS ganesha installation failed")
-            rc = fs_util.nfs_ganesha_conf(nfs_server[0], "admin")
-            if rc == 0:
-                log.info("NFS ganesha config added successfully")
-            else:
-                raise CommandFailed("NFS ganesha config adding failed")
-            rc = fs_util.nfs_ganesha_mount(
-                nfs_client[0], nfs_mounting_dir, nfs_server[0].node.hostname
-            )
-            if rc == 0:
-                log.info("NFS-ganesha mount passed")
-            else:
-                raise CommandFailed("NFS ganesha mount failed")
-
-            mounting_dir = nfs_mounting_dir + "ceph/"
-            out, rc = nfs_client[0].exec_command(
-                sudo=True, cmd=f"mkdir -p {mounting_dir}{dir_name}"
-            )
-            nfs_client[0].exec_command(
-                sudo=True,
-                cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4 "
-                f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
-                f"{mounting_dir}{dir_name}",
-                long_running=True,
-            )
-            nfs_client[0].exec_command(
-                sudo=True,
-                cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation read --threads 10 --file-size 4 "
-                f"--files 1000 --files-per-dir 10 --dirs-per-dir 2 --top "
-                f"{mounting_dir}{dir_name}",
-                long_running=True,
-            )
-            ceph_config["NFS"].update({"nfs_ganesha": {}})
-            ceph_config["NFS"]["nfs_ganesha"].update(
-                {
-                    nfs_server[0]: {
-                        "nfs_mnt_pt": nfs_mounting_dir,
-                        "nfs_mnt_client": nfs_client[0].node.hostname,
-                    }
-                }
             )
 
         log.info(f"Ceph upgrade config : {ceph_config}")

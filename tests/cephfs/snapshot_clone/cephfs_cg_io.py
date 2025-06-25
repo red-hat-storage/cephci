@@ -587,7 +587,7 @@ class CG_snap_IO(object):
                         log.info(f"qs_query:{qs_query}")
                         state = qs_query["sets"][qs_id]["state"]["name"]
                         log.info(f"io_modules:{io_modules}")
-                        if state in "RELEASED":
+                        if (state in "RELEASED") or (state in "QUIESCED"):
                             age_ref = qs_query["sets"][qs_id]["age_ref"]
                             curr_time = time.time()
                             # Get time when state is achieved
@@ -631,7 +631,7 @@ class CG_snap_IO(object):
                                 time_diff = int(
                                     float(end_time) - float(time_before_state)
                                 )
-                                read_str = "Release event can cause impact on immediate read to fail at times"
+                                read_str = "Quiesce/Release event can cause impact on immediate read to fail at times"
                                 log.info(
                                     f"Read exits in {time_diff}secs after {state},a false positive error:{read_str}"
                                 )
