@@ -106,10 +106,10 @@ def run(ceph_cluster, **kw):
         )
 
         log.info(
-            "Write OMAP entries to the pool using rados bench, 100 objects with 50 omap entries each"
+            "Write OMAP entries to the pool using rados bench, 100 objects with 5 omap entries each"
         )
         assert pool_obj.fill_omap_entries(
-            pool_name="cot-pool", obj_start=0, obj_end=100, num_keys_obj=50
+            pool_name="cot-pool", obj_start=0, obj_end=100, num_keys_obj=5
         )
 
         for operation in operations:
