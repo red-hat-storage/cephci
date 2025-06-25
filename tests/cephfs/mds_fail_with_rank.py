@@ -27,9 +27,11 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
         if stop and datetime.now() > stop:
             log.info("Timed out *************************")
             break
-        client1.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}/run_ios_{iter}")
+        client1.exec_command(
+            sudo=True, cmd=f"mkdir -p {mounting_dir}/{mounting_dir}_run_ios_{iter}"
+        )
         fs_util.run_ios(
-            client1, f"{mounting_dir}/run_ios_{iter}", io_tools=["smallfile"]
+            client1, f"{mounting_dir}/{mounting_dir}_run_ios_{iter}", io_tools=["dd"]
         )
         iter = iter + 1
 
@@ -98,7 +100,7 @@ def run(ceph_cluster, **kw):
                 fs_util_v1,
                 clients[0],
                 fuse_mount_dir,
-                timeout=0,
+                timeout=300,
             )
             p.spawn(
                 start_io_time,
