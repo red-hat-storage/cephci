@@ -38,6 +38,7 @@ def setup_nfs_cluster(
     ha=False,
     vip=None,
     ceph_cluster=None,
+    active_standby=False,
 ):
     # Get ceph cluter object and setup start time
     global ceph_cluster_obj
@@ -57,7 +58,11 @@ def setup_nfs_cluster(
 
     # Step 2: Create an NFS cluster
     Ceph(clients[0]).nfs.cluster.create(
-        name=nfs_name, nfs_server=nfs_server, ha=ha, vip=vip
+        name=nfs_name,
+        nfs_server=nfs_server,
+        ha=ha,
+        vip=vip,
+        active_standby=active_standby,
     )
     sleep(3)
 
