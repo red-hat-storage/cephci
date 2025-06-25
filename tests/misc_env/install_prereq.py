@@ -6,14 +6,17 @@ import time
 from ceph.parallel import parallel
 from ceph.utils import config_ntp, update_ca_cert
 from ceph.waiter import WaitUntil
+from cli.exceptions import ConfigError
 from cli.utilities.packages import Package
 from cli.utilities.packages import SubscriptionManager as sm
 from cli.utilities.packages import SubscriptionManagerError
 from cli.utilities.utils import (
     enable_fips_mode,
+    get_service_state,
     is_fips_mode_enabled,
     os_major_version,
     reboot_node,
+    set_service_state,
 )
 from utility.log import Log
 from utility.utils import get_cephci_config, is_unsecured_registry
@@ -56,6 +59,7 @@ rpm_packages = {
         "net-snmp",
         "kernel-modules-extra",
         "iproute-tc",
+        "firewalld",
     ],
 }
 deb_packages = ["wget", "git-core", "python-virtualenv", "lsb-release", "ntp"]
@@ -73,6 +77,7 @@ def run(**kw):
     repo = config.get("add-repo", False)
     skip_enabling_rhel_rpms = config.get("skip_enabling_rhel_rpms", False)
     fips_mode = config.get("enable_fips_mode", False)
+    firewall = config.get("enable_firewall", False)
 
     cloud_type = config.get("cloud-type", "openstack")
 
@@ -91,6 +96,7 @@ def run(**kw):
                 skip_enabling_rhel_rpms,
                 cloud_type,
                 fips_mode,
+                firewall,
             )
             time.sleep(20)
 
@@ -106,6 +112,7 @@ def install_prereq(
     skip_enabling_rhel_rpms=False,
     cloud_type="openstack",
     fips_mode=False,
+    firewall=False,
 ):
     log.info("Waiting for cloud config to complete on " + ceph.hostname)
     ceph.exec_command(cmd="while [ ! -f /ceph-qa-ready ]; do sleep 15; done")
@@ -232,21 +239,30 @@ def install_prereq(
     registry_login(ceph, distro_ver, test_data)
     update_iptables(ceph)
 
-    if not fips_mode:
-        return
+    if fips_mode:
+        # Enable FIPS mode
+        if not enable_fips_mode(ceph):
+            raise FIPSConfigError("Failed to enable FIPS mode")
+        log.info("Enable FIPS mode config set successfully")
 
-    # Enable FIPS mode
-    if not enable_fips_mode(ceph):
-        raise FIPSConfigError("Failed to enable FIPS mode")
-    log.info("Enable FIPS mode config set successfully")
+        # Restart node and wait
+        reboot_node(ceph)
 
-    # Restart node and wait
-    reboot_node(ceph)
+        # Check for FIPS mode setting
+        if not is_fips_mode_enabled(ceph):
+            raise FIPSConfigError("FIPS mode not enabled after reboot")
+        log.info("FIPS mode is enabled")
 
-    # Check for FIPS mode setting
-    if not is_fips_mode_enabled(ceph):
-        raise FIPSConfigError("FIPS mode not enabled after reboot")
-    log.info("FIPS mode is enabled")
+    if firewall:
+        # Start Firewall
+        if not set_service_state(ceph, "firewalld", "start"):
+            raise ConfigError("Failed to start Firewall")
+        log.info("Firewall start successfully")
+
+        # Check for Firewall
+        if get_service_state(ceph, "firewalld").strip() != "active":
+            raise ConfigError("Firewall not active")
+        log.info("Firewall is active")
 
 
 def setup_addition_repo(ceph, repo):
