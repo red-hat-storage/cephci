@@ -17,7 +17,9 @@ def test_rest_image_creation_in_pool(client, **kw):
         client: rbd client obj
         **kw: test data
     """
-    _rest = rest(**kw)
+    log.info(kw)
+    ceph_cluster = config.get("ceph_cluster")
+    _rest = rest(ceph_cluster=ceph_cluster, accept="application/vnd.ceph.api.v1.1+json")
     config = {}
     rep_pool_config = kw["config"].get("rep_pool_config", None)
     if rep_pool_config:
