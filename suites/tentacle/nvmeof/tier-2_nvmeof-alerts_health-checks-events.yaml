@@ -1,0 +1,422 @@
+# NVMeoF alerts and testing
+# cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_4-nvmeof-gwgroup_2gw_cluster.yaml
+# Inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml or later versions
+
+tests:
+# Set up the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#  Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node14
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node6
+          - node5
+        rbd_pool: rbd
+        gw_group: gw_group1
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+            - count: 2
+              size: 5G
+              lb_group: node6
+            - count: 2
+              size: 5G
+              lb_group: node5
+            listener_port: 4420
+            listeners:
+              - node6
+              - node5
+            allow_host: "*"
+        test_case: CEPH-83610948
+        cleanup:
+          - pool
+          - gateway
+      desc: GW failure or unavailability alert via healthcheck warning
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate GW unavailability healthcheck warning
+      polarion-id: CEPH-83610948
+
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        test_case: CEPH-83610950
+        cleanup:
+          - pool
+          - gateway
+        gw_groups:
+          - gw_group: group1
+            gw_nodes:
+              - node3
+              - node4
+          - gw_group: group2
+            gw_nodes:
+              - node6
+              - node5
+      desc: Multinamespace over single RBD image warning
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFMultipleNamespacesOfRBDImage alert
+      polarion-id: CEPH-83610950
+
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        test_case: CEPH-83611097
+        cleanup:
+          - pool
+          - gateway
+        gw_group: group1
+        gw_nodes:
+          - node5
+          - node6
+      desc: NVMeoF Missing Listener warning alert
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFMissingListener alert
+      polarion-id: CEPH-83611097
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node6
+          - node5
+        rbd_pool: rbd
+        time_to_fire: 600
+        gw_group: gw_group1
+        listener_port: 4420
+        test_case: CEPH-83611098
+        cleanup:
+          - pool
+          - gateway
+      desc: Warning at Ceph cluster on zero listener in a subsystem
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate Warning at Ceph cluster on zero listener in a subsystem
+      polarion-id: CEPH-83611098
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node4
+          - node5
+        rbd_pool: rbd
+        time_to_fire: 300
+        gw_group: gw_group1
+        subsystems:                             # Configure subsystems
+          - nqn: nqn.2016-06.io.spdk:cnode1
+        test_case: CEPH-83611099
+        cleanup:
+          - pool
+          - gateway
+      desc: Warning message or Status on NVMe Service with single Gateway Node.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate Warning message or Status on NVMe Service with single Gateway Node.
+      polarion-id: CEPH-83611099
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node5
+          - node6
+        rbd_pool: nvme_of_pool
+        gw_group: gw_group1
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            max_ns: 1024
+            bdevs:
+            - count: 512
+              size: 1G
+              lb_group: node5
+            listener_port: 4420
+            listeners:
+              - node5
+              - node6
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            max_ns: 1024
+            bdevs:
+            - count: 512
+              size: 1G
+              lb_group: node6
+            listener_port: 4420
+            listeners:
+              - node5
+              - node6
+            allow_host: "*"
+        test_case: CEPH-83611306
+        cleanup:
+          - pool
+          - gateway
+      desc: Gateway in DELETING state via healthcheck warning
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate Gateway in DELETING state healthcheck warning
+      polarion-id: CEPH-83611306
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node5
+          - node6
+        rbd_pool: rbd
+        time_to_fire: 60
+        gw_group: gw_group1
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            max_ns: 10
+            serial: 1
+            bdevs:
+            - count: 10
+              size: 5G
+              lb_group: node5
+            listener_port: 4420
+            listeners:
+              - node5
+            allow_host: "*"
+        test_case: CEPH-83616917
+        cleanup:
+          - pool
+          - gateway
+      desc: Warning at maximum number of namespaces reached at subsystem.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate Warning at maximum number of namespaces reached at subsystem.
+      polarion-id: CEPH-83616917
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node2
+          - node3
+          - node4
+          - node5
+          - node6
+          - node7
+          - node8
+          - node9
+          - node10
+        time_to_fire: 60
+        rbd_pool: nvme_of_pool
+        gw_group: gw_group1
+        test_case: CEPH-83617544
+        cleanup:
+          - pool
+          - gateway
+      desc: Warning at Max gateways within a gateway group exceeded on cluster.
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate Warning at Max gateways within a gateway group exceeded on cluster
+      polarion-id: CEPH-83617544
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node5
+          - node6
+        rbd_pool: rbd
+        time_to_fire: 300
+        gw_group: gw_group1
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            listener_port: 4420
+            listeners:
+              - node5
+            allow_host: "*"
+        test_case: CEPH-83616916
+        host: node10
+        cleanup:
+          - pool
+          - gateway
+      desc: Warning at subsystem defined without host level security on cluster
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFGatewayOpenSecurity alert helps user to add host security to the subsystem
+      polarion-id: CEPH-83616916
+
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: rbd
+        time_to_fire: 60
+        gw_groups:
+          - gw_group: group1
+            gw_nodes:
+              - node2
+          - gw_group: group2
+            gw_nodes:
+              - node3
+          - gw_group: group3
+            gw_nodes:
+              - node4
+          - gw_group: group4
+            gw_nodes:
+              - node5
+          - gw_group: group5
+            gw_nodes:
+              - node6
+        test_case: CEPH-83617404
+        cleanup:
+          - pool
+          - gateway
+      desc: Warning at when created more than 4 gateway groups
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFMaxGatewayGroups alert when created more than 4 gateway groups
+      polarion-id: CEPH-83617404
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node5
+          - node6
+        rbd_pool: rbd
+        time_to_fire: 60
+        gw_group: gw_group1
+        subsystems:
+          - nqn: nqn.2016-06.io.spdk:cnode1
+        test_case: CEPH-83617622
+        cleanup:
+          - pool
+          - gateway
+      desc: Prometheus alert for number of subsystems defined to the gateway exceeds supported values
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFTooManySubsystems alert
+      polarion-id: CEPH-83617622
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node5
+          - node6
+        rbd_pool: nvme_of_pool
+        time_to_fire: 60
+        gw_group: gw_group1
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            max_ns: 1024
+            bdevs:
+              - count: 1024
+                size: 1G
+                lb_group: node5
+            listener_port: 4420
+            listeners:
+              - node5
+              - node6
+            allow_host: "*"
+        test_case: CEPH-83617545
+        cleanup:
+          - pool
+          - gateway
+      desc: Prometheus alert for number of namespaces defined to the gateway exceeds supported values
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFTooManyNamespaces alert
+      polarion-id: CEPH-83617545
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_nodes:
+          - node6
+          - node5
+        nvme_diff_version: cp.stg.icr.io/cp/ibm-ceph/nvmeof-rhel9:1.4.11-2
+        rbd_pool: nvme_of_pool
+        time_to_fire: 3600
+        gw_group: gw_group1
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            max_ns: 1024
+            bdevs:
+              - count: 5
+                size: 1G
+                lb_group: node5
+            listener_port: 4420
+            listeners:
+              - node6
+              - node5
+            allow_host: "*"
+        test_case: CEPH-83617640
+        cleanup:
+          - pool
+          - gateway
+      desc: Prometheus alert for having different nvme-of gateway releases active on cluster
+      destroy-cluster: false
+      module: test_ceph_nvmeof_alerts_events.py
+      name: Validate NVMeoFVersionMismatch alert
+      polarion-id: CEPH-83617640
