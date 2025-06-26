@@ -421,10 +421,10 @@ def run(ceph_cluster, **kw):
         if "scenario-5" in scenarios_to_run:
             # Scenario 5 : Shutdown & Start 1 Host on all DC
             shutdown_hosts = []
+            osd_hosts = set(rados_obj.get_osd_hosts())
             for target_dc in dc_names:
                 target_hosts = getattr(all_hosts, target_dc)
                 # Ensure target_host has OSD daemons in it
-                osd_hosts = set(rados_obj.get_osd_hosts())
                 target_host = random.choice(target_hosts)
                 while target_host not in osd_hosts:
                     target_host = random.choice(target_hosts)
