@@ -1,4 +1,5 @@
 from ceph.rbd.initial_config import update_config
+from ceph.rbd.utils import exec_cmd
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.rbd import run_io_and_check_rbd_status
 from ceph.utils import get_node_by_id
@@ -17,6 +18,11 @@ def test_rest_image_creation_in_pool(client, **kw):
         client: rbd client obj
         **kw: test data
     """
+    exec_cmd(node=client, cmd='echo "admin@123" > dashboard_password.yml')
+    exec_cmd(
+        node=client,
+        cmd="ceph dashboard ac-user-set-password admin -i dashboard_password.yml",
+    )
     _rest = rest(**kw)
     config = {}
     rep_pool_config = kw["config"].get("rep_pool_config", None)
