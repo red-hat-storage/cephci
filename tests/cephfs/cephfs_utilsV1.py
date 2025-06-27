@@ -2166,7 +2166,9 @@ class FsUtils(object):
                 command = "python3 /home/cephuser/smallfile/smallfile_cli.py "
                 f"--operation create --threads 1 --file-size 100  --files  {num_of_files} "
                 f"--top {mounting_dir}{dir_name}_{num}"
-                client.exec_command(sudo=True, cmd=command, timeout=300)
+                client.exec_command(
+                    sudo=True, cmd=command, timeout=300, long_running=True
+                )
                 self.return_counts = self.io_verify(client)
             break
         return self.return_counts, 0

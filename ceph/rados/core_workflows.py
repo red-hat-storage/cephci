@@ -1045,6 +1045,21 @@ class RadosOrchestrator:
                 return False
         return True
 
+    def get_osd_crush_weight(self, osd_id: int) -> float:
+        """
+        Method to get the CRUSH weight of the given OSD
+        Args:
+            osd_id: OSD ID
+        Returns:
+            Crush weight of OSD
+        """
+        cmd = "ceph osd tree"
+        out = self.run_ceph_command(cmd=cmd)
+        for entry in out["nodes"]:
+            if int(entry["id"]) == osd_id:
+                return entry["crush_weight"]
+        log.error("Provided OSD ID could not be found")
+
     def reweight_crush_items(self, **kwargs) -> bool:
         """
         Performs Re-weight of various CRUSH items, based on key-value pairs sent
@@ -3122,9 +3137,12 @@ EOF"""
             daemon_status_ls = self.run_ceph_command(
                 cmd=f"ceph orch ps --service_name {service} --refresh"
             )
+            # TODO: current system time to be used when
+            # daemon is stopped/unknown since 'started' key will
+            # not exist in ceph orch ps --service_name {service} output
             for entry in daemon_status_ls:
                 start_time, _ = self.client.exec_command(
-                    cmd=f"date -d {entry['started']} +'%Y%m%d%H%M%S'"
+                    cmd=f"date -d {entry.get('started')} +'%Y%m%d%H%M%S'"
                 )
                 daemon_map[entry["daemon_name"]] = start_time
 
@@ -3148,16 +3166,16 @@ EOF"""
                         assert entry["status_desc"] != "stopped"
                         log.info(f"{entry['daemon_name']} has started")
                         success = True
-                    except AssertionError:
+                    except Exception:
                         log.info(
                             f"{daemon} daemon {entry['daemon_name']} is yet to restart. "
-                            f"Sleeping for 30 secs"
+                            f"Sleeping for 120 secs"
                         )
                         self.client.exec_command(
                             cmd=f"ceph orch daemon restart {entry['daemon_name']}",
                             sudo=True,
                         )
-                        time.sleep(30)
+                        time.sleep(120)
                         success = False
                         break
                 if success:

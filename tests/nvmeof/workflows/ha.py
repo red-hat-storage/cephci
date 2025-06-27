@@ -85,7 +85,9 @@ class HighAvailability:
 
     def create_dhchap_key(self, config, update_host_key=False):
         """Generate DHCHAP key for each initiator and store it."""
-        nqn = config["subnqn"]
+        subnqn = config["subnqn"]
+        group = config["gw_group"]
+        nqn = f"{subnqn}.{group}"
 
         for host_config in config["hosts"]:
             node_id = host_config["node"]
@@ -95,6 +97,7 @@ class HighAvailability:
             key, _ = initiator.gen_dhchap_key(n=config["subnqn"])
             LOG.info(f"{key.strip()} is generated for {nqn} and {node_id}")
 
+            initiator.nqn = config["subnqn"]
             initiator.auth_mode = config.get("auth_mode")
             if initiator.auth_mode == "bidirectional" and not update_host_key:
                 initiator.subsys_key = key.strip()
@@ -1112,7 +1115,17 @@ class HighAvailability:
                 if (
                     expected_visibility == "False"
                 ):  # If expected visibility is False, devices should be empty
-                    if devices_json:  # Check if Devices is not empty
+                    # Determine if devices list is empty (no Namespaces in any Subsystem)
+                    devices_json_empty = (
+                        all(
+                            not subsys.get("Namespaces")  # True if empty or missing
+                            for device in devices_json
+                            for subsys in device.get("Subsystems", [])
+                        )
+                        if rhel_version == "9.6"
+                        else not devices_json
+                    )
+                    if not devices_json_empty:  # Check if Devices is not empty
                         LOG.error(
                             f"Expected no devices for initiator {node}, but found: {devices_json}"
                         )
@@ -1124,7 +1137,16 @@ class HighAvailability:
                 elif (
                     expected_visibility == "True"
                 ):  # If expected visibility is True, devices should not be empty
-                    if not devices_json:
+                    devices_json_empty = (
+                        all(
+                            not subsys.get("Namespaces")  # True if empty or missing
+                            for device in devices_json
+                            for subsys in device.get("Subsystems", [])
+                        )
+                        if rhel_version == "9.6"
+                        else not devices_json
+                    )
+                    if devices_json_empty:
                         LOG.error(
                             f"Expected devices to be visible for node {node}, but found none."
                         )
@@ -1220,7 +1242,6 @@ class HighAvailability:
                     f"Validated - Namespace {nsid} has correct visibility: {ns_visibility}"
                 )
             else:
-                LOG.info("esle")
                 LOG.error(
                     f"NS {nsid} of {subnqn} has wrong visibility.Expected {expected_visibility} got{ns_visibility}"
                 )

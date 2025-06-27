@@ -1,0 +1,20 @@
+---
+# Based on the information found 
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - Manohar-Murthy
+  - HaruChebrolu
+
+reviewers:
+  - manasagowri
+  - sunilangadi2
+  - chaitanyadommeti
+  - rahullepakshi
+  - krishnaramaswamy
+  - jprakash-redhat
+  - aarsharm
+
+
+labels:
+  - NVMe

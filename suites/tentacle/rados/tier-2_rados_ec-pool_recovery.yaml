@@ -209,7 +209,6 @@ tests:
           pg_num: 64
           k: 2
           m: 2
-          plugin: jerasure
           disable_pg_autoscale: true
           max_objs: 300
           rados_read_duration: 10
@@ -238,7 +237,6 @@ tests:
           erasure_code_use_overwrites: "true"
           k: 2
           m: 2
-          plugin: jerasure
           max_objs: 300
           rados_read_duration: 10
           test_overwrites_pool: true
@@ -262,7 +260,6 @@ tests:
           k: 2
           m: 2
           pg_num: 32
-          plugin: jerasure
           max_objs: 300
           rados_read_duration: 10
           osd_max_backfills: 16

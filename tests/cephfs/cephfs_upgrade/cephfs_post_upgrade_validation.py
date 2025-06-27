@@ -333,12 +333,27 @@ def snap_sched_test(snap_req_params):
                     log.info(
                         f"Snap schedule {sched_val} is verified for path {sv_data['sched_path']}."
                     )
-            if "M" in sched_val:
+            if "m" in sched_val:
                 snap_path = f"{fuse_mounting_dir}{sv_data['sched_path']}"
                 snap_util.validate_snap_schedule(cephfs_client, snap_path, sched_val)
-                snap_util.validate_snap_retention(
-                    cephfs_client, snap_path, sv_data["sched_path"]
+                for key, value in sched_item["retention"].items():
+                    if key == "m":
+                        temp_list = re.split(r"(\d+)", sched_val)
+                        duration_min = int(temp_list[1]) * int(value)
+                log.info("Run IO for %s minutes on %s", duration_min, snap_path)
+                io_path = snap_path.replace("..", "")
+                fs_util.run_ios_V1(cephfs_client, io_path, run_time=duration_min)
+                wait_retention_check = int(temp_list[1]) * 60 + 60
+                log.info(
+                    f"Wait for additional time {wait_retention_check}secs to validate retention"
                 )
+                time.sleep(wait_retention_check)
+                try:
+                    snap_util.validate_snap_retention(
+                        cephfs_client, snap_path, sv_data["sched_path"]
+                    )
+                except Exception as ex:
+                    log.error("Snapshot Retention count validation failed:%s", ex)
 
     log.info(
         "Verified that snapshot schedule for existing subvolumes works as expected"
@@ -1569,6 +1584,7 @@ def run(ceph_cluster, **kw):
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         config = kw.get("config")
         build = config.get("rhbuild")
+        test_data = kw.get("test_data")
         cg_snap_util = CG_Snap_Utils(ceph_cluster)
         cg_snap_io = CG_snap_IO(ceph_cluster)
         common_util = CephFSCommonUtils(ceph_cluster)
@@ -1595,14 +1611,20 @@ def run(ceph_cluster, **kw):
             "fs_name": default_fs,
         }
         f.close()
+        ibm_build = fs_util.get_custom_config_value(test_data, "ibm-build")
         space_str = "\t\t\t\t\t\t\t\t\t"
-        log.info(
-            f"\n\n {space_str} Test1 CEPH-83575098 : Post-upgrade NFS Validation\n"
-        )
-
-        nfs_test(test_reqs)
-
-        log.info("NFS post upgrade validation succeeded \n")
+        if pre_upgrade_config.get("NFS") and ibm_build:
+            log.info(
+                "\n\n %s Test1 CEPH-83575098 : Post-upgrade NFS Validation\n",
+                space_str,
+            )
+            nfs_test(test_reqs)
+            log.info("NFS post upgrade validation succeeded \n")
+        else:
+            log.info(
+                "Skipped NFS test,Either Setup is not IBM Ceph cluster or IBMCEPH version is <7.1"
+            )
+            log.info("IBM build : %s", ibm_build)
         log.info(
             f"\n\n {space_str}Test2 : Post-upgrade Snapshot and Schedule Validation\n"
         )

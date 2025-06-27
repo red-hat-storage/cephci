@@ -36,6 +36,11 @@ In version 2, you can choose whether to use threads or processes by
     with parallel(thread_pool=False, timeout=10) as p:
         _r = [p.spawn(quux, x) for name in names]
 
+You can also specify the maximum number of worker threads/processes:
+    with parallel(max_workers=20) as p:
+        for foo in bar:
+            p.spawn(quux, foo, baz=True)
+
 If one of the spawned functions throws an exception, it will be thrown
 when iterating over the results, or when the with block ends.
 
@@ -59,6 +64,7 @@ class parallel:
         thread_pool=True,
         timeout=None,
         shutdown_cancel_pending=False,
+        max_workers=None,
     ):
         """Object initialization method.
 
@@ -67,7 +73,10 @@ class parallel:
             timeout (int | float)       Maximum allowed time.
             shutdown_cancel_pending (bool) If enabled, it would cancel pending tasks.
         """
-        self._executor = ThreadPoolExecutor() if thread_pool else ProcessPoolExecutor()
+        if thread_pool:
+            self._executor = ThreadPoolExecutor(max_workers=max_workers)
+        else:
+            self._executor = ProcessPoolExecutor(max_workers=max_workers)
         self._timeout = timeout
         self._cancel_pending = shutdown_cancel_pending
         self._futures = list()

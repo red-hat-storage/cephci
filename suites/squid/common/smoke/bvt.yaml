@@ -5,13 +5,13 @@ tests:
       module: test_parallel.py
       parallel:
         - test:
-            name: Test M buckets with N objects
+            name: Test M buckets with N objects upload and download
             desc: test to create "M" no of buckets and "N" no of objects
             polarion-id: CEPH-9789
             module: sanity_rgw.py
             config:
               script-name: test_Mbuckets_with_Nobjects.py
-              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              config-file-name: test_Mbuckets_with_Nobjects_upload_and_download.yaml
               timeout: 300
 
         - test:

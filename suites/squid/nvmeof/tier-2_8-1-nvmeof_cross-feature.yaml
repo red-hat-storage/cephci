@@ -171,8 +171,8 @@ tests:
             gw_nodes:
               - node4
               - node5
-            subsystems: 5
-            max-namespaces: 15
+            subsystems: 128
+            max-namespaces: 2048
             no-group-append: true
             inband_auth: true
             listener_port: 5001
@@ -180,22 +180,22 @@ tests:
               - node4
               - node5
             hosts:
-              - node: node6
+              - node: node10
                 inband_auth: true
                 subsystem_range: [1, 64]
-              - node: node7
+              - node: node11
                 inband_auth: true
                 subsystem_range: [65, 128]
             bdevs:
-              - count: 5
+              - count: 2048
                 size: 4G
             initiators:
               - subsystems: 64
                 listener_port: 5001
-                node: node6
+                node: node10
               - subsystems: 64
                 listener_port: 5002
-                node: node7
+                node: node11
             fault-injection-methods:
               - tool: daemon
                 nodes: node4
@@ -212,17 +212,17 @@ tests:
               - node8
               - node9
             hosts:
-              - node: node11
+              - node: node12
                 inband_auth: true
-                subsystems: 128
+                subsystem_range: [1, 128]
             bdevs:
-              - count: 1024
+              - count: 2048
                 size: 4G
             initiators:
               - nqn: connect-all
-                subsystems: 128
+                subsystems: 5
                 listener_port: 5001
-                node: node11
+                node: node12
             fault-injection-methods:
               - tool: daemon
                 nodes: node8
@@ -230,7 +230,7 @@ tests:
       destroy-cluster: false
       module: test_nvmeof_gwgroup_inbandauth.py
       name: Scale NVMe-oF tests with uni and bidirectional in-band authentication.
-      polarion-id: CEPH-83595512                    # This shall be replaced with In band authentication functionality
+      polarion-id: CEPH-83595512       
 
   - test:
       abort-on-fail: true
