@@ -21,15 +21,23 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
         stop = datetime.now() + timedelta(seconds=timeout)
     else:
         stop = 0
-    while not stop_flag:
+    while True:
         if stop and datetime.now() > stop:
             log.info("Timed out *************************")
             break
-        client1.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}/run_ios_{iter}")
+        mount_type = "fuse" if "fuse" in mounting_dir else "kernel"
+        client1.exec_command(
+            sudo=True,
+            cmd=f"mkdir -p {mounting_dir}/{mount_type}_{__name__}_run_ios_{iter}",
+        )
         fs_util.run_ios(
-            client1, f"{mounting_dir}/run_ios_{iter}", io_tools=["smallfile"]
+            client1,
+            f"{mounting_dir}/{mount_type}_{__name__}_run_ios_{iter}",
+            io_tools=["smallfile"],
         )
         iter = iter + 1
+        if stop_flag:
+            break
 
 
 def run(ceph_cluster, **kw):
@@ -121,7 +129,7 @@ def run(ceph_cluster, **kw):
                 fs_util_v1,
                 clients[0],
                 fuse_mount_dir,
-                timeout=0,
+                timeout=900,
             )
             p.spawn(
                 start_io_time,

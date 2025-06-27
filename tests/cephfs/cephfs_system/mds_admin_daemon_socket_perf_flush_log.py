@@ -6,6 +6,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.io.fs_io import fs_io
 from utility.log import Log
 from utility.retry import retry
@@ -29,6 +30,7 @@ def run(ceph_cluster, **kw):
         log.info(f"Running CephFS tests for -{tc}")
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         erasure = (
             FsUtils.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -41,10 +43,12 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
         client1 = clients[0]
-        retry_ceph_health = retry(CommandFailed, tries=5, delay=60)(
-            fs_util.get_ceph_health_status
+        retry_ceph_health = retry(CommandFailed, tries=4, delay=60)(
+            cephfs_common_utils.wait_for_healthy_ceph
         )
-        retry_ceph_health(clients[0])
+        rc = retry_ceph_health(clients[0])
+        if rc:
+            return rc
         fs_name = "cephfs" if not erasure else "cephfs-ec"
         fs_details = fs_util.get_fs_info(client1, fs_name)
 
