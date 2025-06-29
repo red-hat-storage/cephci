@@ -328,6 +328,8 @@ def run(ceph_cluster, **kw) -> int:
             service_obj.remove_custom_host(
                 host_node_name=config.get("remove_host", "node13")
             )
+            # remove empty service specs after host removal
+            rados_obj.remove_empty_service_spec()
             # Waiting for recovery to post OSD host remove
             method_should_succeed(wait_for_clean_pg_sets, rados_obj)
             log.debug("PG's are active + clean post OSD removal")

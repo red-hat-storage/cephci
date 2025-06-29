@@ -506,6 +506,8 @@ def run(ceph_cluster, **kw):
 
         # removing the recovery threads on the cluster
         rados_obj.change_recovery_threads(config={}, action="rm")
+        # remove empty service specs after host removal
+        rados_obj.remove_empty_service_spec()
 
         if set_debug:
             log.debug("Removing debug configs on the cluster for mon, osd & Mgr")
