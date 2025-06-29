@@ -1,0 +1,927 @@
+# Tier 2: RGW STS assume role with web identity tests
+
+# The primary objective of the test suite is to evaluate the STS assume role with web identity functionality of RGW.
+
+# Requires a 5 node cluster layout having only one node with RGW role.
+
+# global-conf: conf/squid/rgw/tier-0_rgw.yaml
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.all
+              args:
+                placement:
+                  label: rgw
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  - test:
+      name: test swift stats command for more than 1000 buckets
+      desc: test swift stats command for more than 1000 buckets
+      polarion-id: CEPH-83573506
+      module: sanity_rgw.py
+      config:
+        script-name: swift_stats.py
+        config-file-name: swift_stats.yaml
+
+  # STS aswi tests with Keycloak
+
+  - test:
+      name: test STS assume role with web identity
+      desc: test STS assume role with web identity without any conditions
+      polarion-id: CEPH-83573497
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity"],
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*",
+                          }
+
+  - test:
+      name: STS aswi Tests to test aud claim in the web token
+      desc: STS aswi Tests to test aud claim in the web token
+      polarion-id: CEPH-83575817
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_aud_claim_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity"],
+                              "Condition": {
+                                "StringEquals": {
+                                  "ip_addr:8180/realms/master:app_id": "account"
+                                }
+                              }
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*",
+                          }
+
+  - test:
+      name: STS aswi Tests to test azp fields in the web token
+      desc: STS aswi Tests to test azp fields in the web token
+      polarion-id: CEPH-83574501
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_azp_claim_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity"],
+                              "Condition": {
+                                "StringEquals": {
+                                  "ip_addr:8180/realms/master:azp": "azp_claim"
+                                }
+                              }
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*",
+                          }
+  - test:
+      name: STS aswi Tests to test sub fields in the web token
+      desc: STS aswi Tests to test sub fields in the web token
+      polarion-id: CEPH-83574500
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_sub_claim_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity"],
+                              "Condition": {
+                                "StringEquals": {
+                                  "ip_addr:8180/realms/master:sub": "sub_claim"
+                                }
+                              }
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*",
+                          }
+
+  - test:
+      name: STS aswi Tests to test aws_PrincipalTag in role's permission policy
+      desc: STS aswi Tests to test aws_PrincipalTag in role's permission policy
+      polarion-id: CEPH-83574495
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_aws_principal_tag_role_policy_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+                session_tags: {
+                  "principal_tags": {
+                    "product": "ceph"
+                  }
+                }
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"],
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*",
+                              "Condition": {
+                                "StringEquals": {
+                                  "aws:PrincipalTag/product": "ceph"
+                                }
+                              }
+                          }
+  - test:
+      name: STS aswi Tests to test aws_RequestTag in role's trust policy
+      desc: STS aswi Tests to test aws_RequestTag in the condition element of a role's trust policy
+      polarion-id: CEPH-83574493
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_aws_request_tag_trust_policy_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+                session_tags: {
+                  "product": "ceph"
+                }
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"],
+                              "Condition": {
+                                "StringEquals": {
+                                  "aws:RequestTag/product": "ceph",
+                                }
+                              }
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*"
+                          }
+
+  - test:
+      name: STS aswi Tests to test aws_TagKeys in permission policy
+      desc: STS aswi Tests to test aws_TagKeys in permission policy
+      polarion-id: CEPH-83574497
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_aws_tagkeys_role_policy_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+                session_tags: {
+                  "product": "ceph"
+                }
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement": [
+                          {
+                            "Sid": "Allow putobject condition rule",
+                            "Effect": "Allow",
+                            "Action": "s3:*",
+                            "Resource": "arn:aws:s3:::*",
+                            "Condition":
+                              {
+                                "ForAnyValue:StringEquals":
+                                  {
+                                    "aws:TagKeys":
+                                      ["Department", "product"]
+                                  }
+                              }
+                          }
+                    ]
+
+  - test:
+      name: STS aswi Tests to test aws_TagKeys in the trust policy
+      desc: STS aswi Tests to test aws_TagKeys in the trust policy
+      polarion-id: CEPH-83574498
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_aws_tagkeys_trust_policy_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+                session_tags: {
+                  "product": "ceph"
+                }
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"],
+                              "Condition":
+                                {
+                                  "ForAnyValue:StringEquals":
+                                    {
+                                      "aws:TagKeys":
+                                        ["Department", "product"]
+                                    }
+                                }
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*"
+                          }
+  - test:
+      name: STS aswi Tests to test iam_ResourceTag in trust policy
+      desc: STS aswi Tests to test iam_ResourceTag in trust policy
+      polarion-id: CEPH-83574494
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_iam_resource_tag_trust_policy_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+                iam_resource_tags: [
+                    {
+                        "Key": "product",
+                        "Value": "ceph"
+                    }
+                ]
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"],
+                              "Condition": {
+                                "StringEquals": {
+                                  "iam:ResourceTag/product": "ceph"
+                                }
+                              }
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*"
+                          }
+
+  - test:
+      name: STS aswi Tests to test allow condition when s3_Resource Tag equals aws_Principal tag in role's permission policy
+      desc: STS aswi Tests to test allow condition when s3_Resource Tag equals aws_Principal tag in role's permission policy
+      polarion-id: CEPH-83574499
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_s3_res_equals_aws_princ_tag_role_policy_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+                s3_resource_tag: true
+                bucket_tags: [
+                    {
+                        "Key": "product",
+                        "Value": "ceph"
+                    }
+                ]
+                session_tags: {
+                  "principal_tags": {
+                    "product": "ceph"
+                  }
+                }
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"]
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*",
+                              "Condition": {
+                                "StringEquals":{
+                                  "s3:ResourceTag/product":[
+                                    "${aws:PrincipalTag/product}"
+                                  ]
+                                }
+                              }
+                          }
+
+  - test:
+      name: STS aswi Tests to test s3_Resource Tag in role's permission policy
+      desc: STS aswi Tests to test s3_Resource Tag in role's permission policy
+      polarion-id: CEPH-83574496
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_s3_resource_tag_role_policy_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                create_bucket: true
+                create_object: true
+                s3_resource_tag: true
+                bucket_tags: [
+                    {
+                        "Key": "product",
+                        "Value": "ceph"
+                    }
+                ]
+          sts:
+                policy_document:
+                    "Version": "2012-10-17"
+                    "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity", "sts:TagSession"],
+                          }
+                    ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*",
+                              "Condition":
+                                {
+                                  "StringEquals":
+                                    {
+                                      "s3:ResourceTag/product": "ceph"
+                                    }
+                                }
+                          }
+                    ]
+
+
+  - test:
+      name: STS aswi Tests to veify role policy allow actions
+      desc: STS aswi Tests to veify role policy allow actions
+      polarion-id: CEPH-83593390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_verify_role_policy_allow_actions_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          encryption_keys: kms
+          lifecycle_conf:
+              - ID: LC_Rule_1
+                Filter:
+                  Prefix: key2
+                Status: Enabled
+                Expiration:
+                  Days: 20
+          test_ops:
+                create_bucket: true
+                create_object: true
+                endpoint: kafka
+                ack_type: broker
+                verify_policy: role_policy
+                bucket_tags: [
+                    {
+                        "Key": "product",
+                        "Value": "ceph"
+                    }
+                ]
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity"],
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                      [
+                          {
+                              "Action": ["s3:PutObject", "s3:ListBucket", "s3:GetObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:PutBucketVersioning", "s3:GetBucketVersioning", "s3:PutBucketPolicy", "s3:GetBucketPolicy", "s3:DeleteBucketPolicy", "s3:PutBucketWebsite", "s3:GetBucketWebsite", "s3:PutLifecycleConfiguration", "s3:GetLifecycleConfiguration", "s3:PutBucketEncryption", "s3:GetBucketEncryption", "s3:PutBucketTagging", "s3:GetBucketTagging", "s3:DeleteBucket", "s3:CreateBucket"],
+                              "Resource": "arn:aws:s3:::*",
+                              "Effect": "Allow",
+                              "Sid": "statement1",
+                          },
+                    ]
+
+
+  - test:
+      name: STS aswi Tests to veify role policy deny actions
+      desc: STS aswi Tests to veify role policy deny actions
+      polarion-id: CEPH-83593390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_verify_role_policy_deny_actions_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          encryption_keys: kms
+          lifecycle_conf:
+              - ID: LC_Rule_1
+                Filter:
+                  Prefix: key2
+                Status: Enabled
+                Expiration:
+                  Days: 20
+          test_ops:
+                create_bucket: true
+                create_object: true
+                endpoint: kafka
+                ack_type: broker
+                verify_policy: role_policy
+                bucket_tags: [
+                    {
+                        "Key": "product",
+                        "Value": "ceph"
+                    }
+                ]
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/ip_addr:8180/realms/master"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity"],
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                      [
+                          {
+                              "Action": ["s3:PutObject", "s3:ListBucket", "s3:GetObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:PutBucketVersioning", "s3:GetBucketVersioning", "s3:PutBucketPolicy", "s3:GetBucketPolicy", "s3:DeleteBucketPolicy", "s3:PutBucketWebsite", "s3:GetBucketWebsite", "s3:PutLifecycleConfiguration", "s3:GetLifecycleConfiguration", "s3:PutBucketEncryption", "s3:GetBucketEncryption", "s3:PutBucketTagging", "s3:GetBucketTagging", "s3:DeleteBucket", "s3:CreateBucket"],
+                              "Resource": "arn:aws:s3:::*",
+                              "Effect": "Deny",
+                              "Sid": "statement1",
+                          }
+                    ]
+
+
+# STS aswi tests with IBM Security Verify as Identity Provider
+
+  - test:
+      name: test STS aswi with ISV
+      desc: test STS aswi with ISV
+      polarion-id: CEPH-83595848
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_isv_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                identity_provider: IBM_Security_Verify
+                create_bucket: true
+                create_object: true
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/idp_url"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity"],
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                          {
+                              "Effect": "Allow",
+                              "Action": "s3:*",
+                              "Resource": "arn:aws:s3:::*",
+                          }
+
+  - test:
+      name: STS aswi Tests to veify role policy allow actions with ISV
+      desc: STS aswi Tests to veify role policy allow actions with ISV
+      polarion-id: CEPH-83595848
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_isv_verify_role_policy_allow_actions_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          encryption_keys: kms
+          lifecycle_conf:
+              - ID: LC_Rule_1
+                Filter:
+                  Prefix: key2
+                Status: Enabled
+                Expiration:
+                  Days: 20
+          test_ops:
+                identity_provider: IBM_Security_Verify
+                create_bucket: true
+                create_object: true
+                endpoint: kafka
+                ack_type: broker
+                verify_policy: role_policy
+                bucket_tags: [
+                    {
+                        "Key": "product",
+                        "Value": "ceph"
+                    }
+                ]
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/idp_url"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity"],
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                      [
+                          {
+                              "Action": ["s3:PutObject", "s3:ListBucket", "s3:GetObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:PutBucketVersioning", "s3:GetBucketVersioning", "s3:PutBucketPolicy", "s3:GetBucketPolicy", "s3:DeleteBucketPolicy", "s3:PutBucketWebsite", "s3:GetBucketWebsite", "s3:PutLifecycleConfiguration", "s3:GetLifecycleConfiguration", "s3:PutBucketEncryption", "s3:GetBucketEncryption", "s3:PutBucketTagging", "s3:GetBucketTagging", "s3:DeleteBucket", "s3:CreateBucket"],
+                              "Resource": "arn:aws:s3:::*",
+                              "Effect": "Allow",
+                              "Sid": "statement1",
+                          },
+                    ]
+
+
+  - test:
+      name: STS aswi Tests to veify role policy deny actions with ISV
+      desc: STS aswi Tests to veify role policy deny actions with ISV
+      polarion-id: CEPH-83595848
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_isv_verify_role_policy_deny_actions_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+                min: 2
+                max: 5000
+          encryption_keys: kms
+          lifecycle_conf:
+              - ID: LC_Rule_1
+                Filter:
+                  Prefix: key2
+                Status: Enabled
+                Expiration:
+                  Days: 20
+          test_ops:
+                identity_provider: IBM_Security_Verify
+                create_bucket: true
+                create_object: true
+                endpoint: kafka
+                ack_type: broker
+                verify_policy: role_policy
+                bucket_tags: [
+                    {
+                        "Key": "product",
+                        "Value": "ceph"
+                    }
+                ]
+          sts:
+                policy_document:
+                      "Version": "2012-10-17"
+                      "Statement": [
+                          {
+                              "Effect": "Allow",
+                              "Principal": {
+                                "Federated": ["arn:aws:iam:::oidc-provider/idp_url"]
+                              },
+                              "Action": ["sts:AssumeRoleWithWebIdentity"],
+                          }
+                      ]
+                role_policy:
+                    "Version": "2012-10-17"
+                    "Statement":
+                      [
+                          {
+                              "Action": ["s3:PutObject", "s3:ListBucket", "s3:GetObject", "s3:DeleteObject", "s3:AbortMultipartUpload", "s3:PutBucketVersioning", "s3:GetBucketVersioning", "s3:PutBucketPolicy", "s3:GetBucketPolicy", "s3:DeleteBucketPolicy", "s3:PutBucketWebsite", "s3:GetBucketWebsite", "s3:PutLifecycleConfiguration", "s3:GetLifecycleConfiguration", "s3:PutBucketEncryption", "s3:GetBucketEncryption", "s3:PutBucketTagging", "s3:GetBucketTagging", "s3:DeleteBucket", "s3:CreateBucket"],
+                              "Resource": "arn:aws:s3:::*",
+                              "Effect": "Deny",
+                              "Sid": "statement1",
+                          }
+                    ]
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+        rule: root netem delay 20ms 2ms distribution normal
+      desc: Configuring network traffic delay
+      module: configure-tc.py
+      name: apply-net-qos
+      polarion-id: CEPH-83575222
+
+  - test:
+      name: STS aswi Tests to test creds expire while copy object in progress
+      desc: STS aswi Tests to test creds expire while copy object in progress
+      polarion-id: CEPH-83581390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_creds_expire_copy_in_progress.yaml
