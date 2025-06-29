@@ -325,7 +325,6 @@ def run(**kw):
 
         verify_io_on_sites = config.get("verify-io-on-site", [])
         if verify_io_on_sites:
-            io_info = home_dir_path + f"io_info_{os.path.basename(config_file_name)}"
             for site in verify_io_on_sites:
                 verify_io_on_site_node = clusters.get(site).get_ceph_object("rgw").node
                 if config.get("multisite-replication-disabled", False):
@@ -338,35 +337,45 @@ def run(**kw):
                 # adding sleep for 80 seconds before verification of data starts
                 log.info("sleeping for 80 seconds before verification of data starts")
                 time.sleep(80)
-                log.info(f"verification IO on {site}")
-                if test_site != site:
-                    copy_file_from_node_to_node(
-                        io_info, exec_from, verify_io_on_site_node, io_info
-                    )
 
-                verify_status = verify_io_on_site_node.exec_command(
-                    cmd="sudo venv/bin/python "
-                    + test_folder_path
-                    + lib_dir
-                    + f"read_io_info.py -c {config_file_name}",
-                    long_running=True,
+                verify_io_info_configs = config.get(
+                    "verify-io-info-configs", [config_file_name]
                 )
-                log.info(f"verify io status code is : {verify_status}")
-                if verify_status != 0:  # Verify io failure on other site
-                    if config.get("multisite-replication-disabled", False):
-                        log.info(
-                            f"Multisite replication disabled. objects not synced to {site}"
-                            + " and verify io failed as expected."
+                for io_config in verify_io_info_configs:
+                    io_info = home_dir_path + f"io_info_{os.path.basename(io_config)}"
+                    log.info(f"verification IO on {site}")
+                    if test_site != site:
+                        copy_file_from_node_to_node(
+                            io_info, exec_from, verify_io_on_site_node, io_info
                         )
-                    else:
-                        raise Exception(f"verify io failed on {site}")
-                else:  # Verify io is successful on other site
-                    if config.get("multisite-replication-disabled", False):
-                        raise Exception(
-                            f"objects synced to {site} even after disabling multisite replication."
-                        )
-                    else:
-                        log.info(f"verify io is successful on {site}")
+
+                    verify_status = verify_io_on_site_node.exec_command(
+                        cmd="sudo venv/bin/python "
+                        + test_folder_path
+                        + lib_dir
+                        + f"read_io_info.py -c {io_config}",
+                        long_running=True,
+                    )
+                    log.info(f"verify io status code is : {verify_status}")
+                    if verify_status != 0:  # Verify io failure on other site
+                        if config.get("multisite-replication-disabled", False):
+                            log.info(
+                                f"Multisite replication disabled. objects not synced to {site}"
+                                + " and verify io failed as expected."
+                            )
+                        else:
+                            raise Exception(
+                                f"verify io failed on {site} for {io_config}"
+                            )
+                    else:  # Verify io is successful on other site
+                        if config.get("multisite-replication-disabled", False):
+                            raise Exception(
+                                f"objects synced to {site} even after disabling multisite replication."
+                            )
+                        else:
+                            log.info(
+                                f"verify io is successful on {site} for {io_config}"
+                            )
 
     return test_status
 
