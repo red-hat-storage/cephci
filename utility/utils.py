@@ -1881,6 +1881,28 @@ def configure_kafka_security(rgw_node, cloud_type):
     time.sleep(20)
 
 
+def config_keystone_ldap(rgw_node, cloud_type):
+    """Set the keystone config option on the cluster at startup"""
+    if cloud_type == "openstack":
+        keystone_server = get_cephci_config()["rhosd"].get("keystone_url")
+        ldap_url = get_cephci_config()["rhosd"].get("ldap_url")
+    elif cloud_type == "ibmc":
+        keystone_server = get_cephci_config()["ibmcos"].get("keystone_url")
+        ldap_url = get_cephci_config()["ibmcos"].get("ldap_url")
+
+    out = rgw_node.exec_command(sudo=True, cmd="ceph orch ls | grep rgw")
+    rgw_name = out[0].split()[0]
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"ceph config set client.{rgw_name} rgw_keystone_url {keystone_server}",
+    )
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"ceph config set client.{rgw_name} rgw_ldap_uri {ldap_url}",
+    )
+    rgw_node.exec_command(sudo=True, cmd=f"ceph orch restart {rgw_name}")
+
+
 def method_should_succeed(function, *args, **kwargs):
     """
     Wrapper function to verify the return value of executed method.
