@@ -5,6 +5,7 @@ import traceback
 from time import sleep
 
 from ceph.ceph import CommandFailed
+from ceph.utils import find_vm_node_by_hostname
 from tests.cephfs.cephfs_system.osd_node_failure_ops import object_compare
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
@@ -53,23 +54,6 @@ def run(ceph_cluster, **kw):
                 unique_objects.append(obj)
         osd_nodes = unique_objects
 
-        osp_cred = config.get("osp_cred")
-        if config.get("cloud-type") == "openstack":
-            os_cred = osp_cred.get("globals").get("openstack-credentials")
-            params = {}
-            params["username"] = os_cred["username"]
-            params["password"] = os_cred["password"]
-            params["auth_url"] = os_cred["auth-url"]
-            params["auth_version"] = os_cred["auth-version"]
-            params["tenant_name"] = os_cred["tenant-name"]
-            params["service_region"] = os_cred["service-region"]
-            params["domain_name"] = os_cred["domain"]
-            params["tenant_domain_id"] = os_cred["tenant-domain-id"]
-            params["cloud_type"] = "openstack"
-        elif config.get("cloud-type") == "ibmc":
-            pass
-        else:
-            pass
         version, rc = clients[0].exec_command(
             sudo=True, cmd="ceph version --format json"
         )
@@ -176,38 +160,47 @@ def run(ceph_cluster, **kw):
 
         log.info("Shutting down the cluster")
         for client in clients:
-            fs_util.node_power_off(node=client.node, sleep_time=120, **params)
+            target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+            target_node.shutdown(wait=True)
 
         log.info("Client Nodes Powered OFF Successfully")
 
         for mds in mds_nodes:
-            fs_util.node_power_off(node=mds.node, sleep_time=120, **params)
+            target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+            target_node.shutdown(wait=True)
 
         log.info("MDS Nodes Powered OFF Successfully")
 
         for mon in mon_nodes:
-            fs_util.node_power_off(node=mon.node, sleep_time=120, **params)
+            target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+            target_node.shutdown(wait=True)
 
         log.info("Mon Nodes Powered OFF Successfully")
         for osd in osd_nodes:
-            fs_util.node_power_off(node=osd.node, sleep_time=120, **params)
+            target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+            target_node.shutdown(wait=True)
+
         log.info("OSD Nodes Powered OFF Successfully")
         log.info("Sleeping for 10 min")
         sleep(600)
 
         log.info("Bring the Cluster back")
         for mon in mon_nodes:
-            fs_util.node_power_on(node=mon.node, sleep_time=120, **params)
+            target_node = find_vm_node_by_hostname(ceph_cluster, mon.node.hostname)
+            target_node.power_on()
         log.info("Mon Nodes Powered ON Successfully")
         for osd in osd_nodes:
-            fs_util.node_power_on(node=osd.node, sleep_time=120, **params)
+            target_node = find_vm_node_by_hostname(ceph_cluster, osd.node.hostname)
+            target_node.power_on()
         log.info("OSD Nodes Powered OFF Successfully")
 
         for mds in mds_nodes:
-            fs_util.node_power_on(node=mds.node, sleep_time=120, **params)
+            target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+            target_node.power_on()
         log.info("MDS Nodes Powered ON Successfully")
         for client in clients:
-            fs_util.node_power_on(node=client.node, sleep_time=120, **params)
+            target_node = find_vm_node_by_hostname(ceph_cluster, client.node.hostname)
+            target_node.power_on()
         log.info("Clients Nodes Powered ON Successfully")
 
         out, rc = clients[0].exec_command(sudo=True, cmd="ceph -s -f json")

@@ -4,6 +4,7 @@ import traceback
 
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
+from ceph.utils import find_vm_node_by_hostname
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.io.fs_io import fs_io
 from utility.log import Log
@@ -52,23 +53,6 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph orch apply mds {fs_name} --placement='3 {hosts}'",
         )
-        osp_cred = config.get("osp_cred")
-        if config.get("cloud-type") == "openstack":
-            os_cred = osp_cred.get("globals").get("openstack-credentials")
-            params = {}
-            params["username"] = os_cred["username"]
-            params["password"] = os_cred["password"]
-            params["auth_url"] = os_cred["auth-url"]
-            params["auth_version"] = os_cred["auth-version"]
-            params["tenant_name"] = os_cred["tenant-name"]
-            params["service_region"] = os_cred["service-region"]
-            params["domain_name"] = os_cred["domain"]
-            params["tenant_domain_id"] = os_cred["tenant-domain-id"]
-            params["cloud_type"] = "openstack"
-        elif config.get("cloud-type") == "ibmc":
-            pass
-        else:
-            pass
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -127,9 +111,13 @@ def run(ceph_cluster, **kw):
                     log.info(type(before))
                     before1 = int(before[0].replace("\n", ""))
                     log.info(before1)
-                fs_util.node_power_off(node=mds_nodes[i].node, sleep_time=40, **params)
+                target_node = find_vm_node_by_hostname(
+                    ceph_cluster, mds_nodes[i].node.hostname
+                )
+                target_node.shutdown(wait=True)
             for mds in mds_nodes:
-                fs_util.node_power_on(node=mds.node, sleep_time=40, **params)
+                target_node = find_vm_node_by_hostname(ceph_cluster, mds.node.hostname)
+                target_node.power_on()
         num_files_after = f"ls -l {fuse_mounting_dir_1} | grep -c '^d'"
         out2 = client1.exec_command(sudo=True, cmd=num_files_after)
         after1 = int(out2[0].replace("\n", ""))
