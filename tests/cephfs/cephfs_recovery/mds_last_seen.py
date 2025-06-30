@@ -230,7 +230,7 @@ def run(ceph_cluster, **kw):
             config = {}
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
-
+        fs_util.auth_list(clients)
         # Create test filesystem if it doesn't exist
         log.info("==== STARTING: Create filesystem if it doesn't exist ====")
         fs_name = "cephfs"
@@ -244,7 +244,7 @@ def run(ceph_cluster, **kw):
         # Step 1: Set the standby-replay mds to 2
         log.info("==== STARTING: Step 1 - Configure standby-replay MDS ====")
         log.info("Setting standby-replay MDS count to 2")
-        fs_util.set_and_validate_mds_standby_replay(client1, fs_name, True)
+        fs_util.set_and_validate_mds_standby_replay(client1, fs_name, 1)
         client1.exec_command(
             sudo=True, cmd="ceph fs set %s standby_count_wanted 2" % fs_name
         )
