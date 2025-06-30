@@ -118,6 +118,7 @@ def wait_for_healthy_ceph(client1, fs_util, wait_time_secs):
 
 def start_io_time(fs_util, client1, mounting_dir, timeout=300):
     global stop_flag
+    stop_flag = False
     iter = 0
     if timeout:
         stop = datetime.now() + timedelta(seconds=timeout)
@@ -127,13 +128,18 @@ def start_io_time(fs_util, client1, mounting_dir, timeout=300):
         if stop and datetime.now() > stop:
             log.info("Timed out *************************")
             break
-        client1.exec_command(sudo=True, cmd=f"mkdir -p {mounting_dir}/run_ios_{iter}")
+        mount_type = "fuse" if "fuse" in mounting_dir else "kernel"
+        client1.exec_command(
+            sudo=True,
+            cmd=f"mkdir -p {mounting_dir}/{mount_type}_{__name__}_run_ios_{iter}",
+        )
         fs_util.run_ios(
-            client1, f"{mounting_dir}/run_ios_{iter}", io_tools=["smallfile"]
+            client1,
+            f"{mounting_dir}/{mount_type}_{__name__}_run_ios_{iter}",
+            io_tools=["smallfile"],
         )
         iter = iter + 1
         if stop_flag:
-            log.info("Exited as stop flag is set to True")
             break
 
 
@@ -208,7 +214,7 @@ def run(ceph_cluster, **kw):
                 fs_util_v1,
                 clients[0],
                 fuse_mount_dir,
-                timeout=0,
+                timeout=1200,
             )
             p.spawn(
                 start_io_time,

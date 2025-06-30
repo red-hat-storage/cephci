@@ -10,7 +10,9 @@ from datetime import datetime, timedelta
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -21,7 +23,7 @@ def test_setup(fs_util, ceph_cluster, client):
     """
     log.info("Create fs volume if doesn't exist")
     default_fs = "cephfs-mds"
-
+    cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
     mds_nodes = ceph_cluster.get_ceph_objects("mds")
     fs_util.create_fs(client, default_fs)
 
@@ -48,9 +50,12 @@ def test_setup(fs_util, ceph_cluster, client):
         sudo=True,
         cmd=f"ceph fs set {default_fs} max_mds 2",
     )
-
-    if wait_for_healthy_ceph(client, fs_util, 300) == 0:
-        return 1
+    retry_ceph_health = retry(CommandFailed, tries=4, delay=60)(
+        cephfs_common_utils.wait_for_healthy_ceph
+    )
+    rc = retry_ceph_health(client)
+    if rc:
+        raise CommandFailed("cluster is in not healthy state")
 
     nfs_servers = ceph_cluster.get_ceph_objects("nfs")
     nfs_server = nfs_servers[0].node.hostname
@@ -268,7 +273,6 @@ def run(ceph_cluster, **kw):
         fs_util_v1.prepare_clients(clients, build)
         fs_util_v1.auth_list(clients)
         client = clients[0]
-
         mon_node_ip = fs_util_v1.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
         log.info("Save current MDS Cache memory limit")
