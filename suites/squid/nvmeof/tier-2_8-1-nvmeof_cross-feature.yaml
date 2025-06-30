@@ -110,127 +110,127 @@ tests:
       name: deploy NVMeoF service for GW group 1
       polarion-id: CEPH-83595696
 
-  - test:
-      abort-on-fail: true
-      config:
-        verify_cluster_health: true
-        steps:
-          - config:
-              command: shell
-              args:
-                - ceph osd pool create nvmeof_pool1
-          - config:
-              command: shell
-              args:
-                - rbd pool init nvmeof_pool1
-          - config:
-              command: apply
-              service: nvmeof
-              args:
-                placement:
-                  nodes:
-                  - node8
-                  - node9
-                  - node10
-                  - node11
-              pos_args:
-                - nvmeof_pool1
-                - group2
-          - config:
-              command: shell
-              args:
-                - ceph osd pool create rbd
-          - config:
-              command: shell
-              args:
-                - rbd pool init rbd
-      desc: deploy NVMeoF service for GW group 2
-      destroy-cluster: false
-      do-not-skip-tc: true
-      module: test_cephadm.py
-      name: deploy NVMeoF service for GW group 2
-      polarion-id: CEPH-83595696
-
+# Tests with uni and bidirectional in-band authentication
   - test:
       abort-on-fail: false
       config:
-        test_case: CEPH-83595512
-        install: true
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
-        cleanup:
-          - pool
-          - gateway
-          - initiators
+        # cleanup:
+        #   - pool
+        #   - gateway
+        #   - initiators
         gw_groups:
           - gw_group: group1
             inband_auth_mode: bidirectional
             gw_nodes:
               - node4
               - node5
-            subsystems: 128
-            max-namespaces: 2048
-            no-group-append: true
-            inband_auth: true
-            listener_port: 5001
-            listeners:
-              - node4
-              - node5
-            hosts:
-              - node: node10
+              - node6
+              - node7
+            subsystems:
+              - subnqn: nqn.2016-06.io.spdk:cnode1
+                no-group-append: true
                 inband_auth: true
-                subsystem_range: [1, 64]
-              - node: node11
-                inband_auth: true
-                subsystem_range: [65, 128]
-            bdevs:
-              - count: 2048
-                size: 4G
-            initiators:
-              - subsystems: 64
                 listener_port: 5001
-                node: node10
-              - subsystems: 64
+                listeners:
+                  - node4
+                  - node5
+                  - node6
+                  - node7
+                hosts:
+                  - node: node12
+                    inband_auth: true
+                bdevs:
+                  - count: 10
+                    size: 4G
+              - subnqn: nqn.2016-06.io.spdk:cnode2
+                no-group-append: true
+                inband_auth: true
                 listener_port: 5002
-                node: node11
-            fault-injection-methods:
-              - tool: daemon
-                nodes: node4
-          - gw_group: group2
-            inband_auth_mode: unidirectional
-            gw_nodes:
-              - node8
-              - node9
-            subsystems: 128
-            max-namespaces: 2048
-            no-group-append: true
-            listener_port: 5001
-            listeners:
-              - node8
-              - node9
-            hosts:
-              - node: node12
+                listeners:
+                  - node4
+                  - node5
+                  - node6
+                  - node7
+                hosts:
+                  - node: node12
+                    inband_auth: true
+                bdevs:
+                  - count: 10
+                    size: 4G
+              - subnqn: nqn.2016-06.io.spdk:cnode3
+                no-group-append: true
                 inband_auth: true
-                subsystem_range: [1, 128]
-            bdevs:
-              - count: 2048
-                size: 4G
+                listener_port: 5003
+                listeners:
+                  - node4
+                  - node5
+                  - node6
+                  - node7
+                hosts:
+                  - node: node12
+                    inband_auth: true
+                bdevs:
+                  - count: 10
+                    size: 4G
+              - subnqn: nqn.2016-06.io.spdk:cnode4
+                no-group-append: true
+                inband_auth: true
+                listener_port: 5004
+                listeners:
+                  - node4
+                  - node5
+                  - node6
+                  - node7
+                hosts:
+                  - node: node12
+                    inband_auth: true
+                bdevs:
+                  - count: 10
+                    size: 4G
+              - subnqn: nqn.2016-06.io.spdk:cnode5
+                no-group-append: true
+                inband_auth: true
+                listener_port: 5005
+                listeners:
+                  - node4
+                  - node5
+                  - node6
+                  - node7
+                hosts:
+                  - node: node12
+                    inband_auth: true
+                bdevs:
+                  - count: 10
+                    size: 4G
             initiators:
-              - nqn: connect-all
-                subsystems: 5
+              - nqn: nqn.2016-06.io.spdk:cnode1
                 listener_port: 5001
+                node: node12
+              - nqn: nqn.2016-06.io.spdk:cnode2
+                listener_port: 5002
+                node: node12
+              - nqn: nqn.2016-06.io.spdk:cnode3
+                listener_port: 5003
+                node: node12
+              - nqn: nqn.2016-06.io.spdk:cnode4
+                listener_port: 5004
+                node: node12
+              - nqn: nqn.2016-06.io.spdk:cnode5
+                listener_port: 5005
                 node: node12
             fault-injection-methods:
               - tool: daemon
-                nodes: node8
-      desc: Scale NVMe-oF tests with uni and bidirectional in-band authentication.
+                nodes: node6
+      desc: NVMe-oF tests with uni and bidirectional in-band authentication.
       destroy-cluster: false
       module: test_nvmeof_gwgroup_inbandauth.py
-      name: Scale NVMe-oF tests with uni and bidirectional in-band authentication.
-      polarion-id: CEPH-83595512
+      name: NVMe-oF tests with uni and bidirectional in-band authentication.
+      polarion-id: CEPH-83608200
 
   - test:
       abort-on-fail: true
