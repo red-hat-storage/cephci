@@ -24,7 +24,6 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
-    osd_list = []
     mclock_profile = ["balanced", "high_recovery_ops", "high_client_ops"]
     rados_object = RadosOrchestrator(node=cephadm)
     mon_object = MonConfigMethods(rados_obj=rados_object)
@@ -36,14 +35,8 @@ def run(ceph_cluster, **kw):
     log.info(f"The rhcs build version is-{build}")
 
     # To get the OSD list
-    ceph_nodes = kw.get("ceph_nodes")
-    for node in ceph_nodes:
-        if node.role == "osd":
-            node_osds = rados_object.collect_osd_daemon_ids(node)
-            # Pick a single OSD from the host OSDs list
-            node_osds = random.sample(node_osds, 1)
-            osd_list = osd_list + node_osds
-    log.info(f"The number of OSDs in the cluster are-{len(osd_list)}")
+    osd_list = rados_object.get_osd_list(status="up")
+    log.info(f"The number of OSDs in the cluster are: {len(osd_list)}")
     # If OSD list is more than 10 then randomly picking the 10 OSDs to check the parameters.
     if len(osd_list) > 10:
         osd_list = random.sample(osd_list, 10)

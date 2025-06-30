@@ -130,7 +130,7 @@ def run(ceph_cluster, **kw):
         method_should_succeed(wait_for_device, host, osd_id, action="add")
         method_should_succeed(
             wait_for_daemon_status,
-            host=host,
+            rados_obj=rados_obj,
             daemon_type="osd",
             daemon_id=osd_id,
             status="running",
@@ -167,7 +167,7 @@ def run(ceph_cluster, **kw):
             method_should_succeed(wait_for_device, host, osd_id, action="add")
             method_should_succeed(
                 wait_for_daemon_status,
-                host=host,
+                rados_obj=rados_obj,
                 daemon_type="osd",
                 daemon_id=osd_id,
                 status="running",

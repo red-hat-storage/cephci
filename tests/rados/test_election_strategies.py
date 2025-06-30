@@ -253,7 +253,7 @@ def run(ceph_cluster, **kw):
             for mon in mon_obj.get_mon_quorum().keys():
                 method_should_succeed(
                     wait_for_daemon_status,
-                    host=installer_node,
+                    rados_obj=rados_obj,
                     daemon_type="mon",
                     daemon_id=mon,
                     status="running",
