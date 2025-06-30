@@ -46,15 +46,20 @@ class RadosScrubber(RadosOrchestrator):
         out = super().run_ceph_command(cmd=cmd)
         return out
 
-    def set_osd_configuration(self, param, value):
+    def set_osd_configuration(self, param, value, osd_id=None):
         """
         Used to set the configuration parametrs to the OSD's.
         Args:
-            params : Parameters to be set for OSD's
-
+            param : Parameters to be set for OSD's
+            value : Parameter value
+            osd_id : osd id . The value is none by default
         Returns: 0  for success or 1 for failure
         """
-        cmd = f"ceph config set  osd {param} {value}"
+
+        if osd_id:
+            cmd = f"ceph config set  osd.{osd_id}  {param} {value}"
+        else:
+            cmd = f"ceph config set  osd {param} {value}"
         out, err = self.node.shell([cmd])
         actual_value = self.get_osd_configuration(param)
         if actual_value == value:
@@ -258,3 +263,18 @@ class RadosScrubber(RadosOrchestrator):
             return False
         log.info("Scrubbing completed")
         return True
+
+    def get_scrub_error_count(self):
+        """
+        Method is used to get the scrub error count in the cluster
+        Return:
+            Retuns the scrub error count.If not present returns 0
+
+        """
+        status_out_put = self.run_ceph_command(cmd="ceph -s")
+        if "OSD_SCRUB_ERRORS" not in status_out_put["health"]["checks"]:
+            log.error("The inconsistent objects not created")
+            return 0
+        return status_out_put["health"]["checks"]["OSD_SCRUB_ERRORS"]["summary"][
+            "count"
+        ]

@@ -176,6 +176,7 @@ def run(ceph_cluster, **kw):
         except Exception as e:
             log.info(e)
             return 1
+        # Change to high value
         msg_obj_count = f"Scenario-2:The object count value is-{obj_count}"
         log.info(msg_obj_count)
         if obj_count == -1:
@@ -197,12 +198,14 @@ def run(ceph_cluster, **kw):
             + f"Inconsistent count after test:{no_of_objects}"
         )
 
+        # Check the scrub/deep-scrub in sin running or not if not
         log.info(
             "Test scenario3:Inconsistent objects less than the osd_scrub_auto_repair_num_errors count and "
             "osd_scrub_auto_repair is true\n"
             + "operation : scrub\n"
             + "Expectation : No repairs to be made"
         )
+
         mon_obj.set_config(section="osd", name="osd_scrub_auto_repair", value="true")
         obj_count = get_inconsistent_count(scrub_object, pg_id, rados_obj, "scrub")
         msg_obj_count = f"Scenario-3:The object count value is-{obj_count}"
@@ -403,6 +406,9 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
 
     """
 
+    # After completing the scenario change the intravels to large
+    # Check the scrub/deep-scrub is in progress or not
+    # If not In the next scenario change the value to 5, 450 and 450 and proceeed
     operation_chk_flag = False
     osd_scrub_min_interval = 5
     osd_scrub_max_interval = 450
@@ -452,6 +458,9 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
     if not operation_chk_flag:
         log.error(f"{operation} not initiated on pg-{pg_id}")
         return -1
+    scrub_object.remove_config(section="osd", name="osd_scrub_min_interval")
+    scrub_object.remove_config(section="osd", name="osd_scrub_max_interval")
+    scrub_object.remove_config(section="osd", name="osd_deep_scrub_interval")
     chk_count = 0
     while chk_count <= 10:
         inconsistent_details = rados_obj.get_inconsistent_object_details(pg_id)
@@ -469,6 +478,7 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
             return obj_count
         chk_count = chk_count + 1
         time.sleep(30)
+    # Set to high values
     return obj_count
 
 
@@ -513,3 +523,33 @@ def set_ecpool_inconsistent_default_param_value(mon_obj, scrub_obj):
     mon_obj.remove_config(section="global", name="osd_pool_default_pg_autoscale_mode")
     mon_obj.remove_config(section="mgr", name="debug_mgr")
     time.sleep(10)
+
+
+def check_for_scrub(rados_object, wait_time):
+    """
+    Method is to wait for scrub operation to finish
+    Args:
+        rados_object: Rados object
+        wait_time : wait time in minutes
+    Returns: bool: True if scrubbing is not in progress at wait_time, False otherwise.
+
+    """
+    end_time = datetime.now() + timedelta(minutes=wait_time)
+    while end_time > datetime.now():
+        status_out_put = rados_object.run_ceph_command(cmd="ceph -s")
+        try:
+            is_scrubbing = any(
+                "scrubbing" in pg_state["state_name"]
+                for pg_state in status_out_put.get("pgmap", {}).get("pgs_by_state", [])
+            )
+            if is_scrubbing:
+                log.info("Scrubbing in progress, waiting 5 seconds...")
+                time.sleep(5)
+            else:
+                log.info("No scrub operations running.")
+                return True
+        except Exception as e:
+            log.error("Error accessing PG status: %s", e)
+            return False
+    log.info("Timeout reached, scrubbing  still  in progress.")
+    return False
