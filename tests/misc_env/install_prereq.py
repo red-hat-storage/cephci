@@ -7,14 +7,13 @@ from ceph.parallel import parallel
 from ceph.utils import config_ntp, update_ca_cert
 from ceph.waiter import WaitUntil
 from cli.exceptions import ConfigError
-from cli.utilities.packages import Package
 from cli.utilities.packages import SubscriptionManager as sm
 from cli.utilities.packages import SubscriptionManagerError
+from cli.utilities.repos import setup_local_repos, yum_add_repo
 from cli.utilities.utils import (
     enable_fips_mode,
     get_service_state,
     is_fips_mode_enabled,
-    os_major_version,
     reboot_node,
     set_service_state,
 )
@@ -182,7 +181,7 @@ def install_prereq(
                 enable_rhel_rpms(ceph, distro_ver)
 
         if repo:
-            setup_addition_repo(ceph, repo)
+            yum_add_repo(ceph, repo, gpgcheck=False)
 
         ceph.exec_command(cmd="sudo yum -y upgrade", timeout=600, check_ec=False)
 
@@ -265,15 +264,6 @@ def install_prereq(
         log.info("Firewall is active")
 
 
-def setup_addition_repo(ceph, repo):
-    log.info("Adding addition repo {repo} to {sn}".format(repo=repo, sn=ceph.shortname))
-    ceph.exec_command(
-        sudo=True,
-        cmd="curl -o /etc/yum.repos.d/rh_add_repo.repo {repo}".format(repo=repo),
-    )
-    ceph.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
-
-
 def setup_subscription_manager(ceph, server, timeout=300, interval=60):
     # Get configuration details from `~/.cephci.yaml`
     configs = get_cephci_config()
@@ -313,31 +303,6 @@ def subscription_manager_status(ceph):
         raise SubscriptionManagerError("Unexpected subscription manager status")
 
     return match.group(0)
-
-
-def setup_local_repos(ceph):
-    # Get configuration details from `~/.cephci.yaml`
-    configs = get_cephci_config()
-
-    # Get distro version
-    os_version = os_major_version(ceph)
-
-    # Get local repositories
-    repos = configs.get("repo")
-    if not repos:
-        raise ConfigNotFoundError("Repos are not provided")
-
-    # Get local repositories
-    local_repos = repos.get("local", {}).get(f"rhel-{os_version}")
-    if not local_repos:
-        raise ConfigNotFoundError("local repositories are not provided")
-
-    # Add local repositories
-    for repo in local_repos:
-        Package(ceph).add_repo(repo=repo)
-
-    log.info("Added local RHEL repos successfully")
-    return True
 
 
 def enable_rhel_rpms(ceph, distro_ver):
