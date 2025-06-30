@@ -99,6 +99,22 @@ class CephBaremetalNode:
         self.rssh().exec_command(command=f"chown {name}:{name} /home/{name}")
         self.rssh().exec_command(command=bash_script)
 
+    def shutdown(self, wait: bool = False) -> None:
+        """
+        Shutdown the baremetal node.
+        Args:
+            wait (bool): If True, wait until the node is completely shut down.
+        """
+        raise NotImplementedError(
+            "Implementation not available for baremetal node shutdown."
+        )
+
+    def power_on(self) -> None:
+        """Power on the baremetal node."""
+        raise NotImplementedError(
+            "Implementation not available for baremetal node power on."
+        )
+
     @property
     def ip_address(self) -> str:
         """Return the private IP address of the node."""
