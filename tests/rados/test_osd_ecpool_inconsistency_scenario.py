@@ -636,9 +636,7 @@ def get_inconsistent_count(
         mon_object.remove_config(section=osd, name="osd_scrub_min_interval")
         mon_object.remove_config(section=osd, name="osd_scrub_max_interval")
         mon_object.remove_config(section=osd, name="osd_deep_scrub_interval")
-
     obj_count = get_pg_inconsistent_object_count(rados_obj, pg_id)
-
     return obj_count
 
 

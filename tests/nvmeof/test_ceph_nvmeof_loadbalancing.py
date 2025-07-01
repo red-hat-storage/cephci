@@ -238,8 +238,155 @@ def test_ceph_83608838(ceph_cluster, config):
     )
 
 
+def test_ceph_83609769(ceph_cluster, config):
+    rbd_pool = config["rbd_pool"]
+    rbd_obj = config["rbd_obj"]
+    gateway_group = config.get("gw_group", "")
+    # Deploy nvmeof service
+    LOG.info("deploy nvme service")
+    config["spec_deployment"] = True
+    config["rebalance_period"] = True
+    config["rebalance_period_sec"] = 0
+    deploy_nvme_service(ceph_cluster, config)
+    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+
+    # Configure subsystems
+    LOG.info("Configure subsystems")
+    with parallel() as p:
+        for subsys_args in config["subsystems"]:
+            subsys_args["ceph_cluster"] = ceph_cluster
+            p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+
+    # Configure namespaces
+    LOG.info("Configure namespaces")
+    load_balancing_group = 1
+    for subsystem in config["subsystems"]:
+        for image_num in range(1, 11):
+            sub_name = subsystem["nqn"]
+            nvmegwcl = ha.gateways[0]
+            image = f"image-{generate_unique_id(6)}-{image_num}"
+            rbd_obj.create_image(rbd_pool, image, "1G")
+            img_args = {
+                "subsystem": f"{sub_name}",
+                "rbd-pool": rbd_pool,
+                "rbd-image": image,
+                "load-balancing-group": load_balancing_group,
+            }
+            nvmegwcl.namespace.add(**{"args": {**img_args}})
+        load_balancing_group += 1
+
+    # Check for num-namespaces is 10 in all gateways
+    LOG.info("Check for num-namespaces is 10 in all gateways")
+    out, _ = ha.orch.shell(
+        args=["ceph", "nvme-gw", "show", config["rbd_pool"], repr(gateway_group)]
+    )
+    out = json.loads(out)
+    LOG.info(f"ceph nvme-gw show output is \n {out}")
+    gateways = out.get("Created Gateways:", [])
+    for gw_detail in gateways:
+        if int(gw_detail["num-namespaces"]) == 10:
+            gw_id = gw_detail["gw-id"]
+            LOG.info(f"Namespaces created for gw-id {gw_id} is 10")
+        else:
+            gw_id = gw_detail["gw-id"]
+            num_namespaces = gw_detail["num-namespaces"]
+            raise Exception(f"Namespaces created for gw-id {gw_id} is {num_namespaces}")
+
+    # Delete namespaces related to one load balancing group in each subsysyem
+    LOG.info("Delete namespaces related to one load balancing group in each subsysyem")
+    nvmegwcl = ha.gateways[0]
+    for subsystem in config["subsystems"]:
+        sub_name = subsystem["nqn"]
+        img_args = {"subsystem": f"{sub_name}"}
+        namespace_list = nvmegwcl.namespace.list(
+            **{"args": {**img_args}, "base_cmd_args": {"format": "json"}}
+        )
+        # Get the nsids related each load-balancing-group
+        parsed_data = json.loads(namespace_list[1])
+        grouped_nsids = dict()
+        for ns in parsed_data["namespaces"]:
+            group = ns["load_balancing_group"]
+            nsid = ns["nsid"]
+            if group not in grouped_nsids:
+                grouped_nsids[group] = list()
+            grouped_nsids[group].append(nsid)
+        nsids_to_delete = grouped_nsids.get(4, [])
+        for nsid in nsids_to_delete:
+            img_args = {"subsystem": f"{sub_name}", "nsid": f"{nsid}"}
+            nvmegwcl.namespace.delete(**{"args": {**img_args}})
+
+    # Sleep for 60 seconds becfore checking namespace count because auto namespace loading will happen within 60 seconds
+    time.sleep(60)
+    # Check for num-namespaces is 0 for one gateway node
+    LOG.info("Check for num-namespaces is 0 for one gateway node")
+    out, _ = ha.orch.shell(
+        args=["ceph", "nvme-gw", "show", config["rbd_pool"], repr(gateway_group)]
+    )
+    out = json.loads(out)
+    LOG.info(f"ceph nvme-gw show output is \n {out}")
+    zero_namespaces = any(
+        int(gw["num-namespaces"]) == 0 for gw in out.get("Created Gateways:", [])
+    )
+    if zero_namespaces:
+        LOG.info(
+            "Namespace for one gateway node is zero and auto load balancing is not happened"
+        )
+    else:
+        raise Exception("Namespace for one gateway node is not zero")
+
+    # Scale down one gateway node
+    LOG.info("Scale down one gateway node")
+    gateway_nodes = deepcopy(config.get("gw_nodes"))
+    config.update({"gw_nodes": config.get("gw_nodes")[0:3]})
+    deploy_nvme_service(ceph_cluster, config)
+
+    # Check for num-namespaces
+    LOG.info("After Scale down Check for num-namespaces is 10 for every gateway node")
+    out, _ = ha.orch.shell(
+        args=["ceph", "nvme-gw", "show", config["rbd_pool"], repr(gateway_group)]
+    )
+    out = json.loads(out)
+    LOG.info(f"ceph nvme-gw show output is \n {out}")
+    gateways = out.get("Created Gateways:", [])
+    for gw_detail in gateways:
+        gw_id = gw_detail["gw-id"]
+        if int(gw_detail["num-namespaces"]) == 10:
+            LOG.info(f"Namespaces created for gw-id {gw_id} is 10")
+        else:
+            num_namespaces = gw_detail["num-namespaces"]
+            raise Exception(f"Namespaces created for gw-id {gw_id} is {num_namespaces}")
+
+    # Scale up one gateway node
+    LOG.info("Scale up one gateway node")
+    config.update({"gw_nodes": gateway_nodes})
+    deploy_nvme_service(ceph_cluster, config)
+
+    # wait for 120 seconds and check autoload balancing not happened
+    LOG.info("wait for 120 seconds and check autoload balancing not happened")
+    time.sleep(120)
+    LOG.info("Check for num-namespaces is 0 for one gateway node")
+    out, _ = ha.orch.shell(
+        args=["ceph", "nvme-gw", "show", config["rbd_pool"], repr(gateway_group)]
+    )
+    out = json.loads(out)
+    LOG.info(f"ceph nvme-gw show output is \n {out}")
+    zero_namespaces = any(
+        int(gw["num-namespaces"]) == 0 for gw in out.get("Created Gateways:", [])
+    )
+    if zero_namespaces:
+        LOG.info(
+            "Namespace for one gateway node is zero and auto load balancing is not happened"
+        )
+    else:
+        raise Exception("Namespace for one gateway node is not zero")
+    LOG.info(
+        "CEPH-83609769 - Test disabling auto namespace load balancing in a GW group test validated successfully."
+    )
+
+
 testcases = {
     "CEPH-83608838": test_ceph_83608838,
+    "CEPH-83609769": test_ceph_83609769,
 }
 
 
@@ -298,15 +445,19 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     initiators = config.get("initiators")
     io_tasks = []
     # Set max_workers to accommodate all FIO processes per initiator
-    num_devices = sum(
-        [(i.get("bdevs", [])[0].get("count", 0)) for i in config.get("subsystems", [])]
-    )
-    max_workers = (
-        len(initiators) * num_devices if initiators else num_devices
-    )  # 20 devices + 10 buffer per initiator
-    executor = ThreadPoolExecutor(
-        max_workers=max_workers,
-    )
+    num_devices = 0
+    for subsystem in config.get("subsystems", []):
+        bdevs = subsystem.get("bdevs", [])
+        if bdevs:
+            num_devices += bdevs[0].get("count", 0)
+
+    if int(num_devices) >= 1:
+        max_workers = (
+            len(initiators) * num_devices if initiators else num_devices
+        )  # 20 devices + 10 buffer per initiator
+        executor = ThreadPoolExecutor(
+            max_workers=max_workers,
+        )
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
     for key, value in dict(item.split("=") for item in overrides).items():

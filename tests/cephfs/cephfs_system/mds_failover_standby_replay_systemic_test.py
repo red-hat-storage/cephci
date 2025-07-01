@@ -9,7 +9,9 @@ from threading import Thread
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -194,6 +196,7 @@ def run(ceph_cluster, **kw):
         config = kw.get("config")
         osp_cred = config.get("osp_cred")
         build = config.get("build", config.get("rhbuild"))
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
 
         if config.get("cloud-type") == "openstack":
             os_cred = osp_cred.get("globals").get("openstack-credentials")
@@ -354,8 +357,12 @@ def run(ceph_cluster, **kw):
         )
         crash_status_after = fs_util_v1.get_crash_ls_new(client)
         log.info(f"Crash status after Test: {crash_status_after}")
-        if wait_for_healthy_ceph(client, fs_util_v1, 300) == 0:
-            assert False, "Cluster health is not OK even after waiting for 300secs"
+        retry_ceph_health = retry(CommandFailed, tries=4, delay=60)(
+            cephfs_common_utils.wait_for_healthy_ceph
+        )
+        rc = retry_ceph_health(client)
+        if rc:
+            return rc
         log.info("Cluster Health is OK")
         for sv in mnt_info:
             mnt_pt = mnt_info[sv]["path"]

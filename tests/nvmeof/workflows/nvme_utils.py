@@ -114,6 +114,11 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
             cfg["config"]["specs"][0]["spec"]["group"] = gw_group
         else:
             cfg["config"]["pos_args"].append(gw_group)
+
+        if config.get("rebalance_period", False):
+            cfg["config"]["specs"][0]["spec"]["rebalance_period_sec"] = config.get(
+                "rebalance_period_sec"
+            )
         return cfg
 
 

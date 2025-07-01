@@ -70,8 +70,10 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
         for instance in instances:
             sleep(counter * 3)
             vsi = CephVMNodeIBM(
-                access_key=ibmc["access-key"],
-                service_url=ibmc["service-url"],
+                os_cred_ibm={
+                    "accesskey": ibmc["access-key"],
+                    "service_url": ibmc["service-url"],
+                },
                 node=instance,
             )
             p.spawn(vsi.delete, ibmc["zone_name"], ibmc["dns_svc_id"])
@@ -246,7 +248,10 @@ def setup_vm_node_ibm(node, ceph_nodes, **params):
     vm = None
     try:
         vm = CephVMNodeIBM(
-            access_key=params["accesskey"], service_url=params["service_url"]
+            os_cred_ibm={
+                "accesskey": params["accesskey"],
+                "service_url": params["service_url"],
+            }
         )
 
         vm.create(
@@ -386,14 +391,16 @@ def setup_vm_node(node, ceph_nodes, **params):
     vm = None
     try:
         vm = CephVMNodeV2(
-            username=params["username"],
-            password=params["password"],
-            auth_url=params["auth-url"],
-            auth_version=params["auth-version"],
-            tenant_name=params["tenant-name"],
-            tenant_domain_id=params["tenant-domain-id"],
-            service_region=params["service-region"],
-            domain_name=params["domain"],
+            os_cred={
+                "username": params["username"],
+                "password": params["password"],
+                "auth_url": params["auth-url"],
+                "auth_version": params["auth-version"],
+                "tenant_name": params["tenant-name"],
+                "tenant_domain_id": params["tenant-domain-id"],
+                "service_region": params["service-region"],
+                "domain_name": params["domain"],
+            }
         )
 
         vm.create(
@@ -1289,3 +1296,22 @@ def host_restart(gyaml, name) -> bool:
                 return False
     log.error(f"node {name} not found in the list obtained from driver")
     return False
+
+
+def find_vm_node_by_hostname(ceph_cluster, target_hostname):
+    """
+    Find and return the vm_node object based on the target hostname.
+    Args:
+        ceph_cluster (Ceph): The Ceph cluster object containing the node list.
+        target_hostname (str): The hostname to search for.
+    Returns:
+        The vm_node object if found, otherwise None.
+    """
+    return next(
+        (
+            getattr(node, "vm_node", None)
+            for node in ceph_cluster.node_list
+            if getattr(node, "hostname", None) == target_hostname
+        ),
+        None,
+    )
