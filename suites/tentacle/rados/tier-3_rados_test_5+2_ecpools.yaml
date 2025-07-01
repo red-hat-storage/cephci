@@ -1,0 +1,654 @@
+# Suite is to be used to verify the EC 5+2.
+# to be run in regression conf: 9-node-ec-cluster-1-client.yaml
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                rhcs-version: 8.1
+                release: rc
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+            - node5
+            - node6
+            - node8
+            - node9
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true"                     # boolean as string
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+          # Adding below WA to set bulk flag to false until bug fix : 2308623
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - "ceph osd pool set cephfs.cephfs.data bulk false"
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:  CEPH-83573758
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node7                     # client node
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Upgrade cluster to latest 9.x ceph version (Tentacle release)
+      desc: Upgrade cluster to latest version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934,CEPH-83573790
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
+
+# 5+2@8 specific scenarios:
+#        scenario-1: Test the effects of bulk flag and no IO stoppage
+#        scenario-2: Perform rolling reboot of all the OSDs on a particular host.
+#        scenario-3: OSD operations
+#        scenario-4: Stopping 1 OSD from each host
+#        scenario-5: Stopping all OSDs of 1 host
+#        scenario-6: Add new host and OSDs into the cluster
+#        scenario-7: Remove 1 OSD from 1 host
+#        scenario-8: Remove 1 host from the cluster
+
+  - test:
+      name: EC pool 5+2@8 LC - scenarios 1,2,3
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          plugin: isa
+          crush-failure-domain: host
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-1
+          - scenario-2
+          - scenario-3
+      desc: 5+2@8 EC pool life cycle with serviceability scenarios
+
+  - test:
+      name: EC pool 5+2@8 LC - scenarios 4,5
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          plugin: isa
+          crush-failure-domain: host
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-4
+          - scenario-5
+      desc: 5+2@8 EC pool life cycle with serviceability scenarios
+
+  - test:
+      name: EC pool 5+2@8 LC - scenarios 6
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          plugin: isa
+          crush-failure-domain: host
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-6
+      desc: 5+2@8 EC pool life cycle with serviceability scenarios
+
+  - test:
+      name: EC pool 5+2@8 LC - scenarios 7
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          plugin: isa
+          crush-failure-domain: host
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-7
+      desc: 5+2@8 EC pool life cycle with serviceability scenarios
+
+  - test:
+      name: EC pool 5+2@8 LC - scenarios 8
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          plugin: isa
+          crush-failure-domain: host
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-8
+      desc: 5+2@8 EC pool life cycle with serviceability scenarios
+
+  - test:
+      name: EC Pool Recovery Improvement
+      module: pool_tests.py
+      polarion-id: CEPH-83573852
+      config:
+        ec_pool_recovery_improvement:
+          create: true
+          pool_name: ec_pool_recovery
+          k: 5
+          m: 2
+          pg_num: 32
+          plugin: isa
+          crush-failure-domain: host
+          max_objs: 300
+          rados_read_duration: 10
+          osd_max_backfills: 16
+          osd_recovery_max_active: 16
+          delete_pool: true
+      desc: Verify Recovery of EC pool with only "k" shards available
+
+  - test:
+      name: EC pool LC
+      module: rados_prep.py
+      polarion-id: CEPH-83571632
+      config:
+        ec_pool:
+          create: true
+          pool_name: test_ec_pool
+          pg_num: 64
+          k: 5
+          m: 2
+          plugin: isa
+          crush-failure-domain: host
+          disable_pg_autoscale: true
+          rados_write_duration: 50
+          rados_read_duration: 10
+        set_pool_configs:
+          pool_name: test_ec_pool
+          configurations:
+            pg_num: 32
+            pgp_num: 32
+            pg_autoscale_mode: 'on'
+            compression_mode: force
+            compression_algorithm: snappy
+        delete_pools:
+          - test_ec_pool
+      desc: Create, modify & delete EC pools and run IO
+
+  - test:
+      name: EC pool with Overwrites
+      module: rados_prep.py
+      polarion-id: CEPH-83571730
+      config:
+        ec_pool:
+          create: true
+          pool_name: ec_pool_overwrite
+          app_name: rbd
+          pg_num: 32
+          erasure_code_use_overwrites: "true"
+          k: 5
+          m: 2
+          plugin: isa
+          crush-failure-domain: host
+          max_objs: 300
+          rados_read_duration: 10
+          test_overwrites_pool: true
+          metadata_pool: re_pool_overwrite
+          image_name: image_ec_pool
+          image_size: 100M
+        delete_pools:
+          - ec_pool_overwrite
+          - re_pool_overwrite
+      desc: EC pool with Overwrites & create RBD pool
+
+
+  - test:
+      name: Inconsistent objects in  EC pool functionality check
+      desc: Scub and deep-scrub on  inconsistent objects in EC pool
+      module: test_osd_ecpool_inconsistency_scenario.py
+      polarion-id: CEPH-83586175
+      config:
+        ec_pool:
+          create: true
+          profile_name: ec52_4
+          pool_name: ec52_pool4
+          pg_num: 1
+          k: 5
+          m: 2
+          plugin: isa
+          disable_pg_autoscale: true
+          crush-failure-domain: host
+        inconsistent_obj_count: 4
+        delete_pool:
+          - ec52_pool4
+
+  - test:
+      name: Compression test - EC pool
+      module: pool_tests.py
+      polarion-id: CEPH-83571674
+      config:
+        Compression_tests:
+          pool_type: erasure
+          pool_config:
+            pool-1: ec52_pool5
+            pool-2: ec52_pool6
+            max_objs: 300
+            byte_size: 10KB
+            pg_num: 32
+            k: 5
+            m: 2
+            plugin: isa
+            crush-failure-domain: host
+          compression_config:
+            compression_mode: aggressive
+            compression_algorithm: snappy
+            compression_required_ratio: 0.7
+            compression_min_blob_size: 1B
+            byte_size: 10KB
+      desc: Verification of the effect of compression on erasure coded pools
+
+  - test:
+      name: Autoscaler test - pool target size ratio
+      module: pool_tests.py
+      polarion-id: CEPH-83573424
+      config:
+        verify_pool_target_ratio:
+          configurations:
+            pool-1:
+              profile_name: ec52_7
+              pool_name: ec52_pool7
+              pool_type: erasure
+              pg_num: 32
+              k: 5
+              m: 2
+              plugin: isa
+              crush-failure-domain: host
+              target_size_ratio: 0.8
+              rados_write_duration: 50
+              rados_read_duration: 10
+              delete_pool: true
+      desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
+
+  - test:
+      name: Verify premerge PGS during PG split
+      module: test_pg_split.py
+      desc: Verify if there are premerge PGs when split is in progress
+      polarion-id: CEPH-83573526
+      config:
+        create_pools:
+          - create_pool:
+              check_premerge_pgs: true
+              profile_name: ec52_8
+              pool_name: ec52_pool8
+              pg_num: 32
+              rados_put: true
+              num_objs: 200
+              byte_size: 1024
+              pool_type: erasure
+              k: 5
+              m: 2
+              plugin: isa
+              crush-failure-domain: host
+        delete_pools:
+          - ec52_pool8
+
+  - test:
+      name: Verify PG split and merge with network delay
+      module: test_pg_split.py
+      desc: Verify PG splitting and merging with network delay
+      polarion-id: CEPH-83571705
+      config:
+        create_pools:
+          - create_pool:
+              profile_name: ec52_9
+              pool_name: ec52_pool9
+              pg_num: 32
+              rados_put: true
+              num_objs: 200
+              byte_size: 1024
+              pool_type: erasure
+              k: 5
+              m: 2
+              crush-failure-domain: host
+              plugin: isa
+        add_network_delay: true
+        delete_pools:
+          - ec52_pool9
+
+  - test:
+      name: Verify scrub logs
+      module: test_scrub_log.py
+      polarion-id: CEPH-83575403
+      config:
+        # After the implementation of BZ#2320860 set the verify_log to true
+        verify_log: false
+        pool_configs:
+            - type: isa
+              conf: sample-pool-7
+        pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Verify that scrub & deep-scrub logs are captured in OSD logs
+
+  - test:
+      name: Autoscaler test - pool pg_num_min
+      module: pool_tests.py
+      polarion-id: CEPH-83573425
+      config:
+        verify_pg_num_min:
+          configurations:
+            pool-1:
+              profile_name: ec52_11
+              pool_name: ec52_pool11
+              pool_type: erasure
+              k: 5
+              m: 2
+              plugin: isa
+              crush-failure-domain: host
+              pg_num_min: 16
+              rados_write_duration: 50
+              rados_read_duration: 10
+              delete_pool: true
+      desc: Specifying pool bounds on pool Pgs - Verify pg_num_min
+
+  - test:
+      name: client pg access
+      module: test_client_pg_access.py
+      polarion-id: CEPH-83571713
+      config:
+        verify_client_pg_access:
+          num_snapshots: 20
+          num_objects: 250
+          configurations:
+            pool-1:
+              profile_name: ec52_12
+              pool_name: ec52_pool12
+              pool_type: erasure
+              k: 5
+              m: 2
+              plugin: isa
+              crush-failure-domain: host
+              disable_pg_autoscale: true
+      desc: many clients clients accessing same PG with bluestore as backend
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: replicated
+        pool-2-type: erasure
+        pool-1-conf: sample-pool-1
+        pool-2-conf: sample-pool-7
+        pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Migrating data between different pools. Scenario-2. RE -> EC
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: erasure
+        pool-2-type: replicated
+        pool-1-conf: sample-pool-7
+        pool-2-conf: sample-pool-3
+        pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Migrating data between different pools. Scenario-3. EC -> RE
+
+  - test:
+      name: Migrate data bw pools.
+      module: test_data_migration_bw_pools.py
+      polarion-id: CEPH-83574768
+      config:
+        pool-1-type: erasure
+        pool-2-type: erasure
+        pool-1-conf: sample-pool-8
+        pool-2-conf: sample-pool-7
+        pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Migrating data between different pools. Scenario-4. Ec -> EC
+
+# Blocked due to BZ 2172795. Bugzilla fixed.
+  - test:
+      name: Verify cluster behaviour during PG autoscaler warn
+      module: pool_tests.py
+      polarion-id:  CEPH-83573413
+      config:
+        verify_pool_warnings:
+          pool_configs:
+            - type: erasure
+              conf: sample-pool-7
+          pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
+      desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
+
+  - test:
+      name: Scrub enhancement
+      module: test_scrub_enhancement.py
+      desc: Verify scrub enhancement feature
+      polarion-id: CEPH-83575885
+      config:
+        create_pools:
+          - create_pool:
+              pg_num: 1
+              pg_num_max: 1
+              profile_name: ec52_13
+              pool_name: ec52_pool13
+              pool_type: erasure
+              k: 5
+              m: 2
+              plugin: isa
+              crush-failure-domain: host
+        delete_pools:
+          - ec52_pool13
+
+  - test:
+      name: Limit slow request details to cluster log
+      module: test_slow_op_requests.py
+      desc: Limit slow request details to cluster log
+      polarion-id: CEPH-83574884
+      config:
+        profile_name: ec52_14
+        pool_name: ec52_pool14
+        pool_type: erasure
+        k: 5
+        m: 2
+        plugin: isa
+        crush-failure-domain: host
+        pg_num: 64
+        rados_write_duration: 1000
+        byte_size: 1024
+        osd_max_backfills: 16
+        osd_recovery_max_active: 16
+        delete_pools:
+          - ec52_pool14
+
+  - test:
+      name: Robust rebalancing - in progress osd replacement
+      module: test_osd_inprogress_rebalance.py
+      desc: Add osd while data migration from the pools are in progress
+      polarion-id: CEPH-9228
+      abort-on-fail: true
+      config:
+        create_pools:
+          - create_pool:
+              create: true
+              profile_name: ec52_15
+              pool_name: ec52_pool15
+              pool_type: erasure
+              k: 5
+              m: 2
+              plugin: isa
+              crush-failure-domain: host
+              rados_put: true
+          - create_pool:
+              create: true
+              profile_name: ec52_16
+              pool_name: ec52_pool16
+              pool_type: erasure
+              k: 5
+              m: 2
+              plugin: isa
+              crush-failure-domain: host
+        delete_pools:
+          - ec52_pool15
+          - ec52_pool16
+
