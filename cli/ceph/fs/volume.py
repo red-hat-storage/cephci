@@ -1,4 +1,5 @@
 from cli import Cli
+from cli.utilities.utils import build_cmd_from_args
 from tests.cephfs.exceptions import VolumeDeleteError, VolumeRenameError
 
 
@@ -9,13 +10,15 @@ class Volume(Cli):
         super(Volume, self).__init__(nodes)
         self.base_cmd = f"{base_cmd} volume"
 
-    def create(self, volume):
+    def create(self, volume, **kwargs):
         """
         Creates ceph volume
         Args:
             volume (str): Name of vol to be created
         """
         cmd = f"{self.base_cmd} create {volume}"
+        if kwargs:
+            cmd += f" {build_cmd_from_args(**kwargs)}"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
