@@ -288,7 +288,7 @@ def test_ceph_83610950(ceph_cluster, config):
     _rbd_pool = config["rbd_pool"]
     _rbd_obj = config["rbd_obj"]
     time_to_fire = 60
-    interval = 10
+    interval = 30
     alert = "NVMeoFMultipleNamespacesOfRBDImage"
     msg = "RBD image {image} cannot be reused for multiple NVMeoF namespace"
     svcs = []
