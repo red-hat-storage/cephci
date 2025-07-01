@@ -95,7 +95,7 @@ class NVMeInitiator(Initiator):
 
         # connect-all
         connect_all = {}
-        if config["nqn"] == "connect-all":
+        if config["nqn"] == "connect-all" or self.auth_mode == "unidirectional":
             connect_all = {"ctrl-loss-tmo": 3600}
             if self.auth_mode == "unidirectional":
                 cmd_args.update({"dhchap-secret": self.host_key})
