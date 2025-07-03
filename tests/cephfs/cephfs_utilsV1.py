@@ -948,6 +948,7 @@ class FsUtils(object):
                 check_ec=False,
             )
             mds_hosts = json.loads(out)
+            log.debug("MDS Hosts Output: %s", mds_hosts)
             if ispresent:
                 for mds in mds_hosts:
                     if process_name in mds["daemon_id"]:
