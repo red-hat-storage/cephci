@@ -24,6 +24,7 @@ def generate_test_case(
     err_type=None,
     err_msg=None,
     err_text=None,
+    comments=None,
     polarion_id=None,
     testrail_id=None,
 ):
@@ -57,11 +58,12 @@ def generate_test_case(
     props = Properties()
     if polarion_id:
         props.append(Property(name="polarion-testcase-id", value=polarion_id))
-        test_case.append(props)
     if testrail_id:
         props.append(Property(name="test_id", value=testrail_id))
+    if comments:
+        props.append(Property(name="comments", value=str(comments)))
+    if props:
         test_case.append(props)
-
     return test_case
 
 
@@ -103,6 +105,7 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
         err_type = tc.get("err_type")
         err_msg = tc.get("err_msg")
         err_text = tc.get("err_text")
+        comments = tc.get("comments")
 
         if pol_ids:
             _ids = pol_ids.split(",")
@@ -117,6 +120,7 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
                         err_text=err_text,
                         polarion_id=_id,
                         testrail_id=testrail_id,
+                        comments=comments,
                     )
                 )
         else:
@@ -128,6 +132,7 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
                     err_type=err_type,
                     err_msg=err_msg,
                     err_text=err_text,
+                    comments=comments,
                 )
             )
 
