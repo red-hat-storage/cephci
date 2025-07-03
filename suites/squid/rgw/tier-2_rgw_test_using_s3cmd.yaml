@@ -274,15 +274,14 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_multipart_upload_with_failed_parts_using_s3cmd_and_boto3.yaml
 
-  # - test:
-  #    name: Test Ratelimit at global scope
-  #    desc: Test Ratelimit at global scope
-  #    polarion-id: CEPH-83574915 # also CEPH-83574916 and CEPH-83574919
-  #    module: sanity_rgw.py
-  #    config:
-  #      script-name: ../s3cmd/test_ratelimit_global.py
-  #      config-file-name: ../../s3cmd/configs/test_ratelimit_global.yaml
-  #    comments: known issue BZ 2301986
+  - test:
+     name: Test Ratelimit at global scope
+     desc: Test Ratelimit at global scope
+     polarion-id: CEPH-83574915 # also CEPH-83574916 and CEPH-83574919
+     module: sanity_rgw.py
+     config:
+       script-name: ../s3cmd/test_ratelimit_global.py
+       config-file-name: ../../s3cmd/configs/test_ratelimit_global.yaml
 
   - test:
       name: Test Ratelimit for versioned buckets
@@ -292,7 +291,6 @@ tests:
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_versioned_bucket.yaml
-      comments: known issue BZ 2301986
 
   - test:
       name: Test Ratelimit for tenanted users
@@ -302,7 +300,6 @@ tests:
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml
-      comments: known issue BZ 2301986
 
   - test:
       name: Test Ratelimit Debt
@@ -312,7 +309,6 @@ tests:
       config:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_debt.yaml
-      comments: known issue BZ 2301986
 
   # - test:
   #     name: Test Ratelimit Division
@@ -322,7 +318,7 @@ tests:
   #     config:
   #       script-name: ../s3cmd/test_rate_limit.py
   #       config-file-name: ../../s3cmd/configs/test_ratelimit_split.yaml
-  #     comments: known issue RFE 2367726
+  #     comments: known issue RFE 2367726 targetted to 9.1
 
   - test:
       name: Test ratelimit on bucket owner change

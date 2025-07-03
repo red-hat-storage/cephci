@@ -326,7 +326,7 @@ tests:
       desc: notify on lifecycle transition events
       polarion-id: CEPH-83591037
       module: sanity_rgw.py
-      comments: Known issue BZ-2282699 targeted to 8.1
+      comments: Known issue BZ-2282699 targeted to 9.0
       config:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
@@ -337,7 +337,7 @@ tests:
       desc: notify on lifecycle transition events with multipart objects
       polarion-id: CEPH-83591037
       module: sanity_rgw.py
-      comments: Known issue BZ-2282699 targeted to 8.1
+      comments: Known issue BZ-2282699 targeted to 9.0
       config:
         run-on-rgw: true
         script-name: test_bucket_lifecycle_object_expiration_transition.py
