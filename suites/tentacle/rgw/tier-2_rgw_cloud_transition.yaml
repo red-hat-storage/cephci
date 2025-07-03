@@ -1,0 +1,300 @@
+# Test suite for cloud transition workflow
+
+# global-conf: conf/tentacle/rgw/cloud_transition.yaml
+
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - rgw.1
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+        cloud:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply
+                  service: rgw
+                  pos_args:
+                    - rgw.1
+                  args:
+                    placement:
+                      nodes:
+                        - node5
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83575222
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        cloud:
+          config:
+            command: add
+            id: client.1
+            node: node6
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        cloud:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin user create --uid=clouduser --display_name='Cloud user' --access-key abc --secret abc"
+        local:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_lc_debug_interval 20"
+              - "radosgw-admin zonegroup placement add --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER --tier-type=cloud-s3"
+              - "radosgw-admin zonegroup placement add --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER --tier-type=cloud-s3 --tier-config=endpoint=http://{node_ip:cloud#node5}:80,access_key=abc,secret=abc,multipart_sync_threshold=44432,multipart_min_part_size=44432,target_path='cloudbucket',retain_head_object=true"
+              - "ceph orch restart {service_name:rgw.1}"
+      desc: Setting up cloud transition environment
+      module: exec.py
+      name: setup cloud transition
+      polarion-id: CEPH-10362
+
+  - test:
+      clusters:
+        local:
+          config:
+            script-name: test_cloud_transition.py
+            config-file-name: test_cloud_transition_headobject_true.yaml
+      desc: test clould transition basic workflow
+      module: sanity_rgw.py
+      name: Test cloud transition retain headobject
+      polarion-id: CEPH-83575276
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zonegroup placement modify --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER --tier-type=cloud-s3 --tier-config=endpoint=http://{node_ip:cloud#node5}:80,access_key=abc,secret=abc,multipart_sync_threshold=44432,multipart_min_part_size=44432,target_path='cloudbucket',retain_head_object=false"
+              - "ceph orch restart {service_name:rgw.1}"
+      desc: Setting "retain_head_object" to false
+      module: exec.py
+      name: Modify storage class
+      polarion-id: CEPH-83575279
+
+  - test:
+      clusters:
+        local:
+          config:
+            script-name: test_cloud_transition.py
+            config-file-name: test_cloud_transition_headobject_false.yaml
+      desc: test clould transition basic workflow
+      module: sanity_rgw.py
+      name: Test cloud transition no retain headobject
+      polarion-id: CEPH-83575278
+
+  - test:
+      clusters:
+        local:
+          config:
+            script-name: test_cloud_transition.py
+            config-file-name: test_cloud_transition_multipart.yaml
+      desc: test clould transition basic workflow
+      module: sanity_rgw.py
+      name: Test cloud transition multipart upload
+      polarion-id: CEPH-83575283
+
+    # configuring vault agent
+
+  - test:
+      clusters:
+        local:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.{daemon_id:rgw.1} rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart {service_name:rgw.1}"
+      desc: Setting vault configs for sse-s3 on local site
+      module: exec.py
+      name: set sse-s3 vault configs on Local cluster
+
+  - test:
+      clusters:
+        local:
+          config:
+            script-name: test_cloud_transition.py
+            config-file-name: test_cloud_transition_encrypted.yaml
+      desc: test cloud transition of ecnrypted objects
+      module: sanity_rgw.py
+      name: Test cloud transition of SSE-S3 encrypted objects
+      polarion-id: CEPH-83575497
+      comments: known issue Bug 2294512 targetted to 9.0
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zone placement modify --rgw-zone default --placement-id default-placement  --compression zlib"
+              - "ceph orch restart {service_name:rgw.1}"
+      desc: Setting "retain_head_object" to false
+      module: exec.py
+      name: Enable compression on zone
+      polarion-id: CEPH-83575497
+
+  - test:
+      clusters:
+        local:
+          config:
+            script-name: test_cloud_transition.py
+            config-file-name: test_cloud_transition_headobject_false.yaml
+      desc: test clould transition of compressed objects
+      module: sanity_rgw.py
+      name: Test cloud transition with compression enabled
+      polarion-id: CEPH-83575278
+      comments: known issue Bug 2294706 targetted to 9.0
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        local:
+          config:
+            cephadm: true
+            commands:
+              - "radosgw-admin zonegroup placement rm --rgw-zonegroup=default --placement-id=default-placement --storage-class=CLOUDTIER"
+              - "ceph orch restart {service_name:rgw.1}"
+      desc: Zonegroup placement remove
+      module: exec.py
+      name: Remove Cloudtier placement
+      polarion-id: CEPH-83575281
+  - test:
+      name: rgw user adoption to account and ownership change with IOs in progress
+      desc: rgw user adoption to account and ownership change with IOs in progress
+      polarion-id: CEPH-83591675
+      module: sanity_rgw.py
+      clusters:
+        local:
+          config:
+            script-name: test_rgw_account_management.py
+            config-file-name: test_account_ownership_change_user_adoption.yaml
