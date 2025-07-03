@@ -216,7 +216,6 @@ tests:
       desc: test if rgw crashes with kafka topic name compare, with kafka broker configured with acl authorizer
       polarion-id: CEPH-83607419
       module: sanity_rgw.py
-      comments: Known issue BZ-2337418
       config:
         run-on-rgw: true
         script-name: test_bucket_notifications.py

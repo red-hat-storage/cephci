@@ -149,4 +149,3 @@ tests:
       config:
         script-name: test_bucket_listing.py
         config-file-name: test_bucket_listing_fake_mp.yaml
-      comments: Bug 2329090
