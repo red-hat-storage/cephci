@@ -13,14 +13,18 @@ from utility.utils import generate_unique_id
 LOG = Log(__name__)
 
 
+def _get_nqn(gw_group, subsys_config):
+    return (
+        f"{subsys_config['subnqn']}.{gw_group}"
+        if gw_group and not subsys_config.get("no-group-append", False)
+        else subsys_config["subnqn"]
+    )
+
+
 def configure_listeners(ha, nodes, gw_group, config):
     """Configure Listeners on subsystem."""
     lb_group_ids = {}
-    nqn = (
-        f"{config['subnqn']}.{gw_group}"
-        if gw_group and not config.get("no-group-append", False)
-        else config["subnqn"]
-    )
+    nqn = _get_nqn(gw_group, config)
     for node in nodes:
         nvmegwcli = ha.check_gateway(node)
         hostname = nvmegwcli.fetch_gateway_hostname()
@@ -29,7 +33,7 @@ def configure_listeners(ha, nodes, gw_group, config):
                 "args": {
                     "subsystem": nqn,
                     "traddr": nvmegwcli.node.ip_address,
-                    "trsvcid": config["listener_port"],
+                    "trsvcid": config.get("listener_port"),
                     "host-name": hostname,
                 }
             }
@@ -40,15 +44,12 @@ def configure_listeners(ha, nodes, gw_group, config):
 
 def configure_subsystems(pool, auth_mode, ha, gw_group, subsys_config):
     """Configure Ceph-NVMEoF Subsystems."""
-    nqn = (
-        f"{subsys_config['subnqn']}.{gw_group}"
-        if gw_group and not subsys_config.get("no-group-append", False)
-        else subsys_config["subnqn"]
-    )
+    nqn = _get_nqn(gw_group, subsys_config)
     sub_args = {"subsystem": subsys_config["subnqn"]}
     ceph_cluster = subsys_config["ceph_cluster"]
     nvmegwcli = ha.gateways[0]
     subsys_config["auth_mode"] = auth_mode
+    subsys_config["gw_group"] = gw_group
 
     # Uncomment the below lines for debugging
     nvmegwcli.gateway.set_log_level(**{"args": {"level": "DEBUG"}})
@@ -75,79 +76,85 @@ def configure_subsystems(pool, auth_mode, ha, gw_group, subsys_config):
     sub_args["subsystem"] = nqn
 
     # Add Listeners
-    listeners = subsys_config.get("listeners", [nvmegwcli.node.hostname])
-    lb_groups = configure_listeners(ha, listeners, gw_group, subsys_config)
+    if subsys_config.get("listeners"):
 
-    # Add Host access
-    if subsys_config.get("allow_host"):
-        nvmegwcli.host.add(
-            **{"args": {**sub_args, **{"host": repr(subsys_config["allow_host"])}}}
-        )
+        listeners = subsys_config.get("listeners", [nvmegwcli.node.hostname])
+        lb_groups = configure_listeners(ha, listeners, gw_group, subsys_config)
 
-    if subsys_config.get("hosts"):
+        # Add Host access
+        if subsys_config.get("allow_host"):
+            nvmegwcli.host.add(
+                **{"args": {**sub_args, **{"host": repr(subsys_config["allow_host"])}}}
+            )
+
+        if subsys_config.get("hosts"):
+            for host in subsys_config["hosts"]:
+                initiator_node = get_node_by_id(ceph_cluster, host.get("node"))
+                initiator = Initiator(initiator_node)
+
+                # unidirectional inband authentication
+                if not subsys_config.get("inband_auth") and host.get("inband_auth"):
+                    ha.create_dhchap_key(subsys_config)
+                    sub_args["dhchap-key"] = subsys_config["dhchap-key"]
+                nvmegwcli.host.add(
+                    **{"args": {**sub_args, **{"host": initiator.nqn()}}}
+                )
+
+        # Add Namespaces
+        if subsys_config.get("bdevs"):
+            bdev_configs = (
+                [subsys_config["bdevs"]]
+                if isinstance(subsys_config["bdevs"], dict)
+                else subsys_config["bdevs"]
+            )
+            with parallel() as p:
+                for bdev_cfg in bdev_configs:
+                    name = generate_unique_id(length=4)
+                    for num in range(bdev_cfg["count"]):
+                        sub_args.pop("dhchap-key", None)
+                        namespace_args = {
+                            **sub_args,
+                            **{
+                                "rbd-pool": pool,
+                                "rbd-create-image": True,
+                                "size": bdev_cfg["size"],
+                                "rbd-image": f"{name}-image{num}",
+                            },
+                        }
+                        if bdev_cfg.get("lb_group"):
+                            lbgid = lb_groups[
+                                get_node_by_id(
+                                    ceph_cluster, bdev_cfg["lb_group"]
+                                ).hostname
+                            ]
+                            namespace_args["load-balancing-group"] = lbgid
+                        p.spawn(nvmegwcli.namespace.add, **{"args": namespace_args})
+
+        # Change key for subsystem
+        subsys_update_key = subsys_config.get("update_dhchap_key", False)
+        if subsys_update_key:
+            ha.create_dhchap_key(subsys_config)
+            sub_args["dhchap-key"] = subsys_config["dhchap-key"]
+            nvmegwcli.subsystem.change_key(
+                **{
+                    "args": {
+                        **sub_args,
+                    }
+                }
+            )
+
+        # Change key for hosts
         for host in subsys_config["hosts"]:
+            host_update_key = host.get("update_dhchap_key", False)
             initiator_node = get_node_by_id(ceph_cluster, host.get("node"))
             initiator = Initiator(initiator_node)
-
-            # unidirectional inband authentication
-            if not subsys_config.get("inband_auth") and host.get("inband_auth"):
-                ha.create_dhchap_key(subsys_config)
-                sub_args["dhchap-key"] = subsys_config["dhchap-key"]
-            nvmegwcli.host.add(**{"args": {**sub_args, **{"host": initiator.nqn()}}})
-
-    # Add Namespaces
-    if subsys_config.get("bdevs"):
-        bdev_configs = (
-            [subsys_config["bdevs"]]
-            if isinstance(subsys_config["bdevs"], dict)
-            else subsys_config["bdevs"]
-        )
-        with parallel() as p:
-            for bdev_cfg in bdev_configs:
-                name = generate_unique_id(length=4)
-                for num in range(bdev_cfg["count"]):
-                    sub_args.pop("dhchap-key", None)
-                    namespace_args = {
-                        **sub_args,
-                        **{
-                            "rbd-pool": pool,
-                            "rbd-create-image": True,
-                            "size": bdev_cfg["size"],
-                            "rbd-image": f"{name}-image{num}",
-                        },
-                    }
-                    if bdev_cfg.get("lb_group"):
-                        lbgid = lb_groups[
-                            get_node_by_id(ceph_cluster, bdev_cfg["lb_group"]).hostname
-                        ]
-                        namespace_args["load-balancing-group"] = lbgid
-                    p.spawn(nvmegwcli.namespace.add, **{"args": namespace_args})
-
-    # Change key for subsystem
-    subsys_update_key = subsys_config.get("update_dhchap_key", False)
-    if subsys_update_key:
-        ha.create_dhchap_key(subsys_config)
-        sub_args["dhchap-key"] = subsys_config["dhchap-key"]
-        nvmegwcli.subsystem.change_key(
-            **{
-                "args": {
-                    **sub_args,
-                }
-            }
-        )
-
-    # Change key for hosts
-    for host in subsys_config["hosts"]:
-        host_update_key = host.get("update_dhchap_key", False)
-        initiator_node = get_node_by_id(ceph_cluster, host.get("node"))
-        initiator = Initiator(initiator_node)
-        if subsys_update_key or host_update_key:
-            if not subsys_update_key:
-                ha.create_dhchap_key(subsys_config, update_host_key=True)
-                sub_args["dhchap-key"] = subsys_config["dhchap-key"]
-            nvmegwcli.host.change_key(
-                **{"args": {**sub_args, **{"host": initiator.nqn()}}}
-            )
+            if subsys_update_key or host_update_key:
+                if not subsys_update_key:
+                    ha.create_dhchap_key(subsys_config, update_host_key=True)
+                    sub_args["dhchap-key"] = subsys_config["dhchap-key"]
+                nvmegwcli.host.change_key(
+                    **{"args": {**sub_args, **{"host": initiator.nqn()}}}
+                )
 
 
 def disconnect_initiator(ceph_cluster, node):
@@ -224,6 +231,59 @@ def deploy_nvme_service_with_encryption_key(ceph_cluster, config):
     test_nvmeof.run(ceph_cluster, **_cfg)
 
 
+def test_ceph_83595512(ceph_cluster, gwgroup_config, config, ha):
+    subsys_args = {
+        "no-group-append": gwgroup_config.get("no_group_append", False),
+        "inband_auth": gwgroup_config.get("inband_auth", False),
+        "ceph_cluster": ceph_cluster,
+        "max_ns": gwgroup_config.get("max-namespaces", False),
+        "listeners": gwgroup_config.get("listeners"),
+        "bdevs": gwgroup_config.get("bdevs"),
+        "listener_port": gwgroup_config.get("listener_port"),
+        "gw_group": gwgroup_config.get("gw_group"),
+    }
+
+    hosts = gwgroup_config.get("hosts", [])
+    if gwgroup_config.get("subsystems"):
+        for i in range(1, gwgroup_config["subsystems"]):
+            subsys_args.update({"subnqn": f"nqn.2016-06.io.spdk:cnode{i}"})
+
+            # Determine target hosts for this subsystem based on range
+            for host in hosts:
+                range_start, range_end = host.get("subsystem_range", [0, 0])
+                if range_start <= i <= range_end:
+                    subsys_args.update({"hosts": [host]})
+
+                configure_subsystems(
+                    config["rbd_pool"],
+                    gwgroup_config.get("inband_auth_mode"),
+                    ha,
+                    gwgroup_config.get("gw_group"),
+                    subsys_args,
+                )
+
+        # configure initiators
+        if gwgroup_config.get("fault-injection-methods"):
+            gw_group = gwgroup_config.get("gw_group")
+            updated_initiators = []
+
+            for initiator in gwgroup_config.get("initiators"):
+                sub_count = initiator["subsystems"]
+
+                for i in range(1, sub_count):
+                    new_initiator = dict(initiator)
+                    new_initiator["nqn"] = f"nqn.2016-06.io.spdk:cnode{i}.{gw_group}"
+                    updated_initiators.append(new_initiator)
+
+            ha.config["initiators"] = updated_initiators
+            ha.run()
+
+
+testcases = {
+    "CEPH-83595512": test_ceph_83595512,
+}
+
+
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     LOG.info("Starting Ceph NVMEoF deployment.")
     config = kwargs["config"]
@@ -254,26 +314,33 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 )
 
             # Configure subsystems and run HA
-            if gwgroup_config.get("subsystems"):
-                with parallel() as p:
-                    for subsys_args in gwgroup_config["subsystems"]:
-                        subsys_args.update({"ceph_cluster": ceph_cluster})
-                        p.spawn(
-                            configure_subsystems,
-                            config["rbd_pool"],
-                            gwgroup_config.get("inband_auth_mode"),
-                            ha,
-                            gwgroup_config.get("gw_group"),
-                            subsys_args,
-                        )
-            if gwgroup_config.get("fault-injection-methods") or config.get(
-                "fault-injection-methods"
-            ):
-                ha.run()
+            if config.get("test_case"):
+                test_case_run = testcases[config["test_case"]]
+                test_case_run(ceph_cluster, gwgroup_config, config, ha)
 
-            if "initiators" in config["cleanup"] and gwgroup_config.get("initiators"):
-                for initiator_cfg in gwgroup_config["initiators"]:
-                    disconnect_initiator(ceph_cluster, initiator_cfg["node"])
+            else:
+                if gwgroup_config.get("subsystems"):
+                    with parallel() as p:
+                        for subsys_args in gwgroup_config["subsystems"]:
+                            subsys_args.update({"ceph_cluster": ceph_cluster})
+                            p.spawn(
+                                configure_subsystems,
+                                config["rbd_pool"],
+                                gwgroup_config.get("inband_auth_mode"),
+                                ha,
+                                gwgroup_config.get("gw_group"),
+                                subsys_args,
+                            )
+                if gwgroup_config.get("fault-injection-methods") or config.get(
+                    "fault-injection-methods"
+                ):
+                    ha.run()
+
+                if "initiators" in config["cleanup"] and gwgroup_config.get(
+                    "initiators"
+                ):
+                    for initiator_cfg in gwgroup_config["initiators"]:
+                        disconnect_initiator(ceph_cluster, initiator_cfg["node"])
 
         return 0
 

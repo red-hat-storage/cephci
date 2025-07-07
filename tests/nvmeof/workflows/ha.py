@@ -85,7 +85,9 @@ class HighAvailability:
 
     def create_dhchap_key(self, config, update_host_key=False):
         """Generate DHCHAP key for each initiator and store it."""
-        nqn = config["subnqn"]
+        subnqn = config["subnqn"]
+        group = config["gw_group"]
+        nqn = f"{subnqn}.{group}"
 
         for host_config in config["hosts"]:
             node_id = host_config["node"]
@@ -95,6 +97,7 @@ class HighAvailability:
             key, _ = initiator.gen_dhchap_key(n=config["subnqn"])
             LOG.info(f"{key.strip()} is generated for {nqn} and {node_id}")
 
+            initiator.nqn = config["subnqn"]
             initiator.auth_mode = config.get("auth_mode")
             if initiator.auth_mode == "bidirectional" and not update_host_key:
                 initiator.subsys_key = key.strip()
@@ -1252,8 +1255,6 @@ class HighAvailability:
                 LOG.info(
                     f"Validated - Namespace {nsid} has correct visibility: {ns_visibility}"
                 )
-            else:
-                # LOG.info("esle")
                 LOG.error(
                     f"NS {nsid} of {subnqn} has wrong visibility.Expected {expected_visibility} got{ns_visibility}"
                 )
