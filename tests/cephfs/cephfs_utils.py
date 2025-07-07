@@ -845,7 +845,9 @@ class FsUtils(object):
                                             num,
                                             mounting_dir,
                                             self.dir_name,
-                                        )
+                                        ),
+                                        long_running=True,
+                                        timeout=900,
                                     )
                                     self.return_counts = self.io_verify(client)
                                 break
@@ -1280,6 +1282,7 @@ finally:
                     "--files-per-dir %d --top %s%s"
                     % (total_of_files, total_of_files, mounting_dir, dir_name),
                     timeout=300,
+                    long_running=True,
                 )
                 self.return_counts = self.io_verify(client)
         return self.return_counts, 0

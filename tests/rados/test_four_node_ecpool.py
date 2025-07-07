@@ -17,7 +17,11 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from tests.rados.monitor_configurations import MonConfigMethods
-from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
+from tests.rados.rados_test_util import (
+    get_device_path,
+    wait_for_daemon_status,
+    wait_for_device_rados,
+)
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 from utility.utils import method_should_succeed, should_not_be_empty
@@ -36,7 +40,9 @@ def run(ceph_cluster, **kw):
         scenario-3: OSD operations
         scenario-4: Stopping 1 OSD from each host
         scenario-5: Stopping all OSDs of 1 host
-        scenario-6: Remove 1 OSD from 1 host
+        scenario-6: Add new host and OSDs into the cluster
+        scenario-7: Remove 1 OSD from 1 host
+        scenario-8: Remove 1 host from the cluster
     """
     log.info(run.__doc__)
     config = kw["config"]
@@ -47,6 +53,7 @@ def run(ceph_cluster, **kw):
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
     test_fail = False
     set_debug = config.get("set_debug", False)
+    new_node_label = config.get("new_node_label", "osd-bak")
     scenarios_to_run = config.get(
         "scenarios_to_run",
         [
@@ -56,6 +63,8 @@ def run(ceph_cluster, **kw):
             "scenario-4",
             "scenario-5",
             "scenario-6",
+            "scenario-7",
+            "scenario-8",
         ],
     )
 
@@ -132,6 +141,9 @@ def run(ceph_cluster, **kw):
         rados_obj.change_recovery_threads(config={}, action="set")
 
         if "scenario-1" in scenarios_to_run:
+            log.info(
+                "\nscenario-1: Test the effects of bulk flag and no IO stoppage - START\n"
+            )
             init_pg_count = rados_obj.get_pool_property(pool=pool_name, props="pg_num")[
                 "pg_num"
             ]
@@ -199,8 +211,14 @@ def run(ceph_cluster, **kw):
                     f"Count {inactive_pg}"
                 )
                 raise Exception("Inactive PGs during bulk on error")
+            log.info(
+                "\nscenario-1: Test the effects of bulk flag and no IO stoppage - COMPLETE\n"
+            )
 
         if "scenario-2" in scenarios_to_run:
+            log.info(
+                "\nscenario-2: Perform rolling reboot of all the OSDs on a particular host. - START\n"
+            )
             log.info("Starting with OSD reboot scenarios for a Host")
 
             # Restarting OSDs belonging to a particular host
@@ -229,9 +247,13 @@ def run(ceph_cluster, **kw):
                 f"All the planned  OSD reboots have completed for host {osd_node.hostname}"
             )
             # Upgrade workflow and the checks moved to dedicated test, which will be called from suite file
+            log.info(
+                "\nscenario-2: Perform rolling reboot of all the OSDs on a particular host. - COMPLETE\n"
+            )
 
         osd_nodes = ceph_cluster.get_nodes(role="osd")
         if "scenario-3" in scenarios_to_run:
+            log.info("\nscenario-3: OSD operations - START\n")
             # Beginning with OSD stop operations
             log.debug("Stopping 1 OSD from each host. No inactive PGs")
             for node in osd_nodes:
@@ -272,8 +294,10 @@ def run(ceph_cluster, **kw):
                 log.error("Found inactive PGs on the cluster during OSD reboots")
                 raise Exception("Inactive PGs during reboot error")
             log.debug("Completed scenario of rebooting 1 OSD from each host")
+            log.info("\nscenario-3: OSD operations - COMPLETE\n")
 
         if "scenario-4" in scenarios_to_run:
+            log.info("\nscenario-4: Stopping 1 OSD from each host - START\n")
             log.debug("Stopping all OSDs of 1 host and check for inactive PGs")
             # Stopping all OSDs of 1 host and check for inactive PGs
             stop_host = osd_nodes[0]
@@ -304,8 +328,10 @@ def run(ceph_cluster, **kw):
                 time.sleep(5)
 
             log.debug("Completed restart of all the OSDs on the Host")
+            log.info("\nscenario-4: Stopping 1 OSD from each host - COMPLETE\n")
 
         if "scenario-5" in scenarios_to_run:
+            log.info("\nscenario-5: Stopping all OSDs of 1 host - START\n")
             log.debug("Starting to reboot all the OSD hosts and waiting till recovery")
             osd_nodes = ceph_cluster.get_nodes(role="osd")
             for node in osd_nodes:
@@ -321,14 +347,45 @@ def run(ceph_cluster, **kw):
                 method_should_succeed(rados_obj.run_pool_sanity_check)
                 log.info(f"reboot of OSD host : {node.hostname} is successful.")
             log.debug("Done with reboot of all the OSD hosts")
+            log.info("\nscenario-5: Stopping all OSDs of 1 host - COMPLETE\n")
 
         if "scenario-6" in scenarios_to_run:
-            log.debug("Starting test to remove OSD from the host.")
+            log.info("\nscenario-6: Add new host + OSDs to the cluster - START\n")
+            log.debug("Starting test to add host into the cluster")
+            try:
+                node_id = ceph_cluster.get_nodes(role=new_node_label)[0]
+            except Exception as err:
+                log.error(
+                    f"Could not find the host for the Addition process with label 'osd-bak'. Err: {err}"
+                )
+                raise Exception("New Host not found for addition error")
+            try:
+                service_obj.add_new_hosts(
+                    add_nodes=[node_id.hostname],
+                    deploy_osd=True,
+                    osd_label=new_node_label,
+                )
+            except Exception as err:
+                log.error(f"Could not add the host in cluster. Err: {err}")
+                raise Exception("New Host addition error")
+
+            log.debug("Waiting for clean PGs post New host & osd addition")
+            # Waiting for recovery to post Host & OSD addition
+            method_should_succeed(
+                wait_for_clean_pg_sets,
+                rados_obj,
+                timeout=12000,
+            )
+            log.debug("PG's are active + clean post New Host & OSD Addition")
+            log.info("\nscenario-6: Add new host + OSDs to the cluster - COMPLETE\n")
+
+        if "scenario-7" in scenarios_to_run:
+            log.info("\nscenario-7: Remove & Add 1 OSD from 1 host - START\n")
+            log.debug("Starting test to remove OSD from the newly host.")
             # Remove one OSD
             inactive_pgs = 0
-            node_label = "osd"
             try:
-                node_id = ceph_cluster.get_nodes(role=node_label)[0]
+                node_id = ceph_cluster.get_nodes(role=new_node_label)[0]
             except Exception as err:
                 log.error(
                     f"Could not find the host for the removal process with label 'osd-bak'. Err: {err}"
@@ -337,6 +394,9 @@ def run(ceph_cluster, **kw):
             target_osd = rados_obj.collect_osd_daemon_ids(osd_node=node_id)[0]
             log.debug(f"Target OSD for removal : {target_osd}")
             host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=target_osd)
+            log.debug(
+                f"Target Host from where OSD removal is scheduled: {host.hostname}"
+            )
             should_not_be_empty(host, "Failed to fetch host details")
             dev_path = get_device_path(host, target_osd)
             target_osd_spec_name = service_obj.get_osd_spec(osd_id=target_osd)
@@ -373,6 +433,14 @@ def run(ceph_cluster, **kw):
             log.debug("Adding the removed OSD back and checking the cluster status")
             utils.add_osd(ceph_cluster, host.hostname, dev_path, target_osd)
             method_should_succeed(wait_for_device_rados, host, target_osd, action="add")
+            method_should_succeed(
+                wait_for_daemon_status,
+                rados_obj=rados_obj,
+                daemon_type="osd",
+                daemon_id=target_osd,
+                status="running",
+                timeout=60,
+            )
             assert service_obj.add_osds_to_managed_service(
                 osds=[target_osd], spec=target_osd_spec_name
             )
@@ -398,33 +466,18 @@ def run(ceph_cluster, **kw):
 
             rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
             log.info("Completed the removal and addition of OSD daemons")
+            log.info("\nscenario-7: Remove & Add 1 OSD from 1 host - COMPLETE\n")
 
-        if config.get("remove_host", True):
-            node_id = "node5"
-            # Adding a new host to the cluster
-            try:
-                service_obj.add_new_hosts(add_nodes=[node_id])
-            except Exception as err:
-                log.error(
-                    f"Could not add host : {node_id} into the cluster and deploy OSDs. error : {err}"
-                )
-                raise Exception("Host not added error")
-            time.sleep(60)
-
-            res, inactive_count = wait_for_clean_pg_sets_check_inactive(
-                rados_obj=rados_obj
-            )
-            if not res:
-                log.error("PGs did not reach active + clean state post Host addition")
-                test_fail = True
-
+        if "scenario-8" in scenarios_to_run:
+            log.info("\nscenario-8: Remove 1 host from the cluster- START\n")
             # Remove one host
             log.info("Starting the removal of OSD Host added")
-
+            node_id = ceph_cluster.get_nodes(role=new_node_label)[0]
+            log.info(f"Starting the removal of OSD Host added : {node_id.hostname}")
             try:
-                service_obj.remove_custom_host(host_node_name=node_id)
+                service_obj.remove_custom_host(host_node_name=node_id.hostname)
             except Exception as err:
-                log.error(f"Could not remove host : {node_id}. Error : {err}")
+                log.error(f"Could not remove host : {node_id.hostname}. Error : {err}")
                 raise Exception("Host not removed error")
 
             # Waiting for recovery to post OSD host removal
@@ -440,6 +493,7 @@ def run(ceph_cluster, **kw):
 
             method_should_succeed(rados_obj.run_pool_sanity_check)
             log.info("PG's are active + clean post OSD Host Addition and Removal")
+            log.info("\nscenario-8: Remove 1 host from the cluster- COMPLETE\n")
 
     except Exception as err:
         log.error(f"Hit exception during execution of test. Exception : {err}")
@@ -452,6 +506,8 @@ def run(ceph_cluster, **kw):
 
         # removing the recovery threads on the cluster
         rados_obj.change_recovery_threads(config={}, action="rm")
+        # remove empty service specs after host removal
+        rados_obj.remove_empty_service_spec()
 
         if set_debug:
             log.debug("Removing debug configs on the cluster for mon, osd & Mgr")

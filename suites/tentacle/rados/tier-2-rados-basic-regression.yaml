@@ -1,5 +1,7 @@
 # Suite contains basic tier-2 rados tests
 # RHOS-d run duration: 70 mins
+
+# Test suite not actively run. Tests merged with other suites.
 tests:
   - test:
       name: setup install pre-requisistes
@@ -432,7 +434,6 @@ tests:
           pool_name: ec_profile_test
           k: 2
           m: 2
-          plugin: jerasure
           max_objs: 300
           rados_read_duration: 10
           crush-failure-domain: host

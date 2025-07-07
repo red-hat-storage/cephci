@@ -13,7 +13,7 @@ from collections import namedtuple
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
-from ceph.utils import host_restart, host_shutdown
+from ceph.utils import find_vm_node_by_hostname
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 
@@ -36,7 +36,6 @@ def run(ceph_cluster, **kw):
     pool_obj = PoolFunctions(node=cephadm)
     client_node = ceph_cluster.get_nodes(role="client")[0]
     pool_name = config.get("pool_name", "test_stretch_io")
-    osp_cred = config.get("osp_cred")
     shutdown_site = config.get("shutdown_site", "DC1")
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
     add_network_delay = config.get("add_network_delay", False)
@@ -112,10 +111,8 @@ def run(ceph_cluster, **kw):
             log.debug(f"Proceeding to shutdown one of the data site {dc_1_name}")
             for host in dc_1_hosts:
                 log.debug(f"Proceeding to shutdown host {host}")
-                if not host_shutdown(gyaml=osp_cred, name=host):
-                    log.error(f"Failed to shutdown host : {host}")
-                    raise Exception("Test execution Failed")
-
+                target_node = find_vm_node_by_hostname(ceph_cluster, host)
+                target_node.shutdown(wait=True)
             log.info(f"Completed shutdown of all the hosts in data site {dc_1_name}.")
 
             # sleeping for 10 seconds for the DC to be identified as down and proceeding to next checks
@@ -164,9 +161,8 @@ def run(ceph_cluster, **kw):
             log.info("Shutting down tiebreaker mon site")
             for host in tiebreaker_hosts:
                 log.debug(f"Proceeding to shutdown host {host}")
-                if not host_shutdown(gyaml=osp_cred, name=host):
-                    log.error(f"Failed to shutdown host : {host}")
-                    raise Exception("Test execution Failed")
+                target_node = find_vm_node_by_hostname(ceph_cluster, host)
+                target_node.shutdown(wait=True)
             time.sleep(20)
 
             # Installer node will be down at this point. all operations need to be done at client nodes
@@ -217,10 +213,9 @@ def run(ceph_cluster, **kw):
         if shutdown_site in [dc_1_name, dc_2_name]:
             log.debug(f"Proceeding to reboot data site {dc_1_name}")
             for host in dc_1_hosts:
-                log.debug(f"Proceeding to reboot host {host}")
-                if not host_restart(gyaml=osp_cred, name=host):
-                    log.error(f"Failed to restart host : {host}")
-                    raise Exception("Test execution Failed")
+                log.debug(f"Proceeding to restart host {host}")
+                target_node = find_vm_node_by_hostname(ceph_cluster, host)
+                target_node.power_on()
             log.info(
                 f"Completed restart of all the hosts in site {dc_1_name}. Host names : {dc_1_hosts}"
             )
@@ -229,9 +224,8 @@ def run(ceph_cluster, **kw):
             log.info("Restarting tiebreaker mon site")
             for host in tiebreaker_hosts:
                 log.debug(f"Proceeding to Restart host {host}")
-                if not host_restart(gyaml=osp_cred, name=host):
-                    log.error(f"Failed to Restart host : {host}")
-                    raise Exception("Test execution Failed")
+                target_node = find_vm_node_by_hostname(ceph_cluster, host)
+                target_node.power_on()
             time.sleep(20)
             log.info(
                 f"Completed Restart of all the hosts in site {shutdown_site}. Host names : {tiebreaker_hosts}"

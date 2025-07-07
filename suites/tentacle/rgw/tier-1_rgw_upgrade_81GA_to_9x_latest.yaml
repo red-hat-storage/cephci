@@ -1,0 +1,180 @@
+#Objective: Testing single site upgrade from RHCS 8.1 G.A latest to 9.x latest build
+#platform : RHEL-9
+#conf: conf/tentacle/rgw/tier-0_rgw.yaml
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 8.1
+                release: rc
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
+      desc: bootstrap and deployment services with label placements.
+      polarion-id: CEPH-83573777
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: Deploy RHCS cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node3:80
+          - node4:80
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  - test:
+      name: Mbuckets_with_Nobjects with etag verification pre upgrade
+      desc: test etag verification
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574871
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
+        run-on-haproxy: true
+
+  # upgrade cluster
+  - test:
+      name: Test rename of large object using sts user through AWS
+      desc: Test rename of large object using sts user through AWS
+      polarion-id: CEPH-83575419
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
+
+  - test:
+      name: Test large omap creation pre upgrade
+      desc: Test large omap creation pre upgrade
+      polarion-id: CEPH-83591446
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_large_omap.py
+        config-file-name: ../../s3cmd/configs/test_large_omap_clearance_brown_field_pre_upgrade.yaml
+        run-on-haproxy: true
+
+  - test:
+      abort-on-fail: true
+      name: Upgrade cluster to latest ceph version
+      desc: Upgrade cluster to latest version
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791
+      verify_cluster_health: true
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+
+  # Post Upgrade tests
+  - test:
+      desc: Retrieve the versions of the cluster
+      module: exec.py
+      name: post upgrade gather version
+      polarion-id: CEPH-83575200
+      config:
+        cephadm: true
+        commands:
+          - "ceph mgr module enable orchestrator" # work aroun for upgrade bz, if not it will afftect other testcase
+          - "sleep 200"
+          - "ceph versions"
+
+# Post upgrade tests
+
+  - test:
+      name: Test large omap clearance post upgrade
+      desc: Test large omap clearance post upgrade
+      polarion-id: CEPH-83591446
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_large_omap.py
+        config-file-name: ../../s3cmd/configs/test_large_omap_clearance_brown_field_post_upgrade.yaml
+        run-on-haproxy: true
+
+  - test:
+      name: test storage policy to use customized placement for S3
+      desc: Test storage policy to use customized placement for S3
+      polarion-id: CEPH-9337
+      module: sanity_rgw.py
+      config:
+        script-name: test_storage_policy.py
+        config-file-name: test_storage_policy_s3.yaml
+
+  - test:
+      name: test storage policy to use customized placement for Swift
+      desc: Test storage policy to use customized placement for Swift
+      polarion-id: CEPH-9336
+      module: sanity_rgw.py
+      config:
+        script-name: test_storage_policy.py
+        config-file-name: test_storage_policy_swift.yaml

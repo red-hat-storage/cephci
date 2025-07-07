@@ -5,11 +5,14 @@ Module to perform Serviceability scenarios on mon daemons
 import datetime
 import json
 import time
+from json import JSONDecodeError
 
+from ceph.ceph import CephNode, CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonElectionStrategies
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -353,7 +356,36 @@ class MonitorWorkflows:
                 log.error(f"Failed with exception: {e.__doc__}")
                 log.exception(e)
                 return False
-
+            """
+            $ cephadm shell -- ceph daemon mon.ceph-vipin-test-ycgsu2-node3 connection scores dump
+            {
+                "rank": 2,
+                "epoch": 60,
+                "version": 1130,
+                "half_life": 43200,
+                "persist_interval": 10,
+                "reports": [
+                    {
+                        "rank": 0,
+                        "epoch": 60,
+                        "version": 1129,
+                        "peer_scores": [
+                            {
+                                "peer_rank": 1,
+                                "peer_score": 0.99995987423644439,
+                                "peer_alive": true
+                            },
+                            {
+                                "peer_rank": 2,
+                                "peer_score": 0.98011054333201453,
+                                "peer_alive": true
+                            }
+                        ]
+                    },
+                  ..................< redacted >.................
+                ]
+            }
+            """
             reports = mon_conn_score["reports"]
 
             # Compare count of mons from connection scores dump and
@@ -369,6 +401,8 @@ class MonitorWorkflows:
             log.info(
                 f"Count of mons in connection scores report verified for mon.{host.hostname}"
             )
+
+            self.check_negative_rank(host)
 
             log.info(f"Proceeding to verify count of peers for mon.{host.hostname}")
 
@@ -453,3 +487,39 @@ class MonitorWorkflows:
             f"Verified connection scores of mon on hosts: {hosts}, and all scenarios passed"
         )
         return True
+
+    @retry(
+        (Exception, JSONDecodeError, CommandFailed, TimeoutError),
+        tries=6,
+        delay=10,
+        backoff=1,
+    )
+    def check_negative_rank(self, host: CephNode):
+        """
+        Method to check if there is a negative rank in mon connection scores.
+        Retries method execution upon Exceptions.
+        Args:
+            host: Instance of class CephNode
+        Returns:
+            None
+        Exception:
+            Raise Exception when rank is <= -1
+        Usage:
+            check_negative_rank(host=host)
+        """
+        log.info("Validating negative rank for mon." + host.hostname)
+        cmd = f"cephadm shell ceph daemon mon.{host.hostname} connection scores dump"
+        out, err = host.exec_command(sudo=True, cmd=cmd, pretty_print=True)
+        mon_conn_score = json.loads(out)
+
+        if mon_conn_score["rank"] <= -1:
+            msg = f"mon.{host.hostname} rank is -1"
+            raise Exception(msg)
+
+        for report in mon_conn_score["reports"]:
+            if report["rank"] <= -1:
+                msg = f"mon.{host.hostname} peers rank is -1"
+                raise Exception(msg)
+        log.info(
+            "Connection score does not include negative rank for mon." + host.hostname
+        )

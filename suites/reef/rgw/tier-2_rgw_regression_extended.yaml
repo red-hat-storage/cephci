@@ -75,6 +75,8 @@ tests:
         haproxy_clients:
           - node6
         rgw_endpoints:
+          - node3:80
+          - node4:80
           - node5:80
       desc: "Configure HAproxy"
       module: haproxy.py
@@ -85,7 +87,6 @@ tests:
       desc: BucketNotification with users in same tenant and different tenant
       polarion-id: CEPH-11204
       module: sanity_rgw.py
-      comments: Known issue BZ-2358562 targeted to 7.1z4
       config:
         run-on-rgw: true
         extra-pkgs:
@@ -111,6 +112,17 @@ tests:
       config:
         script-name: test_bucket_lifecycle_config_ops.py
         config-file-name: test_bucket_lc_incomplete_multipart.yaml
+
+  - test:
+      name: RGW Orphan Utility Validation
+      desc: Validates RGW object consistency using the rgw-orphan-list utility.
+      polarion-id: CEPH-83614243
+      module: sanity_rgw.py
+      config:
+        cephadm: true
+        install_common: false
+        script-name: test_rgw_orphan_list.py
+        config-file-name: test_rgw_orphan_list.yaml
 
   # Object lock no overwrite
   - test:
@@ -204,6 +216,33 @@ tests:
         config-file-name: ../../aws/configs/test_aws_non_ascii.yaml
 
   - test:
+      name: Test Copy object does not delete tail objects with 10m object
+      desc: Test Copy object does not delete tail objects with 10m object
+      polarion-id: CEPH-83622325
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_tail_deletion_during_copy_object.py
+        config-file-name: ../../aws/configs/test_tail_deletion_during_copy_object_10m.yaml
+
+  - test:
+      name: Test Copy object does not delete tail objects with 6m object
+      desc: Test Copy object does not delete tail objects with 6m object
+      polarion-id: CEPH-83622325
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_tail_deletion_during_copy_object.py
+        config-file-name: ../../aws/configs/test_tail_deletion_during_copy_object_6m.yaml
+
+  - test:
+      name: Test Copy object does not delete tail objects with 1GB object
+      desc: Test Copy object does not delete tail objects with 1GB object
+      polarion-id: CEPH-83622325
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_tail_deletion_during_copy_object.py
+        config-file-name: ../../aws/configs/test_tail_deletion_during_copy_object_1g.yaml
+
+  - test:
       name: Test bucket listing with markers on versioned bucket
       desc: Test bucket listing with markers on versioned bucket
       polarion-id: CEPH-83572736
@@ -227,7 +266,6 @@ tests:
       desc: Test LC transition with rule by lc process
       polarion-id: CEPH-83574044
       module: sanity_rgw.py
-      comments: known issue (BZ-2315885) targeted to 7.1z4
       config:
         script-name: test_bucket_lifecycle_object_expiration_transition.py
         config-file-name: test_lc_transition_with_lc_process.yaml
@@ -249,16 +287,6 @@ tests:
       config:
         script-name: user_create.py
         config-file-name: test_user_with_placement_id_storage_class_cold.yaml
-
-  - test:
-      abort-on-fail: false
-      config:
-        branch: ceph-reef
-      desc: Run the external S3test suites.
-      destroy-cluster: false
-      module: test_s3.py
-      name: execute s3tests
-      polarion-id: CEPH-83575225
 
   - test:
       abort-on-fail: false
@@ -339,15 +367,15 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_public_access_block_post_bucket_policy.yaml
-  - test:
-      name: test public access block - BlockPublicAcls
-      desc: test public access block - BlockPublicAcls
-      polarion-id: CEPH-83575582
-      module: sanity_rgw.py
-      config:
-        script-name: test_bucket_policy_ops.py
-        config-file-name: test_public_access_block_acl.yaml
-      comments: known issue - Bug 2344639
+  # - test:
+  #     name: test public access block - BlockPublicAcls
+  #     desc: test public access block - BlockPublicAcls
+  #     polarion-id: CEPH-83575582
+  #     module: sanity_rgw.py
+  #     config:
+  #       script-name: test_bucket_policy_ops.py
+  #       config-file-name: test_public_access_block_acl.yaml
+  #     comments: known issue - Bug 2344639 targetted to 9.0
   - test:
       name: test public access block - IgnorePublicAcls
       desc: test public access block - IgnorePublicAcls
@@ -356,15 +384,15 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_public_access_block_ignore_acl.yaml
-  - test:
-      name: test public access block - RestrictPublicBuckets
-      desc: test public access block - RestrictPublicBuckets
-      polarion-id: CEPH-83575582
-      module: sanity_rgw.py
-      config:
-        script-name: test_bucket_policy_ops.py
-        config-file-name: test_public_access_block_restricted_public_buckets.yaml
-      comments: known issue - Bug 2344730
+  # - test:
+  #     name: test public access block - RestrictPublicBuckets
+  #     desc: test public access block - RestrictPublicBuckets
+  #     polarion-id: CEPH-83575582
+  #     module: sanity_rgw.py
+  #     config:
+  #       script-name: test_bucket_policy_ops.py
+  #       config-file-name: test_public_access_block_restricted_public_buckets.yaml
+  #     comments: known issue - Bug 2344730 atrgetted to 9.0
 
   - test:
       name: test_bi_purge for a bucket

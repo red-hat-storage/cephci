@@ -220,3 +220,48 @@ def wait_for_device_rados(host, osd_id, action: str, timeout: int = 900) -> bool
         )
         time.sleep(120)
     return False
+
+
+def wait_for_daemon_status(
+    rados_obj, daemon_type: str, daemon_id: str, status: str, timeout: int = 900
+) -> bool:
+    """
+    Waiting for the device to be removed/added based on the action
+    Args:
+        rados_obj: RadosOrchestrator object
+        status: status of daemon. "running" "stopped" "unknown"
+        timeout: wait timeout in seconds
+        daemon_id: (str) id of the daemon --daemon-id 1 passed in 'ceph orch ps --daemon-type osd --daemon-id 1'
+        daemon_type: (str) type of daemon --daemon-type osd as passed in
+            'ceph orch ps --daemon-type osd --daemon-id 1'
+    Returns:  True -> pass, False -> fail
+    """
+    end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+    while end_time > datetime.datetime.now():
+        _, curr_status = rados_obj.get_daemon_status(
+            daemon_type=daemon_type, daemon_id=daemon_id
+        )
+
+        if not curr_status:
+            curr_status = ""
+
+        if status.lower() in curr_status.lower():
+            log_info_msg = f"Status of {daemon_type}.{daemon_id} is {curr_status}"
+            log.info(log_info_msg)
+            return True
+
+        sleep_duration_in_seconds = 10
+        log_info_msg = (
+            f"\n Current status of {daemon_type}.{daemon_id} is {curr_status}"
+        )
+        f"\n Expected status of {daemon_type}.{daemon_id} is {status}"
+        f"\n Retrying after {sleep_duration_in_seconds} seconds."
+        log.info(log_info_msg)
+        time.sleep(sleep_duration_in_seconds)
+    else:
+        log_error_msg = (
+            f"\n Status of {daemon_type}.{daemon_id} is not changed to {status}"
+        )
+        f"\n after {timeout} seconds."
+        log.error(log_error_msg)
+        return False

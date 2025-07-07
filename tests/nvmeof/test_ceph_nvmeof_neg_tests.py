@@ -733,7 +733,17 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         nvmegwcli.host.delete(**host_args)
         sleep(20)
         targets = initiator.list_spdk_drives()
-        if targets:
+        if targets[0].get("Subsystems"):
+            namespaces_present = not (
+                all(
+                    not subsystem.get("Namespaces")
+                    for host in targets
+                    for subsystem in host.get("Subsystems", [])
+                )
+            )
+        else:
+            namespaces_present = targets
+        if namespaces_present:
             raise Exception(f"NVMe Targets found on {client.hostname}!!!")
         LOG.info(f"NVMe targets not found on {client.hostname} as expected..")
         try:
@@ -753,7 +763,17 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         nvmegwcli.host.add(**host_args)
         sleep(10)
         targets = initiator.list_spdk_drives()
-        if not targets:
+        if targets[0].get("Subsystems"):
+            namespaces_present = not (
+                all(
+                    not subsystem.get("Namespaces")
+                    for host in targets
+                    for subsystem in host.get("Subsystems", [])
+                )
+            )
+        else:
+            namespaces_present = targets
+        if not namespaces_present:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
         client.exec_command(
             sudo=True, cmd=f"dd if=/dev/zero of={_file}_test bs=1M count=1000"

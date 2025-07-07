@@ -458,8 +458,15 @@ def get_inconsistent_count(scrub_object, pg_id, rados_obj, operation):
         log.debug(
             f"The inconsistent object details in the pg-{pg_id} is - {inconsistent_details}"
         )
+        ceph_health_detail = rados_obj.run_ceph_command("ceph health detail")
+        log.debug(f"Health detail: {ceph_health_detail}")
         obj_count = len(inconsistent_details["inconsistents"])
         log.info(f" The inconsistent object count after {operation} is {obj_count}")
+        # BZ https://bugzilla.redhat.com/show_bug.cgi?id=2299659
+        # rados  list-inconsistent-obj  14.0 -f json
+        # {'epoch': 1836, 'inconsistents': []}
+        if obj_count > 0:
+            return obj_count
         chk_count = chk_count + 1
         time.sleep(30)
     return obj_count

@@ -181,17 +181,6 @@ tests:
       polarion-id: CEPH-83586289
 
   - test:
-      abort-on-fail: false
-      config:
-        branch: ceph-reef
-        kms_keyid: testKey01
-      desc: S3tests
-      destroy-cluster: false
-      module: test_s3.py
-      name: execute s3tests
-      polarion-id: CEPH-83575225
-
-  - test:
       name: object level retention test Governance mode
       desc: object level retention test Governance mode
       polarion-id: CEPH-83574058
@@ -203,7 +192,7 @@ tests:
   - test:
       name: Test swift bulk upload with tar format
       desc: Test swift bulk upload with tar format
-      comments: Known issue BZ-2346223 targeted to 7.1z4
+      comments: Known issue BZ-2346223 targeted to 7.1z6
       polarion-id: CEPH-83607707
       module: sanity_rgw.py
       config:

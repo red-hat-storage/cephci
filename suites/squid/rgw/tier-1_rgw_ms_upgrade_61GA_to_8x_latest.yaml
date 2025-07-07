@@ -370,7 +370,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: create non-tenanted user
       polarion-id: CEPH-83575199
-      comments: 2327402, known bug in 8.0
 
   # Basic swift based tests
 

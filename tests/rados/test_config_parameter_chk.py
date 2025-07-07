@@ -24,7 +24,6 @@ def run(ceph_cluster, **kw):
     log.info(run.__doc__)
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
-    osd_list = []
     mclock_profile = ["balanced", "high_recovery_ops", "high_client_ops"]
     rados_object = RadosOrchestrator(node=cephadm)
     mon_object = MonConfigMethods(rados_obj=rados_object)
@@ -36,35 +35,64 @@ def run(ceph_cluster, **kw):
     log.info(f"The rhcs build version is-{build}")
 
     # To get the OSD list
-    ceph_nodes = kw.get("ceph_nodes")
-    for node in ceph_nodes:
-        if node.role == "osd":
-            node_osds = rados_object.collect_osd_daemon_ids(node)
-            # Pick a single OSD from the host OSDs list
-            node_osds = random.sample(node_osds, 1)
-            osd_list = osd_list + node_osds
-    log.info(f"The number of OSDs in the cluster are-{len(osd_list)}")
+    osd_list = rados_object.get_osd_list(status="up")
+    log.info(f"The number of OSDs in the cluster are: {len(osd_list)}")
     # If OSD list is more than 10 then randomly picking the 10 OSDs to check the parameters.
     if len(osd_list) > 10:
         osd_list = random.sample(osd_list, 10)
     log.info(f"The parameters are checking on {osd_list} osds")
     if config.get("scenario") == "msgrv2_5x":
-        ini_file = config.get("ini-file")
-        config_info.read(ini_file)
-        msgr_parameter = config_info.items("MSGRV2")
-        result = config_param_checker(mon_object, osd_list, msgr_parameter)
-        if result:
-            log.error("The MSGRV2 parameters are exist in the 5.x build")
+        try:
+            ini_file = config.get("ini-file")
+            config_info.read(ini_file)
+            msgr_parameter = config_info.items("MSGRV2")
+            result = config_param_checker(mon_object, osd_list, msgr_parameter)
+            if result:
+                log.error("The MSGRV2 parameters are exist in the 5.x build")
+                raise Exception("parameter value is not correct in the 5.x build")
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            # log cluster health
+            rados_object.log_cluster_health()
             return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+            # log cluster health
+            rados_object.log_cluster_health()
+            # check for crashes after test execution
+            if rados_object.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         return 0
+
     if config.get("scenario") == "msgrv2_6x":
-        ini_file = config.get("ini-file")
-        config_info.read(ini_file)
-        msgr_parameter = config_info.items("MSGRV2")
-        result = config_param_checker(mon_object, osd_list, msgr_parameter)
-        if not result:
-            log.error("The MSGRV2 parameter value is not correct in the 6.x build")
+        try:
+            ini_file = config.get("ini-file")
+            config_info.read(ini_file)
+            msgr_parameter = config_info.items("MSGRV2")
+            result = config_param_checker(mon_object, osd_list, msgr_parameter)
+            if not result:
+                log.error("The MSGRV2 parameter value is not correct in the 6.x build")
+                raise Exception("parameter value is not correct in the 6.x build")
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            # log cluster health
+            rados_object.log_cluster_health()
             return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+            # log cluster health
+            rados_object.log_cluster_health()
+            # check for crashes after test execution
+            if rados_object.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
         return 0
 
     # Checking all sleep parameters in mclock profiles

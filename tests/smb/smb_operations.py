@@ -937,3 +937,22 @@ def remove_sub_vol_group(installer, cephfs_vol, smb_subvol_group, smb_subvols):
         raise CephadmOpsExecutionError(
             f"Fail to remove sub volume and sub volume group, Error {e}"
         )
+
+
+def config_smb_images(installer, samba_image, samba_metrics_image):
+    """Configure smb images
+    Args:
+        installer (obj): Installer node obj
+        samba_image (str): Samba server image
+        samba_metrics_image (str): Samba metrics image
+    """
+    try:
+        # Configure samba server image
+        cmd = f"cephadm shell -- ceph config set mgr mgr/cephadm/container_image_samba {samba_image}"
+        installer.exec_command(sudo=True, cmd=cmd)
+
+        # Configure samba server metrics image
+        cmd = f"cephadm shell -- ceph config set mgr mgr/cephadm/container_image_samba_metrics {samba_metrics_image}"
+        installer.exec_command(sudo=True, cmd=cmd)
+    except Exception as e:
+        raise CephadmOpsExecutionError(f"Fail to configure smb images, Error {e}")

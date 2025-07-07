@@ -28,12 +28,16 @@ or stand-by MDS node and remove it from cluster using Ansible or manual way.
 """
 
 
-@retry(CommandFailed, tries=10, delay=60)
-def check_nodes(admin, target_node, check_node_cmd):
+@retry(CommandFailed, tries=4, delay=60)
+def check_nodes(admin, target_node, check_node_cmd, should_exist=False):
     out2, _ = admin.installer.exec_command(sudo=True, cmd=check_node_cmd)
     log.info(str(out2).strip())
-    if "No daemons reported" not in str(out2).strip():
-        raise CommandFailed(f"{target_node} daemons are not removed")
+    if not should_exist:
+        if "No daemons reported" not in str(out2).strip():
+            raise CommandFailed(f"{target_node} daemons are not removed")
+    else:
+        if "No daemons reported" in str(out2).strip():
+            raise CommandFailed(f"{target_node} daemons are removed")
 
 
 def run(ceph_cluster, **kw):
@@ -102,23 +106,25 @@ def run(ceph_cluster, **kw):
         for host in output1:
             if "osd" not in host["labels"] and "mds" in host["labels"]:
                 candidate_host.append(host["hostname"])
-        print("Candidate host for removing / Adding MDS node")
-        print(candidate_host)
+        log.info("Candidate host for removing / Adding MDS node")
+        log.info(candidate_host)
         target_node = candidate_host[-1]
         drain_node_cmd = f"cephadm shell ceph orch host drain {target_node} --force"
         remove_node_cmd = f"cephadm shell ceph orch host rm {target_node}"
         check_node_cmd = f"cephadm shell ceph orch ps {target_node}"
         admin.installer.exec_command(sudo=True, cmd=drain_node_cmd)
         time.sleep(20)
+        check_nodes(admin, target_node, check_node_cmd)
         admin.installer.exec_command(sudo=True, cmd=remove_node_cmd)
         time.sleep(20)
-        check_nodes(admin, target_node, check_node_cmd)
         add_node_cmd = f"cephadm shell ceph orch host add {target_node} --labels mds"
         admin.installer.exec_command(sudo=True, cmd=add_node_cmd)
         time.sleep(10)
+        check_nodes(admin, target_node, check_node_cmd, should_exist=True)
         check_ps_cmd = f"cephadm shell ceph orch ps {target_node} --format json-pretty"
         out3, ec3 = admin.installer.exec_command(sudo=True, cmd=check_ps_cmd)
         output3 = json.loads(out3)
+        log.info("Command output: %s, exit code: %s", out3, ec3)
         if output3[0]["hostname"] == target_node and output3[0]["daemon_type"] == "mds":
             log.info("The Target mds node added")
         else:

@@ -5,7 +5,9 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from tests.rados.monitor_configurations import MonElectionStrategies
+from tests.rados.rados_test_util import wait_for_daemon_status
 from utility.log import Log
+from utility.utils import method_should_succeed
 
 log = Log(__name__)
 
@@ -248,9 +250,15 @@ def run(ceph_cluster, **kw):
 
             # todo: add other tests to ascertain the health of mon daemons in quorum
             # [12-Feb-2024] added ^
-            if not check_mon_status(rados_obj, mon_obj):
-                log.error("All Mon daemons are not in running state")
-                return 1
+            for mon in mon_obj.get_mon_quorum().keys():
+                method_should_succeed(
+                    wait_for_daemon_status,
+                    rados_obj=rados_obj,
+                    daemon_type="mon",
+                    daemon_id=mon,
+                    status="running",
+                    timeout=60,
+                )
 
             # Collecting the number of mons in the quorum after the test
             mon_final_count = len(mon_obj.get_mon_quorum().keys())

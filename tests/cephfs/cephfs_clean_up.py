@@ -107,15 +107,23 @@ def run(ceph_cluster, **kw):
         if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 1200):
             log.error("Cluster health is not OK even after waiting for 20 mins.")
             return 1
+        time.sleep(180)  # Waiting to remove all stale entries for cephfs
+        fs_util.wait_for_mds_process(clients[0], process_name="", ispresent=False)
         default_fs = "cephfs"
         fs_details = fs_util.get_fs_info(clients[0], default_fs)
         retry_create_fs = retry(CommandFailed, tries=3, delay=30)(fs_util.create_fs)
         if not fs_details:
             retry_create_fs(clients[0], default_fs)
+        for i in range(3):
+            cmd = f"ceph orch apply mds {default_fs} --placement='label:mds'; ceph fs set {default_fs} max_mds 2"
+            clients[0].exec_command(sudo=True, cmd=cmd)
 
-        cmd = f"ceph orch apply mds {default_fs} --placement='label:mds';ceph fs set {default_fs} max_mds 2"
-        clients[0].exec_command(sudo=True, cmd=cmd)
+            if fs_util.wait_for_mds_process(clients[0], process_name=default_fs):
+                break  # Exit early if MDS is successfully applied
 
+            time.sleep(5)  # optional: wait before retrying
+        else:
+            raise Exception("Failed to apply MDS after 3 attempts")
         list_cmds = [
             "ceph fs flag set enable_multiple true",
             "ceph osd pool create cephfs-data-ec 64 erasure",

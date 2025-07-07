@@ -4,6 +4,7 @@ import traceback
 
 from ceph.ceph import SocketTimeoutException
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -27,6 +28,7 @@ def run(ceph_cluster, **kw):
         log.info("Running CephFS tests for ceph kernel xfstests")
         # Initialize the utility class for CephFS
         fs_util = FsUtils(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         # Get the client nodes
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
@@ -37,8 +39,9 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
         fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs"
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
+            fs_util.create_fs(client1, fs_name)
         # check if rhel version is 8 or 9
         rhel_version, _ = client1.exec_command(
             sudo=True, cmd="cat /etc/os-release | grep VERSION_ID"
@@ -84,8 +87,18 @@ def run(ceph_cluster, **kw):
         scratch_mount_point = f"/mnt/cephfs_kernel_{rand}_scratch"
         # Mount CephFS
         mon_node_ips = fs_util.get_mon_node_ips()
-        fs_util.kernel_mount([client1], test_mount_point, ",".join(mon_node_ips))
-        fs_util.kernel_mount([client1], scratch_mount_point, ",".join(mon_node_ips))
+        fs_util.kernel_mount(
+            [client1],
+            test_mount_point,
+            ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
+        )
+        fs_util.kernel_mount(
+            [client1],
+            scratch_mount_point,
+            ",".join(mon_node_ips),
+            extra_params=f",fs={fs_name}",
+        )
         # create subdirectory in the mounted directory
         client1.exec_command(sudo=True, cmd=f"mkdir {test_mount_point}/{rand}_a")
         client1.exec_command(sudo=True, cmd=f"mkdir {scratch_mount_point}/{rand}_b")
@@ -93,6 +106,12 @@ def run(ceph_cluster, **kw):
         admin_key, _ = client1.exec_command(
             sudo=True, cmd="ceph auth get-key client.admin"
         )
+
+        log.info("Verify Cluster is healthy before test")
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
+
         xfs_config_context = f"""
         export TEST_DIR={test_mount_point}
         export SCRATCH_MNT={scratch_mount_point}

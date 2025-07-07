@@ -518,7 +518,6 @@ tests:
       desc: Test rgw user quota using CURL
       polarion-id: CEPH-83575572
       module: sanity_rgw.py
-      comments: Known issue BZ-2361821 for 8.1
       config:
         script-name: ../curl/test_quota_using_curl.py
         config-file-name: ../../curl/configs/test_quota_mgmt_user_quota_using_curl.yaml
@@ -527,7 +526,6 @@ tests:
       desc: Test rgw bucket quota conflict using CURL
       polarion-id: CEPH-83575572
       module: sanity_rgw.py
-      comments: Known issue BZ-2361821 for 8.1
       config:
         script-name: ../curl/test_quota_using_curl.py
         config-file-name: ../../curl/configs/test_quota_mgmt_conflict_bucket_quota_using_curl.yaml

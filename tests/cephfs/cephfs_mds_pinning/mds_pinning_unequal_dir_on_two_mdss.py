@@ -130,7 +130,7 @@ def run(ceph_cluster, **kw):
             log.info("Data validation success")
             for client in client1:
                 client.exec_command(
-                    cmd="sudo mkdir %s%s" % (client_info["mounting_dir"], test_dir)
+                    cmd="sudo mkdir -p %s%s" % (client_info["mounting_dir"], test_dir)
                 )
             log.info("Execution of Test case CEPH-%s started:" % (tc))
             num_of_dirs = int(num_of_dirs / 5)
@@ -317,4 +317,5 @@ def run(ceph_cluster, **kw):
     except Exception as e:
         log.error(e)
         log.error(traceback.format_exc())
+        fs_util_v1.get_ceph_health_status(client1[0])
         return 1

@@ -59,3 +59,32 @@ erasure:
     k: 2
     m: 2
     crush-failure-domain: host
+  sample-pool-7:
+    pool_name: ec_pool_52
+    pool_type: erasure
+    k: 5
+    m: 2
+    plugin: isa
+    crush-failure-domain: host
+  sample-pool-8:
+    pool_name: ec_pool_52_1
+    pool_type: erasure
+    k: 5
+    m: 2
+    plugin: isa
+    crush-failure-domain: host
+  sample-pool-9:
+    pool_name: ec_pool_62
+    pool_type: erasure
+    k: 6
+    m: 2
+    plugin: isa
+    crush-failure-domain: host
+  sample-pool-10:
+    pool_name: ec_pool_62_1
+    pool_type: erasure
+    k: 6
+    m: 2
+    plugin: isa
+    crush-failure-domain: host
+

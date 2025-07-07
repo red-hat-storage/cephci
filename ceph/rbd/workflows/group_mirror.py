@@ -129,6 +129,52 @@ def remove_group_image_and_verify(rbd, **kw):
         raise Exception("cannot remove image from mirror enabled group")
 
 
+def create_group_add_images(rbd, **kw):
+    """
+    Create groups, images and add images to group
+    Args:
+      rbd: RBD object
+      **kw:
+      no_of_group: int value, number of groups to be created
+      no_of_images_in_each_group: int value, number of images to be created and added to each group
+      size_of_image: Size of each image created
+      pool_spec: pool spec (with or without namespace)
+    """
+    res = {}
+    for i in range(0, kw["no_of_group"]):
+        group_spec = f"{kw['pool_spec']}/group{i+1}"
+        group_create, err = rbd.group.create(**{"group-spec": group_spec})
+        if err:
+            raise Exception("Error in group creation: " + err)
+
+        # Create Image and add to the group
+        group_image = []
+        for i in range(0, kw["no_of_images_in_each_group"]):
+            image_spec = f"{kw['pool_spec']}/image{i+1}"
+            image_create, err = rbd.create(
+                **{
+                    "image-spec": image_spec,
+                    "size": kw["size_of_image"],
+                }
+            )
+            if err:
+                raise Exception("Error in image creation: " + err)
+
+            # Add Image to group
+            add_group_image_and_verify(
+                rbd, **{"group-spec": group_spec, "image-spec": image_spec}
+            )
+            log.info(
+                "Successfully verified image "
+                + image_spec
+                + " is added to the group "
+                + group_spec
+            )
+            group_image.append(image_spec)
+            res[group_spec] = group_image
+    return res
+
+
 def group_mirror_status_verify(
     primary_cluster,
     secondary_cluster,
@@ -334,3 +380,106 @@ def verify_group_snapshot_ls(rbd, group_spec, interval, **status_spec):
             interval,
         )
         return 1
+
+
+def get_snap_state_by_snap_id(rbd, snapshot_id, **status_spec):
+    """
+    This function will return snapshot_state(complete/incomplete) for a given snapshot id
+    Args:
+        rbd: rbd object
+        snapshot_id: Snapshot job id
+        status_spec: pool, namespace and group details
+    Returns:
+        Snapshot state (str), when successful
+        raise Exception, if fails
+    """
+    out, err = rbd.group.snap.list(**status_spec)
+    if err:
+        raise Exception(
+            "Error while fetching snapshot list for group  %s, %s",
+            status_spec["group"],
+            err,
+        )
+    snapshot_list = json.loads(out)
+    for snap in snapshot_list:
+        if snap["namespace"]["type"] == "mirror" and snap["id"] == snapshot_id:
+            snapshot_state = snap["state"]
+            break
+    return snapshot_state
+
+
+def get_mirror_group_snap_id(rbd, **status_spec):
+    """
+    This will get first mirror group snapshot id from group snap list CLI
+    Args:
+        rbd: rbd object
+        status_spec: pool, namespace and group details
+    Returns:
+        snapshot id, if successfull
+    """
+    out, err = rbd.group.snap.list(**status_spec)
+    if err:
+        raise Exception(
+            "Error while fetching snapshot list for group  %s, %s",
+            status_spec["group"],
+            err,
+        )
+    snapshot_list = json.loads(out)
+    for snap in snapshot_list:
+        if snap["namespace"]["type"] == "mirror":
+            snapshot_id = snap["id"]
+            break
+    return snapshot_id
+
+
+def wait_till_image_sync_percent(rbd, wait_sync_percent, **group_kw):
+    """
+    Wait till image reach sync_percent
+    Args:
+        rbd: Rbd object
+        wait_sync_percent: Percentage of image sync till which this function has to wait
+        **group_kw: Group spec <pool_name>/<group_name>
+    """
+    retry = 0
+    while retry < 60:
+        (group_mirror_status, err) = rbd.mirror.group.status(**group_kw, format="json")
+        group_mirror_status = str(group_mirror_status).strip("'<>() ").replace("'", '"')
+        group_mirror_status = json.loads(group_mirror_status)
+        cnt = 0
+        if len(group_mirror_status["peer_sites"][0]["images"]) != 0:
+            sync_started = False
+            for image in group_mirror_status["peer_sites"][0]["images"]:
+                if "PREPARE_REPLAY" in image["description"].split(", ")[-1]:
+                    continue
+                replay_state = json.loads(image["description"].split(", ")[-1])[
+                    "replay_state"
+                ]
+                if replay_state == "idle":
+                    if sync_started is True:
+                        cnt = cnt + 1
+                    else:
+                        continue
+                if replay_state == "syncing":
+                    sync_started = True
+                    syncing_percent = json.loads(image["description"].split(", ")[-1])[
+                        "syncing_percent"
+                    ]
+                    if int(syncing_percent) >= wait_sync_percent:
+                        cnt = cnt + 1
+                    else:
+                        break
+
+            if cnt == len(group_mirror_status["peer_sites"][0]["images"]):
+                break
+            else:
+                time.sleep(5)
+                retry = retry + 1
+        else:
+            time.sleep(5)
+            retry = retry + 1
+    if retry == 60:
+        raise Exception(
+            "Sync percentage is not acheived to be "
+            + wait_sync_percent
+            + " even after 300 seconds"
+        )

@@ -95,16 +95,19 @@ def run(ceph_cluster, **kw):
         )
         cmd = "ceph osd pool autoscale-status"
         pool_status = rados_obj.run_ceph_command(cmd=cmd, timeout=600)
-
+        out, _ = rados_obj.client.exec_command(cmd=cmd, sudo=True, pretty_print=True)
         for entry in pool_status:
             if entry["pg_autoscale_mode"] == "on":
                 log.error(
                     f"Pg autoscaler mode still on for pool : {entry['pool_name']}"
+                    f"ceph osd pool autoscale-status:- {out}"
+                    f"ceph osd pool autoscale-status -fjson:- {pool_status}"
                 )
-                # tbd: Uncomment the below exception upon bug fix: https://bugzilla.redhat.com/show_bug.cgi?id=2252788
+                # tbd: Uncomment the below exception upon bug fix: https://bugzilla.redhat.com/show_bug.cgi?id=2361441
                 raise Exception(
-                    "PG autoscaler mode still on error. fixed only in squid"
-                    "Open bug : https://bugzilla.redhat.com/show_bug.cgi?id=2252788. "
+                    "PG autoscaler mode still on error."
+                    "Squid Open bug : https://bugzilla.redhat.com/show_bug.cgi?id=2361441"
+                    "Reef closed bug : https://bugzilla.redhat.com/show_bug.cgi?id=2252788"
                 )
         log.debug(
             "All the pools have the autoscaler mode changed from default on. pass"

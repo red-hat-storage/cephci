@@ -18,7 +18,15 @@ log = Log(__name__)
 
 
 def generate_test_case(
-    name, duration, status, err_type=None, err_msg=None, err_text=None, polarion_id=None
+    name,
+    duration,
+    status,
+    err_type=None,
+    err_msg=None,
+    err_text=None,
+    comments=None,
+    polarion_id=None,
+    testrail_id=None,
 ):
     """Create test case object.
 
@@ -47,11 +55,15 @@ def generate_test_case(
         _result.text = err_text
         test_case.result = [_result]
 
+    props = Properties()
     if polarion_id:
-        props = Properties()
         props.append(Property(name="polarion-testcase-id", value=polarion_id))
+    if testrail_id:
+        props.append(Property(name="test_id", value=testrail_id))
+    if comments:
+        props.append(Property(name="comments", value=str(comments)))
+    if props:
         test_case.append(props)
-
     return test_case
 
 
@@ -87,11 +99,13 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
     for tc in test_cases:
         test_name = tc["name"]
         pol_ids = tc.get("polarion-id")
+        testrail_id = tc.get("testrail-id")
         test_status = tc["status"]
         elapsed_time = tc.get("duration")
         err_type = tc.get("err_type")
         err_msg = tc.get("err_msg")
         err_text = tc.get("err_text")
+        comments = tc.get("comments")
 
         if pol_ids:
             _ids = pol_ids.split(",")
@@ -105,6 +119,8 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
                         err_msg=err_msg,
                         err_text=err_text,
                         polarion_id=_id,
+                        testrail_id=testrail_id,
+                        comments=comments,
                     )
                 )
         else:
@@ -116,6 +132,7 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
                     err_type=err_type,
                     err_msg=err_msg,
                     err_text=err_text,
+                    comments=comments,
                 )
             )
 
@@ -128,6 +145,7 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
     props.append(Property(name="polarion-group-id", value=test_group_id))
     xml.append(props)
     xml.add_testsuite(suite)
-    xml.write(xml_file, pretty=True)
+    with open(xml_file, "w", encoding="utf-8") as f:
+        xml.write(f, pretty=True)
 
     log.info(f"xUnit result file created: {xml_file}")

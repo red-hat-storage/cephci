@@ -19,7 +19,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
-from ceph.utils import host_restart, host_shutdown
+from ceph.utils import find_vm_node_by_hostname
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 
@@ -43,7 +43,6 @@ def run(ceph_cluster, **kw):
     stretch_bucket = config.get("stretch_bucket", "datacenter")
     set_debug = config.get("set_debug", False)
     rule_name = config.get("rule_name", "3az_rule")
-    osp_cred = config.get("osp_cred")
     installer = ceph_cluster.get_nodes(role="installer")[0]
     stime, _ = installer.exec_command(cmd="sudo date '+%Y-%m-%d %H:%M:%S'")
     log.debug("Initial time when test was started : " + stime)
@@ -110,9 +109,22 @@ def run(ceph_cluster, **kw):
             )
 
             for warning in health_warns:
-                if not rados_obj.check_health_warning(warning=warning):
-                    log.error(
-                        "Expected health warning : %s not found on the cluster", warning
+                for _ in range(3):
+                    if rados_obj.check_health_warning(warning=warning):
+                        log.info(
+                            "Expected health warning : %s found on the cluster", warning
+                        )
+                        break
+                    log.info(
+                        "Expected health warning : %s not found on the cluster\n"
+                        "Retrying after 20 seconds",
+                        warning,
+                    )
+                    time.sleep(20)
+                else:
+                    log.info(
+                        "Expected health warning : %s not found on the cluster after retries",
+                        warning,
                     )
                     return False
                 log.debug("Warning : %s present on the cluster", warning)
@@ -369,9 +381,8 @@ def run(ceph_cluster, **kw):
 
             # stopping the Host
             log.debug("Proceeding to shutdown host %s", target_host)
-            if not host_shutdown(gyaml=osp_cred, name=target_host):
-                log.error("Failed to shutdown host %s:", target_host)
-                raise Exception("Test execution Failed - post scenario-4")
+            target_node = find_vm_node_by_hostname(ceph_cluster, target_host)
+            target_node.shutdown(wait=True)
             log.debug("Stopped the host")
             time.sleep(10)
 
@@ -390,10 +401,8 @@ def run(ceph_cluster, **kw):
             log.debug("Wrote IOs and Verified health warnings post post scenario-4")
 
             # Starting the Host
-            log.debug(f"Proceeding to Restart host {target_host}")
-            if not host_restart(gyaml=osp_cred, name=target_host):
-                log.error("Failed to restart host %s ", target_host)
-                raise Exception("Test execution Failed - post scenario-4")
+            target_node = find_vm_node_by_hostname(ceph_cluster, target_host)
+            target_node.power_on()
             log.debug("restarted the host")
             time.sleep(10)
 
@@ -408,10 +417,10 @@ def run(ceph_cluster, **kw):
         if "scenario-5" in scenarios_to_run:
             # Scenario 5 : Shutdown & Start 1 Host on all DC
             shutdown_hosts = []
+            osd_hosts = set(rados_obj.get_osd_hosts())
             for target_dc in dc_names:
                 target_hosts = getattr(all_hosts, target_dc)
                 # Ensure target_host has OSD daemons in it
-                osd_hosts = set(rados_obj.get_osd_hosts())
                 target_host = random.choice(target_hosts)
                 while target_host not in osd_hosts:
                     target_host = random.choice(target_hosts)
@@ -426,9 +435,8 @@ def run(ceph_cluster, **kw):
 
                 # stopping the Host
                 log.debug(f"Proceeding to shutdown host {target_host}")
-                if not host_shutdown(gyaml=osp_cred, name=target_host):
-                    log.error("Failed to shutdown host %s", target_host)
-                    raise Exception("Test execution Failed - post scenario-5")
+                target_node = find_vm_node_by_hostname(ceph_cluster, target_host)
+                target_node.shutdown(wait=True)
                 log.debug("Stopped the host")
                 time.sleep(10)
 
@@ -447,9 +455,8 @@ def run(ceph_cluster, **kw):
             # Starting the Host
             for target_host in shutdown_hosts:
                 log.debug("Proceeding to Restart host %s", target_host)
-                if not host_restart(gyaml=osp_cred, name=target_host):
-                    log.error("Failed to restart host : %s", target_host)
-                    raise Exception("Test execution Failed - post scenario-5")
+                target_node = find_vm_node_by_hostname(ceph_cluster, target_host)
+                target_node.power_on()
                 log.debug("restarted the host")
             time.sleep(60)
 
@@ -476,11 +483,8 @@ def run(ceph_cluster, **kw):
 
                 # stopping the Host
                 log.debug(f"Proceeding to shutdown host {target_host}")
-                if not host_shutdown(gyaml=osp_cred, name=target_host):
-                    log.error(
-                        "Failed to shutdown host : %s post scenario-6", target_host
-                    )
-                    raise Exception("Test execution Failed - post scenario-6")
+                target_node = find_vm_node_by_hostname(ceph_cluster, target_host)
+                target_node.shutdown(wait=True)
                 log.debug("Stopped the host")
                 time.sleep(10)
 
@@ -503,11 +507,8 @@ def run(ceph_cluster, **kw):
             # Starting the Host
             for target_host in target_hosts:
                 log.debug("Proceeding to Restart host %s", target_host)
-                if not host_restart(gyaml=osp_cred, name=target_host):
-                    log.error(
-                        "Failed to restart host : %s post scenario-6", target_host
-                    )
-                    raise Exception("Test execution Failed post scenario-6")
+                target_node = find_vm_node_by_hostname(ceph_cluster, target_host)
+                target_node.power_on()
                 log.debug("restarted the host")
             time.sleep(60)
 
@@ -543,9 +544,8 @@ def run(ceph_cluster, **kw):
             for target_host in target_hosts:
                 # stopping the Host
                 log.debug("Proceeding to shutdown host %s", target_host)
-                if not host_shutdown(gyaml=osp_cred, name=target_host):
-                    log.error("Failed to shutdown host : %s in scenario-7", target_host)
-                    raise Exception("Test execution Failed post scenario-7")
+                target_node = find_vm_node_by_hostname(ceph_cluster, target_host)
+                target_node.shutdown(wait=True)
                 log.debug("Stopped the host")
                 time.sleep(10)
 
@@ -572,11 +572,8 @@ def run(ceph_cluster, **kw):
             # Starting the Host
             for target_host in target_hosts:
                 log.debug("Proceeding to Restart host %s", target_host)
-                if not host_restart(gyaml=osp_cred, name=target_host):
-                    log.error(
-                        "Failed to restart host : %s post scenario-7", target_host
-                    )
-                    raise Exception("Test execution Failed - post scenario-7")
+                target_node = find_vm_node_by_hostname(ceph_cluster, target_host)
+                target_node.power_on()
                 log.debug("restarted the host")
             time.sleep(60)
 
@@ -837,10 +834,9 @@ def run(ceph_cluster, **kw):
                         "Host: %s, is offline. trying to restart the host",
                         host.hostname,
                     )
-                    if not host_restart(gyaml=osp_cred, name=host.hostname):
-                        log.error("Failed to restart host : %s", host.hostname)
-                        return 1
-                    log.info("restarted the host %s", host.hostname)
+                    target_node = find_vm_node_by_hostname(ceph_cluster, host.hostname)
+                    target_node.power_on()
+                    log.info("started the host %s", host.hostname)
                     time.sleep(60)
             log.debug(
                 "All down hosts were started up or no hosts were down."

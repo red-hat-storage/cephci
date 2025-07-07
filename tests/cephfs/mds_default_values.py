@@ -2,6 +2,7 @@ import traceback
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -20,6 +21,7 @@ def run(ceph_cluster, **kw):
     """
     try:
         fs_util = FsUtils(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
         mds_list = ceph_cluster.get_ceph_objects("mds")
@@ -35,6 +37,12 @@ def run(ceph_cluster, **kw):
         client1 = clients[0]
         host_list = [mds.node.hostname for mds in mds_list]
         fs_name = "cephfs"
+
+        log.info("Verify Cluster is healthy before test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
+
         for host in host_list:
             if not fs_util.wait_for_mds_deamon(
                 client=client1, process_name=fs_name, host=host

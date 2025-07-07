@@ -180,7 +180,6 @@ tests:
                  pg_num: 32
                  k: 8
                  m: 4
-                 plugin: jerasure
                  max_objs: 300
                  rados_read_duration: 10
           desc: Verification of the bluestore pinned tests

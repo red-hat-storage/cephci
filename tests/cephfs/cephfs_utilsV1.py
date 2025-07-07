@@ -948,6 +948,7 @@ class FsUtils(object):
                 check_ec=False,
             )
             mds_hosts = json.loads(out)
+            log.debug("MDS Hosts Output: %s", mds_hosts)
             if ispresent:
                 for mds in mds_hosts:
                     if process_name in mds["daemon_id"]:
@@ -2166,7 +2167,9 @@ class FsUtils(object):
                 command = "python3 /home/cephuser/smallfile/smallfile_cli.py "
                 f"--operation create --threads 1 --file-size 100  --files  {num_of_files} "
                 f"--top {mounting_dir}{dir_name}_{num}"
-                client.exec_command(sudo=True, cmd=command, timeout=300)
+                client.exec_command(
+                    sudo=True, cmd=command, timeout=300, long_running=True
+                )
                 self.return_counts = self.io_verify(client)
             break
         return self.return_counts, 0
@@ -2409,87 +2412,6 @@ os.system('sudo systemctl start  network')
                     if op.state == "running":
                         log.info("Node restarted successfully")
                     sleep(20)
-        elif kwargs.get("cloud_type") == "ibmc":
-            # To DO for IBM
-            pass
-        else:
-            pass
-        return 0
-
-    def node_power_off(
-        self,
-        node,
-        sleep_time=300,
-        **kwargs,
-    ):
-        """
-        This is used for node power failures.
-        Limitation : This works only for Openstack Vms
-
-
-        Args:
-            sleep_time:
-            node_1:
-            **kwargs:
-
-        Returns:
-
-        """
-        user = os.getlogin()
-        log.info(f"{user} logged in")
-        if kwargs.get("cloud_type") == "openstack":
-            kwargs.pop("cloud_type")
-            driver = get_openstack_driver(**kwargs)
-            for node_obj in driver.list_nodes():
-                if node.private_ip in node_obj.private_ips:
-                    log.info("Doing power-off on %s" % node_obj.name)
-                    driver.ex_stop_node(node_obj)
-                    sleep(20)
-                    op = driver.ex_get_node_details(node_obj)
-                    if op.state == "stopped":
-                        log.info("Node stopped successfully")
-                    sleep(sleep_time)
-        elif kwargs.get("cloud_type") == "ibmc":
-            # To DO for IBM
-            pass
-        else:
-            pass
-        return 0
-
-    def node_power_on(
-        self,
-        node,
-        sleep_time=300,
-        **kwargs,
-    ):
-        """
-        This is used for node power failures.
-        Limitation : This works only for Openstack Vms
-
-
-        Args:
-            sleep_time:
-            node_1:
-            **kwargs:
-
-        Returns:
-
-        """
-        user = os.getlogin()
-        log.info(f"{user} logged in")
-        if kwargs.get("cloud_type") == "openstack":
-            kwargs.pop("cloud_type")
-            driver = get_openstack_driver(**kwargs)
-            for node_obj in driver.list_nodes():
-                if node.private_ip in node_obj.private_ips:
-                    log.info("Doing power-on on %s" % node_obj.name)
-                    driver.ex_start_node(node_obj)
-                    sleep(20)
-                    op = driver.ex_get_node_details(node_obj)
-                    if op.state == "running":
-                        log.info("Node restarted successfully")
-                    sleep(20)
-                    sleep(sleep_time)
         elif kwargs.get("cloud_type") == "ibmc":
             # To DO for IBM
             pass

@@ -591,6 +591,7 @@ def run(args):
         details["polarion-id-link"] = "{}{}".format(
             polarion_default_url, details["polarion-id"]
         )
+        details["testrail-id"] = var.get("testrail-id")
         details["rhbuild"] = rhbuild
         details["cloud-type"] = cloud_type
         details["ceph-version"] = ceph_version
@@ -792,6 +793,8 @@ def run(args):
                     if "enable-fips-mode=" in _config:
                         config["enable_fips_mode"] = bool(_config.split("=")[1])
 
+                    if "enable-firewall=" in _config:
+                        config["enable_firewall"] = bool(_config.split("=")[1])
             config["ceph_docker_registry"] = docker_registry
             config["ceph_docker_image"] = docker_image
             config["ceph_docker_image_tag"] = docker_tag

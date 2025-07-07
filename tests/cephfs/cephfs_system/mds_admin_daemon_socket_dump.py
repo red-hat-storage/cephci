@@ -6,6 +6,7 @@ import traceback
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.io.fs_io import fs_io
 from utility.log import Log
 from utility.retry import retry
@@ -28,7 +29,9 @@ def run(ceph_cluster, **kw):
         tc = "CEPH-83572891"
         log.info(f"Running CephFS tests for -{tc}")
         test_data = kw.get("test_data")
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
+
         erasure = (
             FsUtils.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -50,10 +53,12 @@ def run(ceph_cluster, **kw):
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
         )
-        retry_ceph_health = retry(CommandFailed, tries=5, delay=60)(
-            fs_util.get_ceph_health_status
+        retry_ceph_health = retry(CommandFailed, tries=4, delay=60)(
+            cephfs_common_utils.wait_for_healthy_ceph
         )
-        retry_ceph_health(clients[0])
+        rc = retry_ceph_health(clients[0])
+        if rc:
+            return rc
         kernel_mounting_dir_1 = f"/mnt/cephfs_kernel{mounting_dir}_1/"
         mon_node_ips = fs_util.get_mon_node_ips()
         fs_util.kernel_mount(

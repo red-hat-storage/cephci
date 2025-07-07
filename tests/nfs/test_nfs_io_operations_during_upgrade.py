@@ -23,7 +23,7 @@ from utility.retry import retry
 log = Log(__name__)
 
 
-@retry(OperationFailedError, tries=3, delay=5, backoff=2)
+@retry(OperationFailedError, tries=6, delay=10, backoff=4)
 def mount_retry(
     clients, client_num, mount_name, version, port, nfs_server, export_name
 ):
@@ -281,6 +281,8 @@ def run(ceph_cluster, **kw):
     file_count = int(config.get("file_count", "100"))
     dd_command_size_in_M = config.get("dd_command_size_in_M", "100")
     export_num = config.get("exports_number", 1)
+    ha = bool(config.get("ha", False))
+    vip = config.get("vip", None)
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
@@ -313,8 +315,9 @@ def run(ceph_cluster, **kw):
                 fs="cephfs",
                 port=port,
                 version=version,
-                ha=False,
+                ha=ha,
                 nfs_server=nfs_hostname,
+                vip=vip,
             )
 
             # 4. perform Create, read, rename, copy, read/write using DD command and deletion

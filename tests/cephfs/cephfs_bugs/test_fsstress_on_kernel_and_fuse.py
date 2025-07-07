@@ -4,6 +4,7 @@ import time
 import traceback
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -29,6 +30,7 @@ def run(ceph_cluster, **kw):
         log.info(f"Running cephfs {tc} test case")
         test_data = kw.get("test_data")
         fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         erasure = (
             FsUtilsV1.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -107,6 +109,11 @@ def run(ceph_cluster, **kw):
             extra_params=f" -r {subvol_path_fuse.strip()} --client_fs {default_fs}",
         )
 
+        log.info("Verify Cluster is healthy before test")
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
+
         log.info("Run fsstress for few iterations on fuse and kernel mounts.")
         fsstress_url = "https://raw.githubusercontent.com/ceph/ceph/main/qa/workunits/suites/fsstress.sh"
 
@@ -126,7 +133,8 @@ def run(ceph_cluster, **kw):
         log.info(
             f"run fsstress on kernel and fuse in parallel for {iterations} iterations"
         )
-        for _ in range(iterations):
+        for i in range(iterations):
+            log.info("Iteration: {}".format(i + 1))
             for directory in [kernel_mounting_dir_1, fuse_mounting_dir_1]:
                 clients[0].exec_command(
                     sudo=True, cmd=f"sh {directory}fsstress/fsstress.sh"
@@ -136,6 +144,8 @@ def run(ceph_cluster, **kw):
                     sudo=True, cmd=f"rm -rf {directory}fsstress/fsstress/"
                 )
             time.sleep(10)
+            # Just capturing the health status and not failing it
+            fs_util_v1.get_ceph_health_status(clients[0], validate=False)
 
         log.info(
             "Check for the Ceph Health to see if there are any deadlock bw unlink and rename."

@@ -247,7 +247,7 @@ tests:
       module: sanity_rgw.py
       name: Test cloud transition of SSE-S3 encrypted objects
       polarion-id: CEPH-83575497
-      comments: known issue Bug 2294512
+      comments: known issue Bug 2294512 targetted to 9.0
 
   - test:
       abort-on-fail: true
@@ -273,7 +273,7 @@ tests:
       module: sanity_rgw.py
       name: Test cloud transition with compression enabled
       polarion-id: CEPH-83575278
-      comments: known issue Bug 2294706
+      comments: known issue Bug 2294706 targetted to 9.0
 
   - test:
       abort-on-fail: true

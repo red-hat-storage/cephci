@@ -191,7 +191,6 @@ tests:
       config:
         non-collocated: true
       desc: Verify ceph-bluestore-tool functionalities for non-collocated OSDs
-      comments: regression Bug in 8.1 - 2309610
 
   - test:
       name: cbt utility bluefs spillover

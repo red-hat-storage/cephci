@@ -7,6 +7,7 @@ from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from tests.rados.rados_test_util import (
     create_pools,
     get_device_path,
+    wait_for_daemon_status,
     wait_for_device_rados,
     write_to_pools,
 )
@@ -81,6 +82,14 @@ def run(ceph_cluster, **kw):
         method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id1)
         utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
         method_should_succeed(wait_for_device_rados, host, osd_id, action="add")
+        method_should_succeed(
+            wait_for_daemon_status,
+            rados_obj=rados_obj,
+            daemon_type="osd",
+            daemon_id=osd_id,
+            status="running",
+            timeout=60,
+        )
         assert service_obj.add_osds_to_managed_service()
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
 
@@ -108,6 +117,14 @@ def run(ceph_cluster, **kw):
             rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
             utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
             method_should_succeed(wait_for_device_rados, host, osd_id, action="add")
+            method_should_succeed(
+                wait_for_daemon_status,
+                rados_obj=rados_obj,
+                daemon_type="osd",
+                daemon_id=osd_id,
+                status="running",
+                timeout=60,
+            )
             assert service_obj.add_osds_to_managed_service(
                 osds=[osd_id], spec=target_osd1_spec_name
             )
@@ -116,6 +133,14 @@ def run(ceph_cluster, **kw):
             rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
             utils.add_osd(ceph_cluster, host1.hostname, dev_path1, osd_id1)
             method_should_succeed(wait_for_device_rados, host1, osd_id1, action="add")
+            method_should_succeed(
+                wait_for_daemon_status,
+                rados_obj=rados_obj,
+                daemon_type="osd",
+                daemon_id=osd_id,
+                status="running",
+                timeout=60,
+            )
             assert service_obj.add_osds_to_managed_service(
                 osds=[osd_id1], spec=target_osd2_spec_name
             )

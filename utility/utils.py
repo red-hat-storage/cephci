@@ -1705,6 +1705,14 @@ def install_start_kafka(rgw_node, cloud_type):
 
     KAFKA_HOME = "/usr/local/kafka"
 
+    # replace localhost ip with rgw ip for kafka listener in server.properties
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"grep -q 'listeners=PLAINTEXT://{rgw_node.ip_address}:9092' {KAFKA_HOME}/config/server.properties"
+        + f" || sed -i 's|#listeners=PLAINTEXT://:9092|listeners=PLAINTEXT://{rgw_node.ip_address}:9092|' "
+        + f"{KAFKA_HOME}/config/server.properties",
+    )
+
     # start zookeeper service
     rgw_node.exec_command(
         check_ec=False,
@@ -1789,6 +1797,19 @@ def configure_kafka_security(rgw_node, cloud_type):
     # wait for zookeepeer service to stop
     time.sleep(30)
 
+    # replace localhost ip with rgw ip for kafka listener in server.properties
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"grep -q 'listeners=PLAINTEXT://{rgw_node.ip_address}:9092,SSL://{rgw_node.ip_address}:9093,"
+        + f"SASL_SSL://{rgw_node.ip_address}:9094,SASL_PLAINTEXT://{rgw_node.ip_address}:9095'"
+        + f" {KAFKA_HOME}/config/server.properties"
+        + " || sed -i 's|listeners=PLAINTEXT://localhost:9092,SSL://localhost:9093,SASL_SSL://localhost:9094,"
+        + "SASL_PLAINTEXT://localhost:9095|"
+        + f"listeners=PLAINTEXT://{rgw_node.ip_address}:9092,SSL://{rgw_node.ip_address}:9093,"
+        + f"SASL_SSL://{rgw_node.ip_address}:9094,SASL_PLAINTEXT://{rgw_node.ip_address}:9095|'"
+        + f" {KAFKA_HOME}/config/server.properties",
+    )
+
     # start zookeeper service
     rgw_node.exec_command(
         check_ec=False,
@@ -1799,7 +1820,7 @@ def configure_kafka_security(rgw_node, cloud_type):
     # wait for zookeepeer service to start
     time.sleep(30)
 
-    # start kafka servicee
+    # start kafka service
     rgw_node.exec_command(
         check_ec=False,
         sudo=True,
@@ -1818,27 +1839,67 @@ def configure_kafka_security(rgw_node, cloud_type):
     )
 
     # set rgw_allow_notification_secrets_in_cleartext to true
-    out = rgw_node.exec_command(sudo=True, cmd="ceph orch ps | grep rgw")
-    rgw_process_name = out[0].split()[0]
-    out = rgw_node.exec_command(
-        sudo=True,
-        cmd=f"ceph config set client.{rgw_process_name} rgw_allow_notification_secrets_in_cleartext true",
-    )
-
-    # mount kafka directory to rgw container by modifying podman run command in unit.run
-    out = rgw_node.exec_command(sudo=True, cmd="ceph fsid")
-    log.info(out)
-    ceph_fsid = out[0].strip()
-    unit_run_path = f"/var/lib/ceph/{ceph_fsid}/{rgw_process_name}/unit.run"
     rgw_node.exec_command(
         sudo=True,
-        cmd=f"grep -q '.*podman run -v /usr/local/kafka:/usr/local/kafka.*' {unit_run_path}"
-        + f" || sed -i 's|podman run|podman run -v /usr/local/kafka:/usr/local/kafka|' {unit_run_path}",
+        cmd="ceph config set client.rgw rgw_allow_notification_secrets_in_cleartext true",
     )
 
-    # restart rgw service
+    # copy kafka ssl certificate to all rgw nodes to be used for authentication while pushing notification
+    rgw_node.exec_command(sudo=True, cmd="sudo yum install -y sshpass")
+    rgw_hosts_out, _ = rgw_node.exec_command(
+        sudo=True, cmd="ceph orch host ls --label rgw --format json"
+    )
+    log.info(rgw_hosts_out)
+    rgw_hosts_out_json = json.loads(rgw_hosts_out)
+    for rgw_host in rgw_hosts_out_json:
+        ip = rgw_host["addr"]
+        rgw_node.exec_command(
+            sudo=True,
+            cmd=f"sshpass -p 'passwd' ssh -o StrictHostKeyChecking=no root@{ip} 'mkdir -p /usr/local/kafka/'",
+        )
+        rgw_node.exec_command(
+            sudo=True,
+            cmd="sshpass -p 'passwd'"
+            + f"scp -o StrictHostKeyChecking=no /usr/local/kafka/y-ca.crt root@{ip}:/usr/local/kafka",
+        )
+
+    # redeploy rgw service to mount kafka certificate path to rgw container
+    rgw_node.exec_command(
+        sudo=True, cmd="ceph orch ls --service-type rgw --export > /root/rgw_spec.yaml"
+    )
+    out, _ = rgw_node.exec_command(sudo=True, cmd="cat /root/rgw_spec.yaml")
+    log.info(out)
+    rgw_node.exec_command(
+        sudo=True,
+        cmd="grep -q 'extra_container_args:\n -v /usr/local/kafka:/usr/local/kafka' /root/rgw_spec.yaml"
+        + " || echo '\nextra_container_args:\n - \"-v /usr/local/kafka:/usr/local/kafka\"' >> /root/rgw_spec.yaml",
+    )
+    out, _ = rgw_node.exec_command(sudo=True, cmd="cat /root/rgw_spec.yaml")
+    log.info(out)
+    rgw_node.exec_command(sudo=True, cmd="ceph orch apply -i /root/rgw_spec.yaml")
+    log.info("sleeping for 20 seconds")
+    time.sleep(20)
+
+
+def config_keystone_ldap(rgw_node, cloud_type):
+    """Set the keystone config option on the cluster at startup"""
+    if cloud_type == "openstack":
+        keystone_server = get_cephci_config()["rhosd"].get("keystone_url")
+        ldap_url = get_cephci_config()["rhosd"].get("ldap_url")
+    elif cloud_type == "ibmc":
+        keystone_server = get_cephci_config()["ibmcos"].get("keystone_url")
+        ldap_url = get_cephci_config()["ibmcos"].get("ldap_url")
+
     out = rgw_node.exec_command(sudo=True, cmd="ceph orch ls | grep rgw")
     rgw_name = out[0].split()[0]
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"ceph config set client.{rgw_name} rgw_keystone_url {keystone_server}",
+    )
+    rgw_node.exec_command(
+        sudo=True,
+        cmd=f"ceph config set client.{rgw_name} rgw_ldap_uri {ldap_url}",
+    )
     rgw_node.exec_command(sudo=True, cmd=f"ceph orch restart {rgw_name}")
 
 

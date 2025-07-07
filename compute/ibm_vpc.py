@@ -20,7 +20,13 @@ from requests.exceptions import ReadTimeout
 from utility.log import Log
 from utility.retry import retry
 
-from .exceptions import NodeDeleteFailure, NodeError, ResourceNotFound
+from .exceptions import (
+    NetworkOpFailure,
+    NodeDeleteFailure,
+    NodeError,
+    ResourceNotFound,
+    VolumeOpFailure,
+)
 
 LOG = Log(__name__)
 
@@ -145,8 +151,7 @@ class CephVMNodeIBM:
 
     def __init__(
         self,
-        access_key: str,
-        service_url: str,
+        os_cred_ibm: dict,
         vsi_id: Optional[str] = None,
         node: Optional[Dict] = None,
     ) -> None:
@@ -154,18 +159,20 @@ class CephVMNodeIBM:
         Initializes the instance using the provided information.
 
         Args:
-            access_key (str):   Service credential secret token
-            service_url (str):  Endpoint of the service provider
+            os_cred_ibm (dict): Dictionary containing 'accesskey' and 'service_url'.
             vsi_id (str):       The VSI node ID to be retrieved
             node (dict):
         """
         # CephVM attributes
+        self._os_cred_ibm = os_cred_ibm
         self._subnet: str = ""
         self._roles: list = list()
         self.node = None
 
-        self.service = get_ibm_service(access_key=access_key, service_url=service_url)
-        self.dns_service = get_dns_service(access_key=access_key)
+        self.service = get_ibm_service(
+            access_key=os_cred_ibm["accesskey"], service_url=os_cred_ibm["service_url"]
+        )
+        self.dns_service = get_dns_service(access_key=os_cred_ibm["accesskey"])
 
         if vsi_id:
             self.node = self.service.get_instance(id=vsi_id).get_result()
@@ -178,7 +185,7 @@ class CephVMNodeIBM:
     @property
     def ip_address(self) -> str:
         """Return the private IP address of the node."""
-        return self.node["primary_network_interface"]["primary_ipv4_address"]
+        return self.node["primary_network_interface"]["primary_ip"]["address"]
 
     @property
     def floating_ips(self) -> List[str]:
@@ -407,7 +414,7 @@ class CephVMNodeIBM:
             response = self.service.create_instance(instance_prototype)
 
             instance_id = response.get_result()["id"]
-            self.wait_until_vm_state_running(instance_id)
+            self._wait_until_vm_state(instance_id, target_state="running")
 
             response = self.service.get_instance(instance_id)
             self.node = response.get_result()
@@ -428,7 +435,7 @@ class CephVMNodeIBM:
                 i
                 for i in records_a
                 if i["rdata"]["ip"]
-                == self.node["primary_network_interface"]["primary_ipv4_address"]
+                == self.node["primary_network_interface"]["primary_ip"]["address"]
             ]
             if records_ip:
                 self.dns_service.update_resource_record(
@@ -440,7 +447,7 @@ class CephVMNodeIBM:
                 )
 
             a_record = ResourceRecordInputRdataRdataARecord(
-                self.node["primary_network_interface"]["primary_ipv4_address"]
+                self.node["primary_network_interface"]["primary_ip"]["address"]
             )
             self.dns_service.create_resource_record(
                 instance_id=dns_svc_id,
@@ -459,7 +466,7 @@ class CephVMNodeIBM:
                 dnszone_id=dns_zone_id,
                 type="PTR",
                 ttl=900,
-                name=self.node["primary_network_interface"]["primary_ipv4_address"],
+                name=self.node["primary_network_interface"]["primary_ip"]["address"],
                 rdata=ptr_record,
             )
 
@@ -515,7 +522,60 @@ class CephVMNodeIBM:
         LOG.debug(resp.get_result())
         raise NodeDeleteFailure(f"Failed to remove {node_name}")
 
-    def wait_until_vm_state_running(self, instance_id: str) -> None:
+    def shutdown(self, wait: bool = False) -> None:
+        """
+        Gracefully power off the IBM Cloud VM.
+        Args:
+            wait (bool): Wait until the VM is fully powered off.
+        """
+        try:
+            if not self.node:
+                return
+            node_id = self.node["id"]
+            LOG.info(
+                "Initiating shutdown of IBM node: {} (ID: {})".format(
+                    self.node["name"], node_id
+                )
+            )
+            self.service.create_instance_action(node_id, type="stop")
+            if wait:
+                try:
+                    self._wait_until_vm_state(node_id, target_state="stopped")
+                except NodeError as e:
+                    LOG.error(
+                        "Error while waiting for IBM Cloud VM to stop with error: {}".format(
+                            e
+                        )
+                    )
+                    raise
+        except (ResourceNotFound, NetworkOpFailure, NodeError, VolumeOpFailure):
+            LOG.error(
+                "Error while initiating shutdown on node {}".format(self.node["id"])
+            )
+            raise
+
+    def power_on(self) -> None:
+        """
+        Start the IBM Cloud VM.
+        """
+        try:
+            if not self.node:
+                return
+            node_id = self.node["id"]
+            LOG.info(
+                "Powering on IBM node: {} (ID: {})".format(self.node["name"], node_id)
+            )
+            self.service.create_instance_action(node_id, type="start")
+            self._wait_until_vm_state(node_id, target_state="running")
+        except (ResourceNotFound, NetworkOpFailure, NodeError, VolumeOpFailure):
+            LOG.error(
+                "Error while initiating powering on node {}".format(self.node["id"])
+            )
+            raise
+
+    def _wait_until_vm_state(
+        self, instance_id: str, target_state: str, timeout: int = 1200
+    ) -> None:
         """
         Waits until the VSI moves to a running state within the specified time.
 
@@ -529,7 +589,7 @@ class CephVMNodeIBM:
             NodeError
         """
         start_time = datetime.now()
-        end_time = start_time + timedelta(seconds=1200)
+        end_time = start_time + timedelta(seconds=timeout)
 
         node_details = None
         while end_time > datetime.now():
@@ -541,12 +601,13 @@ class CephVMNodeIBM:
                 continue
 
             node_details = resp.get_result()
-            if node_details["status"] == "running":
+            if node_details["status"] == target_state:
                 end_time = datetime.now()
                 duration = (end_time - start_time).total_seconds()
                 LOG.info(
-                    "%s moved to running state in %d seconds.",
+                    "%s moved to %s state in %d seconds.",
                     node_details["name"],
+                    target_state,
                     int(duration),
                 )
                 return
@@ -603,3 +664,25 @@ class CephVMNodeIBM:
         # This code path can happen if there are no matching/associated DNS records
         # Or we have a problem
         LOG.debug(f"No matching DNS records found for {self.node['name']}")
+
+    def __getstate__(self) -> dict:
+        """
+        Prepare the object state for pickling.
+        Removes unserializable fields like service clients.
+        """
+        state = dict(self.__dict__)
+        state["service"] = None
+        state["dns_service"] = None
+        return state
+
+    def __setstate__(self, state) -> None:
+        """
+        Rehydrate the object after unpickling.
+        Rebuilds the IBM Cloud services using stored credentials.
+        """
+        self.__dict__.update(state)
+
+        access_key = self._os_cred_ibm["accesskey"]
+        service_url = self._os_cred_ibm["service_url"]
+        self.service = get_ibm_service(access_key=access_key, service_url=service_url)
+        self.dns_service = get_dns_service(access_key=access_key)

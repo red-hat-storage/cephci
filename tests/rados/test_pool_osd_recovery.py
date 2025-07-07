@@ -23,7 +23,11 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from ceph.utils import get_node_by_id
-from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
+from tests.rados.rados_test_util import (
+    get_device_path,
+    wait_for_daemon_status,
+    wait_for_device_rados,
+)
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_data_migration_bw_pools import create_given_pool
 from utility.log import Log
@@ -264,6 +268,14 @@ def run(ceph_cluster, **kw) -> int:
                 method_should_succeed(
                     wait_for_device_rados, host, target_osd, action="add"
                 )
+                method_should_succeed(
+                    wait_for_daemon_status,
+                    rados_obj=rados_obj,
+                    daemon_type="osd",
+                    daemon_id=target_osd,
+                    status="running",
+                    timeout=60,
+                )
                 assert service_obj.add_osds_to_managed_service(
                     osds=[target_osd], spec=target_osd_spec_name
                 )
@@ -316,6 +328,8 @@ def run(ceph_cluster, **kw) -> int:
             service_obj.remove_custom_host(
                 host_node_name=config.get("remove_host", "node13")
             )
+            # remove empty service specs after host removal
+            rados_obj.remove_empty_service_spec()
             # Waiting for recovery to post OSD host remove
             method_should_succeed(wait_for_clean_pg_sets, rados_obj)
             log.debug("PG's are active + clean post OSD removal")
