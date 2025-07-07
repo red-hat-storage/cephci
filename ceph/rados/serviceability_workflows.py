@@ -519,6 +519,7 @@ class ServiceabilityMethods:
             except json.JSONDecodeError:
                 log.info("Drain operations completed on host : " + host_obj.hostname)
                 # Add checks for 8.1 OSD process not removed.
+                # https://bugzilla.redhat.com/show_bug.cgi?id=2376109
                 if self.rados_obj.check_daemon_exists_on_host(host_obj.hostname):
                     log.info(
                         "Drain operations not completed on host : " + host_obj.hostname
