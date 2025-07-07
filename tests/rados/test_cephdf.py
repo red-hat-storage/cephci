@@ -553,6 +553,8 @@ def run(ceph_cluster, **kw):
                 log.error("Cluster cloud not reach active+clean state")
                 return 1
             rados_obj.change_recovery_threads(config=config, action="rm")
+            # remove empty service specs after host removal
+            rados_obj.remove_empty_service_spec()
             # set osd service to managed
             rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
 

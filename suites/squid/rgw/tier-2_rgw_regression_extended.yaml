@@ -140,6 +140,15 @@ tests:
         config-file-name: test_object_lock_no_overwrite.yaml
 
   - test:
+      name: Test olh get on versioned objects
+      desc: Test olh get on versioned objects
+      polarion-id: CEPH-83622656
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_olh_get.yaml
+
+  - test:
       name: Swift user with read access
       desc: Swift user with read access
       polarion-id: CEPH-9220
@@ -278,7 +287,7 @@ tests:
       name: Test user creation with placement and storage class
       desc: Test user creation with placement and storage class
       polarion-id: CEPH-83575880
-      comments: known issue (BZ-2311474)
+      comments: known issue (BZ-2311474) targetted to 9.0
       module: sanity_rgw.py
       config:
         script-name: user_create.py
@@ -371,7 +380,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_public_access_block_acl.yaml
-      comments: known issue - Bug 2344639
+      comments: known issue - Bug 2344639 targetted to 9.0
   - test:
       name: test public access block IgnorePublicAcls
       desc: test public access block IgnorePublicAcls
@@ -388,7 +397,7 @@ tests:
       config:
         script-name: test_bucket_policy_ops.py
         config-file-name: test_public_access_block_restricted_public_buckets.yaml
-      comments: known issue - Bug 2344730
+      comments: known issue - Bug 2344730 targetted to 9.0
 
   - test:
       name: Dynamic Resharding tests without bucket delete

@@ -728,7 +728,7 @@ def run(ceph_cluster, **kw):
             )
             method_should_succeed(
                 wait_for_daemon_status,
-                host=host,
+                rados_obj=rados_obj,
                 daemon_type="osd",
                 daemon_id=target_osd,
                 status="running",
@@ -1036,6 +1036,8 @@ def run(ceph_cluster, **kw):
             )
         # restoring the recovery threads on the cluster
         rados_obj.change_recovery_threads(config={}, action="rm")
+        # remove empty service specs after host removal
+        rados_obj.remove_empty_service_spec()
 
         if config.get("delete_pool"):
             rados_obj.delete_pool(pool=pool_name)

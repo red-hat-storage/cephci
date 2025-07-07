@@ -1,6 +1,6 @@
 # Test module to scale Single GW components - scale factor being 1 subsystem and 256 namespaces
 # Test config at conf/squid/nvmeof/ceph_nvmeof_subsystem_scale_cluster.yaml or conf/squid/nvmeof/octo-6-node-env.yaml for baremetal
-# Inventory: conf/inventory/rhel-9.3-server-x86_64-xlarge.yaml
+# Inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
 # Test attributes
   #  Single ceph-nvmeof GW colocated with osd on node5, node 6 is nvmeof initiators
   #  nvmeof GW - at end of each scale step/ test below is the configuration
