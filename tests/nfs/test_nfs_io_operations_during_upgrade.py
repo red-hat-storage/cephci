@@ -36,6 +36,7 @@ def create_export_and_mount_for_existing_nfs_cluster(
     ha=False,
     vip=None,
     nfs_server=None,
+    **kwargs,
 ):
 
     client_export_mount_dict = exports_mounts_perclient(
@@ -51,12 +52,18 @@ def create_export_and_mount_for_existing_nfs_cluster(
             mount_name = client_export_mount_dict[clients[client_num]]["mount"][
                 export_num
             ]
-            Ceph(clients[client_num]).nfs.export.create(
-                fs_name=fs_name,
-                nfs_name=nfs_name,
-                nfs_export=export_name,
-                fs=fs,
-            )
+            if kwargs:
+                Ceph(clients[client_num]).nfs.export.create(
+                    fs_name=fs_name,
+                    nfs_name=nfs_name,
+                    nfs_export=export_name,
+                    fs=fs,
+                    **kwargs,
+                )
+            else:
+                Ceph(clients[client_num]).nfs.export.create(
+                    fs_name=fs_name, nfs_name=nfs_name, nfs_export=export_name, fs=fs
+                )
             sleep(1)
             # Get the mount versions specific to clients
             mount_versions = _get_client_specific_mount_versions(version, clients)
@@ -70,12 +77,13 @@ def create_export_and_mount_for_existing_nfs_cluster(
                 clients[client_num].create_dirs(dir_path=mount_name, sudo=True)
 
                 if not mount_retry(
-                    client=clients[client_num],
-                    mount_name=mount_name,
-                    version=version,
-                    port=port,
-                    nfs_server=nfs_server,
-                    export_name=export_name,
+                    clients,
+                    client_num,
+                    mount_name,
+                    version,
+                    port,
+                    nfs_server,
+                    export_name,
                 ):
                     log.info(f"Mount failed, {mount_name}")
                     raise OperationFailedError(
