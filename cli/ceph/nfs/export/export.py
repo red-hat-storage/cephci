@@ -1,4 +1,5 @@
 from cli import Cli
+from cli.utilities.utils import build_cmd_from_args
 from utility.log import Log
 
 from .qos import Qos
@@ -22,6 +23,7 @@ class Export(Cli):
         readonly=None,
         squash=None,
         client_addr=None,
+        **kwargs,
     ):
         """
         Perform create operation for nfs cluster
@@ -39,23 +41,27 @@ class Export(Cli):
         cmd = "ceph fs subvolumegroup ls cephfs"
         out = self.execute(sudo=True, cmd=cmd)
         if "[]" in out[0]:
-            cmd = "ceph fs subvolumegroup create cephfs ganeshagroup"
+            cmd = "ceph fs subvolumegroup create cephfs ganeshagroup "
             self.execute(sudo=True, cmd=cmd)
             log.info("Subvolume group created successfully")
         subvol_name = nfs_export.replace("/", "")
 
         # Step 2: Create subvolume
-        cmd = f"ceph fs subvolume create cephfs {subvol_name} --group_name ganeshagroup --namespace-isolated"
+        cmd = f"ceph fs subvolume create cephfs {subvol_name} --group_name ganeshagroup --namespace-isolated "
+        cmd = ''.join(cmd + build_cmd_from_args(**kwargs))
         self.execute(sudo=True, cmd=cmd)
         # Get volume path
         cmd = (
-            f"ceph fs subvolume getpath cephfs {subvol_name} --group_name ganeshagroup"
+            f"ceph fs subvolume getpath cephfs {subvol_name} --group_name ganeshagroup "
         )
         out = self.execute(sudo=True, cmd=cmd)
         path = out[0].strip()
 
         # Step 3: Create export
-        cmd = f"{self.base_cmd} create {fs_name} {nfs_name} {nfs_export} {fs} --path={path}"
+        cmd = f"{self.base_cmd} create {fs_name} {nfs_name} {nfs_export} {fs} --path={path} "
+        enctag = kwargs.get("enctag")
+        if enctag:
+            cmd = f"{cmd} --kmip_key_id={enctag}"
         if readonly:
             cmd += " --readonly"
         if squash:
