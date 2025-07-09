@@ -1,0 +1,156 @@
+#===============================================================================================
+#-------------------------------------
+#---    Test Suite for Nfs Ganesha vers 4.2 ---
+#-------------------------------------
+# Conf: conf/squid/nfs/1admin-7node-3client.yaml
+# test cases for BYOK(bring your own key
+#    - Bootstrap
+#    For this suite gklm data as to be passed as custom args.
+#    ex:
+#    1. run.py ... --custom-config-file <file.yaml> or --custom-config <key>=<value>
+#     if --custom-config-file
+#     file.yaml :
+#       gklm:
+#         gklm_ip: "0.0.0.0"                  # GKLM server IP
+#         gklm_user: "admin"                  # GKLM REST API user
+#         gklm_password: "password"           # GKLM REST API password (PROTECT THIS)
+#         gklm_node_username: "user"          # OS user for SSH access to GKLM node
+#         gklm_node_password: "password"      # OS password for SSH access (PROTECT THIS)
+#         gklm_hostname: "myhost"             # GKLM server hostname
+#    2. run.py ... --custom-config "gklm_ip=0.0.0.0" --custom-config "gklm_user=admin" \
+#                  --custom-config gklm_password=password" --custom-config "gklm_node_username=user"
+#                  --custom-config "gklm_node_password=password" --custom-config  "gklm_hostname=myhost"
+#===============================================================================================
+tests:
+   - test:
+       abort-on-fail: true
+       desc: Install software pre-requisites for cluster deployment.
+       module: install_prereq.py
+       name: setup pre-requisites
+
+   - test:
+       abort-on-fail: true
+       config:
+         steps:
+           - config:
+               command: bootstrap
+               service: cephadm
+               args:
+                 mon-ip: node1
+           - config:
+               command: add_hosts
+               service: host
+               args:
+                 attach_ip_address: true
+                 labels: apply-all-labels
+           - config:
+               command: apply
+               service: osd
+               args:
+                 all-available-devices: true
+           - config:
+               command: apply
+               service: rgw
+               pos_args:
+                 - rgw.1
+               args:
+                 placement:
+                   label: rgw
+           - config:
+               args:
+                 - "ceph fs volume create cephfs"
+               command: shell
+           - config:
+               args:
+                 placement:
+                   label: mds
+               base_cmd_args:
+                 verbose: true
+               command: apply
+               pos_args:
+                 - cephfs
+               service: mds
+           - config:
+               args:
+                 - "ceph osd pool create rbd"
+               command: shell
+           - config:
+               args:
+                 - "rbd pool init rbd"
+               command: shell
+       desc: bootstrap and deploy services.
+       destroy-cluster: false
+       polarion-id: CEPH-83573713
+       module: test_cephadm.py
+       name: Deploy cluster using cephadm
+
+   - test:
+       abort-on-fail: true
+       config:
+         command: add
+         id: client.1
+         node: node4
+         install_packages:
+           - ceph-common
+           - ceph-fuse
+         copy_admin_keyring: true
+       desc: Configure the RGW,RBD client system
+       destroy-cluster: false
+       module: test_client.py
+       name: configure client
+
+   - test:
+       abort-on-fail: true
+       config:
+         command: add
+         id: client.2
+         node: node5
+         install_packages:
+           - ceph-common
+           - ceph-fuse
+         copy_admin_keyring: true
+       desc: Configure the RGW,RBD client system
+       destroy-cluster: false
+       module: test_client.py
+       name: configure client
+
+   - test:
+       abort-on-fail: true
+       config:
+         command: add
+         id: client.3
+         node: node6
+         install_packages:
+           - ceph-common
+           - ceph-fuse
+         copy_admin_keyring: true
+       desc: Configure the RGW,RBD client system
+       destroy-cluster: false
+       module: test_client.py
+       name: configure client
+
+   - test:
+       abort-on-fail: true
+       config:
+         command: add
+         id: client.4
+         node: node7
+         install_packages:
+           - ceph-common
+           - ceph-fuse
+         copy_admin_keyring: true
+       desc: Configure the RGW,RBD client system
+       destroy-cluster: false
+       module: test_client.py
+       name: configure client
+
+   - test:
+       name: Nfs byok
+       module: byok.test_byok_with_io_fuse_validation.py
+       desc: byok test for nfs ganesha
+       polarion-id: CEPH-83625072
+       abort-on-fail: true
+       config:
+         nfs_version: 4.2
+         total_export_num: 4
+         clients: 1

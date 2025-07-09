@@ -1,80 +1,18 @@
 from concurrent.futures import ThreadPoolExecutor
 
-from cli.exceptions import ConfigError, OperationFailedError
+from cli.exceptions import ConfigError
 from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
 from utility.log import Log
+from utility.utils import (
+    create_file,
+    delete_file,
+    permission_to_directory,
+    read_from_file_using_dd_command,
+    rename_file,
+    write_to_file_using_dd_command,
+)
 
 log = Log(__name__)
-
-
-def create_file(client, nfs_mount, file_name):
-    """Create a file in the NFS mount point"""
-    try:
-        cmd = f"touch {nfs_mount}/{file_name}"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File - {0} created successfully".format(file_name))
-    except Exception as e:
-        log.error(f"Failed to create file {file_name}: {e}")
-        raise OperationFailedError(f"Failed to create file {file_name}: {e}")
-
-
-def delete_file(client, nfs_mount, file_name):
-    """Delete a file in the NFS mount point"""
-    try:
-        cmd = f"rm -rf {nfs_mount}/{file_name}"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File - {0} deleted successfully".format(file_name))
-    except Exception as e:
-        log.error(f"Failed to delete file {file_name}: {e}")
-        raise OperationFailedError(f"Failed to delete file {file_name}: {e}")
-
-
-def rename_file(client, nfs_mount, old_name, new_name):
-    """Rename a file in the NFS mount point"""
-    try:
-        cmd = f"mv {nfs_mount}/{old_name} {nfs_mount}/{new_name}"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File renamed successfully")
-    except Exception as e:
-        log.error(f"Failed to rename file {old_name} to {new_name}: {e}")
-        raise OperationFailedError(
-            f"Failed to rename file {old_name} to {new_name}: {e}"
-        )
-
-
-def write_to_file_using_dd_command(client, nfs_mount, file_name, size):
-    """Write to a file in the NFS mount point using dd command"""
-    try:
-        cmd = f"dd if=/dev/zero of={nfs_mount}/{file_name} bs={size}M count=5"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File written successfully")
-    except Exception as e:
-        log.error(f"Failed to write to file {file_name}: {e}")
-        raise OperationFailedError(f"Failed to write to file {file_name}: {e}")
-
-
-def read_from_file_using_dd_command(client, nfs_mount, file_name, size):
-    """Read from a file in the NFS mount point using dd command"""
-    try:
-        cmd = f"dd if={nfs_mount}/{file_name} of=/dev/null bs={size}M count=5"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File read successfully")
-    except Exception as e:
-        log.error(f"Failed to read from file {file_name}: {e}")
-        raise OperationFailedError(f"Failed to read from file {file_name}: {e}")
-
-
-def permission_to_directory(client, nfs_mount):
-    """Provide permission to directory"""
-    try:
-        cmd = f"chmod 777 {nfs_mount}"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("Permission provided successfully")
-    except Exception as e:
-        log.error(f"Failed to provide permission to directory {nfs_mount}: {e}")
-        raise OperationFailedError(
-            f"Failed to provide permission to directory {nfs_mount}: {e}"
-        )
 
 
 def create_nfs_cluster(

@@ -26,6 +26,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
 from reportportal_client import ReportPortalService
 
+from cli.exceptions import OperationFailedError
 from utility.log import Log
 
 log = Log(__name__)
@@ -2248,7 +2249,7 @@ def validate_conf(conf):
                 nodes_id.append(ceph_cluster[node].get("id") or f"{node}")
         else:
             nodes_id = [
-                node.get("id") or f"node{idx+1}" for idx, node in enumerate(nodes)
+                node.get("id") or f"node{idx + 1}" for idx, node in enumerate(nodes)
             ]
         log.info(f"List of Node IDs : {nodes_id}")
         if not (len(nodes_id) == len(set(nodes_id))):
@@ -2582,3 +2583,91 @@ def is_unsecured_registry(test_data):
             return insecure_registry_value  # Return boolean value for insecure-registry
 
     return False  # Default return value if conditions are not met
+
+
+def create_file(client, nfs_mount, file_name):
+    """Create a file in the NFS mount point"""
+    try:
+        cmd = f"touch {nfs_mount}/{file_name}"
+        client.exec_command(cmd=cmd, sudo=True)
+        log.info("File - {0} created successfully".format(file_name))
+    except Exception as e:
+        log.error(f"Failed to create file {file_name}: {e}")
+        raise OperationFailedError(f"Failed to create file {file_name}: {e}")
+
+
+def delete_file(client, nfs_mount, file_name):
+    """Delete a file in the NFS mount point"""
+    try:
+        cmd = f"rm -rf {nfs_mount}/{file_name}"
+        client.exec_command(cmd=cmd, sudo=True)
+        log.info("File - {0} deleted successfully".format(file_name))
+    except Exception as e:
+        log.error(f"Failed to delete file {file_name}: {e}")
+        raise OperationFailedError(f"Failed to delete file {file_name}: {e}")
+
+
+def rename_file(client, nfs_mount, old_name, new_name):
+    """Rename a file in the NFS mount point"""
+    try:
+        cmd = f"mv {nfs_mount}/{old_name} {nfs_mount}/{new_name}"
+        client.exec_command(cmd=cmd, sudo=True)
+        log.info("File renamed successfully")
+    except Exception as e:
+        log.error(f"Failed to rename file {old_name} to {new_name}: {e}")
+        raise OperationFailedError(
+            f"Failed to rename file {old_name} to {new_name}: {e}"
+        )
+
+
+def write_to_file_using_dd_command(client, nfs_mount, file_name, size):
+    """Write to a file in the NFS mount point using dd command"""
+    try:
+        cmd = f"dd if=/dev/zero of={nfs_mount}/{file_name} bs={size}M count=5"
+        client.exec_command(cmd=cmd, sudo=True)
+        log.info("File written successfully")
+    except Exception as e:
+        log.error(f"Failed to write to file {file_name}: {e}")
+        raise OperationFailedError(f"Failed to write to file {file_name}: {e}")
+
+
+def read_from_file_using_dd_command(client, nfs_mount, file_name, size):
+    """Read from a file in the NFS mount point using dd command"""
+    try:
+        cmd = f"dd if={nfs_mount}/{file_name} of=/dev/null bs={size}M count=5"
+        client.exec_command(cmd=cmd, sudo=True)
+        log.info("File read successfully")
+    except Exception as e:
+        log.error(f"Failed to read from file {file_name}: {e}")
+        raise OperationFailedError(f"Failed to read from file {file_name}: {e}")
+
+
+def permission_to_directory(client, nfs_mount):
+    """Provide permission to directory"""
+    try:
+        cmd = f"chmod 777 {nfs_mount}"
+        client.exec_command(cmd=cmd, sudo=True)
+        log.info("Permission provided successfully")
+    except Exception as e:
+        log.error(f"Failed to provide permission to directory {nfs_mount}: {e}")
+        raise OperationFailedError(
+            f"Failed to provide permission to directory {nfs_mount}: {e}"
+        )
+
+
+def lookup_in_directory(client, mount):
+    """
+    Check if the mount point is accessible and contains expected files.
+    Args:
+        client: Client node where the mount is performed.
+        mount: Mount point path.
+    Returns:
+        bool: True if the mount point is accessible and contains expected files, False otherwise.
+    """
+    try:
+        out, _ = client.exec_command(sudo=True, cmd=f"ls {mount}")
+        log.info(f"Contents of {mount}: {out.strip()}")
+        return out
+    except Exception as e:
+        log.error(f"Failed to access mount point {mount}: {e}")
+        return False
