@@ -1883,12 +1883,8 @@ def configure_kafka_security(rgw_node, cloud_type):
 
 def config_keystone_ldap(rgw_node, cloud_type):
     """Set the keystone config option on the cluster at startup"""
-    if cloud_type == "openstack":
-        keystone_server = get_cephci_config()["rhosd"].get("keystone_url")
-        ldap_url = get_cephci_config()["rhosd"].get("ldap_url")
-    elif cloud_type == "ibmc":
-        keystone_server = get_cephci_config()["ibmcos"].get("keystone_url")
-        ldap_url = get_cephci_config()["ibmcos"].get("ldap_url")
+    keystone_server = get_cephci_config()["keystone"][cloud_type].get("url")
+    ldap_url = get_cephci_config()["ldap"][cloud_type].get("url")
 
     out = rgw_node.exec_command(sudo=True, cmd="ceph orch ls | grep rgw")
     rgw_name = out[0].split()[0]
