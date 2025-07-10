@@ -324,36 +324,57 @@ def bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw):
                 "pool": poolname,
                 "remote-cluster-spec": f"{rbd_client}@{primary_cluster_name}",
             }
-    primary_pool_info = json.loads(
-        rbd_primary.mirror.pool.info(
-            pool=poolname, format="json", cluster=ceph_cluster_primary
-        )[0]
-    )
-    secondary_pool_info = json.loads(
-        rbd_secondary.mirror.pool.info(
-            pool=poolname, format="json", cluster=ceph_cluster_secondary
-        )[0]
-    )
 
-    primary_peer_info = value(
-        key="peers",
-        dictionary=primary_pool_info,
-    )
-    log.info(primary_peer_info)
-    secondary_peer_info = value(
-        key="peers",
-        dictionary=secondary_pool_info,
-    )
-    log.info(secondary_peer_info)
-    if primary_peer_info.lower() not in [
-        "none",
-        "",
-        None,
-    ] and secondary_peer_info.lower() not in ["none", "", None]:
-        log.info("Peers were successfully added")
+    if kw.get("namespace_mirror_type") == "non-default_to_non-default":
+        out = rbd_primary.mirror.pool.info(
+            pool=poolname,
+            namespace=kw["namespace"],
+            format="json",
+            cluster=ceph_cluster_primary,
+        )[0]
+        res_text = str(out).strip("'<>() ").replace("'", '"')
+        primary_pool_info = json.loads(res_text)
+
+        out = rbd_secondary.mirror.pool.info(
+            pool=poolname,
+            namespace=kw["remote_namespace"],
+            format="json",
+            cluster=ceph_cluster_secondary,
+        )[0]
+        res_text = str(out).strip("'<>() ").replace("'", '"')
+        secondary_pool_info = json.loads(res_text)
 
     else:
-        log.error("Peers were not added")
+        primary_pool_info = json.loads(
+            rbd_primary.mirror.pool.info(
+                pool=poolname, format="json", cluster=ceph_cluster_primary
+            )[0]
+        )
+        secondary_pool_info = json.loads(
+            rbd_secondary.mirror.pool.info(
+                pool=poolname, format="json", cluster=ceph_cluster_secondary
+            )[0]
+        )
+
+        primary_peer_info = value(
+            key="peers",
+            dictionary=primary_pool_info,
+        )
+        log.info(primary_peer_info)
+        secondary_peer_info = value(
+            key="peers",
+            dictionary=secondary_pool_info,
+        )
+        log.info(secondary_peer_info)
+        if primary_peer_info.lower() not in [
+            "none",
+            "",
+            None,
+        ] and secondary_peer_info.lower() not in ["none", "", None]:
+            log.info("Peers were successfully added")
+
+        else:
+            log.error("Peers were not added")
 
     if kw.get("mirror_level") == "namespace":
         if (
@@ -445,6 +466,17 @@ def config_mirror(rbd_primary, rbd_secondary, is_secondary=False, **kw):
         if "rbd: mirroring is already configured" not in out[0].strip():
             enable_config.update({"cluster": ceph_cluster_secondary})
             out = rbd_secondary.mirror.pool.enable(**enable_config)
+            if kw.get("namespace_mirror_type") == "non-default_to_non-default":
+                enable_config.update({"cluster": ceph_cluster_primary})
+                rbd_primary.mirror.pool.enable(**enable_config)
+                namespace_config = {
+                    "mode": kw["mode"],
+                    "namespace": kw["namespace"],
+                    "remote_namespace": kw["remote_namespace"],
+                }
+                enable_namespace_mirroring(
+                    rbd_primary, rbd_secondary, poolname, **namespace_config
+                )
             bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw)
         else:
             log.info(f"RBD Mirroring has already been configured for pool {poolname}")
