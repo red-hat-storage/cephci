@@ -152,15 +152,14 @@ def enable_ports(node: CephNode, port: int = 5000) -> None:
 
     try:
         out, err = node.exec_command(sudo=True, cmd="firewall-cmd --state")
-        if out.lower() != "running":
+        if out.strip().lower() != "running":
             return
     except CommandFailed:
         LOG.debug(f"{node.shortname} has no firewall configuration.")
         return
-
-    node.exec_command(
-        sudo=True, cmd=f"firewall-cmd --zone public --permanent --port {port}/tcp"
-    )
+    node.exec_command(sudo=True, cmd=f"firewall-cmd --add-port={port}/tcp --permanent")
+    node.exec_command(sudo=True, cmd="firewall-cmd --reload")
+    LOG.info(f"Successfully opened port {port} on {node.shortname}")
 
 
 def generate_endpoint_list(ceph_cluster: Ceph, endpoints):
