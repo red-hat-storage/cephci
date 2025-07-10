@@ -1,0 +1,683 @@
+# ======================================================================================
+# Cluster Configuration:
+#    cephci/conf/squid/rgw/tier-0_rgw.yaml
+#
+#    5-Node cluster(RHEL-7.9 and above)
+#    3 MONS, 2 MGR, 4 OSD and 1 RGW service daemon(s)
+#
+# Test Steps:
+#   (1) Install Pre-requisites, and Deploy Ceph using ceph-ansible
+#   (2) check cluster health
+#   (3) RGW multipart object expiration through lc
+# ======================================================================================
+
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+                  nodes:
+                    - node3
+                    - node4
+                    - node5
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  # Testing stage with lifecycle configuration set
+
+  - test:
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_with_prefix_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            enable_versioning: true
+            create_object: true
+            version_count: 2
+            delete_marker: false
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: '.'
+              Status: Enabled
+              Expiration:
+                Days: 20
+      desc: test lc with prefix containing dot
+      module: sanity_rgw.py
+      name: test lc with prefix containing dot
+      polarion-id: CEPH-11192
+
+  - test:
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_with_prefix_hyphen_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            enable_versioning: true
+            create_object: true
+            version_count: 2
+            delete_marker: false
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: '-'
+              Status: Enabled
+              Expiration:
+                Days: 20
+      desc: test lc with prefix containing hyphen
+      module: sanity_rgw.py
+      name: test lc with prefix containing hyphen
+      polarion-id: CEPH-11192
+
+
+  - test:
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_with_prefix_slash_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            enable_versioning: true
+            create_object: true
+            version_count: 2
+            delete_marker: false
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: '/'
+              Status: Enabled
+              Expiration:
+                Days: 20
+      desc: test lc with prefix containing slash
+      module: sanity_rgw.py
+      name: test lc with prefix containing slash
+      polarion-id: CEPH-11192
+
+
+  - test:
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_with_prefix_underscore_baremetal.yaml
+        test-config:
+          bucket_count: 2
+          objects_count: 200
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            enable_versioning: true
+            create_object: true
+            version_count: 2
+            delete_marker: false
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: '_'
+              Status: Enabled
+              Expiration:
+                Days: 20
+      desc: test lc with prefix containing underscore
+      module: sanity_rgw.py
+      name: test lc with prefix containing underscore
+      polarion-id: CEPH-11192
+
+
+  - test:
+      name: Enable lifecycle and disable it on a bucket before objects expires
+      desc: Enable lifecycle and disable it on a bucket before the objects get expired
+      polarion-id: CEPH-11196
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lc_disable_object_exp_baremetal.yaml
+        test-config:
+          user_count: 1
+          bucket_count: 1
+          objects_count: 200
+          rgw_lc_debug_interval: 60
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            enable_versioning: false
+            version_count: 0
+            create_bucket: true
+            create_object: true
+            rgw_lc_debug: true
+            disable_lifecycle: true
+            verify_lc_disable: true
+            lc_exp_date: "2022-02-19"
+
+
+# bucket lifecycle transition tests
+  - test:
+      name: Bucket Lifecycle Object_transition_tests multiple rules and different storage class
+      desc: Test Object_transition_tests multiple rules and different storage class
+      polarion-id: CEPH-83573372 # also CEPH-83574052
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_multiple_rules_baremetal.yaml
+        test-config:
+          user_count: 1
+          bucket_count: 1
+          objects_count: 200
+          parallel_lc: False
+          test_lc_transition: True
+          pool_name: data.cold
+          storage_class: cold
+          ec_pool_transition: False
+          multiple_transitions: True
+          two_pool_transition: False
+          second_pool_name: data.glacier
+          second_storage_class: glacier
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            create_bucket: true
+            create_object: true
+            enable_versioning: true
+            version_count: 3
+            delete_marker: false
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: key1
+              Status: Enabled
+              Transitions:
+                - Days: 2
+                  StorageClass: cold
+              NoncurrentVersionTransitions:
+                - NoncurrentDays: 2
+                  StorageClass: glacier
+            - ID: LC_Rule_2
+              Filter:
+                Prefix: key2
+              Status: Enabled
+              Transitions:
+                - Days: 2
+                  StorageClass: cold
+              NoncurrentVersionTransitions:
+                - NoncurrentDays: 2
+                  StorageClass: glacier
+
+
+  - test:
+      name: Bucket Lifecycle Object_transition_tests multiple pool transition
+      desc: Bucket Lifecycle Object_transition_tests multiple pool transition
+      polarion-id: CEPH-83574051
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_2_pools_baremetal.yaml
+        test-config:
+          user_count: 1
+          bucket_count: 2
+          objects_count: 200
+          parallel_lc: False
+          test_lc_transition: True
+          pool_name: data.cold
+          storage_class: cold
+          ec_pool_transition: False
+          multiple_transitions: True
+          two_pool_transition: True
+          second_pool_name: data.glacier
+          second_storage_class: glacier
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            create_bucket: true
+            create_object: true
+            enable_versioning: true
+            version_count: 3
+            delete_marker: false
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: single-obj
+              Status: Enabled
+              Transitions:
+                - Days: 1
+                  StorageClass: cold
+                - Days: 2
+                  StorageClass: glacier
+              NoncurrentVersionTransitions:
+                - NoncurrentDays: 1
+                  StorageClass: cold
+                - NoncurrentDays: 2
+                  StorageClass: glacier
+
+  - test:
+      name: Bucket Lifecycle Object_transition_tests to ec pool
+      desc: Test Bucket Lifecycle Object_transition_tests to ec pool
+      polarion-id: CEPH-83574470
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_ecpool_with_prefix_rule_baremetal.yaml
+        test-config:
+          user_count: 1
+          bucket_count: 1
+          objects_count: 200
+          parallel_lc: False
+          test_lc_transition: True
+          pool_name: data.cold
+          storage_class: cold
+          ec_pool_transition: True
+          ec_storage_class: ec_storage_class
+          ec_pool_name: data.ecpool
+          multiple_transitions: True
+          two_pool_transition: False
+          second_pool_name: data.glacier
+          second_storage_class: glacier
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            create_bucket: true
+            create_object: true
+            enable_versioning: true
+            version_count: 3
+            delete_marker: false
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: key1
+              Status: Enabled
+              Transitions:
+                - Days: 2
+                  StorageClass: ec_storage_class
+              NoncurrentVersionTransitions:
+                - NoncurrentDays: 2
+                  StorageClass: ec_storage_class
+
+
+  # # bucket lifecycle with resharding
+
+  - test:
+      name: test lifecycle expiration with dynamic resharding
+      desc: test lifecycle expiration with dynamic resharding
+      polarion-id: CEPH-83574679
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_expiration_dynamic_reshard_baremetal.yaml
+        test-config:
+          objects_count: 200
+          objects_size_range:
+            min: 2
+            max: 5000
+
+          enable_resharding: true
+          sharding_type: dynamic
+          max_objects_per_shard: 5
+
+          test_ops:
+            enable_versioning: false
+            version_count: 1
+            create_object: true
+            delete_marker: false
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: key2
+              Status: Enabled
+              Expiration:
+                Days: 20
+
+  - test:
+      name: test lifecycle expiration with manual resharding and Test if LC policy is applied via lc list and lc get
+      desc: test lifecycle expiration with manual resharding and Test if LC policy is applied via lc list and lc get
+      polarion-id: CEPH-83574042 # Test if LC policy is applied via lc list and lc get
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_expiration_manual_reshard_baremetal.yaml
+        test-config:
+          objects_count: 200
+          objects_size_range:
+            min: 2
+            max: 5000
+
+          enable_resharding: true
+          sharding_type: manual
+          shards: 97
+
+          test_ops:
+            enable_versioning: false
+            version_count: 1
+            create_object: true
+            delete_marker: false
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: key2
+              Status: Enabled
+              Expiration:
+                Days: 20
+
+  # # bucket lifecycle expiration
+
+  - test:
+      name: RGW multipart object expiration through lc
+      desc: RGW multipart object expiration through lc
+      polarion-id: CEPH-83574797
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lc_object_exp_multipart.py
+        config-file-name: test_bucket_lc_object_exp_multipart.yaml
+
+  - test:
+      name: Multipart object expiration through lc
+      desc: Multipart object expiration with lc debug interval 600
+      polarion-id: CEPH-83574803
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lc_object_exp_multipart.py
+        config-file-name: test_bucket_lc_multipart_object_expiration.yaml
+
+  - test:
+      name: lifecycle with version enabled bucket containing only one object version
+      desc: Test lifecycle with version enabled bucket containing only one object version
+      polarion-id: CEPH-11187
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_current_version_object_expiration_baremetal.yaml
+        test-config:
+          objects_count: 200
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            enable_versioning: true
+            create_object: true
+            version_count: 1
+            delete_marker: false
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: key1
+              Status: Enabled
+              Expiration:
+                Days: 20
+
+  - test:
+      name: Bucket Lifecycle expiration Tests
+      desc: Test lifecycle with 100 bucket containing 10 objects each
+      polarion-id: CEPH-11177
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_bucket_lc_multiple_bucket_baremetal.yaml
+        test-config:
+          user_count: 1
+          bucket_count: 100
+          objects_count: 200
+          parallel_lc: True
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            create_bucket: true
+            create_object: true
+            enable_versioning: false
+            version_count: 1
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: single-obj
+              Status: Enabled
+              Expiration:
+                Days: 1
+
+  - test:
+      name: Bucket Lifecycle Object_transition_tests for 100 buckets
+      desc: Test Bucket Lifecycle Object_transition_tests for 100 buckets
+      polarion-id: CEPH-83574043
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_multiple_bucket_baremetal.yaml
+        test-config:
+          user_count: 1
+          bucket_count: 100
+          objects_count: 200
+          parallel_lc: True
+          test_lc_transition: True
+          pool_name: data.cold
+          storage_class: cold
+          ec_pool_transition: False
+          multiple_transitions: False
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            create_bucket: true
+            create_object: true
+            enable_versioning: false
+            version_count: 1
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: single-obj
+              Status: Enabled
+              Transitions:
+                - Days: 1
+                  StorageClass: cold
+
+
+  - test:
+      name: Add a new lifecycle configuration to a bucket
+      desc: Apply lc configuration to bucket which already has lc configuration set
+      polarion-id: CEPH-11199
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_add_new_lc_to_bucket_baremetal.yaml
+        test-config:
+          user_count: 1
+          bucket_count: 2
+          objects_count: 200
+          rgw_lc_debug_interval: 3600
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            create_bucket: true
+            create_object: true
+            enable_versioning: false
+            version_count: 0
+            delete_marker: false
+            apply_new_lc: true
+            rgw_lc_debug: true
+          new_lifecycle_conf:
+            - ID: new_lc_rule
+              Filter:
+                Prefix: newkey
+              Status: Enabled
+              Expiration:
+                Days: 5
+
+  - test:
+      config:
+        script-name: test_manual_lc_process_single_bucket.py
+        config-file-name: test_lc_process_single_bucket_expired_baremetal.yaml
+        test-config:
+          user_count: 1
+          bucket_count: 2
+          objects_count: 200
+          object_expire: true
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            create_bucket: true
+            create_object: true
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: single-obj
+              Status: Enabled
+              Expiration:
+                Date: '2022-06-1'
+      desc: test LC process for a single bucket with expired objects
+      module: sanity_rgw.py
+      name: Test LC process for single bucket expired
+      polarion-id: CEPH-83574809
+
+
+  - test:
+      config:
+        script-name: test_manual_lc_process_single_bucket.py
+        config-file-name: test_lc_process_single_bucket_nonexpired_baremetal.yaml
+        test-config:
+          user_count: 1
+          bucket_count: 2
+          objects_count: 200
+          object_expire: false
+          objects_size_range:
+            min: 2
+            max: 5000
+          test_ops:
+            create_bucket: true
+            create_object: true
+          lifecycle_conf:
+            - ID: LC_Rule_1
+              Filter:
+                Prefix: single-obj
+              Status: Enabled
+              Expiration:
+                Days: 1
+      desc: test LC process for a single bucket with non expired objects
+      module: sanity_rgw.py
+      name: Test LC process for single bucket non-expired
+      polarion-id: CEPH-83574809
+
+
+  - test:
+      name: Delete bucket after suspend is enabled
+      desc: Delete bucket after suspend is enabled
+      polarion-id: CEPH-9195
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_suspended_delete_baremetal.yaml
+        test-config:
+          user_count: 1
+          bucket_count: 2
+          objects_count: 200
+          version_count: 4
+          objects_size_range:
+                min: 2
+                max: 5000
+          test_ops:
+                enable_version: true
+                suspend_version: true
+                copy_to_version: false # this is same as revert and restore object
+                delete_object_versions: false
+                upload_after_suspend: false
+                delete_after_suspend: true
