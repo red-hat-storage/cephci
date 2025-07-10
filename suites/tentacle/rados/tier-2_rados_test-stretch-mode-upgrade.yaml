@@ -171,6 +171,31 @@ tests:
         log_to_file: true
       desc: Change config options to enable logging to file
 
+  # Moving IO modules before enabling stretch mode inorder to test
+  # `ceph mon enable_stretch_mode` along with data in pools
+  #  tracker for reference : https://tracker.ceph.com/issues/72069
+  - test:
+      name: rbd-io
+      module: rbd_faster_exports.py
+      polarion-id: CEPH-83574972
+      config:
+        rep-pool-only: True
+        rep_pool_config:
+          pool: rbd_rep_pool
+          image: rbd_rep_image
+          size: 10G
+        io-total: 100M
+      desc: Perform export during read/write,resizing,flattening,lock operations
+
+  - test:
+      name: rgw sanity tests
+      module: sanity_rgw.py
+      config:
+        script-name: test_multitenant_user_access.py
+        config-file-name: test_multitenant_access.yaml
+        timeout: 300
+      desc: Perform rgw tests
+
   - test:
       name: Deploy stretch Cluster
       polarion-id: CEPH-83574982
@@ -197,28 +222,9 @@ tests:
           release: rc
       abort-on-fail: false
 
-  - test:
-      name: rbd-io
-      module: rbd_faster_exports.py
-      polarion-id: CEPH-83574972
-      config:
-        rep-pool-only: True
-        rep_pool_config:
-          pool: rbd_rep_pool
-          image: rbd_rep_image
-          size: 10G
-        io-total: 100M
-      desc: Perform export during read/write,resizing,flattening,lock operations
-
-  - test:
-      name: rgw sanity tests
-      module: sanity_rgw.py
-      config:
-        script-name: test_multitenant_user_access.py
-        config-file-name: test_multitenant_access.yaml
-        timeout: 300
-      desc: Perform rgw tests
-
+  # "cephfs basic operations" and "nfs-ganesha_with_cephfs"
+  # does not support retaining data. Data cleans up after test executes.
+  # Hence the test modules are not moved before enabling stretch mode
   - test:
       abort-on-fail: false
       desc: "cephfs basic operations"
