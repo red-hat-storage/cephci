@@ -218,3 +218,11 @@ tests:
       polarion-id: CEPH-83573252
       module: test_pg_log_limit.py
       desc: Verify PG log growth limit using pglog_hardlimit flag
+
+  - test:
+      name: Verify watchers are properly cleaned up
+      module: test_rados_watcher_cleanup.py
+      config:
+          Multiple_rados_watcher: true
+      polarion-id: CEPH-83616882
+      desc: Ensures watchers do not persist after client disconnects or interruptions
