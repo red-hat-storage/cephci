@@ -33,6 +33,7 @@ class Upgrade(Cli):
                 hosts (str) : host name
                 service (str) : services name
                 limit (int) : limit value
+                topological_labels (str) : topological label
         """
         cmd = f"{self.base_cmd} start {build_cmd_from_args(**kw)}"
         return self.execute(sudo=True, long_running=True, cmd=cmd)
