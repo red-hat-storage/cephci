@@ -1,0 +1,317 @@
+#################################################################################
+# Tier-level: 2
+# Test-Suite: tier2-upgrade-rhcs-staggered-topological-label-8x-to-8x.yaml
+# Test-Case: Automation support for staggered upgrade from RHCS8.1 to RHCS8.1.x in RHEL9
+#
+# Cluster Configuration:
+#     conf/squid/upgrades/1admin-3node-1client-upgrade.yaml
+#
+# Test Steps:
+#     - Deploy RHCS 8.1 cluster in RHEL 9
+#     - Configure client
+#     - Add topological label to nodes
+#     - Staggered upgrade with topological label for daemon_type mgr
+#     - Staggered upgrade with topological label for daemon_type mon
+#     - Staggered upgrade with topological label for daemon_type osd
+#     - Staggered upgrade with topological label for daemon_type mds
+#     - Staggered upgrade with topological label for daemon_type rgw
+#     - Staggered upgrade with all combinations
+#     - Run I/O's
+#################################################################################
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy RHCS 8.1 GA cluster using cephadm
+      desc: bootstrap and deployment services with label placements.
+      polarion-id: CEPH-83573777
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 8.1
+                release: "rc"
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node3
+                  limit: 2
+                  sep: " "
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure the RGW,RBD client system
+      module: test_client.py
+      polarion-id: CEPH-83573777
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Add topological label to host
+      desc: Add label datacenter=A to installer node
+      module: test_cephadm_add_topological_label.py
+      polarion-id: CEPH-83623930
+      config:
+        node: node1
+        topological_labels: datacenter=A,rack=3
+
+  - test:
+      name: Add topological label to host
+      desc: Add label datacenter=B to node2
+      module: test_cephadm_add_topological_label.py
+      polarion-id: CEPH-83623930
+      config:
+        node: node2
+        topological_labels: datacenter=B,rack=3
+
+  - test:
+      name: Add topological label to host
+      desc: Add label datacenter=B to node3
+      module: test_cephadm_add_topological_label.py
+      polarion-id: CEPH-83623930
+      config:
+        node: node3
+        topological_labels: datacenter=B,rack=3
+
+  - test:
+      name: Staggered upgrade for MGR on datacenter A
+      desc: Staggered upgrade with daemon_types mgr, DC-A
+      module: test_cephadm_staggered_upgrade_using_topological_labels.py
+      polarion-id: CEPH-83623930
+      config:
+        action: "all_combination"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: mgr
+        topological_labels: datacenter=A
+
+  - test:
+      name: Staggered upgrade for MGR on datacenter B
+      desc: Staggered upgrade with daemon_types mgr, DC-B
+      module: test_cephadm_staggered_upgrade_using_topological_labels.py
+      polarion-id: CEPH-83623930
+      config:
+        action: "all_combination"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: mgr
+        topological_labels: datacenter=B
+
+  - test:
+      name: Staggered upgrade for MON on datacenter A
+      desc: Staggered upgrade with daemon_types mon, DC-A
+      module: test_cephadm_staggered_upgrade_using_topological_labels.py
+      polarion-id: CEPH-83623930
+      config:
+        action: "all_combination"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: mon
+        topological_labels: datacenter=A
+
+  - test:
+      name: Staggered upgrade for MON on datacenter B
+      desc: Staggered upgrade with daemon types mon, DC-B
+      module: test_cephadm_staggered_upgrade_using_topological_labels.py
+      polarion-id: CEPH-83623930
+      config:
+        action: "all_combination"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: mon
+        topological_labels: datacenter=B
+
+  - test:
+      name: Staggered upgrade for OSD on datacenter A
+      desc: Staggered upgrade with daemon_types osd, DC-A
+      module: test_cephadm_staggered_upgrade_using_topological_labels.py
+      polarion-id: CEPH-83623930
+      config:
+        action: "all_combination"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: osd
+        topological_labels: datacenter=A
+
+  - test:
+      name: Staggered upgrade for OSD on datacenter B
+      desc: Staggered upgrade with daemon types osd, DC-B
+      module: test_cephadm_staggered_upgrade_using_topological_labels.py
+      polarion-id: CEPH-83623930
+      config:
+        action: "all_combination"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: osd
+        topological_labels: datacenter=B
+
+  - test:
+      name: Staggered upgrade for MDS on datacenter B
+      desc: Staggered upgrade with daemon types mds, DC-B
+      module: test_cephadm_staggered_upgrade_using_topological_labels.py
+      polarion-id: CEPH-83623930
+      config:
+        action: "all_combination"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: mds
+        topological_labels: datacenter=B
+
+  - test:
+      name: Staggered upgrade for RGW on datacenter B
+      desc: Staggered upgrade with daemon rgw crash, DC-B
+      module: test_cephadm_staggered_upgrade_using_topological_labels.py
+      polarion-id: CEPH-83623930
+      config:
+        action: "all_combination"
+        osd_flags:
+          - noout
+          - noscrub
+          - nodeep-scrub
+        daemon_types: rgw
+        topological_labels: datacenter=B
+
+  - test:
+      name: Executes RGW, RBD and FS operations
+      desc: Run object, block and filesystem basic operations parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+            desc: test to create "M" no of buckets and "N" no of objects
+            module: sanity_rgw.py
+            name: Test M buckets with N objects
+            polarion-id: CEPH-9789
+        - test:
+            config:
+              ec-pool-k-m: 2,1
+              ec-pool-only: False
+              ec_pool_config:
+                pool: rbd_pool
+                data_pool: rbd_ec_pool
+                ec_profile: rbd_ec_profile
+                image: rbd_image
+                image_thick_provision: rbd_thick_image
+                snap_thick_provision: rbd_thick_snap
+                clone_thick_provision: rbd_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_ec_pool_snap
+                clone: rbd_ec_pool_clone
+              rep_pool_config:
+                pool: rbd_rep_pool
+                image: rbd_rep_image
+                image_thick_provision: rbd_rep_thick_image
+                snap_thick_provision: rbd_rep_thick_snap
+                clone_thick_provision: rbd_rep_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_rep_pool_snap
+                clone: rbd_rep_pool_clone
+              operations:
+                map: true
+                io: true
+                nounmap: false
+            desc: Run RBD tier-0 operations
+            polarion-id: CEPH-83575401
+            destroy-cluster: false
+            module: rbd_tier0.py
+            name: Run RBD tier-0 operations
+        - test:
+            abort-on-fail: false
+            desc: "cephfs basic operations"
+            module: cephfs_basic_tests.py
+            name: cephfs-basics
+            polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
