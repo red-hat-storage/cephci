@@ -1362,7 +1362,7 @@ def run(ceph_cluster, **kw):
             daemon_type="osd",
             daemon_id=target_osd,
             status="running",
-            timout=60,
+            timeout=60,
         )
         assert service_obj.add_osds_to_managed_service(
             osds=[target_osd], spec=target_osd_spec_name
