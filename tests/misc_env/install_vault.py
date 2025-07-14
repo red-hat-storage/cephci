@@ -90,13 +90,45 @@ AGENT_LAUNCHER = """#!/bin/sh
 def run(ceph_cluster: Ceph, config: Dict, **kwargs) -> int:
     """
     Entry point for module execution.
-    """
-    if "agent" in config["install"]:
-        vault_cfg = get_cephci_config().get("vault")
-        _install_agent(ceph_cluster, vault_cfg)
 
+    Args:
+        ceph_cluster    The cluster participating in the test.
+        config          Configuration passed to the test
+        kwargs          Additional configurations passed to the test.
+
+    Returns:
+        0 on Success else 1
+
+    Example:
+        - test:
+            abort-on-fail: false
+            config:
+              install:
+                - agent
+            desc: Install and configure vault agents
+            module: install_vault.py
+            name: install vault agents
+    """
+    if "agent" not in config.get("install", []):
+        return 0
+
+    cephci_cfg = get_cephci_config()
+    vault_config = cephci_cfg.get("vault", {})
+
+    if "url" in vault_config:
+        _install_agent(ceph_cluster, vault_config)
         client = ceph_cluster.get_nodes(role="client")[0]
-        _configure_rgw_daemons(client, vault_cfg)
+        _configure_rgw_daemons(client, vault_config)
+        return 0
+
+    for provider in ["ibmc", "openstack"]:
+        cfg = vault_config.get(provider)
+        if not cfg:
+            continue
+
+        _install_agent(ceph_cluster, cfg)
+        client = ceph_cluster.get_nodes(role="client")[0]
+        _configure_rgw_daemons(client, cfg)
 
     return 0
 
