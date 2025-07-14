@@ -197,37 +197,35 @@ def run(ceph_cluster, **kw):
 
             # Remove added mon service
             # and perform connection score validation
-            # Skipping scenario #3 in 8.1 due to BZ https://bugzilla.redhat.com/show_bug.cgi?id=2376109
-            if config.get("rhbuild")[0] <= "7":
-                log.debug(
-                    "STARTING::Scenario 3:: Removing the added Monitor daemon & "
-                    "perform validations for mon connection scores"
-                )
-                previous_mon_map_epoch = get_mon_map_epoch(rados_obj=rados_obj)
+            log.debug(
+                "STARTING::Scenario 3:: Removing the added Monitor daemon & "
+                "perform validations for mon connection scores"
+            )
+            previous_mon_map_epoch = get_mon_map_epoch(rados_obj=rados_obj)
 
-                if not mon_workflow_obj.remove_mon_service(host=new_mon_host.hostname):
-                    log.error(f"Could not remove mon on host {new_mon_host.hostname}")
-                    raise Exception("mon service not removed error")
+            if not mon_workflow_obj.remove_mon_service(host=new_mon_host.hostname):
+                log.error(f"Could not remove mon on host {new_mon_host.hostname}")
+                raise Exception("mon service not removed error")
 
-                log.debug(f"Successfully removed mon.{new_mon_host.hostname} service")
-                log.debug(
-                    "Proceeding to check mon connection scores after removing newly added mon"
-                )
+            log.debug(f"Successfully removed mon.{new_mon_host.hostname} service")
+            log.debug(
+                "Proceeding to check mon connection scores after removing newly added mon"
+            )
 
-                wait_until_mon_map_epoch_changes(
-                    rados_obj=rados_obj, previous_epoch=previous_mon_map_epoch
-                )
+            wait_until_mon_map_epoch_changes(
+                rados_obj=rados_obj, previous_epoch=previous_mon_map_epoch
+            )
 
-                if not mon_workflow_obj.connection_score_checks():
-                    raise Exception("Connection score checks failed")
+            if not mon_workflow_obj.connection_score_checks():
+                raise Exception("Connection score checks failed")
 
-                log.debug(
-                    f"Mon connection scores verified after removing mon host {new_mon_host.hostname}"
-                )
-                log.debug(
-                    "COMPLETED::Scenario 3:: Removing the added Monitor daemon & "
-                    "perform validations for mon connection scores"
-                )
+            log.debug(
+                f"Mon connection scores verified after removing mon host {new_mon_host.hostname}"
+            )
+            log.debug(
+                "COMPLETED::Scenario 3:: Removing the added Monitor daemon & "
+                "perform validations for mon connection scores"
+            )
 
             # Restart monitor service and perform connection
             # score validation
