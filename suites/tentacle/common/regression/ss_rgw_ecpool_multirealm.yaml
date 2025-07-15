@@ -1,0 +1,1810 @@
+# This test suite evaluates the Ingress HAproxy deployment scenario wherein there exists more than one
+# RGW daemons configured with multiple realm, along with zones and zonegroups.
+
+# Conf file : conf/tentacle/common/13node-4client-single-site-regression.yaml
+# deployment: suites/tentacle/common/regression/single-site-deploy-and-configure.yaml
+
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              args:
+                - "ceph osd erasure-code-profile set rgwecprofile01 k=4 m=2"
+                - "crush-failure-domain=host crush-device-class=hdd"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.data 32 32"
+                - "erasure rgwecprofile01"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool create default.rgw.buckets.index 32 32"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.data rgw"
+              command: shell
+          - config:
+              args:
+                - "ceph osd pool application enable"
+                - "default.rgw.buckets.index rgw"
+              command: shell
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.realm1
+                  placement:
+                    nodes:
+                      - node4
+                      - node10
+                      - node11
+                  spec:
+                    rgw_frontend_port: 8080
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.realm2
+                  placement:
+                    nodes:
+                      - node4
+                      - node10
+                      - node11
+                  spec:
+                    rgw_frontend_port: 8081
+      desc: configure ecpool and rgw in the cluster
+      polarion-id: CEPH-83573713
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: configure ecpool and rgw in the cluster
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  - test:
+      abort-on-fail: true
+      config:
+        cephadm: true
+        commands:
+          - "radosgw-admin realm create --rgw-realm india --default"
+          - "radosgw-admin zonegroup create --rgw-zonegroup south --rgw-realm india --master --default"
+          - "radosgw-admin zone create --rgw-zone ka --rgw-zonegroup south --rgw-realm india --endpoints http://{node:node4}:8080 --master --default"
+          - "radosgw-admin period update --commit --rgw-realm india"
+          - "ceph config set client.{service_name:rgw.realm1} rgw_realm india"
+          - "ceph config set client.{service_name:rgw.realm1} rgw_zonegroup south"
+          - "ceph config set client.{service_name:rgw.realm1} rgw_zone ka"
+          - "ceph orch restart {service_name:rgw.realm1}"
+          - "radosgw-admin realm create --rgw-realm us"
+          - "radosgw-admin zonegroup create --rgw-zonegroup east --rgw-realm us --master --default"
+          - "radosgw-admin zone create --rgw-zone east-1 --rgw-zonegroup east --rgw-realm us --endpoints http://{node:node10}:8081 --master --default"
+          - "radosgw-admin period update --commit --rgw-realm us"
+          - "ceph config set client.{service_name:rgw.realm2} rgw_realm us"
+          - "ceph config set client.{service_name:rgw.realm2} rgw_zonegroup east"
+          - "ceph config set client.{service_name:rgw.realm2} rgw_zone east-1"
+          - "ceph orch restart {service_name:rgw.realm2}"
+          - "ceph -s"
+          - "radosgw-admin realm list"
+          - "radosgw-admin zonegroup list"
+          - "radosgw-admin zone list"
+      desc: Configure the Object realms and its zones
+      module: exec.py
+      name: configure realm
+      polarion-id: CEPH-83573815
+
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node14
+          - node15
+        rgw_endpoints:
+          - "node4:8080"
+          - "node10:8080"
+          - "node11:8080"
+      desc: Configure HAproxy for rgw endpoint with port 8080
+      module: haproxy.py
+      name: Configure HAproxy for rgw endpoint with port 8080
+      polarion-id: CEPH-83572703
+
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node16
+          - node17
+        rgw_endpoints:
+          - "node4:8081"
+          - "node10:8081"
+          - "node11:8081"
+      desc: Configure HAproxy for rgw endpoint with port 8081
+      module: haproxy.py
+      name: Configure HAproxy for rgw endpoint with port 8081
+      polarion-id: CEPH-83572703
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Test BucketNotification with users in same tenant and different tenant
+      desc: BucketNotification with users in same tenant and different tenant
+      polarion-id: CEPH-11204
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        extra-pkgs:
+          - wget https://download.oracle.com/java/24/latest/jdk-24_linux-x64_bin.rpm
+        install_start_kafka: true
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_put_get_bucket_notification_with_tenant_same_and_different_user.yaml
+
+  - test:
+      name: Test non-current deletion via s3cmd
+      desc: Test non-current deletion via s3cmd
+      polarion-id: CEPH-83573543
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_lifecycle_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_lc_expiration_noncurrent_when_current_object_deleted_via_s3cmd.yaml
+
+  - test:
+      name: Bucket Lifecycle expiration of incomplete multipart
+      desc: Bucket Lifecycle expiration of incomplete multipart
+      polarion-id: CEPH-11195
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lc_incomplete_multipart.yaml
+
+  # Object lock no overwrite
+  - test:
+      name: object lock no overwrite
+      desc: object lock no overwrite
+      polarion-id: CEPH-83574059
+      module: sanity_rgw.py
+      config:
+        script-name: test_object_lock_no_overwrite.py
+        config-file-name: test_object_lock_no_overwrite.yaml
+  - test:
+      name: S3CMD small and multipart object download
+      desc: S3CMD small and multipart object download or GET
+      polarion-id: CEPH-83575477
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_s3cmd.py
+        config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
+
+  - test:
+      name: Swift user with read access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_read.yaml
+
+  - test:
+      name: Swift user with write access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_write.yaml
+
+  - test:
+      name: Swift user with readwrite access
+      desc: Swift user with read access
+      polarion-id: CEPH-9220
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_user_access_readwrite.yaml
+  - test:
+      name: Test rgw put bucket website with users of same and different tenant
+      desc: Test rgw put bucket website with users of same and different tenant
+      polarion-id: CEPH-11148
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_put_bucket_website_with_tenant_same_and_different_user.yaml
+
+  - test:
+      name: Test rgw get bucket website with users of same and different tenant
+      desc: Test rgw get bucket website with users of same and different tenant
+      polarion-id: CEPH-11150
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_get_bucket_website_with_tenant_same_and_different_user.yaml
+
+  - test:
+      name: Test LC with custom worktime
+      desc: Test LC with custom worktime
+      polarion-id: CEPH-83583080
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_with_custom_worktime.yaml
+
+  - test:
+      name: Test Etag not empty for complete multipart upload in aws
+      desc: Test Etag not empty for complete multipart upload in aws
+      polarion-id: CEPH-9801
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_complete_multipart_upload_etag_not_empty.yaml
+
+  - test:
+      name: Test S3 PUT requests with non ascii characters in body
+      desc: Test S3 PUT requests with non ascii characters in body
+      polarion-id: CEPH-83572765
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_aws_non_ascii.yaml
+
+  - test:
+      name: Test bucket listing with markers on versioned bucket
+      desc: Test bucket listing with markers on versioned bucket
+      polarion-id: CEPH-83572736
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_versioned_list_marker.yaml
+
+  - test:
+      name: Test LDAP auth for RGW
+      desc: Test LDAP auth for RGW
+      polarion-id: CEPH-9793
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_ldap_auth.py
+        config-file-name: ../../aws/configs/test_ldap_auth.yaml
+        run-on-rgw: true
+
+  - test:
+      name: Test LC transition with rule by lc process
+      desc: Test LC transition with rule by lc process
+      polarion-id: CEPH-83574044
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_transition_with_lc_process.yaml
+
+  - test:
+      name: Test LC transition without rule by lc process
+      desc: Test LC transition without rule by lc process
+      polarion-id: CEPH-83574044
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_process_without_applying_rule.yaml
+
+  - test:
+      name: Test user creation with placement and storage class cold
+      desc: Test user creation with placement and storage class cold
+      polarion-id: CEPH-83575880
+      module: sanity_rgw.py
+      config:
+        script-name: user_create.py
+        config-file-name: test_user_with_placement_id_storage_class_cold.yaml
+
+  - test:
+      name: Test user creation with placement and storage class
+      desc: Test user creation with placement and storage class
+      polarion-id: CEPH-83575880
+      comments: known issue (BZ-2311474)
+      module: sanity_rgw.py
+      config:
+        script-name: user_create.py
+        config-file-name: test_user_with_placement_id_storage_class.yaml
+
+  - test:
+      name: Test bi put with incomplete multipart upload
+      desc: Test bi put with incomplete multipart upload
+      polarion-id: CEPH-83574876
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_bi_put_with_incomplete_multipart_upload.yaml
+
+  # Basic Bucket Operation Tests
+  - test:
+      name: compresstion_with_zstd_type
+      desc: test compresstion with zstd type
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
+
+  - test:
+      name: compresstion_with_snappy_type
+      desc: test compresstion with snappy type
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression_snappy.yaml
+
+  # Swift basic operation
+
+  - test:
+      name: Modify tenant swift user
+      desc: test modify tenant swift user
+      polarion-id: CEPH-9750
+      module: sanity_rgw.py
+      config:
+        script-name: user_create.py
+        config-file-name: test_modify_tenanted_subuser.yaml
+
+  - test:
+      name: Swift bulk delete operation
+      desc: Swift bulk delete operation
+      polarion-id: CEPH-9753
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_bulk_delete.py
+        config-file-name: test_swift_bulk_delete.yaml
+
+  - test:
+      name: swift upload large object tests
+      desc: upload large object in swift
+      polarion-id: CEPH-9808
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_large_upload.yaml
+
+  - test:
+      name: swift download large object tests
+      desc: download large object in swift
+      polarion-id: CEPH-9809 # CEPH-9816
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_large_download.yaml
+
+  - test:
+      name: Get object with different tenant swift user with same name
+      desc: test get object with different tenant swift user with same name
+      polarion-id: CEPH-9744
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_get_objects_from_tenant_swift_user.yaml
+
+  - test:
+      name: delete container with different tenant swift user with same name
+      desc: test delete container with different tenant swift user with same name
+      polarion-id: CEPH-9749
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_delete_container_from_user_of_diff_tenant.yaml
+
+  - test:
+      name: upload large object with same name using tenant swift user
+      desc: test upload large object with same name using tenant swift user
+      polarion-id: CEPH-9814
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_upload_large_obj_with_same_obj_name.yaml
+
+  - test:
+      name: Test the swift URL at root
+      desc: Test the swift URL at root
+      polarion-id: CEPH-83572699
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_swift_at_root.yaml
+
+  # Versioning Tests
+
+  - test:
+      name: Test suspension of versioning
+      desc: test_versioning_suspend
+      polarion-id: CEPH-14263
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_suspend.yaml
+
+  - test:
+      name: Test overwrite by another user of versioned objects
+      desc: check to test to overwrite objects suspend from another user
+      polarion-id: CEPH-9199
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_versioning_objects_suspend_from_another_user.yaml
+
+  - test:
+      name: Versioning with copy objects and delete with different user
+      desc: Versioning with copy objects and delete with different user
+      polarion-id: CEPH-9353 # Also applies for CEPH-10215
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_copy_objects.py
+        config-file-name: test_delete_version_object_using_different_user.yaml
+
+  - test:
+      name: Test deleting the current version of the object
+      desc: Deleting the current version of the object
+      polarion-id: CEPH-10647
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_delete_current_version_object.yaml
+
+  - test:
+      name: Test copy versioned objects to another versioned bucket
+      desc: copy versioned objects to another versioned bucket
+      polarion-id: CEPH-10644
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_copy_objects.py
+        config-file-name: test_copy_version_object_to_version_bucket.yaml
+
+  - test:
+      name: Test Write modify and read objects in the versioned bucket
+      desc: Test Write modify and read objects in the versioned bucket
+      polarion-id: CEPH-10641
+      module: sanity_rgw.py
+      config:
+        script-name: test_versioning_with_objects.py
+        config-file-name: test_access_versioned_objects.yaml
+
+  # BucketPolicy Tests
+  - test:
+      name: ListBucketVersions with bucket policy for users in same tenant
+      desc: Test ListBucketVersions bucket policy for users in same tenant
+      polarion-id: CEPH-11574
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: test_listbucketversion_with_bucketpolicy_for_tenant_user.yaml
+
+  - test:
+      name: Get object and its version from same and different tenant users
+      desc: test get object and its version from same and different tenant users
+      polarion-id: CEPH-11516
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_bucket_policy_with_tenant_user.py
+        config-file-name: get_object_and_its_versions_tenat_user.yaml
+
+  - test:
+      name: test bucket policy with multiple statements
+      desc: test bucket policy with multiple statements
+      polarion-id: CEPH-11216
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_multiple_statements.yaml
+
+  - test:
+      name: test bucket policy with conflicting statements
+      desc: test bucket policy with conflicting statements
+      polarion-id: CEPH-11217
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_multiple_conflicting_statements.yaml
+
+  - test:
+      name: test bucket policy with condition blocks
+      desc: test bucket policy with condition blocks
+      polarion-id: CEPH-11589
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_condition.yaml
+
+  - test:
+      name: test bucket policy condition block with explicit deny
+      desc: test bucket policy condition block with explicit deny
+      polarion-id: CEPH-11590
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_condition_explicit_deny.yaml
+
+  - test:
+      name: test bucket policy deny actions
+      desc: test bucket policy deny actions
+      polarion-id: CEPH-11216
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_deny_actions.yaml
+
+  - test:
+      name: test bucket policy for object torrent
+      desc: Same tenant and cross tenanted user access to object torrent
+      polarion-id: CEPH-11209
+      module: sanity_rgw.py
+      config:
+        script-name: test_policy_torrent.py
+        config-file-name: test_policy_torrent.yaml
+
+  # Bucket Lifecycle Tests
+  - test:
+      name: object expiration for versioned buckets with filter Prefix test multiple rules.
+      desc: Test object expiration for versioned buckets with filter 'Prefix', test multiple rules.
+      polarion-id: CEPH-11177 # also applies to CEPH-11182, CEPH-11188 and CEPH-11187
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_multiple_rule_prefix_current_days.yaml
+
+  - test:
+      name: object expiration with expiration set to Date
+      desc: Test object expiration with expiration set to Date
+      polarion-id: CEPH-11185
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_date.yaml
+
+  - test:
+      name: object expiration for delete marker set
+      desc: Test object expiration for delete marker set
+      polarion-id: CEPH-11189
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_delete_marker.yaml
+
+  - test:
+      name: Read lifecycle configuration on a given bucket
+      desc: Read lifecycle configuration on a given bucket
+      polarion-id: CEPH-11181
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lifecycle_config_read.yaml
+
+  - test:
+      name: lifecycle with version enabled bucket containing multiple object versions
+      desc: Test lifecycle with version enabled bucket containing multiple object versions
+      polarion-id: CEPH-11188
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lifecycle_config_versioning.yaml
+
+  - test:
+      name: Disable lifecycle configuration on a given bucket
+      desc: Disable lifecycle configuration on a given bucket
+      polarion-id: CEPH-11191
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lifecycle_config_disable.yaml
+
+  - test:
+      name: Modify lifecycle configuration on a given bucket
+      desc: Modify lifecycle configuration on a given bucket
+      polarion-id: CEPH-11120
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_config_ops.py
+        config-file-name: test_bucket_lifecycle_config_modify.yaml
+
+  # Bucket Request Payer tests
+  - test:
+      name: bucket request payer
+      desc: Basic test for bucket request payer
+      polarion-id: CEPH-10344 # also applies to CEPH-10346 and CEPH-10351
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_request_payer.py
+        config-file-name: test_bucket_request_payer.yaml
+
+  # v1 tests
+  # ACLs tests
+  - test:
+      name: Basic ACLs Test
+      desc: Test basic acls
+      polarion-id: CEPH-14239
+      module: sanity_rgw.py
+      config:
+        test-version: v1
+        run-on-rgw: true
+        script-name: test_acls.py
+        config-file-name: test_acls.yaml
+
+  - test:
+      name: test acls with copy objects on different users
+      desc: Test acls with copy objects on different users
+      polarion-id: CEPH-14242
+      module: sanity_rgw.py
+      config:
+        test-version: v1
+        run-on-rgw: true
+        script-name: test_acls_copy_obj.py
+        config-file-name: test_acls_copy_obj.yaml
+
+  - test:
+      name: acls reset
+      desc: Test acls reset
+      polarion-id: CEPH-14260 # also applies to CEPH-10489
+      module: sanity_rgw.py
+      config:
+        test-version: v1
+        run-on-rgw: true
+        script-name: test_acls_reset.py
+        config-file-name: test_acls_reset.yaml
+
+  - test:
+      name: test acls on all users
+      desc: Test acls on all users
+      polarion-id: CEPH-14240 # also applies to CEPH-14241, CEPH-10487, CEPH-10488
+      module: sanity_rgw.py
+      config:
+        test-version: v1
+        run-on-rgw: true
+        script-name: test_acls_all_usrs.py
+        config-file-name: test_acls_all_usrs.yaml
+
+  # multipart test
+  - test:
+      name: multipart upload cancel reupload
+      desc: Test multipart upload->cancel->reupload
+      polarion-id: CEPH-14266
+      module: sanity_rgw.py
+      config:
+        test-version: v1
+        run-on-rgw: true
+        script-name: test_multipart_upload_cancel.py
+        config-file-name: test_multipart_upload_cancel.yaml
+
+  # User, Bucket rename, Bucket link and unlink
+  - test:
+      name: User rename
+      polarion-id: CEPH-83574811
+      desc: RGW User rename script
+      module: sanity_rgw.py
+      config:
+        script-name: test_user_bucket_rename.py
+        config-file-name: test_user_rename.yaml
+
+  - test:
+      name: Bucket rename
+      desc: RGW Bucket rename script
+      polarion-id: CEPH-83572908
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_user_bucket_rename.py
+        config-file-name: test_bucket_rename.yaml
+
+  # Multifactor Authentication tests
+
+  - test:
+      name: multipart versioned object deletion with mfa token
+      desc: test multipart versioned object deletion with mfa token
+      polarion-id: CEPH-83574411
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_rgw_mfa.py
+        config-file-name: test_rgw_mfa_multipart.yaml
+        extra-pkgs:
+          9:
+            - https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
+
+  - test:
+      name: incorrect syntax for mfa resync commnad appropriate usage message is displayed
+      desc: test with incorrect syntax for mfa resync commnad appropriate usage message is displayed
+      polarion-id: CEPH-83574412
+      module: sanity_rgw.py
+      config:
+        test-version: v2
+        script-name: test_rgw_mfa.py
+        config-file-name: test_rgw_mfa_incorrect_syntax.yaml
+
+  - test:
+      name: Test s3_copy_obj on user with admin flag through AWS
+      desc: TESCO-Segfault with s3CopyObj with admin user
+      polarion-id: CEPH-83575562
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_s3copyObj_admin_user.yaml
+
+  # testing rgw through curl
+  - test:
+      name: Test rgw put object through curl using transfer_encoding chunked
+      desc: Test rgw put object through curl using transfer_encoding chunked
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_curl_transfer_encoding_chunked.yaml
+
+  - test:
+      name: Test rgw bucket quota using CURL
+      desc: Test rgw bucket quota using CURL
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_quota_using_curl.py
+        config-file-name: ../../curl/configs/test_quota_mgmt_bucket_quota_using_curl.yaml
+  - test:
+      name: Test rgw user quota using CURL
+      desc: Test rgw user quota using CURL
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_quota_using_curl.py
+        config-file-name: ../../curl/configs/test_quota_mgmt_user_quota_using_curl.yaml
+  - test:
+      name: Test rgw bucket quota conflict using CURL
+      desc: Test rgw bucket quota conflict using CURL
+      polarion-id: CEPH-83575572
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_quota_using_curl.py
+        config-file-name: ../../curl/configs/test_quota_mgmt_conflict_bucket_quota_using_curl.yaml
+  - test:
+      name: Test rgw user capability user-info-without-keys using curl
+      desc: Test rgw user capability user-info-without-keys using curl
+      polarion-id: CEPH-83582351
+      module: sanity_rgw.py
+      config:
+        script-name: ../curl/test_rgw_using_curl.py
+        config-file-name: ../../curl/configs/test_rgw_user_cap_user_info_without_keys.yaml
+
+  - test:
+      name: Test bucket listing is not truncated
+      desc: Test bucket listing is not truncated
+      polarion-id: CEPH-83575816
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_listing.py
+        config-file-name: test_bucket_list_not_truncated.yaml
+
+  - test:
+      name: Test user modify with placement id
+      desc: Test user modify with placement id
+      polarion-id: CEPH-83575880
+      module: sanity_rgw.py
+      config:
+        script-name: user_create.py
+        config-file-name: test_user_modify_with_placementid.yaml
+
+  # rate limits tests with s3cmd
+  - test:
+      name: Test Rate limits on a User and Bucket level using s3cmd
+      desc: Test Rate limits on a User and Bucket level using s3cmd
+      polarion-id: CEPH-83574910
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_rate_limit.yaml
+      comments: known issue BZ 2301986
+
+  # Checksum and CORS tests
+  - test:
+      name: Test Checksum on all supported algorithms
+      desc: Test Checksum on all supported algorithms
+      polarion-id: CEPH-83591679
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../aws/test_checksum.py
+        config-file-name: ../../aws/configs/test_checksum_api.yaml
+
+  - test:
+      name: Test Checksum which is wrongly computed
+      desc: Test Checksum which is wrongly computed
+      polarion-id: CEPH-83591699
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../aws/test_checksum.py
+        config-file-name: ../../aws/configs/test_wrong_checksum.yaml
+
+  - test:
+      name: Test CORS Feature
+      desc: Test CORS feature
+      polarion-id: CEPH-10355
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../curl/test_cors_using_curl.py
+        config-file-name: ../../curl/configs/test_cors_using_curl.yaml
+
+  - test:
+      name: D3n-cache enable
+      desc: D3n-cache enable
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575567
+      config:
+        script-name: test_d3n_cache.py
+        config-file-name: test_d3n_cache_enable.yaml
+        run-on-rgw: true
+
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+        install_common: false
+        run-on-rgw: true
+      desc: test to create "M" no of buckets and "N" no of objects with multipart upload
+      module: sanity_rgw.py
+      name: Test multipart upload of M buckets with N objects
+      polarion-id: CEPH-9801
+
+  - test:
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects.yaml
+        install_common: false
+        run-on-rgw: true
+      desc: test to create "M" no of buckets and "N" no of objects
+      module: sanity_rgw.py
+      name: Test M buckets with N objects
+      polarion-id: CEPH-83575435
+
+  - test:
+      name: Test single delete marker for versioned object using LC
+      desc: Test single delete marker for versioned object using LC
+      polarion-id: CEPH-83574806
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_multiple_delete_marker.yaml
+
+  - test:
+      name: object expiration for versioned buckets with filter Prefix test multiple rules.
+      desc: Test object expiration for versioned buckets with filter 'Prefix', test multiple rules.
+      polarion-id: CEPH-11177 # also applies to CEPH-11182, CEPH-11188 and CEPH-11187
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_multiple_rule_prefix_current_days.yaml
+
+  - test:
+      name: Basic ACLs Test
+      desc: Test basic acls
+      polarion-id: CEPH-14238 # also applies to CEPH-14239
+      module: sanity_rgw.py
+      config:
+        test-version: v1
+        run-on-rgw: true
+        script-name: test_acls.py
+        config-file-name: test_acls.yaml
+
+  - test:
+      name: Test Rate limits on a User and Bucket level using s3cmd
+      desc: Test Rate limits on a User and Bucket level using s3cmd
+      polarion-id: CEPH-83574910
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_rate_limit.yaml
+      comments: known issue BZ 2301986
+
+  - test:
+      name: Manual Resharding tests
+      desc: Resharding test - manual
+      polarion-id: CEPH-83571740
+      module: sanity_rgw.py
+      config:
+        script-name: test_dynamic_bucket_resharding.py
+        config-file-name: test_manual_resharding.yaml
+
+
+  # Tests for SASL_PLAINTEXT security type and PLAIN mechanism
+  - test:
+      name: notify put,copy,delete events with SASL_PLAINTEXT PLAIN
+      desc: notify put,copy,delete events with SASL_PLAINTEXT PLAIN
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        configure_kafka_security: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_persistent.yaml
+
+  - test:
+      name: notify on multipart upload events with SASL_PLAINTEXT PLAIN
+      desc: notify on multipart upload events with SASL_PLAINTEXT PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_persistent_multipart.yaml
+
+  # Tests for SASL_PLAINTEXT security type and SCRAM-SHA-256 mechanism
+  - test:
+      name: notify put,copy,delete events with SASL_PLAINTEXT SCRAM-SHA-256
+      desc: notify put,copy,delete events with SASL_PLAINTEXT SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_broker_persistent.yaml
+
+  - test:
+      name: notify on multipart upload events with SASL_PLAINTEXT SCRAM-SHA-256
+      desc: notify on multipart upload events with SASL_PLAINTEXT SCRAM-SHA-256
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_broker_persistent_multipart.yaml
+
+  # Tests for SASL_SSL security type and PLAIN mechanism
+  - test:
+      name: notify put,copy,delete events with SASL_SSL PLAIN
+      desc: notify put,copy,delete events with SASL_SSL PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_broker_persistent.yaml
+
+  - test:
+      name: notify on multipart upload events with SASL_SSL PLAIN
+      desc: notify on multipart upload events with SASL_SSL PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_broker_persistent_multipart.yaml
+
+  # Tests for SASL_SSL security type and SCRAM-SHA-256 mechanism
+  - test:
+      name: notify put,copy,delete events with SASL_SSL SCRAM-SHA-256
+      desc: notify put,copy,delete events with SASL_SSL SCRAM-SHA-256
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_broker_persistent.yaml
+
+  - test:
+      name: notify on multipart upload events with SASL_SSL SCRAM-SHA-256
+      desc: notify on multipart upload events with SASL_SSL SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_broker_persistent_multipart.yaml
+
+  # kafka broker type broker
+
+  # Tests for SASL_PLAINTEXT security type
+  - test:
+      name: notify put,copy,delete events with kafka_broker and SASL_PLAINTEXT PLAIN
+      desc: notify put,copy,delete events with kafka_broker and SASL_PLAINTEXT PLAIN
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_broker and SASL_PLAINTEXT PLAIN
+      desc: notify on multipart upload events with kafka_broker and SASL_PLAINTEXT PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_broker_multipart.yaml
+
+  - test:
+      name: notify put,copy,delete events with kafka_broker and SASL_PLAINTEXT SCRAM-SHA-256
+      desc: notify put,copy,delete events with kafka_broker and SASL_PLAINTEXT SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_broker.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_broker and SASL_PLAINTEXT SCRAM-SHA-256
+      desc: notify on multipart upload events with kafka_broker and SASL_PLAINTEXT SCRAM-SHA-256
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_broker_multipart.yaml
+
+  # Tests for SASL_SSL security type
+  - test:
+      name: notify put,copy,delete events with kafka_broker and SASL_SSL PLAIN
+      desc: notify put,copy,delete events with kafka_broker and SASL_SSL PLAIN
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_broker.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_broker and SASL_SSL PLAIN
+      desc: notify on multipart upload events with kafka_broker and SASL_SSL PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_broker_multipart.yaml
+
+  - test:
+      name: notify put,copy,delete events with kafka_broker and SASL_SSL SCRAM-SHA-256
+      desc: notify put,copy,delete events with kafka_broker and SASL_SSL SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_broker.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_broker and SASL_SSL SCRAM-SHA-256
+      desc: notify on multipart upload events with kafka_broker and SASL_SSL SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_broker_multipart.yaml
+
+  # kafka broker type none
+
+  # Tests for SASL_PLAINTEXT security type
+  - test:
+      name: notify put,copy,delete events with kafka_none and SASL_PLAINTEXT PLAIN
+      desc: notify put,copy,delete events with kafka_none and SASL_PLAINTEXT PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_none.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_none and SASL_PLAINTEXT PLAIN
+      desc: notify on multipart upload events with kafka_none and SASL_PLAINTEXT PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_none_multipart.yaml
+
+  - test:
+      name: notify put,copy,delete events with kafka_none_persistent and SASL_PLAINTEXT PLAIN
+      desc: notify put,copy,delete events with kafka_none_persistent and SASL_PLAINTEXT PLAIN
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_none_persistent.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_none_persistent and SASL_PLAINTEXT PLAIN
+      desc: notify on multipart upload events with kafka_none_persistent and SASL_PLAINTEXT PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_plain_kafka_none_persistent_multipart.yaml
+
+  - test:
+      name: notify put,copy,delete events with kafka_none and SASL_PLAINTEXT SCRAM-SHA-256
+      desc: notify put,copy,delete events with kafka_none and SASL_PLAINTEXT SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_none.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_none and SASL_PLAINTEXT SCRAM-SHA-256
+      desc: notify on multipart upload events with kafka_none and SASL_PLAINTEXT SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_none_multipart.yaml
+
+  - test:
+      name: notify put,copy,delete events with kafka_none_persistent and SASL_PLAINTEXT SCRAM-SHA-256
+      desc: notify put,copy,delete events with kafka_none_persistent and SASL_PLAINTEXT SCRAM-SHA-256
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_none_persistent.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_none_persistent and SASL_PLAINTEXT SCRAM-SHA-256
+      desc: notify on multipart upload events with kafka_none_persistent and SASL_PLAINTEXT SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_plaintext_scram_sha_256_kafka_none_persistent_multipart.yaml
+
+  # Tests for SASL_SSL security type
+  - test:
+      name: notify put,copy,delete events with kafka_none and SASL_SSL PLAIN
+      desc: notify put,copy,delete events with kafka_none and SASL_SSL PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_none.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_none and SASL_SSL PLAIN
+      desc: notify on multipart upload events with kafka_none and SASL_SSL PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_none_multipart.yaml
+
+  - test:
+      name: notify put,copy,delete events with kafka_none_persistent and SASL_SSL PLAIN
+      desc: notify put,copy,delete events with kafka_none_persistent and SASL_SSL PLAIN
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_none_persistent.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_none_persistent and SASL_SSL PLAIN
+      desc: notify on multipart upload events with kafka_none_persistent and SASL_SSL PLAIN
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_plain_kafka_none_persistent_multipart.yaml
+
+  - test:
+      name: notify put,copy,delete events with kafka_none and SASL_SSL SCRAM-SHA-256
+      desc: notify put,copy,delete events with kafka_none and SASL_SSL SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_none.yaml
+  - test:
+      name: notify on multipart upload events with kafka_none and SASL_SSL SCRAM-SHA-256
+      desc: notify on multipart upload events with kafka_none and SASL_SSL SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_none_multipart.yaml
+
+  - test:
+      name: notify put,copy,delete events with kafka_none_persistent and SASL_SSL SCRAM-SHA-256
+      desc: notify put,copy,delete events with kafka_none_persistent and SASL_SSL SCRAM-SHA-256
+      module: sanity_rgw.py
+      polarion-id: CEPH-83575407
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_none_persistent.yaml
+
+  - test:
+      name: notify on multipart upload events with kafka_none_persistent and SASL_SSL SCRAM-SHA-256
+      desc: notify on multipart upload events with kafka_none_persistent and SASL_SSL SCRAM-SHA-256
+      polarion-id: CEPH-83575407
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_sasl_ssl_scram_sha_256_kafka_none_persistent_multipart.yaml
+
+
+  # Bucket policy tests
+
+  - test:
+      name: test bucket policy with invalid action
+      desc: test bucket policy with invalid action
+      polarion-id: CEPH-83572755
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_invalid_action.yaml
+
+  - test:
+      name: test bucket policy with invalid conditional in condition blocks
+      desc: test bucket policy with invalid conditional in condition blocks
+      polarion-id: CEPH-83572755
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_invalid_condition_key.yaml
+
+  - test:
+      name: test bucket policy with invalid effect
+      desc: test bucket policy with invalid effect
+      polarion-id: CEPH-83572755
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_invalid_effect.yaml
+
+  - test:
+      name: test bucket policy with invalid key
+      desc: test bucket policy with invalid key
+      polarion-id: CEPH-83572755
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_invalid_key.yaml
+
+  - test:
+      name: test bucket policy with invalid principal
+      desc: test bucket policy with invalid principal
+      polarion-id: CEPH-83572755
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_invalid_principal.yaml
+
+  - test:
+      name: test bucket policy with invalid resource
+      desc: test bucket policy with invalid resource
+      polarion-id: CEPH-83572755
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_invalid_resource.yaml
+
+  - test:
+      name: test bucket policy with invalid version
+      desc: test bucket policy with invalid version
+      polarion-id: CEPH-83572755
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_policy_ops.py
+        config-file-name: test_bucket_policy_invalid_version.yaml
+
+  # Bucket lifecycle tests
+
+  - test:
+      name: test bucket lc rule conflict between expiration and transition
+      desc: test bucket lc rule conflict between expiration and transition
+      polarion-id: CEPH-11184
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_conflict_btw_exp_transition.yaml
+
+  - test:
+      name: test bucket lc rule conflict between expiration days
+      desc: test bucket lc rule conflict between expiration days
+      polarion-id: CEPH-11184
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_conflict_exp_days.yaml
+
+  - test:
+      name: test bucket lc rule conflict between transition actions
+      desc: test bucket lc rule conflict between transition actions
+      polarion-id: CEPH-11184
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_conflict_transition_actions.yaml
+
+  - test:
+      name: test bucket lc rules with same ruleid but different rules
+      desc: test bucket lc rules with same ruleid but different rules
+      polarion-id: CEPH-11183
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_same_rule_id_diff_rules.yaml
+
+  - test:
+      name: Test bucket lc reverse transition
+      desc: Test bucket lc reverse transition
+      polarion-id: CEPH-83573373
+      module: sanity_rgw.py
+      config:
+        script-name: test_bucket_lifecycle_object_expiration_transition.py
+        config-file-name: test_lc_rule_reverse_transition.yaml
+
+  # swift container operation
+  - test:
+      name: swift enabling versioning on a bucket that is S3 versioned
+      desc: test swift enabling versioning on a bucket that is S3 versioned
+      polarion-id: CEPH-10649
+      module: sanity_rgw.py
+      config:
+        script-name: test_swift_basic_ops.py
+        config-file-name: test_s3_and_swift_versioning.yaml
+
+  # test s3-select with query generation of incorrect syntax
+
+  - test:
+      abort-on-fail: true
+      config:
+        role: client
+        sudo: True
+        commands:
+          - "echo '\n\n# increase limit on number of open files\n*               soft    nofile          16384\n*               hard    nofile          16384' >> /etc/security/limits.conf"
+          - "echo 'ulimit -n 16384' >> /etc/profile"
+      desc: increase ulimit number of open files to 16384
+      module: exec.py
+      name: increase ulimit number of open files to 16384
+
+  - test:
+      name: test s3select with depth1 queries on csv objects
+      desc: test s3select with depth1 queries of incorrect syntax for checking rgw crashes on csv objects
+      polarion-id: CEPH-83575176
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select.py
+        config-file-name: test_s3select_query_gen_csv_depth1.yaml
+
+  - test:
+      name: test s3select with depth2 queries on csv objects
+      desc: test s3select with depth2 queries of incorrect syntax for checking rgw crashes on csv objects
+      polarion-id: CEPH-83575176
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select.py
+        config-file-name: test_s3select_query_gen_csv_depth2.yaml
+
+  - test:
+      name: test s3select with depth1 queries on parquet objects
+      desc: test s3select with depth1 queries of incorrect syntax for checking rgw crashes on parquet objects
+      polarion-id: CEPH-83575176
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select.py
+        config-file-name: test_s3select_query_gen_parquet_depth1.yaml
+
+  - test:
+      name: test s3select with depth2 queries on parquet objects
+      desc: test s3select with depth2 queries of incorrect syntax for checking rgw crashes on parquet objects
+      polarion-id: CEPH-83575176
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select.py
+        config-file-name: test_s3select_query_gen_parquet_depth2.yaml
+
+  - test:
+      name: test s3select with depth1 queries on parquet objects
+      desc: test s3select with depth1 queries of incorrect syntax for checking rgw crashes on parquet objects
+      polarion-id: CEPH-83575176
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select.py
+        config-file-name: test_s3select_query_gen_parquet_depth1.yaml
+
+  - test:
+      name: test s3select with depth2 queries on parquet objects
+      desc: test s3select with depth2 queries of incorrect syntax for checking rgw crashes on parquet objects
+      polarion-id: CEPH-83575176
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select.py
+        config-file-name: test_s3select_query_gen_parquet_depth2.yaml
+
+  # STS aswi tests with Keycloak
+
+  - test:
+      name: test STS assume role with web identity
+      desc: test STS assume role with web identity without any conditions
+      polarion-id: CEPH-83573497
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi.yaml
+  - test:
+      name: STS aswi Tests to test aud claim in the web token
+      desc: STS aswi Tests to test aud claim in the web token
+      polarion-id: CEPH-83575817
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_aud_claim.yaml
+  - test:
+      name: STS aswi Tests to test azp fields in the web token
+      desc: STS aswi Tests to test azp fields in the web token
+      polarion-id: CEPH-83574501
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_azp_claim.yaml
+  - test:
+      name: STS aswi Tests to test sub fields in the web token
+      desc: STS aswi Tests to test sub fields in the web token
+      polarion-id: CEPH-83574500
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_sub_claim.yaml
+  - test:
+      name: STS aswi Tests to test aws_PrincipalTag in role's permission policy
+      desc: STS aswi Tests to test aws_PrincipalTag in role's permission policy
+      polarion-id: CEPH-83574495
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_aws_principal_tag_role_policy.yaml
+  - test:
+      name: STS aswi Tests to test aws_RequestTag in role's trust policy
+      desc: STS aswi Tests to test aws_RequestTag in the condition element of a role's trust policy
+      polarion-id: CEPH-83574493
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_aws_request_tag_trust_policy.yaml
+  - test:
+      name: STS aswi Tests to test aws_TagKeys in permission policy
+      desc: STS aswi Tests to test aws_TagKeys in permission policy
+      polarion-id: CEPH-83574497
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_aws_tagkeys_role_policy.yaml
+  - test:
+      name: STS aswi Tests to test aws_TagKeys in the trust policy
+      desc: STS aswi Tests to test aws_TagKeys in the trust policy
+      polarion-id: CEPH-83574498
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_aws_tagkeys_trust_policy.yaml
+  - test:
+      name: STS aswi Tests to test iam_ResourceTag in trust policy
+      desc: STS aswi Tests to test iam_ResourceTag in trust policy
+      polarion-id: CEPH-83574494
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_iam_resource_tag_trust_policy.yaml
+  - test:
+      name: STS aswi Tests to test allow condition when s3_Resource Tag equals aws_Principal tag in role's permission policy
+      desc: STS aswi Tests to test allow condition when s3_Resource Tag equals aws_Principal tag in role's permission policy
+      polarion-id: CEPH-83574499
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_s3_res_equals_aws_princ_tag_role_policy.yaml
+  - test:
+      name: STS aswi Tests to test s3_Resource Tag in role's permission policy
+      desc: STS aswi Tests to test s3_Resource Tag in role's permission policy
+      polarion-id: CEPH-83574496
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_s3_resource_tag_role_policy.yaml
+
+  - test:
+      name: STS aswi Tests to veify role policy allow actions
+      desc: STS aswi Tests to veify role policy allow actions
+      polarion-id: CEPH-83593390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_verify_role_policy_allow_actions.yaml
+
+  - test:
+      name: STS aswi Tests to veify role policy deny actions
+      desc: STS aswi Tests to veify role policy deny actions
+      polarion-id: CEPH-83593390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_verify_role_policy_deny_actions.yaml
+
+# STS aswi tests with IBM Security Verify as Identity Provider
+
+  - test:
+      name: test STS aswi with ISV
+      desc: test STS aswi with ISV
+      polarion-id: CEPH-83595848
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_isv.yaml
+
+  - test:
+      name: STS aswi Tests to veify role policy allow actions with ISV
+      desc: STS aswi Tests to veify role policy allow actions with ISV
+      polarion-id: CEPH-83595848
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_isv_verify_role_policy_allow_actions.yaml
+
+  - test:
+      name: STS aswi Tests to veify role policy deny actions with ISV
+      desc: STS aswi Tests to veify role policy deny actions with ISV
+      polarion-id: CEPH-83595848
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_isv_verify_role_policy_deny_actions.yaml
+
+  - test:
+      abort-on-fail: true
+      config:
+        install:
+          - agent
+        run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  # Enable Software QAT on the cluster
+
+  - test:
+      name: Enable QAT config options
+      desc: Enable QAT config options
+      abort-on-fail: true
+      config:
+        cephadm: true
+        commands:
+          - "ceph config set client.rgw.{daemon_id:rgw.realm1} plugin_crypto_accelerator crypto_qat"
+          - "ceph config set client.rgw.{daemon_id:rgw.realm1} qat_compressor_enabled true"
+          - "ceph orch restart {service_name:rgw.realm1}"
+      module: exec.py
+
+  - test:
+      name: compresstion_with_zstd_type
+      desc: test compresstion with zstd type
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression_zstd.yaml
+
+  - test:
+      name: compresstion_with_snappy_type
+      desc: test compresstion with snappy type
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression_snappy.yaml
+
+  - test:
+      name: compresstion_with_Zlib_type
+      desc: test compresstion with Zlib
+      polarion-id: CEPH-11350
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_Mbuckets_with_Nobjects_compression.yaml
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_normal_object_upload.yaml
+      desc: test_sse_s3_per_bucket_encryption_normal_object_upload
+      module: sanity_rgw.py
+      name: sse-s3 per bucket encryption test on a regular bucket
+      polarion-id: CEPH-83574619 # CEPH-8357515
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_bucket_encryption_multipart_object_upload.yaml
+      desc: sse_s3_per_bucket_enc_multipart_upload
+      module: sanity_rgw.py
+      name: sse_s3_per_bucket_enc_multipart_upload
+      polarion-id: CEPH-83575155
+
+  - test:
+      config:
+        script-name: test_sse_s3_kms_with_vault.py
+        config-file-name: test_sse_s3_per_object.yaml
+      desc: test_sse_s3_per_object_encryption
+      module: sanity_rgw.py
+      name: sse-s3 per object encryption test on a regular bucket
+      polarion-id: CEPH-83574040
+
+  - test:
+      abort-on-fail: true
+      config:
+        roles:
+          - rgw
+        rule: root netem delay 20ms 2ms distribution normal
+      desc: Configuring network traffic delay
+      module: configure-tc.py
+      name: apply-net-qos
+      polarion-id: CEPH-83575222
+
+  - test:
+      name: STS aswi Tests to test creds expire while copy object in progress
+      desc: STS aswi Tests to test creds expire while copy object in progress
+      polarion-id: CEPH-83581390
+      module: sanity_rgw.py
+      config:
+        script-name: test_sts_aswi.py
+        config-file-name: test_sts_aswi_creds_expire_copy_in_progress.yaml
+
+  - test:
+      name: Deploy RGW Ingress daemon with SSL
+      abort-on-fail: true
+      desc: Add RGW and HA Proxy services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574609
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: ingress
+                  service_id: rgw.realm1
+                  placement:
+                    nodes:
+                      - node4
+                      - node10
+                  spec:
+                    backend_service: rgw.rgw.realm1
+                    virtual_ip: 10.0.195.174/24 # floating ip1 in rhos-01
+                    frontend_port: 443
+                    monitor_port: 1967
+                    ssl_cert: create-cert
+
+  - test:
+      name: Deploy RGW Ingress daemon
+      abort-on-fail: true
+      desc: Add RGW and HA Proxy services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574608
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: ingress
+                  service_id: rgw.realm2
+                  placement:
+                    nodes:
+                      - node11
+                      - node12
+                  spec:
+                    backend_service: rgw.rgw.realm2
+                    virtual_ip: 10.0.195.111/24 # floating ip2 in rhos-01
+                    frontend_port: 8083
+                    monitor_port: 1967
+
+  - test:
+      abort-on-fail: true
+      config:
+        node: node6
+        sudo: True
+        commands:
+          - "yum install -y jq"
+          - "radosgw-admin zonegroup get --rgw-zonegroup=south > /tmp/zonegroup_south_backup.json"
+          - "jq -r '.zones[].log_data=false | .zones[].sync_from_all=false' /tmp/zonegroup_south_backup.json > /tmp/zonegroup_south.json"
+          - "radosgw-admin zonegroup set --rgw-zonegroup=south --infile=/tmp/zonegroup_south.json"
+          - "radosgw-admin period update --rgw-realm india --commit"
+          - "radosgw-admin zonegroup get --rgw-zonegroup=east > /tmp/zonegroup_east_backup.json"
+          - "jq -r '.zones[].log_data=false | .zones[].sync_from_all=false' /tmp/zonegroup_east_backup.json > /tmp/zonegroup_east.json"
+          - "radosgw-admin zonegroup set --rgw-zonegroup=east --infile=/tmp/zonegroup_east.json"
+          - "radosgw-admin period update --rgw-realm us --commit"
+          - "sleep 20"
+      desc: Disabling sync between the zones
+      module: exec.py
+      name: disable sync between zones
+      polarion-id: CEPH-83581229
+
+  - test:
+      name: check-ceph-health
+      module: exec.py
+      config:
+        cephadm: true
+        commands:
+          - "ceph -s"
+      desc: Check for ceph health debug info
+      polarion-id: CEPH-83575200
+
+  - test:
+      name: clenup the cluster
+      desc: clenup the cluster
+      module: exec.py
+      config:
+        cephadm: true
+        commands:
+          - "ceph orch rm {service_name:rgw.realm1}"
+          - "ceph orch rm {service_name:rgw.realm2}"
