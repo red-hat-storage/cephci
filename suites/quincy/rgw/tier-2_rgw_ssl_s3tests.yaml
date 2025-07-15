@@ -166,3 +166,12 @@ tests:
       name: execute s3tests
       polarion-id: CEPH-83575225
       comments: known issue 55614 fixed in Ceph quincy - v17.2.7, current builds at build is 17.2.6 and BZ2266411 is a known issue for release below 7.1
+
+  - test:
+      name: test deletion of default realm clears realm id in default info
+      desc: test deletion of default realm clears realm id in default info
+      polarion-id: CEPH-83623614
+      module: sanity_rgw.py
+      config:
+        script-name: test_check_sharding_enabled.py
+        config-file-name: test_realm_deletion.yaml
