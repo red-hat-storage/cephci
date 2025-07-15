@@ -1204,7 +1204,13 @@ class FsUtils(object):
             nfs_cmd += f" {kwargs.get('nfs_server_name')}"
         if kwargs.get("placement"):
             nfs_cmd += f" --placement '{kwargs.get('placement')}'"
-
+        nfs_port = kwargs.get("port")
+        if nfs_port:
+            nfs_cmd += f" --port {nfs_port}"
+        # BYOK / KMIP support
+        if kwargs.get("byok_enabled", False):
+            yaml_path = kwargs.get("kmip_yaml_path", "/root/nfs_kmip.yaml")
+            nfs_cmd += f" -i {yaml_path}"
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=nfs_cmd, check_ec=kwargs.get("check_ec", True)
         )
@@ -1281,6 +1287,11 @@ class FsUtils(object):
             export_nfs_cmd += f" --path={kwargs.get('path')} "
         if kwargs.get("readonly"):
             export_nfs_cmd += " --readonly"
+        # Pass Key_ID for byok support
+        if kwargs.get("extra_args"):
+            export_nfs_cmd += f" {kwargs.get('extra_args')}"
+
+        log.info(f"Running export command: {export_nfs_cmd}")
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=export_nfs_cmd, check_ec=kwargs.get("check_ec", True)
         )
@@ -1619,6 +1630,9 @@ class FsUtils(object):
             subvolume_cmd += " --namespace-isolated"
         if kwargs.get("earmark"):
             subvolume_cmd += f" --earmark {kwargs.get('earmark')}"
+        #  To handle extra CLI params like --enctag for BYOK Support
+        if kwargs.get("extra_params"):
+            subvolume_cmd += f" {kwargs.get('extra_params')}"
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=subvolume_cmd, check_ec=kwargs.get("check_ec", True)
         )
