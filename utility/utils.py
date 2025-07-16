@@ -57,6 +57,10 @@ class TestSetupFailure(Exception):
     pass
 
 
+class GKLMSetupError(Exception):
+    pass
+
+
 def config_dict_to_string(data: Dict) -> str:
     """
     Convert the provided data to a string of optional arguments.
@@ -2727,3 +2731,113 @@ def restart_rgw_and_wait(rgw_node, rgw_service_name):
                 break
     else:
         log.info("RGW daemons are up and running")
+
+
+def setup_gklm_prereq(ceph_cluster, cloud_type, custom_config):
+    """setup GKLM authentication certs on the rgw nodes, redeploy rgw to mounted gklm certs path
+    and set ceph configs for sse-kms-kmip"""
+    log.info("setting up GKLM prerequisites")
+    rgw_nodes = ceph_cluster.get_ceph_objects("rgw")
+    gklm_auth_cert_path_remote = "/usr/local/gklm/rgwselfsigned.cert"
+    gklm_auth_key_path_remote = "/usr/local/gklm/rgwselfsigned.key"
+    gklm_auth_cert_path_local = None
+    gklm_auth_key_path_local = None
+    gklm_endpoint_openstack = None
+    gklm_endpoint_ibmc = None
+
+    for config_item in custom_config:
+        key, value = config_item.split("=")
+        if key == "gklm-auth-cert-path":
+            gklm_auth_cert_path_local = value.strip()
+        if key == "gklm-auth-key-path":
+            gklm_auth_key_path_local = value.strip()
+        if key == "gklm-endpoint-openstack":
+            gklm_endpoint_openstack = value.strip()
+        if key == "gklm-endpoint-ibmc":
+            gklm_endpoint_ibmc = value.strip()
+
+    if gklm_auth_cert_path_local is None:
+        raise GKLMSetupError(
+            "gklm-auth-cert-path not passed as custom-config which is required for gklm tests prerequisites"
+        )
+    if gklm_auth_key_path_local is None:
+        raise GKLMSetupError(
+            "gklm-auth-cert-path not passed as custom-config which is required for gklm tests prerequisites"
+        )
+    if gklm_endpoint_openstack is None or gklm_endpoint_ibmc is None:
+        raise GKLMSetupError(
+            "gklm-endpoint not passed as custom-config which is required for gklm tests prerequisites"
+        )
+
+    for rgw_node_obj in rgw_nodes:
+        rgw_node = rgw_node_obj.node
+        log.info(f"setting up auth certs on node {rgw_node.ip_address}")
+        rgw_node.exec_command(sudo=True, cmd="mkdir -p /usr/local/gklm")
+        # copy gklm_auth_cert
+        log.info(
+            f"copying local file '{gklm_auth_cert_path_local}' to remote file '{gklm_auth_cert_path_remote}'. "
+            + f"remote node ip: {rgw_node.ip_address}"
+        )
+        rgw_node.upload_file(
+            sudo=True, src=gklm_auth_cert_path_local, dst=gklm_auth_cert_path_remote
+        )
+        # copy gklm_auth_key
+        log.info(
+            f"copying local file '{gklm_auth_key_path_local}' to remote file '{gklm_auth_key_path_remote}'. "
+            + f"remote node ip: {rgw_node.ip_address}"
+        )
+        rgw_node.upload_file(
+            sudo=True, src=gklm_auth_key_path_local, dst=gklm_auth_key_path_remote
+        )
+
+    # set ceph configs for kmip
+    client_node = ceph_cluster.get_ceph_object("client").node
+    client_node.exec_command(
+        sudo=True, cmd="ceph config set client.rgw rgw_crypt_require_ssl false"
+    )
+    client_node.exec_command(
+        sudo=True, cmd="ceph config set client.rgw rgw_crypt_s3_kms_backend kmip"
+    )
+    client_node.exec_command(
+        sudo=True,
+        cmd="ceph config set client.rgw rgw_crypt_kmip_client_cert /usr/local/gklm/rgwselfsigned.cert",
+    )
+    client_node.exec_command(
+        sudo=True,
+        cmd="ceph config set client.rgw rgw_crypt_kmip_client_key /usr/local/gklm/rgwselfsigned.key",
+    )
+    if cloud_type == "openstack":
+        if gklm_endpoint_openstack is None:
+            raise GKLMSetupError(
+                "gklm-endpoint-openstack not passed as custom-config which is required for gklm tests prerequisites"
+            )
+        client_node.exec_command(
+            sudo=True,
+            cmd=f"ceph config set client.rgw rgw_crypt_kmip_addr {gklm_endpoint_openstack}:5696",
+        )
+    elif cloud_type == "ibmc":
+        if gklm_endpoint_ibmc is None:
+            raise GKLMSetupError(
+                "gklm-endpoint-ibmc not passed as custom-config which is required for gklm tests prerequisites"
+            )
+        client_node.exec_command(
+            sudo=True,
+            cmd=f"ceph config set client.rgw rgw_crypt_kmip_addr {gklm_endpoint_ibmc}:5696",
+        )
+
+    # redeploy rgw to mount gklm certs path to rgw container
+    client_node.exec_command(
+        sudo=True, cmd="ceph orch ls --service-type rgw --export > /root/rgw_spec.yaml"
+    )
+    out, _ = client_node.exec_command(sudo=True, cmd="cat /root/rgw_spec.yaml")
+    log.info(out)
+    client_node.exec_command(
+        sudo=True,
+        cmd="grep -q 'extra_container_args:\n - \"-v /usr/local/gklm:/usr/local/gklm\"' /root/rgw_spec.yaml"
+        + " || echo '\nextra_container_args:\n - \"-v /usr/local/gklm:/usr/local/gklm\"' >> /root/rgw_spec.yaml",
+    )
+    out, _ = client_node.exec_command(sudo=True, cmd="cat /root/rgw_spec.yaml")
+    log.info(out)
+    client_node.exec_command(sudo=True, cmd="ceph orch apply -i /root/rgw_spec.yaml")
+    log.info("sleeping for 20 seconds")
+    time.sleep(20)
