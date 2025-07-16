@@ -61,6 +61,7 @@ from utility.utils import (
     retain_bucket_pol_at_archive,
     set_config_param,
     setup_cluster_access,
+    setup_gklm_prereq,
     test_bucket_stats_with_archive,
     test_sync_via_bucket_stats,
     test_user_stats_consistency,
@@ -94,6 +95,8 @@ def run(**kw):
     config["git-url"] = config.get(
         "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
     )
+    test_data = kw.get("test_data")
+    custom_config = test_data.get("custom-config", {})
 
     set_env = config.get("set-env", False)
     extra_pkgs = config.get("extra-pkgs")
@@ -237,6 +240,11 @@ def run(**kw):
     if configure_kafka_cluster:
         configure_kafka_cluster_with_security(primary_cluster, cloud_type)
         configure_kafka_cluster_with_security(secondary_cluster, cloud_type)
+
+    setup_gklm_prerequisites = config.get("setup_gklm_prerequisites")
+    if setup_gklm_prerequisites:
+        setup_gklm_prereq(primary_cluster, cloud_type, custom_config)
+        setup_gklm_prereq(secondary_cluster, cloud_type, custom_config)
 
     if test_config["config"]:
         log.info("creating custom config")
