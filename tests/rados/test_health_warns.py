@@ -80,8 +80,8 @@ def run(ceph_cluster, **kw):
                     ), "Could not set value %s for parameter %s" % (val, key)
 
                     osd_id = random.choice(rados_obj.get_osd_list(status="up"))
-                    assert str(val) == mon_obj.show_config(
-                        daemon="osd", id=osd_id, param=key
+                    assert val == int(
+                        mon_obj.show_config(daemon="osd", id=osd_id, param=key)
                     ), ("Config show o/p for %s not as expected" % key)
 
                 for val in neg_values:
@@ -98,7 +98,106 @@ def run(ceph_cluster, **kw):
                             % err
                         )
 
-                assert mon_obj.remove_config(section="osd", name=key)
+                assert mon_obj.remove_config(section="osd", name=key, verify_rm=False)
+
+            # begin verification of precedence for the input parameters across config levels and MON and MGR daemons
+            log.debug(
+                "Begin verification of precedence for the input"
+                " parameters across config levels and MON, MGR daemons"
+            )
+            value_map = {}
+            for key in param_dict.keys():
+                for level in ["global", "osd", "host", "daemon", "mon", "mgr"]:
+                    log.info(
+                        "Setting the value of parameter %s at %s level and verifying precedence/priority"
+                        % (key, level)
+                    )
+                    rand_val = random.randint(10, 9999)
+                    # retain value against each level
+                    value_map[level] = rand_val
+                    osd_id = random.choice(rados_obj.get_osd_list(status="up"))
+                    if level == "host":
+                        host_obj = rados_obj.fetch_host_node(
+                            daemon_type="osd", daemon_id=osd_id
+                        )
+                        host_name = host_obj.hostname
+                        assert mon_obj.set_config(
+                            section="osd",
+                            location_type=level,
+                            location_value=host_name,
+                            name=key,
+                            value=rand_val,
+                        )
+                    elif level == "daemon":
+                        assert mon_obj.set_config(
+                            section=f"osd.{osd_id}", name=key, value=rand_val
+                        )
+                    else:
+                        assert mon_obj.set_config(
+                            section=level, name=key, value=rand_val
+                        )
+
+                    # validation checks depending on config level
+                    if level == "host":
+                        # get osds from host
+                        changed_osds = rados_obj.collect_osd_daemon_ids(
+                            osd_node=host_name
+                        )
+                        up_osds = rados_obj.get_osd_list(status="up")
+                        diff_osds = list(set(up_osds) - set(changed_osds))
+                        _osd_id = random.choice(diff_osds)
+                        # OSDs from other hosts should still retain the value set at OSD level
+                        assert value_map["osd"] == int(
+                            mon_obj.show_config(daemon="osd", id=_osd_id, param=key)
+                        ), "Config show o/p for %s for OSD %s is not as expected" % (
+                            key,
+                            _osd_id,
+                        )
+                    elif level == "daemon":
+                        diff_list = rados_obj.get_osd_list(status="up")
+                        diff_list.remove(osd_id)
+                        _osd_id = random.choice(diff_list)
+                        # Other OSDs should not get affected
+                        assert value_map["daemon"] != int(
+                            mon_obj.show_config(daemon="osd", id=_osd_id, param=key)
+                        ), "Config show o/p for %s for OSD %s is not as expected" % (
+                            key,
+                            _osd_id,
+                        )
+                    if level in ["mon", "mgr"]:
+                        assert rand_val != int(
+                            mon_obj.show_config(daemon="osd", id=osd_id, param=key)
+                        ), ("Config show o/p for %s not as expected" % key)
+                    else:
+                        assert rand_val == int(
+                            mon_obj.show_config(daemon="osd", id=osd_id, param=key)
+                        ), ("Config show o/p for %s not as expected" % key)
+
+                # config clean-up
+                log.info(
+                    "Clean up all entries of parameter %s from ceph cluster config"
+                    % key
+                )
+                # fetch ceph config dump in json format
+                config_dump_json = rados_obj.run_ceph_command(
+                    cmd="ceph config dump", client_exec=True
+                )
+                for config_section in config_dump_json:
+                    if config_section["name"] == key:
+                        if config_section.get("location_type"):
+                            mon_obj.remove_config(
+                                section=config_section["section"],
+                                name=key,
+                                location_type=config_section["location_type"],
+                                location_value=config_section["location_value"],
+                                verify_rm=False,
+                            )
+                        else:
+                            mon_obj.remove_config(
+                                section=config_section["section"],
+                                name=key,
+                                verify_rm=False,
+                            )
 
         try:
             if config.get("param-check").get("slow-ops"):
@@ -130,14 +229,34 @@ def run(ceph_cluster, **kw):
                 "\n \n ************** Execution of finally block begins here *************** \n \n"
             )
 
-            _dict = {
-                "bluestore_slow_ops_warn_lifetime": 86400,
-                "bluestore_slow_ops_warn_threshold": 1,
-                "bdev_stalled_read_warn_lifetime": 86400,
-                "bdev_stalled_read_warn_threshold": 1,
-            }
+            # removal of any residual entries in ceph config dump
+            _params = [
+                "bluestore_slow_ops_warn_lifetime",
+                "bluestore_slow_ops_warn_threshold",
+                "bdev_stalled_read_warn_lifetime",
+                "bdev_stalled_read_warn_threshold",
+            ]
 
-            [mon_obj.remove_config(section="osd", name=key) for key in _dict.keys()]
+            # fetch ceph config dump in json format
+            config_dump_json = rados_obj.run_ceph_command(
+                cmd="ceph config dump", client_exec=True
+            )
+            for config_section in config_dump_json:
+                if config_section["name"] in _params:
+                    if config_section.get("location_type"):
+                        mon_obj.remove_config(
+                            section=config_section["section"],
+                            name=config_section["name"],
+                            location_type=config_section["location_type"],
+                            location_value=config_section["location_value"],
+                            verify_rm=False,
+                        )
+                    else:
+                        mon_obj.remove_config(
+                            section=config_section["section"],
+                            name=config_section["name"],
+                            verify_rm=False,
+                        )
 
             # log cluster health
             rados_obj.log_cluster_health()
