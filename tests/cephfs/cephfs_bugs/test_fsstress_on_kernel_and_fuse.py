@@ -150,8 +150,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "Check for the Ceph Health to see if there are any deadlock bw unlink and rename."
         )
-        ceph_health = fs_util_v1.get_ceph_health_status(clients[0])
-        log.info(ceph_health)
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
         return 0
     except Exception as e:
         log.error(e)

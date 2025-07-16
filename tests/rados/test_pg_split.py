@@ -333,7 +333,7 @@ def run(ceph_cluster, **kw):
                     wait_for_daemon_status,
                     rados_obj=rados_obj,
                     daemon_type="osd",
-                    daemon_id=osd_id,
+                    daemon_id=target_osd,
                     status="running",
                     timeout=60,
                 )

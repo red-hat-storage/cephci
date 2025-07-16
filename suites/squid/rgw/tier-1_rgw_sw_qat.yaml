@@ -177,3 +177,13 @@ tests:
       module: sanity_rgw.py
       name: sse-s3 per object encryption test on a regular bucket
       polarion-id: CEPH-83574040
+
+  - test:
+      name: Test create existing bucket with rgw_bucket_eexist_override set through AWS
+      desc: Test create existing bucket with rgw config rgw_bucket_eexist_override through AWS
+      polarion-id: CEPH-83620440
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_aws.py
+        config-file-name: ../../aws/configs/test_aws_create_bucket_for_existing_bucket.yaml
+        run-on-haproxy: true
