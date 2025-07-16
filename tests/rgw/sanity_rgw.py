@@ -209,16 +209,19 @@ def run(ceph_cluster, **kw):
 
     if run_io_verify:
         log.info("running io verify script")
-        verify_status = exec_from.exec_command(
-            cmd=f"sudo {python_cmd} "
-            + test_folder_path
-            + lib_dir
-            + f"read_io_info.py -c {config_file_name}",
-            long_running=True,
+        verify_io_info_configs = config.get(
+            "verify-io-info-configs", [config_file_name]
         )
-        log.info(f"verify io status code is : {verify_status}")
-        if verify_status != 0:
-            log.error(verify_status)
-            return verify_status
+        for io_config in verify_io_info_configs:
+            verify_status = exec_from.exec_command(
+                cmd=f"sudo {python_cmd} "
+                + test_folder_path
+                + lib_dir
+                + f"read_io_info.py -c {io_config}",
+                long_running=True,
+            )
+            log.info(f"verify io status code is : {verify_status}")
+            if verify_status != 0:
+                raise Exception(f"verify io failed for {io_config}")
 
     return test_status

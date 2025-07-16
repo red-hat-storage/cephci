@@ -428,6 +428,10 @@ tests:
             script-name: ../s3cmd/test_rgw_ops_log.py
             config-file-name: ../../s3cmd/multisite_configs/test_rgw_log_details.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
+            verify-io-info-configs:
+              - test_multisite_dynamic_resharding_brownfield.yaml
+              - test_multisite_manual_resharding_brownfield.yaml
+              - test_rgw_log_details.yaml
       desc: S3CMD tests, rgw log details post upgrade
       module: sanity_rgw_multisite.py
       name: S3CMD tests, rgw log details post upgrade
