@@ -1,6 +1,9 @@
+import time
 from collections import namedtuple
 
 from ceph.ceph import CephNode
+from tests.rados.test_stretch_site_down import get_stretch_site_hosts
+from tests.rados.test_stretch_site_reboot import get_host_obj_from_hostname
 from utility.log import Log
 
 log = Log(__name__)
@@ -17,6 +20,15 @@ class StretchMode:
         self.tiebreaker_mon = self.get_tiebreaker_mon()
         self.pool_obj = kwargs.get("pool_obj")
         self.custom_crush_rule = {}
+        self.stretch_bucket = kwargs.get("stretch_bucket", "datacenter")
+
+        # parameters to be populated by segregate_hosts_based_on_stretch_bucket()
+        self.site_1_hosts = None
+        self.site_2_hosts = None
+        self.tiebreaker_hosts = None
+        self.segregate_hosts_based_on_stretch_bucket()
+
+        self.client_node = kwargs.get("client_node", None)
 
     def get_tiebreaker_mon(self):
         """
@@ -102,6 +114,191 @@ class StretchMode:
         )
         self.custom_crush_rule[crush_rule_name] = out["rule_id"]
         return self.custom_crush_rule[crush_rule_name]
+
+    def simulate_netsplit_between_hosts(self, group1, group2):
+        """
+        Method to simulate netsplit between hosts. Netsplit will be simulate by dropping incoming & outgoing
+        traffic using "iptables -A INPUT -s {target_host_ip} -j DROP; iptables -A OUTPUT -d {target_host_ip} -j DROP"
+        group1 : node1, node2, node3
+        group2 : node4, node5
+
+        All incoming/outgoing traffic from group2 hosts will be blocked on group1 hosts.
+        Ip table rules will be added on:-
+         node4 to drop incoming/outgoing packets to/from node1
+         node4 to drop incoming/outgoing packets to/from node2
+         node4 to drop incoming/outgoing packets to/from node3
+         node5 to drop incoming/outgoing packets to/from node1
+         node5 to drop incoming/outgoing packets to/from node2
+         node5 to drop incoming/outgoing packets to/from node3
+
+        Args:
+            group1: List of hosts ( type: list of strings containing hostnames ) ["host1", "host2"]
+            group2: List of hosts ( type: list of strings containing hostnames ) ["host3", "host4"]
+        Returns:
+            None
+        """
+        info_msg = f"Adding IPtable rules between {group1} and {group2}"
+        log.info(info_msg)
+
+        for host1 in group1:
+            target_host_obj = self.rados_obj.get_host_object(hostname=host1)
+            if not target_host_obj:
+                log.error(f"target host : {host1} not found . Exiting...")
+                raise Exception("Test execution Failed")
+            log.debug(
+                f"Proceeding to add IPtables rules to block incoming - outgoing traffic to host {host1} "
+            )
+            for host2 in group2:
+                source_host_obj = self.rados_obj.get_host_object(hostname=host2)
+                log.debug(
+                    f"Proceeding to add IPtables rules to block incoming - outgoing traffic to host {host1} "
+                    f"Applying rules on host : {host2}"
+                )
+                if not source_host_obj:
+                    log.error(f"Source host : {host2} not found . Exiting...")
+                if not self.rados_obj.block_in_out_packets_on_host(
+                    source_host=source_host_obj, target_host=target_host_obj
+                ):
+                    log.error(
+                        f"Failed to add IPtable rules to block {host1} on {host2}"
+                    )
+                    raise Exception("Test execution Failed")
+
+        info_msg = f"Completed adding IPtable rules between {group1} and {group2}"
+        log.info(info_msg)
+
+    def segregate_hosts_based_on_stretch_bucket(self):
+        """
+        Method to segregate hosts based on stretch bucket.
+        Populates site_1_hosts, site_2_hosts and tiebreaker_hosts
+        Returns:
+            None
+        """
+        osd_tree_cmd = "ceph osd tree"
+        buckets = self.rados_obj.run_ceph_command(osd_tree_cmd)
+        dc_buckets = [
+            d for d in buckets["nodes"] if d.get("type") == self.stretch_bucket
+        ]
+        dc_1 = dc_buckets.pop()
+        dc_1_name = dc_1["name"]
+        dc_2 = dc_buckets.pop()
+        dc_2_name = dc_2["name"]
+        all_hosts = get_stretch_site_hosts(
+            rados_obj=self.rados_obj,
+            tiebreaker_mon_site_name=self.tiebreaker_mon_site_name,
+        )
+        self.site_1_hosts = all_hosts.dc_1_hosts
+        self.site_2_hosts = all_hosts.dc_2_hosts
+        self.tiebreaker_hosts = all_hosts.tiebreaker_hosts
+
+        log.debug(f"Hosts present in Datacenter : {dc_1_name} : {self.site_1_hosts}")
+        log.debug(f"Hosts present in Datacenter : {dc_2_name} : {self.site_2_hosts}")
+        log.debug(
+            f"Hosts present in Datacenter : {self.tiebreaker_mon_site_name} : { self.tiebreaker_hosts}"
+        )
+
+    def flush_ip_table_rules_on_all_hosts(self):
+        """
+        Method to flush iptable rules on all hosts part of the cluster
+        Executes iptables -F and reboots the host
+        Returns:
+            None
+        """
+        log.info("Proceeding to flush IP table rules on all hosts")
+        for hostname in self.site_1_hosts + self.site_2_hosts + self.tiebreaker_hosts:
+            host = get_host_obj_from_hostname(
+                hostname=hostname, rados_obj=self.rados_obj
+            )
+            log.debug(f"Proceeding to flush iptable rules on host : {host.hostname}")
+            host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
+            host.exec_command(sudo=True, cmd="reboot", check_ec=False)
+            time.sleep(20)
+        log.info("Completed flushing IP table rules on all hosts")
+
+    def write_io_and_validate_objects(
+        self, pool_name: str, init_objects: int, obj_name: str
+    ) -> object:
+        """
+
+        Args:
+            init_objects:
+
+        Returns:
+
+        """
+        log_msg = (
+            f"\n Writing IO to the pool {pool_name}."
+            f"\n init_objects -> {init_objects}"
+        )
+        log.info(log_msg)
+
+        if (
+            self.pool_obj.do_rados_put(
+                client=self.client_node,
+                pool=pool_name,
+                nobj=200,
+                timeout=100,
+                obj_name=obj_name,
+            )
+            == 1
+        ):
+            err_msg = f"Failed to write IO using rados put command to pool {pool_name}"
+            log.error(err_msg)
+            raise Exception(err_msg)
+
+        log.debug("sleeping for 20 seconds for the objects to be displayed in ceph df")
+        time.sleep(20)
+
+        pool_stat = self.rados_obj.get_cephdf_stats(pool_name=pool_name)
+        current_objects = pool_stat["stats"]["objects"]
+        log.debug(pool_stat)
+
+        # Objects should be more than the initial no of objects
+        if current_objects <= init_objects:
+            log.error(
+                "Write ops should be possible, number of objects in the pool has not changed"
+            )
+            raise Exception(
+                f"Pool {pool_name} has {pool_stat['stats']['objects']} objs"
+            )
+        log_msg = (
+            f"\n Post IO to the pool {pool_name}."
+            f"\n init_objects -> {init_objects}"
+            f"\n current_objects -> {current_objects}"
+        )
+        log.info(log_msg)
+
+    def validate_health_warnings(self, expected_health_warns: list):
+        """
+
+        Returns:
+
+        """
+        status_report = self.rados_obj.run_ceph_command(
+            cmd="ceph report", client_exec=True
+        )
+        ceph_health_status = list(status_report["health"]["checks"].keys())
+        if not all(elem in ceph_health_status for elem in expected_health_warns):
+            err_msg = (
+                f"We do not have the expected health warnings generated on the cluster.\n"
+                f"Warns on cluster : {ceph_health_status}\n"
+                f"Expected Warnings : {expected_health_warns}\n"
+            )
+            log.error(err_msg)
+
+        log.info(
+            f"The expected health warnings are generated on the cluster. Warnings : {ceph_health_status}"
+        )
+
+    def is_degraded_stretch_mode(self):
+        """"""
+        stretch_details = self.rados_obj.get_stretch_mode_dump()
+        if not stretch_details["degraded_stretch_mode"]:
+            log.error(
+                f"Stretch Cluster is not marked as degraded even though we have DC down : {stretch_details}"
+            )
+            return False
+        return True
 
 
 class RevertStretchModeFunctionalities(StretchMode):
