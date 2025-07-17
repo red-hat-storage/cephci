@@ -21,6 +21,7 @@ def wait_for_cluster_health(node, status, timeout=300, interval=20):
     """
     for w in WaitUntil(timeout=timeout, interval=interval):
         _status = Ceph(node).health()
+        log.info(f"Cluster status is {_status}")
         if status in _status:
             log.info(f"Cluster status is in expected state {status}")
             return True

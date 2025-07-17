@@ -83,7 +83,13 @@ class Ceph(Cli):
         if detail:
             cmd += " detail"
         out = self.execute(sudo=True, check_ec=False, long_running=False, cmd=cmd)
-        if isinstance(out, tuple):
+        if isinstance(out, dict):
+            for key, value in out.items():
+                if isinstance(value, tuple):
+                    return value[0].strip()
+                else:
+                    return value[0]
+        elif isinstance(out, tuple):
             return out[0].strip()
         return out
 
