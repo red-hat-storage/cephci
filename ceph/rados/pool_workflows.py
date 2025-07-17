@@ -608,6 +608,8 @@ class PoolFunctions:
         check: bool = True,
         obj_check: bool = True,
         timeout: int = 600,
+        verify_ceph_df: bool = False,
+        verify_ceph_pg_dump: bool = False,
     ) -> bool:
         """
         Perform deep-scrub on given pool and check if "Large omap object"
@@ -620,6 +622,8 @@ class PoolFunctions:
                 objects is to be matched in the health warning
             check: boolean value to decide whether warning should exist or not
             timeout: timeout in seconds for warning to show up
+            verify_ceph_df: Check if the OMAP details are added in ceph df detail. BZ: 2279298
+            verify_ceph_pg_dump: Check if the OMAP details are added in ceph pg dump pools. detail. BZ: 2279298
         Returns:
             True-> pass | False-> Fail
         """
@@ -636,6 +640,13 @@ class PoolFunctions:
             )
             return False
 
+        # Checking if the omap details are populated in ceph pg dump pools before scrub
+        if verify_ceph_pg_dump:
+            log.debug(
+                "Checking if the omap details are populated in ceph pg dump pools before scrub. printed below\n"
+            )
+            log.debug(self.rados_obj.run_ceph_command(cmd="ceph pg dump pools"))
+
         self.rados_obj.run_deep_scrub(pool=pool)
         # Timeout to let health warning show up
         timeout_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
@@ -650,12 +661,68 @@ class PoolFunctions:
                 warn_found = True
                 break
             time.sleep(30)
-
+        cmd_op = True
         if (warn_found and check) or (not warn_found and not check):
             log.info(
                 f"Large omap objects warning found: {warn_found} | Expected: {check}"
             )
-            return True
+            # Checking if the omap details are populated in ceph pg dump pools post scrub
+            if verify_ceph_pg_dump:
+                cmd = "ceph pg dump pools"
+                out = self.rados_obj.run_ceph_command(cmd=cmd)
+                log.debug(out)
+                pool_id = self.get_pool_id(pool_name=pool)
+                for pool in out["pool_stats"]:
+                    if pool["poolid"] == pool_id:
+                        if (
+                            pool["stat_sum"]["num_omap_bytes"] <= 0
+                            or pool["stat_sum"]["num_omap_keys"] <= 0
+                        ):
+                            log.error(
+                                f"omap entries are not part of ceph pg pool stats for pool {pool}"
+                            )
+                            cmd_op = False
+                        log.info(
+                            f"omap entries are part of ceph pg pool stats for pool {pool}"
+                        )
+            # Checking if the omap details are populated in ceph df detail
+            if verify_ceph_df:
+                cmd = "ceph df detail"
+                out = self.rados_obj.run_ceph_command(cmd=cmd)
+                log.debug(out)
+                for pool in out["pools"]:
+                    if pool["name"] == pool:
+                        if (
+                            pool["stats"]["omap_bytes_used"] <= 0
+                            or pool["stats"]["stored_omap"] <= 0
+                        ):
+                            log.error(
+                                f"omap entries are not part of ceph df detail for pool {pool}, but expected."
+                                f"Bug : 2279298. Proceeding to reboot the OSDs and check again."
+                            )
+                            # Applying WA for bug : Bug : 2279298
+                            self.rados_obj.restart_daemon_services(daemon="osd")
+                            out = self.rados_obj.run_ceph_command(cmd="ceph df detail")
+                            log.debug(out)
+                            for pool in out["pools"]:
+                                if pool["name"] == pool:
+                                    if (
+                                        pool["stats"]["omap_bytes_used"] <= 0
+                                        or pool["stats"]["stored_omap"] <= 0
+                                    ):
+                                        log.error(
+                                            f"omap entries are not part of ceph df detail for pool {pool},"
+                                            f"even after restart of all OSDs"
+                                        )
+                                        cmd_op = False
+                                    else:
+                                        log.info(
+                                            f"omap entries are part of ceph df detail for pool {pool} post restart"
+                                        )
+                        log.info(
+                            f"omap entries are part of ceph df detail for pool {pool} before OSD reboot"
+                        )
+            return cmd_op if (verify_ceph_df or verify_ceph_pg_dump) else True
         log.error("Large omap warning did not appear as per expectation")
         return False
 
