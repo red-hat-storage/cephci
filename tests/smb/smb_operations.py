@@ -164,6 +164,7 @@ def smbclient_check_shares(
     smb_user_password,
     auth_mode,
     domain_realm,
+    smb_port,
     public_addrs=None,
 ):
     """Smb share check using smbclients
@@ -173,6 +174,7 @@ def smbclient_check_shares(
         smb_shares (list): Smb shares list
         smb_user_name (str): Smb username
         smb_user_password (str): Smb password
+        smb_port (str): Smb Port
         auth_mode (str): Smb auth mode (user or active-directory)
         domain_realm (str): Smb AD domain relam
     """
@@ -184,6 +186,7 @@ def smbclient_check_shares(
                         cmd = (
                             f"smbclient -U '{domain_realm.split('.')[0].upper()}\\"
                             f"{smb_user_name}%{smb_user_password}' "
+                            f"-p {smb_port} "
                             f"//{public_addr.split('/')[0]}/{smb_share} -c ls"
                         )
                         client.exec_command(
@@ -193,6 +196,7 @@ def smbclient_check_shares(
                     elif auth_mode == "user":
                         cmd = (
                             f"smbclient -U {smb_user_name}%{smb_user_password}"
+                            f"-p {smb_port} "
                             f" //{public_addr.split('/')[0]}/{smb_share} -c ls"
                         )
                         client.exec_command(
@@ -207,6 +211,7 @@ def smbclient_check_shares(
                         cmd = (
                             f"smbclient -U '{domain_realm.split('.')[0].upper()}\\"
                             f"{smb_user_name}%{smb_user_password}' "
+                            f"-p {smb_port} "
                             f"//{smb_node.ip_address}/{smb_share} -c ls"
                         )
                         client.exec_command(
@@ -216,6 +221,7 @@ def smbclient_check_shares(
                     elif auth_mode == "user":
                         cmd = (
                             f"smbclient -U {smb_user_name}%{smb_user_password}"
+                            f"-p {smb_port} "
                             f" //{smb_node.ip_address}/{smb_share} -c ls"
                         )
                         client.exec_command(
