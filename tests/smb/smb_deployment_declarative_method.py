@@ -75,6 +75,10 @@ def run(ceph_cluster, **kw):
                 ]
             else:
                 public_addrs = None
+            if "custom_ports" in spec:
+                smb_port = spec["custom_ports"]["smb"]
+            else:
+                smb_port = "445"
         elif spec["resource_type"] == "ceph.smb.usersgroups":
             smb_user_name = spec["values"]["users"][0]["name"]
             smb_user_password = spec["values"]["users"][0]["password"]
@@ -121,6 +125,7 @@ def run(ceph_cluster, **kw):
             smb_user_password,
             auth_mode,
             domain_realm,
+            smb_port,
             public_addrs,
         )
     except Exception as e:
