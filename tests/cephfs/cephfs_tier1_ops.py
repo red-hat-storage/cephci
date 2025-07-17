@@ -1,6 +1,9 @@
 import random
+import re
 import string
+import time
 import traceback
+from threading import Thread
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
@@ -201,6 +204,50 @@ def run(ceph_cluster, **kw):
             fuse_mounting_dir_2,
             extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
+
+        log.info(
+            "CEPH-83624141: Run parallel IOs on subvolumegroup/subvolume on kernel client and subvolume in Fuse client"
+        )
+        log.info("This validates the hotfix BZ-2371495")
+
+        running = {"run": True}
+
+        # Start the workloads
+        t1 = Thread(target=client1_workload, args=(clients[0], running))
+        t2 = Thread(target=client2_workload, args=(clients[1], running))
+        t1.start()
+        t2.start()
+
+        # Monitor MDS latency for 30 seconds
+        end_time = time.time() + 30
+        active_mds = fs_util.get_active_mdss(clients[0], default_fs)
+        while time.time() < end_time:
+            out, _ = clients[0].exec_command(
+                sudo=True,
+                cmd=f"ceph tell mds.{active_mds[0]} dump_historic_ops_by_duration",
+            )
+            durations = re.findall(r'"duration":\s*([\d.]+)', out)
+
+            # Convert to float and filter out the 600 bucket (or anything >= 600)
+            filtered = [float(d) for d in durations if float(d) < 600]
+            if filtered:
+                max_duration = max(filtered)
+                if max_duration > 1.0:
+                    running["run"] = False  # Stop workloads
+                    log.error(
+                        "High latency detected: {} but not failing the TC since the fix "
+                        "is not yet ported. BZ-2371495".format(max_duration)
+                    )
+                    # return 1
+            log.info("Sleeping for 5 seconds before next validation")
+            time.sleep(5)
+
+        # Stop workloads
+        running["run"] = False
+        t1.join()
+        t2.join()
+
+        log.info("CEPH-83624141: Validation Completed")
 
         log.info(
             "On EC,Mount 1 subvolumegroup/subvolume on kernal and 1 subvloume on Fuse → Client2"
@@ -561,3 +608,25 @@ def run_ios(client, mounting_dir):
     io_tools = [dd, smallfile]
     f = random.choice(io_tools)
     f()
+
+
+def client1_workload(client, running):
+    """Continuously move files between directories a and b."""
+    while running["run"]:
+        log.info("Client1 workload running - moving files between directories a and b")
+        client.exec_command(
+            sudo=True,
+            cmd="mv -f a/file b/file || true; mv -f b/file a/file || true",
+            check_ec=False,
+        )
+
+
+def client2_workload(client, running):
+    """Continuously find files and check their status."""
+    while running["run"]:
+        log.info("Client2 workload running - finding files and checking status")
+        client.exec_command(
+            sudo=True,
+            cmd="find a b -print > /dev/null 2>&1; stat a/file || true",
+            check_ec=False,
+        )
