@@ -477,13 +477,30 @@ tests:
         qos_type: PerShare_PerClient
         operation: restart
 
+
   - test:
-      name: cthon tests for NFS ganesha
-      module: test_cthon.py
-      desc: cthon tests for NFS ganesha - running all testcases basic, general, special and lock
-      polarion-id: CEPH-83617827
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
-        total_num_exports: 4
+      name: cthon tests for NFS ganesha with restart - parallel module
+      module: test_parallel.py
+      desc: cthon + restart - parallel module
+      parallel:
+          - test:
+              name: cthon tests for NFS ganesha
+              module: test_cthon.py
+              desc: cthon tests for NFS ganesha - running all testcases basic, general, special and lock
+              polarion-id: CEPH-83617827
+              abort-on-fail: false
+              config:
+                nfs_version: 4.2
+                clients: 2
+                total_num_exports: 8
+
+          - test:
+              name: Restart NFS Ganesha services
+              desc: Restart NFS Ganesha services for given time
+              module: scripts_tools.restart_nfs_ganesha_services.py
+              config:
+                clients: 1
+                restart_interval: 2 #in minutes
+                longevity: true
+                # longevity_duration: 1 # in hours
+                longevity_loop: 5

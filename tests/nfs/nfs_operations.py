@@ -14,6 +14,7 @@ from cli.exceptions import OperationFailedError
 from cli.utilities.filesys import Mount, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -92,16 +93,10 @@ def setup_nfs_cluster(
     for version, clients in mount_versions.items():
         for client in clients:
             client.create_dirs(dir_path=nfs_mount, sudo=True)
-            if Mount(client).nfs(
-                mount=nfs_mount,
-                version=version,
-                port=port,
-                server=nfs_server,
-                export="{0}_{1}".format(export, i),
+            if mount_retry(
+                clients, i, nfs_mount, version, port, nfs_server, export_name
             ):
-                raise OperationFailedError(
-                    "Failed to mount nfs on %s" % client.hostname
-                )
+                log.info("Mount succeeded on %s" % client.hostname)
             i += 1
             sleep(1)
     log.info("Mount succeeded on all clients")
@@ -794,3 +789,18 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout):
             "NFS Ganesha services are still running after deletion. Timeout expired. -- %s seconds"
             % timeout
         )
+
+
+@retry(OperationFailedError, tries=4, delay=5, backoff=2)
+def mount_retry(
+    clients, client_num, mount_name, version, port, nfs_server, export_name, ha=False
+):
+    if Mount(clients[client_num]).nfs(
+        mount=mount_name,
+        version=version,
+        port=port,
+        server=nfs_server,
+        export=export_name,
+    ):
+        raise OperationFailedError("Failed to mount nfs on %s" % export_name.hostname)
+    return True
