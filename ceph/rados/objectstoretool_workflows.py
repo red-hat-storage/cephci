@@ -16,6 +16,11 @@ Possible obj operations:
     set-size
     clear-data-digest
     remove-clone-metadata
+    export
+    meta-list
+    get-osdmap
+    get-superblock
+    get-inc-osdmap
 
 ceph-objectstore-tool --data-path path to osd [ --op list $obj_ID]
 
@@ -105,7 +110,7 @@ class objectstoreToolWorkflows:
             Returns the output of
             ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op list
         """
-        # Extracting the crush map from the cluster
+        # Extracting the list of objects for an OSD
         _cmd = "--op list"
         if pgid:
             _cmd = f"{_cmd} --pgid {pgid}"
@@ -170,7 +175,7 @@ class objectstoreToolWorkflows:
             in_file: output file for redirection
             start: flag to control osd restart
         Returns:
-            Returns the output of cbt repair cmd
+            Returns the output of cbt set-bytes cmd
         """
         if not start:
             self.nostart = True
@@ -343,4 +348,88 @@ class objectstoreToolWorkflows:
             ceph-objectstore-tool --data-path $PATH_TO_OSD $OBJECT dump
         """
         _cmd = f"'{obj}' dump"
+        return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
+
+    def get_superblock(self, osd_id: int):
+        """Module to retrieve objectstore superblock for an OSD
+        Args:
+            osd_id: OSD ID for which cot will be executed
+        Returns:
+            Returns the output of
+            ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op get-superblock
+        """
+        # Extracting the superblock from the osd
+        _cmd = "--op get-superblock"
+        return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
+
+    def get_osdmap(self, osd_id: int, pgid: str = None, obj_name: str = None):
+        """Module to retrieve osdmap for an object in input OSD
+        Args:
+            osd_id: OSD ID for which cot will be executed
+            pgid: pg ID for which objs will be listed
+            obj_name: name of a specific object to be listed
+        Returns:
+            Returns the output of
+            ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op get-osdmap
+        """
+        # Extracting the osdmap from the osd
+        _cmd = "--op get-osdmap"
+        if pgid:
+            _cmd = f"{_cmd} --pgid {pgid}"
+        if obj_name:
+            _cmd = f"{_cmd} {obj_name}"
+        return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
+
+    def get_inc_osdmap(self, osd_id: int, pgid: str = None, obj_name: str = None):
+        """Module to retrieve inc-osdmap for an object in input OSD
+        Args:
+            osd_id: OSD ID for which cot will be executed
+            pgid: pg ID for which objs will be listed
+            obj_name: name of a specific object to be listed
+        Returns:
+            Returns the output of
+            ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op get-inc-osdmap
+        """
+        # Extracting the incremental osdmap from the osd
+        _cmd = "--op get-inc-osdmap"
+        if pgid:
+            _cmd = f"{_cmd} --pgid {pgid}"
+        if obj_name:
+            _cmd = f"{_cmd} {obj_name}"
+        return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
+
+    def get_meta_list(self, osd_id: int, pgid: str = None, obj_name: str = None):
+        """Module to retrieve meta-list for the input OSD
+        Args:
+            osd_id: OSD ID for which cot will be executed
+            pgid: pg ID for which objs will be listed
+            obj_name: name of a specific object to be listed
+        Returns:
+            Returns the output of
+            ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op meta-list
+        """
+        # Extracting the incremental osdmap from the osd
+        _cmd = "--op meta-list"
+        if pgid:
+            _cmd = f"{_cmd} --pgid {pgid}"
+        if obj_name:
+            _cmd = f"{_cmd} {obj_name}"
+        return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
+
+    def export(self, osd_id: int, pgid: str = None, obj_name: str = None):
+        """Module to export content of input OSD
+        Args:
+            osd_id: OSD ID for which cot will be executed
+            pgid: pg ID for which objs will be listed
+            obj_name: name of a specific object to be listed
+        Returns:
+            Returns the output of
+            ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op export
+        """
+        # Extracting the incremental osdmap from the osd
+        _cmd = "--op export"
+        if pgid:
+            _cmd = f"{_cmd} --pgid {pgid}"
+        if obj_name:
+            _cmd = f"{_cmd} {obj_name}"
         return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
