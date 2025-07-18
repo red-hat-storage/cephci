@@ -55,6 +55,7 @@ import yaml
 from utility import utils
 from utility.log import Log
 from utility.utils import (
+    configure_kafka_cluster_with_security,
     configure_kafka_security,
     install_start_kafka,
     retain_bucket_pol_at_archive,
@@ -231,6 +232,11 @@ def run(**kw):
     if configure_kafka_broker_security:
         configure_kafka_security(primary_rgw_node, cloud_type)
         configure_kafka_security(secondary_rgw_node, cloud_type)
+
+    configure_kafka_cluster = config.get("configure_kafka_cluster_with_security")
+    if configure_kafka_cluster:
+        configure_kafka_cluster_with_security(primary_cluster, cloud_type)
+        configure_kafka_cluster_with_security(secondary_cluster, cloud_type)
 
     if test_config["config"]:
         log.info("creating custom config")
