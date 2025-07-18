@@ -1493,6 +1493,19 @@ def fetch_build_artifacts(
         registry, image_name = container_image.split(":")[0].split("/", 1)
         image_tag = container_image.split(":")[-1]
         base_url = build_info["composes"][platform]
+
+        # Todo: Extend the support for RH builds if RH staging repos
+        # are no longer maintained in future
+        if ibm_build:
+            _release = str(ceph_version)[0]
+            ibm_cdn_repo = (
+                f"https://public.dhe.ibm.com/ibmdl/export/pub/"
+                f"storage/ceph/ibm-storage-ceph-{_release}-{platform}.repo"
+            )
+            repo_data = requests.get(base_url)
+            if repo_data.status_code != 200:
+                base_url = ibm_cdn_repo
+
         return base_url, registry, image_name, image_tag
     except Exception as e:
         raise TestSetupFailure(f"Could not fetch build details of : {e}")
@@ -2224,6 +2237,35 @@ def fetch_image_tag(rhbuild):
         raise TestSetupFailure("Not a live testing")
     except Exception as e:
         raise TestSetupFailure(f"Could not fetch image tag : {e}")
+
+
+def fetch_build_version(rhbuild, version, ibm_build=None):
+    """Retrieves ceph-version from magna002 artifacts
+    for a particular build
+
+        Args:
+            rhbuild: downstream ceph version | 8.1, 7.1-rhel-9, 6.1
+            version: build section to be fetched | 'latest', z1, z2, z3
+            ibm_build: flag to fetch IBM build detail
+        Returns:
+            ceph-version from recipe file
+            e.g. - 19.2.1-230 | 18.2.1-340
+    """
+    try:
+        # Todo: add support for Upstream build if necessary
+        _ver = str(rhbuild).split("-")[0]
+        recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+        filename = f"RHCEPH-{_ver}.yaml"
+        if ibm_build:
+            filename = f"IBMCEPH-{_ver}.yaml"
+
+        url = f"{recipe_url}{filename}"
+        data = requests.get(url, verify=False)
+        yml_data = yaml.safe_load(data.text)
+
+        return yml_data[version]["ceph-version"]
+    except Exception as e:
+        raise TestSetupFailure(f"Could not fetch build details of : {e}")
 
 
 def validate_conf(conf):

@@ -8,7 +8,7 @@ from typing import Dict
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
 from ceph.utils import get_node_by_id, get_public_network, setup_repos
 from utility.log import Log
-from utility.utils import fetch_build_artifacts, get_cephci_config
+from utility.utils import fetch_build_artifacts, fetch_build_version, get_cephci_config
 
 from ..ceph import ResourceNotFoundError
 from .common import config_dict_to_string
@@ -257,7 +257,14 @@ class BootstrapMixin:
                 extra_args=ansible_run.get("extra-args"),
             )
         else:
-            self.install()
+            rpm_version = None
+            if ibm_build and build_type != "released" and _rhcs_release:
+                rpm_version = fetch_build_version(
+                    rhbuild=_rhcs_version, version=_rhcs_release, ibm_build=ibm_build
+                )
+                os_ver = rhbuild.split("-")[-1]
+                rpm_version = f"2:{rpm_version}.el{os_ver}cp"
+            self.install(**{"rpm_version": rpm_version})
 
         cmd = "cephadm"
         if config.get("base_cmd_args"):
