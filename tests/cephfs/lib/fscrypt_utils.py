@@ -673,22 +673,18 @@ class FscryptUtils(object):
         def rename():
             test_files_list = self.get_file_list(client, encrypt_path)
             file_to_rename, file_to_rename_1 = random.sample(test_files_list, 2)
-            retry_cnt = 5
-            while retry_cnt:
-                if ("renamed_file" in file_to_rename) or (
-                    "renamed_file" in file_to_rename_1
-                ):
-                    file_to_rename, file_to_rename_1 = random.sample(test_files_list, 2)
-                    retry_cnt -= 1
-                else:
-                    retry_cnt = 0
+            rand_str = "".join(
+                random.choice(string.ascii_lowercase + string.digits)
+                for _ in list(range(4))
+            )
             try:
                 client.exec_command(
-                    sudo=True, cmd=f"mv {file_to_rename} {encrypt_path}/renamed_file"
+                    sudo=True,
+                    cmd=f"mv {file_to_rename} {encrypt_path}/renamed_file_{rand_str}",
                 )
                 client.exec_command(
                     sudo=True,
-                    cmd=f"mv {file_to_rename_1} {encrypt_path}/../renamed_file",
+                    cmd=f"mv {file_to_rename_1} {encrypt_path}/../renamed_file_{rand_str}",
                 )
             except BaseException as ex:
                 log.info(ex)
