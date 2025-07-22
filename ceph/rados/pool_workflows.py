@@ -672,11 +672,11 @@ class PoolFunctions:
                 out = self.rados_obj.run_ceph_command(cmd=cmd)
                 log.debug(out)
                 pool_id = self.get_pool_id(pool_name=pool)
-                for pool in out["pool_stats"]:
-                    if pool["poolid"] == pool_id:
+                for pool_stats in out["pool_stats"]:
+                    if pool_stats["poolid"] == pool_id:
                         if (
-                            pool["stat_sum"]["num_omap_bytes"] <= 0
-                            or pool["stat_sum"]["num_omap_keys"] <= 0
+                            pool_stats["stat_sum"]["num_omap_bytes"] <= 0
+                            or pool_stats["stat_sum"]["num_omap_keys"] <= 0
                         ):
                             log.error(
                                 f"omap entries are not part of ceph pg pool stats for pool {pool}"
@@ -690,11 +690,11 @@ class PoolFunctions:
                 cmd = "ceph df detail"
                 out = self.rados_obj.run_ceph_command(cmd=cmd)
                 log.debug(out)
-                for pool in out["pools"]:
-                    if pool["name"] == pool:
+                for pool_detail in out["pools"]:
+                    if pool_detail["name"] == pool:
                         if (
-                            pool["stats"]["omap_bytes_used"] <= 0
-                            or pool["stats"]["stored_omap"] <= 0
+                            pool_detail["stats"]["omap_bytes_used"] <= 0
+                            or pool_detail["stats"]["stored_omap"] <= 0
                         ):
                             log.error(
                                 f"omap entries are not part of ceph df detail for pool {pool}, but expected."
@@ -704,11 +704,17 @@ class PoolFunctions:
                             self.rados_obj.restart_daemon_services(daemon="osd")
                             out = self.rados_obj.run_ceph_command(cmd="ceph df detail")
                             log.debug(out)
-                            for pool in out["pools"]:
-                                if pool["name"] == pool:
+                            for pool_detail_post_osd_restart in out["pools"]:
+                                if pool_detail_post_osd_restart["name"] == pool:
                                     if (
-                                        pool["stats"]["omap_bytes_used"] <= 0
-                                        or pool["stats"]["stored_omap"] <= 0
+                                        pool_detail_post_osd_restart["stats"][
+                                            "omap_bytes_used"
+                                        ]
+                                        <= 0
+                                        or pool_detail_post_osd_restart["stats"][
+                                            "stored_omap"
+                                        ]
+                                        <= 0
                                     ):
                                         log.error(
                                             f"omap entries are not part of ceph df detail for pool {pool},"
