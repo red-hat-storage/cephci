@@ -4712,6 +4712,15 @@ EOF"""
             return self.set_service_managed_type(
                 service_type=service_type, unmanaged=False
             )
+
+        cmd_export = f"ceph orch ls {service_type} {service_name} --export"
+        _service = self.run_ceph_command(cmd=cmd_export, client_exec=True)
+        if not _service.get("placement", False):
+            log.warning(
+                "Service %s does not have placement entry and cannot be set to 'managed', skipping"
+                % _service["service_name"]
+            )
+            return True
         cmd_set_managed_flag = f"ceph orch set-managed {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
         base_cmd = "ceph orch ls"

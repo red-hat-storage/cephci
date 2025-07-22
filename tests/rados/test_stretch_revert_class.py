@@ -2,6 +2,7 @@ import time
 from collections import namedtuple
 
 from ceph.ceph import CephNode
+from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.test_stretch_site_down import get_stretch_site_hosts
 from tests.rados.test_stretch_site_reboot import get_host_obj_from_hostname
 from utility.log import Log
@@ -12,8 +13,21 @@ Hosts = namedtuple("Hosts", ["dc_1_hosts", "dc_2_hosts", "tiebreaker_hosts"])
 
 
 class StretchMode:
+    """
+    Usage:-
+        config = {
+            "rados_obj": rados_obj,
+            "pool_obj": pool_obj,
+            "tiebreaker_mon_site_name": tiebreaker_mon_site_name,
+            "stretch_bucket": stretch_bucket,
+            "client_node": client_node,
+        }
+        stretch_mode = StretchMode(**config)
+        stretch_mode.enable_stretch_mode(tiebreaker_mon)
+    """
+
     def __init__(self, **kwargs):
-        self.rados_obj = kwargs.get("rados_obj")
+        self.rados_obj: RadosOrchestrator = kwargs.get("rados_obj")
         self.tiebreaker_mon_site_name = kwargs.get(
             "tiebreaker_mon_site_name", "tiebreaker"
         )
@@ -26,6 +40,8 @@ class StretchMode:
         self.site_1_hosts = None
         self.site_2_hosts = None
         self.tiebreaker_hosts = None
+        self.site_1_name = None
+        self.site_2_name = None
         self.segregate_hosts_based_on_stretch_bucket()
 
         self.client_node = kwargs.get("client_node", None)
@@ -171,6 +187,7 @@ class StretchMode:
         """
         Method to segregate hosts based on stretch bucket.
         Populates site_1_hosts, site_2_hosts and tiebreaker_hosts
+        Populates site_1_name, site_2_name
         Returns:
             None
         """
@@ -190,7 +207,8 @@ class StretchMode:
         self.site_1_hosts = all_hosts.dc_1_hosts
         self.site_2_hosts = all_hosts.dc_2_hosts
         self.tiebreaker_hosts = all_hosts.tiebreaker_hosts
-
+        self.site_1_name = dc_1_name
+        self.site_2_name = dc_2_name
         log.debug(f"Hosts present in Datacenter : {dc_1_name} : {self.site_1_hosts}")
         log.debug(f"Hosts present in Datacenter : {dc_2_name} : {self.site_2_hosts}")
         log.debug(
@@ -215,26 +233,19 @@ class StretchMode:
             time.sleep(20)
         log.info("Completed flushing IP table rules on all hosts")
 
-    def shutdown_hosts(self, hosts):
-        """
-        Method to shutdown the passed list of hosts.
-        Args:
-            hosts: (type: List) List of hostnames to shutdown.
-
-        Returns:
-            None
-        """
-
     def write_io_and_validate_objects(
         self, pool_name: str, init_objects: int, obj_name: str
     ) -> object:
         """
-
+        Method to write IO and validate the count of objects.
         Args:
-            init_objects:
-
+            init_objects (int) : Initial number of objects on the pool
+            pool_name (str) : name of the pool to write IO and validate
+            obj_name (str) : name of the objects to write
         Returns:
-
+            None
+        Raises:
+            Exception If the number of objects post IO is less than or equal to init_objects
         """
         log_msg = (
             f"\n Writing IO to the pool {pool_name}."
@@ -278,30 +289,13 @@ class StretchMode:
         )
         log.info(log_msg)
 
-    def validate_health_warnings(self, expected_health_warns: list):
-        """
-
-        Returns:
-
-        """
-        status_report = self.rados_obj.run_ceph_command(
-            cmd="ceph report", client_exec=True
-        )
-        ceph_health_status = list(status_report["health"]["checks"].keys())
-        if not all(elem in ceph_health_status for elem in expected_health_warns):
-            err_msg = (
-                f"We do not have the expected health warnings generated on the cluster.\n"
-                f"Warns on cluster : {ceph_health_status}\n"
-                f"Expected Warnings : {expected_health_warns}\n"
-            )
-            log.error(err_msg)
-
-        log.info(
-            f"The expected health warnings are generated on the cluster. Warnings : {ceph_health_status}"
-        )
-
     def is_degraded_stretch_mode(self):
-        """"""
+        """
+        Method to check if stretch mode is degraded stretch mode or not.
+        Retuns:
+            True:- If Ceph cluster is in degraded stretch mode
+            False:- If Ceph cluster is not in degraded stretch mode
+        """
         stretch_details = self.rados_obj.get_stretch_mode_dump()
         if not stretch_details["degraded_stretch_mode"]:
             log.error(
@@ -362,7 +356,7 @@ class RevertStretchModeFunctionalities(StretchMode):
         log.info("Validating pool properties for each pool : ")
         log.info(pool_properties)
         cmd = "ceph osd pool ls detail"
-        pool_detail = self.rados_obj.run_ceph_command(cmd=cmd)
+        pool_detail = self.rados_obj.run_ceph_command(cmd=cmd, client_exec=True)
         for pool_detail in pool_detail:
             pool_name = pool_detail["pool_name"]
             for property_name, property_value in pool_properties.items():
@@ -402,7 +396,7 @@ class RevertStretchModeFunctionalities(StretchMode):
         """
         cmd = "ceph osd dump"
         ceph_osd_dump_output = self.rados_obj.run_ceph_command(
-            cmd=cmd, print_output=True
+            cmd=cmd, print_output=True, client_exec=True
         )
         osd_map_configs_to_validate = (
             expected_osd_map_values.keys()
@@ -446,7 +440,7 @@ class RevertStretchModeFunctionalities(StretchMode):
         """
         cmd = "ceph mon dump"
         ceph_mon_dump_output = self.rados_obj.run_ceph_command(
-            cmd=cmd, print_output=True
+            cmd=cmd, print_output=True, client_exec=True
         )
 
         mon_map_configs_to_validate = (
