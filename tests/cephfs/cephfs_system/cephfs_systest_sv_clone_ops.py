@@ -15,6 +15,7 @@ from ceph.parallel import parallel
 # from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_system.cephfs_system_utils import CephFSSystemUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -35,19 +36,19 @@ def run(ceph_cluster, **kw):
 
     """
     try:
+        global common_util, nested_dir
         fs_system_utils = CephFSSystemUtils(ceph_cluster)
         fs_util = FsUtilsV1(ceph_cluster)
+        common_util = CephFSCommonUtils(ceph_cluster)
         config = kw.get("config")
         cephfs_config = {}
         run_time = config.get("run_time_hrs", 4)
+        nested_dir = config.get("nested_dir", True)
         sv_cnt = config.get("sv_cnt", 100)
         clone_cnt = config.get("clone_cnt", 10)
         clients = ceph_cluster.get_ceph_objects("client")
-
         file = "cephfs_systest_data.json"
-
         client1 = clients[0]
-
         f = client1.remote_file(
             sudo=True,
             file_name=f"/home/cephuser/{file}",
@@ -305,6 +306,28 @@ def clone_test_workflow_2(
                     log1.info(f"Started {clone_name} on {sv_name}")
                     k += 1
                     clone_rm_list.append(clone_obj)
+    if nested_dir:
+        mount_params = {
+            "client": client,
+            "mnt_path": "",
+            "fs_name": fs_name,
+            "export_created": 0,
+        }
+        sv_args = {}
+        nested_dir_list = random.sample(clone_rm_list, 2)
+        for clone_obj in nested_dir_list:
+            sv_args.update(
+                {
+                    "subvolume_name": clone_obj["clone_name"],
+                    "subvolume_group": clone_obj["group_name"],
+                }
+            )
+            sv_path = common_util.subvolume_get_path(client, fs_name, **sv_args)
+            mount_params.update({"mnt_path": sv_path})
+            mnt_path, _ = fs_util.mount_ceph("fuse", mount_params)
+            fs_system_utils.add_nested_dirs(client, mnt_path)
+            client.exec_command(sudo=True, cmd=f"umount -l {mnt_path}", check_ec=False)
+
     end_time = datetime.datetime.now() + datetime.timedelta(hours=run_time)
     iter_cnt = 0
     while datetime.datetime.now() < end_time and cluster_healthy:

@@ -421,3 +421,33 @@ class CephFSSystemUtils(object):
             elif proc_stop == 0:
                 log.error("Process is still running : %s", test_proc.name)
                 return 1
+
+    def add_nested_dirs(self, client, mnt_path, dir_limit=1500):
+        """
+        This method will added nested directories in given path to the given limit
+        """
+        base_path = f"{mnt_path}/nested_dirs/"
+        cmd = f"mkdir -p {base_path}"
+        client.exec_command(sudo=True, cmd=cmd)
+        cmd = f'echo "export BDIR={base_path}" >> ~/.bashrc'
+        client.exec_command(sudo=True, cmd=cmd)
+        cd_cmds = "cd $BDIR;"
+        # multi-depth
+        for i in range(1, dir_limit, 50):
+            current_path = ""
+            for j in range(i, i + 50):
+                current_path += f"dir_{j}/"
+                cmd = f"{cd_cmds}mkdir -p {current_path}"
+                client.exec_command(sudo=True, cmd=cmd)
+                file_path = f"{current_path}/dd_file_{j}"
+                cmd = f"{cd_cmds}dd bs=10k count=2 if=/dev/urandom of={file_path}"
+                client.exec_command(sudo=True, cmd=cmd)
+            dir_path = current_path
+            cmd = f'echo "export NDIR{i}={dir_path}" >> ~/.bashrc'
+            client.exec_command(sudo=True, cmd=cmd)
+            cd_cmds += f"cd $NDIR{i};"
+        # remove envs
+        client.exec_command(sudo=True, cmd="unset BDIR")
+        for i in range(1, dir_limit, 50):
+            cmd = f"unset NDIR{i}"
+            client.exec_command(sudo=True, cmd=cmd)
