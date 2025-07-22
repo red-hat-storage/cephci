@@ -44,7 +44,7 @@ def run(ceph_cluster, **kw):
             # Verify the reboot doesn't affect the cluster health
             if not _is_cluster_healthy(mon_node):
                 raise ClusterNotHealthy(
-                    f"Ceph cluster not healthy after rebooting {node.hostname}"
+                    f"Ceph cluster not healthy after rebooting {node.hostname}. Refer Bz : #2295317"
                 )
 
     elif action == "service-state":
