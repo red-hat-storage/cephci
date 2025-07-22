@@ -266,6 +266,7 @@ def run(ceph_cluster, **kw):
                     "byte_size": f"{bench_obj_size_kb}KB",
                     "nocleanup": True,
                     "max_objs": subseq_obj_full,
+                    "check_ec": False,
                 }
                 if (
                     rados_obj.bench_write(
