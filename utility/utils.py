@@ -2582,3 +2582,92 @@ def is_unsecured_registry(test_data):
             return insecure_registry_value  # Return boolean value for insecure-registry
 
     return False  # Default return value if conditions are not met
+
+
+def setup_gklm_prereq(ceph_cluster, cloud_type, ibm_iam_token_filename):
+    """setup GKLM authentication certs on the rgw nodes, redeploy rgw to mounted gklm certs path
+    and set ceph configs for sse-kms-kmip"""
+    log.info("setting up GKLM prerequisites")
+    rgw_nodes = ceph_cluster.get_ceph_objects("rgw")
+    gklm_auth_cert_path = "/usr/local/gklm/rgwselfsigned.cert"
+    gklm_auth_key_path = "/usr/local/gklm/rgwselfsigned.key"
+    for rgw_node_obj in rgw_nodes:
+        rgw_node = rgw_node_obj.node
+        log.info(f"installing kafka on node {rgw_node.ip_address}")
+        rgw_node.exec_command(sudo=True, cmd="mkdir -p /usr/local/gklm")
+        if cloud_type == "openstack":
+            rgw_node.exec_command(
+                sudo=True,
+                cmd=f"curl -o {gklm_auth_cert_path}"
+                + " http://magna002.ceph.redhat.com/cephci-jenkins/gklm/rgwselfsigned.cert",
+            )
+            rgw_node.exec_command(
+                sudo=True,
+                cmd=f"curl -o {gklm_auth_key_path}"
+                + " http://magna002.ceph.redhat.com/cephci-jenkins/gklm/rgwselfsigned.key",
+            )
+        elif cloud_type == "ibmc":
+            ibmc_secrets_base_url = (
+                "https://b4fc7484-5e05-41a3-a3bd-bcb72f6fc466.us-south.secrets-manager.appdomain.cloud"
+                + "/api/v2/secret_groups/cephci-rgw-configs/secret_types/arbitrary/secretsmanager.appdomain.cloud"
+                + "/api/v2/secret_groups/cephci-rgw-configs/secret_types/arbitrary/secrets"
+            )
+            iam_token = "<IBM_CLOUD_IAM_TOKEN>"
+            with open(ibm_iam_token_filename, "r") as file:
+                iam_token = file.read()
+            rgw_node.exec_command(
+                sudo=True,
+                cmd=f'curl -X GET --location --header "Authorization: Bearer {iam_token}"'
+                + f' --header "Accept: application/json" "{ibmc_secrets_base_url}/rgw-self-signed-cert"'
+                + f" -o {gklm_auth_cert_path}",
+            )
+            rgw_node.exec_command(
+                sudo=True,
+                cmd=f'curl -X GET --location --header "Authorization: Bearer {iam_token}"'
+                + f' --header "Accept: application/json" "{ibmc_secrets_base_url}/rgw-self-signed-key"'
+                + f" -o {gklm_auth_key_path}",
+            )
+
+    rgw_node1_obj = rgw_nodes.pop(0)
+    rgw_node = rgw_node1_obj.node
+    rgw_node.exec_command(
+        sudo=True, cmd="ceph orch ls --service-type rgw --export > /root/rgw_spec.yaml"
+    )
+    out, _ = rgw_node.exec_command(sudo=True, cmd="cat /root/rgw_spec.yaml")
+    log.info(out)
+    rgw_node.exec_command(
+        sudo=True,
+        cmd="grep -q 'extra_container_args:\n - \"-v /usr/local/gklm:/usr/local/gklm\"' /root/rgw_spec.yaml"
+        + " || echo '\nextra_container_args:\n - \"-v /usr/local/gklm:/usr/local/gklm\"' >> /root/rgw_spec.yaml",
+    )
+    out, _ = rgw_node.exec_command(sudo=True, cmd="cat /root/rgw_spec.yaml")
+    log.info(out)
+    rgw_node.exec_command(sudo=True, cmd="ceph orch apply -i /root/rgw_spec.yaml")
+    log.info("sleeping for 20 seconds")
+    time.sleep(20)
+
+    rgw_node.exec_command(
+        sudo=True, cmd="ceph config set client.rgw rgw_crypt_require_ssl false"
+    )
+    rgw_node.exec_command(
+        sudo=True, cmd="ceph config set client.rgw rgw_crypt_s3_kms_backend kmip"
+    )
+    rgw_node.exec_command(
+        sudo=True,
+        cmd="ceph config set client.rgw rgw_crypt_kmip_client_cert /usr/local/gklm/rgwselfsigned.cert",
+    )
+    rgw_node.exec_command(
+        sudo=True,
+        cmd="ceph config set client.rgw rgw_crypt_kmip_client_key /usr/local/gklm/rgwselfsigned.key",
+    )
+
+    if cloud_type == "openstack":
+        rgw_node.exec_command(
+            sudo=True,
+            cmd="ceph config set client.rgw rgw_crypt_kmip_addr 10.0.64.87:5696",
+        )
+    elif cloud_type == "ibmc":
+        rgw_node.exec_command(
+            sudo=True,
+            cmd="ceph config set client.rgw rgw_crypt_kmip_addr 10.245.64.16:5696",
+        )
