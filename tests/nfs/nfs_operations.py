@@ -84,6 +84,15 @@ def setup_nfs_cluster(
 
     # Step 4: Perform nfs mount
     # If there are multiple nfs servers provided, only one is required for mounting
+
+    nfs_nodes = ceph_cluster.get_nodes("nfs")
+
+    # Check if the mount version v3 is included in the list of versions and
+    # if the mount version is v3, make necessary changes
+    if 3 in mount_versions.keys():
+        ports_to_open = ["portmapper", "mountd"]
+        for nfs_node in nfs_nodes:
+            open_mandatory_v3_ports(nfs_node, ports_to_open)
     if isinstance(nfs_server, list):
         nfs_server = nfs_server[0]
     if ha:
@@ -126,8 +135,6 @@ def setup_nfs_cluster(
         log.error(
             "Failed to verify nfs cluster and services %s cmd used: %s" % (e, cmd_used)
         )
-
-    nfs_nodes = ceph_cluster.get_nodes("nfs")
 
     # Step 5: Enable nfs coredump to nfs nodes
     Enable_nfs_coredump(nfs_nodes)
@@ -606,9 +613,16 @@ spec:
     # Wait till the NFS daemons are up
     sleep(10)
 
+    verify_nfs_ganesha_service(node=installer, timeout=300)
+    log.info("NFS Ganesha spec file applied successfully.")
+
     # Start the rpc-statd service on server
     cmd = "sudo systemctl start rpc-statd"
     nfs_node.exec_command(cmd=cmd)
+
+    # Open the NLM port
+    ports_to_open = ["nlockmgr"]
+    open_mandatory_v3_ports(nfs_node, ports_to_open)
 
 
 def getfattr(client, file_path, attribute_name=None):
@@ -789,6 +803,61 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout):
             "NFS Ganesha services are still running after deletion. Timeout expired. -- %s seconds"
             % timeout
         )
+
+
+def open_mandatory_v3_ports(nfs_node, ports_to_open):
+    """
+    Open the required ports for v3 mount (portmapper, mountd, nlockmgr) based on rpcinfo output.
+    """
+    # Initialize the service_ports_mapping dictionary to store the port lists
+    service_ports_mapping = {"portmapper": None, "mountd": None, "nlockmgr": None}
+
+    # Execute rpcinfo command to get the port information
+    cmd = "sudo rpcinfo -p"
+    out, _ = nfs_node.exec_command(sudo=True, cmd=cmd)
+    if not out:
+        log.error(f"Failed to execute rpcinfo -p on {nfs_node}")
+        return
+
+    # Split the output into lines and iterate over them
+    lines = out.splitlines()
+    port_mapper_found = False  # Have the first portmapper port
+
+    for line in lines:
+        # Skip header and empty lines
+        if "program vers proto port service" in line or not line.strip():
+            continue
+
+        # Split line into columns
+        columns = line.split()
+        port, service = columns[3], columns[4]
+
+        # Check for relevant services
+        if service == "portmapper" and not port_mapper_found:
+            service_ports_mapping["portmapper"] = port
+            port_mapper_found = True
+        elif service == "mountd":
+            service_ports_mapping["mountd"] = port
+        elif service == "nlockmgr":
+            service_ports_mapping["nlockmgr"] = port
+
+    # Open firewall ports based on services in ports_to_open
+    for service in ports_to_open:
+        port_to_open = service_ports_mapping.get(service)
+
+        if port_to_open:
+            # Open the port using the firewall command
+            nfs_node.exec_command(
+                sudo=True,
+                cmd=f"sudo firewall-cmd --zone=public --add-port={port_to_open}/tcp --permanent",
+            )
+            log.info(f"Opened {service} port: {port_to_open}")
+        else:
+            log.warning(f"{service} port not found or not needed.")
+
+    # Reload the firewall to apply the changes
+    nfs_node.exec_command(sudo=True, cmd="sudo firewall-cmd --reload")
+    log.info("Firewall rules reloaded.")
 
 
 @retry(OperationFailedError, tries=4, delay=5, backoff=2)
