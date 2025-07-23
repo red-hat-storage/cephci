@@ -244,12 +244,15 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
               upgrade: boolean # to upgrade cephadm RPM package
               nogpgcheck: boolean
               upgrade_client: boolean # to upgrade ceph client RPM packages (default: true)
+              rpm_version: specific rpm version to be installed
 
 
         :Note: At present, they are prefixed with -- hence use long options
 
         """
-        cmd = "yum install cephadm -y"
+        cmd = "yum -y install cephadm"
+        if kwargs.get("rpm_version", None):
+            cmd = f"{cmd}-{kwargs['rpm_version']}"
 
         if kwargs.get("nogpgcheck", True):
             cmd += " --nogpgcheck"
@@ -262,7 +265,10 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
                 if self.config.get("ibm_build"):
                     setup_ibm_licence(node, build_type=None)
                 node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
-                node.exec_command(sudo=True, cmd="yum update --nogpgcheck -y ceph*")
+                upd_cmd = "yum update --nogpgcheck -y ceph*"
+                if kwargs.get("rpm_version", None):
+                    upd_cmd = f"{upd_cmd}-{kwargs['rpm_version']}"
+                node.exec_command(sudo=True, cmd=upd_cmd)
 
                 node.exec_command(cmd="rpm -qa | grep ceph")
 

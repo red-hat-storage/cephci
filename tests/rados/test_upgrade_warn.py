@@ -18,7 +18,7 @@ from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
-from utility.utils import fetch_build_artifacts
+from utility.utils import fetch_build_artifacts, fetch_build_version
 
 log = Log(__name__)
 
@@ -100,6 +100,7 @@ def run(ceph_cluster, **kw):
         _custom_image = args.get("custom_image", None)
         _custom_repo = args.get("custom_repo", None)
         _ibm_build = config.get("ibm_build", False)
+        _rpm_version = None
         if _rhcs_release and _rhcs_version:
             curr_ver, _ = cephadm_obj.shell(args=["ceph version | awk '{print $3}'"])
             log.debug(
@@ -124,6 +125,11 @@ def run(ceph_cluster, **kw):
             config["args"]["rhcs-version"] = _rhcs_version
             config["args"]["release"] = _rhcs_release
             config["args"]["image"] = config["container_image"]
+            _ver = fetch_build_version(
+                rhbuild=_rhcs_version, version=_rhcs_release, ibm_build=_ibm_build
+            )
+            os_ver = rhbuild.split("-")[-1]
+            _rpm_version = f"2:{_ver}.el{os_ver}cp"
         elif _custom_image and _custom_repo:
             _registry, _image_name = _custom_image.split(":")[0].split("/", 1)
             _image_tag = _custom_image.split(":")[-1]
@@ -153,7 +159,7 @@ def run(ceph_cluster, **kw):
         # Set repo to newer RPMs
         cluster_obj.set_tool_repo()
         time.sleep(5)
-        upgd_dict = {"upgrade": True}
+        upgd_dict = {"upgrade": True, "rpm_version": _rpm_version}
         cluster_obj.install(**upgd_dict)
         time.sleep(5)
 
