@@ -8,7 +8,6 @@
 # The deployment is evaluated by running IOs across the environments.
 # conf : conf/tentacle/rgw/rgw_multisite.yaml
 tests:
-
   - test:
       abort-on-fail: true
       desc: Install software pre-requisites for cluster deployment.
@@ -224,6 +223,25 @@ tests:
       clusters:
         ceph-pri:
           config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node5:80
+        ceph-sec:
+          config:
+            haproxy_clients:
+              - node6
+            rgw_endpoints:
+              - node5:80
+      desc: Configure HAproxy
+      module: haproxy.py
+      name: Configure HAproxy
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
             cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
@@ -305,7 +323,6 @@ tests:
       polarion-id: CEPH-83575199
 
   # Baseline tests before upgrade
-
   - test:
       clusters:
         ceph-pri:
@@ -330,9 +347,31 @@ tests:
             script-name: test_check_sharding_enabled.py
             config-file-name: test_check_sharding_enabled_brownfield.yaml
             verify-io-on-site: ["ceph-pri", "ceph-sec"]
+  # Baseline tests pri upgrade
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_syncpolicy_prefix_tag.py
+            config-file-name: test_multisite_syncpolicy_prefix_tag.yaml
+            verify-io-on-site: ["ceph-sec"]
+      desc: Bucket sync policy test for prefix and tag
+      module: sanity_rgw_multisite.py
+      name: Bucket Granular Sync policy test
+      polarion-id: CEPH-83575133
 
-#   # Performing cluster upgrade
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_ordered.yaml
+      desc: test duration for ordered listing of bucket with top level objects
+      module: sanity_rgw_multisite.py
+      name: ordered listing of buckets pre upgrade
+      polarion-id: CEPH-83575470
 
+  # Performing cluster upgrade
   - test:
       abort-on-fail: true
       desc: rgw-MS mixed-mode, secondary site upgrade
@@ -345,21 +384,6 @@ tests:
             command: start
             service: upgrade
             verify_cluster_health: true
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            set-env: true
-            script-name: user_create.py
-            config-file-name: non_tenanted_user.yaml
-            copy-user-info-to-site: ceph-sec
-      desc: create non-tenanted user
-      module: sanity_rgw_multisite.py
-      name: create non-tenanted user
-      polarion-id: CEPH-83575199
-
-  # Listing
 
   - test:
       clusters:
@@ -396,3 +420,26 @@ tests:
       module: sanity_rgw_multisite.py
       name: Test dynamic resharding brownfield scenario after upgrade
       polarion-id: CEPH-83574736
+  # Baseline tests post upgrade
+  - test:
+      name: Bucket Granular Sync policy test for prefix and tag post upgrade
+      desc: Bucket sync policy test for prefix and tag
+      polarion-id: CEPH-83575133
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_syncpolicy_prefix_tag.py
+            config-file-name: test_multisite_syncpolicy_prefix_tag.yaml
+            verify-io-on-site: ["ceph-sec"]
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_bucket_listing.py
+            config-file-name: test_bucket_listing_flat_ordered.yaml
+      desc: test duration for ordered listing of bucket with top level objects post upgrade
+      module: sanity_rgw_multisite.py
+      name: ordered listing of buckets post upgrade
+      polarion-id: CEPH-83575470
