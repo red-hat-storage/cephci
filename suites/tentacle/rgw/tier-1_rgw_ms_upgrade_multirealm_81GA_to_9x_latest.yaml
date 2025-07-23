@@ -389,6 +389,17 @@ tests:
       module: sanity_rgw_multisite.py
       name: unordered listing of buckets pre upgrade
       polarion-id: CEPH-83573545
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_rgw_ops_log.py
+            config-file-name: ../../s3cmd/multisite_configs/test_rgw_log_details.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+      desc: S3CMD tests, rgw log details pre upgrade
+      module: sanity_rgw_multisite.py
+      name: S3CMD tests, rgw log details pre upgrade
+      polarion-id: CEPH-83575470
 
   # Performing cluster upgrade
 
@@ -451,3 +462,15 @@ tests:
       module: sanity_rgw_multisite.py
       name: swift object expiration post upgrade
       polarion-id: CEPH-9718
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_rgw_ops_log.py
+            config-file-name: ../../s3cmd/multisite_configs/test_rgw_log_details.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+      desc: S3CMD tests, rgw log details post upgrade
+      module: sanity_rgw_multisite.py
+      name: S3CMD tests, rgw log details post upgrade
+      polarion-id: CEPH-83575470
