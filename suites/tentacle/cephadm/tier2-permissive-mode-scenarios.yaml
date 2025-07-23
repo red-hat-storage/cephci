@@ -103,6 +103,7 @@ tests:
   - test:
       name: Check cluster status when nodes are performed with reboot
       desc: Perform reboot and check ceph status
+      comments: Test fails due to Product Bug - 2295317
       polarion-id: CEPH-83573754
       module: test_verify_cluster_health_after_reboot.py
       config:
