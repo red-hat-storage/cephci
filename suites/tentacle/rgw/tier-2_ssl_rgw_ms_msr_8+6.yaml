@@ -277,3 +277,28 @@ tests:
       module: exec.py
       name: setup multisite
       polarion-id: CEPH-10362
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.pri rgw_crypt_default_encryption_key 4YSmvJtBv0aZ7geVgAsdpRnLBEwWSWlMIGnRS8a9TSA="
+              - "radosgw-admin zone placement modify --rgw-zone primary --placement-id default-placement  --compression zlib"
+              - "radosgw-admin period update --commit"
+              - "radosgw-admin period get"
+              - "ceph orch restart rgw.shared.pri"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.sec rgw_crypt_default_encryption_key 4YSmvJtBv0aZ7geVgAsdpRnLBEwWSWlMIGnRS8a9TSA="
+              - "radosgw-admin zone placement modify --rgw-zone secondary --placement-id default-placement  --compression zlib"
+              - "sleep 120"
+              - "radosgw-admin period update --commit"
+              - "radosgw-admin period get"
+              - "ceph orch restart rgw.shared.sec"
+      desc: enabled default encryption and zlib compression
+      module: exec.py
+      name: enabled default encryption and zlib compression
+      polarion-id: CEPH-11350
