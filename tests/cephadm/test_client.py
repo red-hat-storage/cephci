@@ -175,6 +175,9 @@ def add(cls, config: Dict) -> None:
 
             # Install ceph-common
             if config.get("install_packages"):
+                # Added this condition for upstream build
+                if config.get("ceph_docker_registry") == "quay.ceph.io":
+                    workaround_openssl_issue(_node)
                 for pkg in config.get("install_packages"):
                     _node.exec_command(
                         cmd=f"yum install -y --nogpgcheck {pkg}", sudo=True
@@ -250,6 +253,24 @@ def remove(cls, config: Dict) -> None:
                 cmd=f"yum remove -y {pkg}",
                 sudo=True,
             )
+
+
+# Remove this work around once the openssl issue resolved here
+# https://tracker.ceph.com/issues/71250
+def workaround_openssl_issue(node):
+    """
+    Workaround for the openssl issue in RHEL 9.0
+    This is a temporary fix to install openssl-libs package
+    for tentacle upstream build.
+    """
+    openssl_url = (
+        "https://www.rpmfind.net/linux/centos-stream/9-stream/BaseOS/x86_64/os/Packages/"
+        "openssl-libs-3.5.1-1.el9.x86_64.rpm"
+    )
+    node.exec_command(cmd=f"wget {openssl_url}", sudo=True)
+    node.exec_command(
+        cmd="rpm --force -i openssl-libs-3.5.1-1.el9.x86_64.rpm", sudo=True
+    )
 
 
 MAP_ = {"add": add, "remove": remove}
