@@ -25,6 +25,7 @@ import json
 import time
 from collections import defaultdict
 
+from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
 
@@ -32,6 +33,17 @@ log = Log(__name__)
 
 
 class RadosScrubber(RadosOrchestrator):
+
+    def __init__(self, node: CephAdmin):
+        """
+        initializes the env to run rados commands
+        Args:
+            node: CephAdmin object
+        """
+        self.node = node
+        self.ceph_cluster = node.cluster
+        self.client = node.cluster.get_nodes(role="client")[0]
+
     def get_osd_configuration(self, param):
         """
         Used to get the osd parameter value
@@ -278,3 +290,52 @@ class RadosScrubber(RadosOrchestrator):
         return status_out_put["health"]["checks"]["OSD_SCRUB_ERRORS"]["summary"][
             "count"
         ]
+
+    def get_osd_logs(self, init_time, end_time, osd_id):
+        """
+        Method to check the scrub and deep-scrub logs exists or not
+        Args:
+            rados_object: Rados object
+            init_time:  initial time
+            end_time:  End time
+            osd_log_lines: log lines to check in th logs
+
+        Returns:
+        """
+        fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
+        host = self.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+        cmd_get_log_lines = (
+            f'awk \'$1 >= "{init_time}" && $1 <= "{end_time}"\' '
+            f"/var/log/ceph/{fsid}/ceph-osd.{osd_id}.log"
+        )
+        osd_log_lines, err = host.exec_command(
+            sudo=True,
+            cmd=cmd_get_log_lines,
+        )
+        return osd_log_lines
+
+    def wait_for_pg_scrub_state(self, pg_id, wait_time):
+        """
+        Method is to wait for a PG  scrub operation to finish
+        Args:
+            rados_obj: Rados object
+            pg_id: pg id
+            wait_time : wait time in minutes
+        Returns: bool: True if scrubbing is not in progress at wait_time, False otherwise.
+
+        """
+        end_time = datetime.datetime.now() + datetime.timedelta(minutes=wait_time)
+        while end_time > datetime.datetime.now():
+            try:
+                pg_state = self.get_pg_state(pg_id=pg_id)
+                if "scrubbing" in pg_state:
+                    log.info("Scrubbing in progress, waiting 5 seconds...")
+                    time.sleep(5)
+                else:
+                    log.info("No scrub operations running.")
+                    return True
+            except Exception as err:
+                log.error(f"PGID : {pg_id} was not found, err: {err}")
+                return False
+        log.info("Timeout reached, scrubbing  still  in progress.")
+        return False
