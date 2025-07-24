@@ -446,3 +446,283 @@ globals:
           root_password: passwd
           role:
             - client
+        -
+          hostname: rhel94client51
+          id: node251
+          ip: 10.8.131.151
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client52
+          id: node252
+          ip: 10.8.131.152
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client53
+          id: node253
+          ip: 10.8.131.153
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client54
+          id: node254
+          ip: 10.8.131.154
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client55
+          id: node255
+          ip: 10.8.131.155
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client56
+          id: node256
+          ip: 10.8.131.156
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client57
+          id: node257
+          ip: 10.8.131.157
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client58
+          id: node258
+          ip: 10.8.131.158
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client59
+          id: node259
+          ip: 10.8.131.159
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client60
+          id: node260
+          ip: 10.8.131.160
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client61
+          id: node261
+          ip: 10.8.131.161
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client62
+          id: node262
+          ip: 10.8.131.162
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client63
+          id: node263
+          ip: 10.8.131.163
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client64
+          id: node264
+          ip: 10.8.131.164
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client65
+          id: node265
+          ip: 10.8.131.165
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client66
+          id: node266
+          ip: 10.8.131.166
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client67
+          id: node267
+          ip: 10.8.131.167
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client68
+          id: node268
+          ip: 10.8.131.168
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client69
+          id: node269
+          ip: 10.8.131.169
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client70
+          id: node270
+          ip: 10.8.131.170
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client71
+          id: node271
+          ip: 10.8.131.171
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client72
+          id: node272
+          ip: 10.8.131.172
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client73
+          id: node273
+          ip: 10.8.131.173
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client74
+          id: node274
+          ip: 10.8.131.174
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client75
+          id: node275
+          ip: 10.8.131.175
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client76
+          id: node276
+          ip: 10.8.131.176
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client77
+          id: node277
+          ip: 10.8.131.177
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client78
+          id: node278
+          ip: 10.8.131.178
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client79
+          id: node279
+          ip: 10.8.131.179
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client80
+          id: node280
+          ip: 10.8.131.180
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client81
+          id: node281
+          ip: 10.8.131.181
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client82
+          id: node282
+          ip: 10.8.131.182
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client83
+          id: node283
+          ip: 10.8.131.183
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client84
+          id: node284
+          ip: 10.8.131.184
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client85
+          id: node285
+          ip: 10.8.131.185
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client86
+          id: node286
+          ip: 10.8.131.186
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client87
+          id: node287
+          ip: 10.8.131.187
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client88
+          id: node288
+          ip: 10.8.131.188
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client89
+          id: node289
+          ip: 10.8.131.189
+          root_password: passwd
+          role:
+            - client
+        -
+          hostname: rhel94client90
+          id: node290
+          ip: 10.8.131.190
+          root_password: passwd
+          role:
+            - client
