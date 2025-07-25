@@ -2,6 +2,7 @@ from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
 from utility.log import Log
 
+from .certmgr import CertMgr
 from .daemon import Daemon
 from .device import Device
 from .host import Host
@@ -28,6 +29,7 @@ class Orch(Cli):
         self.device = Device(nodes, self.base_cmd)
         self.osd = Osd(nodes, self.base_cmd)
         self.upgrade = Upgrade(nodes, self.base_cmd)
+        self.certmgr = CertMgr(nodes, self.base_cmd)
 
     def ls(self, **kw):
         """
