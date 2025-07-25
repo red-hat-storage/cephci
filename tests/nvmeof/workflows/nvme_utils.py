@@ -6,6 +6,7 @@ from ceph.ceph_admin.orch import Orch
 from ceph.utils import get_node_by_id, get_nodes_by_ids
 from tests.cephadm import test_nvmeof
 from utility.log import Log
+from utility.systemctl import SystemCtl
 
 LOG = Log(__name__)
 
@@ -27,6 +28,46 @@ def get_nvme_service_name(pool, group=None):
     if group:
         svc_name = f"{svc_name}.{group}"
     return svc_name
+
+
+def setup_firewalld(nodes) -> None:
+    """Setup firewalld service.
+
+    Important:
+        Currently NVMe GW nodes 4420, 8009, 5500, 9100 TCP ports would be
+        opened on Gateway deployment, So any other listener ports like 5001
+        will be blocked (Meaning node listens on that port,
+          but firewall doesn't allow port).
+        Hence this method would opening up the ports from 5000-6000
+        for testing purpose.
+
+        Basically this is not limitation from product side, but ensuring
+        test cases run smoothly.
+
+        In case expanding the port range, please update this defintion and
+        port range accordingly.
+
+        If firewalld is not active, do nothing in order to honor the
+        objective of the use-case.
+
+    Args:
+        nodes: List of GW nodes
+    """
+    port_range = "5000-6000"
+    firewalld = "firewalld"
+    firewalld_cmds = [
+        f"firewall-cmd --permanent --add-port={port_range}/tcp",
+        "firewall-cmd --reload",
+    ]
+
+    for node in nodes:
+        if not SystemCtl(node).is_active(firewalld):
+            LOG.info("Firewalld is disabled or not Active.")
+            continue
+
+        for cmd in firewalld_cmds:
+            node.exec_command(cmd=cmd, sudo=True)
+        LOG.info("Configured firewalld to allow port range: %s", port_range)
 
 
 def apply_nvme_sdk_cli_support(ceph_cluster, config):
@@ -69,6 +110,10 @@ def apply_nvme_sdk_cli_support(ceph_cluster, config):
         gw_nodes = [gw_nodes]
 
     gw_nodes = get_nodes_by_ids(ceph_cluster, gw_nodes)
+
+    # Open up firewall ports if running.
+    setup_firewalld(gw_nodes)
+
     is_spec_or_mtls = config.get("mtls", False) or config.get("spec_deployment", False)
     gw_group = config.get("gw_group")
 
