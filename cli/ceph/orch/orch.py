@@ -9,6 +9,7 @@ from .label import Label
 from .osd import Osd
 from .tuned_profile import TunedProfile
 from .upgrade import Upgrade
+from .certmgr import CertMgr
 
 log = Log(__name__)
 
@@ -28,6 +29,7 @@ class Orch(Cli):
         self.device = Device(nodes, self.base_cmd)
         self.osd = Osd(nodes, self.base_cmd)
         self.upgrade = Upgrade(nodes, self.base_cmd)
+        self.certmgr = CertMgr(nodes, self.base_cmd)
 
     def ls(self, **kw):
         """
