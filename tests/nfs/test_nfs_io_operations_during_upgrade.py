@@ -11,14 +11,14 @@ from tests.nfs.nfs_operations import (
     exports_mounts_perclient,
     mount_retry,
 )
-from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
+from utility.log import Log
+from utility.utils import (
     create_file,
     delete_file,
     read_from_file_using_dd_command,
     rename_file,
     write_to_file_using_dd_command,
 )
-from utility.log import Log
 
 log = Log(__name__)
 
@@ -36,6 +36,7 @@ def create_export_and_mount_for_existing_nfs_cluster(
     ha=False,
     vip=None,
     nfs_server=None,
+    **kwargs,
 ):
 
     client_export_mount_dict = exports_mounts_perclient(
@@ -51,12 +52,18 @@ def create_export_and_mount_for_existing_nfs_cluster(
             mount_name = client_export_mount_dict[clients[client_num]]["mount"][
                 export_num
             ]
-            Ceph(clients[client_num]).nfs.export.create(
-                fs_name=fs_name,
-                nfs_name=nfs_name,
-                nfs_export=export_name,
-                fs=fs,
-            )
+            if kwargs:
+                Ceph(clients[client_num]).nfs.export.create(
+                    fs_name=fs_name,
+                    nfs_name=nfs_name,
+                    nfs_export=export_name,
+                    fs=fs,
+                    **kwargs,
+                )
+            else:
+                Ceph(clients[client_num]).nfs.export.create(
+                    fs_name=fs_name, nfs_name=nfs_name, nfs_export=export_name, fs=fs
+                )
             sleep(1)
             # Get the mount versions specific to clients
             mount_versions = _get_client_specific_mount_versions(version, clients)
