@@ -2084,6 +2084,8 @@ def config_keystone_ldap(rgw_node, cloud_type):
         cmd=f"ceph config set client.{rgw_name} rgw_ldap_uri {ldap_url}",
     )
     rgw_node.exec_command(sudo=True, cmd=f"ceph orch restart {rgw_name}")
+    log.info("sleeping for 20 seconds")
+    time.sleep(20)
 
 
 def method_should_succeed(function, *args, **kwargs):
