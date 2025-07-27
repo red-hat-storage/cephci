@@ -1,10 +1,12 @@
 import datetime
 import json
 import os
+import random
 import re
 import time
 import traceback
 from json import loads
+from pathlib import Path
 from time import mktime, sleep
 
 import requests
@@ -129,8 +131,65 @@ def setup_vm_node_baremetal(node, ceph_nodes, **params):
     ceph_nodes[node] = vm
 
 
+def process_ibmc_custom_config(custom_config):
+    """Process the custom config for IBM target VPC.
+
+    Users can provide a specific VPC for deployment. This information is
+    then used to retrieve the required platform details.
+
+    This method looks for `ibmc_vpc` & `ibmc_profile` where
+        ibmc_vpc     Name of the known Virtual Private Cloud
+        ibmc_profile The flavor to be used for deployment
+
+     The defaults are `ci-vpc-01` and `bx2-2x8`.
+
+     Arguments:
+         custom_config(list)    is a list of <key>=<value>
+
+     Returns
+         A dictionary containing the platform information
+    """
+    repo_dir = Path(__file__).parent.parent.resolve()
+    vpc_name = "ci-vpc-01"
+    profile = ""
+
+    if custom_config:
+        overrides = {
+            item.split("=") for item in custom_config if item.startswith("ibmc")
+        }
+        # check for ibmc_vpc and ibmc_profile
+        if "ibmc_vpc" in overrides:
+            vpc_name = overrides["ibmc_vpc"]
+
+        if "ibmc_profile" in overrides:
+            profile = overrides["ibmc_profile"]
+
+    platform_conf = repo_dir.joinpath(f"conf/ibmc/{vpc_name}.yaml")
+    with platform_conf.open() as fh:
+        platform_dict = yaml.safe_load(fh)
+
+    # Override vm-profile when a value is passed from command line
+    if profile:
+        platform_dict["profile"] = profile
+
+    # Pick one datacenter
+    datacenter = random.choice(platform_dict["datacenters"])
+    network = platform_dict["networks"][datacenter]
+
+    # Replace the values
+    platform_dict["datacenters"] = datacenter
+    platform_dict["networks"] = network
+
+    return platform_dict
+
+
 def create_ibmc_ceph_nodes(
-    cluster_conf, inventory, ibm_creds, run_id, instances_name=None
+    cluster_conf,
+    inventory,
+    ibm_creds,
+    run_id,
+    instances_name=None,
+    custom_config=None,
 ):
     """
     creates instances in IBM cloud
@@ -141,25 +200,33 @@ def create_ibmc_ceph_nodes(
          ibm_creds        global configuration file(ibm)
          run_id           unique id for the run
          instances_name   Name of the instance
+         custom_config    CLI options passed to execution.
     """
     log.info("Creating IBM instances")
     ibm_glbs = ibm_creds.get("globals")
     ibm_cred = ibm_glbs.get("ibm-credentials")
-    params = dict()
     ceph_cluster = cluster_conf.get("ceph-cluster")
+    platform = process_ibmc_custom_config(custom_config)
+
+    # Finalized variables
+    params = dict()
     ceph_nodes = dict()
+
     if ceph_cluster.get("inventory"):
         inventory_path = os.path.abspath(ceph_cluster.get("inventory"))
         with open(inventory_path, "r") as inventory_stream:
             inventory = yaml.safe_load(inventory_stream)
+
     node_count = 0
 
     params["cloud-data"] = inventory.get("instance").get("setup")
     params["accesskey"] = ibm_cred["access-key"]
-    params["service_url"] = ibm_cred["service-url"]
-    params["zone_name"] = ibm_cred["zone_name"]
-    params["vpc_name"] = ibm_cred["vpc_name"]
-    params["zone_id_model_name"] = ibm_cred["zone_id_model_name"]
+    params["service_url"] = platform["service_url"] or ibm_cred["service-url"]
+    params["zone_name"] = platform["dns_zone_name"] or ibm_cred["zone_name"]
+    params["vpc_name"] = platform["vpc_name"] or ibm_cred["vpc_name"]
+    params["zone_id_model_name"] = (
+        platform["datacenters"] or ibm_cred["zone_id_model_name"]
+    )
     params["resource_group_id"] = ibm_cred["resource_group_id"]
     params["dns_svc_id"] = ibm_cred["dns_svc_id"]
 
@@ -172,16 +239,18 @@ def create_ibmc_ceph_nodes(
             )
 
         params["cluster-name"] = ceph_cluster.get("name")
-        params["network_name"] = (
-            inventory.get("instance").get("create").get("network_name")
-        )
-        params["private_key"] = (
-            inventory.get("instance").get("create").get("private_key")
-        )
-        params["group_access"] = (
-            inventory.get("instance").get("create").get("group_access")
-        )
-        params["profile"] = inventory.get("instance").get("create").get("profile")
+        params["network_name"] = platform["networks"] or inventory.get("instance").get(
+            "create"
+        ).get("network_name")
+        params["private_key"] = platform["private_key"] or inventory.get(
+            "instance"
+        ).get("create").get("private_key")
+        params["group_access"] = platform["security_group"] or inventory.get(
+            "instance"
+        ).get("create").get("group_access")
+        params["profile"] = platform["profile"] or inventory.get("instance").get(
+            "create"
+        ).get("profile")
 
         if params.get("root-login") is False:
             params["root-login"] = False

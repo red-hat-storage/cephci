@@ -173,8 +173,31 @@ def create_nodes(
     cloud_type="openstack",
     instances_name=None,
     enable_eus=False,
+    custom_config=None,
 ):
-    """Creates the system under test environment."""
+    """Creates the system under test environment.
+
+    Args:
+        conf            Platform
+        inventory       Test environment
+        osp_cred        Platform access information
+        run_id          execution identifier
+        cloud_type      The platform to be used for deployment.
+        instances_name  system names
+        enable_eus      Extended OS support
+        custom_config   list of <key>=<value>
+
+    Notes:
+        use custom_config to specify the environments or configuration to
+        be used when using generic inventory files. Ensure to prefix the
+        platform. For exmaple
+
+            --custom-config ibmc_vpc=ci-vpc-01
+            --custom-config ibmc_profile=bx2-2x8
+
+        If these values are not provided then the defaults would be used.
+        The defaults are the ones used in the example.
+    """
 
     validate_conf(conf)
     validate_image(conf, cloud_type)
@@ -197,7 +220,7 @@ def create_nodes(
             )
         elif cloud_type == "ibmc":
             ceph_vmnodes = create_ibmc_ceph_nodes(
-                cluster, inventory, osp_cred, run_id, instances_name
+                cluster, inventory, osp_cred, run_id, instances_name, custom_config
             )
         elif "baremetal" in cloud_type:
             ceph_vmnodes = create_baremetal_ceph_nodes(cluster)
