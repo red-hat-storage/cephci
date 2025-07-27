@@ -1,0 +1,18 @@
+---
+# Based on the information found
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - MohitBis
+  - vdas-redhat
+
+reviewers:
+  - sayaleeraut
+  - adityaramteke
+  - vinpapnoi
+  - msainiRedhat
+  - pranavprakash20
+
+labels:
+  - Upgrades
+
