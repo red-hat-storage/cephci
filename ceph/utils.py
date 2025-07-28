@@ -32,7 +32,7 @@ RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
 DEFAULT_OSBS_SERVER = "http://file.corp.redhat.com/~kdreyer/osbs/"
 
 
-def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
+def cleanup_ibmc_ceph_nodes(ibm_cred, pattern, custom_config=None):
     """
     Clean up the DNS records, instance and volumes that matches the given pattern.
 
@@ -43,11 +43,17 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
     log.info("Destroying existing IBM instances..")
     glbs = ibm_cred.get("globals")
     ibmc = glbs.get("ibm-credentials")
+    platform = process_ibmc_custom_config(custom_config)
+
+    # Initialize required variables
+    service_url = platform["service_url"] or ibmc["service-url"]
+    vpc_name = platform["vpc_name"] or ibmc["vpc_name"]
+    dns_zone_name = platform["dns_zone_name"] or ibmc["dns_zone"]
 
     ibmc_client = get_ibm_service(
-        access_key=ibmc["access-key"], service_url=ibmc["service-url"]
+        access_key=ibmc["access-key"], service_url=service_url
     )
-    resp = ibmc_client.list_instances(vpc_name=ibmc["vpc_name"])
+    resp = ibmc_client.list_instances(vpc_name=vpc_name)
     if resp.get_status_code() != 200:
         log.warning("Failed to retrieve instances")
         return 1
@@ -57,7 +63,7 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
 
     while "next" in resp.get_result().keys():
         start = resp.get_result()["next"]["href"].split("start=")[-1]
-        resp = ibmc_client.list_instances(start=start, vpc_name=ibmc["vpc_name"])
+        resp = ibmc_client.list_instances(start=start, vpc_name=vpc_name)
         if resp.get_status_code() != 200:
             log.warning("Failed to fetch instance details, breaking out.")
             break
@@ -74,11 +80,11 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern):
             vsi = CephVMNodeIBM(
                 os_cred_ibm={
                     "accesskey": ibmc["access-key"],
-                    "service_url": ibmc["service-url"],
+                    "service_url": service_url,
                 },
                 node=instance,
             )
-            p.spawn(vsi.delete, ibmc["zone_name"], ibmc["dns_svc_id"])
+            p.spawn(vsi.delete, dns_zone_name, ibmc["dns_svc_id"])
             counter += 1
 
     log.info(f"Done cleaning up nodes with pattern {pattern}")
@@ -154,9 +160,9 @@ def process_ibmc_custom_config(custom_config):
     profile = ""
 
     if custom_config:
-        overrides = {
+        overrides = dict(
             item.split("=") for item in custom_config if item.startswith("ibmc")
-        }
+        )
         # check for ibmc_vpc and ibmc_profile
         if "ibmc_vpc" in overrides:
             vpc_name = overrides["ibmc_vpc"]

@@ -95,6 +95,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--disable-console-log]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
+        [--custom-config <key>=<value>]...
 
 Options:
   -h --help                         show this screen
@@ -204,7 +205,7 @@ def create_nodes(
     if cloud_type == "openstack":
         cleanup_ceph_nodes(osp_cred, instances_name)
     elif cloud_type == "ibmc":
-        cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
+        cleanup_ibmc_ceph_nodes(osp_cred, instances_name, custom_config=None)
 
     ceph_cluster_dict = {}
     clients = []
@@ -445,7 +446,9 @@ def run(args):
         if cloud_type == "openstack":
             cleanup_ceph_nodes(osp_cred, cleanup_name)
         elif cloud_type == "ibmc":
-            cleanup_ibmc_ceph_nodes(osp_cred, cleanup_name)
+            cleanup_ibmc_ceph_nodes(
+                osp_cred, cleanup_name, custom_config=args.get("--custom-config")
+            )
         else:
             log.warning("Unknown cloud type.")
 
@@ -644,6 +647,7 @@ def run(args):
                 cloud_type,
                 instances_name,
                 enable_eus=enable_eus,
+                custom_config=custom_config,
             )
         except Exception as err:
             log.error(err)
