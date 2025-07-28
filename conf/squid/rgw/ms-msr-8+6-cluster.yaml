@@ -1,5 +1,4 @@
 # Bare minimal Multi-Site configuration that supports 8 + 6 EC code profile.
----
 globals:
   - ceph-cluster:
       name: ceph-pri

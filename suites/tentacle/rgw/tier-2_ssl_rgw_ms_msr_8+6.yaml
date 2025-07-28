@@ -1,4 +1,7 @@
-
+# this suite is used to test the RGW multisite replication with SSL enabled ,create a MSR-based Erase-Coded Pool for 4 Node Count 
+# It deploys two clusters with RGW services and configures them for multisite replication
+# It also enables default encryption and zlib compression on the RGW services
+# global conf: /conf/tentacle/rgw/ms-msr-8+6-cluster.yaml
 tests:
   - test:
       name: setup install pre-requisistes
@@ -295,7 +298,7 @@ tests:
               - "ceph config set client.rgw.shared.sec rgw_crypt_default_encryption_key 4YSmvJtBv0aZ7geVgAsdpRnLBEwWSWlMIGnRS8a9TSA="
               - "radosgw-admin zone placement modify --rgw-zone secondary --placement-id default-placement  --compression zlib"
               - "sleep 120"
-              - "radosgw-admin period update --commit"
+              - "radosgw-admin period update"
               - "radosgw-admin period get"
               - "ceph orch restart rgw.shared.sec"
       desc: enabled default encryption and zlib compression
