@@ -1,4 +1,4 @@
-# this suite is used to test the RGW multisite replication with SSL enabled ,create a MSR-based Erase-Coded Pool for 4 Node Count 
+# this suite is used to test the RGW multisite replication with SSL enabled ,create a MSR-based Erase-Coded Pool for 4 Node Count
 # It deploys two clusters with RGW services and configures them for multisite replication
 # It also enables default encryption and zlib compression on the RGW services
 # global conf: /conf/tentacle/rgw/ms-msr-8+6-cluster.yaml
