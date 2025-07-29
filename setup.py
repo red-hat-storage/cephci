@@ -28,7 +28,6 @@ setup(
         "paramiko==3.5.1",
         "plotly==6.1.2",
         "pyyaml==6.0.2",
-        "reportportal-client==5.6.5",
         "requests==2.32.4",
         "python-ipmi==0.5.7",
     ],
