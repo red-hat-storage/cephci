@@ -7,12 +7,31 @@ from utility.log import Log
 log = Log(__name__)
 
 
+def lookup_in_directory(client, mount):
+    """
+    Check if the mount point is accessible and contains expected files.
+    Args:
+        client: Client node where the mount is performed.
+        mount: Mount point path.
+    Returns:
+        bool: True if the mount point is accessible and contains expected files, False otherwise.
+    """
+    try:
+        out, _ = client.exec_command(sudo=True, cmd=f"ls {mount}")
+        log.info(f"Contents of {mount}: {out.strip()}")
+        return out
+    except Exception as e:
+        log.error(f"Failed to access mount point {mount}: {e}")
+        return False
+
+
 def create_file(client, nfs_mount, file_name):
     """Create a file in the NFS mount point"""
     try:
-        cmd = f"touch {nfs_mount}/{file_name}"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File - {0} created successfully".format(file_name))
+        if file_name not in client.get_dir_list(nfs_mount):
+            cmd = f"touch {nfs_mount}/{file_name}"
+            client.exec_command(cmd=cmd, sudo=True)
+            log.info("File - {0} created successfully".format(file_name))
     except Exception as e:
         log.error(f"Failed to create file {file_name}: {e}")
         raise OperationFailedError(f"Failed to create file {file_name}: {e}")
@@ -32,9 +51,10 @@ def delete_file(client, nfs_mount, file_name):
 def rename_file(client, nfs_mount, old_name, new_name):
     """Rename a file in the NFS mount point"""
     try:
-        cmd = f"mv {nfs_mount}/{old_name} {nfs_mount}/{new_name}"
-        client.exec_command(cmd=cmd, sudo=True)
-        log.info("File renamed successfully")
+        if new_name not in client.get_dir_list(nfs_mount):
+            cmd = f"mv {nfs_mount}/{old_name} {nfs_mount}/{new_name}"
+            client.exec_command(cmd=cmd, sudo=True)
+            log.info("File renamed successfully")
     except Exception as e:
         log.error(f"Failed to rename file {old_name} to {new_name}: {e}")
         raise OperationFailedError(
