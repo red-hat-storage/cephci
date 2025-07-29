@@ -165,7 +165,7 @@ def run(ceph_cluster, **kw):
             kernel_cmd = (
                 f"mount -t ceph {clients[0].node.hostname}@.cephfs=/ {kernel_mounting_dir} "
                 f"-o name={clients[0].node.hostname},"
-                f"secretfile=/etc/ceph/{clients[0].node.hostname}.secret,mon_addr={mon_node_ip.replace(',','/')}"
+                f"secretfile=/etc/ceph/{clients[0].node.hostname}.secret,mon_addr={mon_node_ip.replace(',', '/')}"
             )
             clients[0].exec_command(sudo=True, cmd=kernel_cmd)
             fs_util.wait_until_mount_succeeds(clients[0], kernel_mounting_dir)
