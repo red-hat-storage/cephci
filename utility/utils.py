@@ -5,7 +5,6 @@ import os
 import random
 import re
 import smtplib
-import subprocess
 import time
 import traceback
 from copy import deepcopy
@@ -25,7 +24,6 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
-from reportportal_client import RPClient
 
 from utility.log import Log
 
@@ -870,26 +868,6 @@ def create_run_dir(run_id, log_dir=""):
     return base_dir
 
 
-def create_report_portal_session():
-    """
-    Configures and creates a session to the Report Portal instance.
-
-    Returns:
-        The session object
-    """
-    cfg = get_cephci_config()["report-portal"]
-
-    try:
-        return RPClient(
-            endpoint=cfg["endpoint"],
-            project=cfg["project"],
-            api_key=cfg["token"],
-            verify_ssl=False,
-        )
-    except BaseException:  # noqa
-        print("Encountered an issue in connecting to report portal.")
-
-
 def timestamp():
     """
     The current epoch timestamp in milliseconds as a string.
@@ -1617,162 +1595,6 @@ def check_build_overrides(
         return False
     elif 0 < values < length:
         raise Exception(f"{check_build_overrides.__doc__}")
-
-
-def rp_deco(func):
-    def inner_method(cls, *args, **kwargs):
-        if not cls.client:
-            return
-
-        try:
-            func(cls, *args, **kwargs)
-        except BaseException as be:  # noqa
-            log.debug(be, exc_info=True)
-            log.warning("Encountered an error during report portal operation.")
-
-    return inner_method
-
-
-class ReportPortal:
-    """Handles logging to report portal."""
-
-    def __init__(self):
-        """Initializes the instance."""
-        cfg = get_cephci_config()
-        access = cfg.get("report-portal")
-
-        self.client = None
-        self._test_id = None
-
-        if access:
-            try:
-                self.client = RPClient(
-                    endpoint=access["endpoint"],
-                    project=access["project"],
-                    api_key=access["token"],
-                    verify_ssl=False,
-                )
-            except BaseException:  # noqa
-                log.warning("Unable to connect to Report Portal.")
-
-    @rp_deco
-    def start_launch(self, name: str, description: str, attributes: dict) -> None:
-        """
-        Initiates a test execution with the provided details
-
-        Args:
-            name (str):         Name of test execution.
-            description (str):  Meta data information to be added to the launch.
-            attributes (dict):  Meta data information as dict
-
-        Returns:
-             None
-        """
-        self.client.start_launch(
-            name, start_time=timestamp(), description=description, attributes=attributes
-        )
-
-    @rp_deco
-    def start_test_item(self, name: str, description: str, item_type: str) -> None:
-        """
-        Records an entry within the initiated launch.
-
-        Args:
-            name (str):         Name to be set for the test step
-            description (str):  Meta information to be used.
-            item_type (str):    Type of entry to be created.
-
-        Returns:
-            None
-        """
-        self._test_id = self.client.start_test_item(
-            name, start_time=timestamp(), item_type=item_type, description=description
-        )
-
-    @rp_deco
-    def finish_test_item(self, status: Optional[str] = "PASSED") -> None:
-        """
-        Ends a test entry with the given status.
-
-        Args:
-            status (str):
-        """
-        if not self._test_id:
-            return
-
-        self.client.finish_test_item(
-            item_id=self._test_id, end_time=timestamp(), status=status
-        )
-
-    @rp_deco
-    def finish_launch(self) -> None:
-        """Closes the Report Portal execution run."""
-        self.client.finish_launch(end_time=timestamp())
-        self.client.terminate()
-        tfacon(self.client.get_launch_ui_id())
-
-    @rp_deco
-    def log(self, message: str, level="INFO") -> None:
-        """
-        Adds log records to the event.
-
-        Args:
-            message (str):  Message to be logged.
-            level (str):    The level at which the record has to be logged.
-
-        Returns:
-            None
-        """
-        self.client.log(
-            time=timestamp(),
-            message=message.__str__(),
-            level=level,
-            item_id=self._test_id,
-        )
-
-
-def tfacon(launch_id):
-    """
-    Connects the launch with TFA and gives the predictions for the launch
-    It will fail silently
-
-    Args:
-         launch_id : launch_id that has been created
-    """
-    cfg = get_cephci_config()
-    tfacon_cfg = cfg.get("tfacon")
-    if not tfacon_cfg:
-        return
-    project_name = tfacon_cfg.get("project_name")
-    auth_token = tfacon_cfg.get("auth_token")
-    platform_url = tfacon_cfg.get("platform_url")
-    tfa_url = tfacon_cfg.get("tfa_url")
-    re_url = tfacon_cfg.get("re_url")
-    connector_type = tfacon_cfg.get("connector_type")
-    cmd = (
-        f"~/.local/bin/tfacon run --auth-token {auth_token} "
-        f"--connector-type {connector_type} "
-        f"--platform-url {platform_url} "
-        f"--project-name {project_name} "
-        f"--tfa-url {tfa_url} "
-        f"--re-url {re_url} -r "
-        f"--launch-id {launch_id}"
-    )
-    log.info(cmd)
-    p1 = subprocess.Popen(
-        cmd,
-        shell=True,
-        stdin=None,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
-    result, result_err = p1.communicate()
-
-    log.info(result.decode("utf-8"))
-    if p1.returncode != 0:
-        log.warning("Unable to get the TFA anaylsis for the results")
-        log.warning(result_err.decode("utf-8"))
-        log.warning(result.decode("utf-8"))
 
 
 def install_start_kafka(rgw_node, cloud_type):
