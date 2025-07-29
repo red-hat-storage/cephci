@@ -2,7 +2,8 @@ import json
 import random
 import string
 import traceback
-from distutils.version import LooseVersion
+
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils

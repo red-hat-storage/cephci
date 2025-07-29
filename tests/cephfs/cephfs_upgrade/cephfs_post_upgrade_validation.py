@@ -6,9 +6,10 @@ import re
 import string
 import time
 import traceback
-from distutils.version import LooseVersion
 from multiprocessing import Value
 from threading import Thread
+
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from cli.ceph.ceph import Ceph
