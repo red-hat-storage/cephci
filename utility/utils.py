@@ -2172,6 +2172,7 @@ def run_fio(**fio_args):
         "cmd": f"fio {config_dict_to_string(cmd_args)}",
         "long_running": fio_args.get("long_running", False),
         "sudo": True,
+        "verbose": fio_args.get("verbose", False),
     }
 
     if fio_args.get("get_time_taken"):
