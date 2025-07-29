@@ -1,8 +1,9 @@
 import random
 import string
 import traceback
-from distutils.version import LooseVersion
 from itertools import product
+
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils

@@ -25,7 +25,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from jinja_markdown import MarkdownExtension
-from reportportal_client import ReportPortalService
+from reportportal_client import RPClient
 
 from utility.log import Log
 
@@ -880,10 +880,10 @@ def create_report_portal_session():
     cfg = get_cephci_config()["report-portal"]
 
     try:
-        return ReportPortalService(
+        return RPClient(
             endpoint=cfg["endpoint"],
             project=cfg["project"],
-            token=cfg["token"],
+            api_key=cfg["token"],
             verify_ssl=False,
         )
     except BaseException:  # noqa
@@ -1646,10 +1646,10 @@ class ReportPortal:
 
         if access:
             try:
-                self.client = ReportPortalService(
+                self.client = RPClient(
                     endpoint=access["endpoint"],
                     project=access["project"],
-                    token=access["token"],
+                    api_key=access["token"],
                     verify_ssl=False,
                 )
             except BaseException:  # noqa

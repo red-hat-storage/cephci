@@ -1,12 +1,12 @@
 """
 Test suite that verifies the deployment of Ceph NVMeoF Gateway HA
  with supported entities like subsystems , etc.,
-
 """
 
 from concurrent.futures import ThreadPoolExecutor
-from distutils.version import LooseVersion
 from json import loads
+
+from looseversion import LooseVersion
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin.orch import Orch

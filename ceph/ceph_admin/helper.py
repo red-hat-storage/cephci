@@ -6,13 +6,13 @@ import json
 import os
 import tempfile
 from datetime import datetime, timedelta
-from distutils.version import LooseVersion
 from os.path import dirname
 from time import sleep
 from typing import Optional
 
 from dateutil import parser
 from jinja2 import Template
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from ceph.utils import get_node_by_id, get_nodes_by_ids

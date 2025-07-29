@@ -7,13 +7,13 @@ import pickle
 import random
 import re
 import socket
-from distutils.version import LooseVersion
 from time import sleep, time
 
 import cryptography
 import paramiko
 import requests
 import yaml
+from looseversion import LooseVersion
 
 from ceph.parallel import parallel
 from cli.ceph.ceph import Ceph as CephCli

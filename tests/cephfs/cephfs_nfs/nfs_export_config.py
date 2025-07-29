@@ -2,8 +2,9 @@ import json
 import secrets
 import string
 import traceback
-from distutils.version import LooseVersion
 from json import JSONDecodeError
+
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
