@@ -363,3 +363,14 @@ tests:
         install_start_kafka: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
+
+
+  # checksum tests with go
+  - test:
+      name: test checksum with go script
+      desc: test checksum with go script. rgw ssl required for chunked upload with trailing checksum
+      module: sanity_rgw.py
+      polarion-id: CEPH-83591699
+      config:
+        script-name: ../go_scripts/test_rgw_using_go.py
+        config-file-name: ../../go_scripts/configs/test_checksum_using_go.yaml
