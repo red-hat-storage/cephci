@@ -4,7 +4,7 @@ import re
 import time
 
 from ceph.parallel import parallel
-from ceph.utils import config_ntp, update_ca_cert
+from ceph.utils import config_ntp, is_client, update_ca_cert
 from ceph.waiter import WaitUntil
 from cli.exceptions import ConfigError
 from cli.utilities.packages import Package
@@ -100,6 +100,21 @@ def run(**kw):
             )
             time.sleep(20)
 
+    # TODO: remove this method once the openssl issue resolved in
+    # upstream tentacle build, https://tracker.ceph.com/issues/71250
+    if (
+        config.get("build_type") == "upstream"
+        and config.get("upstream_build") == "tentacle"
+    ):
+        with parallel() as p:
+            for ceph in ceph_nodes:
+                if not is_client(ceph):
+                    continue
+
+                p.spawn(
+                    workaround_openssl_issue,
+                    ceph,
+                )
     return 0
 
 
@@ -489,3 +504,29 @@ def update_iptables(node):
                 node.exec_command(cmd=f"$(which iptables) -D {rule}", sudo=True)
     except Exception as err:
         log.error(f"iptables rpm do not exist... error : {err}")
+
+
+def workaround_openssl_issue(node) -> None:
+    """
+    Workaround for the openssl issue in RHEL 9.0
+    This is a temporary fix to install openssl-libs package
+    for tentacle upstream build.
+
+    NOTE:
+        remove this method once the openssl issue resolved in
+        upstream tentacle build, https://tracker.ceph.com/issues/71250
+
+    Args:
+        node: client node object
+    """
+
+    openssl_url = (
+        "https://mirror.stream.centos.org/9-stream/BaseOS/"
+        "x86_64/os/Packages/openssl-libs-3.5.1-1.el9.x86_64.rpm"
+    )
+    node.exec_command(cmd=f"wget {openssl_url}", sudo=True, long_running=True)
+    node.exec_command(
+        cmd="rpm --force -i openssl-libs-3.5.1-1.el9.x86_64.rpm",
+        sudo=True,
+        long_running=True,
+    )

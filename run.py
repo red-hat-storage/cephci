@@ -165,6 +165,10 @@ test_names = []
 run_summary = {}
 
 
+class CephCIArgumentError(Exception):
+    pass
+
+
 @retry(LibcloudError, tries=5, delay=15)
 def create_nodes(
     conf,
@@ -487,8 +491,11 @@ def run(args):
             base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
                 build, rhbuild, platform, upstream_build, ibm_build
             )
-    else:
-        build = None
+    elif build == "upstream":
+        if not upstream_build:
+            raise CephCIArgumentError(
+                "--upstream-build argument not provided Ex: tentacle"
+            )
 
     store = args.get("--store") or False
 
@@ -802,6 +809,7 @@ def run(args):
                     config["add-repo"] = repo
 
             config["build_type"] = build
+            config["upstream_build"] = upstream_build
             config["enable_eus"] = enable_eus
             config["skip_enabling_rhel_rpms"] = skip_enabling_rhel_rpms
             config["docker-insecure-registry"] = docker_insecure_registry
