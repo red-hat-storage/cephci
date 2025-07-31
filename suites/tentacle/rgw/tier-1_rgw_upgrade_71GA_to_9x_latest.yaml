@@ -104,7 +104,14 @@ tests:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_etag.yaml
         run-on-haproxy: true
-
+  - test:
+      name: Test rename of large object using sts user through AWS
+      desc: Test rename of large object using sts user through AWS
+      polarion-id: CEPH-83575419
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_sts_rename_large_object.py
+        config-file-name: ../../aws/configs/test_sts_rename_large_object.yaml
   - test:
       name: Dynamic Resharding tests pre upgrade
       desc: Resharding test - dynamic
@@ -240,3 +247,22 @@ tests:
       module: sanity_rgw.py
       name: sse-s3 per bucket encryption test on a versiond bucket after upgrade
       polarion-id: CEPH-83575152 # CEPH-83575150 #CEPH-83574619 # CEPH-8357515
+
+  - test:
+      name: test storage policy to use customized placement for S3
+      desc: Test storage policy to use customized placement for S3
+      polarion-id: CEPH-9337
+      module: sanity_rgw.py
+      config:
+        script-name: test_storage_policy.py
+        config-file-name: test_storage_policy_s3.yaml
+
+  - test:
+      name: test storage policy to use customized placement for Swift
+      desc: Test storage policy to use customized placement for Swift
+      polarion-id: CEPH-9336
+      module: sanity_rgw.py
+      config:
+        script-name: test_storage_policy.py
+        config-file-name: test_storage_policy_swift.yaml
+
