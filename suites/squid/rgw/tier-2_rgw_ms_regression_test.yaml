@@ -399,3 +399,15 @@ tests:
       desc: test_swift_all_objects_lc
       polarion-id: CEPH-11193
       module: sanity_rgw_multisite.py
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3_swift/test_swift_tenanted_user.py
+            config-file-name: ../../s3_swift/multisite_configs/test_swift_tenanted_user.yaml
+      name: test_swift_tenanted_user
+      desc: test_swift_tenanted_user
+      polarion-id: CEPH-10734
+      module: sanity_rgw_multisite.py
+
