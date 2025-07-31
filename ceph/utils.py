@@ -1390,3 +1390,10 @@ def find_vm_node_by_hostname(ceph_cluster, target_hostname):
         ),
         None,
     )
+
+
+def is_client(ceph_node):
+    """
+    Return True if client node else False
+    """
+    return len(ceph_node.role.role_list) == 1 and "client" in ceph_node.role.role_list

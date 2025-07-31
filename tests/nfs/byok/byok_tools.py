@@ -146,7 +146,7 @@ def create_nfs_instance_for_byok(
         "spec": {
             "kmip_cert": "|\n" + cert.rstrip("\\n"),
             "kmip_key": "|\n" + rsa_key.rstrip("\\n"),
-            "kmip_ca_cert": "|\n" + ca_cert.rstrip("\\n"),
+            "kmip_ca_cert": "|\n" + ca_cert.replace("\r\n", "\n").rstrip("\n"),
             "kmip_host_list": [kmip_host_list],
         },
     }

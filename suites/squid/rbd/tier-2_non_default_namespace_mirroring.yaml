@@ -203,3 +203,48 @@ tests:
                 direct: 1
                 invalidate: 1
                 io_type: randrw
+
+  - test:
+      abort-on-fail: True
+      desc: >
+        Verify Mirror Image Synchronization Between Differently-Named
+        Namespaces in Different Clusters in one way mode
+      name: >
+        Test Non Default to non default one way mode
+      module: test_namespace_mirror_operations.py
+      polarion-id: CEPH-83601537
+      clusters:
+        ceph-rbd1:
+          config:
+            operation: CEPH-83601537
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: True
+              size: 1G
+              mode: image
+              mirror_level: namespace
+              namespace_mirror_type: non-default_to_non-default
+              mirrormode: snapshot
+              snap_schedule_intervals:
+                - 1m
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: True
+              size: 1G
+              mode: image
+              mirror_level: namespace
+              namespace_mirror_type: non-default_to_non-default
+              mirrormode: snapshot
+              snap_schedule_intervals:
+                - 1m
+            fio:
+              size: 100M
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw

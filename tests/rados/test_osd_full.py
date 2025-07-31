@@ -196,7 +196,7 @@ def run(ceph_cluster, **kw):
 
                 # perform rados bench to trigger nearfull warning
                 nearfull_config = {
-                    "rados_write_duration": 500,
+                    "rados_write_duration": 1000,
                     "byte_size": f"{bench_obj_size_kb}KB",
                     "nocleanup": True,
                     "max_objs": max_obj_nearfull,
@@ -228,7 +228,7 @@ def run(ceph_cluster, **kw):
 
                 # perform rados bench to trigger backfill-full warning
                 backfillfull_config = {
-                    "rados_write_duration": 200,
+                    "rados_write_duration": 400,
                     "byte_size": f"{bench_obj_size_kb}KB",
                     "nocleanup": True,
                     "max_objs": subseq_obj_backfillfull,
@@ -262,7 +262,7 @@ def run(ceph_cluster, **kw):
 
                 # perform rados bench to trigger osd full warning
                 osdfull_config = {
-                    "rados_write_duration": 200,
+                    "rados_write_duration": 400,
                     "byte_size": f"{bench_obj_size_kb}KB",
                     "nocleanup": True,
                     "max_objs": subseq_obj_full,

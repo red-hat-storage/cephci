@@ -102,9 +102,7 @@ def setup_nfs_cluster(
     for version, clients in mount_versions.items():
         for client in clients:
             client.create_dirs(dir_path=nfs_mount, sudo=True)
-            if mount_retry(
-                clients, i, nfs_mount, version, port, nfs_server, export_name
-            ):
+            if mount_retry(client, nfs_mount, version, port, nfs_server, export_name):
                 log.info("Mount succeeded on %s" % client.hostname)
             i += 1
             sleep(1)
@@ -829,8 +827,6 @@ def mount_retry(
     port,
     nfs_server,
     export_name,
-    ha=False,
-    fuse=None,
 ):
 
     if Mount(clients[client_num]).nfs(

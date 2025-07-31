@@ -84,7 +84,6 @@ def create_export_and_mount_for_existing_nfs_cluster(
                     port,
                     nfs_server,
                     export_name,
-                    ha=ha,
                 ):
                     log.info(f"Mount failed, {mount_name}")
                     raise OperationFailedError(
