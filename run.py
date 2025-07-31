@@ -496,6 +496,11 @@ def run(args):
             raise CephCIArgumentError(
                 "--upstream-build argument not provided Ex: tentacle"
             )
+    else:
+        # TODO: By default, build=released, but Pipelines and environment
+        #       are not ready for this change. Need to revert this code changes
+        #       once we have right build value set across pipelines.
+        build = None
 
     store = args.get("--store") or False
 
