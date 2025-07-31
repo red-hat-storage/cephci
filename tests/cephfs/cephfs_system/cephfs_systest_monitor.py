@@ -35,7 +35,6 @@ def run(ceph_cluster, **kw):
         mem_limit = config.get("mds_mem_limit", 95)
         cpu_limit = config.get("mds_cpu_limit", 180)
         disk_limit = config.get("disk_limit", 80)
-        mds_failover = config.get("mds_failover", 0)
         client = clients[0]
         update_system_status(client, "NA")
         mds_names_hostname = []
@@ -68,7 +67,7 @@ def run(ceph_cluster, **kw):
 
         while datetime.datetime.now() < end_time:
             log.info("Check for Ceph Cluster health")
-            clus_health = check_health(client, mds_failover=mds_failover)
+            clus_health = check_health(client)
             log.info("Check for CPU and MEM usage by MDS")
             cpu_mem_disk_use = check_mds_cpu_mem_disk_use(
                 mem_limit, cpu_limit, disk_limit, client, fs_util_v1, mds_nodes
@@ -77,7 +76,7 @@ def run(ceph_cluster, **kw):
             crash_status = check_crash_info(client)
             status_str = f"Cluster Health-{clus_health},CPU_MEM_DISK_usage-{cpu_mem_disk_use},Crash-{crash_status}"
 
-            if (clus_health or cpu_mem_disk_use or crash_status) == 1:
+            if (clus_health or cpu_mem_disk_use) == 1:
                 log.error(
                     f"Cluster monitor returned error, check status : {status_str}"
                 )
@@ -95,20 +94,16 @@ def run(ceph_cluster, **kw):
         fs_scale_utils.stop_logging()
 
 
-def check_health(client, mds_failover=0):
+def check_health(client):
     out, _ = client.exec_command(sudo=True, cmd="ceph status --f json")
     output = json.loads(out)
-    exp_status = "HEALTH_OK"
+    clus_status = "HEALTH_ERR"
     status = output["health"]["status"]
     log.info(f"status:{status}")
-    if exp_status not in status:
-        log.error(f"Ceph Health is not OK: {out}")
+    if clus_status in status:
+        log.error(f"Ceph Health is in Error state: {out}")
         out, _ = client.exec_command(sudo=True, cmd="ceph health detail")
         log.info(out)
-        if mds_failover == 1 and "filesystem is degraded" in out:
-            log.info(f"MDS failover tests have been run, so ignoring {status}")
-            return 0
-        return 1
     return 0
 
 

@@ -1,3 +1,14 @@
+#=======================================================================================================================
+# Conf file : cong/squid/cephfs/extensa_cephfs_scale_system.yaml
+# Suite Description : This suite file runs CephFS System and Scale test on Baremetal cluster
+#  Cluster : 7-node Extensa, Clients:90
+# Example run cmd for IBM Ceph:
+# run.py --log-level <> --osp-cred osp/osp-cred-sys.yaml  --global-conf conf/squid/cephfs/extensa_cephfs_scale_system.yaml
+#  --suite suites/squid/cephfs/tier-4_cephfs_system_scale_baremetal.yaml --inventory conf/inventory/rhel-9.5-server-x86_64.yaml --platform rhel-9
+#  --cloud baremetal  --instances-name sys-scale-test --skip-sos-report --rhbuild 8.1 --custom-config ibm-build=True
+#  --rhs-ceph-repo https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-8.1-202507241636.ci.0/IBM-CEPH-8.1-202507241636.ci.0-rhel9.repo
+#  --docker-registry cp.stg.icr.io --docker-image cp/ibm-ceph/ceph-8-rhel9 --docker-tag 8-178 --store
+#=======================================================================================================================
 ---
 tests:
   -
@@ -44,18 +55,16 @@ tests:
                   label: mon
               command: apply
               service: mon
-          -
-            config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
       desc: "Execute the cluster deployment workflow with label placement."
       destroy-cluster: false
       module: test_cephadm.py
       name: "cluster deployment"
       polarion-id: CEPH-83573777
-
+  - test:
+      name: Configure OSD
+      module: misc_env.homogenous_osd_cluster.py
+      desc: Deploy OSDs on node to setup homogenous cluster.
+      abort-on-fail: true
 ### Configure Clients
   - test:
       abort-on-fail: true
@@ -1260,7 +1269,145 @@ tests:
         daemon_list : ['mds','osd','mgr','mon']
 
 ### System Tests
+  ### Set Spare disk to be added when Cluster is near full
+  -
+    test:
+      abort-on-fail: false
+      desc: Remove OSD
+      module: cephfs_system.cephfs_systest_disruptive_tests.py
+      name: "Remove OSD"
+      config:
+        test_name: "remove_osd_during_systest"
+        osd_rm_limit: 0
+  ### System test Setup
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: cephfs_system.cephfs_systest_setup.py
+      name: "setup system test configuration"
 
-
-
+  ### System test Execution 1
+  - test:
+      name: CephFS_System_test_1
+      module: test_parallel.py
+      parallel:
+        -
+          test:
+            abort-on-fail: false
+            desc: Run Client IO workflows
+            module: cephfs_system.cephfs_systest_client_io.py
+            name: "CephFS System Test Client IO"
+        -
+          test:
+            abort-on-fail: false
+            desc: Run MDS config updates
+            module: cephfs_system.cephfs_config_update.py
+            name: "CephFS MDS config update"
+        -
+          test:
+            abort-on-fail: false
+            desc: Run SV and Clone ops
+            module: cephfs_system.cephfs_systest_sv_clone_ops.py
+            name: "CephFS System Test SV Clone ops"
+        -
+          test:
+            abort-on-fail: false
+            desc: Run MDS ops
+            module: cephfs_system.cephfs_systest_mds_ops.py
+            name: "CephFS System Test MDS ops"
+        -
+          test:
+            abort-on-fail: false
+            desc: Run Disruptive tests during IO - Add and Remove OSD
+            module: cephfs_system.cephfs_systest_disruptive_tests.py
+            name: "Add and Remove OSD with snapshot create"
+        -
+          test:
+            abort-on-fail: true
+            desc: System monitor
+            module: cephfs_system.cephfs_systest_monitor.py
+            name: "CephFS System monitor"
+      desc: Running all System test workflows in parallel
+      abort-on-fail: false
+  ### System test Execution 2
+  - test:
+      name: CephFS_System_test_2
+      module: test_parallel.py
+      parallel:
+        -
+          test:
+            abort-on-fail: false
+            desc: Run Client IO workflow 7
+            module: cephfs_system.cephfs_systest_client_io.py
+            name: "CephFS System Test Client IO 7"
+            config:
+              test_name : io_test_workflow_7
+        -
+          test:
+            abort-on-fail: true
+            desc: System monitor
+            module: cephfs_system.cephfs_systest_monitor.py
+            name: "CephFS System monitor"
+        -
+          test:
+            name: Test fs volume creation, run IO & deletion in loop for 5 times
+            module: cephfs_vol_management.cephfs_vol_mgmt_fs_create_delete_loop.py
+            polarion-id: CEPH-83604070
+            desc: Test fs volume creation, run IO & deletion in loop for 5 times
+            abort-on-fail: false
+            config:
+              iteration_cnt : 5
+      desc: Running all System test workflows in parallel
+      abort-on-fail: false
+  ### Post-test Checks
+  -
+    test:
+      abort-on-fail: false
+      desc: "Check for Crash"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-check
+      config:
+        crash_check : 1
+        daemon_list : ['mds','osd','mgr','mon']
+  -
+    test:
+      name: Parse dbg logs for specific strings
+      module: cephfs_logs_util.py
+      config:
+        LOG_PARSER : 1
+        daemon : 'mds'
+        expect_list : ['issue_new_caps','get_allowed_caps','"sending MClientCaps"','client_caps\(revoke']
+        unexpect_list: ['Exception','assert']
 ### Scale Tests
+
+### Post-test Checks
+  -
+    test:
+      abort-on-fail: false
+      desc: "Check for Crash"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-check
+      config:
+        crash_check : 1
+        daemon_list : ['mds','osd','mgr','mon']
+
+  ### Disable debug logging
+  -
+    test:
+      abort-on-fail: false
+      desc: "Disable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-disable-logs
+      config:
+        DISABLE_LOGS : 1
+        daemon_list : ['mds','client','osd','mgr','mon']
+  -
+    test:
+      name: Parse dbg logs for specific strings
+      module: cephfs_logs_util.py
+      config:
+        LOG_PARSER : 1
+        daemon : 'mds'
+        expect_list : ['issue_new_caps','get_allowed_caps','"sending MClientCaps"','client_caps\(revoke']
+        unexpect_list: ['Exception','assert']
