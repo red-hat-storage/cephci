@@ -48,7 +48,7 @@ erasure:
     plugin: jerasure
     crush-failure-domain: host
   sample-pool-6:
-    pool_name: ec_pool_22_1
+    pool_name: ec_pool_22_2
     pool_type: erasure
     k: 2
     m: 2

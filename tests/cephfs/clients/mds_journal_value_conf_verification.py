@@ -72,19 +72,44 @@ def run(ceph_cluster, **kw):
             ("journaler_prefetch_periods", "12"),
             ("journaler_prezero_periods", "6"),
         ]
+
+        client1.exec_command(
+            sudo=True,
+            cmd=f"mkdir -p {fuse_mounting_dir_1}/fuse_{__name__}_run_ios",
+        )
+        client1.exec_command(
+            sudo=True,
+            cmd=f"mkdir -p {kernel_mounting_dir_1}/kernel_{__name__}_run_ios",
+        )
         with parallel() as p:
-            p.spawn(fs_util.run_ios, client1, fuse_mounting_dir_1, ["dd", "smallfile"])
             p.spawn(
-                fs_util.run_ios, client1, kernel_mounting_dir_1, ["dd", "smallfile"]
+                fs_util.run_ios,
+                client1,
+                f"{fuse_mounting_dir_1}/fuse_{__name__}_run_ios",
+                ["dd", "smallfile"],
+            )
+            p.spawn(
+                fs_util.run_ios,
+                client1,
+                f"{kernel_mounting_dir_1}/kernel_{__name__}_run_ios",
+                ["dd", "smallfile"],
             )
         for target in conf_target:
             client_conf = target[0]
             value = target[1]
             client1.exec_command(sudo=True, cmd=f"{conf_set} {client_conf} {value}")
         with parallel() as p:
-            p.spawn(fs_util.run_ios, client1, fuse_mounting_dir_1, ["dd", "smallfile"])
             p.spawn(
-                fs_util.run_ios, client1, kernel_mounting_dir_1, ["dd", "smallfile"]
+                fs_util.run_ios,
+                client1,
+                f"{fuse_mounting_dir_1}/fuse_{__name__}_run_ios",
+                ["dd", "smallfile"],
+            )
+            p.spawn(
+                fs_util.run_ios,
+                client1,
+                f"{kernel_mounting_dir_1}/kernel_{__name__}_run_ios",
+                ["dd", "smallfile"],
             )
         for target in conf_target:
             client_conf = target[0]
