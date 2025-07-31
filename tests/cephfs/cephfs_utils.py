@@ -3,7 +3,8 @@ import random
 import re
 import string
 import time
-from distutils.version import LooseVersion
+
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from utility.log import Log

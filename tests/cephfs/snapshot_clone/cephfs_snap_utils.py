@@ -1,7 +1,6 @@
 """
 This is cephfs snapshot schedule utility module
 It contains all the re-useable functions related to cephfs snapshot schedule and retention feature
-
 """
 
 import datetime
@@ -10,7 +9,8 @@ import random
 import re
 import string
 import time
-from distutils.version import LooseVersion
+
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.exceptions import ValueMismatchError
