@@ -68,6 +68,80 @@ from utility.log import Log
 log = Log(__name__)
 
 
+def verify_namespace_mirror_uuid(
+    rbd_primary, rbd_secondary, pool, namespace, remote_namespace
+):
+    """
+    Verify the mirror UUID and remote namespace for a given pool and namespace
+    on both primary and secondary clusters.
+
+    Args:
+        rbd_primary: RBD client for the primary cluster
+        rbd_secondary: RBD client for the secondary cluster
+        pool: Name of the pool
+        namespace: Namespace on the primary cluster
+        remote_namespace: Namespace on the secondary cluster
+    """
+    # Run rbd mirror pool info for namespace on both clusters
+    pri_ns_spec = f"{pool}/{namespace}"
+    sec_ns_spec = f"{pool}/{remote_namespace}"
+
+    log.info(f"Running 'rbd mirror pool info {pri_ns_spec}' on Cluster-1")
+    out_pri, err_pri = rbd_primary.mirror.pool.info(
+        **{"pool-spec": pri_ns_spec, "format": "json"}
+    )
+    if err_pri:
+        raise Exception(
+            f"Failed to get mirror pool info for {pri_ns_spec} on Cluster-1: {err_pri}"
+        )
+
+    log.info(f"Running 'rbd mirror pool info {sec_ns_spec}' on Cluster-2")
+    out_sec, err_sec = rbd_secondary.mirror.pool.info(
+        **{"pool-spec": sec_ns_spec, "format": "json"}
+    )
+    if err_sec:
+        raise Exception(
+            f"Failed to get mirror pool info for {sec_ns_spec} on Cluster-2: {err_sec}"
+        )
+
+    # Parse outputs
+    try:
+        info_pri = json.loads(out_pri)
+        info_sec = json.loads(out_sec)
+    except Exception as e:
+        raise Exception(f"Failed to parse mirror pool info JSON: {e}")
+
+    # Extract mirror UUID and remote namespace
+    uuid_pri = info_pri.get("mirror_uuid")
+    remote_ns_pri = info_pri.get("remote_namespace")
+    uuid_sec = info_sec.get("mirror_uuid")
+    remote_ns_sec = info_sec.get("remote_namespace")
+
+    log.info(f"Cluster-1: mirror_uuid={uuid_pri}, remote_namespace={remote_ns_pri}")
+    log.info(f"Cluster-2: mirror_uuid={uuid_sec}, remote_namespace={remote_ns_sec}")
+
+    # Validate remote namespaces
+    if remote_ns_pri != remote_namespace:
+        raise Exception(
+            f"Remote namespace mismatch on Cluster-1: expected {remote_namespace}, got {remote_ns_pri}"
+        )
+    if remote_ns_sec != namespace:
+        raise Exception(
+            f"Remote namespace mismatch on Cluster-2: expected {namespace}, got {remote_ns_sec}"
+        )
+
+    # Validate mirror UUIDs are present and do not match
+    if not uuid_pri or not uuid_sec:
+        raise Exception("Mirror UUID missing in pool info output")
+    if uuid_pri == uuid_sec:
+        raise Exception(
+            f"Mirror UUIDs match: Cluster-1={uuid_pri}, Cluster-2={uuid_sec}"
+        )
+    log.info(
+        "Mirror UUID and remote namespace verified successfully across both clusters"
+    )
+
+
 def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
     log.info(
         "Starting CEPH-83601539 - Perform mirror image operation like demote, "
@@ -188,6 +262,11 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                         interval=interval,
                         namespace=namespace,
                     )
+
+                # Verify namespace mirroring UUIDs and remote namespaces
+                verify_namespace_mirror_uuid(
+                    rbd_primary, rbd_secondary, pool, namespace, remote_namespace
+                )
 
                 # Demote Primary Image on cluster-1
                 log.info(f"Demoting primary image {pri_image_spec} on Cluster-1")

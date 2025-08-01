@@ -172,6 +172,7 @@ tests:
       clusters:
         ceph-rbd1:
           config:
+            operation: CEPH-83601539
             rep_pool_config:
               num_pools: 1
               num_images: 1
