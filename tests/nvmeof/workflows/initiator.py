@@ -141,23 +141,22 @@ class NVMeInitiator(Initiator):
         LOG.debug(targets)
         return targets
 
-    def start_fio(self):
+    def start_fio(self, io_size="100%"):
         """Start FIO on the all targets on client node."""
         targets = self.list_devices()
-
-        rhel_version = self.distro_version()
-        if rhel_version.endswith("9.5"):
-            paths = [target["DevicePath"] for target in targets]
-        elif rhel_version == "9.6":
-            paths = [
-                f"/dev/{ns['NameSpace']}"
-                for device in targets
-                for subsys in device.get("Subsystems", [])
-                for ns in subsys.get("Namespaces", [])
-            ]
-
+        paths = []
         results = []
-        io_args = {"size": "100%"}
+        io_args = {"size": io_size}
+        for target in targets:
+            if "DevicePath" in target:
+                paths.append(target["DevicePath"])
+
+            elif "Subsystems" in target:
+                for subsys in target.get("Subsystems", []):
+                    for ns in subsys.get("Namespaces", []):
+                        if "NameSpace" in ns:
+                            paths.append(f"/dev/{ns['NameSpace']}")
+
         # Use max_workers to ensure all FIO processes can start simultaneously
         with parallel(max_workers=len(paths) + 4) as p:
             for path in paths:
@@ -171,6 +170,7 @@ class NVMeInitiator(Initiator):
                         "client_node": self.node,
                         "long_running": True,
                         "cmd_timeout": "notimeout",
+                        "verbose": True,
                     }
                 )
                 _io_args = {**io_args, **_io_args}
