@@ -1266,12 +1266,21 @@ class HighAvailability:
         """Execute the HA failover and failback with IO validation."""
         fail_methods = self.config["fault-injection-methods"]
         initiators = self.config["initiators"]
-        executor = ThreadPoolExecutor()
         io_tasks = []
 
         try:
             # Prepare FIO Execution
             namespaces = self.fetch_namespaces(self.gateways[0])
+            if len(namespaces) >= 1:
+                max_workers = (
+                    len(initiators) * len(namespaces) if initiators else len(namespaces)
+                )  # 20 devices + 10 buffer per initiator
+                executor = ThreadPoolExecutor(
+                    max_workers=max_workers,
+                )
+            else:
+                executor = ThreadPoolExecutor()
+
             self.prepare_io_execution(initiators)
 
             # Check for targets at clients
