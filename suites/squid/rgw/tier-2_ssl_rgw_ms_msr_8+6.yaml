@@ -1,0 +1,307 @@
+# this suite is used to test the RGW multisite replication with SSL enabled ,create a MSR-based Erase-Coded Pool for 4 Node Count
+# It deploys two clusters with RGW services and configures them for multisite replication
+# It also enables default encryption and zlib compression on the RGW services
+# global conf: /conf/squid/rgw/ms-msr-8+6-cluster.yaml
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.pri
+                      placement:
+                        nodes:
+                          - node4
+                      spec:
+                        ssl: true
+                        rgw_frontend_ssl_certificate: create-cert
+              - config:
+                  args:
+                    - "ceph osd set-require-min-compat-client squid"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec86-profile k=8 m=6 crush-failure-domain=host crush-osds-per-failure-domain=4 crush-num-failure-domains=4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile ls"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile get rgwec86-profile"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create rgwec86-pool erasure rgwec86-profile"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable rgwec86-pool rgw"
+                  command: shell
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.sec
+                      placement:
+                        nodes:
+                          - node4
+                      spec:
+                        ssl: true
+                        rgw_frontend_ssl_certificate: create-cert
+              - config:
+                  args:
+                    - "ceph osd set-require-min-compat-client squid"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec86-profile k=8 m=6 crush-failure-domain=host crush-osds-per-failure-domain=4 crush-num-failure-domains=4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile ls"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile get rgwec86-profile"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create rgwec86-pool erasure rgwec86-profile "
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable rgwec86-pool rgw"
+                  command: shell
+      desc: RHCS cluster deployment and rgw deployment with ssl cert generation
+      polarion-id: CEPH-83604472
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster and rgw with ssl gen-cert
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - node1
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - node1
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - node1
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - node1
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.1
+            node: node5
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-sec:
+          config:
+            command: add
+            id: client.1
+            node: node5
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+      polarion-id: CEPH-83573758
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            commands:
+              - "radosgw-admin realm create --rgw-realm india --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node4} --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node4} --master --default"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.pri rgw_realm india"
+              - "ceph config set client.rgw.shared.pri rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.pri rgw_zone primary"
+              - "ceph config set client.rgw.shared.pri rgw_verify_ssl False"
+              - "ceph orch restart {service_name:shared.pri}"
+        ceph-sec:
+          config:
+            commands:
+              - "sleep 120"
+              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node4} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node4} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node4} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.sec rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.sec rgw_realm india"
+              - "ceph config set client.rgw.shared.sec rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.sec rgw_zone secondary"
+              - "ceph orch restart {service_name:shared.sec}"
+              - "sleep 120"
+      desc: Setting up RGW multisite replication environment
+      module: exec.py
+      name: setup multisite
+      polarion-id: CEPH-10362
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.pri rgw_crypt_default_encryption_key 4YSmvJtBv0aZ7geVgAsdpRnLBEwWSWlMIGnRS8a9TSA="
+              - "radosgw-admin zone placement modify --rgw-zone primary --placement-id default-placement  --compression zlib"
+              - "radosgw-admin period update --commit"
+              - "radosgw-admin period get"
+              - "ceph orch restart rgw.shared.pri"
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.sec rgw_crypt_default_encryption_key 4YSmvJtBv0aZ7geVgAsdpRnLBEwWSWlMIGnRS8a9TSA="
+              - "radosgw-admin zone placement modify --rgw-zone secondary --placement-id default-placement  --compression zlib"
+              - "sleep 120"
+              - "radosgw-admin period update"
+              - "radosgw-admin period get"
+              - "ceph orch restart rgw.shared.sec"
+      desc: enabled default encryption and zlib compression
+      module: exec.py
+      name: enabled default encryption and zlib compression
+      polarion-id: CEPH-11350
