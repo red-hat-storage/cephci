@@ -355,7 +355,7 @@ tests:
         Failover cluster from secondary to primary
         in deafult namespace mirroring
       name: Test failover after an orderly shut-down of client IOPS
-      module: test_rbd_mirror_default_namespace_failover.py
+      module: test_rbd_mirror_namespace_failover.py
       polarion-id: CEPH-83613955
       clusters:
         ceph-rbd1:
@@ -397,7 +397,7 @@ tests:
         Failover cluster from secondary to primary
         in deafult namespace mirroring with force promote
       name: Test failover after an non orderly shut-down with force promote
-      module: test_rbd_mirror_default_namespace_failover.py
+      module: test_rbd_mirror_namespace_failover.py
       polarion-id: CEPH-83613956
       clusters:
         ceph-rbd1:

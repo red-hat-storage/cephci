@@ -982,6 +982,7 @@ def run(**kw):
         test_map = {
             "CEPH-83613955": test_failover_orderly_shutdown,
             "CEPH-83613956": test_failover_non_orderly_shutdown,
+            "CEPH-83601544": test_failover_orderly_shutdown,
         }
 
         test_func = kw["config"]["test_function"]
