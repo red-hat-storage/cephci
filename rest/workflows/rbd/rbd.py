@@ -1,3 +1,4 @@
+import json
 import math
 
 from ceph.rbd.workflows.pool import check_pool_exists
@@ -101,26 +102,29 @@ def create_image_in_pool_verify(**kw):
                 application_metadata=["rbd"],
             )
             log.info(f"pool create response {pool_create_response2}")
-        pool_get_response = ceph_rest.get_a_pool(pool=pool)
-        if pool_get_response["pool_name"] != pool:
+        kwargs = {"raw_response": True}
+        pool_get_response = ceph_rest.get_a_pool(pool=pool, **kwargs)
+        get_pool_response = json.loads(pool_get_response.text)
+        if get_pool_response["pool_name"] != pool:
             log.error(f"Pool {pool} REST GET verification failed")
             return 1
         log.info(f"Pool {pool} REST GET verification successful")
-        pool_list_response = ceph_rest.list_pool()
+        pool_list_response = ceph_rest.list_pool(**kwargs)
+        pool_list_response = json.loads(pool_list_response.text)
         found_pool = False
         for pool_details in pool_list_response:
             if pool_details["pool_name"] == pool:
                 found_pool = True
                 break
         if not found_pool:
-            log.erorr(f"Pool {pool} REST list GET verification failed")
+            log.error(f"Pool {pool} REST list GET verification failed")
             return 1
         log.info(f"Pool {pool} REST list GET verification successful")
 
         # This is to demonstrate one can seamlessly add existing cli based checks, if needed
         check_pool_rc = check_pool_exists(client=client, pool_name=pool)
         if check_pool_rc:
-            log.eror("Pool verification failed through cli")
+            log.error("Pool verification failed through cli")
             return 1
     except Exception as e:
         log.error(f"pool {pool} creation using REST failed with error {str(e)}")

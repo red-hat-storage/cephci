@@ -40,7 +40,7 @@ class CEPH:
         response = self._rest.post(relative_url=pool_endpoint, data=json.dumps(data))
         return response
 
-    def get_a_pool(self, pool):
+    def get_a_pool(self, pool, **kwargs):
         """
         To get a specific pool
 
@@ -52,14 +52,14 @@ class CEPH:
         get_pool_ep = self._config.get_config()["endpoints"]["rbd"]["GET_POOL"].format(
             pool_name=pool
         )
-        response = self._rest.get(relative_url=get_pool_ep)
+        response = self._rest.get(relative_url=get_pool_ep, **kwargs)
         return response
 
-    def list_pool(self):
+    def list_pool(self, **kwargs):
         """
         To list all pools
         GET request end point /api/pool
         """
         get_pool_ep = self._config.get_config()["endpoints"]["rbd"]["LIST_POOL"]
-        response = self._rest.get(relative_url=get_pool_ep)
+        response = self._rest.get(relative_url=get_pool_ep, **kwargs)
         return response
