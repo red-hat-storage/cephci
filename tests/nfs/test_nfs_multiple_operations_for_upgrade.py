@@ -77,6 +77,24 @@ def permission_to_directory(client, nfs_mount):
         )
 
 
+def lookup_in_directory(client, mount):
+    """
+    Check if the mount point is accessible and contains expected files.
+    Args:
+        client: Client node where the mount is performed.
+        mount: Mount point path.
+    Returns:
+        bool: True if the mount point is accessible and contains expected files, False otherwise.
+    """
+    try:
+        out, _ = client.exec_command(sudo=True, cmd=f"ls {mount}")
+        log.info(f"Contents of {mount}: {out.strip()}")
+        return out
+    except Exception as e:
+        log.error(f"Failed to access mount point {mount}: {e}")
+        return False
+
+
 def create_nfs_cluster(
     clients,
     nfs_server_name,

@@ -715,46 +715,6 @@ def create_nfs_via_file_and_verify(installer_node, nfs_objects, timeout):
         log.error(f"Failed to apply NFS Ganesha spec file: {err}")
 
 
-def verify_nfs_ganesha_service(node, timeout):
-    """
-    Verify the status of NFS Ganesha service.
-    Args:
-        node: Installer Node.
-    Returns:
-        bool: True if the service is in the expected state, False otherwise.
-    """
-    interval = 5
-
-    for w in WaitUntil(timeout=timeout, interval=interval):
-        result = json.loads(
-            CephAdm(node).ceph.orch.ls(format="json", service_type="nfs")
-        )
-        if all(x["status"]["running"] == x["status"]["size"] for x in result):
-            log.info(
-                "\n"
-                + "=" * 30
-                + "\n"
-                + "NFS Ganesha service is up and running. Time taken : -- %s seconds \n"
-                + "=" * 30,
-                w._attempt * w.interval,
-            )
-            log.info("sleep(20)  # Allow some time for the service to stabilize")
-            sleep(20)  # Allow some time for the service to stabilize
-            return True
-        else:
-            log.info(
-                "\n \n NFS Ganesha service is not running as expected, retrying...... "
-                "Time remaining : -- %s seconds \n",
-                timeout - (w._attempt * w.interval),
-            )
-            log.debug("Current status: %s", result)
-    log.error("\n NFS Ganesha service is not running as expected.")
-    if w.expired:
-        raise OperationFailedError(
-            "NFS daemons check failed Timeout expired. -- %s seconds" % timeout
-        )
-
-
 def delete_nfs_clusters_in_parallel(installer_node, timeout):
     """
     Delete NFS clusters in batch.
@@ -859,13 +819,76 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
 
 
 @retry(OperationFailedError, tries=4, delay=5, backoff=2)
-def mount_retry(client, mount_name, version, port, nfs_server, export_name, ha=False):
-    if Mount(client).nfs(
+def mount_retry(
+    clients,
+    client_num,
+    mount_name,
+    version,
+    port,
+    nfs_server,
+    export_name,
+):
+
+    if Mount(clients[client_num]).nfs(
         mount=mount_name,
         version=version,
         port=port,
         server=nfs_server,
         export=export_name,
     ):
-        raise OperationFailedError("Failed to mount nfs on %s" % export_name.hostname)
+        raise OperationFailedError("Failed to mount nfs on %s" % {export_name.hostname})
     return True
+
+
+@retry(OperationFailedError, tries=4, delay=5, backoff=2)
+def fuse_mount_retry(client, mount, **kwargs):
+    """
+    Retry mounting NFS using FUSE.
+    Args:
+        client: Client node where the mount is to be performed.
+        mount: Mount point path.
+        **kwargs: Additional arguments for the Mount method.
+    """
+    if Mount(client).fuse(client_hostname=client.hostname, mount=mount, **kwargs):
+        raise OperationFailedError("Failed to fuse mount nfs on %s" % client.hostname)
+    return True
+
+
+def verify_nfs_ganesha_service(node, timeout):
+    """
+    Verify the status of NFS Ganesha service.
+    Args:
+        node: Installer Node.
+    Returns:
+        bool: True if the service is in the expected state, False otherwise.
+    """
+    interval = 5
+
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        result = json.loads(
+            CephAdm(node).ceph.orch.ls(format="json", service_type="nfs")
+        )
+        if all(x["status"]["running"] == x["status"]["size"] for x in result):
+            log.info(
+                "\n"
+                + "=" * 30
+                + "\n"
+                + "NFS Ganesha service is up and running. Time taken : -- %s seconds \n"
+                + "=" * 30,
+                w._attempt * w.interval,
+            )
+            log.info("sleep(20)  # Allow some time for the service to stabilize")
+            sleep(20)  # Allow some time for the service to stabilize
+            return True
+        else:
+            log.info(
+                "\n \n NFS Ganesha service is not running as expected, retrying...... "
+                "Time remaining : -- %s seconds \n",
+                timeout - (w._attempt * w.interval),
+            )
+            log.debug("Current status: %s", result)
+    log.error("\n NFS Ganesha service is not running as expected.")
+    if w.expired:
+        raise OperationFailedError(
+            "NFS daemons check failed Timeout expired. -- %s seconds" % timeout
+        )
