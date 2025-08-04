@@ -1,0 +1,166 @@
+#============================================================
+# Test-Case: Verify certificate management through certmgr
+#
+# Cluster Configuration:
+#    conf/tentacle/cephadm/1admin-4node-1client-cluster.yaml
+#============================================================
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: Mgmt-gateway
+              pos_args:
+                - Mgmt-gateway.1
+              args:
+                placement:
+                  label: Mgmt-gateway
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Configure the Mgmt-gateway,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: Validate certificate cephadm_root_ca_cert
+      desc: Test cephadm signed cert "cephadm_root_ca_cert" is present
+      module: test_certmgr_cert.py
+      config:
+        action: ls
+        cert: cephadm_root_ca_cert
+        include_cephadm_signed: True
+
+  - test:
+      name: Validate setting new user-signed certificate for Mgmt-gateway
+      desc: Test setting user-signed certificate for Mgmt-gateway using cli command
+      module: test_certmgr_cert.py
+      config:
+        action: set
+        scope: global
+        entity: mgmt-gateway
+        node: node1
+        generate_ssl_cert: True
+        cert_file_name: cert.pem
+        key_file_name: key.pem
+        days: 6095
+
+  - test:
+      name: Validate get command for new user-signed certificate for Mgmt-gateway
+      desc: Test user-signed certificate for Mgmt-gateway using cli get command
+      module: test_certmgr_cert.py
+      config:
+        action: get
+        scope: global
+        entity: mgmt-gateway
+
+  - test:
+      name: Validate setting new user-signed key for Mgmt-gateway
+      desc: Test setting user-signed key for Mgmt-gateway using cli command
+      module: test_certmgr_key.py
+      config:
+        action: set
+        scope: global
+        entity: mgmt-gateway
+        generate_ssl_cert: True
+        key_file_name: key.pem
+
+  - test:
+      name: Validate get command for new user-signed key for Mgmt-gateway
+      desc: Test user-signed key for Mgmt-gateway using cli get command
+      module: test_certmgr_key.py
+      config:
+        action: get
+        scope: global
+        entity: mgmt-gateway
+
+  - test:
+      name: Validate reload command for certificates
+      desc: Test reconfigure cert specs using cli command
+      module: test_certmgr_cert.py
+      config:
+        action: reload
+
+  - test:
+      name: Validate check command for cluster
+      desc: Test cluster for expired/invalid certificates
+      module: test_certmgr_cert.py
+      config:
+        action: check
+
+  - test:
+      name: Remove the user-signed certificate for Mgmt-gateway
+      desc: Test rm command for certmgr
+      module: test_certmgr_cert.py
+      config:
+        action: remove
+        scope: global
+        entity: mgmt-gateway
+
+  - test:
+      name: Remove the private key for Mgmt-gateway
+      desc: Test rm command for certmgr
+      module: test_certmgr_key.py
+      config:
+        action: remove
+        scope: global
+        entity: mgmt-gateway
