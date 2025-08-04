@@ -2083,7 +2083,8 @@ def config_keystone_ldap(rgw_node, cloud_type):
         sudo=True,
         cmd=f"ceph config set client.{rgw_name} rgw_ldap_uri {ldap_url}",
     )
-    rgw_node.exec_command(sudo=True, cmd=f"ceph orch restart {rgw_name}")
+    # Restart rgw service and wait for it to come up
+    restart_rgw_and_wait(rgw_node, rgw_name)
 
 
 def method_should_succeed(function, *args, **kwargs):
@@ -2798,3 +2799,34 @@ def is_unsecured_registry(test_data):
             return insecure_registry_value  # Return boolean value for insecure-registry
 
     return False  # Default return value if conditions are not met
+
+
+def restart_rgw_and_wait(rgw_node, rgw_service_name):
+    """
+    Restart the given RGW service and wait until all daemons are running.
+    """
+    log.info(f"Restarting RGW service: {rgw_service_name}")
+    rgw_node.exec_command(sudo=True, cmd=f"ceph orch restart {rgw_service_name}")
+    time.sleep(0.5)
+
+    out, _ = rgw_node.exec_command(
+        sudo=True, cmd="ceph orch ls --service_type=rgw --format json-pretty"
+    )
+    rgw_serv = json.loads(out)
+
+    if int(rgw_serv[0]["status"]["running"]) != int(rgw_serv[0]["status"]["size"]):
+        for retry_count in range(12):
+            time.sleep(5)
+            out, _ = rgw_node.exec_command(
+                sudo=True, cmd="ceph orch ls --service_type=rgw --format json-pretty"
+            )
+            re_rgw_serv = json.loads(out)
+            if int(re_rgw_serv[0]["status"]["running"]) != int(
+                re_rgw_serv[0]["status"]["size"]
+            ):
+                log.debug("wait for 5 sec until all daemon are up and running")
+            else:
+                log.debug("RGW daemons are up and running")
+                break
+    else:
+        log.info("RGW daemons are up and running")
