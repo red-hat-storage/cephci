@@ -47,10 +47,6 @@ tests:
                   service: osd
                   args:
                     all-available-devices: true
-              - config:
-                  args:
-                    - "ceph mgr module enable rgw"
-                  command: shell
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -196,7 +192,7 @@ tests:
               - node5:80
       desc: "Configure HAproxy"
       module: haproxy.py
-  #     name: "Configure HAproxy"
+      name: "Configure HAproxy"
   - test:
       abort-on-fail: true
       clusters:
@@ -209,11 +205,11 @@ tests:
               - "ceph rgw realm bootstrap --realm-name india --zonegroup-name shared --zone-name primary --port 80 --placement=\"{node:node5}\" --start-radosgw"
               - "radosgw-admin zone modify --rgw-realm=india --rgw-zonegroup=shared --rgw-zone=primary --endpoints=http://{node_ip:node5}:80"
               - "radosgw-admin period update --rgw-realm=india --commit"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
+              - "ceph config set client.rgw.{daemon_id:india.primary} rgw_realm india"
+              - "ceph config set client.rgw.{daemon_id:india.primary} rgw_zonegroup shared"
+              - "ceph config set client.rgw.{daemon_id:india.primary} rgw_zone primary"
               - "ceph config set client.rgw rgw_verify_ssl False"
-              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_verify_ssl False"
+              - "ceph config set client.rgw.{daemon_id:india.primary} rgw_verify_ssl False"
               - "ceph orch restart {service_name:india.primary}"
               - "sudo yum install -y sshpass"
               - "sleep 120"
