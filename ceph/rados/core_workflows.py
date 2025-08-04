@@ -4714,7 +4714,7 @@ EOF"""
             )
 
         cmd_export = f"ceph orch ls {service_type} {service_name} --export"
-        _service = self.run_ceph_command(cmd=cmd_export, client_exec=True)
+        _service = self.run_ceph_command(cmd=cmd_export, client_exec=True)[0]
         if not _service.get("placement", False):
             log.warning(
                 "Service %s does not have placement entry and cannot be set to 'managed', skipping"
