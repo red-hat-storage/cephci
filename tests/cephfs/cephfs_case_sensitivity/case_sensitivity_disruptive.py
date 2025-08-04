@@ -9,6 +9,7 @@ from tests.cephfs.exceptions import (
     log_and_fail,
 )
 from tests.cephfs.lib.cephfs_attributes_lib import CephFSAttributeUtilities
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.lib.cephfs_recovery_lib import FSRecovery
 from utility.log import Log
 
@@ -20,6 +21,7 @@ def run(ceph_cluster, **kw):
         test_data = kw.get("test_data")
         fs_util = FsUtils(ceph_cluster, test_data=test_data)
         attr_util = CephFSAttributeUtilities(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         fs_recovery = FSRecovery(ceph_cluster)
         config = kw.get("config")
         clients = ceph_cluster.get_ceph_objects("client")
@@ -86,6 +88,11 @@ def run(ceph_cluster, **kw):
             "\n---------------***************-----------------------------------"
         )
 
+        log.info("Check Ceph health")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
+
         num_of_osds = config.get("num_of_osds")
         fs_util.runio_reboot_active_mds_nodes(
             fs_util,
@@ -128,6 +135,11 @@ def run(ceph_cluster, **kw):
             "\n---------------***************-----------------------------------"
         )
 
+        log.info("Check Ceph health")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
+
         log.info("Unmounting fuse client:")
         cmd = "fusermount -u {} -z".format(fuse_mounting_dir)
         client1.exec_command(sudo=True, cmd=cmd)
@@ -150,6 +162,11 @@ def run(ceph_cluster, **kw):
             "\n    Usecase 3: Failing the file system                           "
             "\n---------------***************-----------------------------------"
         )
+
+        log.info("Check Ceph health")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
 
         log.info("Unmounting fuse client:")
         child_dir_3 = os.path.join(parent_dir, "child_dir_step-3")
@@ -178,7 +195,9 @@ def run(ceph_cluster, **kw):
             log.error("No MDS is in failed state")
             return 1
 
-        fs_recovery.fs_recovery(client1, active_mds_ranks, fs_name)
+        if fs_recovery.fs_recovery(client1, active_mds_ranks, fs_name):
+            log.error("Failed to recover the file system {}".format(fs_name))
+            return 1
 
         fs_util.wait_for_stable_fs(client1, False, 60)
 
@@ -217,6 +236,11 @@ def run(ceph_cluster, **kw):
             "\n                 Cleanup                                              "
             "\n---------------***************----------------------------------------"
         )
+        log.info("Check Ceph health")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
+
         fs_util.client_clean_up(
             "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir
         )

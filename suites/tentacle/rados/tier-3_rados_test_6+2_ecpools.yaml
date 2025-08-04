@@ -295,38 +295,17 @@ tests:
       desc: Verification of the effect of compression on erasure coded pools
 
   - test:
-      name: Autoscaler test - pool target size ratio
-      module: pool_tests.py
-      polarion-id: CEPH-83573424
-      config:
-        verify_pool_target_ratio:
-          configurations:
-            pool-1:
-              profile_name: ec62_7
-              pool_name: ec62_pool7
-              pool_type: erasure
-              pg_num: 32
-              k: 6
-              m: 2
-              plugin: isa
-              crush-failure-domain: host
-              target_size_ratio: 0.8
-              max_objs: 300
-              rados_read_duration: 10
-              delete_pool: true
-      desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
-
-  - test:
       name: ceph-bluestore-tool utility
       module: test_bluestoretool_workflows.py
       polarion-id: CEPH-83571692
       desc: Verify ceph-bluestore-tool functionalities
 
-  - test:
-      name: ceph-objectstore-tool utility
-      module: test_objectstoretool_workflows.py
-      polarion-id: CEPH-83581811
-      desc: Verify ceph-objectstore-tool functionalities
+# COT tests underneath run only on RE pools, commenting workflow for now
+#  - test:
+#      name: ceph-objectstore-tool utility
+#      module: test_objectstoretool_workflows.py
+#      polarion-id: CEPH-83581811
+#      desc: Verify ceph-objectstore-tool functionalities
 
   - test:
       name: Verify premerge PGS during PG split
@@ -386,28 +365,6 @@ tests:
               conf: sample-pool-9
         pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
       desc: Verify that scrub & deep-scrub logs are captured in OSD logs
-
-  - test:
-      name: Autoscaler test - pool target size ratio
-      module: pool_tests.py
-      polarion-id: CEPH-83573424
-      config:
-        verify_pool_target_ratio:
-          configurations:
-            pool-1:
-              profile_name: ec62_10
-              pool_name: ec62_pool10
-              pool_type: erasure
-              pg_num: 32
-              k: 6
-              m: 2
-              plugin: isa
-              crush-failure-domain: host
-              target_size_ratio: 0.8
-              max_objs: 300
-              rados_read_duration: 10
-              delete_pool: true
-      desc: Specifying pool bounds on pool Pgs - Verify target_size_ratio
 
   - test:
       name: Autoscaler test - pool target size ratio

@@ -102,9 +102,7 @@ def setup_nfs_cluster(
     for version, clients in mount_versions.items():
         for client in clients:
             client.create_dirs(dir_path=nfs_mount, sudo=True)
-            if mount_retry(
-                clients, i, nfs_mount, version, port, nfs_server, export_name
-            ):
+            if mount_retry(client, nfs_mount, version, port, nfs_server, export_name):
                 log.info("Mount succeeded on %s" % client.hostname)
             i += 1
             sleep(1)
@@ -861,10 +859,8 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
 
 
 @retry(OperationFailedError, tries=4, delay=5, backoff=2)
-def mount_retry(
-    clients, client_num, mount_name, version, port, nfs_server, export_name, ha=False
-):
-    if Mount(clients[client_num]).nfs(
+def mount_retry(client, mount_name, version, port, nfs_server, export_name, ha=False):
+    if Mount(client).nfs(
         mount=mount_name,
         version=version,
         port=port,

@@ -1001,7 +1001,7 @@ def run(ceph_cluster, **kw):
             )
         )
         return 1
-    client1 = clients[1]
+    client1 = clients[0]
     fs_util.prepare_clients([client1], build)
 
     log.info(
@@ -1047,6 +1047,11 @@ def run(ceph_cluster, **kw):
                 "\nUsecase 1: Set casesensitivity for a new directory "
                 "\n---------------***************---------------------"
             )
+            log.info("Check Ceph health")
+            if common_util.wait_for_healthy_ceph(client1, 300):
+                log.error("Cluster health is not OK even after waiting for 300secs")
+                return 1
+
             test_case_sensitivity()
 
             log.info(
@@ -1091,6 +1096,11 @@ def run(ceph_cluster, **kw):
                 "\nUsecase 6: Set normalization for a new directory   "
                 "\n---------------***************---------------------"
             )
+            log.info("Check Ceph health")
+            if common_util.wait_for_healthy_ceph(client1, 300):
+                log.error("Cluster health is not OK even after waiting for 300secs")
+                return 1
+
             test_directory_normalization()
 
             log.info(
@@ -1132,6 +1142,10 @@ def run(ceph_cluster, **kw):
                 "\nUsecase 11:Create softlink for dir, make modification and validate the attribute"
                 "\n---------------***************--------------------------------------------------"
             )
+            log.info("Check Ceph health")
+            if common_util.wait_for_healthy_ceph(client1, 300):
+                log.error("Cluster health is not OK even after waiting for 300secs")
+                return 1
             test_softlink_modification_attribute_validation()
 
             log.info(
@@ -1193,6 +1207,11 @@ def run(ceph_cluster, **kw):
                 "\n                 Cleanup                                              "
                 "\n---------------***************----------------------------------------"
             )
+
+            log.info("Check Ceph health")
+            if common_util.wait_for_healthy_ceph(client1, 300):
+                log.error("Cluster health is not OK even after waiting for 300secs")
+                return 1
 
             if mount_type == "fuse":
                 for mount_dir in [
