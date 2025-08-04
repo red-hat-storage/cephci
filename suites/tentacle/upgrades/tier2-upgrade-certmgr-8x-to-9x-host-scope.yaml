@@ -1,0 +1,263 @@
+#################################################################################
+# Tier-level: 2
+# Test-Suite: tier2-upgrade-certmgr-8x-to-9x-host-scope.yaml
+# Test-Case: Upgrade RHCS 8.1 to RHCS 9.x with user-signed certificates (host-scope)
+#
+# Cluster Configuration:
+#     conf/tentacle/upgrades/1admin-3node-1client-upgrade.yaml
+#
+# Test Steps:
+#     - Deploy Ceph 8.1 cluster in RHEL 9
+#     - Deploy Grafana service explicitly
+#     - Set user-signed certificates and keys for host-level entity (Grafana)
+#     - Validate certificates are set correctly
+#     - Upgrade cluster from Ceph 8.1 to Ceph 9.x
+#     - Post-upgrade validation:
+#         - Verify cluster health
+#         - Verify service status
+#         - Verify certificates and keys are intact
+#################################################################################
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy Ceph 8.1 GA cluster using cephadm
+      desc: Bootstrap Ceph 8.1 cluster and deploy services with label placements.
+      polarion-id: CEPH-83573777
+      module: test_cephadm.py
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                rhcs-version: 8.1
+                release: "released"
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: grafana
+              args:
+                placement:
+                  nodes:
+                    - node1
+          - config:
+              command: shell
+              args:
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply
+              service: mds
+              base_cmd_args:
+                verbose: true
+              pos_args:
+                - cephfs
+              args:
+                placement:
+                  nodes:
+                    - node2
+                    - node3
+                  limit: 2
+                  sep: " "
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure the RGW, RBD, CephFS client system
+      module: test_client.py
+      polarion-id: CEPH-83573777
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Validate cephadm root CA certificate
+      desc: Verify cephadm signed cert "cephadm_root_ca_cert" is present
+      module: test_certmgr_cert.py
+      config:
+        action: ls
+        cert: cephadm_root_ca_cert
+        include_cephadm_signed: True
+
+  - test:
+      name: Set user-signed certificate for Grafana
+      desc: Generate and set user-signed certificate for Grafana host-level service
+      module: test_certmgr_cert.py
+      config:
+        action: set
+        scope: host
+        entity: grafana
+        node: node1
+        generate_ssl_cert: True
+        cert_file_name: grafana_cert.pem
+        key_file_name: grafana_key.pem
+        days: 6095
+
+  - test:
+      name: Set user-signed key for Grafana
+      desc: Set user-signed key for Grafana host-level service
+      module: test_certmgr_key.py
+      config:
+        action: set
+        scope: host
+        entity: grafana
+        node: node1
+        generate_ssl_cert: True
+        key_file_name: grafana_key.pem
+
+  - test:
+      name: Validate Grafana certificate
+      desc: Verify user-signed certificate for Grafana is set correctly
+      module: test_certmgr_cert.py
+      config:
+        action: get
+        scope: host
+        entity: grafana
+        node: node1
+
+  - test:
+      name: Validate Grafana key
+      desc: Verify user-signed key for Grafana is set correctly
+      module: test_certmgr_key.py
+      config:
+        action: get
+        scope: host
+        entity: grafana
+        node: node1
+
+  - test:
+      name: Check certificate status before upgrade
+      desc: Verify all certificates are valid before upgrade
+      module: test_certmgr_cert.py
+      config:
+        action: check
+
+  - test:
+      name: Upgrade cluster to latest 9.x ceph version
+      desc: Upgrade cluster from Ceph 8.1 to latest Ceph 9.x
+      module: test_cephadm_upgrade.py
+      polarion-id: CEPH-83573791,CEPH-83573790
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Verify cluster health post-upgrade
+      desc: Verify cluster is healthy after upgrade
+      module: exec.py
+      config:
+        sudo: true
+        commands:
+          - "ceph -s"
+          - "ceph health detail"
+          - "ceph versions"
+
+  - test:
+      name: Verify service status post-upgrade
+      desc: Verify all services are running after upgrade
+      module: exec.py
+      config:
+        sudo: true
+        commands:
+          - "ceph orch ls"
+          - "ceph orch ps"
+
+  - test:
+      name: Validate Grafana certificate post-upgrade
+      desc: Verify Grafana certificate is intact after upgrade
+      module: test_certmgr_cert.py
+      config:
+        action: get
+        scope: host
+        entity: grafana
+        node: node1
+
+  - test:
+      name: Validate Grafana key post-upgrade
+      desc: Verify Grafana key is intact after upgrade
+      module: test_certmgr_key.py
+      config:
+        action: get
+        scope: host
+        entity: grafana
+        node: node1
+
+  - test:
+      name: Check certificate status post-upgrade
+      desc: Verify all certificates are valid after upgrade
+      module: test_certmgr_cert.py
+      config:
+        action: check
+
+  - test:
+      name: Reload certificate manager configuration
+      desc: Reload certmgr configuration to ensure all changes are applied
+      module: test_certmgr_cert.py
+      config:
+        action: reload
+
+  - test:
+      name: List all certificates post-upgrade
+      desc: List all certificates to verify bindings are intact
+      module: exec.py
+      config:
+        sudo: true
+        commands:
+          - "ceph orch certmgr cert ls"
+          - "ceph orch certmgr key ls"
+          - "ceph orch certmgr bindings ls"
