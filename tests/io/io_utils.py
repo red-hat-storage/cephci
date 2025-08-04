@@ -1,3 +1,4 @@
+import re
 import traceback
 from datetime import datetime, timedelta
 from time import sleep
@@ -8,6 +9,13 @@ from utility.log import Log
 from utility.utils import get_smallfile_config
 
 log = Log(__name__)
+
+
+def get_max_clat_from_fio_output(fio_output: str) -> int:
+    """Extract the max clat (msec) value from fio output."""
+    clat_max_values = re.findall(r"clat \(nsec\): min=\d+, max=(\d+)", fio_output)
+    clat_max_values = list(map(int, clat_max_values))
+    return max(clat_max_values) if clat_max_values else -1
 
 
 def smallfile_io(client, **kwargs):
