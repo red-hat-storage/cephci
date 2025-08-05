@@ -70,14 +70,12 @@ def create_export_and_mount_for_existing_nfs_cluster(
                 clients[client_num].create_dirs(dir_path=mount_name, sudo=True)
 
                 if not mount_retry(
-                    clients,
-                    client_num,
-                    mount_name,
-                    version,
-                    port,
-                    nfs_server,
-                    export_name,
-                    ha=ha,
+                    client=clients[client_num],
+                    mount_name=mount_name,
+                    version=version,
+                    port=port,
+                    nfs_server=nfs_server,
+                    export_name=export_name,
                 ):
                     log.info(f"Mount failed, {mount_name}")
                     raise OperationFailedError(
