@@ -13,6 +13,7 @@ import datetime
 import json
 import time
 
+from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -179,6 +180,7 @@ def run(ceph_cluster, **kw):
         inactive_pgs = 0
         # Monitor upgrade status, till completion, checking for the warning to be generated
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        command_failed_counter = 0
         while end_time > datetime.datetime.now():
             cmd = "ceph orch upgrade status"
             try:
@@ -187,6 +189,19 @@ def run(ceph_cluster, **kw):
                 if not status["in_progress"]:
                     log.info("Upgrade Complete...")
                     upgrade_complete = True
+                    break
+                command_failed_counter = 0
+            except CommandFailed as err:
+                command_failed_counter += 1
+                log.error("Exception hit : %s" % err.__doc__)
+                log.exception(err)
+                log.info("Retrying after 20 seconds...")
+                time.sleep(20)
+                if command_failed_counter < 3:
+                    continue
+                else:
+                    log.error("Command failed after 3 attempts...")
+                    upgrade_complete = False
                     break
             except json.JSONDecodeError:
                 if "no upgrades in progress" in out:
@@ -198,7 +213,7 @@ def run(ceph_cluster, **kw):
                 # Error msg :  ENOTSUP: Warning: due to ceph-mgr restart, some PG states may not be up to date
                 # Module 'orchestrator' is not enabled/loaded (required by command 'orch upgrade status'):
                 # use `ceph mgr module enable orchestrator` to enable it
-                if "not enabled/loaded" in err:
+                if "not enabled/loaded" in str(err):
                     log.info(
                         "Intermittent issue hit. bug : 2314146. Error hit : \n %s \n"
                         % err,
