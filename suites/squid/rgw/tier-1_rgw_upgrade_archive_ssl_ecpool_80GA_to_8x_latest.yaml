@@ -562,12 +562,12 @@ tests:
       name: multisite ceph upgrade
       polarion-id: CEPH-83574647
       clusters:
-        ceph-pri:
+        ceph-sec:
           config:
             command: start
             service: upgrade
             verify_cluster_health: true
-        ceph-sec:
+        ceph-pri:
           config:
             command: start
             service: upgrade
