@@ -26,6 +26,7 @@ tests:
   - test:
       name: Delete cluster using cephadm rm-cluster command
       desc:  Verify cluster purge via cephamd commands
+      comments: Test fails due to Product Bug - 2129252
       polarion-id: CEPH-83573765
       module: test_remove_cluster.py
 
