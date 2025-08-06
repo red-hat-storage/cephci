@@ -98,5 +98,9 @@ instance:
 
     runcmd:
       - timedatectl set-timezone Etc/UTC
+      - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/yum.conf
+      - sed -i 's/gpgcheck=1/gpgcheck=0/' /etc/dnf/dnf.conf
+      - dnf clean all
+      - dnf update -y
       - systemctl restart sshd
       - touch /ceph-qa-ready
