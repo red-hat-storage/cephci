@@ -1,6 +1,9 @@
 from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.utils import get_node_by_id
 from utility.utils import get_ceph_version_from_cluster
+from utility.log import Log
+
+LOG = Log(__name__)
 
 
 class NVMeGateway:
@@ -79,3 +82,15 @@ class NVMeGateway:
                     }
                 }
                 self.nvmegwcli.listener.add(**listener_config)
+
+    def check_gateway(self, node_id):
+        """Check node is NVMeoF Gateway node.
+
+        Args:
+            node_id: Ceph node Id (ex., node6)
+        """
+        for gw in self.gateways:
+            if gw.node.id == node_id:
+                LOG.info(f"[{node_id}] {gw.node.hostname} is NVMeoF Gateway node.")
+                return gw
+        raise Exception(f"{node_id} doesn't match to any gateways provided...")

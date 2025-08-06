@@ -13,6 +13,7 @@ from ceph.parallel import parallel
 from ceph.utils import get_node_by_id, get_nodes_by_ids
 from tests.cephadm import test_nvmeof
 from tests.nvmeof.workflows.nvmegateway import NVMeGateway
+from tests.nvmeof.workflows.utils import string_to_dict
 from utility.systemctl import SystemCtl
 from utility.utils import generate_unique_id
 
@@ -433,3 +434,58 @@ class NVMeService:
                 )
             )
         return gateways
+
+    def ana_states(self, gw_group=""):
+        """Fetch ANA states and convert into python dict."""
+
+        orch = Orch(cluster=self.ceph_cluster)
+        out, _ = orch.shell(
+            args=[
+                "ceph",
+                "nvme-gw",
+                "show",
+                self.rbd_pool,
+                repr(self.gateway_group_name),
+            ]
+        )
+        states = {}
+        if self.cluster.rhcs_version >= "8":
+            out = json.loads(out)
+            for gateway in out.get("Created Gateways:"):
+                gw = gateway["gw-id"]
+                states[gw] = gateway
+                states[gw].update(string_to_dict(gateway["ana states"]))
+        else:
+            for data in out.split("}"):
+                data = data.strip()
+                if not data:
+                    continue
+                data = json.loads(f"{data}}}")
+                if data.get("ana states"):
+                    gw = data["gw-id"]
+                    states[gw] = data
+                    states[gw].update(string_to_dict(data["ana states"]))
+
+        return states
+
+    def check_gateway_availability(self, ana_id, state="AVAILABLE", ana_states=None):
+        """Check for failed ANA GW become unavailable.
+
+        Args:
+            ana_id: Gateway ANA group id.
+            state: Gateway availability state
+            ana_states: Overall ana state. (output from self.ana_states)
+        Return:
+            True if Gateway availability is in expected state, else False
+        """
+        # get ANA states
+        if not ana_states:
+            ana_states = self.ana_states()
+
+        # Check Availability of ANA Group Gateway
+        for _, _state in ana_states.items():
+            if _state["anagrp-id"] == ana_id:
+                if _state["Availability"] == state:
+                    return True
+                return False
+        return False
