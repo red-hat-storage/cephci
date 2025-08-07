@@ -16,8 +16,8 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-8-rhel-9.repo"
-                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:latest"
+                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-8.1-202507211240.ci.0/IBM-CEPH-8.1-202507211240.ci.0-rhel9.repo"
+                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-175"
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
