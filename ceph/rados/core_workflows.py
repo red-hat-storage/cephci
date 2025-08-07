@@ -5367,3 +5367,26 @@ EOF"""
             msg_logline = f"The log line {search_string} not found on - {daemon_type} : {daemon_id} log"
             log.info(msg_logline)
             return False
+
+    def remove_log_file_content(self, nodes_list):
+        """
+        The method is used to remove the log file contents in the cluster
+        Args:
+            nodes_list: Cluster nodes list that remove the file content
+
+        Returns: True -> Successful execution of command
+                 False -> Failure of command
+
+        """
+        cluster_fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
+        cmd_truncate = rf"cd /var/log/ceph/{cluster_fsid}/ && find . -type f -exec truncate -s 0 {{}} \;"
+
+        for node in nodes_list:
+            msg_log = f"Removing the file content from the node -{node.hostname}"
+            log.info(msg_log)
+            try:
+                out, err = node.exec_command(sudo=True, cmd=cmd_truncate)
+            except Exception:
+                log.error("Error while removing contents of file")
+                return False
+        return True
