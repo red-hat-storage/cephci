@@ -4712,6 +4712,15 @@ EOF"""
             return self.set_service_managed_type(
                 service_type=service_type, unmanaged=False
             )
+
+        cmd_export = f"ceph orch ls {service_type} {service_name} --export"
+        _service = self.run_ceph_command(cmd=cmd_export, client_exec=True)[0]
+        if not _service.get("placement", False):
+            log.warning(
+                "Service %s does not have placement entry and cannot be set to 'managed', skipping"
+                % _service["service_name"]
+            )
+            return True
         cmd_set_managed_flag = f"ceph orch set-managed {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
         base_cmd = "ceph orch ls"
@@ -5317,3 +5326,44 @@ EOF"""
         log_info_msg = f"Removed service {service_name} successfully"
         log.info(log_info_msg)
         return True
+
+    def lookup_log_message(
+        self, init_time, end_time, daemon_type, daemon_id, search_string
+    ):
+        """
+        This method is used to verify whether a specific string is present in the log.
+
+        Args:
+            init_time : Initial time  in the log line
+            end_time : End time in the log line
+            daemon_type : Daemon types are- mon,mgr,osd,mds and rgw
+            daemon_id : daemon id
+            search_string : search string in the log
+        Returns:
+            True -> If the search string exist in the log
+            False -> If the search string not exist in the log
+        """
+        fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
+        host = self.fetch_host_node(daemon_type=daemon_type, daemon_id=daemon_id)
+
+        base_cmd_get_log_line = (
+            f'awk \'$1 >= "{init_time}" && $1 <= "{end_time}"\' '
+            f"/var/log/ceph/{fsid}/ceph-{daemon_type}.{daemon_id}.log"
+        )
+
+        grep_line = rf"grep -E {search_string}"
+        try:
+            base_cmd_get_log_line = f"{base_cmd_get_log_line} | {grep_line}"
+            chk_log_msg, err = host.exec_command(sudo=True, cmd=base_cmd_get_log_line)
+        except Exception:
+            msg_logline = "Exception occurred or message not found in the logs."
+            log.info(msg_logline)
+            return False
+        if chk_log_msg:
+            msg_logline = f"The log line {search_string} found on - {daemon_type} : {daemon_id} log"
+            log.info(msg_logline)
+            return True
+        else:
+            msg_logline = f"The log line {search_string} not found on - {daemon_type} : {daemon_id} log"
+            log.info(msg_logline)
+            return False

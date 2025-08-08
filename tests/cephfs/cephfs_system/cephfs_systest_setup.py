@@ -59,7 +59,6 @@ def run(ceph_cluster, **kw):
         nfs_name = "cephfs_systest_nfs"
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
-        nfs_server = "magna027"
         client1.exec_command(
             sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
         )
@@ -72,7 +71,7 @@ def run(ceph_cluster, **kw):
         if ephemeral_pin == 1:
             log.info("Setup Ephemeral Random pinning")
             cmd = "ceph config set mds mds_export_ephemeral_random true;"
-            cmd += "ceph config set mds mds_export_ephemeral_random_max 0.75"
+            cmd += "ceph config set mds mds_export_ephemeral_random_max 0.1"
             client1.exec_command(sudo=True, cmd=cmd)
 
         log.info("Enable snap-schedule config")
@@ -189,14 +188,18 @@ def run(ceph_cluster, **kw):
                                     "nfs_server": nfs_server,
                                 }
                             )
-                        if (ephemeral_pin == 1) and (mds_pin_cnt < 5):
+                        if (
+                            (ephemeral_pin == 1)
+                            and (mds_pin_cnt < 5)
+                            and (mnt_type != "nfs")
+                        ):
                             log.info(f"Configure MDS pinning : {mds_pin_cnt}")
-                            cmd = f"setfattr -n ceph.dir.pin.random -v 0.75 {mounting_dir1}"
+                            cmd = f"setfattr -n ceph.dir.pin.random -v 0.1 {mounting_dir1}"
                             mnt_client1.exec_command(
                                 sudo=True,
                                 cmd=cmd,
                             )
-                            cmd = f"setfattr -n ceph.dir.pin.random -v 0.75 {mounting_dir2}"
+                            cmd = f"setfattr -n ceph.dir.pin.random -v 0.1 {mounting_dir2}"
                             mnt_client2.exec_command(
                                 sudo=True,
                                 cmd=cmd,

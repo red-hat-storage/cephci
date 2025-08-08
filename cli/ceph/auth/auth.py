@@ -40,3 +40,26 @@ class Auth(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def get_or_create_client_keyring(self, client_hostname: str) -> str:
+        """
+        Get or create a Ceph auth keyring for the given client hostname.
+
+        Args:
+            client_hostname (str): Name of the Ceph client (e.g., hostname of the host).
+
+        Returns:
+            str: CLI output from Ceph auth command (the path to the keyring or stdout).
+
+        Raises:
+            FuseMountError: If keyring creation fails.
+        """
+        keyring_path = f"/etc/ceph/ceph.client.{client_hostname}.keyring"
+        cmd = (
+            f"{self.base_cmd} get-or-create client.{client_hostname} "
+            f"mon 'allow *' mds 'allow * path=/' osd 'allow *' "
+            f"-o {keyring_path}"
+        )
+
+        out = self.execute(sudo=True, cmd=cmd)
+        return out[0].strip() if isinstance(out, tuple) else out

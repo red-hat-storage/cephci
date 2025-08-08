@@ -26,7 +26,7 @@ def run(ceph_cluster, **kw):
     # Storing the pg dump log before setting the scrub parameters
     before_scrub_log = scrub_object.get_pg_dump("pgid", "last_scrub_stamp")
     scrub_check_flag = True
-
+    set_debug = config.get("set_debug", False)
     osd_scrub_min_interval = 120
     osd_scrub_max_interval = 3600
 
@@ -40,6 +40,17 @@ def run(ceph_cluster, **kw):
         log.info(f"The {pool_name} pool created")
         log.info(f"writing test data into the {pool_name}pool")
         method_should_succeed(rados_object.bench_write, **cr_pool)
+
+        if set_debug:
+            log.debug("Setting up debug configs on the cluster for Mgr daemons")
+            mon_obj.set_config(section="mgr", name="debug_mgr", value="20/20")
+            mon_obj.set_config(
+                section="mgr", name="mgr/cephadm/log_level", value="debug"
+            )
+            mon_obj.set_config(
+                section="mgr", name="mgr/cephadm/log_to_file", value="true"
+            )
+
         log.info(f"writing test data into the {pool_name}pool is completed")
         (
             scrub_begin_hour,
@@ -129,11 +140,20 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("\n--Executing finally block--\n")
-        log.info(f"Deleting the {pool_name} pool")
-        method_should_succeed(rados_object.delete_pool, pool_name)
-        log.info(f"{pool_name} pool is deleted")
+
+        if "pool_name" in globals() or "pool_name" in locals():
+            log.info(f"Deleting the {pool_name} pool")
+            method_should_succeed(rados_object.delete_pool, pool_name)
+            log.info(f"{pool_name} pool is deleted")
+
         log.info("Setting the parameters in to default  values")
         set_default_params(mon_obj)
+
+        if set_debug:
+            log.debug("Removing debug configs on the cluster for mon, osd & Mgr")
+            mon_obj.remove_config(section="mgr", name="debug_mgr")
+            mon_obj.remove_config(section="mgr", name="mgr/cephadm/log_level")
+            mon_obj.remove_config(section="mgr", name="mgr/cephadm/log_to_file")
 
         # log cluster health
         rados_object.log_cluster_health()

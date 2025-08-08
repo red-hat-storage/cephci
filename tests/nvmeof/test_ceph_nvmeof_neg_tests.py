@@ -30,7 +30,7 @@ from tests.nvmeof.test_ceph_nvmeof_gateway import (
 )
 from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
-from tests.nvmeof.workflows.nvme_utils import deploy_nvme_service
+from tests.nvmeof.workflows.nvme_utils import deploy_nvme_service, setup_firewalld
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.retry import retry
@@ -1275,6 +1275,7 @@ def test_ceph_83608266(
         container_ids = []
         subsystem_list = []
         gw_nodes = get_nodes_by_ids(ceph_cluster, config.get("gw_nodes"))
+        setup_firewalld(gw_nodes)
         if conf["placement"] == "apply_spec":
             cfg = {
                 "no_cluster_state": False,

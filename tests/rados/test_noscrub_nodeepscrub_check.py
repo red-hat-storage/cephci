@@ -10,7 +10,6 @@ CEPH-83594004 - Verification of Scrub and Deep-Scrub Operations on Placement Gro
 """
 
 import datetime
-import re
 import time
 import traceback
 
@@ -75,31 +74,34 @@ def run(ceph_cluster, **kw):
 
         # Modified the scrub parameters
         mon_object.set_config(section="osd", name="osd_scrub_min_interval", value=60)
-        mon_object.set_config(section="osd", name="osd_deep_scrub_interval", value=420)
+        mon_object.set_config(section="osd", name="osd_deep_scrub_interval", value=60)
         mon_object.set_config(section="osd", name="debug_osd", value="20/20")
 
         # Check for log
         exec_end_time = datetime.datetime.now() + datetime.timedelta(minutes=10)
-        while exec_end_time > datetime.datetime.now():
+
+        for pg_id in pg_id_list:
+            if datetime.datetime.now() >= exec_end_time:
+                break
             end_time, _ = installer.exec_command(
                 cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
             )
             end_time = end_time.strip()
-            for pg_id in pg_id_list:
-                log_lines = [
-                    rf"{pg_id}\s*(?!deep-)scrub starts",
-                    rf"{pg_id}\s*deep-scrub starts",
-                ]
-                if verify_scrub_log(
-                    rados_object, init_time, end_time, pg_id, log_lines
-                ):
-                    msg_err_pgid = f"The scrub started on the {pg_id} after setting the no_scrub and no_deepscrub flag"
-                    log.error(msg_err_pgid)
-                    return 1
+            log_lines = [
+                rf"'{pg_id} scrub starts'",
+                rf"'{pg_id} deep-scrub starts'",
+            ]
+            if verify_scrub_log(rados_object, init_time, end_time, pg_id, log_lines):
+                msg_err_pgid = f"The scrub started on the {pg_id} after setting the no_scrub and no_deepscrub flag"
+                log.error(msg_err_pgid)
+                return 1
             time.sleep(30)
+        log.info(
+            "===Verification of the scrub operation by setting the no-scrub and nodeep-scrub completed==="
+        )
 
         log.info(
-            "Verify that the deep-scrub starts after unsetting the nodeep-scrub flag"
+            "===Verify that the deep-scrub starts after unsetting the nodeep-scrub flag==="
         )
         init_time, _ = installer.exec_command(
             cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
@@ -109,30 +111,36 @@ def run(ceph_cluster, **kw):
         log.info("The nodeep-scrub flag is unset")
         time.sleep(20)
         deep_scrub_falg = False
+
         exec_end_time = datetime.datetime.now() + datetime.timedelta(minutes=10)
-        while exec_end_time > datetime.datetime.now():
+        for pg_id in pg_id_list:
+            if datetime.datetime.now() >= exec_end_time:
+                break
             end_time, _ = installer.exec_command(
                 cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
             )
             end_time = end_time.strip()
-            for pg_id in pg_id_list:
-                log_lines = [
-                    rf"{pg_id}\s*deep-scrub starts",
-                    rf"{pg_id}\s*deep-scrub ok",
-                ]
-                if verify_scrub_log(
-                    rados_object, init_time, end_time, pg_id, log_lines
-                ):
-                    msg_scrub_start = f"The scrub started on the {pg_id} after unsetting no_deepscrub flag"
-                    log.info(msg_scrub_start)
-                    deep_scrub_falg = True
+            log_lines = [
+                rf"'{pg_id} deep-scrub starts'",
+                rf"'{pg_id} deep-scrub ok'",
+            ]
+            if verify_scrub_log(rados_object, init_time, end_time, pg_id, log_lines):
+                msg_scrub_start = f"The deep-scrub started on the {pg_id} after unsetting no_deepscrub flag"
+                log.info(msg_scrub_start)
+                deep_scrub_falg = True
             time.sleep(30)
+
         if not deep_scrub_falg:
             log.error(
                 "The deep-scrub not started after unsetting the nodeep-scrub flag"
             )
             return 1
-
+        log.info(
+            "===Verification of the deep-scrub starts after unsetting the nodeep-scrub flag completed==="
+        )
+        log.info(
+            "===Verification of pg scheduled time after removing the scrub intervals==="
+        )
         before_test_scrub_schedule_time = {}
         # unset the parameters
         mon_object.remove_config(section="osd", name="osd_scrub_min_interval")
@@ -154,32 +162,34 @@ def run(ceph_cluster, **kw):
         exec_end_time = datetime.datetime.now() + datetime.timedelta(minutes=10)
         # Define the format for parsing
         fmt = "%Y-%m-%dT%H:%M:%S.%f%z"
-        while exec_end_time > datetime.datetime.now():
+        for pg_id in pg_id_list:
+            if datetime.datetime.now() >= exec_end_time:
+                break
             end_time, _ = installer.exec_command(
                 cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
             )
             end_time = end_time.strip()
-            for pg_id in pg_id_list:
-                log_lines = [
-                    rf"{pg_id}\s*(?!deep-)scrub starts",
-                    rf"{pg_id}\s*deep-scrub starts",
-                ]
-
-                pg_id_time = before_test_scrub_schedule_time[pg_id]
-                scrub_log_result = verify_scrub_log(
-                    rados_object, init_time, end_time, pg_id, log_lines
+            log_lines = [
+                rf"'{pg_id} scrub starts'",
+                rf"'{pg_id} deep-scrub starts'",
+            ]
+            pg_id_time = before_test_scrub_schedule_time[pg_id]
+            scrub_log_result = verify_scrub_log(
+                rados_object, init_time, end_time, pg_id, log_lines
+            )
+            pg_id_dt = datetime.datetime.strptime(pg_id_time, fmt)
+            end_dt = datetime.datetime.strptime(end_time, fmt)
+            if scrub_log_result and pg_id_dt >= end_dt:
+                msg_error = (
+                    f"The scrub started on the {pg_id} after setting the no_scrub and no_deepscrub flag."
+                    f"The scheduled time- {pg_id_dt} is greater than current time-{end_dt}"
                 )
-
-                pg_id_dt = datetime.datetime.strptime(pg_id_time, fmt)
-                end_dt = datetime.datetime.strptime(end_time, fmt)
-                if scrub_log_result and pg_id_dt >= end_dt:
-                    msg_error = (
-                        f"The scrub started on the {pg_id} after setting the no_scrub and no_deepscrub flag."
-                        f"The scheduled time- {pg_id_dt} is greater than current time-{end_dt}"
-                    )
-                    log.error(msg_error)
-                    return 1
+                log.error(msg_error)
+                return 1
             time.sleep(30)
+        log.info(
+            "===Verification of pg scheduled time after removing the scrub intervals completed==="
+        )
 
     except Exception as e:
         log.info(e)
@@ -221,29 +231,23 @@ def verify_scrub_log(rados_object, init_time, end_time, pgid, log_lines):
     acting_set = rados_object.get_pg_acting_set(pg_num=pgid)
     msg_acting_set = f"The acting osd set of the pg {pgid} is {acting_set}"
     log.info(msg_acting_set)
-    fsid = rados_object.run_ceph_command(cmd="ceph fsid")["fsid"]
+
     scrub_flag = False
     for osd_id in acting_set:
-        host = rados_object.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
-        cmd_get_log_lines = (
-            f'awk \'$1 >= "{init_time}" && $1 <= "{end_time}"\' '
-            f"/var/log/ceph/{fsid}/ceph-osd.{osd_id}.log"
-        )
-        osd_logs, err = host.exec_command(
-            sudo=True,
-            cmd=cmd_get_log_lines,
-        )
-        osd_lines = osd_logs.splitlines()
         for log_line in log_lines:
-            for osd_line in osd_lines:
-                if re.search(log_line, osd_line):
-                    msg_found_logline = f" Found the log lines on OSD : {osd_id} and log line is {osd_line}"
-                    log.info(msg_found_logline)
-                    # The flag is included to check the log lines in all OSDs
-                    scrub_flag = True
-        if scrub_flag:
-            return True
-        msg_osd_logs = f"The {osd_id} osd logs are - {osd_logs}"
-        log.debug(msg_osd_logs)
+            chk_log_msg = rados_object.lookup_log_message(
+                init_time=init_time,
+                end_time=end_time,
+                daemon_type="osd",
+                daemon_id=osd_id,
+                search_string=log_line,
+            )
+            if chk_log_msg:
+                msg_found_logline = f" Found the log lines on OSD : {osd_id} and log line is {chk_log_msg}"
+                log.info(msg_found_logline)
+                scrub_flag = True
+                break
+    if scrub_flag:
+        return True
     log.info("The line not appeared in the log files")
     return False

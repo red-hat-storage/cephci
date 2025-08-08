@@ -208,7 +208,7 @@ def upgrade(
 
         # Set osd flags
         for flag in osd_flags:
-            cmd = f"ceph osd set {flag}"
+            cmd = f"cephadm shell -- ceph osd set {flag}"
             installer.exec_command(sudo=True, cmd=cmd)
 
         # fetch smb images
@@ -247,7 +247,7 @@ def upgrade(
 
         # Unset osd flags
         for flag in osd_flags:
-            cmd = f"cephadm shell ceph osd unset {flag}"
+            cmd = f"cephadm shell -- ceph osd unset {flag}"
             installer.exec_command(sudo=True, cmd=cmd)
 
         # Check cluster health after upgrade

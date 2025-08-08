@@ -266,7 +266,6 @@ tests:
       module: cephfs_nfs.nfs_info_cluster_id_and_ls_export_detailed.py
       name: "nfs ls export verification and info with cluster_id"
       polarion-id: "CEPH-83573992"
-      comments: "No Clarity on the implementation"
   - test:
       abort-on-fail: false
       desc: "Apply various number of hosts to nfs cluster and verify the changes"

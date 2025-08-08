@@ -77,3 +77,18 @@ class Host(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def set_topological_labels(self, hostname, label=None):
+        """
+        Add/Remove topological label used for staggered upgrade
+        Args:
+          hostname (str): host name
+          label (str): label name
+        Note: If no label is passed, command removes existing
+        topological labels for that host
+        """
+        cmd = f"{self.base_cmd} set-topological-labels {hostname} {label}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out

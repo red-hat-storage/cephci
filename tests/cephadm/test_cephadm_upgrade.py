@@ -7,6 +7,7 @@ from ceph.ceph_admin.orch import Orch
 from ceph.rados.rados_bench import RadosBench
 from ceph.utils import is_legacy_container_present
 from utility.log import Log
+from utility.utils import fetch_image_manifest
 
 log = Log(__name__)
 
@@ -42,6 +43,40 @@ def run(ceph_cluster, **kwargs) -> int:
     config = kwargs["config"]
     config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
     verify_image = bool(config.get("verify_cluster_health", False))
+    if config.get("args", {}).get("rhcs-version", None):
+        _rhcs_version = config.get("args").get("rhcs-version", None)
+        _rhcs_release = config.get("args").get("release", None)
+        rhbuild = config.get("rhbuild")
+        _platform = "-".join(rhbuild.split("-")[1:])
+        build_info, custom_images = fetch_image_manifest(
+            _rhcs_release, _rhcs_version, _platform
+        )
+
+        _base_url = build_info.get("composes", {}).get(_platform)
+        _repository = build_info.get("repository", "")
+        _registry, _image_name = _repository.split(":")[0].split("/", 1)
+        _image_tag = _repository.split(":")[-1]
+        log.debug("Fetched build info from manifest:")
+        log.debug("  Base URL     : %s", _base_url)
+        log.debug("  Registry     : %s", _registry)
+        log.debug("  Image Name   : %s", _image_name)
+        log.debug("  Image Tag    : %s", _image_tag)
+        log.debug("  Custom Images: %s", custom_images)
+        # The cluster object is configured so that the values are persistent till
+        # an upgrade occurs. This enables us to execute the test in the right
+        # context.
+        config["base_url"] = _base_url
+        config["container_image"] = f"{_registry}/{_image_name}:{_image_tag}"
+        config["ceph_docker_registry"] = _registry
+        config["ceph_docker_image"] = _image_name
+        config["ceph_docker_image_tag"] = _image_tag
+        ceph_cluster.rhcs_version = _rhcs_version or rhbuild
+        config["rhbuild"] = f"{_rhcs_version}-{_platform}"
+        config["args"]["rhcs-version"] = _rhcs_version
+        config["args"]["release"] = _rhcs_release
+        config["args"]["image"] = config["container_image"]
+
+    # initiate a new object with updated config
     orch = Orch(cluster=ceph_cluster, **config)
 
     client = ceph_cluster.get_nodes(role="client")[0]
@@ -81,7 +116,8 @@ def run(ceph_cluster, **kwargs) -> int:
             installer.exec_command(cmd=f"{base_cmd} orch upgrade stop")
 
         # Start Upgrade
-        config.update({"args": {"image": "latest"}})
+        if not config.get("args", {}).get("rhcs-version", None):
+            config.update({"args": {"image": "latest"}})
         orch.start_upgrade(config)
 
         # Monitor upgrade status, till completion

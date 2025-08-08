@@ -81,9 +81,32 @@ Step 16: namespace level snapshot scheduling should have no affect
 Step 17: Pool level snapshot scheduling should  still show same as before
 Step 18: Repeat above on EC pool
 Step 19: Cleanup all rbd test objects like pools, images, groups etc
+
+CEPH-83620584:
+Test Case Flow:
+Step 1: Deploy Two ceph cluster on version 8.1 or above
+Step 2: Create RBD pool ‘pool_1’ on both sites with/without namespace
+Step 3: Enable Image mode mirroring on pool_1 on both sites
+Step 4: Bootstrap the storage cluster peers (Two-way)
+Step 5: Create 2 RBD images in pool_1
+Step 6: Create Consistency group
+Step 7: Add Images in the consistency group
+Step 8: Enable Mirroring for the group
+Step 9: Wait for replication to complete
+Step 10: Demote on site-a
+Step 11: Promote on site-b
+Step 12: Wait for status, site-a: up+replaying, site-b: up+stopped
+Step 13: force promote on site-a + demote on site-a
+Step 14: Perform resync
+Step 15: wait for status, site-a: up+replaying, site-b: up+stopped
+Step 16: toggle demote/promote
+Step 17: disable group mirroring on site-a
+Step 18: Repeat above on EC pool
+Step 19: Cleanup all rbd test objects like pools, images, groups etc
 """
 
 import ast
+import json
 import random
 import time
 from copy import deepcopy
@@ -94,6 +117,7 @@ from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.group_mirror import (
     disable_group_mirroring_and_verify_state,
     enable_group_mirroring_and_verify_state,
+    group_mirror_status_verify,
     remove_group_image_and_verify,
     verify_group_snapshot_ls,
     verify_group_snapshot_schedule,
@@ -676,12 +700,235 @@ def test_group_mirror_scheduling(
                 )
 
 
+def test_rbd_group_toggle_demote_promote(
+    rbd_primary,
+    rbd_secondary,
+    client_primary,
+    client_secondary,
+    primary_cluster,
+    secondary_cluster,
+    pool_types,
+    **kw,
+):
+    """
+    Image level & pool level promote/demote when group mirroring is enabled/disabled
+    Args:
+        rbd_primary: RBD object of primary cluster
+        rbd_secondary: RBD objevct of secondary cluster
+        client_primary: client node object of primary cluster
+        client_secondary: client node object of secondary cluster
+        primary_cluster: Primary cluster object
+        secondary_cluster: Secondary cluster object
+        pool_types: Replication pool or EC pool
+        **kw: any other arguments
+    """
+    for pool_type in pool_types:
+        rbd_config = kw.get("config", {}).get(pool_type, {})
+        multi_pool_config = deepcopy(getdict(rbd_config))
+        log.info("Running test CEPH-83620584  for %s", pool_type)
+
+        for pool, pool_config in multi_pool_config.items():
+            group_config = {}
+            if "data_pool" in pool_config.keys():
+                _ = pool_config.pop("data_pool")
+            group_spec = pool_config.get("group-spec")
+            group_config.update({"group-spec": group_spec})
+
+            image_spec = []
+            images = []
+            for image, image_config in pool_config.items():
+                if "image" in image:
+                    if "namespace" in pool_config:
+                        pool_spec = pool + "/" + pool_config.get("namespace") + "/"
+                    else:
+                        pool_spec = pool + "/"
+                    image_spec.append(pool_spec + image)
+                    images.append(image)
+            if "namespace" in pool_config:
+                enable_namespace_mirroring(
+                    rbd_primary, rbd_secondary, pool, **pool_config
+                )
+
+            # Enable Group Mirroring and Verify
+            enable_group_mirroring_and_verify_state(
+                rbd_primary, **{"group-spec": group_spec}
+            )
+
+            # Wait for group mirroring to complete
+            wait_for_idle(rbd_primary, **{"group-spec": group_spec})
+            log.info("Data replay state is idle for all images in the group")
+
+            demote(rbd_primary, group_spec, "site-A")
+            # Verify group mirroring status on both clusters
+            group_mirror_status_verify(
+                primary_cluster,
+                secondary_cluster,
+                rbd_primary,
+                rbd_secondary,
+                primary_state="up+unknown",
+                secondary_state="up+unknown",
+                **group_config,
+            )
+            log.info(
+                "Group states reached 'up+unknown' on site-A and 'up+unknown' on site-B"
+            )
+
+            promote(rbd_secondary, group_spec, "site-B")
+
+            # Verify group mirroring status on both clusters
+            group_mirror_status_verify(
+                primary_cluster,
+                secondary_cluster,
+                rbd_primary,
+                rbd_secondary,
+                primary_state="up+replaying",
+                secondary_state="up+stopped",
+                **group_config,
+            )
+            log.info(
+                "Group states reached 'up+replaying' on site-A and 'up+stopped' on site-B"
+            )
+
+            (out, err) = rbd_primary.mirror.group.promote(
+                **{"group-spec": group_spec, "force": True}
+            )
+            if err:
+                raise Exception("Failed to force promote group on site-A " + str(err))
+            log.info("Force Promoted " + group_spec + " on site-A ")
+
+            group_mirror_status_verify(
+                primary_cluster,
+                secondary_cluster,
+                rbd_primary,
+                rbd_secondary,
+                primary_state="up+stopped",
+                secondary_state="up+stopped",
+                **group_config,
+            )
+            log.info(
+                "Group states reached 'up+stopped' on site-A and 'up+stopped' on site-B"
+            )
+
+            demote(rbd_primary, group_spec, "site-A")
+            group_mirror_status_verify(
+                primary_cluster,
+                secondary_cluster,
+                rbd_primary,
+                rbd_secondary,
+                primary_state="up+error",
+                secondary_state="up+stopped",
+                **group_config,
+            )
+            log.info(
+                "Group states reached 'up+error' on site-A and 'up+stopped' on site-B"
+            )
+
+            # wait for split-brain status:
+            (group_mirror_status, err) = rbd_primary.mirror.group.status(
+                **{"group-spec": group_spec}, format="json"
+            )
+
+            data = json.loads(group_mirror_status)
+            if data.get("description") == "split-brain":
+                log.info("Mirror group is in split-brain state")
+
+            (out, err) = rbd_primary.mirror.group.resync(**{"group-spec": group_spec})
+            if err:
+                raise Exception("Failed to resync group on site-B " + str(err))
+            log.info("Resync group done for " + group_spec + " on site-A ")
+            # During resync the images on secondary will be deleted and created
+            # so we wait for some time before the status is queried
+            time.sleep(30)
+            # Verify group mirroring status on both clusters
+            group_mirror_status_verify(
+                primary_cluster,
+                secondary_cluster,
+                rbd_primary,
+                rbd_secondary,
+                primary_state="up+replaying",
+                secondary_state="up+stopped",
+                **group_config,
+            )
+            log.info(
+                "Group states reached 'up+stopped' on site-A and 'up+replaying' on site-B"
+            )
+
+            demote(rbd_secondary, group_spec, "site-B")
+
+            promote(rbd_primary, group_spec, "site-A")
+
+            demote(rbd_primary, group_spec, "site-A")
+
+            promote(rbd_secondary, group_spec, "site-B")
+
+            demote(rbd_secondary, group_spec, "site-B")
+
+            promote(rbd_primary, group_spec, "site-A")
+
+            disable_group_mirroring_and_verify_state(
+                rbd_primary, **{"group-spec": group_spec}
+            )
+            (group_mirror_status, err) = rbd_secondary.mirror.group.status(
+                **{"group-spec": group_spec}, format="json"
+            )
+
+            data = json.loads(group_mirror_status)
+            peer_state = [data.get("state") for site in data.get("peer_sites", [])][0]
+            if "up+error" in data.get("state") and "up+unknown" in peer_state:
+                log.info(
+                    "Verified 'up+error' and 'up+unknown' on site-B after disabling mirror on site-A"
+                )
+            if "remote group no longer exists" in data.get("description"):
+                log.info(
+                    "Verified the description 'remote group no longer exists' on site-B status"
+                )
+
+
+def demote(rbd, group_spec, site):
+    """
+    This function demotes the group and validates the operation
+
+    Args:
+        rbd: test data
+        group_spec : group spec
+        site : site name
+    Returns:
+        Nil
+
+    """
+    (out, err) = rbd.mirror.group.demote(**{"group-spec": group_spec})
+    if err:
+        raise Exception("Failed to demote group on " + site + str(err))
+    log.info("Demoted " + group_spec + " on " + site)
+
+    time.sleep(30)
+
+
+def promote(rbd, group_spec, site):
+    """
+    This function promotes the group and validates the operation
+
+    Args:
+        rbd: test data
+        group_spec : group spec
+        site : site name
+    Returns:
+        Nil
+
+    """
+    (out, err) = rbd.mirror.group.promote(**{"group-spec": group_spec})
+    if err:
+        raise Exception("Failed to promote group on " + site + str(err))
+    log.info("Promoted " + group_spec + " on " + site)
+
+
 def run(**kw):
     """
     This test verifies:
     - add or remove group mirror snapshot schedule when client is blocklisted
     - Image level & pool level promote/demote when group mirroring is enabled/disabled
     - Snapshot schedule at image and namespace level when group snapshot scheduling is enabled
+    - Toggle on demote/promote after split brain+resync and disabling group mirroring
 
     Args:
         kw: test data
@@ -696,6 +943,7 @@ def run(**kw):
             "CEPH-83613275": test_group_consistency,
             "CEPH-83614239": test_rbd_group_mirror_unsupported_ops,
             "CEPH-83614240": test_group_mirror_scheduling,
+            "CEPH-83620584": test_rbd_group_toggle_demote_promote,
         }
 
         grouptypes = ["single_pool_without_namespace", "single_pool_with_namespace"]

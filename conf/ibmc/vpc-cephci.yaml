@@ -1,0 +1,15 @@
+---
+datacenters:
+  - eu-de-1
+  - eu-de-2
+  - eu-de-3
+dns_zone_name: "qe.ceph.eu.lab"
+networks:
+  eu-de-1: sn-cephci-eu-de-1
+  eu-de-2: sn-cephci-eu-de-2
+  eu-de-3: sn-cephci-eu-de-3
+private_key: ceph-qe-sa-svc
+profile: bx2-2x8
+security_group: "sg-cephci"
+service_url: "https://eu-de.iaas.cloud.ibm.com/v1"
+vpc_name: "vpc-cephci"

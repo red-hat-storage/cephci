@@ -360,28 +360,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            script-name: test_check_sharding_enabled.py
-            config-file-name: test_zone_deletion.yaml
-      desc: Test zone deletion in master
-      module: sanity_rgw_multisite.py
-      name: Perform zone deletion in master
-      polarion-id: CEPH-10753
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_check_sharding_enabled.py
-            config-file-name: test_realm_rename.yaml
-      desc: Test realm rename in master
-      module: sanity_rgw_multisite.py
-      name: Perform realm rename in master
-      polarion-id: CEPH-10739
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
             script-name: ../s3_swift/test_swift_delete_during_sync.py
             config-file-name: ../../s3_swift/multisite_configs/test_swift_delete_during_sync.yaml
       name: test_swift_delete_during_sync
@@ -399,3 +377,25 @@ tests:
       desc: test_swift_all_objects_lc
       polarion-id: CEPH-11193
       module: sanity_rgw_multisite.py
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_zone_deletion.yaml
+      desc: Test zone deletion in master
+      module: sanity_rgw_multisite.py
+      name: Perform zone deletion in master
+      polarion-id: CEPH-10753
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_realm_rename.yaml
+      desc: Test realm rename in master
+      module: sanity_rgw_multisite.py
+      name: Perform realm rename in master
+      polarion-id: CEPH-10739

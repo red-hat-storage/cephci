@@ -32,7 +32,7 @@ def run(ceph_cluster, **kw):
         log.info("checking Pre-requisites")
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
-        default_fs = "cephfs" if not erasure else "cephfs-ec"
+        default_fs = "cephfs_rw" if not erasure else "cephfs_rw-ec"
         fs_details = fs_util.get_fs_info(clients[0], default_fs)
 
         if not fs_details:
@@ -48,6 +48,7 @@ def run(ceph_cluster, **kw):
         create_cmd = (
             f"ceph auth get-or-create client.{user_name} mon 'allow *'"
             f" mds 'allow * path=/'"
+            f" osd 'allow *'"
             f" -o /etc/ceph/ceph.client.{user_name}.keyring"
         )
         clients[0].exec_command(sudo=True, cmd=create_cmd)
@@ -70,7 +71,6 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True,
             cmd=f"dd if=/dev/zero of={fuse_mounting_dir_1}_dd bs=100M " f"count=5",
-            check_ec=False,
         )
         client1.exec_command(
             sudo=True, cmd=f"ceph auth caps client.{user_name} mds 'allow r path=/'"
@@ -90,3 +90,7 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         fs_util.client_clean_up(client1, kernel_mounting_dir_1, fuse_mounting_dir_1)
+        fs_util.remove_fs(client1, default_fs)
+        fs_util.validate_fs_services(
+            client1, service_name=f"mds.{default_fs}", is_present=False
+        )

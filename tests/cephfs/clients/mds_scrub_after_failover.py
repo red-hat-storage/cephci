@@ -134,11 +134,26 @@ def run(ceph_cluster, **kw):
         clients[0].exec_command(
             sudo=True, cmd=f"mkdir -p {kernel_mounting_dir_2}/dir_kernel_2"
         )
+
         with parallel() as p:
-            p.spawn(fs_util.run_ios, client1, f"{fuse_mounting_dir_1}/dir_fuse_1")
-            p.spawn(fs_util.run_ios, client1, f"{fuse_mounting_dir_2}/dir_fuse_2")
-            p.spawn(fs_util.run_ios, client2, f"{kernel_mounting_dir_1}/dir_kernel_1")
-            p.spawn(fs_util.run_ios, client2, f"{kernel_mounting_dir_1}/dir_kernel_2")
+            p.spawn(
+                fs_util.run_ios, client1, f"{fuse_mounting_dir_1}/dir_fuse_1", ["dd"]
+            )
+            p.spawn(
+                fs_util.run_ios, client1, f"{fuse_mounting_dir_2}/dir_fuse_2", ["dd"]
+            )
+            p.spawn(
+                fs_util.run_ios,
+                client2,
+                f"{kernel_mounting_dir_1}/dir_kernel_1",
+                ["dd"],
+            )
+            p.spawn(
+                fs_util.run_ios,
+                client2,
+                f"{kernel_mounting_dir_1}/dir_kernel_2",
+                ["dd"],
+            )
         # kill active MDS
         client1.exec_command(sudo=True, cmd=f"ceph mds fail {active_mds_before[-1]}")
         time.sleep(30)

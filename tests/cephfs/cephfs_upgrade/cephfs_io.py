@@ -3,8 +3,10 @@ import string
 import traceback
 from datetime import datetime, timedelta
 
+from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -79,18 +81,16 @@ def run(ceph_cluster, **kw):
         if config.get("client_upgrade", 0) == 1:
             log.info("Upgrade Clients after Cluster upgrade")
             upgrade_node = config.get("client_upgrade_node", "all")
+
             if upgrade_node == "all":
                 for client in clients:
-                    cmd = "yum install -y --nogpgcheck ceph-common ceph-fuse"
-                    client.exec_command(sudo=True, cmd=cmd)
+                    install_ceph_packages(client)
             else:
                 client = [
                     i if upgrade_node in i.node.hostname else None for i in clients
                 ][0]
                 if client is not None:
-                    cmd = "yum install -y --nogpgcheck ceph-common ceph-fuse"
-                    client.exec_command(sudo=True, cmd=cmd)
-
+                    install_ceph_packages(client)
         return 0
     except KeyboardInterrupt:
         pass
@@ -115,3 +115,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "---------------------------------------------------------------------"
         )
+
+
+@retry(CommandFailed, tries=3, delay=30)
+def install_ceph_packages(client):
+    cmd = "yum install -y --nogpgcheck ceph-common ceph-fuse"
+    client.exec_command(sudo=True, cmd=cmd)

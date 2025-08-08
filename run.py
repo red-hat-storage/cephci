@@ -95,6 +95,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--disable-console-log]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
+        [--custom-config <key>=<value>]...
 
 Options:
   -h --help                         show this screen
@@ -164,6 +165,10 @@ test_names = []
 run_summary = {}
 
 
+class CephCIArgumentError(Exception):
+    pass
+
+
 @retry(LibcloudError, tries=5, delay=15)
 def create_nodes(
     conf,
@@ -173,15 +178,38 @@ def create_nodes(
     cloud_type="openstack",
     instances_name=None,
     enable_eus=False,
+    custom_config=None,
 ):
-    """Creates the system under test environment."""
+    """Creates the system under test environment.
+
+    Args:
+        conf            Platform
+        inventory       Test environment
+        osp_cred        Platform access information
+        run_id          execution identifier
+        cloud_type      The platform to be used for deployment.
+        instances_name  system names
+        enable_eus      Extended OS support
+        custom_config   list of <key>=<value>
+
+    Notes:
+        use custom_config to specify the environments or configuration to
+        be used when using generic inventory files. Ensure to prefix the
+        platform. For exmaple
+
+            --custom-config ibmc_vpc=ci-vpc-01
+            --custom-config ibmc_profile=bx2-2x8
+
+        If these values are not provided then the defaults would be used.
+        The defaults are the ones used in the example.
+    """
 
     validate_conf(conf)
     validate_image(conf, cloud_type)
     if cloud_type == "openstack":
         cleanup_ceph_nodes(osp_cred, instances_name)
     elif cloud_type == "ibmc":
-        cleanup_ibmc_ceph_nodes(osp_cred, instances_name)
+        cleanup_ibmc_ceph_nodes(osp_cred, instances_name, custom_config=None)
 
     ceph_cluster_dict = {}
     clients = []
@@ -197,7 +225,7 @@ def create_nodes(
             )
         elif cloud_type == "ibmc":
             ceph_vmnodes = create_ibmc_ceph_nodes(
-                cluster, inventory, osp_cred, run_id, instances_name
+                cluster, inventory, osp_cred, run_id, instances_name, custom_config
             )
         elif "baremetal" in cloud_type:
             ceph_vmnodes = create_baremetal_ceph_nodes(cluster)
@@ -422,7 +450,9 @@ def run(args):
         if cloud_type == "openstack":
             cleanup_ceph_nodes(osp_cred, cleanup_name)
         elif cloud_type == "ibmc":
-            cleanup_ibmc_ceph_nodes(osp_cred, cleanup_name)
+            cleanup_ibmc_ceph_nodes(
+                osp_cred, cleanup_name, custom_config=args.get("--custom-config")
+            )
         else:
             log.warning("Unknown cloud type.")
 
@@ -461,7 +491,15 @@ def run(args):
             base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
                 build, rhbuild, platform, upstream_build, ibm_build
             )
+    elif build == "upstream":
+        if not upstream_build:
+            raise CephCIArgumentError(
+                "--upstream-build argument not provided Ex: tentacle"
+            )
     else:
+        # TODO: By default, build=released, but Pipelines and environment
+        #       are not ready for this change. Need to revert this code changes
+        #       once we have right build value set across pipelines.
         build = None
 
     store = args.get("--store") or False
@@ -621,6 +659,7 @@ def run(args):
                 cloud_type,
                 instances_name,
                 enable_eus=enable_eus,
+                custom_config=custom_config,
             )
         except Exception as err:
             log.error(err)
@@ -775,6 +814,7 @@ def run(args):
                     config["add-repo"] = repo
 
             config["build_type"] = build
+            config["upstream_build"] = upstream_build
             config["enable_eus"] = enable_eus
             config["skip_enabling_rhel_rpms"] = skip_enabling_rhel_rpms
             config["docker-insecure-registry"] = docker_insecure_registry

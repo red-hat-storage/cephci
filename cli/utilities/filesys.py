@@ -1,4 +1,6 @@
 from cli import Cli
+from cli.ceph.auth.auth import Auth
+from cli.exceptions import OperationFailedError
 
 
 class MountFailedError(Exception):
@@ -60,3 +62,49 @@ class Unmount(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+
+class FuseMount(Cli):
+    """Supports CephFS mounts using ceph-fuse."""
+
+    def __init__(self, nodes):
+        super().__init__(nodes)
+        self.base_cmd = "ceph-fuse"
+        self.auth_tool = Auth(nodes, base_cmd="ceph")
+
+    def mount(self, mount_point, client_hostname, extra_params=None):
+        """
+        Mount CephFS using FUSE.
+
+        Args:
+            mount_point (str): Local path to mount CephFS.
+            client_hostname (str): Ceph client ID (host shortname).
+            extra_params (str): Optional ceph-fuse arguments.
+
+        Returns:
+            str: Mount command's STDOUT on success.
+
+        Raises:
+            FuseMountError: On authentication or mount failure.
+        """
+        # Ensure keyring exists
+        try:
+            self.auth_tool.get_or_create_client_keyring(client_hostname)
+        except Exception as e:
+            raise OperationFailedError(
+                f"Failed to prepare auth for client.{client_hostname}: {e}"
+            )
+
+        # Ensure mount directory exists
+        out = self.execute(cmd=f"ls {mount_point}", sudo=True)
+        if not out[0]:
+            self.execute(cmd=f"mkdir -p {mount_point}", sudo=True)
+
+        # Run ceph-fuse command
+        cmd = f"{self.base_cmd} -n client.{client_hostname} {mount_point}"
+        if extra_params:
+            cmd += f" {extra_params}"
+
+        out = self.execute(sudo=True, long_running=True, cmd=cmd)
+        stdout = out[0].strip() if isinstance(out, tuple) else out
+        return stdout

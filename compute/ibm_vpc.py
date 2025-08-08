@@ -368,9 +368,27 @@ class CephVMNodeIBM:
             # Construct a dict representation of a ZoneIdentityByName model
             zone_identity_model = dict({"name": zone_id_model_name})
 
-            # Construct a dict representation of a VolumeProfileIdentityByName model
-            volume_profile_identity_model = dict({"name": "general-purpose"})
+            # Set the volume profile according to the VPC as SDS is not
+            # available in ci-vpc-01.
+            volume_profile_identity_model = dict({"name": "sdp"})
+            if vpc_name == "ci-vpc-01":
+                volume_profile_identity_model = dict({"name": "general-purpose"})
 
+            # Set the boot volume profile
+            boot_volume_prototype_model = dict(
+                {
+                    "name": f"{node_name.lower()}-boot",
+                    "profile": volume_profile_identity_model,
+                }
+            )
+            # Set the boot volume attachment profile
+            boot_volume_attachment_prototype_model = dict(
+                {
+                    "volume": boot_volume_prototype_model,
+                }
+            )
+
+            # Prepare the volume attachments
             volume_attachment_list = []
             for i in range(0, no_of_volumes):
                 volume_attachment_volume_prototype_instance_context_model1 = dict(
@@ -401,6 +419,9 @@ class CephVMNodeIBM:
             instance_prototype_model["profile"] = instance_profile_identity_model
             instance_prototype_model["resource_group"] = resource_group_identity_model
             instance_prototype_model["user_data"] = userdata
+            instance_prototype_model["boot_volume_attachment"] = (
+                boot_volume_attachment_prototype_model
+            )
             instance_prototype_model["volume_attachments"] = volume_attachment_list
             instance_prototype_model["vpc"] = vpc_identity_model
             instance_prototype_model["image"] = image_identity_model

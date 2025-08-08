@@ -18,6 +18,27 @@ tests:
           config:
             controllers:
               - mero003
+            drivers:
+              - mero003
+              - mero004
+            bucket_prefix: per-test-bkt-
+            number_of_buckets: 1
+            object_prefix: "data/N27/good/193_tasking/2024-10-31/25/AC.28,86%.1539.DOC"
+            objects_size_type: small
+            number_of_objects: 2000000
+            monitor-consistency-bucket-stats: true
+            record_sync_on_site: ceph-sec
+      desc: upload 2M small object to regular bucket with object key percent
+      module: push_cosbench_workload.py
+      name: Test upload 2M small object to regular bucket with object key percent
+      polarion-id: CEPH-83625917
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            controllers:
+              - mero003
             drivers: # if drivers are not specified will use one of the rgw node
               - mero003
               - mero004

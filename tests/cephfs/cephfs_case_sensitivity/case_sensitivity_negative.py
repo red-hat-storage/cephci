@@ -350,7 +350,7 @@ def run(ceph_cluster, **kw):
             )
         )
         return 1
-    client1 = clients[1]
+    client1 = clients[0]
 
     mount_type_list = ["fuse"]
     for mount_type in mount_type_list:
@@ -433,6 +433,11 @@ def run(ceph_cluster, **kw):
                 "\nUsecase 1: Fail to set casesensitivity on a directory with files "
                 "\n---------------***************-----------------------------------"
             )
+            log.info("Check Ceph health")
+            if common_util.wait_for_healthy_ceph(client1, 300):
+                log.error("Cluster health is not OK even after waiting for 300secs")
+                return 1
+
             test_fail_set_casesensitivity_with_files()
 
             log.info(
@@ -474,6 +479,11 @@ def run(ceph_cluster, **kw):
                 "\n     Usecase 6: Setting invalid value for normalization          "
                 "\n---------------***************-----------------------------------"
             )
+            log.info("Check Ceph health")
+            if common_util.wait_for_healthy_ceph(client1, 300):
+                log.error("Cluster health is not OK even after waiting for 300secs")
+                return 1
+
             test_set_invalid_normalization_value()
 
             log.info(
@@ -512,6 +522,11 @@ def run(ceph_cluster, **kw):
                 "\n                 Cleanup                                              "
                 "\n---------------***************----------------------------------------"
             )
+            log.info("Check Ceph health")
+            if common_util.wait_for_healthy_ceph(client1, 300):
+                log.error("Cluster health is not OK even after waiting for 300secs")
+                return 1
+
             if mount_type == "fuse":
                 fs_util.client_clean_up(
                     "umount", fuse_clients=[client1], mounting_dir=fuse_mounting_dir

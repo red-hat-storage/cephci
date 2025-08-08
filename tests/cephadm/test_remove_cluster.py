@@ -34,7 +34,8 @@ def validate_ceph_config_dir(nodes, dir_path, roles=[], ignore=[]):
         _dirs = node.get_dir_list(sudo=True, dir_path=CEPH_CONFIG_DIR)
         if _dirs or _dirs not in [ignore, None]:
             raise OperationFailedError(
-                f"Failed to clean ceph directory '{dir_path}' on node '{node.ip_address}' -\n{_dirs} "
+                f"Failed to clean ceph directory '{dir_path}' on node '{node.ip_address}' "
+                f"-\n{_dirs} Refer Bz : #2129252"
             )
 
         log.info(

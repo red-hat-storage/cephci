@@ -13,12 +13,13 @@ import datetime
 import json
 import time
 
+from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
-from utility.utils import fetch_build_artifacts
+from utility.utils import fetch_build_artifacts, fetch_build_version
 
 log = Log(__name__)
 
@@ -100,6 +101,7 @@ def run(ceph_cluster, **kw):
         _custom_image = args.get("custom_image", None)
         _custom_repo = args.get("custom_repo", None)
         _ibm_build = config.get("ibm_build", False)
+        _rpm_version = None
         if _rhcs_release and _rhcs_version:
             curr_ver, _ = cephadm_obj.shell(args=["ceph version | awk '{print $3}'"])
             log.debug(
@@ -124,6 +126,11 @@ def run(ceph_cluster, **kw):
             config["args"]["rhcs-version"] = _rhcs_version
             config["args"]["release"] = _rhcs_release
             config["args"]["image"] = config["container_image"]
+            _ver = fetch_build_version(
+                rhbuild=_rhcs_version, version=_rhcs_release, ibm_build=_ibm_build
+            )
+            os_ver = rhbuild.split("-")[-1]
+            _rpm_version = f"2:{_ver}.el{os_ver}cp"
         elif _custom_image and _custom_repo:
             _registry, _image_name = _custom_image.split(":")[0].split("/", 1)
             _image_tag = _custom_image.split(":")[-1]
@@ -153,7 +160,7 @@ def run(ceph_cluster, **kw):
         # Set repo to newer RPMs
         cluster_obj.set_tool_repo()
         time.sleep(5)
-        upgd_dict = {"upgrade": True}
+        upgd_dict = {"upgrade": True, "rpm_version": _rpm_version}
         cluster_obj.install(**upgd_dict)
         time.sleep(5)
 
@@ -173,6 +180,7 @@ def run(ceph_cluster, **kw):
         inactive_pgs = 0
         # Monitor upgrade status, till completion, checking for the warning to be generated
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=timeout)
+        command_failed_counter = 0
         while end_time > datetime.datetime.now():
             cmd = "ceph orch upgrade status"
             try:
@@ -181,6 +189,19 @@ def run(ceph_cluster, **kw):
                 if not status["in_progress"]:
                     log.info("Upgrade Complete...")
                     upgrade_complete = True
+                    break
+                command_failed_counter = 0
+            except CommandFailed as err:
+                command_failed_counter += 1
+                log.error("Exception hit : %s" % err.__doc__)
+                log.exception(err)
+                log.info("Retrying after 20 seconds...")
+                time.sleep(20)
+                if command_failed_counter < 3:
+                    continue
+                else:
+                    log.error("Command failed after 3 attempts...")
+                    upgrade_complete = False
                     break
             except json.JSONDecodeError:
                 if "no upgrades in progress" in out:
@@ -192,7 +213,7 @@ def run(ceph_cluster, **kw):
                 # Error msg :  ENOTSUP: Warning: due to ceph-mgr restart, some PG states may not be up to date
                 # Module 'orchestrator' is not enabled/loaded (required by command 'orch upgrade status'):
                 # use `ceph mgr module enable orchestrator` to enable it
-                if "not enabled/loaded" in err:
+                if "not enabled/loaded" in str(err):
                     log.info(
                         "Intermittent issue hit. bug : 2314146. Error hit : \n %s \n"
                         % err,

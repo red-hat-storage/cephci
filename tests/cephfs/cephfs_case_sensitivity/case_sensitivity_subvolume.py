@@ -1082,6 +1082,11 @@ def run(ceph_cluster, **kw):
             "\n---------------***************-----------------------------"
         )
 
+        log.info("Check Ceph health")
+        if common_util.wait_for_healthy_ceph(client1, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
+
         create_svgroup_charmap_test()
 
         log.info(
@@ -1134,6 +1139,11 @@ def run(ceph_cluster, **kw):
             "\n  Usecase 6: Validate attribute of subvolume1 created under subvolume group 1 "
             "\n---------------***************-----------------------------"
         )
+        log.info("Check Ceph health")
+        if common_util.wait_for_healthy_ceph(client1, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
+
         validate_charmap_sv1()
 
         log.info(
@@ -1174,6 +1184,11 @@ def run(ceph_cluster, **kw):
             "\n  Usecase 11: Run IO on the subvolume and validate charmaps "
             "\n---------------***************-----------------------------"
         )
+        log.info("Check Ceph health")
+        if common_util.wait_for_healthy_ceph(client1, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
+
         run_io_sv_and_validate_charmap()
 
         log.info(
@@ -1268,6 +1283,11 @@ def run(ceph_cluster, **kw):
             "\n  Cleaning up the file system and subvolumes created "
             "\n---------------***************-----------------------------"
         )
+
+        log.info("Check Ceph health")
+        if common_util.wait_for_healthy_ceph(client1, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
 
         log.info("Unmounting and cleaning up the FUSE mounts")
         fs_util.client_clean_up(

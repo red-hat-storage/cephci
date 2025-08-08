@@ -509,7 +509,7 @@ class CephFSAttributeUtilities(object):
         )
 
         cmd = (
-            "ceph tell mds.{active_mds} dump tree '{base_path}' 0 2>/dev/null "
+            "ceph tell mds.{active_mds} dump tree '/{base_path}' 0 2>/dev/null "
             "| jq -r '.[0].dirfrags[0].dentries | "
             'map(select(.path == "{base_path}/{dir_name}") | .path) | .[]\' '
             "| awk -F'/' '{{print $NF}}' "
@@ -521,7 +521,7 @@ class CephFSAttributeUtilities(object):
         out, _ = client.exec_command(sudo=True, cmd=cmd)
 
         if out == "":
-            cmd = ("ceph tell mds.{active_mds} dump tree '{base_path}' 0").format(
+            cmd = ("ceph tell mds.{active_mds} dump tree '/{base_path}' 0").format(
                 active_mds=active_mds[0], base_path=base_path
             )
             debug_out, _ = client.exec_command(sudo=True, cmd=cmd)

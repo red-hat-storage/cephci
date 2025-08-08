@@ -484,17 +484,26 @@ def config_mirror(rbd_primary, rbd_secondary, is_secondary=False, **kw):
     # Waiting for OK pool mirror status to be okay based on user input as in image based
     # mirorring status wouldn't reach OK without enabling mirroing on individual images
     if is_wait_for_status:
+        if kw.get("way") == "one-way" and "rbd1" in primary_cluster_name:
+            primary_health_expected = "WARNING"
+            secondary_health_expected = "OK"
+        elif kw.get("way") == "one-way" and "rbd1" in secondary_cluster_name:
+            primary_health_expected = "OK"
+            secondary_health_expected = "WARNING"
+        else:
+            primary_health_expected = "OK"
+            secondary_health_expected = "OK"
         wait_for_status(
             rbd=rbd_primary,
             cluster_name=primary_cluster_name,
             poolname=poolname,
-            health_pattern="OK",
+            health_pattern=primary_health_expected,
         )
         wait_for_status(
             rbd=rbd_secondary,
             cluster_name=secondary_cluster_name,
             poolname=poolname,
-            health_pattern="OK",
+            health_pattern=secondary_health_expected,
         )
 
 
@@ -518,17 +527,26 @@ def enable_image_mirroring(primary_config, secondary_config, **kw):
     if "cannot enable mirroring: pool is not in image mirror mode" in out[1].strip():
         return out[1]
 
+    if kw.get("way") == "one-way" and "rbd1" in primary_cluster.name:
+        primary_health_expected = "WARNING"
+        secondary_health_expected = "OK"
+    elif kw.get("way") == "one-way" and "rbd1" in secondary_cluster.name:
+        primary_health_expected = "OK"
+        secondary_health_expected = "WARNING"
+    else:
+        primary_health_expected = "OK"
+        secondary_health_expected = "OK"
     wait_for_status(
         rbd=rbd_primary,
         cluster_name=primary_cluster.name,
         poolname=pool,
-        health_pattern="OK",
+        health_pattern=primary_health_expected,
     )
     wait_for_status(
         rbd=rbd_secondary,
         cluster_name=secondary_cluster.name,
         poolname=pool,
-        health_pattern="OK",
+        health_pattern=secondary_health_expected,
     )
 
     # TBD: We need to override wait_for_status to match images in cluster1==cluster2
@@ -555,13 +573,14 @@ def enable_image_mirroring(primary_config, secondary_config, **kw):
     else:
         sec_image_spec = f"{pool}/{image}"
     with parallel() as p:
-        p.spawn(
-            wait_for_status,
-            rbd=rbd_primary,
-            cluster_name=primary_cluster.name,
-            imagespec=pri_image_spec,
-            state_pattern="up+stopped",
-        )
+        if kw.get("way") != "one-way":
+            p.spawn(
+                wait_for_status,
+                rbd=rbd_primary,
+                cluster_name=primary_cluster.name,
+                imagespec=pri_image_spec,
+                state_pattern="up+stopped",
+            )
         p.spawn(
             wait_for_status,
             rbd=rbd_secondary,
@@ -597,6 +616,8 @@ def config_mirror_multi_pool(
             pool_config["rbd_client"] = pool_config.get("rbd_client", "client.admin")
             if pool_config.get("mode") == "image":
                 kw["wait_for_status"] = False
+            if kw.get("way"):
+                pool_config["way"] = kw.get("way")
             config_mirror(
                 rbd_primary,
                 rbd_secondary,

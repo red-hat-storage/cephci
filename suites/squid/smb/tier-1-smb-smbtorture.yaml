@@ -1,0 +1,1308 @@
+#========================================================================
+# Test-Case: Tier 1
+#
+# Cluster Configuration:
+#    conf/squid/smb/1admin-4node-1client-cluster.yaml
+#========================================================================
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+          - cifs-utils
+      copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Run smbtorture test:smb2.rw
+      desc: Run smbtorture test:smb2.rw
+      module: smbtorture.py
+      polarion-id: CEPH-83625919
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.rw
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.rw.rw1
+      desc: Run smbtorture test:smb2.rw.rw1
+      module: smbtorture.py
+      polarion-id: CEPH-83625920
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.rw.rw1
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.sharemode.sharemode-access
+      desc: Run smbtorture test:smb2.sharemode.sharemode-access
+      module: smbtorture.py
+      polarion-id: CEPH-83625921
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.sharemode.sharemode-access
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.sharemode.access-sharemode
+      desc: Run smbtorture test:smb2.sharemode.access-sharemode
+      module: smbtorture.py
+      polarion-id: CEPH-83625922
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.sharemode.access-sharemode
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.rename.close-full-information
+      desc: Run smbtorture test:smb2.rename.close-full-information
+      module: smbtorture.py
+      polarion-id: CEPH-83625923
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.rename.close-full-information
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.deny.deny2
+      desc: Run smbtorture test:smb2.deny.deny2
+      module: smbtorture.py
+      polarion-id: CEPH-83625924
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.deny.deny2
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.lock.overlap
+      desc: Run smbtorture test:smb2.lock.overlap
+      module: smbtorture.py
+      polarion-id: CEPH-83625925
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.lock.overlap
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.read
+      desc: Run smbtorture test:smb2.read
+      module: smbtorture.py
+      polarion-id: CEPH-83625926
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.read
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.check-sharemode
+      desc: Run smbtorture test:smb2.check-sharemode
+      module: smbtorture.py
+      polarion-id: CEPH-83625927
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.check-sharemode
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.compound_find
+      desc: Run smbtorture test:smb2.compound_find
+      module: smbtorture.py
+      polarion-id: CEPH-83625928
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.compound_find
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.connect
+      desc: Run smbtorture test:smb2.connect
+      module: smbtorture.py
+      polarion-id: CEPH-83625929
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.connect
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.credits
+      desc: Run smbtorture test:smb2.credits
+      module: smbtorture.py
+      polarion-id: CEPH-83625930
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.credits
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.deny
+      desc: Run smbtorture test:smb2.deny
+      module: smbtorture.py
+      polarion-id: CEPH-83625931
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.deny
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.lock
+      desc: Run smbtorture test:smb2.lock
+      module: smbtorture.py
+      polarion-id: CEPH-83625932
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.lock
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.maximum_allowed
+      desc: Run smbtorture test:smb2.maximum_allowed
+      module: smbtorture.py
+      polarion-id: CEPH-83625933
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.maximum_allowed
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.mkdir
+      desc: Run smbtorture test:smb2.mkdir
+      module: smbtorture.py
+      polarion-id: CEPH-83625934
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.mkdir
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.notify-inotify
+      desc: Run smbtorture test:smb2.notify-inotify
+      module: smbtorture.py
+      polarion-id: CEPH-83625935
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.notify-inotify
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.rename
+      desc: Run smbtorture test:smb2.rename
+      module: smbtorture.py
+      polarion-id: CEPH-83625936
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.rename
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.sdread
+      desc: Run smbtorture test:smb2.sdread
+      module: smbtorture.py
+      polarion-id: CEPH-83625937
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.sdread
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.secleak
+      desc: Run smbtorture test:smb2.secleak
+      module: smbtorture.py
+      polarion-id: CEPH-83625938
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.secleak
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.session-id
+      desc: Run smbtorture test:smb2.session-id
+      module: smbtorture.py
+      polarion-id: CEPH-83625939
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.session-id
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+  - test:
+      name: Run smbtorture test:smb2.sharemode
+      desc: Run smbtorture test:smb2.sharemode
+      module: smbtorture.py
+      polarion-id: CEPH-83625940
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.sharemode
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.tcon
+      desc: Run smbtorture test:smb2.tcon
+      module: smbtorture.py
+      polarion-id: CEPH-83625941
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.tcon
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.winattr
+      desc: Run smbtorture test:smb2.winattr
+      module: smbtorture.py
+      polarion-id: CEPH-83625942
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.winattr
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.durable-open-disconnect
+      desc: Run smbtorture test:smb2.durable-open-disconnect
+      module: smbtorture.py
+      polarion-id: CEPH-83625943
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.durable-open-disconnect
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.openattr
+      desc: Run smbtorture test:smb2.openattr
+      module: smbtorture.py
+      polarion-id: CEPH-83625944
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.openattr
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.session
+      desc: Run smbtorture test:smb2.session
+      module: smbtorture.py
+      polarion-id: CEPH-83625945
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.session
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.create
+      desc: Run smbtorture test:smb2.create
+      module: smbtorture.py
+      polarion-id: CEPH-83625946
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.create
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.timestamps
+      desc: Run smbtorture test:smb2.timestamps
+      module: smbtorture.py
+      polarion-id: CEPH-83625947
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.timestamps
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.maxfid
+      desc: Run smbtorture test:smb2.maxfid
+      module: smbtorture.py
+      polarion-id: CEPH-83625948
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.maxfid
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.async_dosmode
+      desc: Run smbtorture test:smb2.async_dosmode
+      module: smbtorture.py
+      polarion-id: CEPH-83625949
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.async_dosmode
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.create_no_streams
+      desc: Run smbtorture test:smb2.create_no_streams
+      module: smbtorture.py
+      polarion-id: CEPH-83625950
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.create_no_streams
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.bench
+      desc: Run smbtorture test:smb2.bench
+      module: smbtorture.py
+      polarion-id: CEPH-83625951
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.bench
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.winattr2
+      desc: Run smbtorture test:ssmb2.winattr2
+      module: smbtorture.py
+      polarion-id: CEPH-83625952
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.winattr2
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Run smbtorture test:smb2.charset
+      desc: Run smbtorture test:smb2.charset
+      module: smbtorture.py
+      polarion-id: CEPH-83625953
+      config:
+        smb_service_deployment: False
+        smb_service_cleanup: False
+        setup_smbtorture: False
+        smbtorture_test: smb2.charset
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
