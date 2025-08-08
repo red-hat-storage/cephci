@@ -2,8 +2,9 @@
 
 import json
 import tempfile
-from distutils.version import LooseVersion
 from typing import Dict
+
+from looseversion import LooseVersion
 
 from ceph.ceph_admin.cephadm_ansible import CephadmAnsible
 from ceph.utils import get_node_by_id, get_public_network, setup_repos
