@@ -313,13 +313,37 @@ class CephfsMirroringUtils(object):
 
         This function adds the specified path to the mirroring configuration of the source filesystem. This path
         will be mirrored to the target filesystem for snapshot synchronization.
-
+        Validates the configuration by listing all mirrored paths using "ceph fs snapshot mirror ls"
         Note:
             The specified path should exist within the source filesystem.
         """
+        path = path.rstrip("/")  # to avoid trailing slash mismatch
+
+        log.info(
+            f"Adding path '{path}' to mirroring configuration for filesystem '{source_fs}'..."
+        )
         source_clients.exec_command(
             sudo=True, cmd=f"ceph fs snapshot mirror add {source_fs} {path}"
         )
+        # Validate the path was added successfully
+        out, _ = source_clients.exec_command(
+            sudo=True, cmd=f"ceph fs snapshot mirror ls {source_fs}"
+        )
+        try:
+            mirrored_paths = [p.rstrip("/") for p in json.loads(out.strip())]
+            log.debug(f"Mirrored paths returned: {mirrored_paths}")
+        except json.JSONDecodeError:
+            log.error(f"Failed to parse mirror ls output: {out}")
+            raise
+        if path in mirrored_paths:
+            log.info(
+                f"Successfully added path '{path}' for mirroring on filesystem '{source_fs}'."
+            )
+        else:
+            log.error(
+                f"Path '{path}' was not found in mirror list for filesystem '{source_fs}'."
+            )
+            raise Exception(f"Mirroring path addition failed: {path}")
 
     def remove_path_from_mirroring(self, source_clients, source_fs, path):
         """
