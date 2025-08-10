@@ -288,7 +288,8 @@ class REST(object):
                 # Decode(Deserialize) the json object using json.loads
                 if response.status_code == requests.codes.NO_CONTENT:
                     return {}
-                return_val = json.loads(response.text)
+                res_text = str(response.text).strip("'<>() ").replace("'", '"')
+                return_val = json.loads(res_text)
                 log.debug(f"<< {json.dumps(return_val, indent=2)}")
                 return return_val
 

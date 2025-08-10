@@ -324,36 +324,57 @@ def bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw):
                 "pool": poolname,
                 "remote-cluster-spec": f"{rbd_client}@{primary_cluster_name}",
             }
-    primary_pool_info = json.loads(
-        rbd_primary.mirror.pool.info(
-            pool=poolname, format="json", cluster=ceph_cluster_primary
-        )[0]
-    )
-    secondary_pool_info = json.loads(
-        rbd_secondary.mirror.pool.info(
-            pool=poolname, format="json", cluster=ceph_cluster_secondary
-        )[0]
-    )
 
-    primary_peer_info = value(
-        key="peers",
-        dictionary=primary_pool_info,
-    )
-    log.info(primary_peer_info)
-    secondary_peer_info = value(
-        key="peers",
-        dictionary=secondary_pool_info,
-    )
-    log.info(secondary_peer_info)
-    if primary_peer_info.lower() not in [
-        "none",
-        "",
-        None,
-    ] and secondary_peer_info.lower() not in ["none", "", None]:
-        log.info("Peers were successfully added")
+    if kw.get("namespace_mirror_type") == "non-default_to_non-default":
+        out = rbd_primary.mirror.pool.info(
+            pool=poolname,
+            namespace=kw["namespace"],
+            format="json",
+            cluster=ceph_cluster_primary,
+        )[0]
+        res_text = str(out).strip("'<>() ").replace("'", '"')
+        primary_pool_info = json.loads(res_text)
+
+        out = rbd_secondary.mirror.pool.info(
+            pool=poolname,
+            namespace=kw["remote_namespace"],
+            format="json",
+            cluster=ceph_cluster_secondary,
+        )[0]
+        res_text = str(out).strip("'<>() ").replace("'", '"')
+        secondary_pool_info = json.loads(res_text)
 
     else:
-        log.error("Peers were not added")
+        primary_pool_info = json.loads(
+            rbd_primary.mirror.pool.info(
+                pool=poolname, format="json", cluster=ceph_cluster_primary
+            )[0]
+        )
+        secondary_pool_info = json.loads(
+            rbd_secondary.mirror.pool.info(
+                pool=poolname, format="json", cluster=ceph_cluster_secondary
+            )[0]
+        )
+
+        primary_peer_info = value(
+            key="peers",
+            dictionary=primary_pool_info,
+        )
+        log.info(primary_peer_info)
+        secondary_peer_info = value(
+            key="peers",
+            dictionary=secondary_pool_info,
+        )
+        log.info(secondary_peer_info)
+        if primary_peer_info.lower() not in [
+            "none",
+            "",
+            None,
+        ] and secondary_peer_info.lower() not in ["none", "", None]:
+            log.info("Peers were successfully added")
+
+        else:
+            log.error("Peers were not added")
 
     if kw.get("mirror_level") == "namespace":
         if (
@@ -445,6 +466,17 @@ def config_mirror(rbd_primary, rbd_secondary, is_secondary=False, **kw):
         if "rbd: mirroring is already configured" not in out[0].strip():
             enable_config.update({"cluster": ceph_cluster_secondary})
             out = rbd_secondary.mirror.pool.enable(**enable_config)
+            if kw.get("namespace_mirror_type") == "non-default_to_non-default":
+                enable_config.update({"cluster": ceph_cluster_primary})
+                rbd_primary.mirror.pool.enable(**enable_config)
+                namespace_config = {
+                    "mode": kw["mode"],
+                    "namespace": kw["namespace"],
+                    "remote_namespace": kw["remote_namespace"],
+                }
+                enable_namespace_mirroring(
+                    rbd_primary, rbd_secondary, poolname, **namespace_config
+                )
             bootstrap_and_add_peers(rbd_primary, rbd_secondary, **kw)
         else:
             log.info(f"RBD Mirroring has already been configured for pool {poolname}")
@@ -452,17 +484,26 @@ def config_mirror(rbd_primary, rbd_secondary, is_secondary=False, **kw):
     # Waiting for OK pool mirror status to be okay based on user input as in image based
     # mirorring status wouldn't reach OK without enabling mirroing on individual images
     if is_wait_for_status:
+        if kw.get("way") == "one-way" and "rbd1" in primary_cluster_name:
+            primary_health_expected = "WARNING"
+            secondary_health_expected = "OK"
+        elif kw.get("way") == "one-way" and "rbd1" in secondary_cluster_name:
+            primary_health_expected = "OK"
+            secondary_health_expected = "WARNING"
+        else:
+            primary_health_expected = "OK"
+            secondary_health_expected = "OK"
         wait_for_status(
             rbd=rbd_primary,
             cluster_name=primary_cluster_name,
             poolname=poolname,
-            health_pattern="OK",
+            health_pattern=primary_health_expected,
         )
         wait_for_status(
             rbd=rbd_secondary,
             cluster_name=secondary_cluster_name,
             poolname=poolname,
-            health_pattern="OK",
+            health_pattern=secondary_health_expected,
         )
 
 
@@ -486,17 +527,26 @@ def enable_image_mirroring(primary_config, secondary_config, **kw):
     if "cannot enable mirroring: pool is not in image mirror mode" in out[1].strip():
         return out[1]
 
+    if kw.get("way") == "one-way" and "rbd1" in primary_cluster.name:
+        primary_health_expected = "WARNING"
+        secondary_health_expected = "OK"
+    elif kw.get("way") == "one-way" and "rbd1" in secondary_cluster.name:
+        primary_health_expected = "OK"
+        secondary_health_expected = "WARNING"
+    else:
+        primary_health_expected = "OK"
+        secondary_health_expected = "OK"
     wait_for_status(
         rbd=rbd_primary,
         cluster_name=primary_cluster.name,
         poolname=pool,
-        health_pattern="OK",
+        health_pattern=primary_health_expected,
     )
     wait_for_status(
         rbd=rbd_secondary,
         cluster_name=secondary_cluster.name,
         poolname=pool,
-        health_pattern="OK",
+        health_pattern=secondary_health_expected,
     )
 
     # TBD: We need to override wait_for_status to match images in cluster1==cluster2
@@ -523,13 +573,14 @@ def enable_image_mirroring(primary_config, secondary_config, **kw):
     else:
         sec_image_spec = f"{pool}/{image}"
     with parallel() as p:
-        p.spawn(
-            wait_for_status,
-            rbd=rbd_primary,
-            cluster_name=primary_cluster.name,
-            imagespec=pri_image_spec,
-            state_pattern="up+stopped",
-        )
+        if kw.get("way") != "one-way":
+            p.spawn(
+                wait_for_status,
+                rbd=rbd_primary,
+                cluster_name=primary_cluster.name,
+                imagespec=pri_image_spec,
+                state_pattern="up+stopped",
+            )
         p.spawn(
             wait_for_status,
             rbd=rbd_secondary,
@@ -565,6 +616,8 @@ def config_mirror_multi_pool(
             pool_config["rbd_client"] = pool_config.get("rbd_client", "client.admin")
             if pool_config.get("mode") == "image":
                 kw["wait_for_status"] = False
+            if kw.get("way"):
+                pool_config["way"] = kw.get("way")
             config_mirror(
                 rbd_primary,
                 rbd_secondary,

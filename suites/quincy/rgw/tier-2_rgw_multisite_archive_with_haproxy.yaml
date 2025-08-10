@@ -626,9 +626,8 @@ tests:
             script-name: test_encrypted_bucket_chown.py
             run-on-haproxy: true
             config-file-name: test_encrypted_bucket_chown.yaml
-      desc: test
+      desc: test Change bucket ownership to a different user when encryption is enabled
       module: sanity_rgw_multisite.py
       name: Change bucket ownership to a different user when encryption is enabled
       polarion-id: CEPH-83574621
-      comments: Change bucket ownership to a different user when encryption is enabled
 

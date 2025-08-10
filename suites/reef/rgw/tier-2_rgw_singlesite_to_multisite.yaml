@@ -524,4 +524,4 @@ tests:
   #     module: sanity_rgw_multisite.py
   #     name: Perform zone rename in non master that is secondary
   #     polarion-id: CEPH-10740
-  #     comments: known issue (BZ2210695)targeted to 8.0
+  #     comments: known issue (BZ2210695)targeted to 9.0

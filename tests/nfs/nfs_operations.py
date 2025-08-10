@@ -11,9 +11,10 @@ from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
 from cli.exceptions import OperationFailedError
-from cli.utilities.filesys import Mount, Unmount
+from cli.utilities.filesys import FuseMount, Mount, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -83,6 +84,15 @@ def setup_nfs_cluster(
 
     # Step 4: Perform nfs mount
     # If there are multiple nfs servers provided, only one is required for mounting
+
+    nfs_nodes = ceph_cluster.get_nodes("nfs")
+
+    # Check if the mount version v3 is included in the list of versions and
+    # if the mount version is v3, make necessary changes
+    if 3 in mount_versions.keys():
+        ports_to_open = ["portmapper", "mountd"]
+        for nfs_node in nfs_nodes:
+            open_mandatory_v3_ports(nfs_node, ports_to_open)
     if isinstance(nfs_server, list):
         nfs_server = nfs_server[0]
     if ha:
@@ -92,16 +102,10 @@ def setup_nfs_cluster(
     for version, clients in mount_versions.items():
         for client in clients:
             client.create_dirs(dir_path=nfs_mount, sudo=True)
-            if Mount(client).nfs(
-                mount=nfs_mount,
-                version=version,
-                port=port,
-                server=nfs_server,
-                export="{0}_{1}".format(export, i),
+            if mount_retry(
+                clients, i, nfs_mount, version, port, nfs_server, export_name
             ):
-                raise OperationFailedError(
-                    "Failed to mount nfs on %s" % client.hostname
-                )
+                log.info("Mount succeeded on %s" % client.hostname)
             i += 1
             sleep(1)
     log.info("Mount succeeded on all clients")
@@ -131,8 +135,6 @@ def setup_nfs_cluster(
         log.error(
             "Failed to verify nfs cluster and services %s cmd used: %s" % (e, cmd_used)
         )
-
-    nfs_nodes = ceph_cluster.get_nodes("nfs")
 
     # Step 5: Enable nfs coredump to nfs nodes
     Enable_nfs_coredump(nfs_nodes)
@@ -611,9 +613,16 @@ spec:
     # Wait till the NFS daemons are up
     sleep(10)
 
+    verify_nfs_ganesha_service(node=installer, timeout=300)
+    log.info("NFS Ganesha spec file applied successfully.")
+
     # Start the rpc-statd service on server
     cmd = "sudo systemctl start rpc-statd"
     nfs_node.exec_command(cmd=cmd)
+
+    # Open the NLM port
+    ports_to_open = ["nlockmgr"]
+    open_mandatory_v3_ports(nfs_node, ports_to_open)
 
 
 def getfattr(client, file_path, attribute_name=None):
@@ -708,46 +717,6 @@ def create_nfs_via_file_and_verify(installer_node, nfs_objects, timeout):
         log.error(f"Failed to apply NFS Ganesha spec file: {err}")
 
 
-def verify_nfs_ganesha_service(node, timeout):
-    """
-    Verify the status of NFS Ganesha service.
-    Args:
-        node: Installer Node.
-    Returns:
-        bool: True if the service is in the expected state, False otherwise.
-    """
-    interval = 5
-
-    for w in WaitUntil(timeout=timeout, interval=interval):
-        result = json.loads(
-            CephAdm(node).ceph.orch.ls(format="json", service_type="nfs")
-        )
-        if all(x["status"]["running"] == x["status"]["size"] for x in result):
-            log.info(
-                "\n"
-                + "=" * 30
-                + "\n"
-                + "NFS Ganesha service is up and running. Time taken : -- %s seconds \n"
-                + "=" * 30,
-                w._attempt * w.interval,
-            )
-            log.info("sleep(20)  # Allow some time for the service to stabilize")
-            sleep(20)  # Allow some time for the service to stabilize
-            return True
-        else:
-            log.info(
-                "\n \n NFS Ganesha service is not running as expected, retrying...... "
-                "Time remaining : -- %s seconds \n",
-                timeout - (w._attempt * w.interval),
-            )
-            log.debug("Current status: %s", result)
-    log.error("\n NFS Ganesha service is not running as expected.")
-    if w.expired:
-        raise OperationFailedError(
-            "NFS daemons check failed Timeout expired. -- %s seconds" % timeout
-        )
-
-
 def delete_nfs_clusters_in_parallel(installer_node, timeout):
     """
     Delete NFS clusters in batch.
@@ -793,4 +762,137 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout):
         raise OperationFailedError(
             "NFS Ganesha services are still running after deletion. Timeout expired. -- %s seconds"
             % timeout
+        )
+
+
+def open_mandatory_v3_ports(nfs_node, ports_to_open):
+    """
+    Open the required ports for v3 mount (portmapper, mountd, nlockmgr) based on rpcinfo output.
+    """
+    # Initialize the service_ports_mapping dictionary to store the port lists
+    service_ports_mapping = {"portmapper": None, "mountd": None, "nlockmgr": None}
+
+    # Execute rpcinfo command to get the port information
+    cmd = "sudo rpcinfo -p"
+    out, _ = nfs_node.exec_command(sudo=True, cmd=cmd)
+    if not out:
+        log.error(f"Failed to execute rpcinfo -p on {nfs_node}")
+        return
+
+    # Split the output into lines and iterate over them
+    lines = out.splitlines()
+    port_mapper_found = False  # Have the first portmapper port
+
+    for line in lines:
+        # Skip header and empty lines
+        if "program vers proto port service" in line or not line.strip():
+            continue
+
+        # Split line into columns
+        columns = line.split()
+        port, service = columns[3], columns[4]
+
+        # Check for relevant services
+        if service == "portmapper" and not port_mapper_found:
+            service_ports_mapping["portmapper"] = port
+            port_mapper_found = True
+        elif service == "mountd":
+            service_ports_mapping["mountd"] = port
+        elif service == "nlockmgr":
+            service_ports_mapping["nlockmgr"] = port
+
+    # Open firewall ports based on services in ports_to_open
+    for service in ports_to_open:
+        port_to_open = service_ports_mapping.get(service)
+
+        if port_to_open:
+            # Open the port using the firewall command
+            nfs_node.exec_command(
+                sudo=True,
+                cmd=f"sudo firewall-cmd --zone=public --add-port={port_to_open}/tcp --permanent",
+            )
+            log.info(f"Opened {service} port: {port_to_open}")
+        else:
+            log.warning(f"{service} port not found or not needed.")
+
+    # Reload the firewall to apply the changes
+    nfs_node.exec_command(sudo=True, cmd="sudo firewall-cmd --reload")
+    log.info("Firewall rules reloaded.")
+
+
+@retry(OperationFailedError, tries=4, delay=5, backoff=2)
+def mount_retry(
+    clients,
+    client_num,
+    mount_name,
+    version,
+    port,
+    nfs_server,
+    export_name,
+):
+
+    if Mount(clients[client_num]).nfs(
+        mount=mount_name,
+        version=version,
+        port=port,
+        server=nfs_server,
+        export=export_name,
+    ):
+        raise OperationFailedError("Failed to mount nfs on %s" % {export_name.hostname})
+    return True
+
+
+@retry(OperationFailedError, tries=4, delay=5, backoff=2)
+def fuse_mount_retry(client, mount, **kwargs):
+    """
+    Retry mounting NFS using FUSE.
+    Args:
+        client: Client node where the mount is to be performed.
+        mount: Mount point path.
+        **kwargs: Additional arguments for the Mount method.
+    """
+    if FuseMount(client).mount(
+        client_hostname=client.hostname, mount_point=mount, **kwargs
+    ):
+        raise OperationFailedError("Failed to fuse mount nfs on %s" % client.hostname)
+    return True
+
+
+def verify_nfs_ganesha_service(node, timeout):
+    """
+    Verify the status of NFS Ganesha service.
+    Args:
+        node: Installer Node.
+    Returns:
+        bool: True if the service is in the expected state, False otherwise.
+    """
+    interval = 5
+
+    for w in WaitUntil(timeout=timeout, interval=interval):
+        result = json.loads(
+            CephAdm(node).ceph.orch.ls(format="json", service_type="nfs")
+        )
+        if all(x["status"]["running"] == x["status"]["size"] for x in result):
+            log.info(
+                "\n"
+                + "=" * 30
+                + "\n"
+                + "NFS Ganesha service is up and running. Time taken : -- %s seconds \n"
+                + "=" * 30,
+                w._attempt * w.interval,
+            )
+            log.info("sleep(20)  # Allow some time for the service to stabilize")
+            sleep(20)  # Allow some time for the service to stabilize
+            return True
+        else:
+            log.info(
+                "\n \n NFS Ganesha service is not running as expected, retrying...... "
+                "Time remaining : -- %s seconds \n",
+                timeout - (w._attempt * w.interval),
+            )
+            log.debug("Current status: %s", result)
+    log.error("\n NFS Ganesha service is not running as expected.")
+    if w.expired:
+        raise OperationFailedError(
+            "NFS daemons check failed Timeout expired. -- %s seconds" % timeout
         )

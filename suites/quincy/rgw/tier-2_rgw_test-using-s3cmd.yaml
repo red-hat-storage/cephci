@@ -252,15 +252,14 @@ tests:
         script-name: ../s3cmd/test_rate_limit.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_tenanted_user.yaml
 
-  # - test:
-  #     name: Test ratelimit on bucket owner change
-  #     desc: Test ratelimit on bucket owner change
-  #     polarion-id: CEPH-83574920
-  #     module: sanity_rgw.py
-  #     comments: known issue BZ2278599 pointed to 7.0
-  #     config:
-  #       script-name: ../s3cmd/test_ratelimit_bucketowner.py
-  #       config-file-name: ../../s3cmd/configs/test_ratelimit_bucketowner.yaml
+  - test:
+      name: Test ratelimit on bucket owner change
+      desc: Test ratelimit on bucket owner change
+      polarion-id: CEPH-83574920
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_ratelimit_bucketowner.py
+        config-file-name: ../../s3cmd/configs/test_ratelimit_bucketowner.yaml
 
   - test:
       name: Test deletlifecycle rule via s3cmd

@@ -360,6 +360,28 @@ tests:
       clusters:
         ceph-pri:
           config:
+            script-name: ../s3_swift/test_swift_delete_during_sync.py
+            config-file-name: ../../s3_swift/multisite_configs/test_swift_delete_during_sync.yaml
+      name: test_swift_delete_during_sync
+      desc: test_swift_delete_during_sync
+      polarion-id: CEPH-9544
+      module: sanity_rgw_multisite.py
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3_swift/test_swift_all_objects_lc.py
+            config-file-name: ../../s3_swift/multisite_configs/test_swift_all_objects_lc.yaml
+      name: test_swift_all_objects_lc
+      desc: test_swift_all_objects_lc
+      polarion-id: CEPH-11193
+      module: sanity_rgw_multisite.py
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
             script-name: test_check_sharding_enabled.py
             config-file-name: test_zone_deletion.yaml
       desc: Test zone deletion in master

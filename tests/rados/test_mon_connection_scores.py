@@ -10,8 +10,59 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from tests.rados.monitor_configurations import MonElectionStrategies
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
+
+
+@retry(Exception, tries=12, delay=10, backoff=1)
+def get_mon_map_epoch(rados_obj: RadosOrchestrator):
+    """
+    Method to fetch mon map epoch. Retries commands upon failure.
+    Args:
+         rados_obj: Instance of Class RadosOrchestrator
+    Returns:
+        epoch: (type: int) mon map epoch from `ceph mon stat` output
+    Raises:
+         Exception is raised when mon map epoch is not present in `ceph mon stat`
+    Usage:
+        get_mon_map_epoch(rados_obj)
+    """
+    log.info("Fetching mon map epoch")
+    out = rados_obj.run_ceph_command("ceph mon stat", print_output=True)
+    epoch = out.get("epoch", None)
+    if epoch is None:
+        raise Exception("Mon map epoch entry is not present:" + out)
+    log.info("Mon map epoch -> " + str(epoch))
+    return epoch
+
+
+@retry(Exception, tries=12, delay=10, backoff=1)
+def wait_until_mon_map_epoch_changes(rados_obj: RadosOrchestrator, previous_epoch):
+    """
+    Method waits until current mon map epoch is greater than provided epoch.
+    Args:
+         rados_obj: Instance of Class RadosOrchestrator
+         previous_epoch: (type: int) mon map epoch previously collected
+    Returns:
+        None
+    Raises:
+         Exception is raised when current epoch is not greater than passed epoch.
+    Usage:
+        get_mon_map_epoch(rados_obj)
+    """
+    log.info(
+        "Waiting until mon map epoch is greater than previous epoch "
+        + str(previous_epoch)
+    )
+    current_epoch = get_mon_map_epoch(rados_obj)
+
+    if not (current_epoch > previous_epoch):
+        err_msg = f"Current epoch ({current_epoch}) is not greater than previous epoch ({previous_epoch})"
+        raise Exception(err_msg)
+
+    msg = f"Current epoch ({current_epoch}) > previous epoch ({previous_epoch})"
+    log.info(msg)
 
 
 def run(ceph_cluster, **kw):
@@ -57,8 +108,12 @@ def run(ceph_cluster, **kw):
         # Collect mon details such as name, rank and number of mons
         mon_nodes = ceph_cluster.get_nodes(role="mon")
         osd_nodes = ceph_cluster.get_nodes(role="osd")
+        non_mon_nodes = list()
+        for node in osd_nodes:
+            if node not in mon_nodes:
+                non_mon_nodes.append(node)
 
-        for mon_election_strategy in ["classic", "disallow", "connectivity"]:
+        for mon_election_strategy in ["disallow", "connectivity", "classic"]:
             log.debug(f"Setting mon election strategy to {mon_election_strategy} mode")
             log.debug(
                 f"Proceeding to test all scenarios with mon election strategy {mon_election_strategy}"
@@ -66,11 +121,20 @@ def run(ceph_cluster, **kw):
 
             # Changing mon election strategy
             # and perform connection score validation
+            log.debug(
+                "STARTING::Scenario 1:: Changing mon election strategy & perform validations for mon connection scores"
+            )
+            previous_mon_map_epoch = get_mon_map_epoch(rados_obj=rados_obj)
+
             if not mon_election_obj.set_election_strategy(mode=mon_election_strategy):
                 log.error(
                     f"could not set election strategy to {mon_election_strategy} mode"
                 )
                 raise Exception("Changing election strategy failed")
+
+            wait_until_mon_map_epoch_changes(
+                rados_obj=rados_obj, previous_epoch=previous_mon_map_epoch
+            )
 
             if not mon_workflow_obj.connection_score_checks():
                 raise Exception("Connection score checks failed")
@@ -78,10 +142,17 @@ def run(ceph_cluster, **kw):
             log.debug(
                 f"mon connection scores verified after changing election strategy to {mon_election_strategy} mode"
             )
+            log.debug(
+                "COMPLETED::Scenario1:: Changing mon election strategy & perform validations for mon connection scores"
+            )
 
             # Adding new host as mon and perform connection
             # score validation
-            new_mon_host = random.choice(osd_nodes)
+            log.debug(
+                "STARTING::Scenario 2:: Adding Monitor daemon on a host & perform validations for mon connection scores"
+            )
+            new_mon_host = random.choice(non_mon_nodes)
+            previous_mon_map_epoch = get_mon_map_epoch(rados_obj=rados_obj)
 
             log.debug(
                 f"Picked random osd host {new_mon_host.hostname} to be added as mon host"
@@ -103,6 +174,10 @@ def run(ceph_cluster, **kw):
             )
             log.debug("Proceeding to check mon connection scores after adding new mon")
 
+            wait_until_mon_map_epoch_changes(
+                rados_obj=rados_obj, previous_epoch=previous_mon_map_epoch
+            )
+
             if not mon_workflow_obj.connection_score_checks():
                 log.debug(
                     "mon connection score checks skipped after adding mon service - active bug BZ-2151501"
@@ -113,10 +188,21 @@ def run(ceph_cluster, **kw):
             log.debug(
                 f"Mon connection scores verified after adding new mon host {new_mon_host.hostname}"
             )
+            log.debug(
+                "COMPLETED::Scenario 2:: Adding Monitor daemon on a host & perform "
+                "validations for mon connection scores"
+            )
+
             log.debug(f"Proceeding to remove newly added mon {new_mon_host.hostname}")
 
             # Remove added mon service
             # and perform connection score validation
+            log.debug(
+                "STARTING::Scenario 3:: Removing the added Monitor daemon & "
+                "perform validations for mon connection scores"
+            )
+            previous_mon_map_epoch = get_mon_map_epoch(rados_obj=rados_obj)
+
             if not mon_workflow_obj.remove_mon_service(host=new_mon_host.hostname):
                 log.error(f"Could not remove mon on host {new_mon_host.hostname}")
                 raise Exception("mon service not removed error")
@@ -126,16 +212,28 @@ def run(ceph_cluster, **kw):
                 "Proceeding to check mon connection scores after removing newly added mon"
             )
 
+            wait_until_mon_map_epoch_changes(
+                rados_obj=rados_obj, previous_epoch=previous_mon_map_epoch
+            )
+
             if not mon_workflow_obj.connection_score_checks():
                 raise Exception("Connection score checks failed")
 
             log.debug(
                 f"Mon connection scores verified after removing mon host {new_mon_host.hostname}"
             )
+            log.debug(
+                "COMPLETED::Scenario 3:: Removing the added Monitor daemon & "
+                "perform validations for mon connection scores"
+            )
 
             # Restart monitor service and perform connection
             # score validation
+            log.debug(
+                "STARTING::Scenario 4:: Restarting Monitor daemon & perform validations for mon connection scores"
+            )
             mon_host = random.choice(mon_nodes)
+            previous_mon_map_epoch = get_mon_map_epoch(rados_obj=rados_obj)
 
             log.debug(
                 f"Picked random mon host {mon_host.hostname} to restart, stop and start mon service"
@@ -153,13 +251,26 @@ def run(ceph_cluster, **kw):
                 "Proceeding to check mon connection scores after restarting mon service"
             )
 
+            # Mon map is not updated for restart scenarios, hence omitting the Mon map update check.
+            # wait_until_mon_map_epoch_changes(rados_obj=rados_obj, previous_epoch=previous_mon_map_epoch)
+
             if not mon_workflow_obj.connection_score_checks():
                 raise Exception("Connection score checks failed")
 
             log.debug(
                 f"Mon connection scores verified after restarting mon service on host {mon_host.hostname}"
             )
+
+            log.debug(
+                "COMPLETED::Scenario 4:: Restarting Monitor daemon & perform validations for mon connection scores"
+            )
+
             log.debug(f"Proceeding to stop mon service on host {mon_host.hostname}")
+
+            log.debug(
+                "STARTING::Scenario 5:: Stop Monitor daemon & perform validations for mon connection scores"
+            )
+            # previous_mon_map_epoch = get_mon_map_epoch(rados_obj=rados_obj)
 
             # Stop monitor service and perform connection score validation
             if not rados_obj.change_daemon_systemctl_state(
@@ -173,13 +284,26 @@ def run(ceph_cluster, **kw):
                 "Proceeding to check mon connection scores after stopping mon service"
             )
 
+            # Mon map is not updated for stop daemon scenario, hence omitting the Mon map update check.
+            # wait_until_mon_map_epoch_changes(rados_obj=rados_obj, previous_epoch=previous_mon_map_epoch)
+
             if not mon_workflow_obj.connection_score_checks():
                 raise Exception("Connection score checks failed")
 
             log.debug(
                 f"Mon connection scores verified after stopping mon service on host {mon_host.hostname}"
             )
+
+            log.debug(
+                "COMPLETED::Scenario 5:: Stop Monitor daemon & perform validations for mon connection scores"
+            )
+
             log.debug(f"Proceeding to start mon service on host {mon_host.hostname}")
+
+            log.debug(
+                "STARTING::Scenario 6:: Start Monitor daemon & perform validations for mon connection scores"
+            )
+            # previous_mon_map_epoch = get_mon_map_epoch(rados_obj=rados_obj)
 
             # Start stopped monitor service and perform connection score validation
             if not rados_obj.change_daemon_systemctl_state(
@@ -193,12 +317,20 @@ def run(ceph_cluster, **kw):
                 "Proceeding to check mon connection scores after starting mon service"
             )
 
+            # Mon map is not updated for start daemon scenario, hence omitting the Mon map update check.
+            # wait_until_mon_map_epoch_changes(rados_obj=rados_obj, previous_epoch=previous_mon_map_epoch)
+
             if not mon_workflow_obj.connection_score_checks():
                 raise Exception("Connection score checks failed")
 
             log.debug(
                 f"Mon connection scores verified after starting mon service on host {mon_host.hostname}"
             )
+
+            log.debug(
+                "COMPLETED::Scenario 6:: Start Monitor daemon & perform validations for mon connection scores"
+            )
+
             log.debug(
                 f"Successfully verified mon connection scores with mon election strategy set as {mon_election_strategy}"
             )

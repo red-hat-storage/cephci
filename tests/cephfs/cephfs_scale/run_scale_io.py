@@ -53,22 +53,17 @@ def run(ceph_cluster, **kw):
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
         default_fs = "cephfs"
 
-        mds_names_hostname = []
-        for mds in mds_nodes:
-            mds_names_hostname.append(mds.node.hostname)
-        log.info(f"MDS List : {mds_names_hostname}")
-
-        mds_names = []
-        for mds in mds_nodes:
-            mds_names.append(mds.node.hostname)
+        mds_names = [mds.node.hostname for mds in mds_nodes]
+        log.info("MDS List: %s", mds_names)
         mds_hosts_list1 = mds_names[:3]
-        mds_hosts_1 = " ".join(mds_hosts_list1) + " "
+        mds_hosts_1 = " ".join(mds_hosts_list1)
         mds_host_list1_length = len(mds_hosts_list1)
 
         enable_standby_replay = config.get("enable_standby_replay", False)
         max_mds_default_fs = 2 if enable_standby_replay else 1
         log.info(
-            f"Create Filesystems with {'standby-replay' if enable_standby_replay else 'active MDS'}"
+            "Create Filesystems with %s",
+            "standby-replay" if enable_standby_replay else "active MDS",
         )
         fs_details = [
             (default_fs, mds_host_list1_length, mds_hosts_1, max_mds_default_fs),
@@ -76,10 +71,11 @@ def run(ceph_cluster, **kw):
         for fs_name, mds_host_list_length, mds_hosts, max_mds in fs_details:
             clients[0].exec_command(
                 sudo=True,
-                cmd=f'ceph fs volume create {fs_name} --placement="{mds_host_list_length} {mds_hosts}"',
+                cmd='ceph fs volume create %s --placement="%s %s"'
+                % (fs_name, mds_host_list_length, mds_hosts),
             )
             clients[0].exec_command(
-                sudo=True, cmd=f"ceph fs set {fs_name} max_mds {max_mds}"
+                sudo=True, cmd="ceph fs set %s max_mds %s" % (fs_name, max_mds)
             )
             fs_util_v1.wait_for_mds_process(clients[0], fs_name)
 
@@ -90,24 +86,62 @@ def run(ceph_cluster, **kw):
                     fs_name,
                     1,
                 )
-                log.info(f"Ceph fs status after enabling standby-replay : {result}")
+                log.info("Ceph fs status after enabling standby-replay : %s", result)
 
         # nfs_servers = ceph_cluster.get_ceph_objects("nfs")
+        # log.info("NFS Servers are : %s", nfs_servers)
         # nfs_server = nfs_servers[0].node.hostname
-        nfs_server = "extensa023"
-        nfs_name = "cephfs-nfs"
-        nfs_server_ip = "10.1.172.123"
+        # log.info("NFS Servers 1 hostname is  : %s", nfs_server)
+        #
         # nfs_server_ip = nfs_servers[0].node.ipaddress
-        # log.info(f"NFS Server IP Adderess ; {nfs_server_ip}")
+        # log.info("NFS Server 1 IP Address ; %s", nfs_server_ip)
+        nfs_server = "cali027"
+        hosts = ["cali027"]
+        nfs_base_name = "ceph-nfs"
+        count = 10
+        start_port = 25501
+        start_monitoring_port = 24501
 
         try:
-            fs_util_v1.create_nfs(
-                clients[0],
-                nfs_name,
-                validate=False,
-                placement="1 %s" % nfs_server,
-            )
-            log.info("NFS cluster %s created successfully." % nfs_name)
+            multi_cluster_kmip_enabled = config.get("multi_cluster_kmip_enabled", False)
+            byok_enabled = config.get("byok_enabled", False)
+            if multi_cluster_kmip_enabled:
+                log.info(
+                    "Multi-cluster KMIP is enabled, proceeding with parallel NFS cluster creation."
+                )
+
+                # Create multiple NFS clusters using KMIP YAML
+                nfs_cluster_names = (
+                    fs_scale_utils.create_multiple_nfs_clusters_with_kmip(
+                        clients[0],
+                        fs_util_v1,
+                        yaml_src_path="tests/cephfs/lib/nfs_kmip.yaml",
+                        yaml_dst_path="/root/nfs_kmip.yaml",
+                        nfs_base_name=nfs_base_name,
+                        count=count,
+                        start_port=start_port,
+                        start_monitoring_port=start_monitoring_port,
+                        hosts=hosts,
+                    )
+                )
+
+                log.info("Created NFS Clusters: %s", nfs_cluster_names)
+
+            else:
+                log.info(
+                    "Multi-cluster KMIP not enabled, proceeding with single NFS cluster creation."
+                )
+
+                nfs_name = "cephfs-nfs"
+                fs_util_v1.create_nfs(
+                    clients[0],
+                    nfs_name,
+                    validate=False,
+                    placement="1 %s" % nfs_server,
+                    port=start_port,
+                )
+                nfs_cluster_names = ["%s" % nfs_name]
+                log.info("Created Single NFS Cluster: %s", nfs_cluster_names)
         except CommandFailed as e:
             log.error("Failed to create NFS cluster: %s" % e)
             return 1
@@ -132,10 +166,13 @@ def run(ceph_cluster, **kw):
         fio_depth = config.get("fio_depth")
         fio_file_size = config.get("fio_file_size")
 
+        nfs_server_ip_address = ["10.8.130.27"]
+
         if client_count > len(clients):
             log.error(
-                f"Clients required to perform the test is {client_count} but "
-                f"the conf file has only {len(clients)}"
+                "Clients required to perform the test is %s but the conf file has only %s",
+                client_count,
+                len(clients),
             )
             return 1
 
@@ -161,6 +198,8 @@ def run(ceph_cluster, **kw):
         }
         fs_util_v1.create_subvolumegroup(clients[0], **subvolumegroup)
 
+        # Static Key ID for BYOK NFS exports (KMIP)
+        byok_key_id = "KEY-f49f500-6142373d-637b-4afa-98fe-19252bc2f0e0"
         log.info("Create Subvolumes and mount on clients")
         clients_to_use = clients[:client_count]
         mount_paths = fs_scale_utils.mount_and_create_subvolumes(
@@ -171,15 +210,22 @@ def run(ceph_cluster, **kw):
             subvolume_name,
             subvolume_group_name,
             mount_type,
-            nfs_cluster_name=nfs_name if mount_type == "nfs" else None,
+            nfs_cluster_name=nfs_cluster_names if mount_type == "nfs" else None,
             nfs_server=nfs_server if mount_type == "nfs" else None,
-            nfs_server_ip=nfs_server_ip if mount_type == "nfs" else None,
+            nfs_server_ip=nfs_server_ip_address if mount_type == "nfs" else None,
+            byok_enabled=byok_enabled,
+            key_id=byok_key_id,
+            multiple_cluster=True,
+            start_port=start_port,
+            nfs_cluster_names=nfs_cluster_names,
+            nfs_server_ips=nfs_server_ip_address,
         )
 
         fs_scale_utils.collect_logs(
             ceph_cluster, clients, default_fs, fs_util_v1, log_dir
         )
 
+        batch_size = 50
         log.info("Start Running IO's in parallel on all Clients")
         if io_type == "largefile":
             create_large_file_script = "create_large_file.sh"
@@ -187,11 +233,11 @@ def run(ceph_cluster, **kw):
                 client.upload_file(
                     sudo=True,
                     src="tests/cephfs/cephfs_scale/create_large_file.sh",
-                    dst=f"/root/{create_large_file_script}",
+                    dst="/root/%s" % create_large_file_script,
                 )
                 client.exec_command(
                     sudo=True,
-                    cmd=f"chmod 777 /root/{create_large_file_script}",
+                    cmd="chmod 777 /root/%s" % create_large_file_script,
                     long_running=True,
                 )
             fs_scale_utils.run_io_operations_parallel(mount_paths, "largefile")
@@ -205,26 +251,37 @@ def run(ceph_cluster, **kw):
                 fio_block_size=fio_block_size,
                 fio_depth=fio_depth,
                 fio_file_size=fio_file_size,
+                batch_size=batch_size,
             )
             try:
                 for client in clients:
-                    os.makedirs(f"{log_dir}/fio_{client.node.hostname}", exist_ok=True)
-                    src_path = f"/root/fio_{client.node.hostname}.json"
-                    dst_path = f"{log_dir}/fio_{client.node.hostname}/fio_{client.node.hostname}.json"
+                    os.makedirs(
+                        "%s/fio_%s" % (log_dir, client.node.hostname), exist_ok=True
+                    )
+                    src_path = "/root/fio_%s.json" % client.node.hostname
+                    dst_path = "%s/fio_%s/fio_%s.json" % (
+                        log_dir,
+                        client.node.hostname,
+                        client.node.hostname,
+                    )
                     try:
-                        client.exec_command(sudo=True, cmd=f"test -e {src_path}")
-                        log.info(f"File {src_path} exists. Proceeding with download.")
+                        client.exec_command(sudo=True, cmd="test -e %s" % src_path)
+                        log.info("File %s exists. Proceeding with download.", src_path)
                         client.download_file(src=src_path, dst=dst_path, sudo=True)
-                        log.info(f"Downloaded {src_path} to {dst_path}")
-                        client.exec_command(sudo=True, cmd=f"rm -f {src_path}")
-                        log.info(f"Deleted source file {src_path}")
+                        log.info("Downloaded %s to %s", src_path, dst_path)
+                        client.exec_command(sudo=True, cmd="rm -f %s" % src_path)
+                        log.info("Deleted source file %s", src_path)
                     except CommandFailed:
                         log.warning(
-                            f"File {src_path} does not exist on client {client.node.hostname}. Skipping download."
+                            "File %s does not exist on client %s. Skipping download.",
+                            src_path,
+                            client.node.hostname,
                         )
             except Exception as e:
                 log.error(
-                    f"Failed to download FIO file for client {client.node.hostname} : {e}"
+                    "Failed to download FIO file for client %s : %s",
+                    client.node.hostname,
+                    str(e),
                 )
         elif io_type == "smallfile":
             metrics = fs_scale_utils.run_io_operations_parallel(
@@ -235,12 +292,25 @@ def run(ceph_cluster, **kw):
                 io_file_size=io_file_size,
                 io_files=io_files,
             )
-            log.info(f"Metrics of all Runs : {metrics}")
+            log.info("Metrics of all Runs : %s", metrics)
+        elif io_type == "dd":
+            fs_scale_utils.run_io_operations_parallel(
+                mount_paths,
+                io_type="dd",
+                dd_block_size="1M",
+                dd_count="1024",
+            )
+        elif io_type == "cthon":
+            fs_scale_utils.run_io_operations_parallel(
+                mount_paths,
+                io_type="cthon",
+                cthonLogPath=log_dir,
+            )
 
         collected_logs = fs_scale_utils.collect_and_compress_logs(
             clients[0], fs_util_v1, log_dir
         )
-        log.info(f"Logs captures : {collected_logs}")
+        log.info("Logs captures : %s", collected_logs)
 
         return 0
     except Exception as e:
@@ -252,12 +322,12 @@ def run(ceph_cluster, **kw):
             log.info("Stop logging the Ceph Cluster Cluster status to a log dir")
             fs_scale_utils.stop_all_logging()
             daemon_list = ["mds", "osd", "mgr", "mon"]
-            log.info(f"Check for crash from : {daemon_list}")
+            log.info("Check for crash from : %s", daemon_list)
             fs_system_utils.crash_check(
                 clients[0], crash_copy=1, daemon_list=daemon_list
             )
         except Exception as e:
-            log.error(f"Error in crash validation block: {e}")
+            log.error("Error in crash validation block: %s", e)
 
         if config.get("cleanup", True):
             try:
@@ -268,5 +338,5 @@ def run(ceph_cluster, **kw):
                 else:
                     log.error("Cleanup failed.")
             except Exception as e:
-                log.error(f"Cleanup process encountered an error: {e}")
-                log.error(traceback.format_exc())
+                log.error("Cleanup process encountered an error: %s", e)
+                log.error("Stack trace:\n%s", traceback.format_exc())

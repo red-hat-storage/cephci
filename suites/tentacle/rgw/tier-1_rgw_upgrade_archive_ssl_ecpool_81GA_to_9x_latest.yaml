@@ -1,0 +1,615 @@
+#upgrade multisite with archive zone to latest 8.1(GA) to 9x
+#global-conf: conf/tentacle/rgw/3-way-archive-ec-profile-2+2@4nodes.yaml
+tests:
+
+  # Cluster deployment stage
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    rhcs-version: 8.1
+                    release: rc
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create primary.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "primary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.pri
+                      placement:
+                        nodes:
+                          - node3
+                      spec:
+                        ssl: true
+                        rgw_frontend_ssl_certificate: create-cert
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    rhcs-version: 8.1
+                    release: rc
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create secondary.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "secondary.rgw.buckets.data rgw"
+                  command: shell
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.sec
+                      placement:
+                        nodes:
+                          - node3
+                      spec:
+                        ssl: true
+                        rgw_frontend_ssl_certificate: create-cert
+        ceph-arc:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: bootstrap
+                  service: cephadm
+                  args:
+                    rhcs-version: 8.1
+                    release: rc
+                    registry-url: registry.redhat.io
+                    mon-ip: node1
+                    orphan-initial-daemons: true
+                    initial-dashboard-password: admin@123
+                    dashboard-password-noupdate: true
+                    skip-monitoring-stack: true
+              - config:
+                  command: add_hosts
+                  service: host
+                  args:
+                    attach_ip_address: true
+                    labels: apply-all-labels
+              - config:
+                  command: apply
+                  service: mgr
+                  args:
+                    placement:
+                      label: mgr
+              - config:
+                  command: apply
+                  service: mon
+                  args:
+                    placement:
+                      label: mon
+              - config:
+                  command: apply
+                  service: osd
+                  args:
+                    all-available-devices: true
+              - config:
+                  args:
+                    - "ceph osd erasure-code-profile set rgwec22_4 k=2 m=2"
+                    - "crush-failure-domain=host crush-device-class=hdd"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool create archive.rgw.buckets.data 32 32"
+                    - "erasure rgwec22_4"
+                  command: shell
+              - config:
+                  args:
+                    - "ceph osd pool application enable"
+                    - "archive.rgw.buckets.data rgw"
+                  command: shell
+              - config:
+                  command: apply_spec
+                  service: orch
+                  specs:
+                    - service_type: rgw
+                      service_id: shared.arc
+                      placement:
+                        nodes:
+                          - node3
+                      spec:
+                        ssl: true
+                        rgw_frontend_ssl_certificate: create-cert
+      desc: RHCS cluster deployment using cephadm.
+      polarion-id: CEPH-83573386
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - node1
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - node1
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+        ceph-sec:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - node1
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - node1
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+        ceph-arc:
+          config:
+            verify_cluster_health: true
+            steps:
+              - config:
+                  command: apply_spec
+                  service: orch
+                  validate-spec-services: true
+                  specs:
+                    - service_type: prometheus
+                      placement:
+                        count: 1
+                        nodes:
+                          - node1
+                    - service_type: grafana
+                      placement:
+                        nodes:
+                          - node1
+                    - service_type: alertmanager
+                      placement:
+                        count: 1
+                    - service_type: node-exporter
+                      placement:
+                        host_pattern: "*"
+                    - service_type: crash
+                      placement:
+                        host_pattern: "*"
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            command: add
+            id: client.1
+            node: node4
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-sec:
+          config:
+            command: add
+            id: client.1
+            node: node4
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-arc:
+          config:
+            command: add
+            id: client.1
+            node: node4
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            commands:
+              - "radosgw-admin realm create --rgw-realm india --default"
+              - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node3} --master --default"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --endpoints https://{node_ip:node3} --master --default"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
+              - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.pri rgw_realm india"
+              - "ceph config set client.rgw.shared.pri rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.pri rgw_zone primary"
+              - "ceph config set client.rgw.shared.pri rgw_verify_ssl False"
+              - "ceph orch restart {service_name:shared.pri}"
+              - "sleep 120"
+        ceph-sec:
+          config:
+            commands:
+              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.sec rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.sec rgw_realm india"
+              - "ceph config set client.rgw.shared.sec rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.sec rgw_zone secondary"
+              - "ceph orch restart {service_name:shared.sec}"
+              - "sleep 120"
+        ceph-arc:
+          config:
+            commands:
+              - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
+              - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
+              - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone archive --endpoints https://{node_ip:node3} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --tier-type=archive"
+              - "radosgw-admin zone modify  --rgw-realm india --rgw-zonegroup shared --rgw-zone archive  --sync-from-all false --sync-from-rm secondary --sync-from primary"
+              - "radosgw-admin period update --rgw-realm india --commit"
+              - "ceph config set client.rgw.shared.arc rgw_verify_ssl False"
+              - "ceph config set client.rgw.shared.arc rgw_realm india"
+              - "ceph config set client.rgw.shared.arc rgw_zonegroup shared"
+              - "ceph config set client.rgw.shared.arc rgw_zone archive"
+              - "ceph orch restart {service_name:shared.arc}"
+              - "sleep 120"
+      desc: Setting up RGW multisite replication environment with archive zone
+      module: exec.py
+      name: setup multisite
+      polarion-id: CEPH-10704
+
+#verify ceph cluster s3_details
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph versions"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: get shared realm info on primary
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph versions"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: get shared realm info on secondary
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-arc:
+          config:
+            cephadm: true
+            commands:
+              - "ceph versions"
+              - "radosgw-admin sync status"
+              - "ceph -s"
+              - "radosgw-admin realm list"
+              - "radosgw-admin zonegroup list"
+              - "radosgw-admin zone list"
+      desc: Retrieve the configured environment details
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: get shared realm info on archive zone
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            set-env: true
+            script-name: user_create.py
+            config-file-name: non_tenanted_user.yaml
+            copy-user-info-to-site: ceph-arc
+      desc: create tenanted user
+      module: sanity_rgw_multisite.py
+      name: create tenanted user
+      polarion-id: CEPH-83575199
+
+  - test:
+      name: Test NFS cluster and export create
+      desc: Test NFS cluster and export create
+      polarion-id: CEPH-83574597
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../nfs_ganesha/nfs_cluster.py
+            config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec", "ceph-arc"]
+      name: test to create "M" no of buckets on primary
+      polarion-id: CEPH-83575435
+      desc: test metadata sync - create buckets
+      module: sanity_rgw_multisite.py
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+        ceph-sec:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+        ceph-arc:
+          config:
+            install:
+              - agent
+            run-on-rgw: true
+      desc: Setup and configure vault agent
+      destroy-cluster: false
+      module: install_vault.py
+      name: configure vault agent
+      polarion-id: CEPH-83575226
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-sec:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.sec rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.sec"
+        ceph-pri:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.pri rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.pri"
+        ceph-arc:
+          config:
+            cephadm: true
+            commands:
+              - "ceph config set client.rgw.shared.arc rgw_crypt_require_ssl false"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_backend vault"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_auth agent"
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_prefix /v1/transit "
+              - "ceph config set client.rgw.shared.arc rgw_crypt_sse_s3_vault_secret_engine transit"
+              - "ceph orch restart rgw.shared.arc"
+      desc: Setting vault configs for sse-s3 on multisite archive
+      module: exec.py
+      name: set sse-s3 vault configs on multisite
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_sse_s3_kms_with_vault.py
+            config-file-name: test_sse_s3_bucket_enc_multipart_download_archive_site.yaml
+      desc: test multipart+encrypt object access at the archive site
+      polarion-id: CEPH-83573390
+      module: sanity_rgw_multisite.py
+      name: test multipart+encrypt object access at the archive site
+
+# Performing cluster upgrade
+
+  - test:
+      abort-on-fail: true
+      desc: Multisite upgrade
+      module: test_cephadm_upgrade.py
+      name: multisite ceph upgrade
+      polarion-id: CEPH-83574647
+      clusters:
+        ceph-sec:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+        ceph-pri:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+        ceph-arc:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+
+  - test:
+      name: Verify DBR feature enabled on upgraded cluster
+      desc: Check DBR feature enabled on upgraded cluster
+      abort-on-fail: true
+      module: sanity_rgw_multisite.py
+      polarion-id: CEPH-83573596
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_check_sharding_enabled.py
+            config-file-name: test_check_sharding_enabled_brownfield.yaml
+
+  - test:
+      name: NFS export delete
+      desc: NFS cluster and exports delete
+      polarion-id: CEPH-83574600 # also covers CEPH-83574601
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../nfs_ganesha/nfs_cluster.py
+            config-file-name: ../../nfs_ganesha/config/nfs_cluster_delete.yaml
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_dynamic_resharding_greenfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec" , "ceph-arc"]
+      desc: Test dynamic resharding brownfield scenario after upgrade on new bucket
+      abort-on-fail: true
+      module: sanity_rgw_multisite.py
+      name: Dynamic resharding tests on Primary cluster
+      polarion-id: CEPH-83574737

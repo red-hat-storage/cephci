@@ -312,178 +312,28 @@ tests:
         clients: 1
 
   - test:
-      name: Qos PerShare enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos Pershare enablement on cluster level
-      polarion-id: CEPH-83611390
-      abort-on-fail: false
-      config:
-        cephfs_volume : cephfs
-        cluster_name : cephfs-nfs
-        max_export_write_bw : 8MB
-        max_export_read_bw : 8MB
-        max_client_write_bw : 8MB
-        max_client_read_bw: 8MB
-        qos_type : PerShare
-        operation : restart
+      name: cthon tests for NFS ganesha with restart - parallel module
+      module: test_parallel.py
+      desc: cthon + restart - parallel module
+      parallel:
+          - test:
+              name: cthon tests for NFS ganesha
+              module: test_cthon.py
+              desc: cthon tests for NFS ganesha - running all testcases basic, general, special and lock
+              polarion-id: CEPH-83617827
+              abort-on-fail: false
+              config:
+                nfs_version: 4.2
+                clients: 2
+                total_num_exports: 8
 
-  - test:
-      name: Qos PerClient enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerClient enablement on cluster level
-      polarion-id: CEPH-83614246
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        max_export_write_bw: 8MB
-        max_export_read_bw: 8MB
-        max_client_write_bw: 8MB
-        max_client_read_bw: 8MB
-        qos_type: PerClient
-        operation: restart
-
-  - test:
-      name: Qos PerShare_PerClient enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerShare_PerClient enablement on cluster level
-      polarion-id: CEPH-83614247
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        max_export_write_bw: 8MB
-        max_export_read_bw: 8MB
-        max_client_write_bw: 8MB
-        max_client_read_bw: 8MB
-        qos_type: PerShare_PerClient
-        operation: restart
-
-  - test:
-      name: Qos enablement PerShare-PerClient on export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
-      desc: Verify qos PerShare-PerClient enablement on export level
-      polarion-id: CEPH-83613691
-      abort-on-fail: false
-      config:
-        cephfs_volume : cephfs
-        cluster_name : cephfs-nfs
-        cluster_bw :
-          - max_export_write_bw : 100MB
-            max_export_read_bw : 100MB
-            max_client_write_bw : 100MB
-            max_client_read_bw: 100MB
-        export_bw:
-          - max_export_write_bw: 8MB
-            max_export_read_bw: 8MB
-            max_client_write_bw: 8MB
-            max_client_read_bw: 8MB
-        qos_type : PerShare_PerClient
-        operation : restart
-
-  - test:
-      name: Qos enablement PerShare on export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
-      desc: Verify qos Pershare enablement on export level
-      polarion-id: CEPH-83614248
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        cluster_bw:
-          - max_export_write_bw: 100MB
-            max_export_read_bw: 100MB
-            max_client_write_bw: 100MB
-            max_client_read_bw: 100MB
-        export_bw:
-          - max_export_write_bw: 8MB
-            max_export_read_bw: 8MB
-            max_client_write_bw: 8MB
-            max_client_read_bw: 8MB
-        qos_type: PerShare
-        operation: restart
-
-  - test:
-      name: Qos enablement PerShare-combined_bw value for export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
-      desc: Verify qos PerShare-combined_bw value enablement on export level
-      polarion-id: CEPH-83616913
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        cluster_bw:
-          - max_export_combined_bw: 100MB
-        export_bw:
-          - max_export_combined_bw: 8MB
-        qos_type: PerShare
-        operation: restart
-
-  - test:
-      name: Qos enablement PerShare_PerClient-combined_bw value for export level with nfs service with restart
-      module: test_nfs_qos_on_export_level_enablement.py
-      desc: Verify qos PerShare_PerClient-combined_bw value enablement on export level
-      polarion-id: CEPH-83616914
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        cluster_bw:
-          - max_client_combined_bw: 100MB
-            max_export_combined_bw: 100MB
-        export_bw:
-          - max_client_combined_bw: 8MB
-            max_export_combined_bw: 8MB
-        qos_type: PerShare_PerClient
-        operation: restart
-
-  - test:
-      name: Qos PerShare-combined_bw enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerShare-combined_bw enablement on cluster level
-      polarion-id: CEPH-83616910
-      abort-on-fail: false
-      config:
-        cephfs_volume : cephfs
-        cluster_name : cephfs-nfs
-        max_export_combined_bw: 8MB
-        qos_type : PerShare
-        operation : restart
-
-  - test:
-      name: Qos PerClient-combined_bw enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerClient-combined_bw enablement on cluster level
-      polarion-id: CEPH-83616911
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        max_client_combined_bw: 8MB
-        qos_type: PerClient
-        operation: restart
-
-  - test:
-      name: Qos PerShare_PerClient-combined_bw enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerShare_PerClient-combined_bw enablement on cluster level
-      polarion-id: CEPH-83616912
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        max_export_combined_bw: 8MB
-        max_client_combined_bw: 8MB
-        qos_type: PerShare_PerClient
-        operation: restart
-
-  - test:
-      name: cthon tests for NFS ganesha
-      module: test_cthon.py
-      desc: cthon tests for NFS ganesha - running all testcases basic, general, special and lock
-      polarion-id: CEPH-83617827
-      abort-on-fail: false
-      config:
-        nfs_version: 4.2
-        clients: 2
-        total_num_exports: 4
+          - test:
+              name: Restart NFS Ganesha services
+              desc: Restart NFS Ganesha services for given time
+              module: scripts_tools.restart_nfs_ganesha_services.py
+              config:
+                clients: 1
+                restart_interval: 2 #in minutes
+                longevity: true
+                # longevity_duration: 1 # in hours
+                longevity_loop: 5

@@ -244,12 +244,12 @@ def run(ceph_cluster, **kw):
                 target_osd,
             )
 
-        assert service_obj.add_osds_to_managed_service()
-
         for target_osd in dc_1_osds_to_remove + dc_2_osds_to_remove:
             client = ceph_cluster.get_nodes(role="client")[0]
             log.info(f'Waiting for OSD {target_osd} to be "up" state')
             wait_for_osd_daemon_state(client, target_osd, "up")
+
+        assert service_obj.add_osds_to_managed_service()
 
         log.info(
             f"Successfully removed and added back removed OSDs:\
@@ -598,6 +598,7 @@ def run(ceph_cluster, **kw):
             if dc_1_osd_count != 2 and dc_2_osd_count != 2:
                 log.error(
                     f"PG {pg_stat['pgid']} set does not have 2 OSDs from each of DC1 and DC2"
+                    f"PG acting set -> {pg_stat['acting']}"
                 )
                 return False
         log.info("All PG acting set has 2 OSD from DC1 and 2 OSD from DC2")
@@ -728,7 +729,7 @@ def run(ceph_cluster, **kw):
             )
             method_should_succeed(
                 wait_for_daemon_status,
-                host=host,
+                rados_obj=rados_obj,
                 daemon_type="osd",
                 daemon_id=target_osd,
                 status="running",
@@ -767,7 +768,7 @@ def run(ceph_cluster, **kw):
                 if not rados_obj.set_managed_flag(
                     service_type="osd", service_name=service
                 ):
-                    log_error = f"Service {service} could be set to unmanaged=True"
+                    log_error = f"Service {service} could not be set to managed"
                     raise Exception(log_error)
 
             log.info("Completed the removal and addition of OSD daemons")
@@ -1036,6 +1037,8 @@ def run(ceph_cluster, **kw):
             )
         # restoring the recovery threads on the cluster
         rados_obj.change_recovery_threads(config={}, action="rm")
+        # remove empty service specs after host removal
+        rados_obj.remove_empty_service_spec()
 
         if config.get("delete_pool"):
             rados_obj.delete_pool(pool=pool_name)

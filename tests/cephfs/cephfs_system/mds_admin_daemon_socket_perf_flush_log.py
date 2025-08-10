@@ -115,19 +115,9 @@ def run(ceph_cluster, **kw):
             target_mds.exec_command(
                 sudo=True, cmd=f"{admin_daemon} {dump}", check_ec=False
             )
-            out, rc = clients[0].exec_command(sudo=True, cmd="ceph -s -f json")
-            log.info(out)
-            cluster_info = json.loads(out)
-            if cluster_info.get("health").get("status") != "HEALTH_OK":
-                log.error(
-                    f"Cluster helath is in : {cluster_info.get('health').get('status')}"
-                )
-                out, rc = clients[0].exec_command(
-                    sudo=True, cmd="ceph health detail -f json"
-                )
-                error_summary = json.loads(out)
-                log.error(f"{error_summary}")
-                raise CommandFailed("Cluster health is not OK")
+            if cephfs_common_utils.wait_for_healthy_ceph(client1, 300):
+                log.error("Cluster health is not OK even after waiting for 300secs")
+                return 1
         out2, ec2 = client1.exec_command(sudo=True, cmd="ceph fs dump")
         log.info(out2)
         return 0

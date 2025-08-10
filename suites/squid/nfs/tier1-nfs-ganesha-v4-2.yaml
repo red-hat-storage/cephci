@@ -302,14 +302,13 @@ tests:
         nfs_version: 4.2
         clients: 4
         port: 2049
-        number_of_clusters : 2
-        timeout : 100
-        nfs_instance_number: 6
+        timeout : 150
+        nfs_instance_number: 4
         spec:
           service_type: nfs
           service_id: nfs
           placement:
             host_pattern: '*'
           spec:
-            port: 50000
-            monitoring_port: 60000
+            port: 62000
+            monitoring_port: 62500

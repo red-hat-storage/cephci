@@ -209,6 +209,12 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_get_s3cmd.yaml
         run-on-haproxy: true
+        run_io_verify: true
+        verify-io-info-configs:
+          - test_dynamic_resharding_without_bucket_delete.yaml
+          - test_manual_resharding_without_bucket_delete.yaml
+          - test_dynamic_resharding_with_version_without_bucket_delete.yaml
+          - test_Mbuckets_with_Nobjects_download.yaml
 
   - test:
       name: Test large omap clearance post upgrade

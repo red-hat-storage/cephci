@@ -2,8 +2,9 @@ import random
 import string
 import traceback
 
-from ceph.ceph import SocketTimeoutException
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
+from tests.cephfs.lib.xfs_lib.xfs_utils import XfsTestSetup
 from utility.log import Log
 
 log = Log(__name__)
@@ -25,8 +26,8 @@ Steps to Reproduce:
 def run(ceph_cluster, **kw):
     try:
         log.info("Running CephFS tests for ceph kernel xfstests")
-        # Initialize the utility class for CephFS
         fs_util = FsUtils(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         # Get the client nodes
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
@@ -37,129 +38,91 @@ def run(ceph_cluster, **kw):
         fs_util.prepare_clients(clients, build)
         client1 = clients[0]
         fs_details = fs_util.get_fs_info(client1)
+        fs_name = "cephfs"
         if not fs_details:
-            fs_util.create_fs(client1, "cephfs")
-        # check if rhel version is 8 or 9
-        rhel_version, _ = client1.exec_command(
-            sudo=True, cmd="cat /etc/os-release | grep VERSION_ID"
-        )
-        log.info("Installing epel-release depending on the RHEL version")
-        if rhel_version.startswith('VERSION_ID="8'):
-            client1.exec_command(
-                sudo=True,
-                cmd="dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm",
+            fs_util.create_fs(client1, fs_name)
+
+        log.info("Verify Cluster is healthy before test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, 300):
+            log.error("Cluster health is not OK even after waiting for 300secs")
+            return 1
+
+        failure_count = {"kernel": 0, "fuse": 0}
+        for mount_type in ["kernel"]:
+            xfs_test = XfsTestSetup(ceph_cluster, client1)
+            if xfs_test.setup_environment():
+                log.error("Failed to set up the environment for XFS tests")
+                return 1
+
+            if xfs_test.clone_and_build_xfstests():
+                log.error("Failed to clone and build xfstests")
+                return 1
+
+            rand = "".join(
+                random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
             )
-        elif rhel_version.startswith('VERSION_ID="9'):
-            client1.exec_command(
-                sudo=True,
-                cmd="dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm",
-            )
+            test_mount_point = f"/mnt/cephfs_{mount_type}_{rand}_test"
+            scratch_mount_point = f"/mnt/cephfs_{mount_type}_{rand}_scratch"
 
-        commands = [
-            "yum install -y acl attr automake bc dbench dump e2fsprogs fio gawk gcc gdbm-devel"
-            " git indent kernel-devel libacl-devel libaio-devel libcap-devel libtool libuuid-devel"
-            " lvm2 make psmisc python3 quota sed sqlite udftools xfsprogs",
-            "dnf install -y glib2-devel readline-devel ncurses-devel e2fsprogs-devel gcc-c++ autoconf",
-            "git clone https://github.com/axboe/liburing.git",
-            "cd liburing && ./configure && make && make install && cd ..",
-            "yum install -y xfsdump xfsprogs-devel",
-            "yum install -y exfatprogs autoconf",
-            "git clone https://git.kernel.org/pub/scm/linux/kernel/git/jaegeuk/f2fs-tools.git",
-            "cd f2fs-tools && ./configure && make && make install && cd ..",
-            "git clone https://github.com/markfasheh/ocfs2-tools.git",
-            "cd ocfs2-tools && ./autogen.sh && ./configure && make && make install && cd ..",
-            "yum install -y libacl-devel bc libtool",
-            "git clone git://git.kernel.org/pub/scm/fs/xfs/xfstests-dev.git",
-            "cd xfstests-dev && make && sudo make install",
-        ]
-        log.info("Installing required packages for xfstests")
-        for command in commands:
-            client1.exec_command(sudo=True, cmd=command, check_ec=False)
-        rand = "".join(
-            random.choice(string.ascii_lowercase + string.digits) for _ in range(5)
-        )
-        # Define mount directories
-        log.info("Mounting only kernel clients for xfstests")
-        test_mount_point = f"/mnt/cephfs_kernel_{rand}_test"
-        scratch_mount_point = f"/mnt/cephfs_kernel_{rand}_scratch"
-        # Mount CephFS
-        mon_node_ips = fs_util.get_mon_node_ips()
-        fs_util.kernel_mount([client1], test_mount_point, ",".join(mon_node_ips))
-        fs_util.kernel_mount([client1], scratch_mount_point, ",".join(mon_node_ips))
-        # create subdirectory in the mounted directory
-        client1.exec_command(sudo=True, cmd=f"mkdir {test_mount_point}/{rand}_a")
-        client1.exec_command(sudo=True, cmd=f"mkdir {scratch_mount_point}/{rand}_b")
-        # get admin key
-        admin_key, _ = client1.exec_command(
-            sudo=True, cmd="ceph auth get-key client.admin"
-        )
-        xfs_config_context = f"""
-        export TEST_DIR={test_mount_point}
-        export SCRATCH_MNT={scratch_mount_point}
-        export FSTYP=ceph
-        export TEST_DEV={mon_node_ips[0]}:/{rand}_a
-        export SCRATCH_DEV={mon_node_ips[1]}:/{rand}_b
+            if mount_type == "kernel":
+                mount_info = {
+                    "test_mount": test_mount_point,
+                    "scratch_mount": scratch_mount_point,
+                    "mount_type": mount_type,
+                    "FSTYP": "ceph",
+                    "fs_name": fs_name,
+                    "test_dev": f"{rand}_a",
+                    "scratch_dev": f"{rand}_b",
+                }
+            elif mount_type == "fuse":
+                mount_info = {
+                    "test_mount": test_mount_point,
+                    "scratch_mount": scratch_mount_point,
+                    "mount_type": mount_type,
+                    "FSTYP": "ceph-fuse",
+                    "fs_name": fs_name,
+                    "test_dev": "ceph-fuse",
+                    "scratch_dev": "ceph-fuse",
+                }
 
-        COMMON_OPTIONS="name=admin"
-        COMMON_OPTIONS+=",secret={admin_key}"
+            if xfs_test.mount_fs(mount_info):
+                log.error("Failed to mount the CephFS filesystem")
+                return 1
 
-        TEST_FS_MOUNT_OPTS="-o ${{COMMON_OPTIONS}}"
-        MOUNT_OPTIONS="-o ${{COMMON_OPTIONS}}"
+            if xfs_test.configure_local_config(mount_info):
+                log.error("Failed to configure local.config for xfstests")
+                return 1
 
-        export TEST_FS_MOUNT_OPTS
-        export MOUNT_OPTIONS
-        """
-        # write to file as local.config.
-        client1.exec_command(
-            sudo=True,
-            cmd=f"echo '{xfs_config_context}' > /root/xfstests-dev/local.config",
-        )
-        # create exclude file
-        exclude_file = "generic/003 generic/538 generic/397 generic/379"
-        client1.exec_command(
-            sudo=True, cmd=f"echo '{exclude_file}' > /root/xfstests-dev/ceph.exclude"
-        )
-        # run the tests
-        client1.exec_command(
-            sudo=True,
-            cmd="cd /root/xfstests-dev && ./check -d -T -g quick -e ceph.exclude",
-            check_ec=False,
-            timeout=7200,
-        )
-        log.info("XFS tests completed successfully")
+            len_failed_tc = xfs_test.run_tests(mount_type)
+            failure_count[mount_type] = len_failed_tc
+
+            log.info("XFS tests completed successfully")
+
+            if xfs_test.cleanup(mount_info):
+                log.error("Failed to clean up the XFS test environment")
+                return 1
+
+        log.info("Verify Cluster is healthy after test")
+        if cephfs_common_utils.wait_for_healthy_ceph(client1, 600):
+            log.error("Cluster health is not OK even after waiting for 600 secs")
+            return 1
+
+        log.info("Reporting the failure")
+        if failure_count["kernel"] > 0 or failure_count["fuse"] > 0:
+            log.error("XFS tests failed for mounts")
+            log.error("Kernel/Fuse failures: {}".format(failure_count))
+            return 1
+        else:
+            log.info("XFS tests passed for all clients")
+
         return 0
+
     except Exception as e:
-        dmesg, _ = clients[0].exec_command(sudo=True, cmd="dmesg")
+        dmesg, _ = client1.exec_command(sudo=True, cmd="dmesg")
         log.error(dmesg)
         log.error(e)
         log.error(traceback.format_exc())
+        if xfs_test.cleanup(mount_info):
+            log.error("Failed to clean up the XFS test environment")
+            return 1
         return 1
-    except SocketTimeoutException as ste:
-        dmesg, _ = clients[0].exec_command(sudo=True, cmd="dmesg")
-        log.error(dmesg)
-        log.error(ste)
-        return 1
-    finally:
-        uninstall_commands = [
-            "dnf remove -y acl attr automake bc dbench dump e2fsprogs fio gawk gcc gdbm-devel git"
-            " indent kernel-devel libacl-devel libaio-devel libcap-devel libtool libuuid-devel lvm2"
-            " make psmisc python3 quota sed sqlite udftools xfsprogs",
-            "dnf remove -y glib2-devel readline-devel ncurses-devel e2fsprogs-devel gcc-c++ autoconf",
-            "dnf remove -y xfsdump xfsprogs-devel",
-            "dnf remove -y exfatprogs autoconf",
-            "dnf remove -y libuuid-devel libtool libselinux1-dev",
-            "dnf remove -y libacl-devel bc libtool",
-            "dnf remove -y epel-release",
-        ]
-        log.info("Uninstalling required packages for xfstests")
-        for command in uninstall_commands:
-            client1.exec_command(sudo=True, cmd=command, check_ec=False)
-        remove_commands = [
-            "cd /root && rm -rf liburing",
-            "cd /root && rm -rf f2fs-tools",
-            "cd /root && rm -rf ocfs2-tools",
-            "cd /root && rm -rf xfstests-dev",
-        ]
-        log.info("Removing the directories created for xfstests)")
-        for command in remove_commands:
-            client1.exec_command(sudo=True, cmd=command, check_ec=False)

@@ -948,6 +948,7 @@ class FsUtils(object):
                 check_ec=False,
             )
             mds_hosts = json.loads(out)
+            log.debug("MDS Hosts Output: %s", mds_hosts)
             if ispresent:
                 for mds in mds_hosts:
                     if process_name in mds["daemon_id"]:
@@ -1203,7 +1204,13 @@ class FsUtils(object):
             nfs_cmd += f" {kwargs.get('nfs_server_name')}"
         if kwargs.get("placement"):
             nfs_cmd += f" --placement '{kwargs.get('placement')}'"
-
+        nfs_port = kwargs.get("port")
+        if nfs_port:
+            nfs_cmd += f" --port {nfs_port}"
+        # BYOK / KMIP support
+        if kwargs.get("byok_enabled", False):
+            yaml_path = kwargs.get("kmip_yaml_path", "/root/nfs_kmip.yaml")
+            nfs_cmd += f" -i {yaml_path}"
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=nfs_cmd, check_ec=kwargs.get("check_ec", True)
         )
@@ -1280,6 +1287,11 @@ class FsUtils(object):
             export_nfs_cmd += f" --path={kwargs.get('path')} "
         if kwargs.get("readonly"):
             export_nfs_cmd += " --readonly"
+        # Pass Key_ID for byok support
+        if kwargs.get("extra_args"):
+            export_nfs_cmd += f" {kwargs.get('extra_args')}"
+
+        log.info(f"Running export command: {export_nfs_cmd}")
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=export_nfs_cmd, check_ec=kwargs.get("check_ec", True)
         )
@@ -1618,6 +1630,9 @@ class FsUtils(object):
             subvolume_cmd += " --namespace-isolated"
         if kwargs.get("earmark"):
             subvolume_cmd += f" --earmark {kwargs.get('earmark')}"
+        #  To handle extra CLI params like --enctag for BYOK Support
+        if kwargs.get("extra_params"):
+            subvolume_cmd += f" {kwargs.get('extra_params')}"
         cmd_out, cmd_rc = client.exec_command(
             sudo=True, cmd=subvolume_cmd, check_ec=kwargs.get("check_ec", True)
         )
@@ -2411,87 +2426,6 @@ os.system('sudo systemctl start  network')
                     if op.state == "running":
                         log.info("Node restarted successfully")
                     sleep(20)
-        elif kwargs.get("cloud_type") == "ibmc":
-            # To DO for IBM
-            pass
-        else:
-            pass
-        return 0
-
-    def node_power_off(
-        self,
-        node,
-        sleep_time=300,
-        **kwargs,
-    ):
-        """
-        This is used for node power failures.
-        Limitation : This works only for Openstack Vms
-
-
-        Args:
-            sleep_time:
-            node_1:
-            **kwargs:
-
-        Returns:
-
-        """
-        user = os.getlogin()
-        log.info(f"{user} logged in")
-        if kwargs.get("cloud_type") == "openstack":
-            kwargs.pop("cloud_type")
-            driver = get_openstack_driver(**kwargs)
-            for node_obj in driver.list_nodes():
-                if node.private_ip in node_obj.private_ips:
-                    log.info("Doing power-off on %s" % node_obj.name)
-                    driver.ex_stop_node(node_obj)
-                    sleep(20)
-                    op = driver.ex_get_node_details(node_obj)
-                    if op.state == "stopped":
-                        log.info("Node stopped successfully")
-                    sleep(sleep_time)
-        elif kwargs.get("cloud_type") == "ibmc":
-            # To DO for IBM
-            pass
-        else:
-            pass
-        return 0
-
-    def node_power_on(
-        self,
-        node,
-        sleep_time=300,
-        **kwargs,
-    ):
-        """
-        This is used for node power failures.
-        Limitation : This works only for Openstack Vms
-
-
-        Args:
-            sleep_time:
-            node_1:
-            **kwargs:
-
-        Returns:
-
-        """
-        user = os.getlogin()
-        log.info(f"{user} logged in")
-        if kwargs.get("cloud_type") == "openstack":
-            kwargs.pop("cloud_type")
-            driver = get_openstack_driver(**kwargs)
-            for node_obj in driver.list_nodes():
-                if node.private_ip in node_obj.private_ips:
-                    log.info("Doing power-on on %s" % node_obj.name)
-                    driver.ex_start_node(node_obj)
-                    sleep(20)
-                    op = driver.ex_get_node_details(node_obj)
-                    if op.state == "running":
-                        log.info("Node restarted successfully")
-                    sleep(20)
-                    sleep(sleep_time)
         elif kwargs.get("cloud_type") == "ibmc":
             # To DO for IBM
             pass

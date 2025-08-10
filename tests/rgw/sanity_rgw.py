@@ -50,6 +50,7 @@ import yaml
 from utility import utils
 from utility.log import Log
 from utility.utils import (
+    config_keystone_ldap,
     configure_kafka_security,
     install_start_kafka,
     setup_cluster_access,
@@ -87,6 +88,7 @@ def run(ceph_cluster, **kw):
     install_start_kafka_broker = config.get("install_start_kafka")
     configure_kafka_broker_security = config.get("configure_kafka_security")
     cloud_type = config.get("cloud-type")
+    log.info(f"Cloud Type is {cloud_type}")
     test_config = {"config": config.get("test-config", {})}
     rgw_node = rgw_ceph_object.node
     client_node = client_ceph_object.node
@@ -159,6 +161,9 @@ def run(ceph_cluster, **kw):
     if configure_kafka_broker_security:
         configure_kafka_security(rgw_node, cloud_type)
 
+    if cloud_type:
+        config_keystone_ldap(rgw_node, cloud_type)
+
     out, err = exec_from.exec_command(cmd="ls -l venv", check_ec=False)
     if not out:
         exec_from.exec_command(
@@ -204,16 +209,19 @@ def run(ceph_cluster, **kw):
 
     if run_io_verify:
         log.info("running io verify script")
-        verify_status = exec_from.exec_command(
-            cmd=f"sudo {python_cmd} "
-            + test_folder_path
-            + lib_dir
-            + f"read_io_info.py -c {config_file_name}",
-            long_running=True,
+        verify_io_info_configs = config.get(
+            "verify-io-info-configs", [config_file_name]
         )
-        log.info(f"verify io status code is : {verify_status}")
-        if verify_status != 0:
-            log.error(verify_status)
-            return verify_status
+        for io_config in verify_io_info_configs:
+            verify_status = exec_from.exec_command(
+                cmd=f"sudo {python_cmd} "
+                + test_folder_path
+                + lib_dir
+                + f"read_io_info.py -c {io_config}",
+                long_running=True,
+            )
+            log.info(f"verify io status code is : {verify_status}")
+            if verify_status != 0:
+                raise Exception(f"verify io failed for {io_config}")
 
     return test_status

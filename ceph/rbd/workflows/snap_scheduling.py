@@ -41,8 +41,13 @@ def add_snapshot_scheduling(rbd, **kw):
         out, err = rbd.mirror.group.snapshot.schedule.add_(**group_kw)
 
     elif level == "namespace":
-        namespace_kw = {"pool": pool, "interval": interval, "namespace": namespace}
-        out, err = rbd.mirror.snapshot.schedule.add_(**namespace_kw)
+        if namespace:
+            namespace_kw = {"pool": pool, "interval": interval, "namespace": namespace}
+            out, err = rbd.mirror.snapshot.schedule.add_(**namespace_kw)
+        else:
+            # Default namespace: treat as image-level schedule
+            image_kw = {"pool": pool or "rbd", "image": image, "interval": interval}
+            out, err = rbd.mirror.snapshot.schedule.add_(**image_kw)
 
     else:
         # Default case: treat it as image-level snapshot schedule
@@ -89,8 +94,13 @@ def remove_snapshot_scheduling(rbd, **kw):
         out, err = rbd.mirror.group.snapshot.schedule.remove_(**group_kw)
 
     elif level == "namespace":
-        namespace_kw = {"pool": pool, "interval": interval, "namespace": namespace}
-        out, err = rbd.mirror.snapshot.schedule.remove_(**namespace_kw)
+        if not namespace:
+            # Default namespace: treat as image-level schedule
+            image_kw = {"pool": pool or "rbd", "image": image, "interval": interval}
+            out, err = rbd.mirror.snapshot.schedule.remove_(**image_kw)
+        else:
+            namespace_kw = {"pool": pool, "interval": interval, "namespace": namespace}
+            out, err = rbd.mirror.snapshot.schedule.remove_(**namespace_kw)
 
     else:
         # Default case: treat it as image-level snapshot schedule

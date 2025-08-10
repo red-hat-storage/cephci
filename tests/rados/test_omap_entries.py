@@ -82,6 +82,8 @@ def run(ceph_cluster, **kw):
                 pool=pool_name,
                 obj_num=omap_obj_num,
                 check=omap_config["large_warn"],
+                verify_ceph_df=True,
+                verify_ceph_pg_dump=True,
             )
 
             if omap_config["large_warn"]:
@@ -101,11 +103,20 @@ def run(ceph_cluster, **kw):
 
                     # Waiting for cluster to get clean state after OSD stopped
                     if not wait_for_clean_pg_sets(rados_obj, test_pool=pool_name):
-                        log.error("PG's in cluster are not active + Clean state.. ")
-                        raise Exception(
-                            "PG's in cluster are not active + Clean state.. "
+                        log.error(
+                            "PG's in cluster are not active + Clean state.. after OSD stop"
                         )
-                    rados_obj.change_osd_state(action="restart", target=osd_id)
+                        raise Exception(
+                            "PG's in cluster are not active + Clean state.. after OSD stop"
+                        )
+                    rados_obj.change_osd_state(action="start", target=osd_id)
+                    if not wait_for_clean_pg_sets(rados_obj, test_pool=pool_name):
+                        log.error(
+                            "PG's in cluster are not active + Clean state.. after OSD start"
+                        )
+                        raise Exception(
+                            "PG's in cluster are not active + Clean state.. after OSD start"
+                        )
                     log.debug(
                         f"Cluster reached clean state after osd {osd_id} stop and restart"
                     )

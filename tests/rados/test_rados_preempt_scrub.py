@@ -43,7 +43,7 @@ def run(ceph_cluster, **kw):
     mon_obj = MonConfigMethods(rados_obj=rados_object)
     installer = ceph_cluster.get_nodes(role="installer")[0]
 
-    log_lines = ["preempted"]
+    log_line = "preempted"
     pool_name = config["pool_name"]
     try:
         # enable the file logging
@@ -94,12 +94,13 @@ def run(ceph_cluster, **kw):
             for osd_id in acting_set:
                 time.sleep(5)
                 log.info(f"Checking the logs at: {osd_id}")
-                if verify_preempt_log(
+
+                if rados_object.lookup_log_message(
                     init_time=init_time,
                     end_time=end_time,
-                    rados_object=rados_object,
-                    osd_id=osd_id,
-                    lines=log_lines,
+                    daemon_type="osd",
+                    daemon_id=osd_id,
+                    search_string=log_line,
                 ):
                     log.info(f"The preempted lines found at {osd_id}")
                     found_flag = True
@@ -127,35 +128,6 @@ def run(ceph_cluster, **kw):
         rados_object.log_cluster_health()
 
     return 0
-
-
-def verify_preempt_log(init_time, end_time, rados_object, osd_id, lines) -> bool:
-    """
-    Retrieve the preempt log using journalctl command
-    Args:
-        init_time: time to start reading the journalctl logs - format ('2022-07-20 09:40:10')
-        end_time: time to stop reading the journalctl logs - format ('2022-07-20 10:58:49')
-        rados_object: Rados object
-        osd_id : osd id
-        lines: Log lines to search in the osd logs
-    Returns:  True-> if the lines are exist in the osd logs
-              False -> if the lines are not exist in the osd logs
-    """
-
-    log.info("Checking for the preempt messages in the OSD logs")
-    fsid = rados_object.run_ceph_command(cmd="ceph fsid")["fsid"]
-    host = rados_object.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
-    cmd_get_log_lines = f'awk \'$1 >= "{init_time}" && $1 <= "{end_time}"\' /var/log/ceph/{fsid}/ceph-osd.{osd_id}.log'
-    log_lines, err = host.exec_command(
-        sudo=True,
-        cmd=cmd_get_log_lines,
-    )
-    for line in lines:
-        if line in log_lines:
-            log.info(f" Found the log lines at OSD : {osd_id}")
-            return True
-    log.info(f"Did not found the  log lines on OSD : {osd_id}")
-    return False
 
 
 def set_preempt_parameter_value(mon_object, rados_object, pool_name):

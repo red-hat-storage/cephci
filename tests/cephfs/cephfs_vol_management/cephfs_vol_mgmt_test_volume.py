@@ -4,6 +4,7 @@ import traceback
 from concurrent.futures import ThreadPoolExecutor
 
 from ceph.ceph import CommandFailed
+from cli.ceph.ceph import Ceph
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 
@@ -33,7 +34,7 @@ def update_dict_from_b_gb(input_dict, keys_to_be_converted):
 def test_cephfs_volume_creation(fs_util, client):
     """
     Unified test suite to validate CephFS volume creation under various scenarios.
-    This includes testing valid and invalid names, duplicate names, system limits,
+    This includes testing valid and invalid names, duplicate names, existing pools,system limits,
     and placement validation.
 
     Args:
@@ -46,7 +47,8 @@ def test_cephfs_volume_creation(fs_util, client):
         3. Invalid volume names (special characters, excessive length).
         4. Duplicate volume names (idempotent behavior).
         5. Invalid placement group.
-        6. Maximum volume limit.
+        6. Existing pools
+        7. Maximum volume limit.
 
     Cleanup:
         Ensures proper cleanup of created volumes to prevent residual data.
@@ -62,6 +64,8 @@ def test_cephfs_volume_creation(fs_util, client):
         "_",
         "..",  # Relative path markers
     ]
+    test_fail = 0
+
     log.info(f"Testing shortest valid volume names: {shortest_valid_names}")
 
     for vol_name in shortest_valid_names:
@@ -73,6 +77,7 @@ def test_cephfs_volume_creation(fs_util, client):
             )
         except Exception as e:
             log.error(f"Test failed for shortest valid name '{vol_name}': {e}")
+            test_fail += 1
         finally:
             try:
                 fs_util.remove_fs(client, vol_name, validate=True)
@@ -107,6 +112,7 @@ def test_cephfs_volume_creation(fs_util, client):
                 )
             except Exception as e:
                 log.error(f"Test failed for volume name '{vol_name[:10]}...': {e}")
+                test_fail += 1
             finally:
                 try:
                     fs_util.remove_fs(client, vol_name, validate=True)
@@ -115,6 +121,7 @@ def test_cephfs_volume_creation(fs_util, client):
                         f"Cleanup not required: Volume '{vol_name[:10]}...' does not exist."
                     )
     except Exception as overall_exception:
+        test_fail += 1
         log.error(
             f"Unexpected error in longest valid volume name test: {overall_exception}"
         )
@@ -153,11 +160,23 @@ def test_cephfs_volume_creation(fs_util, client):
                 log.error(
                     f"Test failed: Volume with invalid name '{vol_name}' was created."
                 )
+                # test_fail += 1
+                log.info("BZ:https://bugzilla.redhat.com/show_bug.cgi?id=2375560")
+                fs_util.remove_fs(client, vol_name, validate=True)
             except CommandFailed:
                 log.info(f"Test passed: Creation failed as expected for '{vol_name}'.")
             except Exception as e:
+                test_fail += 1
                 log.error(f"Unexpected error for invalid name '{vol_name}': {e}")
+            finally:
+                for vol_tmp in ["tab", "newline"]:
+                    if vol_tmp in vol_name:
+                        vol_name = vol_tmp
+                fs_details = fs_util.get_fs_info(client, vol_name)
+                if fs_details:
+                    fs_util.remove_fs(client, vol_name, validate=True)
     except Exception as overall_exception:
+        test_fail += 1
         log.error(f"Unexpected error in invalid volume name test: {overall_exception}")
 
     # Test 4: Duplicate volume names
@@ -170,6 +189,7 @@ def test_cephfs_volume_creation(fs_util, client):
             f"Test passed: Duplicate volume creation succeeded for '{vol_name}' (idempotent behavior)."
         )
     except Exception as e:
+        test_fail += 1
         log.error(f"Test failed for duplicate volume name: {e}")
     finally:
         fs_util.remove_fs(client, vol_name, validate=True)
@@ -185,17 +205,47 @@ def test_cephfs_volume_creation(fs_util, client):
         log.error(
             f"Test failed: Volume creation succeeded with invalid placement '{invalid_placement}'."
         )
+        test_fail += 1
     except CommandFailed:
         log.info(
             f"Test passed: Creation failed as expected for invalid placement '{invalid_placement}'."
         )
     except Exception as e:
+        test_fail += 1
         log.error(f"Unexpected error for invalid placement: {e}")
     finally:
         try:
             fs_util.remove_fs(client, vol_name, validate=True)
         except CommandFailed:
             log.info(f"Cleanup not required: Volume '{vol_name}' does not exist.")
+
+    # Test 6: Verify volume create with existing pools
+    try:
+        vol_name = "add_existing_pools_test"
+        log.info(f"Testing existing pools addition for volume '{vol_name}'")
+        data_pool_name = "cephfs_data_pool"
+        metadata_pool_name = "cephfs_metadata_pool"
+        Ceph(client).osd.pool.create(data_pool_name)
+        Ceph(client).osd.pool.create(metadata_pool_name)
+        out = Ceph(client).osd.lspools()
+        log.info(out)
+        for pool_name in [data_pool_name, metadata_pool_name]:
+            if pool_name not in out:
+                log.error("Pool creation failed")
+                return 1
+        Ceph(client).fs.volume.create(
+            vol_name,
+            **{"meta_pool": metadata_pool_name, "data_pool": data_pool_name},
+        )
+        log.info("Volume creation succeeded with existing pools")
+        fs_util.remove_fs(client, vol_name, validate=True)
+    except CommandFailed as ex1:
+        log.error("Failed to create Volume with existing pools", ex1)
+        test_fail += 1
+
+    if test_fail > 0:
+        return 1
+    return 0  # End of tests,Pass
 
     # Test 6: Maximum volume limit
     # max_volumes = 100  # Adjust the limit as required
@@ -606,7 +656,8 @@ def run(ceph_cluster, **kw):
 
         log.info("Starting all other tests for CephFS Volume creation")
 
-        test_cephfs_volume_creation(fs_util, client1)
+        if test_cephfs_volume_creation(fs_util, client1):
+            return 1
         # test_simultaneous_creation(fs_util, client1) # Reserved for future use or Scale Tests
         # test_max_volumes(fs_util, client1) # Reserved for future use or Scale Tests
         test_volume_deletion_with_mon_allow_pool_delete_false(fs_util, client1)

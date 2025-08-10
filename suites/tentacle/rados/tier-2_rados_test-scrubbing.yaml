@@ -97,6 +97,7 @@ tests:
       desc: Verify CPU and Memory check during scheduled scrub
       polarion-id: CEPH-9369
       config:
+        set_debug: true
         create_pools:
           - create_pool:
               pool_name: scheduled_scrub

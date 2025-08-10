@@ -407,6 +407,8 @@ def run(ceph_cluster, **kw):
             log.info("Cleaning up successfull")
         return 1
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
+        log.info(fs_util_v1.get_fs_status_dump(client1[0]))
+        fs_util_v1.get_ceph_health_status(client1[0])
         return 1

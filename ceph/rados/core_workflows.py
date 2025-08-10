@@ -154,11 +154,18 @@ class RadosOrchestrator:
         log.info("Email alerts configured on the cluster")
         return True
 
-    def run_ceph_command(self, cmd: str, timeout: int = 300, client_exec: bool = False):
+    def run_ceph_command(
+        self,
+        cmd: str,
+        timeout: int = 300,
+        client_exec: bool = False,
+        print_output: bool = False,
+    ):
         """
         Runs ceph commands with json tag for the action specified otherwise treats action as command
         and returns formatted output
         Args:
+            print_output: bool to print output and error
             cmd: Command that needs to be run
             timeout: Maximum time allowed for execution.
             client_exec: Selection if true, runs the command on the client node
@@ -177,6 +184,9 @@ class RadosOrchestrator:
         if out.isspace():
             return {}
         status = json.loads(out)
+        if print_output:
+            log.info("out: " + out + "\n")
+            log.info("err: " + err + "\n")
         return status
 
     def pool_inline_compression(self, pool_name: str, **kwargs) -> bool:
@@ -4702,6 +4712,15 @@ EOF"""
             return self.set_service_managed_type(
                 service_type=service_type, unmanaged=False
             )
+
+        cmd_export = f"ceph orch ls {service_type} {service_name} --export"
+        _service = self.run_ceph_command(cmd=cmd_export, client_exec=True)[0]
+        if not _service.get("placement", False):
+            log.warning(
+                "Service %s does not have placement entry and cannot be set to 'managed', skipping"
+                % _service["service_name"]
+            )
+            return True
         cmd_set_managed_flag = f"ceph orch set-managed {service_name}"
         self.client.exec_command(sudo=True, cmd=cmd_set_managed_flag)
         base_cmd = "ceph orch ls"
@@ -5187,3 +5206,164 @@ EOF"""
                 )
                 return False
         return True if rule_name not in self.get_crush_rule_names() else False
+
+    def remove_empty_service_spec(self, service_type: str = None):
+        """
+        Method to remove empty service specs.
+        Args:
+            [ optional ] service_type: ( type: string ) type of the service such as osd, mon, mgr
+        Usage:
+             remove_empty_service_spec(service_type="osd") => Removes empty service spec of type "osd"
+             remove_empty_service_spec() => Removes empty service spec of any type
+        Returns:
+            True -> If removal of service was successful
+            False -> If removal of service failed
+        Output:
+            Service will be deleted if the status.size is 0
+            $ ceph orch ls -f json
+            [{
+                "events": [
+                    "2025-06-18T02:52:32.577657Z service:prometheus [INFO] \"service was created\""
+                ],
+                "placement": {
+                    "count": 1
+                },
+                "service_name": "prometheus",
+                "service_type": "prometheus",
+                "status": {
+                    "created": "2025-06-18T02:49:28.122168Z",
+                    "last_refresh": "2025-06-24T07:30:04.509405Z",
+                    "ports": [
+                        9095
+                    ],
+                    "running": 1,
+                    "size": 1
+                }
+            }]
+        """
+        log_info_msg = "Removing empty service spec of type "
+        if service_type:
+            log_info_msg += service_type
+        else:
+            log_info_msg += "Any"
+        log.info(log_info_msg)
+
+        removed_services = list()
+        failed_removal_services = list()
+        ceph_orch_ls = self.run_ceph_command("ceph orch ls")
+        for service in ceph_orch_ls:
+            current_service_type = service["service_type"]
+            current_service_size = service["status"]["size"]
+            current_service_name = service["service_name"]
+            if (service_type is None and current_service_size == 0) or (
+                current_service_type == service_type and current_service_size == 0
+            ):
+                if self.remove_orch_service(service_name=current_service_name):
+                    removed_services.append(current_service_name)
+                else:
+                    failed_removal_services.append(current_service_name)
+            else:
+                log_info_msg = (
+                    f"Service {current_service_name} service_type did not match"
+                    f" or Service is not empty"
+                )
+                log.info(log_info_msg)
+
+        if len(failed_removal_services) != 0:
+            log_error_msg = f"{failed_removal_services} removal failed."
+            log.error(log_error_msg)
+            return False
+
+        if len(removed_services) == 0:
+            log_error_msg = "Empty service spec not found"
+            log.error(log_error_msg)
+            return True
+
+        log_info_msg = f"Successfully removed empty service specs : {removed_services}"
+        log.info(log_info_msg)
+        return True
+
+    def remove_orch_service(self, service_name: str, force: bool = None):
+        """
+        Method to remove orchestrator service using command 'ceph orch rm <service-name>' for service
+        removal and uses command 'ceph orch ls' to validate service was removed.
+        Use force=True to forcefully remove a service. 'ceph orch rm <service-name> --force'
+        will be used.
+
+        Args:
+            service_name: Name of the service. Example:- osd.default
+            force: Boolean flag to control force removal of service. Adds --force flag during removal.
+
+        Returns:
+            True :- If service removal using 'ceph orch rm <service-name>' succeeded
+            False :- If service removal using 'ceph orch rm <service-name>' failed
+        """
+        log_info_msg = f"Removing service {service_name}"
+        log.info(log_info_msg)
+
+        cmd = f"ceph orch rm {service_name}"
+        if force:
+            cmd += " --force"
+        out, _ = self.client.exec_command(cmd=cmd)
+
+        if "Removed service" not in out:
+            log_err_msg = (
+                f"ceph orch rm {service_name} command execution did"
+                f" not yield expected message. \n"
+                f"Expected message: Removed service {service_name}\n"
+                f"Current message: {out}"
+            )
+            log.error(log_err_msg)
+        time.sleep(5)
+        if service_name in self.run_ceph_command("ceph orch ls", client_exec=True):
+            log_err_msg = (
+                f"Service {service_name} removal failed."
+                f" Service is listed in `ceph orch ls` output"
+            )
+            log.error(log_err_msg)
+            return False
+
+        log_info_msg = f"Removed service {service_name} successfully"
+        log.info(log_info_msg)
+        return True
+
+    def lookup_log_message(
+        self, init_time, end_time, daemon_type, daemon_id, search_string
+    ):
+        """
+        This method is used to verify whether a specific string is present in the log.
+
+        Args:
+            init_time : Initial time  in the log line
+            end_time : End time in the log line
+            daemon_type : Daemon types are- mon,mgr,osd,mds and rgw
+            daemon_id : daemon id
+            search_string : search string in the log
+        Returns:
+            True -> If the search string exist in the log
+            False -> If the search string not exist in the log
+        """
+        fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
+        host = self.fetch_host_node(daemon_type=daemon_type, daemon_id=daemon_id)
+
+        base_cmd_get_log_line = (
+            f'awk \'$1 >= "{init_time}" && $1 <= "{end_time}"\' '
+            f"/var/log/ceph/{fsid}/ceph-{daemon_type}.{daemon_id}.log"
+        )
+
+        grep_line = rf"grep -E {search_string}"
+        try:
+            base_cmd_get_log_line = f"{base_cmd_get_log_line} | {grep_line}"
+            chk_log_msg, err = host.exec_command(sudo=True, cmd=base_cmd_get_log_line)
+        except Exception:
+            msg_logline = "Exception occurred or message not found in the logs."
+            log.info(msg_logline)
+            return False
+        if chk_log_msg:
+            msg_logline = f"The log line {search_string} found on - {daemon_type} : {daemon_id} log"
+            log.info(msg_logline)
+            return True
+        else:
+            msg_logline = f"The log line {search_string} not found on - {daemon_type} : {daemon_id} log"
+            log.info(msg_logline)
+            return False

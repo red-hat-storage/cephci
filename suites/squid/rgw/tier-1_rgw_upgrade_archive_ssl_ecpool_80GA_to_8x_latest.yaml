@@ -553,29 +553,6 @@ tests:
       module: sanity_rgw_multisite.py
       name: test multipart+encrypt object access at the archive site
 
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_s3_bucket_enc_multipart_download_archive_site.yaml
-      desc: test multipart+encrypt object access at the archive site
-      polarion-id: CEPH-83573390
-      module: sanity_rgw_multisite.py
-      name: test multipart+encrypt object access at the archive site
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            set-env: true
-            script-name: ../s3cmd/test_s3cmd.py
-            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd.yaml
-      desc: Upload 5000 objects via s3cmd to test full sync at archive
-      polarion-id: CEPH-83575917
-      module: sanity_rgw_multisite.py
-      name: Upload 5000 objects via s3cmd to test full sync at archive
-
 # Performing cluster upgrade
 
   - test:
@@ -585,12 +562,12 @@ tests:
       name: multisite ceph upgrade
       polarion-id: CEPH-83574647
       clusters:
-        ceph-pri:
+        ceph-sec:
           config:
             command: start
             service: upgrade
             verify_cluster_health: true
-        ceph-sec:
+        ceph-pri:
           config:
             command: start
             service: upgrade

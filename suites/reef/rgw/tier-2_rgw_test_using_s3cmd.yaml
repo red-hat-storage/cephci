@@ -225,7 +225,6 @@ tests:
       desc: Test ratelimit on bucket owner change
       polarion-id: CEPH-83574920
       module: sanity_rgw.py
-      comments: known issue BZ2278599 if run on 7.0 fixed in 7.1
       config:
         script-name: ../s3cmd/test_ratelimit_bucketowner.py
         config-file-name: ../../s3cmd/configs/test_ratelimit_bucketowner.yaml
@@ -339,3 +338,21 @@ tests:
         script-name: ../s3cmd/test_s3cmd.py
         config-file-name: ../../s3cmd/configs/test_create_bucket_for_existing_bucket.yaml
         run-on-haproxy: true
+
+  - test:
+      name: Test Bucket rename with link cmd on ratelimit enabled bucket
+      desc: Test Bucket rename with link cmd on ratelimit enabled bucket
+      polarion-id: CEPH-83574910
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_bucket_link_with_ratelimit.yaml
+
+  - test:
+      name: Test Bucket Owner change with link cmd on ratelimit enabled bucket
+      desc: Test Bucket Owner change with link cmd on ratelimit enabled bucket
+      polarion-id: CEPH-83574910
+      module: sanity_rgw.py
+      config:
+        script-name: ../s3cmd/test_rate_limit.py
+        config-file-name: ../../s3cmd/configs/test_user_link_with_ratelimit.yaml

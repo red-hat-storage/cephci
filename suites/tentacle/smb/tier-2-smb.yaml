@@ -1,0 +1,185 @@
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+      copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: samba with client multi-connections
+      desc: Load Testing - samba with client multi-connections
+      module: smb_multi_connection.py
+      polarion-id: CEPH-83593849
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        load_test:
+          total_load_process: 3
+          thread_per_load_process: 3
+          load_runtime: 50 # In sec
+          load_file_size: 3 # In mb
+          load_dir: loadtest
+          port: 445
+          actions:
+            - write
+            - read
+            - delete
+
+  - test:
+      name: Ceph samba load test
+      desc: Setup Ceph cluster with SMB, run load test and check process id
+      module: smb_multi_connection.py
+      polarion-id: CEPH-83593850
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        load_test:
+          total_load_process: 1
+          thread_per_load_process: 3
+          load_runtime: 300 # In sec
+          load_file_size: 3 # In mb
+          load_dir: loadtest
+          port: 445
+          actions:
+            - write
+            - read
+            - delete
+
+  - test:
+      name: Deploy samba with 500 shares using declarative style(Spec File)
+      desc: Deploy samba with 500 shares using auth_mode 'user'
+      module: smb_deployment_multi_shares_declarative_method.py
+      polarion-id: CEPH-83593846
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        smb_shares: 500
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv
+              path: /
+
+  - test:
+      name: Verify that asynchronous IO read and write is enabled for the deployed SMB services.
+      desc: Verify that asynchronous IO read and write is enabled for the deployed SMB services.
+      module: smb_conf_check.py
+      polarion-id: CEPH-83614664
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        smb_conf:
+          - aio write size: 1
+          - aio read size: 1
