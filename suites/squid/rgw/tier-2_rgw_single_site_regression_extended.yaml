@@ -274,6 +274,41 @@ tests:
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
         run-on-haproxy: true
 
+  # server-access-logging tests
+
+  - test:
+      name: test bucket logging with Journal mode, SimplePrefix, rgw_admin_flush
+      desc: test bucket logging with Journal mode, SimplePrefix, rgw_admin_flush
+      polarion-id: CEPH-83623532
+      module: sanity_rgw.py
+      config:
+        script-name: test_server_access_logging.py
+        config-file-name: test_bucket_logging_journal_mode.yaml
+  - test:
+      name: test bucket logging with Journal mode, multipart_objects, PartitionedPrefix, rest_api_flush
+      desc: test bucket logging with Journal mode, multipart_objects, PartitionedPrefix, rest_api_flush
+      polarion-id: CEPH-83623532
+      module: sanity_rgw.py
+      config:
+        script-name: test_server_access_logging.py
+        config-file-name: test_bucket_logging_journal_mode_multipart.yaml
+  - test:
+      name: test bucket logging with Standard mode, PartitionedPrefix, rgw_admin_flush
+      desc: test bucket logging with Standard mode, PartitionedPrefix, rgw_admin_flush
+      polarion-id: CEPH-83623532
+      module: sanity_rgw.py
+      config:
+        script-name: test_server_access_logging.py
+        config-file-name: test_bucket_logging_standard_mode.yaml
+  - test:
+      name: test bucket logging with Standard mode, multipart_objects, SimplePrefix, rest_api_flush
+      desc: test bucket logging with Standard mode, multipart_objects, SimplePrefix, rest_api_flush
+      polarion-id: CEPH-83623532
+      module: sanity_rgw.py
+      config:
+        script-name: test_server_access_logging.py
+        config-file-name: test_bucket_logging_standard_mode_multipart.yaml
+
   - test:
       name: Test large omap creation and clearance
       desc: Test large omap creation and clearance
@@ -283,3 +318,14 @@ tests:
         script-name: ../s3cmd/test_large_omap.py
         config-file-name: ../../s3cmd/configs/test_large_omap_clearance_green_field.yaml
         run-on-haproxy: true
+
+  # Downshard and bucket instance deletion tests
+
+  - test:
+      name: Test bucket instance deletion on bucket delete
+      desc: Test bucket instance deletion on bucket delete
+      polarion-id: CEPH-83591444
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_bucket_instance_delete.yaml
