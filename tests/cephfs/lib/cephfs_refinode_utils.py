@@ -649,10 +649,9 @@ class RefInodeUtils(object):
                 sudo=True, cmd="ln %s %s" % (source_path, target_path), check_ec=True
             )
             log.info("Successfully created hard link: %s" % target_path)
-            return True
         except Exception as e:
             log.error("Exception while creating hard link: %s" % e)
-            return False
+            raise
 
     def allow_referent_inode_feature_enablement(self, clients, fs_name, enable=False):
         """
@@ -747,9 +746,23 @@ class RefInodeUtils(object):
         log.info("Found %d hardlinks for %s: %s", len(hardlinks), file_path, hardlinks)
 
         for link in hardlinks:
-            full_path = "%s/%s" % (mount_dir.rstrip("/"), link.lstrip("/"))
+            if "/volumes/" in link:
+                parts = link.split("/")
+                try:
+                    idx = parts.index("volumes")
+                    # Extract relative path under UUID (subdir/.../file)
+                    relative_path = "/".join(
+                        parts[idx + 5 :]
+                    )  # [volumes, group, subvol, uuid, ...]
+                    full_path = f"{mount_dir.rstrip('/')}/{relative_path}"
+                except (ValueError, IndexError):
+                    log.error("Failed to parse hardlink path: %s", link)
+                    continue
+            else:
+                full_path = "%s/%s" % (mount_dir.rstrip("/"), link.lstrip("/"))
+
             cmd = "rm -f %s" % full_path
-            client.exec_command(sudo=True, cmd=cmd)
             log.info("Unlinked hardlink: %s", full_path)
+            client.exec_command(sudo=True, cmd=cmd)
 
         log.info("Successfully unlinked all hardlinks for %s.", file_path)

@@ -1,5 +1,6 @@
 """
-Module to Verify Disabling and re-enabling a namespace level mirroring
+Module to Verify :
+  - Disabling and re-enabling a namespace level mirroring and enable to a different namespace should fail
 
 Pre-requisites :
 1. Create two Ceph clusters with version 8.0 or later and set up mon, mgr, and osd services on each.
@@ -17,20 +18,24 @@ CEPH-83601542:
 8. Re-enable mirroring for image1 in pool1/ns1_p namespace on cluster1
 9. Check mirroring status for the pool1/ns1_p namespace after re-enabling mirroring
 10. Check mirroring status for the pool1/ns1_s namespace on cluster2 after re-enabling mirroring
+11. Attempt to enable mirroring for ns1_p to a different remote namespace ns2_s on cluster2
+and verify it fails.
+
 """
 
 import json
 
 from ceph.rbd.initial_config import initial_mirror_config
-from ceph.rbd.utils import getdict
+from ceph.rbd.utils import getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
+from ceph.rbd.workflows.namespace import create_namespace_and_verify
 from ceph.rbd.workflows.rbd_mirror import enable_image_mirroring, wait_for_status
 from utility.log import Log
 
 log = Log(__name__)
 
 
-def test_toggle_enable_mirroring(pri_config, sec_config, pool_types, **kw):
+def test_toggle_enable_mirroring_and_diff_ns(pri_config, sec_config, pool_types, **kw):
     """
     Test Verify Disabling and re-enabling a namespace level mirroring
     Args:
@@ -45,6 +50,7 @@ def test_toggle_enable_mirroring(pri_config, sec_config, pool_types, **kw):
 
     rbd_primary = pri_config.get("rbd")
     rbd_secondary = sec_config.get("rbd")
+    client_secondary = sec_config.get("client")
 
     def construct_imagespec(pool, namespace, image):
         return f"{pool}/{namespace}/{image}" if namespace else f"{pool}/{image}"
@@ -176,15 +182,56 @@ def test_toggle_enable_mirroring(pri_config, sec_config, pool_types, **kw):
                     raise Exception(
                         "Image no mirroring on secondary after enabling mirroring"
                     )
+            remote_namespace_new = "namespace_" + random_string(len=3)
+            rc = create_namespace_and_verify(
+                **{
+                    "pool-name": pool,
+                    "namespace": remote_namespace_new,
+                    "client": client_secondary,
+                }
+            )
+
+            if rc == 0:
+                log.info(
+                    "New namespace %s created on site-B on pool %s",
+                    remote_namespace_new,
+                    pool,
+                )
+            else:
+                raise Exception(
+                    "Failed to create namespace %s in pool %s on site-B",
+                    remote_namespace_new,
+                    pool,
+                )
+
+            enable_diff_namespace = {
+                "pool-spec": f"{pool}/{namespace}",
+                "mode": pool_config["mode"],
+                "remote-namespace": remote_namespace_new,
+            }
+
+            out, err = rbd_primary.mirror.pool.enable(**enable_diff_namespace)
+            if not out and "failed to set the remote namespace" in err:
+                log.info(
+                    "Failed to enable namespace level mirroring for a different namespace on secondary"
+                    " cluster as expected: \n %s",
+                    err,
+                )
+            else:
+                raise Exception(
+                    "Namespace mirroring enabled for a different namespace on secondary cluster: %s",
+                    out,
+                )
             log.info(
-                "Test passed: Verify Disabling and re-enabling a namespace level mirroring"
+                "Test passed: Verify Disabling and re-enabling a namespace level mirroring "
+                "and enabling for different namespace"
             )
     return 0
 
 
 def run(**kw):
     """
-    Test to verify Disabling and re-enabling a namespace level mirroring
+    Test to verify Disabling and re-enabling a namespace level mirroring and enable for different namespace should fail
 
     Args:
         kw: Key/value pairs of configuration information to be used in the test
@@ -215,7 +262,7 @@ def run(**kw):
         log.info("Initial configuration complete")
         pool_types = list(mirror_obj.values())[0].get("pool_types")
         test_map = {
-            "CEPH-83601542": test_toggle_enable_mirroring,
+            "CEPH-83601542": test_toggle_enable_mirroring_and_diff_ns,
         }
 
         test_func = kw["config"]["test_function"]

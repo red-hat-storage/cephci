@@ -8,6 +8,7 @@ import smtplib
 import subprocess
 import time
 import traceback
+from copy import deepcopy
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from ipaddress import ip_address
@@ -1512,6 +1513,79 @@ def fetch_build_artifacts(
         raise TestSetupFailure(f"Could not fetch build details of : {e}")
 
 
+def fetch_image_manifest(
+    build, ceph_version, platform, upstream_build=None, ibm_build=False
+):
+    """
+    Retrieves full build info dictionary from magna002.ceph.redhat.com YAML files
+    and extracts container image URLs from 'custom-configs'.
+
+    Args:
+        ceph_version: RHCS version (e.g., "8.1")
+        build: build tag to be fetched (e.g., "latest", "regression", "rc")
+        platform: OS distribution (e.g., "rhel-9")
+        upstream_build: Optional upstream build tag (e.g., "pacific", "reef")
+        ibm_build: Whether to use IBM build YAML instead of RH
+
+    Returns:
+        Tuple: (build_info_dict, custom_images_dict)
+    """
+    try:
+        recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+
+        # Determine filename
+        if ibm_build:
+            filename = f"IBMCEPH-{ceph_version}.yaml"
+        elif build == "upstream":
+            version = str(upstream_build).upper() if upstream_build else "MAIN"
+            filename = f"UPSTREAM-{version}.yaml"
+        else:
+            filename = f"RHCEPH-{ceph_version}.yaml"
+
+        url = f"{recipe_url}{filename}"
+        response = requests.get(url, verify=False)
+        if response.status_code != 200:
+            raise TestSetupFailure(
+                f"Failed to fetch: {url} [HTTP {response.status_code}]"
+            )
+
+        yml_data = yaml.safe_load(response.text)
+
+        # Fetch the dictionary for the specific build tag
+        build_info = yml_data.get(build)
+        if not build_info:
+            raise TestSetupFailure(f"Build tag '{build}' not found in {filename}")
+
+        # For IBM builds, handle fallback logic for repo URL
+        if (
+            ibm_build
+            and "composes" in build_info
+            and platform in build_info["composes"]
+        ):
+            base_url = build_info["composes"][platform]
+            repo_data = requests.get(base_url)
+            if repo_data.status_code != 200:
+                release_major = str(ceph_version).split(".")[0]
+                build_info["composes"][platform] = (
+                    f"https://public.dhe.ibm.com/ibmdl/export/pub/"
+                    f"storage/ceph/ibm-storage-ceph-{release_major}-{platform}.repo"
+                )
+
+        # Extract all custom image URLs
+        custom_images = {}
+
+        custom_configs = build_info.get("custom-configs", {})
+        if isinstance(custom_configs, dict):
+            custom_images = deepcopy(custom_configs)
+        elif isinstance(custom_configs, list):
+            custom_images = dict(item.split("=") for item in custom_configs)
+
+        return build_info, custom_images
+
+    except Exception as e:
+        raise TestSetupFailure(f"Could not fetch build details: {e}")
+
+
 def check_build_overrides(
     rpm: any,
     registry: any,
@@ -2378,6 +2452,7 @@ def run_fio(**fio_args):
         "cmd": f"fio {config_dict_to_string(cmd_args)}",
         "long_running": fio_args.get("long_running", False),
         "sudo": True,
+        "verbose": fio_args.get("verbose", False),
     }
 
     if fio_args.get("get_time_taken"):
