@@ -13,9 +13,9 @@ import re
 import shutil
 import string
 import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
-from itertools import islice
 
 import yaml
 
@@ -58,8 +58,6 @@ class CephfsScaleUtils(object):
         subvolume_group_name,
         mount_type,
         nfs_cluster_name=None,
-        nfs_server=None,
-        nfs_server_ip=None,
         **kwargs,
     ):
         """
@@ -94,13 +92,12 @@ class CephfsScaleUtils(object):
 
         multiple_cluster = kwargs.get("multiple_cluster", False)
         nfs_clusters = kwargs.get("nfs_cluster_names", [nfs_cluster_name])
-        nfs_server_ips = kwargs.get("nfs_server_ips", [nfs_server_ip])
-        start_port = kwargs.get("start_port", 2049)
         byok_enabled = kwargs.get("byok_enabled", False)
         key_id = kwargs.get("key_id") if byok_enabled else None
+        nfs_cluster_ip_map = kwargs.get("nfs_cluster_ip_map", {})
 
         if mount_type == "nfs" and not multiple_cluster:
-            if not nfs_cluster_name or not nfs_server:
+            if not nfs_cluster_name or nfs_cluster_name not in nfs_cluster_ip_map:
                 log.error(
                     "NFS cluster name or server not provided for single-cluster NFS mount."
                 )
@@ -123,10 +120,6 @@ class CephfsScaleUtils(object):
         mount_id = "".join(
             random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
         )
-
-        cluster_port_map = {
-            nfs_clusters[i]: start_port + i for i in range(len(nfs_clusters))
-        }
 
         subvolume_list = []
         for idx in range(1, subvolume_count + 1):
@@ -174,7 +167,7 @@ class CephfsScaleUtils(object):
                 subvol_path = subvol_path.strip()
 
                 # Define mount directory
-                mount_dir = "/mnt/cephfs_%s%s_%s/" % (mount_type, mount_id, sv)
+                mount_dir = "/mnt/cephfs_scale_%s%s_%s/" % (mount_type, mount_id, sv)
                 client.exec_command(sudo=True, cmd="mkdir -p %s" % mount_dir)
 
                 if mount_type == "fuse":
@@ -199,11 +192,9 @@ class CephfsScaleUtils(object):
                     binding = "/export_%s" % sv
                     cluster_index = subvolume_list.index(sv) % len(nfs_clusters)
                     active_nfs_cluster = nfs_clusters[cluster_index]
-                    active_nfs_ip = (
-                        nfs_server_ips[cluster_index]
-                        if len(nfs_server_ips) > cluster_index
-                        else nfs_server_ip
-                    )
+                    cluster_info = nfs_cluster_ip_map.get(active_nfs_cluster, {})
+                    active_nfs_ip = cluster_info.get("ip")
+                    active_nfs_port = cluster_info.get("port", 2049)
 
                     export_kwargs = {}
                     if byok_enabled:
@@ -223,7 +214,7 @@ class CephfsScaleUtils(object):
                         active_nfs_ip,
                         binding,
                         mount_dir,
-                        port=cluster_port_map.get(active_nfs_cluster, 2049),
+                        port=active_nfs_port,
                     )
 
                 else:
@@ -365,43 +356,60 @@ class CephfsScaleUtils(object):
         """
         mds_nodes = ceph_cluster.get_ceph_objects("mds")
         for mds in mds_nodes:
-            # Get  process ID of the ceph-mds process
-            mds_hostnames = mds.node.hostname
-            process_id_out = mds.exec_command(
-                sudo=True,
-                cmd="pgrep ceph-mds",
-            )
-            process_id = process_id_out[0].strip()
-            log.info("Process ID : %s", process_id)
+            hostname = mds.node.hostname
+            log_filename = f"{hostname.replace(' ', '_')}_ceph-mds_top_output.log"
+            log_file_path = os.path.join(log_dir, log_filename)
 
-            # Get the top output for the ceph-mds process
-            top_out = mds.exec_command(
-                sudo=True,
-                cmd="top -b -n 1 -p %s" % process_id,
-            )
-            top_out1 = mds.exec_command(
-                sudo=True,
-                cmd="ps -p %s -o rss=" % process_id,
-            )
-            top_out_rss_value = top_out1[0].strip()
-            mds_log_name = mds_hostnames.replace(" ", "_")
-            log_file_path = os.path.join(
-                log_dir, "%s_ceph-mds_top_output.log" % mds_log_name
-            )
-            current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            separator = "-" * 40
+            try:
+                pid_output = mds.exec_command(sudo=True, cmd="pgrep ceph-mds")[
+                    0
+                ].strip()
+                pids = [pid.strip() for pid in pid_output.splitlines() if pid.strip()]
 
-            with open(log_file_path, "a") as log_file:
-                log_file.write("%s\n" % current_time)
-                log_file.write(top_out[0])
-                log_file.write("\n")
-                log_file.write(top_out_rss_value)
-                log_file.write("\n")
-                log_file.write("%s\n" % separator)
-            log.info("Top output of ceph-mds on %s is %s", mds_hostnames, top_out[0])
-            log.info(
-                "rss Value of ceph-mds on %s is %s", mds_hostnames, top_out_rss_value
-            )
+                if not pids:
+                    log.info(f"No ceph-mds process found on {hostname}")
+                    continue
+
+                for pid in pids:
+                    try:
+                        top_out = mds.exec_command(
+                            sudo=True, cmd=f"top -b -n 1 -p {pid}"
+                        )[0]
+                        rss_out = mds.exec_command(
+                            sudo=True, cmd=f"ps -p {pid} -o rss="
+                        )[0].strip()
+
+                        current_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        separator = "-" * 40
+
+                        with open(log_file_path, "a") as log_file:
+                            log_file.write(f"{current_time} | PID: {pid}\n")
+                            log_file.write(top_out + "\n")
+                            log_file.write(f"RSS: {rss_out} kB\n")
+                            log_file.write(f"{separator}\n\n")
+
+                        log.info(
+                            "Top output of ceph-mds (PID: %s) on %s written",
+                            pid,
+                            hostname,
+                        )
+
+                    except Exception as e:
+                        log.warning(
+                            "Failed to collect top/rss for PID %s on %s: %s",
+                            pid,
+                            hostname,
+                            str(e),
+                        )
+
+            except Exception as e:
+                log.warning(
+                    "Failed to get ceph-mds PIDs from %s: %s, No MDS running",
+                    hostname,
+                    str(e),
+                )
+
+        log.info("Completed mds top log collection for all ceph-mds daemons.")
 
     def run_mds_commands_periodically(self, ceph_cluster, log_dir, interval=300):
         """
@@ -489,225 +497,139 @@ class CephfsScaleUtils(object):
             logging_thread.join()
 
     def run_io_operations_parallel(
-        self,
-        mount_paths,
-        io_type,
-        io_operation=None,
-        io_threads=None,
-        io_file_size=None,
-        io_files=None,
-        fio_engine=None,
-        fio_operation=None,
-        fio_direct=None,
-        fio_block_size=None,
-        fio_depth=None,
-        fio_file_size=None,
-        dd_block_size="1M",
-        dd_count=1024,
-        cthonLogPath=None,
-        batch_size=None,
+        self, mount_paths, io_type, io_args=None, batch_size=None
     ):
         """
-        Run IO operations on the mounted paths in parallel based on the specified IO type.
+        Run IO operations on the mounted paths in parallel.
 
-        :param mount_paths: List of dictionaries containing client and mount path
-        :param io_type: Type of IO operation ("smallfile", "largefile", "fio", "dd", or "cthon")
-        :param io_operation: Operation type for smallfile (e.g., create, read, etc.)
-        :param io_threads: Number of threads for smallfile
-        :param io_file_size: File size for smallfile
-        :param io_files: Number of files for smallfile
-        :param fio_engine: IO engine for FIO
-        :param fio_operation: Operation type for FIO (e.g., read, write, randwrite, randread)
-        :param fio_direct: Direct IO flag for FIO
-        :param fio_block_size: Block size for FIO
-        :param fio_depth: IO depth for FIO
-        :param fio_file_size: File size for FIO
-        :param dd_block_size: Block size for dd command (default: 1M)
-        :param dd_count: Count for dd command (default: 1024)
-        :param cthonLogPath: Log directory path for cthon
-        :param batch_size: Batch size for parallel execution (optional)
-        :return: Dictionary with metrics outputs from IO operations
+        :param mount_paths: List of dicts with 'client' and 'mount_path'
+        :param io_type: IO type - 'smallfile', 'largefile', 'dd', 'fio', 'cthon'
+        :param io_args: Dict of additional args per io_type
+        :param batch_size: Optional batch size for execution
+        :return: List of metrics dictionaries per mount path
         """
 
-        def run_dd_io(client, mount_path):
-            """
-            Run dd-based IO operations on the specified mount path.
+        metrics_outputs = []
+        io_args = io_args or {}
 
-            :param client: Client object to run the operation
-            :param mount_path: Mount path to perform the IO operation
-            :return: Dictionary with dd metrics
-            """
+        def run_largefile_io(client, mount_path, file_count, file_size, file_unit):
             try:
-                log.info(
-                    "Running dd IO on %s from client %s"
-                    % (mount_path, client.node.hostname)
+                log.info(f"Running IO on {mount_path} from {client.node.hostname}")
+                cmd = (
+                    f"python3 /root/create_large_file.py {mount_path} "
+                    f"{file_count} {file_size} {file_unit}"
                 )
-                output_file = "%s/dd_file_%s" % (mount_path, client.node.hostname)
-                cmd = "dd if=/dev/urandom of=%s bs=%s count=%s oflag=direct" % (
-                    output_file,
-                    dd_block_size,
-                    dd_count,
+                start = time.time()
+                client.exec_command(sudo=True, cmd=cmd, timeout=36000)
+                end = time.time()
+                return {
+                    "client": client.node.hostname,
+                    "mount_path": mount_path,
+                    "file_count": file_count,
+                    "file_size": file_size,
+                    "file_unit": file_unit,
+                    "total_time_seconds": round(end - start, 2),
+                }
+            except Exception as e:
+                log.error(f"Largefile IO failed on {mount_path}: {e}")
+                return {
+                    "client": client.node.hostname,
+                    "mount_path": mount_path,
+                    "error": str(e),
+                }
+
+        def run_smallfile_io(client, mount_path, operation, threads, file_size, files):
+            try:
+                dirname = f"smallfile_dir_{''.join(random.choices(string.ascii_lowercase + string.digits, k=2))}"
+                client.exec_command(sudo=True, cmd=f"mkdir {mount_path}{dirname}")
+                cmd = (
+                    f"python3 /home/cephuser/smallfile/smallfile_cli.py "
+                    f"--operation {operation} --threads {threads} "
+                    f"--file-size {file_size} --files {files} "
+                    f"--top {mount_path}{dirname}"
                 )
+                out, _ = client.exec_command(sudo=True, cmd=cmd, timeout=36000)
+                return {
+                    "client": client.node.hostname,
+                    "mount_path": mount_path,
+                    "result": out.strip(),
+                }
+            except Exception as e:
+                log.error(f"Smallfile IO failed on {mount_path}: {e}")
+                return {
+                    "client": client.node.hostname,
+                    "mount_path": mount_path,
+                    "error": str(e),
+                }
+
+        def run_dd_io(client, mount_path, block_size, count):
+            try:
+                output_file = f"{mount_path}/dd_file_{client.node.hostname}"
+                cmd = f"dd if=/dev/urandom of={output_file} bs={block_size} count={count} oflag=direct"
                 out, err = client.exec_command(sudo=True, cmd=cmd, timeout=72000)
-                dd_output = err.strip() if err.strip() else out.strip()
-
-                log.info("dd output:\n%s" % dd_output)
-
+                dd_output = err.strip() or out.strip()
                 match = re.search(
                     r"(\d+)\s+bytes.*copied.*,?\s*([0-9.]+)\s+s(?:ec)?,?\s*([0-9.]+)\s+([A-Za-z/]+)",
                     dd_output,
                 )
+                metrics = {"raw_output": dd_output}
                 if match:
-                    metrics = {
-                        "bytes_written": match.group(1),
-                        "time_taken_sec": match.group(2),
-                        "throughput": "%s %s" % (match.group(3), match.group(4)),
-                    }
-                else:
-                    metrics = {"raw_output": out.strip()}
-
-                return {client.node.hostname: metrics}
-
-            except CommandFailed as e:
-                log.error(
-                    "dd IO failed on %s from client %s: %s"
-                    % (mount_path, client.node.hostname, e)
-                )
-                return {client.node.hostname: None}
-            except Exception as e:
-                log.error("Unexpected error during dd IO on %s: %s" % (mount_path, e))
-                return {client.node.hostname: None}
-
-        def run_smallfile_io(client, mount_path):
-            """
-            Run smallfile IO operations on the specified mount path.
-
-            :param client: Client object to run the operation
-            :param mount_path: Mount path to perform the IO operation
-            :return: Dictionary with metrics from the IO operation
-            """
-            try:
-                log.info(
-                    "Running IO operations on %s from client %s"
-                    % (mount_path, client.node.hostname)
-                )
-                log.info("Creating Directory for running smallfile writes")
-                dirname_suffix = "".join(
-                    random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(2))
-                )
-                dir_name = "smallfile_dir_%s" % dirname_suffix
-                client.exec_command(
-                    sudo=True, cmd="mkdir %s%s" % (mount_path, dir_name)
-                )
-                smallfilepath = "/home/cephuser/smallfile/smallfile_cli.py"
-                out, _ = client.exec_command(
-                    sudo=True,
-                    cmd=(
-                        "python3 %s --operation %s --threads %s "
-                        "--file-size %s --files %s "
-                        "--top %s%s"
+                    metrics.update(
+                        {
+                            "bytes_written": match.group(1),
+                            "time_taken_sec": match.group(2),
+                            "throughput": f"{match.group(3)} {match.group(4)}",
+                        }
                     )
-                    % (
-                        smallfilepath,
-                        io_operation,
-                        io_threads,
-                        io_file_size,
-                        io_files,
-                        mount_path,
-                        dir_name,
-                    ),
-                )
-                log.info("smallfile out : %s" % out)
-                log.info(
-                    "IO operation completed on %s from client %s"
-                    % (mount_path, client.node.hostname)
-                )
-
-                metrics = self.extract_smallfile_metrics(out)
-                log.info("Metrics : %s" % metrics)
-
-                return {client.node.hostname: metrics}
-
-            except CommandFailed as e:
-                log.error(
-                    "IO operation failed on %s from client %s: %s"
-                    % (mount_path, client.node.hostname, e)
-                )
-
-                return {client.node.hostname: None}
-
+                return {
+                    "client": client.node.hostname,
+                    "mount_path": mount_path,
+                    "metrics": metrics,
+                }
             except Exception as e:
-                log.error(
-                    "An unexpected error occurred on %s from client %s: %s"
-                    % (mount_path, client.node.hostname, e)
-                )
+                return {
+                    "client": client.node.hostname,
+                    "mount_path": mount_path,
+                    "error": str(e),
+                }
 
-                return {client.node.hostname: {mount_path: metrics}}
-
-        def run_largefile_io(client, mount_path):
-            """
-            Run largefile IO operations on the specified mount path.
-
-            :param client: Client object to run the operation
-            :param mount_path: Mount path to perform the IO operation
-            :return: None
-            """
-            log.info(
-                "Running IO operations on %s from client %s"
-                % (mount_path, client.node.hostname)
-            )
-
+        def run_fio_io(client, mount_path, fio_args):
             try:
-                client.exec_command(
-                    sudo=True,
-                    cmd="bash /root/create_large_file.sh %s" % mount_path,
-                    timeout=36000,
+                dirname = f"fio_dir_{''.join(random.choices(string.ascii_lowercase + string.digits, k=2))}"
+                client.exec_command(sudo=True, cmd=f"mkdir {mount_path}{dirname}")
+                cmd = (
+                    f"cd {mount_path}{dirname}; fio --name={fio_args['operation']} --rw={fio_args['operation']} "
+                    f"--direct={fio_args['direct']} --ioengine={fio_args['engine']} --bs={fio_args['block_size']} "
+                    f"--iodepth={fio_args['iodepth']} --size={fio_args['file_size']} --group_reporting=1 "
+                    f"--output=/root/fio_{client.node.hostname}.json"
                 )
-                log.info(
-                    "IO operation completed on %s from client %s"
-                    % (mount_path, client.node.hostname)
-                )
-
-            except CommandFailed as e:
-                log.error(
-                    "IO operation failed on %s from client %s: %s"
-                    % (mount_path, client.node.hostname, e)
-                )
-
+                client.exec_command(sudo=True, cmd=cmd, timeout=72000)
+                return {
+                    "client": client.node.hostname,
+                    "mount_path": mount_path,
+                    "status": "fio complete",
+                }
             except Exception as e:
-                log.error(
-                    "An unexpected error occurred on %s from client %s: %s"
-                    % (mount_path, client.node.hostname, e)
-                )
+                return {
+                    "client": client.node.hostname,
+                    "mount_path": mount_path,
+                    "error": str(e),
+                }
 
-                return {client.node.hostname: None}
-
-        def run_cthon_io(client, mount_path, cthonLogPath, iterations=1):
-            """
-            Run Cthon IO operations on the specified mount path by parsing mount details for NFS info.
-
-            :param client: Client object
-            :param mount_path: Mount point
-            :param cthonLogPath: Log directory path
-            :param iterations: Number of Cthon iterations
-            :return: Dict with status and log
-            """
-
+        def run_cthon_io(client, mount_path, io_args):
             try:
+                iterations = io_args.get("iterations", 1)
+                remote_log_dir = io_args.get("log_path", "/root/cthon_logs")
                 log.info(
-                    "Running Cthon IO on %s from %s"
-                    % (mount_path, client.node.hostname)
+                    f"Running Cthon IO on {mount_path} from {client.node.hostname}"
                 )
-
-                # Get full mount output
-                export_mounted_path = mount_path.rstrip("/")  # Remove trailing slash
+                export_mounted_path = mount_path.rstrip("/")
                 mount_output, _ = client.exec_command(
                     sudo=True,
-                    cmd="mount | grep 'on %s '" % export_mounted_path,
+                    cmd=f"mount | grep 'on {export_mounted_path} '",
                     timeout=60,
                 )
-                log.debug("Mount info for %s:\n%s" % (mount_path, mount_output))
+                log.debug(f"Mount info for {mount_path}:\n{mount_output}")
 
                 # Parse server_ip, export_path, port
                 match = re.search(
@@ -719,7 +641,7 @@ class CephfsScaleUtils(object):
                     mount_output.strip(),
                 )
                 if not match:
-                    raise ValueError("Could not parse mount info for %s" % mount_path)
+                    raise ValueError(f"Could not parse mount info for {mount_path}")
 
                 server_ip = match.group("server_ip")
                 export_path = match.group("export_path")
@@ -727,232 +649,80 @@ class CephfsScaleUtils(object):
                 port_match = re.search(r"port=(\d+)", options)
                 nfs_port = int(port_match.group(1)) if port_match else 2049
 
-                # Prepare log file path
-                client.exec_command(sudo=True, cmd="mkdir -p %s" % cthonLogPath)
+                client.exec_command(sudo=True, cmd=f"mkdir -p {remote_log_dir}")
                 sv_suffix = mount_path.strip("/").split("/")[-1]
-                log_file = "%s/cthon_%s.log" % (cthonLogPath, sv_suffix)
-
-                # Setup environment
-                base_url = (
-                    "https://mirrors.vcea.wsu.edu/rocky/9/devel/x86_64/os/Packages/l"
+                log_file = (
+                    f"{remote_log_dir}/cthon_{client.node.hostname}_{sv_suffix}.log"
                 )
-                libtirpc = "%s/libtirpc-1.3.3-9.el9.x86_64.rpm" % base_url
-                libtirpc_devel = "%s/libtirpc-devel-1.3.3-9.el9.x86_64.rpm" % base_url
-                setup_cmds = [
-                    "dnf install -y git",
-                    "dnf groupinstall -y 'Development Tools'",
-                    "dnf install -y %s" % libtirpc,
-                    "dnf install -y %s" % libtirpc_devel,
-                    "rm -rf cthon04",
-                    "git clone git://git.linux-nfs.org/projects/steved/cthon04.git",
-                    "cd cthon04 && make",
-                ]
-                for cmd in setup_cmds:
-                    client.exec_command(sudo=True, cmd=cmd, timeout=300)
 
-                # Run cthon with parsed info
                 run_cmd = (
-                    "cd cthon04 && "
-                    "./server -a -o port=%s -N %s "
-                    "-p %s -m %s %s > %s 2>&1"
-                    % (
-                        nfs_port,
-                        iterations,
-                        export_path,
-                        mount_path,
-                        server_ip,
-                        log_file,
-                    )
+                    f"cd cthon04 && "
+                    f"./server -a -o port={nfs_port} -N {iterations} "
+                    f"-p {export_path} -m {mount_path} {server_ip} > {log_file} 2>&1"
                 )
                 client.exec_command(sudo=True, cmd=run_cmd, timeout=18000)
 
                 log.info(
-                    "Cthon started on %s (IP=%s, port=%s). Log: %s"
-                    % (mount_path, server_ip, nfs_port, log_file)
+                    f"Cthon started on {mount_path} (IP={server_ip}, port={nfs_port}). Log: {log_file}"
                 )
                 return {client.node.hostname: {"status": "started", "log": log_file}}
 
             except Exception as e:
                 log.error(
-                    "Cthon IO failed on %s from %s: %s"
-                    % (mount_path, client.node.hostname, e)
+                    f"Cthon IO failed on {mount_path} from {client.node.hostname}: {e}"
                 )
-
                 return {client.node.hostname: None}
 
-        def run_fio(client, mount_path):
-            """
-            Run FIO operations on the specified mount path.
+        io_func_map = {
+            "largefile": lambda c, m: run_largefile_io(
+                c, m, io_args["file_count"], io_args["file_size"], io_args["file_unit"]
+            ),
+            "smallfile": lambda c, m: run_smallfile_io(
+                c,
+                m,
+                io_args["operation"],
+                io_args["threads"],
+                io_args["file_size"],
+                io_args["files"],
+            ),
+            "dd": lambda c, m: run_dd_io(
+                c, m, io_args.get("block_size", "1M"), io_args.get("count", 1024)
+            ),
+            "fio": lambda c, m: run_fio_io(c, m, io_args),
+            "cthon": lambda c, m: run_cthon_io(c, m, io_args),
+        }
 
-            :param client: Client object to run the operation
-            :param mount_path: Mount path to perform the IO operation
-            :return: None
-            """
-            try:
+        if io_type not in io_func_map:
+            raise ValueError(f"Invalid IO type: {io_type}")
+
+        io_func = io_func_map[io_type]
+
+        if batch_size:
+            log.info(f"Running IOs in batches of size: {batch_size}")
+            for i in range(0, len(mount_paths), batch_size):
+                batch = mount_paths[i : i + batch_size]
+                batch_number = (i // batch_size) + 1
                 log.info(
-                    "Running FIO IO operations on %s from client %s"
-                    % (mount_path, client.node.hostname)
+                    "Starting batch %s with %s mount paths" % (batch_number, len(batch))
                 )
-
-                log.info("Creating Directory for running fio writes")
-                dirname_suffix = "".join(
-                    random.choice(string.ascii_lowercase + string.digits)
-                    for _ in list(range(2))
-                )
-                dir_name = "fio_dir_%s" % dirname_suffix
-                client.exec_command(
-                    sudo=True, cmd="mkdir %s%s" % (mount_path, dir_name)
-                )
-                out, err = client.exec_command(
-                    sudo=True,
-                    cmd=(
-                        "cd %s%s; fio --name=%s --rw=%s"
-                        " --direct=%s --ioengine=%s --bs=%s"
-                        " --iodepth=%s --size=%s --group_reporting=1"
-                        " --output=/root/fio_%s.json"
-                    )
-                    % (
-                        mount_path,
-                        dir_name,
-                        fio_operation,
-                        fio_operation,
-                        fio_direct,
-                        fio_engine,
-                        fio_block_size,
-                        fio_depth,
-                        fio_file_size,
-                        client.node.hostname,
-                    ),
-                )
-                log.info(
-                    "IO operation completed on %s from client %s"
-                    % (mount_path, client.node.hostname)
-                )
-
-            except CommandFailed as e:
-                log.error(
-                    "IO operation failed on %s from client %s: %s"
-                    % (mount_path, client.node.hostname, e)
-                )
-
-                return {client.node.hostname: None}
-
-            except Exception as e:
-                log.error(
-                    "An unexpected error occurred on %s from client %s: %s"
-                    % (mount_path, client.node.hostname, e)
-                )
-
-                return {client.node.hostname: None}
-
-        metrics_outputs = {}
-
-        if batch_size:  # Run IO in batches only if batch_size is provided
-            log.info("Running IOs in batches of size: %s" % batch_size)
-            for batch_num, batch in enumerate(
-                self.chunks(mount_paths, batch_size), start=1
-            ):
-                log.info(
-                    "Starting batch %s with %s mount paths" % (batch_num, len(batch))
-                )
-
                 with ThreadPoolExecutor(max_workers=len(batch)) as executor:
-                    if io_type == "smallfile":
-                        futures = [
-                            executor.submit(
-                                run_smallfile_io, m["client"], m["mount_path"]
-                            )
-                            for m in batch
-                        ]
-                    elif io_type == "largefile":
-                        futures = [
-                            executor.submit(
-                                run_largefile_io, m["client"], m["mount_path"]
-                            )
-                            for m in batch
-                        ]
-                    elif io_type == "fio":
-                        futures = [
-                            executor.submit(run_fio, m["client"], m["mount_path"])
-                            for m in batch
-                        ]
-                    elif io_type == "dd":
-                        futures = [
-                            executor.submit(run_dd_io, m["client"], m["mount_path"])
-                            for m in batch
-                        ]
-                    elif io_type == "cthon":
-                        futures = [
-                            executor.submit(
-                                run_cthon_io, m["client"], m["mount_path"], cthonLogPath
-                            )
-                            for m in batch
-                        ]
-                    else:
-                        raise ValueError("Invalid io_type specified.")
-
-                    for future in as_completed(futures):
-                        try:
-                            result = future.result()
-                            if result:
-                                for hostname, mount_data in result.items():
-                                    if hostname not in metrics_outputs:
-                                        metrics_outputs[hostname] = {}
-                                    metrics_outputs[hostname].update(mount_data)
-                        except Exception as e:
-                            log.error(
-                                "Exception occurred during IO batch %s: %s"
-                                % (batch_num, e)
-                            )
-
-                    log.info("Completed batch %s" % batch_num)
-
-        else:  # Run all IOs in full parallel mode
-            log.info("Running IOs in full parallel mode (no batching)")
-
+                    futures = [
+                        executor.submit(io_func, m["client"], m["mount_path"])
+                        for m in batch
+                    ]
+                    for f in as_completed(futures):
+                        metrics_outputs.append(f.result())
+        else:
+            log.info("Running all IOs in parallel")
             with ThreadPoolExecutor(max_workers=len(mount_paths)) as executor:
-                if io_type == "smallfile":
-                    futures = [
-                        executor.submit(run_smallfile_io, m["client"], m["mount_path"])
-                        for m in mount_paths
-                    ]
-                elif io_type == "largefile":
-                    futures = [
-                        executor.submit(run_largefile_io, m["client"], m["mount_path"])
-                        for m in mount_paths
-                    ]
-                elif io_type == "fio":
-                    futures = [
-                        executor.submit(run_fio, m["client"], m["mount_path"])
-                        for m in mount_paths
-                    ]
-                elif io_type == "dd":
-                    futures = [
-                        executor.submit(run_dd_io, m["client"], m["mount_path"])
-                        for m in mount_paths
-                    ]
-                elif io_type == "cthon":
-                    futures = [
-                        executor.submit(
-                            run_cthon_io, m["client"], m["mount_path"], cthonLogPath
-                        )
-                        for m in mount_paths
-                    ]
-                else:
-                    raise ValueError("Invalid io_type specified.")
+                futures = [
+                    executor.submit(io_func, m["client"], m["mount_path"])
+                    for m in mount_paths
+                ]
+                for f in as_completed(futures):
+                    metrics_outputs.append(f.result())
 
-                for future in as_completed(futures):
-                    try:
-                        result = future.result()
-                        if result:
-                            for hostname, mount_data in result.items():
-                                if hostname not in metrics_outputs:
-                                    metrics_outputs[hostname] = {}
-                                metrics_outputs[hostname].update(mount_data)
-                    except Exception as e:
-                        log.error("Exception occurred during IO operation: %s" % e)
-
-        log.info("Metrics Outputs : %s" % metrics_outputs)
+        log.info(f"Total IO operations completed: {len(metrics_outputs)}")
         return metrics_outputs
 
     def extract_smallfile_metrics(self, output):
@@ -1214,24 +984,6 @@ class CephfsScaleUtils(object):
         log.info("YAML file generated at: %s" % output_path)
         return output_path  # Return path for remote upload
 
-    def chunks(self, data, size):
-        """
-        Yield successive chunks of a specified size from the input iterable.
-
-        This method is primarily used to divide mount paths or subvolumes into batches
-        for parallel I/O execution (e.g., smallfile, fio, dd, Cthon).
-
-        :param data: Iterable (e.g., list of mount paths or clients) to split into chunks
-        :param size: Number of elements per chunk (i.e., batch size)
-        :return: Generator yielding lists of up to 'size' elements each
-        """
-        it = iter(data)
-        while True:
-            chunk = list(islice(it, size))
-            if not chunk:
-                break
-            yield chunk
-
     def create_multiple_nfs_clusters_with_kmip(
         self,
         client,
@@ -1278,3 +1030,252 @@ class CephfsScaleUtils(object):
         except CommandFailed as e:
             log.error("Failed to create or validate NFS cluster(s): %s" % e)
             return []
+
+    def enable_cluster_qos(
+        self,
+        client,
+        cluster_id,
+        qos_type="PerShare",
+        max_export_write_bw=None,
+        max_export_read_bw=None,
+        max_client_write_bw=None,
+        max_client_read_bw=None,
+        max_export_combined_bw=None,
+        max_client_combined_bw=None,
+        combined_rw_bw=False,
+    ):
+        """
+        Enables cluster-level QoS with proper validation based on qos_type and combination mode.
+
+        Args:
+            client: Ceph client node object
+            cluster_id: NFS cluster ID
+            qos_type: PerShare | PerClient | PerShare_PerClient
+            max_export_write_bw, max_export_read_bw: Export-level bandwidth limits
+            max_client_write_bw, max_client_read_bw: Client-level bandwidth limits
+            max_export_combined_bw: Export-level combined R/W limit
+            max_client_combined_bw: Client-level combined R/W limit
+            combined_rw_bw: Boolean to enable --combined-rw-bw-ctrl
+
+        Raises:
+            ValueError if required parameters are missing or qos_type is invalid.
+        """
+
+        valid_qos_types = ["PerShare", "PerClient", "PerShare_PerClient"]
+        if qos_type not in valid_qos_types:
+            raise ValueError(
+                f"Invalid qos_type: {qos_type}. Must be one of {valid_qos_types}"
+            )
+
+        if not combined_rw_bw:
+            if qos_type == "PerShare":
+                if not (max_export_write_bw and max_export_read_bw):
+                    raise ValueError(
+                        "For 'PerShare', both --max_export_write_bw and --max_export_read_bw are required."
+                    )
+            elif qos_type == "PerClient":
+                if not (max_client_write_bw and max_client_read_bw):
+                    raise ValueError(
+                        "For 'PerClient', both --max_client_write_bw and --max_client_read_bw are required."
+                    )
+            elif qos_type == "PerShare_PerClient":
+                if not (
+                    max_export_write_bw
+                    and max_export_read_bw
+                    and max_client_write_bw
+                    and max_client_read_bw
+                ):
+                    raise ValueError(
+                        "For 'PerShare_PerClient', all export/client read/write bandwidths are required."
+                    )
+        else:
+            if qos_type == "PerShare":
+                if not max_export_combined_bw:
+                    raise ValueError(
+                        "For 'PerShare' with combined_rw_bw, --max_export_combined_bw is required."
+                    )
+            elif qos_type == "PerClient":
+                if not max_client_combined_bw:
+                    raise ValueError(
+                        "For 'PerClient' with combined_rw_bw, --max_client_combined_bw is required."
+                    )
+            elif qos_type == "PerShare_PerClient":
+                if not (max_export_combined_bw and max_client_combined_bw):
+                    raise ValueError(
+                        "For 'PerShare_PerClient' with combined_rw_bw, both export/client combined limits are required."
+                    )
+
+        cmd = f"ceph nfs cluster qos enable bandwidth_control {cluster_id} {qos_type}"
+        if combined_rw_bw:
+            cmd += " --combined-rw-bw-ctrl"
+            if max_export_combined_bw:
+                cmd += f" --max_export_combined_bw {max_export_combined_bw}"
+            if max_client_combined_bw:
+                cmd += f" --max_client_combined_bw {max_client_combined_bw}"
+        else:
+            if max_export_write_bw:
+                cmd += f" --max_export_write_bw {max_export_write_bw}"
+            if max_export_read_bw:
+                cmd += f" --max_export_read_bw {max_export_read_bw}"
+            if max_client_write_bw:
+                cmd += f" --max_client_write_bw {max_client_write_bw}"
+            if max_client_read_bw:
+                cmd += f" --max_client_read_bw {max_client_read_bw}"
+
+        log.info(f"Enabling cluster-level QoS with command: {cmd}")
+        client.exec_command(sudo=True, cmd=cmd)
+        log.info(f"Successfully enabled cluster-level QoS on {cluster_id}")
+
+    def disable_cluster_qos(self, client, cluster_id):
+        cmd = f"ceph nfs cluster qos disable bandwidth_control {cluster_id}"
+        client.exec_command(sudo=True, cmd=cmd)
+        log.info(f"Disabled cluster-level QoS on {cluster_id}")
+
+    def get_cluster_qos(self, client, cluster_id):
+        cmd = f"ceph nfs cluster qos get {cluster_id}"
+        out, err = client.exec_command(sudo=True, cmd=cmd)
+        qos_output = out.strip() if out.strip() else err.strip()
+        log.info(f"Cluster-level QoS config for {cluster_id}:\n{qos_output}")
+        return qos_output
+
+    def enable_export_qos(
+        self,
+        client,
+        cluster_id,
+        pseudo_path,
+        max_export_write_bw=None,
+        max_export_read_bw=None,
+        max_client_write_bw=None,
+        max_client_read_bw=None,
+        max_export_combined_bw=None,
+        max_client_combined_bw=None,
+        combined_rw_bw=False,
+        qos_type="PerShare",
+    ):
+        """
+        Enables export-level bandwidth control with validation based on combination and qos_type.
+
+        Args:
+            client: Ceph client node object
+            cluster_id: NFS cluster ID
+            pseudo_path: Pseudo-path of the export
+            max_export_write_bw, max_export_read_bw: Export-level bandwidth limits
+            max_client_write_bw, max_client_read_bw: Client-level bandwidth limits
+            max_export_combined_bw: Combined R/W export limit
+            max_client_combined_bw: Combined R/W client limit
+            combined_rw_bw: Enable --combined-rw-bw-ctrl
+            qos_type: Optional hint for validation logic (PerShare | PerClient | PerShare_PerClient)
+
+        Raises:
+            ValueError if required fields are missing based on mode
+        """
+
+        qos_type = qos_type.lower()
+
+        if not combined_rw_bw:
+            if qos_type == "PerShare":
+                if not (max_export_write_bw and max_export_read_bw):
+                    raise ValueError(
+                        "For 'PerShare', both export write/read limits are required."
+                    )
+            elif qos_type == "PerClient":
+                if not (max_client_write_bw and max_client_read_bw):
+                    raise ValueError(
+                        "For 'PerClient', both client write/read limits are required."
+                    )
+            elif qos_type == "PerShare_PerClient":
+                if not (
+                    max_export_write_bw
+                    and max_export_read_bw
+                    and max_client_write_bw
+                    and max_client_read_bw
+                ):
+                    raise ValueError(
+                        "For 'PerShare_PerClient', all export/client write/read limits are required."
+                    )
+            else:
+                raise ValueError(f"Invalid qos_type: {qos_type}")
+        else:
+            if qos_type == "PerShare":
+                if not max_export_combined_bw:
+                    raise ValueError(
+                        "For 'PerShare' with combined_rw_bw, --max_export_combined_bw is required."
+                    )
+            elif qos_type == "PerClient":
+                if not max_client_combined_bw:
+                    raise ValueError(
+                        "For 'PerClient' with combined_rw_bw, --max_client_combined_bw is required."
+                    )
+            elif qos_type == "PerShare_PerClient":
+                if not (max_export_combined_bw and max_client_combined_bw):
+                    raise ValueError(
+                        "For 'PerShare_PerClient' with combined_rw_bw, both combined limits are required."
+                    )
+            else:
+                raise ValueError(f"Invalid qos_type: {qos_type}")
+
+        cmd = f"ceph nfs export qos enable bandwidth_control {cluster_id} {pseudo_path}"
+        if combined_rw_bw:
+            cmd += " --combined-rw-bw-ctrl"
+            if max_export_combined_bw:
+                cmd += f" --max_export_combined_bw {max_export_combined_bw}"
+            if max_client_combined_bw:
+                cmd += f" --max_client_combined_bw {max_client_combined_bw}"
+        else:
+            if max_export_write_bw:
+                cmd += f" --max_export_write_bw {max_export_write_bw}"
+            if max_export_read_bw:
+                cmd += f" --max_export_read_bw {max_export_read_bw}"
+            if max_client_write_bw:
+                cmd += f" --max_client_write_bw {max_client_write_bw}"
+            if max_client_read_bw:
+                cmd += f" --max_client_read_bw {max_client_read_bw}"
+
+        log.info(f"Enabling export-level QoS: {cmd}")
+        client.exec_command(sudo=True, cmd=cmd)
+        log.info(
+            f"Export-level QoS successfully enabled for {pseudo_path} in {cluster_id}"
+        )
+
+    def disable_export_qos(self, client, cluster_id, pseudo_path):
+        cmd = (
+            f"ceph nfs export qos disable bandwidth_control {cluster_id} {pseudo_path}"
+        )
+        client.exec_command(sudo=True, cmd=cmd)
+        log.info(f"Disabled export-level QoS on {pseudo_path} of {cluster_id}")
+
+    def get_export_qos(self, client, cluster_id, pseudo_path):
+        cmd = f"ceph nfs export qos get {cluster_id} {pseudo_path}"
+        out, err = client.exec_command(sudo=True, cmd=cmd)
+        qos_output = out.strip() if out.strip() else err.strip()
+        log.info(
+            f"Export-level QoS config for {pseudo_path} on {cluster_id}:\n{qos_output}"
+        )
+        return qos_output
+
+    def setup_cthon_environment(self, client):
+        """
+        Install and build cthon04 on the provided client node.
+        """
+        log.info(f"Setting up Cthon environment on {client.node.hostname}")
+        try:
+            repo_path = (
+                "https://mirrors.vcea.wsu.edu/rocky/9/devel/x86_64/os/Packages/l"
+            )
+            setup_cmds = [
+                "dnf install -y git time",
+                "dnf groupinstall -y 'Development Tools'",
+                f"dnf install -y {repo_path}/libtirpc-1.3.3-9.el9.x86_64.rpm",
+                f"dnf install -y {repo_path}/libtirpc-devel-1.3.3-9.el9.x86_64.rpm",
+                "rm -rf cthon04",
+                "git clone git://git.linux-nfs.org/projects/steved/cthon04.git",
+                "cd cthon04 && make",
+            ]
+            for cmd in setup_cmds:
+                client.exec_command(sudo=True, cmd=cmd, timeout=300)
+            log.info(f"Cthon setup complete on {client.node.hostname}")
+        except Exception as e:
+            log.error(
+                f"Failed to set up Cthon environment on {client.node.hostname}: {e}"
+            )
+            raise

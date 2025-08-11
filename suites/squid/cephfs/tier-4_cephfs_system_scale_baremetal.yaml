@@ -1268,7 +1268,176 @@ tests:
         crash_setup : 1
         daemon_list : ['mds','osd','mgr','mon']
 
+
+### Scale Tests
+
+  - test:
+      name: CephFS_Scale_Test_LargeFile_Writes
+      module: test_parallel.py
+      parallel:
+        -
+          test:
+            name: Write 1GB of 1 large file across 1000 Subvol with 90 kernel Clients
+            module: cephfs_scale.run_scale_io.py
+            config:
+              num_of_subvolumes: 1000
+              num_of_clients: 90
+              io_type: largefile
+              large_file_count: 1
+              large_file_size: 1
+              mount_type: kernel
+              collect_logs: true
+              cleanup: false
+            desc: Write 1GB of 1 large file across 1000 Subvol with 90 kernel Clients
+            abort-on-fail: false
+
+        -
+          test:
+            name: Write 10GB of 1 large file across 100 Subvol with 90 fuse Clients
+            module: cephfs_scale.run_scale_io.py
+            config:
+              num_of_subvolumes: 100
+              num_of_clients: 90
+              io_type: largefile
+              large_file_count: 1
+              large_file_size: 10
+              mount_type: fuse
+              collect_logs: true
+              cleanup: false
+            desc: Write 10GB of 1 large file across 100 Subvol with 90 fuse Clients
+            abort-on-fail: false
+
+        -
+          test:
+            name: Write 10GB of 10 large file across 10 Subvol with 10 NFS Clients
+            module: cephfs_scale.run_scale_io.py
+            config:
+              num_of_subvolumes: 10
+              num_of_clients: 10
+              io_type: largefile
+              large_file_count: 10
+              large_file_size: 10
+              mount_type: nfs
+              collect_logs: true
+              cleanup: false
+            desc: Write 10GB of 10 large file across 10 Subvol with 10 NFS Clients
+            abort-on-fail: false
+
+      desc: Run LargeFile CephFS Scale IO Workflows in Parallel
+      abort-on-fail: false
+
+  - test:
+      name: CephFS_Scale_Test_SmallFile_Writes
+      module: test_parallel.py
+      parallel:
+        - test:
+            name: Small File writes on 100 Subvol with 90 Fuse Clients and 1 thread
+            module: cephfs_scale.run_scale_io.py
+            config:
+              num_of_subvolumes: 100
+              num_of_clients: 90
+              io_type: smallfile
+              mount_type : fuse
+              smallfile_operation : create
+              smallfile_threads : 1
+              smallfile_file_size : 1024
+              smallfile_files : 10000
+              collect_logs: true
+              cleanup: false
+            desc: Small File writes on 100 Subvol with 90 Fuse Clients and 1 thread
+            abort-on-fail: false
+
+        - test:
+            name: Small File writes on 1000 Subvol with 90 kernel Clients and 4 thread
+            module: cephfs_scale.run_scale_io.py
+            config:
+              num_of_subvolumes: 1000
+              num_of_clients: 90
+              io_type: smallfile
+              mount_type : kernel
+              smallfile_operation : create
+              smallfile_threads : 4
+              smallfile_file_size : 256
+              smallfile_files : 4096
+              collect_logs: true
+              cleanup: false
+            desc: Small File writes on 1000 Subvol with 90 kernel Clients and 4 thread
+            abort-on-fail: false
+
+        - test:
+            name: Small File writes on 10 Subvol with 10 nfs Clients and 8 thread
+            module: cephfs_scale.run_scale_io.py
+            config:
+              num_of_subvolumes: 10
+              num_of_clients: 10
+              io_type: smallfile
+              mount_type : nfs
+              smallfile_operation : create
+              smallfile_threads : 8
+              smallfile_file_size : 1024
+              smallfile_files : 102400
+              collect_logs: true
+              cleanup: false
+            desc: Small File writes on 10 Subvol with 10 nfs Clients and 8 thread
+            abort-on-fail: false
+      desc: Run CephFS SmallFile Scale IO Workflows in Parallel
+      abort-on-fail: false
+
+  - test:
+      name: Run cthon on 1000 Subvols with 90 NFS Client
+      module: cephfs_scale.run_scale_io.py
+      config:
+        num_of_subvolumes: 1000
+        num_of_clients: 90
+        io_type: cthon
+        mount_type: nfs
+        multi_cluster_kmip_enabled: true
+        byok_enabled: true
+        collect_logs: true
+        cleanup: false
+      desc: Run cthon on 1000 Subvol with 90 NFS Client
+      abort-on-fail: false
+
+### Post-test Checks
+  -
+    test:
+      abort-on-fail: false
+      desc: "Check for Crash"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-check
+      config:
+        crash_check : 1
+        daemon_list : ['mds','osd','mgr','mon']
+  -
+    test:
+      name: Parse dbg logs for specific strings
+      module: cephfs_logs_util.py
+      config:
+        LOG_PARSER : 1
+        daemon : 'mds'
+        expect_list : ['issue_new_caps','get_allowed_caps','"sending MClientCaps"','client_caps\(revoke']
+        unexpect_list: ['Exception','assert']
+
+
 ### System Tests
+  ### Configure Debugging
+  -
+    test:
+      abort-on-fail: false
+      desc: "Enable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-enable-logs
+      config:
+        ENABLE_LOGS : 1
+        daemon_list : ['mds','client','osd','mgr','mon']
+        daemon_dbg_level : {'mds':10,'client':10,'osd':5,'mgr':5,'mon':5}
+  ### System test Setup
+  -
+    test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: cephfs_system.cephfs_systest_setup.py
+      name: "setup system test configuration"
   ### Set Spare disk to be added when Cluster is near full
   -
     test:
@@ -1279,13 +1448,6 @@ tests:
       config:
         test_name: "remove_osd_during_systest"
         osd_rm_limit: 0
-  ### System test Setup
-  -
-    test:
-      abort-on-fail: true
-      desc: "Setup phase to deploy the required pre-requisites for running the tests."
-      module: cephfs_system.cephfs_systest_setup.py
-      name: "setup system test configuration"
 
   ### System test Execution 1
   - test:
@@ -1360,7 +1522,8 @@ tests:
               iteration_cnt : 5
       desc: Running all System test workflows in parallel
       abort-on-fail: false
-  ### Post-test Checks
+
+  ### Post-test Crash Checks
   -
     test:
       abort-on-fail: false
@@ -1370,28 +1533,6 @@ tests:
       config:
         crash_check : 1
         daemon_list : ['mds','osd','mgr','mon']
-  -
-    test:
-      name: Parse dbg logs for specific strings
-      module: cephfs_logs_util.py
-      config:
-        LOG_PARSER : 1
-        daemon : 'mds'
-        expect_list : ['issue_new_caps','get_allowed_caps','"sending MClientCaps"','client_caps\(revoke']
-        unexpect_list: ['Exception','assert']
-### Scale Tests
-
-### Post-test Checks
-  -
-    test:
-      abort-on-fail: false
-      desc: "Check for Crash"
-      module: cephfs_crash_util.py
-      name: cephfs-crash-check
-      config:
-        crash_check : 1
-        daemon_list : ['mds','osd','mgr','mon']
-
   ### Disable debug logging
   -
     test:
@@ -1411,3 +1552,4 @@ tests:
         daemon : 'mds'
         expect_list : ['issue_new_caps','get_allowed_caps','"sending MClientCaps"','client_caps\(revoke']
         unexpect_list: ['Exception','assert']
+
