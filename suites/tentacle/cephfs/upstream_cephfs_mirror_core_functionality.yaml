@@ -178,6 +178,7 @@ tests:
           config:
             name: Validate the Synchronisation is successful upon enabling fs mirroring
       module: cephfs_mirroring.test_cephfs_mirroring_configure_cephfs_mirroring.py
+      name: Validate the Synchronisation is successful upon enabling fs mirroring
       polarion-id: "CEPH-83574099"
   - test:
       abort-on-fail: false
@@ -187,6 +188,7 @@ tests:
           config:
             name: Configure CephFS Mirroring modification of source and target cluster
       module: cephfs_mirroring.validate_file_dir_stats_modification_on_mirrored_cluster.py
+      name: Configure CephFS Mirroring modification of source and target cluster
       polarion-id: "CEPH-83575625"
   - test:
       abort-on-fail: false
@@ -196,6 +198,7 @@ tests:
           config:
             name: Validate the Mirroring is successful upon enabling fs mirroring on multiple FS from source to same destinatio
       module: cephfs_mirroring.test_cephfs_mirroring_validate_cephfs-mirroring_on_multifs_setup.py
+      name: Validate the Mirroring is successful upon enabling fs mirroring on multiple FS from source to same destinatio
       polarion-id: "CEPH-83574107"
   - test:
       abort-on-fail: false
@@ -205,6 +208,7 @@ tests:
           config:
             name: "modify User caps and validate the mirroring sync."
       module: cephfs_mirroring.test_cephfs_mirror_auth_caps.py
+      name: "modify User caps and validate the mirroring sync."
       polarion-id: "CEPH-83574109"
   - test:
       abort-on-fail: false
@@ -214,6 +218,7 @@ tests:
           config:
             name: Modify the Remote Snap Directories
       module: cephfs_mirroring.test_cephfs_mirroring_modify_remote_snapshots.py
+      name: Modify the Remote Snap Directories
       polarion-id: "CEPH-83574120"
   - test:
       abort-on-fail: false
@@ -223,6 +228,7 @@ tests:
           config:
             name: Convert single node to HA configuration
       module: cephfs_mirroring.test_cephfs_mirror_ha_conversion.py
+      name: Convert single node to HA configuration
       polarion-id: "CEPH-83575340"
   - test:
       abort-on-fail: false
@@ -232,6 +238,7 @@ tests:
           config:
             name: Validate all failure scenarios to disconnect the mirroring
       module: cephfs_mirroring.test_cephfs_mirror_disconnect.py
+      name: Validate all failure scenarios to disconnect the mirroring
       polarion-id: "CEPH-83574100"
   - test:
       abort-on-fail: false
@@ -241,6 +248,7 @@ tests:
           config:
             name: Validate multiple snapshots Synchronization on Mirror setup
       module: cephfs_mirroring.test_cephfs_mirroring_multiple_snapshots.py
+      name: Validate multiple snapshots Synchronization on Mirror setup
       polarion-id: "CEPH-83580026"
   - test:
       abort-on-fail: false
@@ -250,6 +258,7 @@ tests:
           config:
             name: Validate the Synchronisation Status using asok file
       module: cephfs_mirroring.test_cephfs_mirroring_snap_status_using_asok.py
+      name: Validate the Synchronisation Status using asok file
       polarion-id: "CEPH-83593134"
   - test:
       abort-on-fail: false
@@ -257,8 +266,9 @@ tests:
       clusters:
         ceph1:
           config:
-            name: Validate snapshot synchronisation using SnapSchedul
+            name: Validate snapshot synchronisation using SnapSchedule
       module: cephfs_mirroring.test_cephfs_mirroring_with_snap_schedule.py
+      name: Validate snapshot synchronisation using SnapSchedule
       polarion-id: "CEPH-83598968"
   - test:
       abort-on-fail: false
@@ -268,6 +278,7 @@ tests:
           config:
             name: "cephfs basic operations"
       module: cephfs_basic_tests.py
+      name: cephfs basic operations
       polarion-id: "CEPH-11293"
   - test:
       desc: cephfs_snapshot_management
@@ -277,6 +288,7 @@ tests:
           config:
             name: "cephfs_snapshot_management.py"
       polarion-id: CEPH-83571366
+      name: cephfs snapshot management
       abort-on-fail: false
   - test:
       clusters:
@@ -286,6 +298,7 @@ tests:
       module: bug-1980920.py
       desc: Cancel the clone operation and validate error message
       polarion-id: CEPH-83574681
+      name: Clone Operations
       abort-on-fail: false
   - test:
       clusters:
@@ -295,6 +308,7 @@ tests:
       module: nfs-ganesha_basics.py
       desc: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
       polarion-id: CEPH-83574439
+      name: Configure nfs-ganesha on nfs server,do mount on any client and do IOs
       abort-on-fail: false
   - test:
       clusters:
@@ -304,6 +318,7 @@ tests:
       module: cephfs_bugs.fsstress_kernel_verification.py
       polarion-id: CEPH-83575623
       desc: Run fsstress on kernel and fuse mounts
+      name: Run fsstress on kernel and fuse mounts
       abort-on-fail: false
   - test:
       clusters:
@@ -313,6 +328,7 @@ tests:
       module: xfs_test.py
       polarion-id: CEPH-83575623
       desc: Run xfs test on kernel
+      name: Run xfs test on kernel
       abort-on-fail: false
   - test:
        clusters:
@@ -322,6 +338,7 @@ tests:
        module: quota.quota_files.py
        polarion-id: CEPH-83573399
        desc: Tests the file attributes on the directory
+       name: Tests the file attributes on the directory
        abort-on-fail: false
   - test:
        clusters:
@@ -331,6 +348,7 @@ tests:
        module: quota.quota_bytes.py
        polarion-id: CEPH-83573399
        desc: Tests the Byte attr
+       name: Tests the Byte quota attr
   - test:
        clusters:
          ceph1:
@@ -339,6 +357,7 @@ tests:
        module: clients.fs_basic_bash_cmds.py
        polarion-id: CEPH-11300
        desc: Running basic bash commands on fuse,Kernel and NFS mounts
+       name: Running basic bash commands on fuse,Kernel and NFS mounts
        abort-on-fail: false
        config:
          no_of_files: 1000
@@ -352,6 +371,7 @@ tests:
           config:
             name: "Running basic bash commands on fuse,Kernel and NFS mounts"
       module: clients.verify_root_squash_in_caps.py
+      name: Running basic bash commands on fuse,Kernel and NFS mounts
       polarion-id: "CEPH-83573868"
   - test:
       desc: Create 4-5 Filesystem randomly on different MDS daemons
@@ -361,6 +381,7 @@ tests:
           config:
             name: "creation of multiple file systems"
       module: multifs.multifs_multiplefs.py
+      name: creation of multiple file systems
       polarion-id: CEPH-83573867
   - test:
       desc: cephfs-top metrcis verification using --dump
@@ -370,6 +391,7 @@ tests:
           config:
             name: "cephfs-top metrcis verification using --dump"
       module: cephfs_top.cephfs_top_dump.py
+      name: cephfs-top metrcis verification using --dump
       polarion-id: CEPH-83573848
   - test:
       abort-on-fail: false
@@ -380,6 +402,7 @@ tests:
       desc: "Taking the cephfs down with down flag"
       module: cephfs_recovery.fs_down_flag.py
       polarion-id: CEPH-83573264
+      name: Taking the cephfs down with down flag
       comments: "Product bug - BZ-2225891"
   - test:
       abort-on-fail: false
@@ -389,4 +412,5 @@ tests:
           config:
             name: "Execute FS Scrub Commands on cephfs"
       module: cephfs_recovery.fs_scrub.py
+      name: Execute FS Scrub Commands on cephfs
       polarion-id: CEPH-11267
