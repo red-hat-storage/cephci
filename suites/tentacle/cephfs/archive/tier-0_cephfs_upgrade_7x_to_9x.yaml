@@ -4,7 +4,7 @@
 #
 # Test Steps:
 #   (1) Bootstrap cluster using latest released ceph 6.x with below options,
-#       - rhcs-version: 7.1 in this suite, but it can be changed to 7.x for upgrade start version as needed
+#       - rhcs-version: 6.1 in this suite, but it can be changed to 6.x for upgrade start version as needed
 #       - release: ga in this suite but it can be changed to  <ga | z1 | z1-async1>
 #       - registry-url: <registry-URL>
 #       - mon-ip: <monitor address, Required>
