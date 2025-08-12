@@ -5,9 +5,9 @@ import secrets
 import string
 import time
 import traceback
-from distutils.version import LooseVersion
 
 import dateutil.parser as parser
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsv1

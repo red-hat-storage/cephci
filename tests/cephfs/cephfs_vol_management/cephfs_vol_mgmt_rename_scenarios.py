@@ -5,7 +5,8 @@ import secrets
 import string
 import time
 import traceback
-from distutils.version import LooseVersion
+
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from ceph.parallel import parallel

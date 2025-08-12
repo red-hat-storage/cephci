@@ -4,8 +4,9 @@ import random
 import string
 import time
 import traceback
-from distutils.version import LooseVersion
 from time import sleep
+
+from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils

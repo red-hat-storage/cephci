@@ -138,7 +138,7 @@ def test_rbd(rbd, pool_type, **kw):
             return 1
 
         resize_int = size_int + 2
-        resize = f"{resize_int}{size.replace(str(size_int),'')}"
+        resize = f"{resize_int}{size.replace(str(size_int), '')}"
         if rbd.image_resize(pool, clone, resize):
             log.error(f"Clone resize failed for {clone}")
             return 1

@@ -1,5 +1,6 @@
 import traceback
-from distutils.version import LooseVersion
+
+from looseversion import LooseVersion
 
 from utility.log import Log
 from utility.utils import get_ceph_version_from_cluster, get_ceph_version_from_repo
