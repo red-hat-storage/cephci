@@ -230,38 +230,44 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                 snap_intervals = image_config_val.get("snap_schedule_intervals")
 
                 if snap_levels and snap_intervals:
-                    level = snap_levels[0]
-                    interval = snap_intervals[0]
+                    for level in snap_levels:
+                        for interval in snap_intervals:
+                            # Handle case when level is 'namespace' but no namespace is defined (i.e., default ns)
+                            effective_level = (
+                                "image"
+                                if level == "namespace" and not namespace
+                                else level
+                            )
 
-                    # Handle case when level is 'namespace' but no namespace is defined (i.e., default ns)
-                    effective_level = (
-                        "image" if level == "namespace" and not namespace else level
-                    )
+                            out, err = add_snapshot_scheduling(
+                                rbd_primary,
+                                pool=pool,
+                                image=image,
+                                level=effective_level,
+                                interval=interval,
+                                namespace=namespace,
+                            )
+                            if err:
+                                raise Exception(
+                                    "Adding snapshot schedule failed with error %s"
+                                    % err
+                                )
 
-                    out, err = add_snapshot_scheduling(
-                        rbd_primary,
-                        pool=pool,
-                        image=image,
-                        level=effective_level,
-                        interval=interval,
-                        namespace=namespace,
-                    )
-                    if err:
-                        raise Exception(
-                            "Adding snapshot schedule failed with error %s" % err
-                        )
+                            # Retain original level for remaining tests
+                            level = effective_level
 
-                    # Retain original level for remaining tests
-                    level = effective_level
-
-                    # Verify snapshot schedules are effective on the namespaces
-                    verify_snapshot_schedule(
-                        rbd_primary,
-                        pool,
-                        image=image,
-                        interval=interval,
-                        namespace=namespace,
-                    )
+                            # Verify snapshot schedules are effective on the namespaces
+                            if verify_snapshot_schedule(
+                                rbd_primary,
+                                pool,
+                                image=image,
+                                interval=interval,
+                                namespace=namespace,
+                            ):
+                                raise Exception(
+                                    "Snapshot schedule verification failed at {} level for {} "
+                                    "with interval: {}".format(level, image, interval)
+                                )
 
                 # Verify namespace mirroring UUIDs and remote namespaces
                 verify_namespace_mirror_uuid(
@@ -376,7 +382,7 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                 log.info(f"Renamed image {pri_image_spec} to {new_image_spec_pri}")
 
                 time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
+                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 180
                 )
 
                 new_image_spec_sec = f"{pool}/{remote_namespace}/{image}_renamed"

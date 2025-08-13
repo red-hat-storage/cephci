@@ -184,6 +184,7 @@ tests:
               mirrormode: snapshot
               snap_schedule_intervals:
                 - 1m
+                - 5m
             ec_pool_config:
               num_pools: 1
               num_images: 1
