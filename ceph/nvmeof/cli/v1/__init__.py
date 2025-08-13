@@ -1,31 +1,34 @@
 from json import loads
 
-from ceph.nvmegw_cli.connection import Connection
-from ceph.nvmegw_cli.execute import ExecuteCommandMixin
-from ceph.nvmegw_cli.gateway import Gateway
-from ceph.nvmegw_cli.host import Host
-from ceph.nvmegw_cli.listener import Listener
-from ceph.nvmegw_cli.log_level import LogLevel
-from ceph.nvmegw_cli.namespace import Namespace
-from ceph.nvmegw_cli.subsystem import Subsystem
-from ceph.nvmegw_cli.version import Version
+from ceph.nvmeof.cli.v1.connection import Connection
+from ceph.nvmeof.cli.v1.execute import ExecuteCommandMixin
+from ceph.nvmeof.cli.v1.gateway import Gateway
+from ceph.nvmeof.cli.v1.host import Host
+from ceph.nvmeof.cli.v1.listener import Listener
+from ceph.nvmeof.cli.v1.log_level import LogLevel
+from ceph.nvmeof.cli.v1.namespace import Namespace
+from ceph.nvmeof.cli.v1.subsystem import Subsystem
+from ceph.nvmeof.cli.v1.version import Version
 from cephci.utils.configs import get_configs, get_registry_credentials
 from cli.utilities.containers import Registry
 
 
 class NVMeGWCLI(ExecuteCommandMixin):
-    def __init__(self, node, port=5500, mtls=False) -> None:
+    cli_version = "v1"
+
+    def __init__(self, node, **kwargs) -> None:
         self.node = node
-        self.port = port
-        self._mtls = mtls
-        self.connection = Connection(node, port, mtls)
-        self.gateway = Gateway(node, port, mtls)
-        self.host = Host(node, port, mtls)
-        self.loglevel = LogLevel(node, port, mtls)
-        self.listener = Listener(node, port, mtls)
-        self.namespace = Namespace(node, port, mtls)
-        self.subsystem = Subsystem(node, port, mtls)
-        self.version = Version(node, port, mtls)
+        self.port = kwargs.get("port", 5500)
+        self._mtls = kwargs.get("mtls", False)
+        self.connection = Connection(self)
+        self.gateway = Gateway(self)
+        self.host = Host(self)
+        self.loglevel = LogLevel(self)
+        self.listener = Listener(self)
+        self.namespace = Namespace(self)
+        self.subsystem = Subsystem(self)
+        self.version = Version(self)
+        self.v1 = True
 
         self.name = " "
         for clas in [
@@ -83,7 +86,7 @@ class NVMeGWCLI(ExecuteCommandMixin):
     def fetch_gateway(self):
         """Return Gateway info"""
         gwinfo = {"base_cmd_args": {"format": "json"}}
-        _, out = self.gateway.info(**gwinfo)
+        out, _ = self.gateway.info(**gwinfo)
         out = loads(out)
         return out
 

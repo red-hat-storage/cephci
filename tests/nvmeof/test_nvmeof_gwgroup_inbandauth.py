@@ -1,11 +1,13 @@
 from ceph.ceph import Ceph
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmeof.initiator import Initiator
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_nvmeof
 from tests.nvmeof.workflows.ha import HighAvailability
-from tests.nvmeof.workflows.nvme_utils import apply_nvme_sdk_cli_support
+from tests.nvmeof.workflows.nvme_utils import (
+    apply_nvme_sdk_cli_support,
+    check_and_set_nvme_cli_image,
+)
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id
@@ -290,10 +292,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
+    check_and_set_nvme_cli_image(ceph_cluster, config=overrides)
 
     try:
         for gwgroup_config in config["gw_groups"]:
@@ -313,6 +312,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 ha = HighAvailability(
                     ceph_cluster, gwgroup_config["gw_nodes"], **gwgroup_config
                 )
+                ha.initialize_gateways()
 
             # Configure subsystems and run HA
             if config.get("test_case"):

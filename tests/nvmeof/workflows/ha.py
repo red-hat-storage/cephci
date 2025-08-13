@@ -16,8 +16,11 @@ from ceph.utils import get_node_by_id, get_openstack_driver
 from ceph.waiter import WaitUntil
 from tests.io.io_utils import get_max_clat_from_fio_output
 from tests.nvmeof.workflows.initiator import NVMeInitiator, validate_initiator
-from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
-from tests.nvmeof.workflows.nvme_utils import deploy_nvme_service
+from tests.nvmeof.workflows.nvme_gateway import create_gateway
+from tests.nvmeof.workflows.nvme_utils import (
+    deploy_nvme_service,
+    nvme_gw_cli_version_adapter,
+)
 from utility.log import Log
 from utility.retry import retry
 from utility.utils import log_json_dump
@@ -40,6 +43,7 @@ class HighAvailability:
         """
         self.cluster = ceph_cluster
         self.config = config
+        self.gw_list = gateways
         self.gateways = []
         self.mtls = config.get("mtls")
         self.gateway_group = config.get("gw_group", "")
@@ -49,18 +53,30 @@ class HighAvailability:
         self.nvme_pool = config["rbd_pool"]
         self.clients = []
         self.initiators = {}
-
-        for gateway in gateways:
-            gw_node = get_node_by_id(self.cluster, gateway)
-            self.gateways.append(NVMeGateway(gw_node, self.mtls))
-
-        self.ana_ids = [i.ana_group_id for i in self.gateways]
+        self.ana_ids = []
         self.fail_ops = {
             "systemctl": self.system_control,
             "daemon": self.ceph_daemon,
             "power_on_off": self.power_on_off,
             "maintanence_mode": self.maintanence_mode,
         }
+
+    def initialize_gateways(self):
+        """Initialize Gateways."""
+        version = nvme_gw_cli_version_adapter(self.cluster)
+
+        for gateway in self.gw_list:
+            gw_node = get_node_by_id(self.cluster, gateway)
+            self.gateways.append(
+                create_gateway(
+                    version,
+                    gw_node,
+                    mtls=self.mtls,
+                    shell=getattr(self.orch, "shell"),
+                    gw_group=self.gateway_group,
+                )
+            )
+        self.ana_ids = [i.ana_group_id for i in self.gateways]
 
     def check_gateway(self, node_id):
         """Check node is NVMeoF Gateway node.
@@ -80,7 +96,7 @@ class HighAvailability:
 
         if key not in self.initiators:
             node = get_node_by_id(self.cluster, node_id)
-            self.initiators[key] = NVMeInitiator(node, self.gateways[0], nqn)
+            self.initiators[key] = NVMeInitiator(node, nqn)
 
         return self.initiators[key]
 
@@ -538,7 +554,15 @@ class HighAvailability:
         self.gateways = []
         for gateway in self.config["gw_nodes"]:
             gw_node = get_node_by_id(self.cluster, gateway)
-            self.gateways.append(NVMeGateway(gw_node, self.mtls))
+            self.gateways.append(
+                create_gateway(
+                    nvme_gw_cli_version_adapter(self.cluster),
+                    gw_node,
+                    mtls=self.mtls,
+                    shell=getattr(self.orch, "shell"),
+                    gw_group=self.gateway_group,
+                )
+            )
 
         start_counter, start_time = get_current_timestamp()
         for gateway in to_be_scaledown_gws:
@@ -606,7 +630,15 @@ class HighAvailability:
 
         for gateway_node in scaleup_nodes:
             gw = get_node_by_id(self.cluster, gateway_node)
-            new_gws.append(NVMeGateway(gw, self.mtls))
+            new_gws.append(
+                create_gateway(
+                    nvme_gw_cli_version_adapter(self.cluster),
+                    gw,
+                    mtls=self.mtls,
+                    shell=getattr(self.orch, "shell"),
+                    gw_group=self.gateway_group,
+                )
+            )
 
         start_counter, start_time = get_current_timestamp()
         for gateway in new_gws:
@@ -684,7 +716,15 @@ class HighAvailability:
         self.gateways = []
         for gateway in gwnodes_to_be_deployed:
             gw_node = get_node_by_id(self.cluster, gateway)
-            self.gateways.append(NVMeGateway(gw_node, self.mtls))
+            self.gateways.append(
+                create_gateway(
+                    nvme_gw_cli_version_adapter(self.cluster),
+                    gw_node,
+                    mtls=self.mtls,
+                    shell=getattr(self.orch, "shell"),
+                    gw_group=self.gateway_group,
+                )
+            )
 
         # Validate ana_grp_ids post scale up
         for scaleup_node in scaleup_nodes:
@@ -969,7 +1009,7 @@ class HighAvailability:
             if io_client.get("subnqn"):
                 nqn = io_client.get("subnqn")
             client = self.get_or_create_initiator(io_client["node"], nqn)
-            client.connect_targets(io_client)
+            client.connect_targets(self.gateways[0], io_client)
             if client not in self.clients:
                 self.clients.append(client)
         if return_clients:
@@ -985,7 +1025,7 @@ class HighAvailability:
             list of namespaces
         """
         args = {"base_cmd_args": {"format": "json"}}
-        _, subsystems = gateway.subsystem.list(**args)
+        subsystems, _ = gateway.subsystem.list(**args)
         subsystems = json.loads(subsystems)
 
         namespaces = []
@@ -993,7 +1033,7 @@ class HighAvailability:
         for subsystem in subsystems["subsystems"]:
             sub_name = subsystem["nqn"]
             cmd_args = {"args": {"subsystem": subsystem["nqn"]}}
-            _, nspaces = gateway.namespace.list(**{**args, **cmd_args})
+            nspaces, _ = gateway.namespace.list(**{**args, **cmd_args})
             nspaces = json.loads(nspaces)["namespaces"]
             all_ns.extend(nspaces)
 
@@ -1089,9 +1129,9 @@ class HighAvailability:
         """Validate that the namespace visibility is correct from all initiators."""
         for node in init_nodes:
             initiator_node = get_node_by_id(self.cluster, node)
-            client = NVMeInitiator(initiator_node, self.gateways[0])
+            client = NVMeInitiator(initiator_node)
             client.disconnect_all()  # Reconnect NVMe targets
-            client.connect_targets(config={"nqn": "connect-all"})
+            client.connect_targets(self.gateways[0], config={"nqn": "connect-all"})
             serial_to_namespace = defaultdict(set)
 
             out, _ = initiator_node.exec_command(

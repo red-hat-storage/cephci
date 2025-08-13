@@ -4,10 +4,15 @@ from copy import deepcopy
 from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmeof.initiator import Initiator
+from ceph.ceph_admin.orch import Orch
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
+from tests.nvmeof.workflows.nvme_gateway import create_gateway
+from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
+    nvme_gw_cli_version_adapter,
+)
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.retry import retry
@@ -242,7 +247,7 @@ def configure_namespaces(
                     },
                 }
                 namespace_func = fetch_method(_cls, command)
-                _, namespaces = namespace_func(**config)
+                namespaces, _ = namespace_func(**config)
                 nsid = json.loads(namespaces)["nsid"]
 
                 _config = {
@@ -250,7 +255,7 @@ def configure_namespaces(
                     "args": {"subsystem": subnqn, "nsid": nsid},
                 }
                 namespace_list = fetch_method(_cls, "list")
-                _, namespace = namespace_list(**_config)
+                namespace, _ = namespace_list(**_config)
                 ns_uuid = json.loads(namespace)["namespaces"][0]["uuid"]
 
                 for io in io_param:
@@ -297,7 +302,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     LOG.info("Configure Ceph NVMeoF entities at scale over CLI.")
     config = deepcopy(kwargs["config"])
     node = get_node_by_id(ceph_cluster, config["node"])
-    port = config.get("port", 5500)
     rbd_pool = config.get("rbd_pool", "rbd_pool")
     kwargs["config"].update(
         {
@@ -307,12 +311,20 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         }
     )
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
+
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = None
     overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
-    nvmegwcli = NVMeGWCLI(node, port)
+    check_and_set_nvme_cli_image(ceph_cluster, config=overrides)
+
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
 
     try:
         steps = config.get("steps", [])

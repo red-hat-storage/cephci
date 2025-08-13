@@ -13,8 +13,8 @@ from time import sleep
 from ceph.ceph import Ceph, SocketTimeoutException
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.helper import check_service_exists
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmeof.initiator import Initiator
+from ceph.ceph_admin.orch import Orch
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
@@ -29,8 +29,13 @@ from tests.nvmeof.test_ceph_nvmeof_gateway import (
     teardown,
 )
 from tests.nvmeof.workflows.initiator import NVMeInitiator
-from tests.nvmeof.workflows.nvme_gateway import NVMeGateway
-from tests.nvmeof.workflows.nvme_utils import deploy_nvme_service, setup_firewalld
+from tests.nvmeof.workflows.nvme_gateway import create_gateway
+from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
+    deploy_nvme_service,
+    nvme_gw_cli_version_adapter,
+    setup_firewalld,
+)
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.retry import retry
@@ -43,8 +48,16 @@ cli_image = str()
 def test_ceph_83575812(ceph_cluster, rbd, pool, config):
     """CEPH-83575812 Remove the image during NVMe images are in use."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
     listener_port = find_free_port(gw_node)
     subsystem = dict()
     subsystem.update(
@@ -97,8 +110,16 @@ def test_ceph_83575812(ceph_cluster, rbd, pool, config):
 def test_ceph_83576084(ceph_cluster, rbd, pool, config):
     """CEPH-83576084: Delete-recreate bdev in loop and rediscover namespace."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -211,8 +232,16 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
 def test_ceph_83575467(ceph_cluster, rbd, pool, config):
     """CEPH-83575467: Perform restart and validate the gateway entities"""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -249,7 +278,7 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
         @retry(IOError, tries=5, delay=5)
         def list_subsystems(**sub_args):
             try:
-                _, out = nvmegwcli.subsystem.list(**sub_args)
+                out, _ = nvmegwcli.subsystem.list(**sub_args)
                 return out
             except Exception as e:
                 raise IOError(e)
@@ -299,8 +328,16 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
 def test_ceph_83576085(ceph_cluster, rbd, pool, config):
     """CEPH-83576085: Perform map and unmap NVMe namespaces in loop."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -403,8 +440,16 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
 def test_ceph_83576087(ceph_cluster, rbd, pool, config):
     """CEPH-83576087: Reboot client node and validate NVMe namespaces"""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -526,8 +571,16 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
 def test_ceph_83576093(ceph_cluster, rbd, pool, config):
     """CEPH-83576093: Perform reboot on GW node and validate the namespaces."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -642,8 +695,16 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
 def test_ceph_83575455(ceph_cluster, rbd, pool, config):
     """CEPH-83575455: Validate Host access failures"""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
     client = get_node_by_id(ceph_cluster, config["initiator_node"])
     initiator = Initiator(client)
     initiator_nqn = initiator.nqn()
@@ -797,8 +858,16 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
 def test_ceph_83575813(ceph_cluster, rbd, pool, config):
     """CEPH-83575813: Perform NVMeoF RBD operations expand on images."""
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -897,8 +966,16 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
         int: 0 on success, 1 on failure.
     """
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     mon_obj = MonitorWorkflows(node=cephadm)
     rados_obj = RadosOrchestrator(node=cephadm)
@@ -979,8 +1056,16 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
     """
 
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -1015,7 +1100,7 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
         }
         nvmegwcli.namespace.add(**ns_args)
         config.update(initiator_cfg)
-        _, namespaces = nvmegwcli.namespace.list(**list_args)
+        namespaces, _ = nvmegwcli.namespace.list(**list_args)
         namespaces = json.loads(namespaces)
         nsid = namespaces.get("namespaces")[0].get("nsid")
         try:
@@ -1045,7 +1130,7 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
             if "unrecognized arguments:" not in str(err):
                 raise Exception("Set QoS was failed as expected due to invalid args.")
             LOG.info("Set QoS was failed as expected due to invalid args....")
-
+        return 0
     finally:
         cleanup_cfg = {
             "gw_node": config.get("gw_node"),
@@ -1056,7 +1141,7 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
         }
         config.update(cleanup_cfg)
         teardown(ceph_cluster, rbd, nvmegwcli, config)
-        return 0
+    return 1
 
 
 def test_ceph_83581945(ceph_cluster, rbd, pool, config):
@@ -1070,8 +1155,16 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
         int: 0 on success, 1 on failure.
     """
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -1104,7 +1197,7 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
         }
         config.update(initiator_cfg)
         nvmegwcli.namespace.add(**ns_args)
-        _, namespaces = nvmegwcli.namespace.list(**list_args)
+        namespaces, _ = nvmegwcli.namespace.list(**list_args)
         namespaces = json.loads(namespaces)
         nsid = namespaces.get("namespaces")[0].get("nsid")
         try:
@@ -1178,8 +1271,16 @@ def test_ceph_83581755(ceph_cluster, rbd, pool, config):
         int: 0 on success, 1 on failure.
     """
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    NVMeGWCLI.NVMEOF_CLI_IMAGE = cli_image
-    nvmegwcli = NVMeGWCLI(gw_node, 5500)
+    ceph = Orch(ceph_cluster, **{})
+    nvmegwcli = create_gateway(
+        nvme_gw_cli_version_adapter(ceph_cluster),
+        gw_node,
+        mtls=config.get("mtls"),
+        shell=getattr(ceph, "shell"),
+        port=config.get("gw_port", 5500),
+        gw_group=config.get("gw_group"),
+    )
+    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -1215,7 +1316,7 @@ def test_ceph_83581755(ceph_cluster, rbd, pool, config):
                 }
             }
             nvmegwcli.namespace.add(**ns_args)
-            _, namespaces = nvmegwcli.namespace.list(**list_args)
+            namespaces, _ = nvmegwcli.namespace.list(**list_args)
             list_namespaces = json.loads(namespaces)
             nsid.append(list_namespaces.get("namespaces")[i].get("nsid"))
 
@@ -1339,7 +1440,7 @@ def test_ceph_83608266(
                 }
                 nvmegwcli.namespace.add(**ns_args)
 
-            _, subsystem_list_bkp = nvmegwcli.subsystem.list(
+            subsystem_list_bkp, _ = nvmegwcli.subsystem.list(
                 base_cmd_args={"format": "json"}
             )
             subsystem_list = json.loads(subsystem_list_bkp.strip())["subsystems"]
@@ -1350,7 +1451,7 @@ def test_ceph_83608266(
     def validate_redeployment_effects(
         initial_subsystems, initial_states, initial_containers, gw_node, nvmegwcli, pool
     ):
-        _, updated_subsystems_raw = nvmegwcli.subsystem.list(
+        updated_subsystems_raw, _ = nvmegwcli.subsystem.list(
             base_cmd_args={"format": "json"}
         )
         updated_subsystems = json.loads(updated_subsystems_raw.strip())["subsystems"]
@@ -1431,7 +1532,14 @@ def test_ceph_83608266(
         conf["pos_args"].append("gw_group1")
 
         LOG.info("Deploying NVMe service in gw_group1")
-        nvmegwcli = NVMeGWCLI(gw_node, 5500)
+        _cls = nvme_gw_cli_version_adapter(ceph_cluster)
+        ceph = Orch(ceph_cluster, **{})
+
+        args = {
+            "shell": getattr(ceph, "shell"),
+            "port": config.get("port", 5500),
+        }
+        nvmegwcli = _cls(gw_node, **args)
         initial_subsystems, initial_states, initial_containers = deploy_nvme_service(
             conf, gw_node, nvmegwcli, False
         )
@@ -1439,9 +1547,15 @@ def test_ceph_83608266(
         # Start IO Execution
         for io_client in config["initiators"]:
             node = get_node_by_id(ceph_cluster, io_client["node"])
-            gateway = NVMeGateway(gw_node, False)
-            client = NVMeInitiator(node, gateway)
-            client.connect_targets(io_client)
+            gateway = create_gateway(
+                _cls,
+                gw_node,
+                shell=getattr(ceph, "shell"),
+                port=config.get("port", 5500),
+                gw_group=config.get("gw_group"),
+            )
+            client = NVMeInitiator(node)
+            client.connect_targets(gateway, io_client)
             clients.append(client)
 
         for initiator in clients:
@@ -1511,11 +1625,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     io_tasks = []
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            cli_image = value
-            break
-
+    check_and_set_nvme_cli_image(ceph_cluster, config=overrides)
     try:
         if config["operation"] != "CEPH-83608266":
             rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]

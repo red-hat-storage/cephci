@@ -1,7 +1,7 @@
 import json
 
 from ceph.ceph import CommandFailed
-from ceph.nvmeof.initiator import Initiator
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from utility.log import Log
 from utility.retry import retry
@@ -11,9 +11,8 @@ LOG = Log(__name__)
 
 
 class NVMeInitiator(Initiator):
-    def __init__(self, node, gateway, nqn=""):
+    def __init__(self, node, nqn=""):
         super().__init__(node)
-        self.gateway = gateway
         self.discovery_port = 8009
         self.subsys_key = None
         self.host_key = None
@@ -76,14 +75,14 @@ class NVMeInitiator(Initiator):
         LOG.debug(f"[ {self.node.hostname} ] LSBLK UUIds : {log_json_dump(out)}")
         return uuids
 
-    def connect_targets(self, config):
+    def connect_targets(self, gateway, config):
         if not config:
             config = self.config
 
         # Discover the subsystem endpoints
         cmd_args = {
             "transport": "tcp",
-            "traddr": self.gateway.node.ip_address,
+            "traddr": gateway.node.ip_address,
         }
         json_format = {"output-format": "json"}
 

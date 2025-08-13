@@ -10,8 +10,7 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from ceph.ceph import Ceph
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmeof.initiator import Initiator
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.waiter import WaitUntil
 from tests.nvmeof.test_ceph_nvmeof_high_availability import (
@@ -22,7 +21,10 @@ from tests.nvmeof.test_ceph_nvmeof_high_availability import (
     get_node_by_id,
     teardown,
 )
-from tests.nvmeof.workflows.nvme_utils import delete_nvme_service
+from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
+    delete_nvme_service,
+)
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.retry import retry
@@ -157,28 +159,6 @@ class PrometheusAlerts:
                 f"[ {alert_name} ] - ( Expected: {state} )\n{dumps(_alert)}"
             )
 
-    # def monitor_alert1(self, alert_name, state="firing", timeout=60, msg=""):
-    #     """Monitor NVMe alert."""
-
-    #     @retry(NVMeAlertFailure, tries=3, delay=timeout, backoff=1)
-    #     def check():
-    #         _alert = self.get_nvme_alert_by_name(alert_name)
-    #         if _alert["state"] == state:
-    #             LOG.info(
-    #                 f"[ {alert_name} ] is in Expected {state} state  - \n{dumps(_alert)}"
-    #             )
-    #             if msg:
-    #                 for alrt in _alert["alerts"]:
-    #                     if alrt["annotations"]["summary"] == msg:
-    #                         LOG.info(f"[ {alert_name} ] has expected msg {msg}")
-    #                         return _alert
-    #             return _alert
-    #         raise NVMeAlertFailure(
-    #             f"[ {alert_name} ] - ( Expected: {state} )\n{dumps(_alert)}"
-    #         )
-
-    #     return check()
-
 
 def test_ceph_83611097(ceph_cluster, config):
     """[CEPH-83611097] NVMeoFNVMeoFMissingListener alert.
@@ -199,6 +179,7 @@ def test_ceph_83611097(ceph_cluster, config):
     # Deploy Services
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
 
     # Create RBD image and multiple NS with that image.
     nvmegwcli = ha.gateways[0]
@@ -297,7 +278,9 @@ def test_ceph_83610950(ceph_cluster, config):
     for svc in config["gw_groups"]:
         svc.update({"rbd_pool": _rbd_pool})
         deploy_nvme_service(ceph_cluster, svc)
-        svcs.append(HighAvailability(ceph_cluster, svc["gw_nodes"], **svc))
+        ha = HighAvailability(ceph_cluster, svc["gw_nodes"], **svc)
+        ha.initialize_gateways()
+        svcs.append(ha)
 
     # Create RBD image and multiple NS with that image.
     ha1, ha2 = svcs
@@ -367,6 +350,7 @@ def test_ceph_83610948(ceph_cluster, config):
     rbd_pool = config["rbd_pool"]
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
 
     with parallel() as p:
         for subsys_args in config["subsystems"]:
@@ -450,6 +434,7 @@ def test_ceph_83611098(ceph_cluster, config):
     LOG.info("Deploy nvme service")
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
 
     # Configure subsystems
     nvmegwcl1 = ha.gateways[0]
@@ -534,6 +519,8 @@ def test_ceph_83611099(ceph_cluster, config):
     config.update({"gw_nodes": [random_gateway]})
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
+
     # Check for alert
     # NVMeoFSingleGateway prometheus alert should be firing
     events = PrometheusAlerts(ha.orch)
@@ -596,6 +583,7 @@ def test_ceph_83611306(ceph_cluster, config):
     LOG.info("Deploy NVME service")
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
 
     with parallel() as p:
         for subsys_args in config["subsystems"]:
@@ -702,6 +690,8 @@ def test_CEPH_83616917(ceph_cluster, config):
     LOG.info("deploy nvme service")
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
+
     # Configure subsystems, --max-namespaces is 10 and we are creating 10 namesapces
     with parallel() as p:
         for subsys_args in config["subsystems"]:
@@ -765,6 +755,8 @@ def test_ceph_83617544(ceph_cluster, config):
     gateway_nodes = deepcopy(config.get("gw_nodes"))
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
+
     # Check for alert
     # NVMeoFMaxGatewayGroupSize prometheus alert should be firing
     events = PrometheusAlerts(ha.orch)
@@ -824,6 +816,7 @@ def test_ceph_83616916(ceph_cluster, config):
     LOG.info("deploy nvme service")
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
     nvmegwcli = ha.gateways[0]
 
     with parallel() as p:
@@ -893,7 +886,10 @@ def test_ceph_83617404(ceph_cluster, config):
     for svc in config["gw_groups"]:
         svc.update({"rbd_pool": rbd_pool})
         deploy_nvme_service(ceph_cluster, svc)
-        svcs.append(HighAvailability(ceph_cluster, svc["gw_nodes"], **svc))
+        ha = HighAvailability(ceph_cluster, svc["gw_nodes"], **svc)
+        ha.initialize_gateways()
+        svcs.append(ha)
+
     ha1 = svcs[0]
     # Check for alert
     # NVMeoFMaxGatewayGroups prometheus alert should be firing
@@ -965,6 +961,7 @@ def test_ceph_83617622(ceph_cluster, config):
     LOG.info("deploy nvme service")
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
 
     # Configure subsystems
     nvmegwcl1 = ha.gateways[0]
@@ -1035,6 +1032,7 @@ def test_ceph_83617545(ceph_cluster, config):
     LOG.info("deploy nvme service")
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
     nvmegwcl1 = ha.gateways[0]
 
     # Configure subsystems
@@ -1101,6 +1099,7 @@ def test_ceph_83617640(ceph_cluster, config):
     LOG.info("deploy nvme service")
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
 
     # Configure subsystems
     LOG.info("Configure subsystems")
@@ -1209,7 +1208,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     Returns:
         int - 0 when the execution is successful else 1 (for failure).
     """
-    LOG.info("Starting Ceph Ceph NVMEoF deployment.")
     config = kwargs["config"]
     kwargs["config"].update(
         {
@@ -1221,11 +1219,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
-    overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
+    custom_config = kwargs.get("test_data", {}).get("custom-config")
+    check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
 
     try:
         # NVMe alert test case to run

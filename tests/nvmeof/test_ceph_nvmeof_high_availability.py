@@ -9,12 +9,12 @@ from copy import deepcopy
 from ceph.ceph import Ceph
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import check_service_exists
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmeof.initiator import Initiator
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.ha import HighAvailability
 from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
     delete_nvme_service,
     deploy_nvme_service,
     get_nvme_service_name,
@@ -177,6 +177,7 @@ def test_ceph_83595464(ceph_cluster, config):
 
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
 
     with parallel() as p:
         for subsys_args in config["subsystems"]:
@@ -272,11 +273,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
-    overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
+    custom_config = kwargs.get("test_data", {}).get("custom-config")
+    check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
 
     try:
         # Any test case to run
@@ -289,6 +287,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             deploy_nvme_service(ceph_cluster, config)
 
         ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+        ha.initialize_gateways()
 
         # Configure Subsystem
         if config.get("subsystems"):

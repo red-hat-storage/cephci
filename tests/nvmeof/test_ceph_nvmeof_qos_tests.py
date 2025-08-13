@@ -9,14 +9,17 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 from ceph.ceph import Ceph
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmeof.initiator import Initiator
+from ceph.ceph_admin.orch import Orch
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.nvme_gateway import create_gateway
 from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
     delete_nvme_service,
     deploy_nvme_service,
+    nvme_gw_cli_version_adapter,
     validate_qos,
     verify_qos,
 )
@@ -246,7 +249,7 @@ def run_io_and_validate_qos(ceph_cluster, config, key, qos_args, nvmegwcli):
     initiators = config["initiators"]
 
     ha = HighAvailability(ceph_cluster, [config["gw_node"]], **config)
-    ha.prepare_io_execution(initiators)
+    ha.prepare_io_execution(nvmegwcli, initiators)
     devices_dict = ha.clients[0].fetch_lsblk_nvme_devices_dict()
     lsblk_devs = [device["name"] for device in devices_dict]
     io_mode = {
@@ -310,20 +313,25 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     config = kwargs["config"]
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
-
-    overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
-
+    custom_config = kwargs.get("test_data", {}).get("custom-config")
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gw_port = config.get("gw_port", 5500)
-    nvmegwcli = NVMeGWCLI(gw_node, gw_port)
+    ceph = Orch(ceph_cluster, **{})
+
+    nvmegwcli = None
+    check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
 
     try:
         if config.get("install"):
             deploy_nvme_service(ceph_cluster, config)
+
+        nvmegwcli = create_gateway(
+            nvme_gw_cli_version_adapter(ceph_cluster),
+            gw_node,
+            mtls=config.get("mtls"),
+            shell=getattr(ceph, "shell"),
+            port=config.get("gw_port", 5500),
+            gw_group=config.get("gw_group"),
+        )
 
         if config.get("subsystems"):
             with parallel() as p:
