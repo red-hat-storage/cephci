@@ -27,10 +27,10 @@ def run(ceph_cluster, **kw):
     try:
         fs_util_v1 = FsUtilsV1(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
-        default_fs = "cephfs"
+        default_fs = "cephfs-scale"
         subvolume_group_name = "subvolgroup1"
 
-        mount_path = "/mnt/cephfs_"
+        mount_path = "/mnt/cephfs_scale"
 
         with parallel() as p:
             for client in clients:
