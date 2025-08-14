@@ -210,6 +210,7 @@ tests:
   - test:
       abort-on-fail: True
       desc: Verify default to non-default namespace mirroring
+      comments: Product bug 2358634
       name: >
         Snapshot based Namespace level mirroring from
         default to non-default namespace

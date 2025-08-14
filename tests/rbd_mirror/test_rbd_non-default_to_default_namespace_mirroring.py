@@ -125,6 +125,7 @@ from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
 from ceph.rbd.workflows.rbd_mirror import enable_image_mirroring, wait_for_status
 from ceph.rbd.workflows.snap_scheduling import (
     add_snapshot_scheduling,
+    remove_snapshot_scheduling,
     verify_namespace_snapshot_schedule,
     verify_snapshot_schedule,
 )
@@ -415,6 +416,7 @@ def test_default_to_non_default_namespace_mirroring(
                         out, err = add_snapshot_scheduling(
                             rbd_primary, **snap_schedule_config
                         )
+
                         if verify_snapshot_schedule(
                             rbd_primary, pool, image, interval=interval
                         ):
@@ -425,6 +427,7 @@ def test_default_to_non_default_namespace_mirroring(
                                 + image
                                 + " failed"
                             )
+
                 pri_image_spec = f"{pool}/{image}"
                 sec_image_spec = f"{pool}/{remote_namespace}/{image}"
                 # Write data on the primary image
@@ -501,6 +504,27 @@ def test_default_to_non_default_namespace_mirroring(
                         "Data is consistent with the mirrored image for "
                         + pri_image_spec
                     )
+
+                # Remove schedule from primary
+                out, err = remove_snapshot_scheduling(
+                    rbd_primary,
+                    pool=pool,
+                    image=image,
+                    level=level,
+                    interval=interval,
+                    namespace=namespace,
+                )
+
+                if err:
+                    raise Exception("Failed to remove mirror snapshot schedule")
+
+                disable_args = {"pool": pool, "image": image}
+                if namespace:
+                    disable_args["namespace"] = namespace
+
+                out, err = rbd_primary.mirror.image.disable(**disable_args)
+                if "Mirroring disabled" in out:
+                    log.info(f"Successfully disabled mirroring for {image} on site-A")
 
             # create image in the non-default namespace on secondary
             log.info(
@@ -590,6 +614,97 @@ def test_default_to_non_default_namespace_mirroring(
             }
             if check_data_integrity(**data_integrity_spec):
                 raise Exception("Data integrity check failed for " + pri_image_spec)
+
+            # Remove schedule from secondary
+            out, err = remove_snapshot_scheduling(
+                rbd_secondary,
+                pool=pool,
+                image=image,
+                level=level,
+                interval=interval,
+                namespace=remote_namespace,
+            )
+
+            if err:
+                raise Exception("Failed to remove mirror snapshot schedule")
+
+            disable_args = {"pool": pool, "image": image}
+            if remote_namespace:
+                disable_args["namespace"] = remote_namespace
+
+            out, err = rbd_secondary.mirror.image.disable(**disable_args)
+            if "Mirroring disabled" in out:
+                log.info(f"Successfully disabled mirroring for {image} on site-B")
+
+            # Get peer info on primary cluster
+            out, err = rbd_primary.mirror.pool.info(**{"pool": pool, "format": "json"})
+            if err:
+                raise Exception(f"Failed to get mirror pool info: {err}")
+            try:
+                info = json.loads(out)
+                peer_uuids = [peer["uuid"] for peer in info.get("peers", [])]
+                if not peer_uuids:
+                    raise Exception("No peer UUID found in mirror pool info")
+                peer_uuid = peer_uuids[0]
+            except Exception as e:
+                raise Exception(f"Failed to parse mirror pool info: {e}")
+
+            # Get peer info on secondary cluster
+            out, err = rbd_secondary.mirror.pool.info(
+                **{"pool": pool, "format": "json"}
+            )
+            if err:
+                raise Exception(f"Failed to get mirror pool info: {err}")
+            try:
+                info = json.loads(out)
+                peer_uuids = [peer["uuid"] for peer in info.get("peers", [])]
+                if not peer_uuids:
+                    raise Exception("No peer UUID found in mirror pool info")
+                peer_uuid = peer_uuids[0]
+            except Exception as e:
+                raise Exception(f"Failed to parse mirror pool info: {e}")
+
+            # wait for the mirror to reflect in secondary
+            time.sleep(int(interval[:-1]) * 120)
+
+            # Remove peer from both clusters
+            out, err = rbd_primary.mirror.pool.peer.remove_(
+                **{"pool": pool, "uuid": peer_uuid}
+            )
+            if err:
+                raise Exception(f"Failed to remove pool peer on primary: {err}")
+
+            out, err = rbd_secondary.mirror.pool.peer.remove_(
+                **{"pool": pool, "uuid": peer_uuid}
+            )
+            if err:
+                raise Exception(f"Failed to remove pool peer on secondary: {err}")
+
+            # Disable mirroring on both clusters
+            out, err = rbd_primary.mirror.pool.disable(**{"pool": pool})
+            if err:
+                raise Exception(f"Failed to disable mirroring on primary: {err}")
+
+            out, err = rbd_secondary.mirror.pool.disable(**{"pool": pool})
+            if err:
+                raise Exception(f"Failed to disable mirroring on secondary: {err}")
+
+            # Enable image mode mirroring on both clusters
+            out, err = rbd_primary.mirror.pool.enable(**{"pool": pool, "mode": "image"})
+            if err:
+                raise Exception(
+                    f"Failed to enable image mode mirroring on primary: {err}"
+                )
+
+            out, err = rbd_secondary.mirror.pool.enable(
+                **{"pool": pool, "mode": "image"}
+            )
+            if err:
+                raise Exception(
+                    f"Failed to enable image mode mirroring on secondary: {err}"
+                )
+
+            log.info("Changed mirroring mode to image level on both clusters")
     return 0
 
 
