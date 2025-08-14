@@ -136,58 +136,6 @@ class StretchMode:
         self.custom_crush_rule[crush_rule_name] = out["rule_id"]
         return self.custom_crush_rule[crush_rule_name]
 
-    def simulate_netsplit_between_hosts(self, group1, group2):
-        """
-        Method to simulate netsplit between hosts. Netsplit will be simulate by dropping incoming & outgoing
-        traffic using "iptables -A INPUT -s {target_host_ip} -j DROP; iptables -A OUTPUT -d {target_host_ip} -j DROP"
-        group1 : node1, node2, node3
-        group2 : node4, node5
-
-        All incoming/outgoing traffic from group2 hosts will be blocked on group1 hosts.
-        Ip table rules will be added on:-
-         node4 to drop incoming/outgoing packets to/from node1
-         node4 to drop incoming/outgoing packets to/from node2
-         node4 to drop incoming/outgoing packets to/from node3
-         node5 to drop incoming/outgoing packets to/from node1
-         node5 to drop incoming/outgoing packets to/from node2
-         node5 to drop incoming/outgoing packets to/from node3
-
-        Args:
-            group1: List of hosts ( type: list of strings containing hostnames ) ["host1", "host2"]
-            group2: List of hosts ( type: list of strings containing hostnames ) ["host3", "host4"]
-        Returns:
-            None
-        """
-        info_msg = f"Adding IPtable rules between {group1} and {group2}"
-        log.info(info_msg)
-
-        for host1 in group1:
-            target_host_obj = self.rados_obj.get_host_object(hostname=host1)
-            if not target_host_obj:
-                log.error(f"target host : {host1} not found . Exiting...")
-                raise Exception("Test execution Failed")
-            log.debug(
-                f"Proceeding to add IPtables rules to block incoming - outgoing traffic to host {host1} "
-            )
-            for host2 in group2:
-                source_host_obj = self.rados_obj.get_host_object(hostname=host2)
-                log.debug(
-                    f"Proceeding to add IPtables rules to block incoming - outgoing traffic to host {host1} "
-                    f"Applying rules on host : {host2}"
-                )
-                if not source_host_obj:
-                    log.error(f"Source host : {host2} not found . Exiting...")
-                if not self.rados_obj.block_in_out_packets_on_host(
-                    source_host=source_host_obj, target_host=target_host_obj
-                ):
-                    log.error(
-                        f"Failed to add IPtable rules to block {host1} on {host2}"
-                    )
-                    raise Exception("Test execution Failed")
-
-        info_msg = f"Completed adding IPtable rules between {group1} and {group2}"
-        log.info(info_msg)
-
     def segregate_hosts_based_on_stretch_bucket(self):
         """
         Method to segregate hosts based on stretch bucket.
@@ -219,24 +167,6 @@ class StretchMode:
         log.debug(
             f"Hosts present in Datacenter : {self.tiebreaker_mon_site_name} : { self.tiebreaker_hosts}"
         )
-
-    def flush_ip_table_rules_on_all_hosts(self):
-        """
-        Method to flush iptable rules on all hosts part of the cluster
-        Executes iptables -F and reboots the host
-        Returns:
-            None
-        """
-        log.info("Proceeding to flush IP table rules on all hosts")
-        for hostname in self.site_1_hosts + self.site_2_hosts + self.tiebreaker_hosts:
-            host = get_host_obj_from_hostname(
-                hostname=hostname, rados_obj=self.rados_obj
-            )
-            log.debug(f"Proceeding to flush iptable rules on host : {host.hostname}")
-            host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
-            host.exec_command(sudo=True, cmd="reboot", check_ec=False)
-            time.sleep(20)
-        log.info("Completed flushing IP table rules on all hosts")
 
     def write_io_and_validate_objects(
         self, pool_name: str, init_objects: int, obj_name: str
@@ -474,3 +404,75 @@ class RevertStretchModeFunctionalities(StretchMode):
                 raise Exception(log_msg)
 
         log.info("Successfully validated MON map configs of stretch mode")
+
+
+def simulate_netsplit_between_hosts(rados_obj, group1, group2):
+    """
+    Method to simulate netsplit between hosts. Netsplit will be simulate by dropping incoming & outgoing
+    traffic using "iptables -A INPUT -s {target_host_ip} -j DROP; iptables -A OUTPUT -d {target_host_ip} -j DROP"
+    group1 : node1, node2, node3
+    group2 : node4, node5
+
+    All incoming/outgoing traffic from group2 hosts will be blocked on group1 hosts.
+    Ip table rules will be added on:-
+     node4 to drop incoming/outgoing packets to/from node1
+     node4 to drop incoming/outgoing packets to/from node2
+     node4 to drop incoming/outgoing packets to/from node3
+     node5 to drop incoming/outgoing packets to/from node1
+     node5 to drop incoming/outgoing packets to/from node2
+     node5 to drop incoming/outgoing packets to/from node3
+
+    Args:
+        group1: List of hosts ( type: list of strings containing hostnames ) ["host1", "host2"]
+        group2: List of hosts ( type: list of strings containing hostnames ) ["host3", "host4"]
+    Returns:
+        None
+    """
+    info_msg = f"Adding IPtable rules between {group1} and {group2}"
+    log.info(info_msg)
+
+    for host1 in group1:
+        target_host_obj = rados_obj.get_host_object(hostname=host1)
+        if not target_host_obj:
+            err_msg = f"target host : {host1} not found . Exiting..."
+            log.error(err_msg)
+            raise Exception("Test execution Failed")
+        debug_msg = f"Proceeding to add IPtables rules to block incoming - outgoing traffic to host {host1} "
+        log.debug(debug_msg)
+        for host2 in group2:
+            source_host_obj = rados_obj.get_host_object(hostname=host2)
+            debug_msg = (
+                f"Proceeding to add IPtables rules to block incoming - outgoing traffic to host {host1}"
+                f". Applying rules on host : {host2}"
+            )
+            log.debug(debug_msg)
+            if not source_host_obj:
+                err_msg = f"Source host : {host2} not found . Exiting..."
+                log.error(err_msg)
+            if not rados_obj.block_in_out_packets_on_host(
+                source_host=source_host_obj, target_host=target_host_obj
+            ):
+                err_msg = f"Failed to add IPtable rules to block {host1} on {host2}"
+                log.error(err_msg)
+                raise Exception("Test execution Failed")
+
+    info_msg = f"Completed adding IPtable rules between {group1} and {group2}"
+    log.info(info_msg)
+
+
+def flush_ip_table_rules_on_all_hosts(rados_obj, hosts):
+    """
+    Method to flush iptable rules on all hosts part of the cluster
+    Executes iptables -F and reboots the host
+    Returns:
+        None
+    """
+    log.info("Proceeding to flush IP table rules on all hosts")
+    for hostname in hosts:
+        host = get_host_obj_from_hostname(hostname=hostname, rados_obj=rados_obj)
+        debug_msg = f"Proceeding to flush iptable rules on host : {host.hostname}"
+        log.debug(debug_msg)
+        host.exec_command(sudo=True, cmd="iptables -F", long_running=True)
+        host.exec_command(sudo=True, cmd="reboot", check_ec=False)
+        time.sleep(20)
+    log.info("Completed flushing IP table rules on all hosts")

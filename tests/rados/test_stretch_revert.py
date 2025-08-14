@@ -19,7 +19,11 @@ from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from ceph.utils import find_vm_node_by_hostname
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
-from tests.rados.test_stretch_revert_class import RevertStretchModeFunctionalities
+from tests.rados.test_stretch_revert_class import (
+    RevertStretchModeFunctionalities,
+    flush_ip_table_rules_on_all_hosts,
+    simulate_netsplit_between_hosts,
+)
 from tests.rados.test_stretch_site_down import stretch_enabled_checks
 from tests.rados.test_stretch_site_reboot import get_host_obj_from_hostname
 from utility.log import Log
@@ -337,7 +341,7 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
         ]
 
         log.info("Step 3 ->  Simulate a network partition between passed hosts")
-        self.simulate_netsplit_between_hosts(group_1_hosts, group_2_hosts)
+        simulate_netsplit_between_hosts(self.rados_obj, group_1_hosts, group_2_hosts)
 
         # If the netsplit occurs between all hosts of DC1 and all hosts of DC2.
         # Cluster enters into degraded stretch mode.
@@ -372,7 +376,7 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
         self.validate_mon_configurations_post_revert(self.expected_mon_map_values)
 
         log.info("Step 8 -> Remove the simulated network partition")
-        self.flush_ip_table_rules_on_all_hosts()
+        flush_ip_table_rules_on_all_hosts(self.rados_obj, group_1_hosts + group_2_hosts)
 
         log.info("Step 9 -> validate PG's reached active+clean")
         if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:

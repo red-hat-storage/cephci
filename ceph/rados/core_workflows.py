@@ -5255,6 +5255,10 @@ EOF"""
             current_service_type = service["service_type"]
             current_service_size = service["status"]["size"]
             current_service_name = service["service_name"]
+            log_debug_msg = (
+                f"\nservice name -> {current_service_name}" f"\nservice -> {service}"
+            )
+            log.debug(log_debug_msg)
             if (service_type is None and current_service_size == 0) or (
                 current_service_type == service_type and current_service_size == 0
             ):
@@ -5367,3 +5371,54 @@ EOF"""
             msg_logline = f"The log line {search_string} not found on - {daemon_type} : {daemon_id} log"
             log.info(msg_logline)
             return False
+
+    def get_service_spec_daemons(self, service_name: str):
+        """
+        Returns the ids of daemon part of service spec. Command `ceph orch ps --service-name <service-name>` is used
+        for the opreation.
+        Args:
+            service_name: Example: osd.osds, osd.default
+        Returns:
+            List: list of daemons part of the service spec
+        Usage:
+            get_service_spec_daemons(service_name="osd.default") returns [3,1,2]
+             get_service_spec_daemons(service_name="mon") returns ["depressa007", "depressa008"]
+        """
+        # $ceph orch ps --service-name osd.osd_spec -fjson-pretty
+        # [
+        #    {
+        #     "container_id": "f60959d13eff",
+        #     "container_image_digests": [
+        #         "quay.ceph.io/ceph-ci/ceph@sha256:8a4b10563247b88eab253c58da7d993c491c34a340f18ddd3f82f84653edb1b3"
+        #     ],
+        #     "container_image_id": "407e8c6551488dab2e9677a2762780c5df16d2a88cd82e27cecbf6095cc0e1ea",
+        #     "container_image_name": "quay.ceph.io/ceph-ci/ceph@sha256:8a4b10563247b88eab253c58da7d993c491c34a340f1",
+        #     "cpu_percentage": "1.40%",
+        #     "created": "2025-06-18T12:25:50.970306Z",
+        #     "daemon_id": "17",
+        #     "daemon_name": "osd.17",
+        #     "daemon_type": "osd",
+        #     "events": [
+        #         "2025-08-06T09:41:08.123978Z daemon:osd.17 [INFO] \"Reconfigured osd.17 on host 'depressa006'\""
+        #     ],
+        #     "hostname": "depressa006",
+        #     "is_active": false,
+        #     "last_refresh": "2025-08-07T03:07:05.198294Z",
+        #     "memory_request": 2635148574,
+        #     "memory_usage": 1653562408,
+        #     "pending_daemon_config": false,
+        #     "ports": [],
+        #     "service_name": "osd.osd_spec",
+        #     "started": "2025-08-05T13:21:41.788237Z",
+        #     "status": 1,
+        #     "status_desc": "running",
+        #     "systemd_unit": "ceph-b141fe32-4bee-11f0-8f36-ac1f6b5628fe@osd.17",
+        #     "version": "20.0.0-2453-ga40ac658"
+        # },
+        # .....<redacted>.....
+        ceph_orch_ps = self.run_ceph_command(
+            cmd=f"ceph orch ps --service_name {service_name}"
+        )
+        log_debug_msg = f"Daemons -> {ceph_orch_ps}"
+        log.debug(log_debug_msg)
+        return [daemon["daemon_id"] for daemon in ceph_orch_ps]

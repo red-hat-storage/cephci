@@ -554,7 +554,10 @@ def run(ceph_cluster, **kw):
                 return 1
             rados_obj.change_recovery_threads(config=config, action="rm")
             # remove empty service specs after host removal
-            rados_obj.remove_empty_service_spec()
+            osds = rados_obj.get_service_spec_daemons(service_name="osd.default")
+            service_obj.add_osds_to_managed_service(
+                osds=osds, spec="osds", remove_empty_service_spec=True
+            )
             # set osd service to managed
             rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
 
