@@ -377,3 +377,14 @@ tests:
       module: sanity_rgw_multisite.py
       name: Perform realm rename in master
       polarion-id: CEPH-10739
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3_swift/test_swift_tenanted_user.py
+            config-file-name: ../../s3_swift/multisite_configs/test_swift_tenanted_user.yaml
+      name: test_swift_tenanted_user
+      desc: test_swift_tenanted_user
+      polarion-id: CEPH-10734
+      module: sanity_rgw_multisite.py
