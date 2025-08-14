@@ -105,19 +105,6 @@ tests:
                     only_bind_port_on_networks: true
 
   - test:
-      abort-on-fail: true
-      config:
-        haproxy_clients:
-          - node6
-        rgw_endpoints:
-          - node3:80
-          - node4:80
-          - node5:80
-      desc: "Configure HAproxy"
-      module: haproxy.py
-      name: "Configure HAproxy"
-
-  - test:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_Mbuckets_with_Nobjects_delete.yaml
