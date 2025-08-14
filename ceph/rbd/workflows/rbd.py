@@ -644,7 +644,7 @@ def feature_ops_single_image(**kw):
         return 1
 
 
-def check_rbd_status(rbd, pool, image, timeout):
+def check_rbd_status(rbd, pool, image, timeout, namespace=None):
     """
     Keep checking rbd status until watchers is None
     """
@@ -654,7 +654,12 @@ def check_rbd_status(rbd, pool, image, timeout):
     out = str()
     sleep(5)
     while datetime.datetime.now() - starttime <= timeout:
-        out, err = rbd.status(pool=pool, image=image, format="json")
+        if namespace is not None:
+            out, err = rbd.status(
+                pool=pool, image=image, namespace=namespace, format="json"
+            )
+        else:
+            out, err = rbd.status(pool=pool, image=image, format="json")
         if err:
             log.error(f"Error while fetching rbd status {pool}/{image}")
             raise Exception(f"Error while fetching rbd status {pool}/{image}")
@@ -685,7 +690,11 @@ def run_io_and_check_rbd_status(**kw):
         rbd = kw.get("rbd")
         pool = kw.get("pool")
         image = kw.get("image")
-        image_spec = f"{pool}/{image}"
+        namespace = kw.get("namespace")
+        if namespace:
+            image_spec = f"{pool}/{namespace}/{image}"
+        else:
+            image_spec = f"{pool}/{image}"
         image_conf = kw.pop("image_conf", {})
         client = kw.get("client")
         test_ops_parallely = kw.get("test_ops_parallely", False)
@@ -718,11 +727,28 @@ def run_io_and_check_rbd_status(**kw):
                 "skip_mkfs": kw.get("skip_mkfs", False),
             },
         }
-        with parallel() as p:
-            p.spawn(krbd_io_handler, **io_config)
-            p.spawn(check_rbd_status, rbd=rbd, pool=pool, image=image, timeout=120)
+        if namespace:
+            with parallel() as p:
+                p.spawn(krbd_io_handler, **io_config)
+                p.spawn(
+                    check_rbd_status,
+                    rbd=rbd,
+                    pool=pool,
+                    image=image,
+                    timeout=120,
+                    namespace=namespace,
+                )
+        else:
+            with parallel() as p:
+                p.spawn(krbd_io_handler, **io_config)
+                p.spawn(check_rbd_status, rbd=rbd, pool=pool, image=image, timeout=120)
 
-        out, err = rbd.status(pool=pool, image=image, format="json")
+        if namespace:
+            out, err = rbd.status(
+                pool=pool, image=image, namespace=namespace, format="json"
+            )
+        else:
+            out, err = rbd.status(pool=pool, image=image, format="json")
         if err:
             log.error(f"Error while fetching rbd status {pool}/{image}")
             if test_ops_parallely:
