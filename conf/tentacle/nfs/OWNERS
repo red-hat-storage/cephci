@@ -1,0 +1,17 @@
+---
+# Based on the information found
+# https://github.com/kubernetes/community/blob/master/contributors/guide/owners.md
+
+approvers:
+  - msainiRedhat
+  - vdas-redhat
+
+reviewers:
+  - pranavprakash20
+  - hacharya
+  - vamahaja
+  - tintumathew10
+
+labels:
+  - NFS-Ganesha
+
