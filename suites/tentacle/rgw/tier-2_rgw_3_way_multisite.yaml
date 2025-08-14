@@ -497,6 +497,7 @@ tests:
               - "radosgw-admin sync status"
               - "ceph -s"
               - "radosgw-admin bucket list"
+              - "radosgw-admin user list"
       desc: Check if data is synced on tertiary
       module: exec.py
       name: Check if data is synced on tertiary
