@@ -590,6 +590,73 @@ def test_default_to_non_default_namespace_mirroring(
             }
             if check_data_integrity(**data_integrity_spec):
                 raise Exception("Data integrity check failed for " + pri_image_spec)
+
+            # Get peer info on primary cluster
+            out, err = rbd_primary.mirror.pool.info(**{"pool": pool, "format": "json"})
+            if err:
+                raise Exception(f"Failed to get mirror pool info: {err}")
+            try:
+                info = json.loads(out)
+                peer_uuids = [peer["uuid"] for peer in info.get("peers", [])]
+                if not peer_uuids:
+                    raise Exception("No peer UUID found in mirror pool info")
+                peer_uuid = peer_uuids[0]
+            except Exception as e:
+                raise Exception(f"Failed to parse mirror pool info: {e}")
+
+            # Get peer info on secondary cluster
+            out, err = rbd_secondary.mirror.pool.info(
+                **{"pool": pool, "format": "json"}
+            )
+            if err:
+                raise Exception(f"Failed to get mirror pool info: {err}")
+            try:
+                info = json.loads(out)
+                peer_uuids = [peer["uuid"] for peer in info.get("peers", [])]
+                if not peer_uuids:
+                    raise Exception("No peer UUID found in mirror pool info")
+                peer_uuid = peer_uuids[0]
+            except Exception as e:
+                raise Exception(f"Failed to parse mirror pool info: {e}")
+
+            # Remove peer from both clusters
+            out, err = rbd_primary.mirror.pool.peer.remove_(
+                **{"pool": pool, "uuid": peer_uuid}
+            )
+            if err:
+                raise Exception(f"Failed to remove pool peer on primary: {err}")
+
+            out, err = rbd_secondary.mirror.pool.peer.remove_(
+                **{"pool": pool, "uuid": peer_uuid}
+            )
+            if err:
+                raise Exception(f"Failed to remove pool peer on secondary: {err}")
+
+            # Disable mirroring on both clusters
+            out, err = rbd_primary.mirror.pool.disable(**{"pool": pool})
+            if err:
+                raise Exception(f"Failed to disable mirroring on primary: {err}")
+
+            out, err = rbd_secondary.mirror.pool.disable(**{"pool": pool})
+            if err:
+                raise Exception(f"Failed to disable mirroring on secondary: {err}")
+
+            # Enable image mode mirroring on both clusters
+            out, err = rbd_primary.mirror.pool.enable(**{"pool": pool, "mode": "image"})
+            if err:
+                raise Exception(
+                    f"Failed to enable image mode mirroring on primary: {err}"
+                )
+
+            out, err = rbd_secondary.mirror.pool.enable(
+                **{"pool": pool, "mode": "image"}
+            )
+            if err:
+                raise Exception(
+                    f"Failed to enable image mode mirroring on secondary: {err}"
+                )
+
+            log.info("Changed mirroring mode to image level on both clusters")
     return 0
 
 
