@@ -326,36 +326,21 @@ tests:
 
   - test:
       abort-on-fail: true
-      name: RGW MS upgarde and IO parallelly
-      desc: PRGW MS upgarde and IO parallelly
-      module: test_parallel.py
-      parallel:
-        - test:
-            clusters:
-              ceph-sec:
-                config:
-                  command: start
-                  service: upgrade
-                  verify_cluster_health: true
-              ceph-pri:
-                config:
-                  command: start
-                  service: upgrade
-                  verify_cluster_health: true
-            desc: Multisite upgrade
-            module: test_cephadm_upgrade.py
-            name: multisite ceph upgrade
-            polarion-id: CEPH-83574647
-        - test:
-            clusters:
-              ceph-pri:
-                config:
-                  script-name: test_Mbuckets_with_Nobjects.py
-                  config-file-name: test_Mbuckets_with_Nobjects_download.yaml
-            desc: test to create "M" no of buckets and "N" no of objects with download
-            module: sanity_rgw_multisite.py
-            name: download objects post upgrade
-            polarion-id: CEPH-14237
+      desc: Multisite upgrade
+      module: test_cephadm_upgrade.py
+      name: multisite ceph upgrade
+      polarion-id: CEPH-83574647
+      clusters:
+        ceph-sec:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
+        ceph-pri:
+          config:
+            command: start
+            service: upgrade
+            verify_cluster_health: true
 
   - test:
       name: Retrieve the versions of the cluster parallelly
@@ -384,3 +369,13 @@ tests:
             polarion-id: CEPH-83575200
             module: exec.py
             name: Retrieve the versions of the cluster in secondary
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_Mbuckets_with_Nobjects_download.yaml
+      desc: test to create "M" no of buckets and "N" no of objects with download
+      module: sanity_rgw_multisite.py
+      name: download objects post upgrade
+      polarion-id: CEPH-14237
