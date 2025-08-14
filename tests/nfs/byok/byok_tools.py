@@ -8,6 +8,7 @@ from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
     create_file,
     lookup_in_directory,
 )
+from utility.gklm_client.gklm_client import GklmClient
 
 
 def get_enctag(
@@ -514,3 +515,100 @@ def load_gklm_config(custom_data, config, cephci_data):
 
     log.info("Final GKLM configuration: %s", {k: merged[k] for k in required})
     return merged
+
+
+def nfs_byok_test_setup(byok_setup_params):
+    """
+    This method creates GKLM rest client instance,gets CA cert, generates Cert.pem and RSA-key
+    and add them into NFS spec file and deploys NFS through spec file.
+    It also creates GKLM client and key object and returns key as enctag
+    Required params: GKLM params as dict in below format,
+    byok_setup_params = {
+        'gklm_ip':gklm_ip,
+        'gklm_user':gklm_user,
+        'gklm_password':gklm_password,
+        'gklm_node_user':gklm_node_user,
+        'gklm_node_password':gklm_node_password,
+        'gklm_hostname':gklm_hostname,
+        'gklm_client_name':gklm_client_name,
+        'gklm_cert_alias':gklm_cert_alias,
+        'gklm_ca_cert_alias':gklm_ca_cert_alias,
+        'nfs_nodes':nfs_nodes,
+        'installer':installer,
+        'nfs_name':nfs_name
+    }
+    Returns:4 variables,
+    byok setup status - 0 for pass, 1 for fail
+    enctag - Key object,gklm_rest_client- GKLM rest client object for reuse,cert-cert.pem of nfs instance
+    """
+    gklm_ip = byok_setup_params["gklm_ip"]
+    gklm_user = byok_setup_params["gklm_user"]
+    gklm_password = byok_setup_params["gklm_password"]
+    gklm_node_user = byok_setup_params["gklm_node_user"]
+    gklm_node_password = byok_setup_params["gklm_node_password"]
+    gklm_hostname = byok_setup_params["gklm_hostname"]
+    gklm_client_name = byok_setup_params["gklm_client_name"]
+    gklm_cert_alias = byok_setup_params["gklm_cert_alias"]
+    nfs_nodes = byok_setup_params["nfs_nodes"]
+    nfs_node = nfs_nodes[0]
+    installer = byok_setup_params["installer"]
+    nfs_name = byok_setup_params["nfs_name"]
+    try:
+        exe_node = setup_gklm_infrastructure(
+            nfs_nodes=nfs_nodes,
+            gklm_ip=gklm_ip,
+            gklm_node_username=gklm_node_user,
+            gklm_node_password=gklm_node_password,
+            gklm_hostname=gklm_hostname,
+        )
+        gklm_rest_client = GklmClient(
+            gklm_ip, user=gklm_user, password=gklm_password, verify=False
+        )
+        log.info(
+            f"Initialized GKLM REST client for server {gklm_ip}, user {gklm_user}. "
+            f"Client name: {gklm_client_name}, certificate alias: {gklm_cert_alias}"
+        )
+
+        log.info("Fetching RSA key and certificate from GKLM for NFS node credentials")
+        # Request device-specific certificate and key from GKLM
+        rsa_key, cert, _ = gklm_rest_client.certificates.get_certificates(
+            subject={
+                "common_name": nfs_node.hostname,
+                "ip_address": nfs_node.ip_address,
+            }
+        )
+        created_client_data = gklm_rest_client.clients.create_client(gklm_client_name)
+
+        log.info("Creating symmetric key encryption tag in GKLM")
+        enctag = get_enctag(
+            gklm_rest_client,
+            created_client_data,
+            gklm_client_name,
+            gklm_cert_alias,
+            gklm_user,
+            cert,
+        )
+
+        # ------------------- Prerequisites and Certificate Export -------------------
+        # Ensure SSH access, hostname resolution, and certificate availability
+        log.info(
+            "Setting up SSH and CA certificate prerequisites on NFS and GKLM nodes"
+        )
+        ca_cert = get_gklm_ca_certificate(
+            gklm_ip=gklm_ip,
+            gklm_node_username=gklm_node_user,
+            gklm_node_password=gklm_node_password,
+            exe_node=exe_node,
+            gklm_rest_client=gklm_rest_client,
+        )
+        log.info("CA certificate successfully retrieved \n %s", ca_cert)
+
+        # ------------------- NFS Ganesha Instance Creation with BYOK -------------------
+        log.info("Creating NFS Ganesha instance with BYOK/KMIP configuration")
+        create_nfs_instance_for_byok(
+            installer, nfs_node, nfs_name, gklm_ip, rsa_key, cert, ca_cert
+        )
+        return (0, enctag, gklm_rest_client, cert)
+    except Exception as ex:
+        log.error(ex)
+        return (1, None, None, None)

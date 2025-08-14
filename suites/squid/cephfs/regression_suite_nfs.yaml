@@ -202,6 +202,12 @@ tests:
       polarion-id: "CEPH-83574003"
   - test:
       abort-on-fail: false
+      desc: "test cephfs nfs byok functionality"
+      module: cephfs_nfs.test_cephfs_nfs_byok_functional.py
+      name: "cephfs_nfs_byok"
+      polarion-id: "CEPH-83625558"
+  - test:
+      abort-on-fail: false
       desc: "test recreation of cephfs nfs cluster with same name"
       module: cephfs_nfs.recreate_same_name_nfs.py
       name: "recreate same name nfs cluster"
