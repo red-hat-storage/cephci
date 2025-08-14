@@ -428,7 +428,6 @@ class ServiceabilityMethods:
             log.info(
                 "All OSDs part of list has been added to a managed OSD service. pass"
             )
-            return True
 
         else:
             log.info(
@@ -453,9 +452,14 @@ class ServiceabilityMethods:
                 ):
                     log.info("Could not remove empty service spec")
                     return False
-
             log.info("Completed running set-managed for all OSDs without correct spec")
-            return True
+
+        if remove_empty_service_spec:
+            if self.rados_obj.remove_empty_service_spec(service_type="osd") is False:
+                log.info("Could not remove empty service spec")
+                return False
+
+        return True
 
     def drain_host(self, host_obj, zap=True, keep_conf=False):
         """
