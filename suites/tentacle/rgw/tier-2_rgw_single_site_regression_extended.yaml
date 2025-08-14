@@ -283,6 +283,35 @@ tests:
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
         run-on-haproxy: true
 
+
+  # test checksum with awscli v1 and v2
+
+  - test:
+      name: test checksum with awscli_v1_v2 small objects
+      desc: test checksum with awscli_v1_v2 small objects
+      polarion-id: CEPH-83591699
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
+        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_small_objects.yaml
+  - test:
+      name: test checksum with awscli_v1_v2 non-multipart objects
+      desc: test checksum with awscli_v1_v2 non-multipart objects
+      polarion-id: CEPH-83591699
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
+        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_non_multipart.yaml
+  - test:
+      name: test checksum with awscli_v1_v2 multipart objects
+      desc: test checksum with awscli_v1_v2 multipart objects
+      polarion-id: CEPH-83591699
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_checksum_with_awscli_v1_and_v2.py
+        config-file-name: ../../aws/configs/test_checksum_awscli_v1_v2_multipart.yaml
+
+
   - test:
       name: Test large omap creation and clearance
       desc: Test large omap creation and clearance
