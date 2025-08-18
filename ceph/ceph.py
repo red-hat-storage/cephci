@@ -1720,7 +1720,7 @@ class CephNode(object):
 
             logger.info(msg)
 
-        if "verbose" in kw:
+        if kw.get("verbose", False):
             return _out, _err, _exit, _time
 
         # Historically, we are only providing command exit code for long
