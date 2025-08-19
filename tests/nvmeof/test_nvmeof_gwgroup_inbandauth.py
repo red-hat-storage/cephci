@@ -297,6 +297,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
     try:
         for gwgroup_config in config["gw_groups"]:
+            LOG.info(f"Configuring NVMeOf Gateway Group: {gwgroup_config['gw_group']}")
             gwgroup_config.update(
                 {
                     "osp_cred": config["osp_cred"],
