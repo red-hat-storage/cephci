@@ -48,13 +48,6 @@ def run(ceph_cluster, **kw):
             ceph_cluster=ceph_cluster,
         )
 
-        # Mount the share on Client 2
-        cmd = f"umount -l {nfs_mount}"
-        clients[1].exec_command(sudo=True, cmd=cmd)
-
-        cmd = f"mount -t nfs {nfs_nodes[0].ip_address}:{nfs_export}_0 {nfs_mount}"
-        clients[1].exec_command(sudo=True, cmd=cmd)
-
         # Create 5 file on Mount point from client 1
         try:
             for i in range(1, num_files + 1):
