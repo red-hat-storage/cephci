@@ -378,7 +378,7 @@ def run(ceph_cluster, **kw):
         log.info(
             f"Proceeding to remove hosts: {dc_1_hosts_to_remove + dc_2_hosts_to_remove}"
         )
-        mon_hosts_map:dict = {}
+        mon_hosts_map: dict = {}
         for hostname in dc_1_hosts_to_remove + dc_2_hosts_to_remove:
             log.info(f"Selected host {hostname} for removal")
             test_host = rados_obj.get_host_object(hostname=hostname)
@@ -487,12 +487,18 @@ def run(ceph_cluster, **kw):
 
             log_info_msg = f"Setting location for mon {hostname}"
             log.info(log_info_msg)
-            cmd = f"ceph mon set_location {hostname} {stretch_bucket}={crush_bucket_val}"
+            cmd = (
+                f"ceph mon set_location {hostname} {stretch_bucket}={crush_bucket_val}"
+            )
             if rados_obj.run_ceph_command(cmd=cmd) is None:
-                log_msg = f"Failed to set mon location of {hostname} to {crush_bucket_val}"
+                log_msg = (
+                    f"Failed to set mon location of {hostname} to {crush_bucket_val}"
+                )
                 log.error(log_msg)
                 raise Exception(log_msg)
-            log_info_msg = f"Successfully set mon location of {hostname} to {crush_bucket_val}"
+            log_info_msg = (
+                f"Successfully set mon location of {hostname} to {crush_bucket_val}"
+            )
             log.info(log_info_msg)
 
         log.info(
