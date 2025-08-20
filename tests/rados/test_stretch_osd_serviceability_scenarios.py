@@ -378,12 +378,9 @@ def run(ceph_cluster, **kw):
         log.info(
             f"Proceeding to remove hosts: {dc_1_hosts_to_remove + dc_2_hosts_to_remove}"
         )
-        mon_hosts_map:dict = {}
         for hostname in dc_1_hosts_to_remove + dc_2_hosts_to_remove:
             log.info(f"Selected host {hostname} for removal")
             test_host = rados_obj.get_host_object(hostname=hostname)
-            if "mon" in test_host.get_host_label(host_name=hostname):
-                mon_hosts_map[hostname] = test_host
             test_hosts_map[hostname] = test_host
             service_obj.remove_custom_host(host_node_name=test_host.hostname)
         time.sleep(10)
@@ -474,25 +471,28 @@ def run(ceph_cluster, **kw):
 
         log.info("Setting crush location for each monitor for next scenario")
         for hostname in dc_1_hosts_to_remove + dc_2_hosts_to_remove:
-            if "mon" not in mon_hosts_map[hostname]:
-                log_msg = (
-                    f"host {hostname} did not have mon daemon before removal, Skipping"
-                )
-                log.info(log_msg)
+            host_obj = rados_obj.get_host_object(hostname=hostname)
+            if "mon" not in host_obj.get_host_label(host_name=hostname):
                 continue
+
             if hostname in dc_1_hosts:
                 crush_bucket_val = dc_1_name
             else:
                 crush_bucket_val = dc_2_name
 
-            log_info_msg = f"Setting location for mon {hostname}"
-            log.info(log_info_msg)
-            cmd = f"ceph mon set_location {hostname} {stretch_bucket}={crush_bucket_val}"
+            cmd = (
+                f"ceph mon set_location {hostname} {stretch_bucket}={crush_bucket_val}"
+            )
             if rados_obj.run_ceph_command(cmd=cmd) is None:
-                log_msg = f"Failed to set mon location of {hostname} to {crush_bucket_val}"
+                log_msg = (
+                    f"Failed to set mon location of {hostname} to {crush_bucket_val}"
+                )
                 log.error(log_msg)
                 raise Exception(log_msg)
-            log_info_msg = f"Successfully set mon location of {hostname} to {crush_bucket_val}"
+
+            log_info_msg = (
+                f"Successfully set mon location of {hostname} to {crush_bucket_val}"
+            )
             log.info(log_info_msg)
 
         log.info(
