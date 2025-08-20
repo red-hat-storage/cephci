@@ -3437,14 +3437,25 @@ EOF"""
         return pg_id
 
     def start_check_scrub_complete(
-        self, pg_id, user_initiated: bool = True, wait_time: int = 900
+        self, pg_id, pg_dump=None, user_initiated: bool = True, wait_time: int = 900
     ):
         """
+
         Initiates scrubbing on the PG provided and waits until the scrubbing is complete.
+        Args:
+            pg_id: pg id
+            pg_dump: pg dump if none gets the input online
+            user_initiated : if True starts user initiated scrub
+            wait_time : The wait time for the scrub by default 900 seconds
+        Returns: True -> Successful execution of scrub
+                 False -> Failure of scrub
 
         """
+        if pg_dump is None:
+            init_pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
+        else:
+            init_pool_pg_dump = pg_dump
 
-        init_pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
         log.info("Dumping scrub stats before starting scrub")
         log.info(f"last_scrub : {init_pool_pg_dump['last_scrub']}")
         log.info(f"last_scrub_stamp: {init_pool_pg_dump['last_scrub_stamp']}")
@@ -3496,14 +3507,24 @@ EOF"""
             raise Exception("Objects not scrubbed error")
 
     def start_check_deep_scrub_complete(
-        self, pg_id, user_initiated: bool = True, wait_time: int = 900
+        self, pg_id, pg_dump=None, user_initiated: bool = True, wait_time: int = 900
     ):
         """
-        Initiates deep-scrubbing on the PG provided and waits until the deep-scrubbing is complete.
+         Initiates scrubbing on the PG provided and waits until the scrubbing is complete.
+        Args:
+            pg_id: pg id
+            pg_dump: pg dump if none gets the input online
+            user_initiated : if True starts user initiated scrub
+            wait_time : The wait time for the scrub by default 900 seconds
+        Returns: True -> Successful execution of scrub
+                 False -> Failure of scrub
 
         """
+        if pg_dump is None:
+            init_pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
+        else:
+            init_pool_pg_dump = pg_dump
 
-        init_pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
         log.info("Dumping deep-scrub stats before starting deep-scrub")
         log.info(f"last_deep_scrub : {init_pool_pg_dump['last_deep_scrub']}")
         log.info(f"last_deep_scrub_stamp: {init_pool_pg_dump['last_deep_scrub_stamp']}")
@@ -5422,3 +5443,46 @@ EOF"""
         log_debug_msg = f"Daemons -> {ceph_orch_ps}"
         log.debug(log_debug_msg)
         return [daemon["daemon_id"] for daemon in ceph_orch_ps]
+
+    def remove_log_file_content(
+        self,
+        nodes_list,
+        daemon_type=None,
+    ):
+        """
+        The method is used to remove the log file contents in the cluster
+        Args:
+            nodes_list: Cluster nodes list that remove the file content
+            daemon_type: The daemon type like mon,mgr,osd
+        Returns: True -> Successful execution of command
+                 False -> Failure of command
+
+        """
+        cluster_fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
+        timestamp = datetime.datetime.now().strftime("%Y%m%d%H%M%S")
+
+        if daemon_type is None:
+            cmd_truncate = rf"""
+            cd /var/log/ceph/{cluster_fsid}/ && \
+            find . -type f ! -name '*.gz' -exec sh -c 'gzip -c "$1" > "$1.{timestamp}.gz"' _ {{}} \; && \
+            find . -type f ! -name '*.gz' -exec truncate -s 0 {{}} \;
+            """
+        else:
+            # Compress only matching daemon_type files, then truncate
+            cmd_truncate = rf"""
+            cd /var/log/ceph/{cluster_fsid}/ && \
+            find . -type f -name '*{daemon_type}*' ! -name '*.gz' -exec sh -c 'gzip -c "$1" > "$1.{timestamp}.gz"' \
+            _ {{}} \; && find . -type f -name '*{daemon_type}*' ! -name '*.gz' -exec truncate -s 0 {{}} \;
+            """
+        for node in nodes_list:
+            msg_log = (
+                f"The log files are compressed and stored at-/var/log/ceph/{cluster_fsid}/ directory."
+                f"Removing the file content from the node -{node.hostname}"
+            )
+            log.info(msg_log)
+            try:
+                out, err = node.exec_command(sudo=True, cmd=cmd_truncate)
+            except Exception:
+                log.error("Error while removing contents of file")
+                return False
+        return True
