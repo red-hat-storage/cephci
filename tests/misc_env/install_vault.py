@@ -80,12 +80,10 @@ Restart=on-failure
 
 [Install]
 WantedBy=multi-user.target
-
 """
 
 AGENT_LAUNCHER = """#!/bin/sh
 /bin/vault agent -config /usr/local/etc/vault/agent.hcl
-
 """
 
 
@@ -95,119 +93,141 @@ def run(ceph_cluster: Ceph, config: Dict, **kwargs) -> int:
 
     Args:
         ceph_cluster    The cluster participating in the test.
-        config          Configuration passed to the test
+        config          Configuration passed to the test.
         kwargs          Additional configurations passed to the test.
 
     Returns:
         0 on Success else 1
-
-    Raises:
-        CommandFailure
-
-    Example:
-
-        - test:
-            abort-on-fail: false
-            config:
-              install:
-                - agent
-            desc: Install and configure vault agent
-            module: install_vault.py
-            name: install vault agent
     """
-    if "agent" in config["install"]:
-        vault_cfg = get_cephci_config().get("vault")
-        _install_agent(ceph_cluster, vault_cfg)
+    if "agent" not in config.get("install", []):
+        return 0
+    cephci_cfg = get_cephci_config()
+    vault_cfg = cephci_cfg.get("vault", {})
 
-        client = ceph_cluster.get_nodes(role="client")[0]
-        _configure_rgw_daemons(client, vault_cfg)
+    # Determine the cloud type explicitly or default to 'openstack'
+    cloud_type = config.get("cloud-type")
+    # cloud_type = config.get("cloud_type", "openstack").lower()
 
+    LOG.info(f"Selected cloud_type='{cloud_type}' for Vault configuration")
+
+    if cloud_type not in vault_cfg:
+        raise ValueError(
+            f"Invalid or missing Vault config for cloud_type '{cloud_type}' in cephci.yaml. "
+            f"Expected one of: {', '.join(vault_cfg.keys())}"
+        )
+
+    selected_cfg = vault_cfg[cloud_type]
+
+    if not selected_cfg.get("url"):
+        raise ValueError(
+            f"Missing 'url' in Vault config for cloud_type '{cloud_type}'."
+        )
+
+    # Pass cloud_type down so the installer can make an explicit repo choice
+    _install_agent(ceph_cluster, selected_cfg, cloud_type=cloud_type)
+
+    try:
+        client_node = ceph_cluster.get_nodes(role="client")[0]
+    except IndexError:
+        raise RuntimeError(
+            "No client node found in the cluster to configure RGW daemons."
+        )
+
+    _configure_rgw_daemons(client_node, selected_cfg)
     return 0
-
-
-# Private methods
 
 
 def _write_remote_file(node: CephNode, file_name: str, content: str) -> None:
     """
-    Copies the provide content to the specified file on the given node.
-
-    Args:
-        node        The target system
-        file_name   The name of the remote file to which the content needs to be written
-        content     The content of the file to be written
-
-    Returns:
-          None
-
-    Raises:
-          CommandFailed
+    Copies the provided content to the specified file on the given node.
     """
-    LOG.debug(f"Writing to remote file {file_name}")
+    LOG.info(f"{node.shortname}: Writing to remote file {file_name}")
     file_handle = node.remote_file(sudo=True, file_mode="w", file_name=file_name)
     file_handle.write(data=content)
     file_handle.flush()
     file_handle.close()
 
 
-def _install_agent(cluster: Ceph, config: Dict) -> None:
+def _install_agent(cluster: Ceph, config: Dict, *, cloud_type: str) -> None:
     """
-    Installs and configures the vault-agent on all RGW nodes
-
-    Args:
-        cluster     Ceph cluster participating in the test
-        config      key/value pairs useful for customization
-        vault_cfg   Vault configuration parameters
-
-    Returns:
-        None
-
-    Raises:
-        CommandFailed
+    Installs and configures the vault-agent on all RGW nodes.
     """
     rgw_nodes = cluster.get_nodes(role="rgw")
     for node in rgw_nodes:
-        LOG.debug(f"Vault install and configuration on {node.shortname}")
-        _install_vault_packages(node)
+        LOG.info(
+            f"{node.shortname}: Installing and configuring Vault agent (cloud_type={cloud_type})"
+        )
+        _install_vault_packages(node, cloud_type=cloud_type)
         _create_agent_config(node, config)
         _create_agent_systemd(node)
 
 
-def _install_vault_packages(node: CephNode) -> None:
+def _install_vault_packages(node: CephNode, *, cloud_type: str) -> None:
     """
-    Installs the required packages for vault
-
-    Args:
-        node    The system on which the package needs to be installed
-        config  Config passed from CI, mainly needed for OS version
-
-    Returns:
-        None
-
-    Raises:
-        CommandFailed
+    Installs the required packages for Vault based on the explicit cloud_type
+    ('ibmc' or 'openstack') selection from cephci.yaml instead of heuristics.
     """
-    wget_cmd = "curl -o /etc/yum.repos.d/hashicorp.repo http://magna002.ceph.redhat.com/cephci-jenkins/hashicorp.repo"
-    node.exec_command(sudo=True, cmd=wget_cmd, check_ec=False)
-    install_vault_cmd = "yum install -y vault"
-    node.exec_command(sudo=True, cmd=install_vault_cmd, check_ec=False)
+    try:
+        if cloud_type == "ibmc":
+            LOG.info(
+                f"{node.shortname}: Using HashiCorp official repo for IBM-Ceph (cloud_type=ibmc)"
+            )
+            repo_cmd = r"""
+cat <<'EOF' | sudo tee /etc/yum.repos.d/hashicorp.repo
+[hashicorp]
+name=Hashicorp Stable - $basearch
+baseurl=https://rpm.releases.hashicorp.com/RHEL/9/$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=https://rpm.releases.hashicorp.com/gpg
+
+[hashicorp-test]
+name=Hashicorp Test - $basearch
+baseurl=https://rpm.releases.hashicorp.com/RHEL/9/$basearch/test
+enabled=0
+gpgcheck=1
+gpgkey=https://rpm.releases.hashicorp.com/gpg
+EOF
+""".strip()
+            node.exec_command(sudo=True, cmd=repo_cmd, check_ec=False)
+
+        elif cloud_type == "openstack":
+            LOG.debug(
+                f"{node.shortname}: Using enterprise-internal repo for RH-Ceph/OpenStack (cloud_type=openstack)"
+            )
+            wget_cmd = (
+                "curl -fsSL -o /etc/yum.repos.d/hashicorp.repo "
+                "http://magna002.ceph.redhat.com/cephci-jenkins/hashicorp.repo"
+            )
+            node.exec_command(sudo=True, cmd=wget_cmd, check_ec=False)
+
+        else:
+            # Fallback: default to HashiCorp official repo if an unknown cloud_type is given
+            LOG.warning(
+                f"{node.shortname}: Unknown cloud_type='{cloud_type}', defaulting to HashiCorp official repo"
+            )
+            repo_cmd = r"""
+cat <<'EOF' | sudo tee /etc/yum.repos.d/hashicorp.repo
+[hashicorp]
+name=Hashicorp Stable - $basearch
+baseurl=https://rpm.releases.hashicorp.com/RHEL/9/$basearch/stable
+enabled=1
+gpgcheck=1
+gpgkey=https://rpm.releases.hashicorp.com/gpg
+EOF
+""".strip()
+            node.exec_command(sudo=True, cmd=repo_cmd, check_ec=False)
+
+        install_cmd = "yum install -y vault"
+        node.exec_command(sudo=True, cmd=install_cmd, check_ec=False)
+
+    except Exception as e:
+        raise RuntimeError(f"{node.shortname}: Failed to install Vault - {str(e)}")
 
 
 def _create_agent_config(node: CephNode, config: Dict) -> None:
     """
-    Writes the required configuration file to the provided node.
-
-    The following files are created .app-role-id, .app-secret-id and agent.hcl
-
-    Args:
-        node    The system on which files have to be copied
-        config  Dictionary holding the tokens
-
-    Returns:
-        None
-
-    Raises:
-        CommandFailed
+    Writes required agent configuration files to the node.
     """
     node.exec_command(sudo=True, cmd="mkdir -p /usr/local/etc/vault/")
 
@@ -221,10 +241,22 @@ def _create_agent_config(node: CephNode, config: Dict) -> None:
         file_name="/usr/local/etc/vault/.app-secret-id",
         content=config["agent"]["secret-id"],
     )
-    # hcl file
-    agent_conf = {"url": config["url"], "auth": config["agent"]["auth"]}
+
+    # Harden file permissions for credentials
+    node.exec_command(
+        sudo=True,
+        cmd="chmod 600 /usr/local/etc/vault/.app-role-id /usr/local/etc/vault/.app-secret-id",
+        check_ec=False,
+    )
+
+    agent_conf = {
+        "url": config["url"],
+        "auth": config["agent"]["auth"],
+        "token": {"file": config["agent"].get("token_file", "")},
+    }
     tmpl = Template(AGENT_HCL)
     data = tmpl.render(data=agent_conf)
+
     _write_remote_file(
         node=node,
         file_name="/usr/local/etc/vault/agent.hcl",
@@ -234,19 +266,7 @@ def _create_agent_config(node: CephNode, config: Dict) -> None:
 
 def _create_agent_systemd(node: CephNode) -> None:
     """
-    Configures and runs the vault-agent as a system daemon.
-
-    This method creates two files i.e. a launcher file and a system service unit. It
-    also enables the service to start.
-
-    Args:
-        node    The node for which the vault agent needs to be set.
-
-    Returns:
-        None
-
-    Raises:
-        CommandFailed
+    Configures vault-agent as a systemd service.
     """
     _write_remote_file(
         node=node,
@@ -261,6 +281,7 @@ def _create_agent_systemd(node: CephNode) -> None:
 
     commands = [
         "chmod +x /usr/bin/vault-agent",
+        "systemctl daemon-reload",
         "systemctl start vault-agent.service",
         "systemctl enable vault-agent.service",
     ]
@@ -270,22 +291,14 @@ def _create_agent_systemd(node: CephNode) -> None:
 
 def _configure_rgw_daemons(node: CephNode, config: Dict) -> None:
     """
-    Updates the RGW daemons with the provided configuration.
-
-    Args:
-         node       Server that has privilege to perform ceph config set commands.
-         config     Key/value pairs to be used for configuration
-    Returns:
-        None
-    Raises:
-        CommandFailed
+    Updates RGW daemons with Vault config.
     """
-    out, err = node.exec_command(
+    out, _ = node.exec_command(
         sudo=True, cmd="ceph orch ps --daemon_type rgw --format json"
     )
     rgw_daemons = [f"client.rgw.{x['daemon_id']}" for x in loads(out)]
 
-    out, err = node.exec_command(
+    out, _ = node.exec_command(
         sudo=True, cmd="ceph orch ls --service_type rgw --format json"
     )
     rgw_services = [x["service_name"] for x in loads(out)]
