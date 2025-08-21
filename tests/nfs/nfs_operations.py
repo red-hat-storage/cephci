@@ -1,4 +1,5 @@
 import json
+import re
 import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
@@ -691,11 +692,17 @@ def create_nfs_via_file_and_verify(installer_node, nfs_objects, timeout):
     Create a temporary YAML file with NFS Ganesha configuration.
     Args:
         installer_node: The node where the NFS Ganesha configuration will be applied.
+                      Can be a single node or list of nodes (first node will be used)
         nfs_objects: List of NFS Ganesha configuration objects.
     Returns:
         str: Path to the temporary YAML file.
     """
     temp_file = tempfile.NamedTemporaryFile(suffix=".yaml")
+
+    # Handle case where installer_node is a list
+    if isinstance(installer_node, list):
+        installer_node = installer_node[0]
+
     spec_file = installer_node.remote_file(
         sudo=True, file_name=temp_file.name, file_mode="wb"
     )
@@ -715,14 +722,17 @@ def create_nfs_via_file_and_verify(installer_node, nfs_objects, timeout):
         log.error(f"Failed to apply NFS Ganesha spec file: {err}")
 
 
-def delete_nfs_clusters_in_parallel(installer_node, timeout):
+def delete_nfs_clusters_in_parallel(installer_node, timeout=300, clusters=None):
     """
     Delete NFS clusters in batch.
     Args:
         installer_node: The node where the NFS Ganesha configuration will be applied.
         nfs_objects: List of NFS Ganesha configuration objects.
     """
-    clusters = CephAdm(installer_node).ceph.nfs.cluster.ls()
+    if not clusters:
+        clusters = CephAdm(installer_node).ceph.nfs.cluster.ls()
+    else:
+        clusters = clusters
     with ThreadPoolExecutor(max_workers=None) as executor:
         futures = [
             executor.submit(
@@ -740,6 +750,8 @@ def delete_nfs_clusters_in_parallel(installer_node, timeout):
             CephAdm(installer_node).ceph.orch.ls(format="json", service_type="nfs")
         )
         if all(x["status"]["running"] == 0 for x in result) or not result:
+            log.info("sleep(10)  # Allow some time for the service to stabilize")
+            sleep(10)
             log.info(
                 "\n"
                 + "=" * 30
@@ -819,7 +831,7 @@ def open_mandatory_v3_ports(nfs_node, ports_to_open):
 
 
 @retry(OperationFailedError, tries=4, delay=5, backoff=2)
-def mount_retry(client, mount_name, version, port, nfs_server, export_name, ha=False):
+def mount_retry(client, mount_name, version, port, nfs_server, export_name):
     if Mount(client).nfs(
         mount=mount_name,
         version=version,
@@ -885,3 +897,204 @@ def verify_nfs_ganesha_service(node, timeout):
         raise OperationFailedError(
             "NFS daemons check failed Timeout expired. -- %s seconds" % timeout
         )
+
+
+def create_multiple_nfs_instance_via_spec_file(
+    spec, replication_number, installer, timeout=300
+):
+    """
+    Create multiple NFS Ganesha service instances from a base spec file.
+
+    This function takes a service specification dictionary (as used in Ceph orchestrator),
+    clones it `replication_number` times, and increments the `service_id`, `port`, and
+    `monitoring_port` fields for each replica. The generated spec list is then used to
+    deploy the instances on the Ceph cluster via `create_nfs_via_file_and_verify`.
+
+    Args:
+        spec (dict): Base NFS Ganesha service spec containing:
+                     - service_type (str): common name for nfs instances
+                     - service_id (str): Base identifier for the service
+                     - placement.host_pattern (str): Node(s) to host the service(s)
+                     - spec.port (int): Base NFS server port
+                     - spec.monitoring_port (int): Base prometheus exporter port
+        replication_number (int): Number of NFS instances to create.
+        installer (CephAdm or str): Installer node or handler used for deployment.
+        timeout (int, optional): Timeout in seconds for instance creation and verification.
+                                 Defaults to 300.
+
+    Returns:
+        int: 0 on success, 1 on failure.
+    """
+    try:
+        new_objects = []
+        for i in range(replication_number):
+            service_id = f"{spec['service_id']}{i if i != 0 else ''}"
+            port = spec["spec"]["port"] + i
+            monitoring_port = spec["spec"]["monitoring_port"] + i
+
+            new_object = {
+                "service_type": spec["service_type"],
+                "service_id": service_id,
+                "placement": {"host_pattern": spec["placement"]["host_pattern"]},
+                "spec": {
+                    "port": port,
+                    "monitoring_port": monitoring_port,
+                },
+            }
+            new_objects.append(new_object)
+
+            log.debug(
+                f"Prepared spec for NFS instance {i + 1}/{replication_number}: "
+                f"service_id={service_id}, port={port}, monitoring_port={monitoring_port}"
+            )
+
+        log.info(
+            f"Creating {replication_number} NFS Ganesha instance(s) "
+            f"using base spec service_id='{spec['service_id']}'..."
+        )
+        log.debug(f"Full generated specs: {new_objects}")
+
+        # Deploy the NFS service(s) via orchestrator
+        if not create_nfs_via_file_and_verify(installer, new_objects, timeout):
+            log.error("NFS Ganesha instance creation failed during verification.")
+            return 1
+
+        log.info(
+            f"Successfully created {replication_number} NFS Ganesha instance(s) "
+            f"with IDs: {[obj['service_id'] for obj in new_objects]}"
+        )
+        return new_objects
+
+    except KeyError as e:
+        log.error(f"Missing required key in spec: {e}")
+        return 1
+    except Exception as e:
+        log.error(f"Unexpected error creating NFS Ganesha instances: {e}")
+        return 1
+
+
+def dynamic_cleanup_common_names(
+    clients, mounts_common_name, clusters=None, mount_point="/mnt/", group_name=None
+):
+    """
+    Dynamically clean up NFS resources by common name.
+
+    Steps performed:
+        1. Unmount and remove all directories matching the given mount name prefix on all clients.
+        2. Delete all NFS exports in the specified clusters.
+        3. Delete all CephFS subvolumes associated with the exports.
+        4. Delete all NFS clusters.
+        5. Check for NFS coredumps and raise if found.
+
+    Args:
+        clients (list): List of client nodes.
+        mounts_common_name (str): Prefix for mount directories to clean up.
+        clusters (list, optional): List of NFS cluster names to clean up. If None, will auto-discover.
+        mount_point (str, optional): Base mount directory. Default is "/mnt/".
+        group_name (str, optional): CephFS subvolume group name.
+    Raises:
+        NfsCleanupFailed: If coredump is found or cleanup times out.
+        OperationFailedError: If unmount or resource deletion fails.
+    """
+    if not isinstance(clients, list):
+        clients = [clients]
+
+    # Check for NFS coredump on all NFS nodes before cleanup
+    if ceph_cluster_obj:
+        nfs_nodes = ceph_cluster_obj.get_nodes("nfs")
+        coredump_path = "/var/lib/systemd/coredump"
+        for nfs_node in nfs_nodes:
+            if check_coredump_generated(nfs_node, coredump_path, setup_start_time):
+                log.error(
+                    f"Coredump found on {nfs_node.hostname} after test execution."
+                )
+                raise NfsCleanupFailed(
+                    "Coredump generated post execution of the current test case"
+                )
+
+    # Step 1: Unmount and remove all matching mount directories on each client
+    for client in clients:
+        log.info(f"Starting mount cleanup on client {client.hostname}")
+        for w in WaitUntil(timeout=600, interval=10):
+            # Find all mounts matching the common name prefix
+            mounts = [
+                x
+                for x in client.get_dir_list(mount_point)
+                if x.startswith(mounts_common_name)
+            ]
+            if not mounts:
+                log.info(
+                    f"No mounts found with prefix '{mounts_common_name}' on {client.hostname}"
+                )
+                break
+            for mount in mounts:
+                log.info(f"Removing files from mount {mount} on {client.hostname}")
+                client.remove_file(f"{mount_point}{mount}/*")
+                log.info(f"Unmounting {mount_point}{mount} on {client.hostname}")
+                if Unmount(client).unmount(mount_point + mount):
+                    log.error(
+                        f"Failed to unmount {mount_point}{mount} on {client.hostname}"
+                    )
+                    raise OperationFailedError(
+                        f"Failed to unmount {mount_point}{mount} nfs on {client.hostname}"
+                    )
+                client.exec_command(sudo=True, cmd=f"rm -rf {mount_point}{mount}")
+                log.info(
+                    f"Removed mount directory {mount_point}{mount} on {client.hostname}"
+                )
+            break
+        if w.expired:
+            log.error(f"Timeout while cleaning up mounts on {client.hostname}")
+            raise NfsCleanupFailed(
+                "Failed to cleanup nfs mount dir even after multiple iterations. Timed out!"
+            )
+
+    # Step 2: Delete all exports in each cluster
+    client = clients[0]
+    if not clusters:
+        clusters = Ceph(client).nfs.cluster.ls()
+        log.info(f"Auto-discovered clusters for cleanup: {clusters}")
+    if not isinstance(clusters, list):
+        clusters = [clusters]
+
+    # Step 3: Delete all CephFS subvolumes associated with the exports
+    subvols = json.loads(
+        Ceph(client).fs.sub_volume.ls(volume="cephfs", group=group_name)
+    )
+    for cluster in clusters:
+        exports = json.loads(Ceph(client).nfs.export.ls(cluster))
+        log.info(f"Found {len(exports)} exports in cluster '{cluster}': {exports}")
+
+        for export in exports:
+            Ceph(client).nfs.export.delete(cluster, export)
+            log.info(f"Deleted export '{export}' in cluster '{cluster}'")
+
+        sub_vols_infos = []
+        for subvol in subvols:
+            subvol_info = Ceph(client).fs.sub_volume.info(
+                volume="cephfs", subvolume=subvol["name"], group=group_name
+            )
+            sub_vols_infos.append(subvol_info)
+            for export in exports:
+                # Check if export is referenced in the subvolume's pool_namespace
+                if re.findall(export, subvol_info["pool_namespace"])[1:]:
+                    log.info(f"Export '{export}' found in subvolume '{subvol['name']}'")
+                    Ceph(client).fs.sub_volume.rm(
+                        volume="cephfs",
+                        subvolume=subvol["name"],
+                        group=group_name,
+                        force=True,
+                    )
+                    log.info(
+                        f"Deleted subvolume '{subvol['name']}' in group '{group_name}'"
+                    )
+
+        # Step 4: Remove the NFS cluster itself
+        Ceph(clients[0]).nfs.cluster.delete(cluster)
+        log.info(f"Deleted NFS cluster '{cluster}'")
+
+    # Step 5: Wait for all NFS daemons to be removed
+    log.info("Waiting for all NFS daemons to be removed from the cluster...")
+    sleep(30)
+    check_nfs_daemons_removed(client)
+    log.info("Dynamic cleanup of NFS resources completed")
