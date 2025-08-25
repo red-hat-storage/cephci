@@ -123,16 +123,16 @@ def initiators(ceph_cluster, gateway, config):
         raise Exception(f"NVMe Targets not found on {client.hostname}")
     LOG.debug(targets)
 
-    rhel_version = initiator.distro_version()
-    if rhel_version == "9.5":
-        paths = [target["DevicePath"] for target in targets]
-    elif rhel_version == "9.6":
-        paths = [
-            f"/dev/{ns['NameSpace']}"
-            for device in targets
-            for subsys in device.get("Subsystems", [])
-            for ns in subsys.get("Namespaces", [])
-        ]
+    paths = []
+    for target in targets:
+        if "DevicePath" in target:
+            paths.append(target["DevicePath"])
+
+        elif "Subsystems" in target:
+            for subsys in target.get("Subsystems", []):
+                for ns in subsys.get("Namespaces", []):
+                    if "NameSpace" in ns:
+                        paths.append(f"/dev/{ns['NameSpace']}")
 
     results = []
     io_args = {"size": "100%"}
@@ -146,7 +146,7 @@ def initiators(ceph_cluster, gateway, config):
                 _io_args.update({"test_name": test_name})
             _io_args.update(
                 {
-                    "device_name": f"/dev/{path}",
+                    "device_name": path,
                     "client_node": client,
                     "long_running": True,
                     "cmd_timeout": "notimeout",
@@ -155,6 +155,8 @@ def initiators(ceph_cluster, gateway, config):
             _io_args = {**io_args, **_io_args}
             p.spawn(run_fio, **_io_args)
         for op in p:
+            if op != 0:
+                raise RuntimeError(f"FIO failed with exit code : {op}")
             results.append(op)
     return results
 

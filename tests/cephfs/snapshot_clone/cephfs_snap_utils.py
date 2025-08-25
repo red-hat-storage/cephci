@@ -14,6 +14,7 @@ from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.exceptions import ValueMismatchError
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 from utility.retry import retry
 from utility.utils import get_ceph_version_from_cluster
@@ -35,6 +36,7 @@ class SnapUtils(object):
         self.osds = ceph_cluster.get_ceph_objects("osd")
         self.mdss = ceph_cluster.get_ceph_objects("mds")
         self.clients = ceph_cluster.get_ceph_objects("client")
+        self.cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
 
     def enable_snap_schedule(self, client):
         """
@@ -104,7 +106,7 @@ class SnapUtils(object):
         out, rc = client.exec_command(sudo=True, cmd=sched_cmd)
         log.info(out)
 
-        if snap_params["validate"] is True:
+        if snap_params.get("validate", False) is True:
             cmd = f"ceph fs snap-schedule status {snap_params['path']} --fs {snap_params['fs_name']} --f json"
             if snap_params.get("subvol_name"):
                 sv_name = snap_params["subvol_name"]
@@ -596,8 +598,223 @@ class SnapUtils(object):
         log.info("Snapshots are retained as per retention policy")
         return 0
 
+    def snapshot_visibility(self, client, op_type, **kwargs):
+        """
+        This method does set/get of subvolume snapshot_visibility for given subvolume
+        Required params:
+        client : for ceph cmds
+        op_Type: set or get
+        kw_args : dict object in below format,
+        {"sub_name":sub_name,
+         "group_name":group_name,
+         "vol_name":vol_name,
+         "value":value
+        }
+        """
+        cmd = f"ceph fs subvolume snapshot_visibility {op_type} {kwargs['vol_name']} {kwargs['sub_name']}"
+        if kwargs.get("group_name"):
+            cmd += f" --group_name {kwargs['group_name']}"
+        if op_type == "set":
+            cmd += f" --value {kwargs['value']}"
 
-# HELPER ROUTINES
+        out, _ = client.exec_command(sudo=True, cmd=cmd)
+        return out.strip()
+
+    def snapshot_visibility_client_mgr(self, client, daemon_type, op_type, **kwargs):
+        """
+        This method does set/get of subvolume snapshot_visibility for given subvolume
+        Required params:
+        client : for ceph cmds
+        daemon_type : client or mgr
+        op_type: set or get
+        kw_args : dict object in below format,
+        {
+         "client_id":client_hostname,
+         "client_respect_snapshot_visibility":"true"
+        }
+        Returns : True on success
+        """
+        if daemon_type == "client" and kwargs.get("client_id"):
+            daemon_type += f"{daemon_type}.{kwargs['client_id']}"
+        cmd = f"ceph config {op_type} {daemon_type} client_respect_subvolume_snapshot_visibility "
+        if op_type == "set":
+            cmd += f" {kwargs['client_respect_snapshot_visibility']}"
+        out, _ = client.exec_command(sudo=True, cmd=cmd)
+        if op_type == "get":
+            return out.strip()
+        return True
+
+    def validate_snapshot_visibility(self, client, mnt_client, **mnt_args):
+        """
+        This method validates snapshot visibility behavior relevant subvolume, client and mgr setting for
+        snapshot visibility by checking for .snap fir in mountpath and running snapshot ops in cli
+        Required params:
+        client : for ceph cmds
+        mnt_client : Client object where .snap dir validation is run
+        mnt_args : a dict object in below format,
+        {'sub_name':sub_name,
+         'group_name':group_name,
+         'vol_name':vol_name,
+         'mnt_type':'fuse'
+        }
+        Returns : 0 - Success, 1 - Failure
+        """
+        # Snapshot visibility validation
+        str0 = "snapshot_visibility true,client config client_respect_snapshot_visibility true, .snap dir is visible"
+        str1 = "snapshot_visibility true,client config client_respect_snapshot_visibility false, .snap dir is visible"
+        str2 = "snapshot_visibility false,client config client_respect_snapshot_visibility true, .snap dir NOT visible"
+        str3 = "snapshot_visibility false,client config client_respect_snapshot_visibility false, .snap dir is visible"
+        str4 = "snapshot_visibility true,mgr config client_respect_snapshot_visibility true, Snaphot ops allowed"
+        str5 = "snapshot_visibility true,mgr config client_respect_snapshot_visibility false, Snaphot ops allowed"
+        str6 = "snapshot_visibility false,mgr config client_respect_snapshot_visibility true, Snaphot ops NOT allowed"
+        str7 = "snapshot_visibility false,mgr config client_respect_snapshot_visibility false, Snaphot ops allowed"
+        for str_tmp in [str0, str1, str2, str3, str4, str5, str6, str7]:
+            log.info(str_tmp)
+        snap_visibility_ops = {
+            "1": {"true": "1", "false": "1"},
+            "0": {"true": "0", "false": "1"},
+        }
+        # "Snapshot visibility test terminology - 1 - Visibile/Allowed, 0 - Not Visibile/Allowed"
+        snapshot_visibility = self.snapshot_visibility(
+            client, "get", **mnt_args
+        ).strip()
+        snapshot_visibility_client = self.snapshot_visibility_client_mgr(
+            client, "client", "get", **mnt_args
+        )
+        snapshot_visibility_mgr = self.snapshot_visibility_client_mgr(
+            client, "mgr", "get", **mnt_args
+        )
+        exp_snap_visibility = snap_visibility_ops[snapshot_visibility][
+            snapshot_visibility_client
+        ]
+        exp_snap_ops = snap_visibility_ops[snapshot_visibility][snapshot_visibility_mgr]
+        if self.verify_snap_visibility(
+            exp_snap_visibility, client, mnt_client, mnt_args
+        ):
+            log.error("Snapshot visibility validation failed")
+            return 1
+        if self.verify_snap_ops(exp_snap_ops, client, mnt_args):
+            log.error("Snapshot ops validation failed")
+            return 1
+        # Snapshot ops validation
+
+    # HELPER ROUTINES
+    def verify_snap_visibility(self, exp_snap_visibility, client, mnt_client, mnt_args):
+        """
+        This method verifies snapshot visibility on mountpath created
+        Returns : 0 - Success , 1 - Failure
+        """
+        vol_name = mnt_args["vol_name"]
+        mnt_type = mnt_args["mnt_type"]
+        subvol_path = self.cephfs_common_utils.subvolume_get_path(
+            client,
+            vol_name,
+            subvolume_name=mnt_args["sub_name"],
+            subvolume_group=mnt_args["group_name"],
+        )
+        mount_params = {
+            "client": mnt_client,
+            "mnt_path": subvol_path,
+            "fs_name": vol_name,
+            "export_created": 0,
+        }
+        if mnt_type == "nfs":
+            nfs_export_name = f"/export_{mnt_args['sub_name']}_" + "".join(
+                random.choice(string.digits) for i in range(3)
+            )
+            mount_params.update(
+                {
+                    "nfs_export_name": nfs_export_name,
+                    "nfs_server": mnt_args["nfs_server"],
+                    "nfs_name": mnt_args["nfs_name"],
+                }
+            )
+
+        mnt_path, _ = self.cephfs_common_utils.mount_ceph(mnt_type, mount_params)
+        snap_ls_err = "ls: cannot access '.snap': Operation not permitted"
+        try:
+            out, _ = mnt_client.exec_command(sudo=True, cmd=f"ls {mnt_path}/.snap")
+            log.info(out)
+            actual_snap_visibility = "1"
+
+        except CommandFailed as ex:
+            log.info(
+                "ls on %s for subvolume %s failed with error - %s",
+                mnt_path,
+                mnt_args["sub_name"],
+                ex,
+            )
+            if snap_ls_err in str(ex):
+                actual_snap_visibility = "0"
+
+        mnt_client.exec_command(sudo=True, cmd=f"umount -l {mnt_path}")
+        if mnt_type == "nfs":
+            self.cephfs_common_utils.remove_nfs_export(
+                client, mnt_args["nfs_name"], nfs_export_name
+            )
+        snap_str = f"Actual Snapshot visibilty : {actual_snap_visibility},"
+        snap_str += f" Expected Snapshot visibility : {exp_snap_visibility}"
+        log.info(snap_str)
+        time.sleep(300)
+        if actual_snap_visibility != exp_snap_visibility:
+            return 1
+        return 0
+
+    def verify_snap_ops(self, exp_snap_ops, client, mnt_args):
+        """
+        This method verifies snapshot ops for given subvolume
+        Returns : 0 - Success , 1 - Failure
+        """
+        log.info(f"in verify_snap_ops:{mnt_args}")
+        vol_name = mnt_args["vol_name"]
+        snap_create_err = "EPERM: error in mkdir "
+        snap_ls_err = "EPERM: opendir failed at"
+        snap_clone_err = ""
+        rand_str = "".join(random.choice(string.digits) for i in range(3))
+        snap_name = f"snap_ops_{rand_str}"
+        snap_create_cmd = f"ceph fs subvolume snapshot create {vol_name} {mnt_args['sub_name']} {snap_name}"
+        snap_ls_cmd = f"ceph fs subvolume snapshot ls {vol_name} {mnt_args['sub_name']}"
+        snap_clone_cmd = f"ceph fs subvolume snapshot clone {vol_name} {mnt_args['sub_name']} {snap_name} "
+        snap_clone_cmd += f"{mnt_args['sub_name']}_clone"
+        if mnt_args.get("group_name"):
+            snap_create_cmd += f" --group_name {mnt_args['group_name']}"
+            snap_ls_cmd += f" --group_name {mnt_args['group_name']}"
+            snap_clone_cmd += f" --group_name {mnt_args['group_name']} --target_group_name {mnt_args['group_name']}"
+
+        cmd_err = {
+            snap_create_cmd: snap_create_err,
+            snap_ls_cmd: snap_ls_err,
+            snap_clone_cmd: snap_clone_err,
+        }
+        snap_rm_cmd = f"ceph fs subvolume snapshot rm {vol_name} {mnt_args['sub_name']} {snap_name}"
+        clone_rm_cmd = f"ceph fs subvolume rm {vol_name} {mnt_args['sub_name']}_clone "
+        if mnt_args.get("group_name"):
+            snap_rm_cmd += f" --group_name {mnt_args['group_name']}"
+            clone_rm_cmd += f" --group_name {mnt_args['group_name']}"
+        clone_rm_cmd += f";{snap_rm_cmd}"
+
+        clone_obj = {
+            "vol_name": vol_name,
+            "target_subvol_name": f"{mnt_args['sub_name']}_clone",
+            "target_group_name": mnt_args.get("group_name", None),
+        }
+        for snap_cmd in [snap_create_cmd, snap_ls_cmd, snap_clone_cmd]:
+            try:
+                client.exec_command(sudo=True, cmd=snap_cmd)
+                actual_snap_ops = "1"
+                if "snapshot clone" in snap_cmd:
+                    self.cephfs_common_utils.validate_clone_state(client, clone_obj)
+                    client.exec_command(sudo=True, cmd=clone_rm_cmd)
+            except CommandFailed as ex:
+                log.info("Snap op %s failed with error - %s", snap_cmd, ex)
+                if cmd_err[snap_cmd] in str(ex):
+                    actual_snap_ops = "0"
+            snap_str = f"Actual Snapshot Ops allowability : {actual_snap_ops},"
+            snap_str += f" Expected Snapshot Ops allowability : {exp_snap_ops}"
+            log.info(snap_str)
+            if actual_snap_ops != exp_snap_ops:
+                return 1
+        return 0
 
 
 @retry(ValueMismatchError, tries=5, delay=30)

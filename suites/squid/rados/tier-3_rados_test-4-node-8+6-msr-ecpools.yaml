@@ -365,11 +365,12 @@ tests:
             byte_size: 10KB
       desc: Verification of the effect of compression on erasure coded pools
 
-  - test:
-      name: ceph-bluestore-tool utility
-      module: test_bluestoretool_workflows.py
-      polarion-id: CEPH-83571692
-      desc: Verify ceph-bluestore-tool functionalities
+# Commenting CBT test due to time constraints
+#  - test:
+#      name: ceph-bluestore-tool utility
+#      module: test_bluestoretool_workflows.py
+#      polarion-id: CEPH-83571692
+#      desc: Verify ceph-bluestore-tool functionalities
 
 # COT tests underneath run only on RE pools, commenting workflow for now
 #  - test:

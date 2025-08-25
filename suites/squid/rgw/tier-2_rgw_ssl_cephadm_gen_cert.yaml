@@ -66,8 +66,6 @@ tests:
                       spec:
                         generate_cert: true
                         ssl: true
-                        zonegroup_hostnames:
-                          - s3.example.com
                       placement:
                         nodes:
                           - node5
@@ -116,8 +114,6 @@ tests:
                       spec:
                         generate_cert: true
                         ssl: true
-                        zonegroup_hostnames:
-                          - s3.example.com
                       placement:
                         nodes:
                           - node5

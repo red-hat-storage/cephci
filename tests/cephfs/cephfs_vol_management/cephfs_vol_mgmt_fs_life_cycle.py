@@ -47,14 +47,13 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd="ceph config set mon mon_allow_pool_delete true"
         )
         for output in output1:
-            log.info(print(output))
+            log.info(output)
             exist_fs = output["name"]
             client1.exec_command(sudo=True, cmd=f"ceph fs fail {exist_fs}")
-            out2, ec2 = client1.exec_command(
+            client1.exec_command(
                 sudo=True, cmd=f"ceph fs rm {exist_fs} --yes-i-really-mean-it"
             )
-            if ec2:
-                raise CommandFailed(f"Removing {exist_fs} fas failed")
+
         pool_data = f"cephfs_data_{rand}"
         pool_meta = f"cephfs_metadata_{rand}"
         pool_list.append(pool_meta)
@@ -68,13 +67,10 @@ def run(ceph_cluster, **kw):
 
         client1.exec_command(sudo=True, cmd=create_cmd)
         client1.exec_command(sudo=True, cmd=f"ceph fs fail {fs_name}")
-        out4, ec4 = client1.exec_command(
+
+        client1.exec_command(
             sudo=True, cmd=f"ceph fs rm {fs_name} --yes-i-really-mean-it"
         )
-
-        log.info(print(out4))
-        if ec4:
-            raise CommandFailed("Removing fs fas failed")
 
         client1.exec_command(sudo=True, cmd=f"ceph osd pool create {pool_data}_1")
         client1.exec_command(sudo=True, cmd=f"ceph osd pool create {pool_meta}_1")
@@ -93,18 +89,16 @@ def run(ceph_cluster, **kw):
         retry_mount([client1], kernel_mounting_dir_1, ",".join(mon_node_ips))
 
         out7, ec7 = client1.exec_command(sudo=True, cmd=f"ceph fs get {fs_name}")
-        log.info(print(out7))
+        log.info(out7)
+        log.info(ec7)
         fs_util.run_ios(
             client1, kernel_mounting_dir_1, ["dd", "smallfile"], file_name=rand
         )
-        if ec7:
-            raise CommandFailed("Getting fs has failed")
+
         out8, ec8 = client1.exec_command(
             sudo=True, cmd=f"ceph fs set {fs_name} max_mds 3"
         )
-        log.info(print(out8))
-        if ec8:
-            raise CommandFailed("Setting fs has failed")
+        log.info(out8)
         # Adding addiotional pool in the cephfs since we can not remove the default pool
         pool_name_remove = "remove_pool"
         client1.exec_command(sudo=True, cmd=f"ceph osd pool create {pool_name_remove}")

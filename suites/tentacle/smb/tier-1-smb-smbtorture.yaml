@@ -89,9 +89,9 @@ tests:
       module: smbtorture.py
       polarion-id: CEPH-83625919
       config:
-        smb_service_deployment: False
+        smb_service_deployment: True
         smb_service_cleanup: False
-        setup_smbtorture: False
+        setup_smbtorture: True
         smbtorture_test: smb2.rw
         file_type: yaml
         file_mount: /tmp
