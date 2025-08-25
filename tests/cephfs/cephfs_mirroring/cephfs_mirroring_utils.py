@@ -303,17 +303,18 @@ class CephfsMirroringUtils(object):
             log.error(f"Error validating Peer Connection: {e}")
             return 1
 
-    def add_path_for_mirroring(self, source_clients, source_fs, path):
+    def add_path_for_mirroring(self, source_clients, source_fs, path, build=None):
         """
         Add a path for mirroring on the source filesystem.
         Args:
             source_clients (CephNode): The source Ceph clients responsible for mirroring setup.
             source_fs (str): The name of the source Ceph filesystem where mirroring is configured.
             path (str): The path to be added for mirroring within the source filesystem.
-
-        This function adds the specified path to the mirroring configuration of the source filesystem. This path
-        will be mirrored to the target filesystem for snapshot synchronization.
-        Validates the configuration by listing all mirrored paths using "ceph fs snapshot mirror ls"
+            build (str, optional): Ceph build version string (e.g., "6.1.2", "7.0.1").
+                                   If build starts with "6", validation is skipped since
+                                   'snapshot mirror ls' is not supported.
+        This function adds the specified path to the mirroring configuration of the source filesystem.
+        For Ceph builds >= 7, validates the configuration by listing mirrored paths.
         Note:
             The specified path should exist within the source filesystem.
         """
@@ -325,25 +326,32 @@ class CephfsMirroringUtils(object):
         source_clients.exec_command(
             sudo=True, cmd=f"ceph fs snapshot mirror add {source_fs} {path}"
         )
-        # Validate the path was added successfully
-        out, _ = source_clients.exec_command(
-            sudo=True, cmd=f"ceph fs snapshot mirror ls {source_fs}"
-        )
-        try:
-            mirrored_paths = [p.rstrip("/") for p in json.loads(out.strip())]
-            log.debug(f"Mirrored paths returned: {mirrored_paths}")
-        except json.JSONDecodeError:
-            log.error(f"Failed to parse mirror ls output: {out}")
-            raise
-        if path in mirrored_paths:
+
+        # Skip validation for 6.x builds
+        if build and build.startswith("6"):
             log.info(
-                f"Successfully added path '{path}' for mirroring on filesystem '{source_fs}'."
+                f"Skipping mirror path validation as build '{build}' is < 7.x and it's not supported"
             )
         else:
-            log.error(
-                f"Path '{path}' was not found in mirror list for filesystem '{source_fs}'."
+            # Run validation only for builds 7.x and above
+            out, _ = source_clients.exec_command(
+                sudo=True, cmd=f"ceph fs snapshot mirror ls {source_fs}"
             )
-            raise Exception(f"Mirroring path addition failed: {path}")
+            try:
+                mirrored_paths = [p.rstrip("/") for p in json.loads(out.strip())]
+                log.debug(f"Mirrored paths returned: {mirrored_paths}")
+            except json.JSONDecodeError:
+                log.error(f"Failed to parse mirror ls output: {out}")
+                raise
+            if path in mirrored_paths:
+                log.info(
+                    f"Successfully added path '{path}' for mirroring on filesystem '{source_fs}'."
+                )
+            else:
+                log.error(
+                    f"Path '{path}' was not found in mirror list for filesystem '{source_fs}'."
+                )
+                raise Exception(f"Mirroring path addition failed: {path}")
 
     def remove_path_from_mirroring(self, source_clients, source_fs, path):
         """
