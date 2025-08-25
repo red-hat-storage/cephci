@@ -1,0 +1,197 @@
+##############################################################################################
+# Tier-Level: 1
+# Test-Suite: tier1-nfs-ganesha-ha-longevity.yaml
+# Scenario: Run longevity test for NFS-Ganesha
+#
+# Cluster Configuration: Conf: baremetal_custom config
+# Add more clients if required
+# Test Steps:
+# - Deploy
+# - Deploy RHCS 7.1 client
+# - Deploy NFS-Ganesha with HA
+# - Upgrade cluster
+# - Run longevity test for NFS-Ganesha
+# loop execution longevity for loop - longevity: True and longevity_loop: 4
+# loop execution longevity for duration - longevity: True and longevity_duration: 1 (in Hrs)
+# exports on clients = total_num_exports / len(client)
+################################################################################################
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      desc: bootstrap and deploy services.
+      destroy-cluster: false
+      polarion-id: CEPHsA-83573713
+      module: test_cephadm.py
+      name: Deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+          - ceph-fuse
+        copy_admin_keyring: true
+      desc: Configure the RGW,RBD client system
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      name: setting up cluster for longevity
+      module: test_nfs_multiple_operations_for_upgrade.py
+      desc: setting up cluster for longevity with io
+      polarion-id: CEPH-83620035
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        file_count: 10
+        dd_command_size_in_M: 10
+        cluster_name: cluster_longevity
+        operation: before_upgrade
+
+  - test:
+      name: longevity - parallel
+      module: test_parallel.py
+      desc: Upgrade along with IOs for nfs - parallel module
+      parallel:
+        - test:
+            name: io operations during longevity
+            module: test_nfs_io_operations_during_upgrade.py
+            desc: io operations during longevity - io cluster
+            polarion-id: CEPH-83620035
+            abort-on-fail: false
+            config:
+              nfs_version: 4.2
+              clients: 1
+              file_count: 10
+              dd_command_size_in_M: 10
+              exports_number: 5
+              cluster_name: cluster_longevity
+              longevity: true
+#              longevity_duration: 1  # in hours
+              longevity_loop: 1
+
+        - test:
+            name: cthon tests for NFS ganesha
+            module: test_cthon.py
+            desc: cthon tests for NFS ganesha - running all testcases basic, general, special and lock
+            polarion-id: CEPH-83617827
+            abort-on-fail: false
+            config:
+              nfs_version: 4.2
+              clients: 1
+              total_num_exports: 2
+              nfs_export: /cthon
+              nfs_mount: /mnt/cthon
+              cluster_name: cluster_cthon
+              longevity: true
+#              longevity_duration: 1
+              longevity_loop: 1
+
+        - test:
+            name: deploy multiple nfs ganesha servers concurrently
+            desc: Deploy multiple nfs ganesha servers concurrently and verify
+            polarion-id: CEPH-83621553
+            module: test_deploy_multiple_nfs_ganesha_concurrently.py
+            config:
+              nfs_version: 4.2
+              clients: 1
+              timeout : 700
+              nfs_instance_number: 2
+              longevity: true
+#              longevity_duration: 1
+              longevity_loop: 2
+              spec:
+                service_type: nfs
+                service_id: nfs
+                placement:
+                  host_pattern: '*'
+                spec:
+                  port: 50001
+                  monitoring_port: 60000
+
+        - test:
+            name: Restart NFS Ganesha services
+            desc: Restart NFS Ganesha services for given time
+            module: scripts_tools.restart_nfs_ganesha_services.py
+            config:
+              clients: 1
+              restart_interval : 3 #in minutes
+              instances_to_restart:
+                - cluster_longevity
+                - cluster_cthon
+              longevity: true
+#              longevity_duration: 1 # in hours
+              longevity_loop: 1
+
+  - test:
+      name: cleaning up cluster for longevity
+      module: test_nfs_multiple_operations_for_upgrade.py
+      desc: cleaning up cluster for longevity with io
+      polarion-id: CEPH-83620035
+      abort-on-fail: false
+      config:
+        nfs_version: 4.2
+        clients: 1
+        file_count: 10
+        dd_command_size_in_M: 10
+        cluster_name: cluster_longevity
+        operation: after_upgrade
