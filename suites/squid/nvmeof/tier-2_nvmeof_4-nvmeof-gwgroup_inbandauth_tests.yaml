@@ -96,6 +96,8 @@ tests:
                 hosts:
                   - node: node14
                     inband_auth: true
+                  - node: node15
+                    inband_auth: true
                 bdevs:
                   - count: 2
                     size: 4G
@@ -116,6 +118,9 @@ tests:
               - nqn: nqn.2016-06.io.spdk:cnode1
                 listener_port: 5001
                 node: node14
+              - nqn: nqn.2016-06.io.spdk:cnode1
+                listener_port: 5001
+                node: node15
               - nqn: nqn.2016-06.io.spdk:cnode2
                 listener_port: 5002
                 node: node14

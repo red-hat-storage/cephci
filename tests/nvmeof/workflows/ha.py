@@ -85,28 +85,37 @@ class HighAvailability:
         return self.initiators[key]
 
     def create_dhchap_key(self, config, update_host_key=False):
-        """Generate DHCHAP key for each initiator and store it."""
+        """Generate DHCHAP key for subsystem (once) and unique keys for each initiator host."""
         subnqn = config["subnqn"]
 
         for host_config in config["hosts"]:
             node_id = host_config["node"]
             initiator = self.get_or_create_initiator(node_id, subnqn)
 
-            # Generate key for subsystem NQN
-            key, _ = initiator.gen_dhchap_key(n=config["subnqn"])
-            LOG.info(f"{key.strip()} is generated for {subnqn} and {node_id}")
+            # Case 1: Subsystem key (generate once and reuse for all hosts)
+            if not update_host_key:
+                if "subsys_key" not in config or config.get(
+                    "update_dhchap_key", False
+                ):  # only generate once
+                    key, _ = initiator.gen_dhchap_key(n=subnqn)
+                    config["subsys_key"] = key.strip()
+                    LOG.info(
+                        f"Generated subsystem key {config['subsys_key']} for {subnqn}"
+                    )
+                initiator.subsys_key = config["subsys_key"]
+                config["dhchap-key"] = config["subsys_key"]  # backward compatibility
 
-            initiator.nqn = config["subnqn"]
+            # Case 2: Host key (unique per initiator)
+            else:
+                key, _ = initiator.gen_dhchap_key(n=initiator.initiator_nqn())
+                host_config["dhchap-key"] = key.strip()
+                initiator.host_key = key.strip()
+                LOG.info(
+                    f"Generated host key {host_config['dhchap-key']} for host {node_id}"
+                )
+
+            initiator.nqn = subnqn
             initiator.auth_mode = config.get("auth_mode")
-            if initiator.auth_mode == "bidirectional" and not update_host_key:
-                initiator.subsys_key = key.strip()
-                initiator.host_key = key.strip()
-            if initiator.auth_mode == "unidirectional":
-                initiator.host_key = key.strip()
-            if update_host_key:
-                initiator.host_key = key.strip()
-            config["dhchap-key"] = key.strip()
-
             self.clients.append(initiator)
 
     def catogorize(self, gws):

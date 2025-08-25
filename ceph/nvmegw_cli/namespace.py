@@ -57,3 +57,11 @@ class Namespace(ExecuteCommandMixin):
     def set_qos(self, **kwargs):
         """Set QoS for a namespace."""
         return self.run_nvme_cli("set_qos", **kwargs)
+
+    def set_auto_resize(self, **kwargs):
+        """Set auto-resize for a namespace."""
+        return self.run_nvme_cli("set_auto_resize", **kwargs)
+
+    def refresh_size(self, **kwargs):
+        """Refresh size for a namespace."""
+        return self.run_nvme_cli("refresh_size", **kwargs)

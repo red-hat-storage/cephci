@@ -92,12 +92,13 @@ def configure_subsystems(pool, auth_mode, ha, gw_group, subsys_config):
                 initiator_node = get_node_by_id(ceph_cluster, host.get("node"))
                 initiator = Initiator(initiator_node)
 
-                # unidirectional inband authentication
-                if not subsys_config.get("inband_auth") and host.get("inband_auth"):
-                    ha.create_dhchap_key(subsys_config)
-                    sub_args["dhchap-key"] = subsys_config["dhchap-key"]
+                # Generate key for host NQN
+                sub_args.pop("dhchap-key", None)
+                if host.get("inband_auth"):
+                    ha.create_dhchap_key(subsys_config, update_host_key=True)
+                    sub_args["dhchap-key"] = host["dhchap-key"]
                 nvmegwcli.host.add(
-                    **{"args": {**sub_args, **{"host": initiator.nqn()}}}
+                    **{"args": {**sub_args, **{"host": initiator.initiator_nqn()}}}
                 )
 
         # Add Namespaces
@@ -135,6 +136,7 @@ def configure_subsystems(pool, auth_mode, ha, gw_group, subsys_config):
         if subsys_update_key:
             ha.create_dhchap_key(subsys_config)
             sub_args["dhchap-key"] = subsys_config["dhchap-key"]
+            LOG.info(f"Updating DHCHAP key for Subsystem {nqn}")
             nvmegwcli.subsystem.change_key(
                 **{
                     "args": {
@@ -148,12 +150,14 @@ def configure_subsystems(pool, auth_mode, ha, gw_group, subsys_config):
             host_update_key = host.get("update_dhchap_key", False)
             initiator_node = get_node_by_id(ceph_cluster, host.get("node"))
             initiator = Initiator(initiator_node)
-            if subsys_update_key or host_update_key:
-                if not subsys_update_key:
-                    ha.create_dhchap_key(subsys_config, update_host_key=True)
-                    sub_args["dhchap-key"] = subsys_config["dhchap-key"]
+            if host_update_key:
+                # if not subsys_update_key:
+                ha.create_dhchap_key(subsys_config, update_host_key=True)
+                sub_args.pop("dhchap-key", None)
+                sub_args["dhchap-key"] = host["dhchap-key"]
+                LOG.info(f"Updating DHCHAP key for Host {initiator.initiator_nqn()}")
                 nvmegwcli.host.change_key(
-                    **{"args": {**sub_args, **{"host": initiator.nqn()}}}
+                    **{"args": {**sub_args, **{"host": initiator.initiator_nqn()}}}
                 )
 
 

@@ -646,7 +646,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
     nvmegwcli = NVMeGWCLI(gw_node, 5500)
     client = get_node_by_id(ceph_cluster, config["initiator_node"])
     initiator = Initiator(client)
-    initiator_nqn = initiator.nqn()
+    initiator_nqn = initiator.initiator_nqn()
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
