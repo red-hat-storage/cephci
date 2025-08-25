@@ -41,3 +41,12 @@ class Config(Cli):
         """
         cmd = f"{self.base_cmd} dump{build_cmd_from_args(**kw)}"
         return self.execute(sudo=True, check_ec=False, long_running=False, cmd=cmd)
+
+    def rm(self, who, option):
+        """Remove the config value
+        Args:
+        who (str): entity or entities for which the configuration option should be removed
+        option (str): name of the configuration option to be removed
+        """
+        cmd = f"{self.base_cmd} rm {who} {option}"
+        return self.execute(sudo=True, cmd=cmd)
