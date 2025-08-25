@@ -51,7 +51,7 @@ def configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, config):
         for host in config["hosts"]:
             initiator_node = get_node_by_id(ceph_cluster, host)
             initiator = Initiator(initiator_node)
-            host_nqn = initiator.nqn()
+            host_nqn = initiator.initiator_nqn()
             nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
 
     if config.get("bdevs"):
