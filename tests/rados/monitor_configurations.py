@@ -95,7 +95,12 @@ class MonElectionStrategies:
         """
         cmd = "ceph mon dump"
         quorum = self.rados_obj.run_ceph_command(cmd)
-        return quorum["disallowed_leaders: "].split(",")
+        disallowed_leaders = list()
+        for key in quorum:
+            if re.match(r"^disallowed_leaders*", key):
+                disallowed_leaders = quorum[key]
+                break
+        return disallowed_leaders
 
     def get_mon_quorum_leader(self):
         """

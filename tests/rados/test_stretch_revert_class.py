@@ -149,10 +149,12 @@ class StretchMode:
         dc_buckets = [
             d for d in buckets["nodes"] if d.get("type") == self.stretch_bucket
         ]
-        dc_1 = dc_buckets.pop()
-        dc_1_name = dc_1["name"]
+        while len(dc_buckets) > 2:
+            dc_buckets.pop()
         dc_2 = dc_buckets.pop()
         dc_2_name = dc_2["name"]
+        dc_1 = dc_buckets.pop()
+        dc_1_name = dc_1["name"]
         all_hosts = get_stretch_site_hosts(
             rados_obj=self.rados_obj,
             tiebreaker_mon_site_name=self.tiebreaker_mon_site_name,

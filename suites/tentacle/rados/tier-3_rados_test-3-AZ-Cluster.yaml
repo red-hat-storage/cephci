@@ -287,6 +287,16 @@ tests:
       desc: negative scenarios with stretch pool enable command
 
   - test:
+      name: Netsplit detection and warning
+      module: test_netsplit_detection_and_warning.py
+      polarion-id: CEPH-83620060
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Netsplit detection and warning in stretch mode
+
+  - test:
       name: Netsplit Scenarios data-data sites
       module: test_stretch_n-az_netsplit_scenarios.py
       polarion-id: CEPH-83609870
