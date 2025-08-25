@@ -3,7 +3,11 @@ import yaml
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError
 from cli.utilities.packages import Package
-from tests.nfs.nfs_operations import create_nfs_via_file_and_verify, log
+from tests.nfs.nfs_operations import (
+    create_multiple_nfs_instance_via_spec_file,
+    create_nfs_via_file_and_verify,
+    log,
+)
 from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
     create_file,
     lookup_in_directory,
@@ -119,7 +123,13 @@ def validate_enc_for_nfs_export_via_fuse(client, fuse_mount, nfs_mount):
 
 
 def create_nfs_instance_for_byok(
-    installer, nfs_node, nfs_name, kmip_host_list, rsa_key, cert, ca_cert
+    installer,
+    nfs_node,
+    nfs_name,
+    kmip_host_list,
+    rsa_key,
+    cert,
+    ca_cert,
 ):
     """
     Create an NFS Ganesha service instance with BYOK (Bring Your Own Key) KMIP configuration,
@@ -230,7 +240,12 @@ def setup_gklm_infrastructure(
 
 
 def get_gklm_ca_certificate(
-    gklm_ip, gklm_node_password, gklm_node_username, exe_node, gklm_rest_client
+    gklm_ip,
+    gklm_node_password,
+    gklm_node_username,
+    exe_node,
+    gklm_rest_client,
+    gkml_servering_cert_name="self-signed-cert1",
 ):
     """
     Retrieve the GKLM CA certificate for use in the cluster:
@@ -259,23 +274,24 @@ def get_gklm_ca_certificate(
         certificate_uuid_to_export = [
             x["uuid"]
             for x in certs
-            if x.get("usage") == "SSLSERVER" and x.get("alias") == "self-signed-cert1"
+            if x.get("usage") == "SSLSERVER"
+               and x.get("alias") == gkml_servering_cert_name
         ][0]
         log.info(f"Found target certificate with UUID: {certificate_uuid_to_export}")
     except IndexError:
         log.error(
-            "No certificate with alias 'self-signed-cert1' and usage 'SSLSERVER' found in GKLM"
+            f"No certificate with alias {gkml_servering_cert_name} and usage 'SSLSERVER' found in GKLM"
         )
         raise
 
     log.info(
         "Checking if CA certificate is already exported at "
-        "/opt/IBM/WebSphere/Liberty/products/sklm/data/export1/exportedCert"
+        f"/opt/IBM/WebSphere/Liberty/products/sklm/data/export1/{gkml_servering_cert_name}"
     )
     file_check_cmd = (
         f"sshpass -p {gklm_node_password} ssh -o StrictHostKeyChecking=no {gklm_node_username}@{gklm_ip} "
-        '\'[ -f /opt/IBM/WebSphere/Liberty/products/sklm/data/export1/exportedCert ] && echo "File exists" '
-        '|| echo "File does not exist"\''
+        f"'[ -f /opt/IBM/WebSphere/Liberty/products/sklm/data/export1/{gkml_servering_cert_name} ] && "
+        'echo "File exists" || echo "File does not exist"\''
     )
     log.debug(f"Executing remote file check: {file_check_cmd}")
     is_cert_exists = Ceph(exe_node).execute(cmd=file_check_cmd)
@@ -301,7 +317,8 @@ def get_gklm_ca_certificate(
         log.info("Set required permissions on export directory")
 
         gklm_rest_client.certificates.export_certificate(
-            uuid=certificate_uuid_to_export, file_name="export1/exportedCert"
+            uuid=certificate_uuid_to_export,
+            file_name=f"export1/{gkml_servering_cert_name}",
         )
         log.info(
             f"Exported certificate (UUID {certificate_uuid_to_export}) from GKLM server"
@@ -310,11 +327,12 @@ def get_gklm_ca_certificate(
         log.info("CA certificate already exists at configured path; skipping export")
 
     log.info(
-        "Fetching CA certificate contents from /opt/IBM/WebSphere/Liberty/products/sklm/data/export1/exportedCert"
+        "Fetching CA certificate contents from "
+        f"/opt/IBM/WebSphere/Liberty/products/sklm/data/export1/{gkml_servering_cert_name}"
     )
     cert_fetch_cmd = (
         f"sshpass -p {gklm_node_password} ssh -o StrictHostKeyChecking=no {gklm_node_username}@{gklm_ip} "
-        "'cat /opt/IBM/WebSphere/Liberty/products/sklm/data/export1/exportedCert'"
+        f"'cat /opt/IBM/WebSphere/Liberty/products/sklm/data/export1/{gkml_servering_cert_name}'"
     )
     ca_cert = Ceph(exe_node).execute(cmd=cert_fetch_cmd)[0]
     log.info("CA certificate successfully retrieved from GKLM server")
@@ -612,3 +630,66 @@ def nfs_byok_test_setup(byok_setup_params):
     except Exception as ex:
         log.error(ex)
         return (1, None, None, None)
+
+
+def create_multiple_nfs_instance_for_byok(
+    spec: dict,
+    replication_number: int,
+    installer,
+    cert: str,
+    rsa_key: str,
+    ca_cert: str,
+    kmip_host_list: str,
+    timeout: int = 300,
+) -> int:
+    """
+    Create multiple BYOK-enabled NFS Ganesha service instances using a given service spec.
+
+    This function injects KMIP (BYOK) certificate, private key, CA certificate,
+    and KMIP host list into the NFS Ganesha spec, then calls
+    `create_multiple_nfs_instance_via_spec_file` to deploy the instances.
+
+    Args:
+        spec (dict): Base NFS Ganesha service spec.
+        replication_number (int): Number of service instances to create.
+        installer: Installer node or handler object for deployment.
+        cert (str): PEM-encoded KMIP client certificate.
+        rsa_key (str): PEM-encoded KMIP client private key.
+        ca_cert (str): PEM-encoded KMIP server CA certificate.
+        kmip_host_list (str): Hostname(s) or IP(s) of the KMIP server(s).
+        timeout (int, optional): Timeout in seconds for creation & verification. Defaults to 300.
+
+    Returns:
+        int: 0 on success, 1 on failure.
+    """
+
+    try:
+        # Clean up certificate formatting — YAML style block string ('|')
+        # with proper newline termination, avoiding tuple creation
+        spec["kmip_cert"] = "|\n" + cert.strip("\n")
+        spec["kmip_key"] = "|\n" + rsa_key.strip("\n")
+        spec["kmip_ca_cert"] = "|\n" + ca_cert.strip("\n")
+        spec["kmip_host_list"] = [kmip_host_list]
+
+        log.debug(f"Prepared BYOK-enabled NFS Ganesha service spec:\n{spec}")
+
+        # Call core spec deployment function
+        result = create_multiple_nfs_instance_via_spec_file(
+            spec=spec,
+            replication_number=replication_number,
+            installer=installer,
+            timeout=timeout,
+        )
+
+        if result == 0:
+            log.info(
+                f"Successfully created {replication_number} BYOK-enabled "
+                f"NFS Ganesha instance(s) using base service_id '{spec.get('service_id')}'"
+            )
+        else:
+            log.error(" Failed to create BYOK-enabled NFS Ganesha instances.")
+        return result
+
+    except Exception as e:
+        log.error(f"Unexpected error during BYOK NFS instance creation: {e}")
+        return 1
