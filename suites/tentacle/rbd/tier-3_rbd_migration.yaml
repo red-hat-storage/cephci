@@ -200,6 +200,29 @@ tests:
       polarion-id: CEPH-83595846
 
   - test:
+      desc: Live migration of namespace level rbd images with encryption
+      config:
+        operation: CEPH-83596443
+        encryption_type:
+          - luks1
+          - luks2
+        rep_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        ec_pool_config:
+          num_pools: 1
+          do_not_create_image: true
+        fio:
+          size: 1G
+          fs: ext4
+          io: true
+      module: test_rbd_image_live_migration_with_encryption.py
+      name: >
+        Test Live migration of namespace level rbd images
+        with encryption on single cluster
+      polarion-id: CEPH-83596443
+
+  - test:
       desc: Live migration of rbd clone images with encryption
       config:
         encryption_type:
@@ -220,7 +243,9 @@ tests:
       polarion-id: CEPH-83595960
 
   - test:
-      desc: Live migration of image with external data source as RAW data format in single ceph cluster
+      desc: >
+        Live migration of image with external data source as
+        RAW data format in single ceph cluster
       config:
         rep_pool_config:
           num_pools: 1

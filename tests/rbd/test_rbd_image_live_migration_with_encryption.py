@@ -54,6 +54,7 @@ from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.encryption import create_passphrase_file
 from ceph.rbd.workflows.krbd_io_handler import krbd_io_handler
 from ceph.rbd.workflows.migration import verify_migration_state
+from ceph.rbd.workflows.namespace import create_namespace_and_verify
 from ceph.rbd.workflows.rbd import create_single_pool_and_images
 from ceph.utils import get_node_by_id
 from cli.rbd.rbd import Rbd
@@ -62,7 +63,7 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def migration_encrypted_rbd_images(rbd_obj, client, **kw):
+def migration_encrypted_rbd_images(rbd_obj, client, namespace, **kw):
     """
     Test to verify Live migration of rbd images with encryption
     Args:
@@ -89,18 +90,43 @@ def migration_encrypted_rbd_images(rbd_obj, client, **kw):
                 )
                 kw[pool].update({"image": image})
 
-                err = run_io_on_encryption_formatted_image(rbd, pool, image, **kw)
+                if namespace:
+                    # Create Namespace in pool
+                    namespace_name = "namespace" + random_string(len=5)
+                    rc = create_namespace_and_verify(
+                        **{
+                            "pool-name": pool,
+                            "namespace": namespace_name,
+                            "client": client,
+                        }
+                    )
+                    if rc != 0:
+                        raise Exception("Error creating namespace in pool " + {pool})
+                    # Set image Spec
+                    image_spec = f"{pool}/{namespace_name}/{image}"
+                else:
+                    # Set image Spec
+                    image_spec = f"{pool}/{image}"
+
+                err = run_io_on_encryption_formatted_image(
+                    rbd, pool, image, image_spec, **kw
+                )
                 if err:
                     return 1
 
-                err = migrate_check_consistency(rbd, pool, image, **kw)
+                if namespace:
+                    err = migrate_check_consistency(
+                        rbd, pool, image, image_spec, namespace_name, **kw
+                    )
+                else:
+                    err = migrate_check_consistency(rbd, pool, image, image_spec, **kw)
                 if err:
                     return 1
 
     return 0
 
 
-def run_io_on_encryption_formatted_image(rbd, pool, image, **kw):
+def run_io_on_encryption_formatted_image(rbd, pool, image, image_spec, **kw):
     """
     Function to carry out the following:
       - Create source rbd image
@@ -115,12 +141,12 @@ def run_io_on_encryption_formatted_image(rbd, pool, image, **kw):
     """
 
     # Create an RBD image in pool
-    out, err = rbd.create(**{"image-spec": f"{pool}/{image}", "size": 1024})
+    out, err = rbd.create(**{"image-spec": image_spec, "size": 1024})
     if err:
-        log.error(f"Create image {pool}/{image} failed with error {err}")
+        log.error(f"Create image {image_spec} failed with error {err}")
         return 1
     else:
-        log.info(f"Successfully created image {pool}/{image}")
+        log.info(f"Successfully created image {image_spec}")
 
     # Format the image with encryption
     passphrase = (
@@ -130,19 +156,19 @@ def run_io_on_encryption_formatted_image(rbd, pool, image, **kw):
     kw["cleanup_files"].append(passphrase)
     out, err = rbd.encryption_format(
         **{
-            "image-spec": f"{pool}/{image}",
+            "image-spec": image_spec,
             "format": kw[pool]["encryption_type"],
             "passphrase-file": passphrase,
         }
     )
     if err:
         log.error(
-            f"Encryption format with {kw[pool]['encryption_type']} failed on {pool}/{image}"
+            f"Encryption format with {kw[pool]['encryption_type']} failed on {image_spec}"
         )
         return 1
     else:
         log.info(
-            f"Successfully formatted the image {pool}/{image} with encryption type {kw[pool]['encryption_type']}"
+            f"Successfully formatted the image {image_spec} with encryption type {kw[pool]['encryption_type']}"
         )
 
     # Map, mount and run IOs
@@ -156,7 +182,7 @@ def run_io_on_encryption_formatted_image(rbd, pool, image, **kw):
             "file_size": fio["size"],
             "file_path": [f"/mnt/mnt_{random_string(len=3)}/file"],
             "get_time_taken": True,
-            "image_spec": [f"{pool}/{image}"],
+            "image_spec": [image_spec],
             "operations": {
                 "fs": "ext4",
                 "io": True,
@@ -176,25 +202,25 @@ def run_io_on_encryption_formatted_image(rbd, pool, image, **kw):
     kw[pool].update({"encryption_config": encryption_config})
     out, err = krbd_io_handler(**io_config)
     if err:
-        log.error(f"Map, mount and run IOs failed for encrypted {pool}/{image}")
+        log.error(f"Map, mount and run IOs failed for encrypted {image_spec}")
         return 1
     else:
-        log.info(f"Map, mount and IOs successful for encrypted {pool}/{image}")
+        log.info(f"Map, mount and IOs successful for encrypted {image_spec}")
 
-    out, err = rbd.map(**{"image-or-snap-spec": f"{pool}/{image}"})
+    out, err = rbd.map(**{"image-or-snap-spec": f"{image_spec}"})
     if err:
         log.info(err)
-        log.error(f"Failed to map the source image {pool}/{image} without encryption")
+        log.error(f"Failed to map the source image {image_spec} without encryption")
         return 1
     else:
         log.info(
-            f"Successfully mapped the source image {pool}/{image} without encryption"
+            f"Successfully mapped the source image {image_spec} without encryption"
         )
     kw[pool].update({image: {}})
     kw[pool][image].update({"dev": out.strip()})
 
 
-def migrate_check_consistency(rbd, pool, image, **kw):
+def migrate_check_consistency(rbd, pool, image, image_spec, namespace_name=None, **kw):
     """
     Function to carry out the following:
       - Create target pool and image
@@ -239,7 +265,7 @@ def migrate_check_consistency(rbd, pool, image, **kw):
 
     out = rbd.lock_ls(
         **{
-            "image-spec": f"{pool}/{image}",
+            "image-spec": f"{image_spec}",
         }
     )
     locker_name = out[0].split("\n")[2].split(" ")[0]
@@ -247,17 +273,27 @@ def migrate_check_consistency(rbd, pool, image, **kw):
         out[0].split("\n")[2].split(" ")[2] + " " + out[0].split("\n")[2].split(" ")[3]
     )
 
-    out, err = rbd.lock_rm(
-        **{
-            "lock-spec": f"'{locker_id}' {locker_name}",
-            "image": image,
-            "pool": pool,
-        }
-    )
-    if err:
-        log.error(f"Lock remove failed for {pool}/{image}")
+    if namespace_name:
+        out, err = rbd.lock_rm(
+            **{
+                "lock-spec": f"'{locker_id}' {locker_name}",
+                "image": image,
+                "namespace": namespace_name,
+                "pool": pool,
+            }
+        )
     else:
-        log.info(f"Lock removed for {pool}/{image}")
+        out, err = rbd.lock_rm(
+            **{
+                "lock-spec": f"'{locker_id}' {locker_name}",
+                "image": image,
+                "pool": pool,
+            }
+        )
+    if err:
+        log.error(f"Lock remove failed for {image_spec}")
+    else:
+        log.info(f"Lock removed for {image_spec}")
 
     out = rbd.blocklist_ls()
     ip_dict = {}
@@ -286,23 +322,31 @@ def migrate_check_consistency(rbd, pool, image, **kw):
             log.error("Error in unmounting the device before migration")
             return 1
 
-    map_config = {
-        "pool": pool,
-        "image": image,
-        "device-type": config.get("device_type", "nbd"),
-    }
+    if namespace_name:
+        map_config = {
+            "pool": pool,
+            "image": image,
+            "namespace": namespace_name,
+            "device-type": config.get("device_type", "nbd"),
+        }
+    else:
+        map_config = {
+            "pool": pool,
+            "image": image,
+            "device-type": config.get("device_type", "nbd"),
+        }
     out, err = rbd.device.unmap(**map_config)
     if err:
         if "not mapped" in err:
             log.info("Device is not mapped")
         else:
-            log.error(f"Failed to unmap source image {pool}/{image}")
+            log.error(f"Failed to unmap source image {image_spec}")
             return 1
     else:
-        log.info(f"Successfully unmapped source image {pool}/{image}")
+        log.info(f"Successfully unmapped source image {image_spec}")
 
     md5_before_migration = get_md5sum_rbd_image(
-        image_spec=f"{pool}/{image}",
+        image_spec=f"{image_spec}",
         rbd=rbd,
         client=kw["client"],
         file_path=f"/tmp/{random_string(len=3)}",
@@ -312,7 +356,7 @@ def migrate_check_consistency(rbd, pool, image, **kw):
     # Prepare Migration
     target_image = "target_image_" + random_string(len=3)
     rbd.migration.prepare(
-        source_spec=f"{pool}/{image}",
+        source_spec=f"{image_spec}",
         dest_spec=f"{target_pool}/{target_image}",
         client_node=kw["client"],
     )
@@ -428,7 +472,11 @@ def run(**kw):
 
         if rbd_obj:
             log.info("Executing test on Replicated and EC pool")
-            if migration_encrypted_rbd_images(rbd_obj, client, **kw):
+            if kw.get("config")["operation"] == "CEPH-83596443":
+                namespace = True
+            else:
+                namespace = False
+            if migration_encrypted_rbd_images(rbd_obj, client, namespace, **kw):
                 return 1
             log.info("Test rbd image live migration with encryption is successful")
 
