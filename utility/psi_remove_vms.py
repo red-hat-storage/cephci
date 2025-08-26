@@ -68,6 +68,21 @@ def add_key_to_ref(
         ref.update({email: {category: {tenant: [vm_name]}}})
 
 
+def _normalize_os_creds(osp_cred: dict, tenant: str) -> dict:
+    return {
+        "username": osp_cred["username"],
+        "password": osp_cred["password"],
+        "auth_url": osp_cred["auth-url"],  # hyphen -> underscore
+        "auth_version": osp_cred["auth-version"],
+        "tenant_name": tenant,
+        "tenant_domain_id": osp_cred["tenant-domain-id"],
+        "service_region": osp_cred["service-region"],
+        "domain_name": osp_cred["domain"],
+        # optional; defaults to "2.2" in get_openstack_driver if omitted
+        "api_version": osp_cred.get("api_version", "2.2"),
+    }
+
+
 def cleanup(
     osp_identity, osp_cred: Dict, node: Node, results: Dict, tenant: str
 ) -> None:
@@ -110,17 +125,8 @@ def cleanup(
         add_key_to_ref(results, "error", user_.email, node.name, tenant)
 
     try:
-        ceph_node = CephVMNodeV2(
-            username=osp_cred["username"],
-            password=osp_cred["password"],
-            auth_url=osp_cred["auth-url"],
-            auth_version=osp_cred["auth-version"],
-            tenant_name=tenant,
-            tenant_domain_id=osp_cred["tenant-domain-id"],
-            service_region=osp_cred["service-region"],
-            domain_name=osp_cred["domain"],
-            node_name=node.name,
-        )
+        os_cred = _normalize_os_creds(osp_cred, tenant)
+        ceph_node = CephVMNodeV2(os_cred=os_cred, node_name=node.name)
 
         ceph_node.delete()
         if user_.name == "psi-ceph-jenkins":
