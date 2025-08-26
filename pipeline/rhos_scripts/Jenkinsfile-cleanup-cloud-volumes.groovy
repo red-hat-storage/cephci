@@ -4,7 +4,7 @@
 // Global variables section
 def sharedLib
 
-node("rhel-8-medium") {
+node("rhel-9-medium") {
 
     stage('prepareNode') {
         checkout(
