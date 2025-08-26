@@ -1448,6 +1448,87 @@ class RadosOrchestrator:
         cmd = "ceph osd crush rule ls"
         return self.run_ceph_command(cmd=cmd)
 
+    def enable_fast_ec_feature_on_pool(
+        self,
+        **kwargs,
+    ) -> bool:
+        """
+        Enable Fast EC features on a given pool.
+
+        Steps:
+        1. Ensure require_osd_release is at least 'tentacle'.
+        2. Ensure min_compat_client is 'tentacle'.
+        3. Enable EC overwrites on the pool if required.
+        4. Enable Fast EC optimizations on the pool.
+
+        Args: to be passed as kwargs via suite file configs
+            set_osd_release (bool): Whether to update require_osd_release if not set.
+            set_min_client (bool): Whether to update min_compat_client if not set.
+            set_overwrites (bool): Whether to enable allow_ec_overwrites if not set.
+        Note: The above options kept for testing the -ve scenarios with Fast EC enablement,
+            passed to module as additional kwargs if needed.
+        Returns:
+            bool: True if Fast EC features successfully enabled, False otherwise.
+        """
+        pool_name = kwargs.get("pool_name")
+        set_osd_release = kwargs.get("set_osd_release", True)
+        set_min_client = kwargs.get("set_min_client", True)
+        set_overwrites = kwargs.get("set_overwrites", True)
+
+        # 1. Check Ceph version (must be tentacle/>=9)
+        if int(self.rhbuild.split(".")[0]) < 9:
+            log.error("Ceph version < tentacle, cannot enable fast EC features")
+            return False
+
+        cluster_dump = self.run_ceph_command(cmd="ceph osd dump")
+        osd_release = cluster_dump.get("require_osd_release")
+        client_release = cluster_dump.get("min_compat_client")
+
+        # 2. Ensure OSD release correct
+        if osd_release != "tentacle":
+            if set_osd_release:
+                self.run_ceph_command(cmd="ceph osd set-require-osd-release tentacle")
+                log.info("Set require_osd_release to tentacle")
+            else:
+                log.warning("OSD release is %s, not tentacle", osd_release)
+
+        # 3. Ensure min compat client correct
+        if client_release != "tentacle":
+            if set_min_client:
+                config_cmd = "ceph osd set-require-min-compat-client tentacle --yes-i-really-mean-it"
+                self.client.exec_command(cmd=config_cmd, sudo=True)
+                log.info("Set min_compat_client to tentacle")
+            else:
+                log.warning("min_compat_client is %s, not tentacle", client_release)
+
+        # 4. Ensure EC overwrites
+        ec_overwrites = self.get_pool_property(
+            pool=pool_name, props="allow_ec_overwrites"
+        )["allow_ec_overwrites"]
+        if not ec_overwrites and set_overwrites:
+            self.set_pool_property(
+                pool=pool_name, props="allow_ec_overwrites", value="true"
+            )
+            log.info("Enabled allow_ec_overwrites on pool %s", pool_name)
+        elif not ec_overwrites:
+            log.warning("EC overwrites not enabled on pool %s", pool_name)
+
+        # 5. Enable Fast EC optimization
+        self.set_pool_property(
+            pool=pool_name, props="allow_ec_optimizations", value="true"
+        )
+
+        # 6. Verify
+        fast_ec_enabled = self.get_pool_property(
+            pool=pool_name, props="allow_ec_optimizations"
+        )
+        if not fast_ec_enabled:
+            log.error("Failed to enable Fast EC features on pool %s", pool_name)
+            return False
+
+        log.info("Fast EC features enabled successfully on pool %s", pool_name)
+        return True
+
     def create_erasure_pool(self, **kwargs) -> bool:
         """
         Creates an erasure code profile and then creates a pool with the same
@@ -1462,9 +1543,10 @@ class RadosOrchestrator:
                 4. crush-failure-domain -> crush object to be us to store replica sets (str)
                 5. plugin -> plugin to be set (str)
                     supported plugins:
-                    1. jerasure (default)
+                    1. jerasure (default until Squid)
                     2. lrc -> Upstream Only
                     3. clay -> Upstream Only
+                    4. isa ( default from Tentacle )
                 6. pool_name -> pool name to create and associate with the EC profile being created
                 7. force -> Override an existing profile by the same name.
                 8. crush-osds-per-failure-domain -> number of OSDs per failure domain
@@ -1473,8 +1555,9 @@ class RadosOrchestrator:
                 11. profile_name -> Name of the profile to be created
                 12. yes_i_mean_it -> Needed to be passed for profile modification along with --force from 8.0
                 13. name: Name of the profile/rule to create if none is provided
-                14. negative_test: pass true if performing -ve tests. min_compact_client won't be updated for pool
+                14. negative_test -> pass true if performing -ve tests. min_compact_client won't be updated for pool
                 creation when this param is set to true. Required for MSR EC pool tests with min_compact_client
+                15. enable_fast_ec_features -> Pass true if the Fast EC features need to be enabled on the created pool
         Returns: True -> pass, False -> fail
         """
         failure_domain = kwargs.get("crush-failure-domain", "osd")
@@ -1487,8 +1570,10 @@ class RadosOrchestrator:
         )
         crush_num_failure_domains = kwargs.get("crush-num-failure-domains", None)
         create_rule = kwargs.get("create_rule", False)
-        plugin = kwargs.get("plugin", "jerasure")
-        pool_name = kwargs.get("pool_name", "name")
+        major_version = int(self.rhbuild.split(".")[0])
+        default_plugin = "jerasure" if major_version < 9 else "isa"
+        plugin = kwargs.get("plugin", default_plugin)
+        pool_name = kwargs.get("pool_name", "test-ec-pool")
         if not pool_name:
             log.error("No name provided. Exiting")
             return False
@@ -1498,6 +1583,7 @@ class RadosOrchestrator:
         yes_i_mean_it = kwargs.get("yes_i_mean_it", False)
         profile_name = kwargs.get("profile_name", f"ecp_{pool_name}")
         rule_name = f"rule_{pool_name}"
+        enable_fast_ec_features = kwargs.get("enable_fast_ec_features", False)
 
         # Creating an erasure coded profile with the options provided
         cmd = (
@@ -1505,7 +1591,7 @@ class RadosOrchestrator:
             f" crush-failure-domain={failure_domain} k={k} m={m} plugin={plugin}"
         )
         if crush_osds_per_failure_domain:
-            if self.rhbuild and self.rhbuild.split(".")[0] >= "8":
+            if major_version >= 8:
                 min_client_version = self.run_ceph_command(cmd="ceph osd dump")[
                     "require_min_compat_client"
                 ]
@@ -1590,6 +1676,20 @@ class RadosOrchestrator:
                 ):
                     log.error(f"Failed to create Pool {pool_name}")
                     return False
+
+        # Checking if enable Fast EC features flag passed
+        if enable_fast_ec_features:
+            try:
+                if not self.enable_fast_ec_feature_on_pool(**kwargs):
+                    log.error("Could not enable fast EC features on the provided pool")
+                    return False
+                log.info("Enabled Fast EC feature on the EC pool created")
+            except Exception as err:
+                log.error(
+                    f"Exception hit while enabling Fast EC features on the pool created: {err}"
+                )
+                return False
+
         try:
             log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
             cmd = f"ceph osd crush rule dump {pool_name}"
