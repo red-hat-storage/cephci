@@ -148,3 +148,13 @@ tests:
       desc: Validate host add localhost with NOPASSWD removed in sudoers file
       polarion-id: CEPH-83595706
       module: test_add_host_with_nopasswd_sudoers_file.py
+
+  - test:
+      name: Validate config set command with spaces added to config params
+      desc: Test the ceph config set command behaviour
+      polarion-id: CEPH-83626377
+      module: test_verify_ceph_config_set_command.py
+      config:
+        service: osd
+        config: debug_ms
+        value: 1
