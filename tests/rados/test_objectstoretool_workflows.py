@@ -56,7 +56,7 @@ def run(ceph_cluster, **kw):
                 return pg_id, obj
         if not found:
             raise Exception(
-                f"No obj with OMAP data found in the list of objs for OSD: {osd_id}"
+                f"No rados bench object found in the list of objs for OSD: {osd_id}"
             )
 
     def get_omap_obj(_osd_id):
@@ -95,13 +95,13 @@ def run(ceph_cluster, **kw):
         log.info(f"List of OSDs: \n{osd_list}")
 
         log.info("Create a data pool with default config")
-        assert rados_obj.create_pool(pool_name="cot-pool")
+        assert rados_obj.create_pool(pool_name="cot-pool", pg_num=128, pg_num_min=128)
 
         log.info("Write data to the pool using rados bench, 100 objects")
         assert rados_obj.bench_write(
             pool_name="cot-pool",
             rados_write_duration=200,
-            max_objs=200,
+            max_objs=1000,
             verify_stats=False,
         )
 
@@ -109,7 +109,7 @@ def run(ceph_cluster, **kw):
             "Write OMAP entries to the pool using rados bench, 100 objects with 5 omap entries each"
         )
         assert pool_obj.fill_omap_entries(
-            pool_name="cot-pool", obj_start=0, obj_end=100, num_keys_obj=5
+            pool_name="cot-pool", obj_start=0, obj_end=200, num_keys_obj=5
         )
 
         for operation in operations:
