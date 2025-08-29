@@ -19,7 +19,7 @@ import yaml
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
-from tests.rados.monitor_configurations import MonConfigMethods
+from tests.rados.monitor_configurations import MonConfigMethods, MonElectionStrategies
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_data_migration_bw_pools import create_given_pool
 from utility.log import Log
@@ -1674,6 +1674,15 @@ def run(ceph_cluster, **kw):
                     f"Hosts present in Datacenter : {site} : {getattr(all_hosts, site)}"
                 )
                 log.info(hosts_info)
+
+            mon_election_obj = MonElectionStrategies(rados_obj=rados_obj)
+            if mon_election_obj.set_election_strategy(mode="connectivity") is False:
+                log.error("Unable to set mon election strategy")
+                raise Exception("Unable to enable stretch pool")
+            else:
+                log.info(
+                    "Successfully set mon election strategy to connectivity for enabling stretch pools"
+                )
 
             if pool_name:
                 rados_obj.create_pool(pool_name=pool_name)
