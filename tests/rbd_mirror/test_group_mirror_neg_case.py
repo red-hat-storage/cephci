@@ -357,10 +357,7 @@ def test_group_mirroring_neg_case(
                     enable_group_mirroring_and_verify_state(rbd_primary, **group_config)
                     mirror_state = "Enabled"
             except Exception as e:
-                if (
-                    "group image resides in a different pool, mirroring is not supported"
-                    in str(e)
-                ):
+                if "image is in a different pool" in str(e):
                     log.info(
                         "Successfully verified that group mirroring cannot be enabled "
                         "on group containing images from multiple pools"
