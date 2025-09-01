@@ -275,13 +275,15 @@ tests:
         stretch_bucket: datacenter
         tiebreaker_mon_site_name: tiebreaker
         delete_pool: true
-        scenarios_to_run:
-          - scenario1
-          - scenario2
-          - scenario3
-          - scenario4
-          - scenario5
-          - scenario6
-          - scenario7
-          - scenario8
       desc: Netsplit detection and warning in stretch mode
+
+  - test:
+      name: Netsplit detection and warning regular cluster with crush location
+      module: test_netsplit_detection_and_warning.py
+      polarion-id: CEPH-83620060
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+        regular_cluster_with_mon_location: true
+      desc: Netsplit detection and warning regular cluster with crush location

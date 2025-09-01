@@ -3240,7 +3240,6 @@ EOF"""
             within timeout
         """
         daemon_map = dict()
-        success = False
         daemon_services = self.list_orch_services(service_type=daemon)
         # capture current start time for each daemon part of the services
         for service in daemon_services:
@@ -3267,6 +3266,7 @@ EOF"""
                 daemon_status_ls = self.run_ceph_command(
                     cmd=f"ceph orch ps --service_name {service} --refresh"
                 )
+                success_count = 0
                 for entry in daemon_status_ls:
                     try:
                         restart_time, _ = self.client.exec_command(
@@ -3275,21 +3275,19 @@ EOF"""
                         assert restart_time > daemon_map[entry["daemon_name"]]
                         assert entry["status_desc"] != "stopped"
                         log.info(f"{entry['daemon_name']} has started")
-                        success = True
+                        success_count += 1
                     except Exception:
                         log.info(
                             f"{daemon} daemon {entry['daemon_name']} is yet to restart. "
-                            f"Sleeping for 120 secs"
                         )
                         self.client.exec_command(
                             cmd=f"ceph orch daemon restart {entry['daemon_name']}",
                             sudo=True,
                         )
-                        time.sleep(120)
-                        success = False
-                        break
-                if success:
+                if success_count == len(daemon_status_ls):
                     break
+                log.info("Sleeping for 120 secs")
+                time.sleep(120)
             else:
                 log.error(
                     f"All the daemons part of the service {service} did not restart within "
@@ -4598,7 +4596,21 @@ EOF"""
                 cmd=f"{base_cmd} {daemon_type}.{daemon_id}", client_exec=True
             )
 
-        out = self.run_ceph_command(cmd=f"{base_cmd} {daemon_id}", client_exec=True)
+        for _ in range(3):
+            try:
+                out = self.run_ceph_command(
+                    cmd=f"{base_cmd} {daemon_id}", client_exec=True
+                )
+                break
+            except Exception as e:
+                debug_msg = f"Passed daemon type : {daemon_type}, Daemon ID : {daemon_id}, Error : {e}"
+                log.debug(debug_msg)
+                log.warning("ceph metadata command failed. retrying after 30 seconds.")
+                time.sleep(30)
+        else:
+            log.debug("Metadata command execution failed for 3 consecutive tries")
+            return None
+
         if out is None:
             log.error(
                 f"Metadata info for the input daemon: {daemon_type} {daemon_id} not found"
