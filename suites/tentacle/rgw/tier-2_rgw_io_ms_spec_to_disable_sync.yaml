@@ -294,6 +294,17 @@ tests:
       name: create non-tenanted user
 
   - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_s3cmd.py
+            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_put_obj_primary_cp_obj_secondary.yaml
+      desc: test put object from primary and copy objevts from secondary
+      module: sanity_rgw_multisite.py
+      name: Put object from primary and copy objevts from secondary
+      polarion-id: CEPH-83628287
+
+  - test:
       name: bucket granular sync policy with sync from differnt bucket
       desc: Test bucket granular sync with sync from differnt bucket
       polarion-id: CEPH-83575140
