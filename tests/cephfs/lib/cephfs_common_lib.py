@@ -20,6 +20,7 @@ from tests.smb.smb_operations import (
     smbclient_check_shares,
 )
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -85,7 +86,7 @@ class CephFSCommonUtils(FsUtils):
             return True
         return False
 
-    def test_setup(self, fs_name, client):
+    def test_setup(self, fs_name, client, nfs_name="cephfs-nfs"):
         """
         This method is Setup to create test configuration - subvolumegroup,subvolumes,nfs servers
         Returns setup_params as dict variable upon setup sucess else 1
@@ -100,11 +101,11 @@ class CephFSCommonUtils(FsUtils):
 
         nfs_servers = self.ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
-        nfs_name = "cephfs-nfs"
-
-        client.exec_command(
-            sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
-        )
+        out, _ = client.exec_command(sudo=True, cmd="ceph nfs cluster ls")
+        if nfs_name not in out:
+            client.exec_command(
+                sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
+            )
         if wait_for_process(client=client, process_name=nfs_name, ispresent=True):
             log.info("ceph nfs cluster created successfully")
         else:
@@ -285,6 +286,7 @@ class CephFSCommonUtils(FsUtils):
             random.choice(string.ascii_lowercase + string.digits) for _ in range(10)
         )
 
+    @retry(CommandFailed, tries=5, delay=60)
     def subvolume_get_path(self, client, fs_name, **kwargs):
         """
         Get the path of a subvolume.
@@ -484,7 +486,14 @@ class CephFSCommonUtils(FsUtils):
         return mount_path
 
     def enc_tag(
-        self, client, op_type, subvol, enc_tag="cephfs_enctag", validate=True, **kwargs
+        self,
+        client,
+        op_type,
+        subvol,
+        enc_tag="cephfs_enctag",
+        add_suffix=True,
+        validate=True,
+        **kwargs,
     ):
         """
         This method is to set,get or remove the enctag in subvolume command
@@ -507,7 +516,10 @@ class CephFSCommonUtils(FsUtils):
         if kwargs.get("group_name"):
             cmd += f" --group_name {kwargs['group_name']}"
         if op_type == "set":
-            cmd += f" --enctag {enc_tag}_{rand_str}"
+            enc_tag = kwargs.get(enc_tag, enc_tag)
+            if kwargs.get(add_suffix, add_suffix):
+                enc_tag = f"{enc_tag}_{rand_str}"
+            cmd += f" --enctag {enc_tag}"
         out, _ = client.exec_command(
             sudo=True,
             cmd=cmd,
@@ -568,7 +580,7 @@ class CephFSCommonUtils(FsUtils):
             elif "not mounted" in str(ex):
                 return 0
 
-    def rolling_mds_failover(self, client, fs_name):
+    def rolling_mds_failover(self, client, fs_name, mds_fail_cnt=3):
         """
         This method will perform Rolling MDS failover on given FS, wait for active MDS
         Return 0 on success, 1 on failure
@@ -585,12 +597,12 @@ class CephFSCommonUtils(FsUtils):
         standby_replay_mds = [
             mds["name"] for mds in output["mdsmap"] if (mds["state"] == st2)
         ]
-        sample_cnt = min(3, len(standby_replay_mds))
+        sample_cnt = min(mds_fail_cnt, len(standby_replay_mds))
         if len(standby_replay_mds) == 0:
             standby_mds = [
                 mds["name"] for mds in output["mdsmap"] if (mds["state"] == st1)
             ]
-            sample_cnt = min(3, len(standby_mds))
+            sample_cnt = min(mds_fail_cnt, len(standby_mds))
         mds_to_fail = random.sample(mds_ls, sample_cnt)
         for mds in mds_to_fail:
             out, rc = client.exec_command(cmd=f"ceph mds fail {mds}", client_exec=True)

@@ -141,6 +141,7 @@ def create_group_add_images(rbd, **kw):
       pool_spec: pool spec (with or without namespace)
     """
     res = {}
+    cnt = 0
     for i in range(0, kw["no_of_group"]):
         group_spec = f"{kw['pool_spec']}/group{i+1}"
         group_create, err = rbd.group.create(**{"group-spec": group_spec})
@@ -150,7 +151,8 @@ def create_group_add_images(rbd, **kw):
         # Create Image and add to the group
         group_image = []
         for i in range(0, kw["no_of_images_in_each_group"]):
-            image_spec = f"{kw['pool_spec']}/image{i+1}"
+            cnt = cnt + 1
+            image_spec = f"{kw['pool_spec']}/image{cnt+1}"
             image_create, err = rbd.create(
                 **{
                     "image-spec": image_spec,
@@ -171,7 +173,7 @@ def create_group_add_images(rbd, **kw):
                 + group_spec
             )
             group_image.append(image_spec)
-            res[group_spec] = group_image
+        res[group_spec] = group_image
     return res
 
 

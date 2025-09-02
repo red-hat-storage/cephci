@@ -72,6 +72,7 @@ tests:
         install_packages:
           - ceph-common
           - samba-client
+          - cifs-utils
       copy_admin_keyring: true
       destroy-cluster: false
       abort-on-fail: true
@@ -183,3 +184,80 @@ tests:
         smb_conf:
           - aio write size: 1
           - aio read size: 1
+
+  - test:
+      name: Deploy SMB service with case sensitivity disabled and perform IO operations
+      desc: Deploy SMB service with case sensitivity disabled and perform IO operations.
+      module: smb_case_sensitivity_operations.py
+      polarion-id: CEPH-83627869
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        casesensitive: "false"
+        operations:
+          - deploy_smb
+          - perfrom_io
+          - verify_service
+          - cleanup_smb
+        mount_type: linux
+        cifs_mount_point: "/mnt/smb"
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: SMB and NFS Colocation Validation Test
+      desc: SMB and NFS Colocation Validation Test
+      module: smb_nfs_colocation.py
+      polarion-id: CEPH-83627873
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        nfs_version: 4.1
+        operations:
+          - deploy_nfs
+          - deploy_smb
+          - verify_service
+          - cleanup_smb
+          - cleanup_nfs
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /

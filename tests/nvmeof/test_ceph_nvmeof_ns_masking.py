@@ -135,7 +135,7 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
             # Determine the correct host for the current namespace
             for i, node in enumerate(
                 hostnqn_dict.keys(), start=1
-            ):  # Iterate over hostnqn_dict # Calculate the range of namespaces this initiator should handle
+            ):  # Calculate the range of namespaces this initiator should handle
                 if num in range(
                     (i - 1) * num_namespaces_per_initiator + 1,
                     i * num_namespaces_per_initiator + 1,
@@ -145,6 +145,12 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
                     host_nqn = hostnqn_dict[node]
                     break
 
+            if host_nqn is None:
+                raise Exception(
+                    f"Host NQN not found for namespace {num} in subsystem {subnqn}"
+                )
+
+            LOG.info(f"Adding host {host_nqn} to namespace {num} in subsystem {subnqn}")
             config = {
                 "base_cmd_args": {"format": "json"},
                 "args": {
@@ -230,6 +236,13 @@ def del_host(config, command, init_nodes, hostnqn_dict, ha):
                     host_nqn = hostnqn_dict[node]
                     break
 
+            if host_nqn is None:
+                raise Exception(
+                    f"Host NQN not found for namespace {num} in subsystem {subnqn}"
+                )
+            LOG.info(
+                f"Deleting host {host_nqn} from namespace {num} in subsystem {subnqn}"
+            )
             config = {
                 "base_cmd_args": {"format": "json"},
                 "args": {

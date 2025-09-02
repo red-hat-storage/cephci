@@ -266,3 +266,24 @@ tests:
         scenarios_to_run:
           - scenario5
       desc: Performs tests related to reverting from stretch mode
+
+  - test:
+      name: Netsplit detection and warning
+      module: test_netsplit_detection_and_warning.py
+      polarion-id: CEPH-83620060
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+      desc: Netsplit detection and warning in stretch mode
+
+  - test:
+      name: Netsplit detection and warning regular cluster with crush location
+      module: test_netsplit_detection_and_warning.py
+      polarion-id: CEPH-83620060
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+        regular_cluster_with_mon_location: true
+      desc: Netsplit detection and warning regular cluster with crush location

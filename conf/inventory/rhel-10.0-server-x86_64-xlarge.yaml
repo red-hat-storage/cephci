@@ -1,0 +1,45 @@
+---
+version_id: 10.0
+id: rhel
+instance:
+  create:
+    image-name: RHEL-10.0-x86_64-ga-latest
+    vm-size: ci.standard.xl
+
+  setup: |
+    #cloud-config
+
+    ssh_pwauth: true
+    disable_root: false
+
+    groups:
+      - cephuser
+
+    users:
+      - name: cephuser
+        primary-group: cephuser
+        sudo: ALL=(ALL) NOPASSWD:ALL
+        shell: /bin/bash
+        ssh-authorized-keys:
+           - ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQCyaKj0phxJTD2ZblCbujHOlH3KWx4WlEUdKWxftfBarFbN9tztClUXC4WtSDXsJeith9/JaiXkJMNulSEmZ1+WfpaS1CKiBxyy/6lzwaiqnphiIJIZu7mQTOydcc0ACIE1g/sm0yBpOQRaa28BFAlQxN5IFVzQqws1M3uSYU9iyOj8CZagnavIHMPfw7wOVX+ncUl+YIySRgsjbtrLPm1cfEcutpT8SphNOu6mKDq5jN9jVqn5j+2KxAmJRjkKmEyNXrzhTUgdBrxfJ877JkeyNfjzaptX29ms1LzJxVPV0pitJ7gHirc3LlZ8PihIdWR52Ts2BwcF86/2CB39nw+NCXSICbGmWues0m5BjIC7utGERA/fU5eE7CnTKFuUaONkL7CGqQN/7bak0E9IUJqzyRswDub93j9QyXfV305wHF4nfOeHLDKbcQHgLM1/rjs6BQMZvJlS+f+2kJHMfFD9UYCrnhdMpLXTvJ8amlF9J+HUhu7zLPNuEjJf9I4aNb0= psathyan@psathyan.remote.csb
+
+    chpasswd:
+      list: |
+        root:passwd
+        cephuser:pass123
+      expire: false
+
+    runcmd:
+      - sed -i -e 's/^Defaults\s\+requiretty/# \0/' /etc/sudoers
+      - echo "net.core.default_qdisc=netem" > /etc/sysctl.d/1000-qdisc.conf
+      - subscription-manager clean
+      - timedatectl set-timezone Etc/UTC
+      - hostnamectl set-hostname $(hostname -s)
+      - sed -i -e 's/#PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+      - systemctl restart sshd
+      - curl -m 120 -o /etc/pki/ca-trust/source/anchors/ceph-qe-ca.pem http://magna002.ceph.redhat.com/cephci-jenkins/.cephqe-ca.pem
+      - curl -m 120 -k -o /etc/pki/ca-trust/source/anchors/RH-IT-Root-CA.crt https://certs.corp.redhat.com/certs/Current-IT-Root-CAs.pem
+      - update-ca-trust
+      - touch /ceph-qa-ready
+
+    final_message: "Ready for ceph qa testing"

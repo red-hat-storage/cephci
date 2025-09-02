@@ -404,16 +404,3 @@ tests:
         scenarios_to_run:
           - scenario-7
       desc: Test stretch Cluster Host replacement
-
-  - test:
-      name: Revert stretch mode scenarios 1,2
-      module: test_stretch_revert.py
-      polarion-id: CEPH-83620057
-      config:
-        stretch_bucket: datacenter
-        tiebreaker_mon_site_name: tiebreaker
-        delete_pool: true
-        scenarios_to_run:
-          - scenario1
-          - scenario2
-      desc: Performs tests related to reverting from stretch mode

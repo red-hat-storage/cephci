@@ -1,0 +1,150 @@
+tests:
+  - test:
+      abort-on-fail: true
+      desc: "Setup phase to deploy the required pre-requisites for running the tests."
+      module: install_prereq.py
+      name: "setup install pre-requisistes"
+
+  - test:
+      name: Deploy IBMSC 8.x(GA) cluster with ceph services.
+      desc: Deploy IBMSC 8.x(GA) cluster with ceph services.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573777
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                custom_repo: "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/testing/IBM-CEPH-8.1-202508120158.ci.0/IBM-CEPH-8.1-202508120158.ci.0-rhel9.repo"
+                custom_image: "cp.stg.icr.io/cp/ibm-ceph/ceph-8-rhel9:8-190"
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - cifs-utils
+          - samba-client
+      copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Deploy SMB service with case sensitivity disabled.
+      desc: Deploy SMB service with case sensitivity disabled.
+      module: smb_case_sensitivity_operations.py
+      polarion-id: CEPH-83627870
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        casesensitive: "false"
+        operations:
+          - deploy_smb
+        mount_type: linux
+        cifs_mount_point: "/mnt/smb"
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+
+  - test:
+      name: Upgrade Ceph Cluster with SMB Services have share with casesensitive disable to Latest 8.x Version
+      desc: Upgrade Ceph Cluster with SMB Services have share with casesensitive disable to Latest 8.x Version
+      module: smb_upgrade_operations.py
+      polarion-id: CEPH-83627871
+      config:
+        initial_ga_version: 8.x
+        upgrade_target_version: 8.x
+        operations:
+          - upgrade
+          - cleanup_smb
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
