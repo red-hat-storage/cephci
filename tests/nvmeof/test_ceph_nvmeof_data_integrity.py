@@ -4,9 +4,9 @@ from copy import deepcopy
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin.orch import Orch
-from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
+from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_gateway import create_gateway
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_set_nvme_cli_image,
@@ -50,13 +50,13 @@ def configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, config):
     # All host to subsystem
     if config.get("allow_host"):
         nvmegwcli.host.add(
-            **{"args": {**sub_args, **{"host": repr(config["allow_host"])}}}
+            **{"args": {**sub_args, **{"host-nqn": repr(config["allow_host"])}}}
         )
 
     if config.get("hosts"):
         for host in config["hosts"]:
             initiator_node = get_node_by_id(ceph_cluster, host)
-            initiator = Initiator(initiator_node)
+            initiator = NVMeInitiator(initiator_node)
             host_nqn = initiator.nqn()
             nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
 
@@ -116,7 +116,7 @@ def initiators(ceph_cluster, gateway, config):
             node: node7
     """
     client = get_node_by_id(ceph_cluster, config["node"])
-    initiator = Initiator(client)
+    initiator = NVMeInitiator(client)
     cmd_args = {
         "transport": "tcp",
         "traddr": gateway.node.ip_address,
@@ -154,7 +154,7 @@ def initiators(ceph_cluster, gateway, config):
 def disconnect_initiator(ceph_cluster, node):
     """Disconnect Initiator."""
     node = get_node_by_id(ceph_cluster, node)
-    initiator = Initiator(node)
+    initiator = NVMeInitiator(node)
     initiator.disconnect_all()
 
 
@@ -267,6 +267,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     for ns in subsys.get("Namespaces", [])
                 ]
 
+            if not paths:
+                raise RuntimeError("No paths")
             # verifying data integrity on NVMe targets
             for path in paths:
                 nvme = generate_unique_id(length=4)

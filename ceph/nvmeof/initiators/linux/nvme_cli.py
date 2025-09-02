@@ -120,7 +120,7 @@ class NVMeCLI(Cli):
                     for ctrl in subsys.get("Controllers", []):
                         if ctrl.get("ModelNumber", "").startswith(
                             "Ceph bdev Controller"
-                        ):
+                        ) and subsys.get("Namespaces"):
                             devices.append(dev)
             return devices
 

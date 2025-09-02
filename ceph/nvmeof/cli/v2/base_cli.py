@@ -7,6 +7,7 @@ LOG = Log(__name__)
 
 KEY_MAP = {
     "subsystem": "nqn",
+    "host": "host_nqn",
     "host-nqn": "host_nqn",
     "rbd-pool": "rbd_pool",
     "rbd-image": "rbd_image_name",

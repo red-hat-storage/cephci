@@ -3,6 +3,7 @@ import json
 from ceph.ceph import CommandFailed
 from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
+from tests.nvmeof.workflows.exceptions import NoDevicesFound
 from utility.log import Log
 from utility.retry import retry
 from utility.utils import log_json_dump, run_fio
@@ -132,11 +133,12 @@ class NVMeInitiator(Initiator):
 
             LOG.debug(self.connect(**_conn_cmd))
 
+    @retry((NoDevicesFound))
     def list_devices(self):
         """List NVMe targets."""
         targets = self.list_spdk_drives()
         if not targets:
-            raise Exception(f"NVMe Targets not found on {self.node.hostname}")
+            raise NoDevicesFound(f"NVMe Targets not found on {self.node.hostname}")
         LOG.debug(targets)
         return targets
 

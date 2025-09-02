@@ -14,7 +14,6 @@ from ceph.ceph import Ceph, SocketTimeoutException
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.helper import check_service_exists
 from ceph.ceph_admin.orch import Orch
-from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
@@ -57,7 +56,6 @@ def test_ceph_83575812(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
     listener_port = find_free_port(gw_node)
     subsystem = dict()
     subsystem.update(
@@ -119,7 +117,6 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -155,7 +152,7 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
 
         config.update(initiator_cfg)
         client = get_node_by_id(ceph_cluster, config["node"])
-        initiator = Initiator(client)
+        initiator = NVMeInitiator(client)
         cmd_args = {
             "transport": "tcp",
             "traddr": nvmegwcli.node.ip_address,
@@ -183,7 +180,7 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
             conn_port = {"trsvcid": listener_port}
             _conn_cmd = {**_cmd_args, **conn_port}
             LOG.debug(initiator.connect(**_conn_cmd))
-            targets = initiator.list_spdk_drives()
+            targets = initiator.list_devices()
             rhel_version = initiator.distro_version()
             if not targets:
                 raise Exception(f"NVMe Targets not found on {client.hostname}")
@@ -241,7 +238,6 @@ def test_ceph_83575467(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -337,7 +333,6 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -380,7 +375,7 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
 
         config.update(initiator_cfg)
         client = get_node_by_id(ceph_cluster, config["node"])
-        initiator = Initiator(client)
+        initiator = NVMeInitiator(client)
 
         disc_port = {"trsvcid": 8009}
         _disc_cmd = {**cmd_args, **disc_port, **json_format}
@@ -399,7 +394,7 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
         conn_port = {"trsvcid": listener_port}
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
-        targets = initiator.list_spdk_drives()
+        targets = initiator.list_devices()
         rhel_version = initiator.distro_version()
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
@@ -449,7 +444,6 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -492,7 +486,7 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
 
         config.update(initiator_cfg)
         client = get_node_by_id(ceph_cluster, config["node"])
-        initiator = Initiator(client)
+        initiator = NVMeInitiator(client)
 
         initiator.disconnect_all()
         disc_port = {"trsvcid": 8009}
@@ -511,7 +505,7 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
         conn_port = {"trsvcid": listener_port}
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
-        targets = initiator.list_spdk_drives()
+        targets = initiator.list_devices()
         rhel_version = initiator.distro_version()
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
@@ -538,7 +532,7 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
             raise Exception("Host did not started post reboot!!!!")
         initiator.configure()
         LOG.debug(initiator.connect(**_cmd_args))
-        targets = initiator.list_spdk_drives()
+        targets = initiator.list_devices()
         rhel_version = initiator.distro_version()
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
@@ -580,7 +574,6 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -612,7 +605,7 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
 
         config.update(initiator_cfg)
         client = get_node_by_id(ceph_cluster, config["node"])
-        initiator = Initiator(client)
+        initiator = NVMeInitiator(client)
         cmd_args = {
             "transport": "tcp",
             "traddr": nvmegwcli.node.ip_address,
@@ -640,7 +633,7 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
         conn_port = {"trsvcid": listener_port}
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
-        targets = initiator.list_spdk_drives()
+        targets = initiator.list_devices()
         rhel_version = initiator.distro_version()
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
@@ -704,9 +697,8 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
     client = get_node_by_id(ceph_cluster, config["initiator_node"])
-    initiator = Initiator(client)
+    initiator = NVMeInitiator(client)
     initiator_nqn = initiator.nqn()
 
     subsystem = dict()
@@ -766,7 +758,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         conn_port = {"trsvcid": listener_port}
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
-        targets = initiator.list_spdk_drives()
+        targets = initiator.list_devices()
         rhel_version = initiator.distro_version()
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
@@ -781,6 +773,9 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
             ]
             _target = paths[0]
 
+        if not _target:
+            raise Exception("No paths")
+
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
         client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
         client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
@@ -790,10 +785,23 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         # Remove client host access to the namespaces
         # Check for the non-existence of nvme namespaces
         # Create a file to check IO failure on mount point
-        host_args = {"args": {"subsystem": subsystem["nqn"], "host": initiator_nqn}}
-        nvmegwcli.host.delete(**host_args)
+        LOG.info("Remove client host access to the namespaces")
+        try:
+            host_args = {
+                "args": {"subsystem": subsystem["nqn"], "host-nqn": initiator_nqn}
+            }
+            nvmegwcli.host.delete(**host_args)
+        except Exception as host_del_err:
+            if (
+                "Reconnecting the host would fail unless it is re-added to the subsystem"
+                not in str(host_del_err)
+            ):
+                raise Exception("Host deletion is failed")
+            else:
+                LOG.info("Deletion of host is successful")
+
         sleep(20)
-        targets = initiator.list_spdk_drives()
+        targets = initiator.list_devices()
         if targets[0].get("Subsystems"):
             namespaces_present = not (
                 all(
@@ -823,7 +831,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         # Check the existence of the NVMe namespaces
         nvmegwcli.host.add(**host_args)
         sleep(10)
-        targets = initiator.list_spdk_drives()
+        targets = initiator.list_devices()
         if targets[0].get("Subsystems"):
             namespaces_present = not (
                 all(
@@ -867,7 +875,6 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -886,7 +893,7 @@ def test_ceph_83575813(ceph_cluster, rbd, pool, config):
         "node": config["initiator_node"],
     }
     client = get_node_by_id(ceph_cluster, config["initiator_node"])
-    initiator = Initiator(client)
+    initiator = NVMeInitiator(client)
     try:
         configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsystem)
         name = generate_unique_id(length=4)
@@ -975,7 +982,6 @@ def test_ceph_83575814(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     mon_obj = MonitorWorkflows(node=cephadm)
     rados_obj = RadosOrchestrator(node=cephadm)
@@ -1065,7 +1071,6 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -1127,7 +1132,9 @@ def test_ceph_83581753(ceph_cluster, rbd, pool, config):
             )
             _ = nvmegwcli.namespace.set_qos(**qos_args_with_invalid_args)
         except Exception as err:
-            if "unrecognized arguments:" not in str(err):
+            if "unrecognized arguments:" not in str(
+                err
+            ) and "invalid command" not in str(err):
                 raise Exception("Set QoS was failed as expected due to invalid args.")
             LOG.info("Set QoS was failed as expected due to invalid args....")
         return 0
@@ -1164,7 +1171,6 @@ def test_ceph_83581945(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)
@@ -1280,7 +1286,6 @@ def test_ceph_83581755(ceph_cluster, rbd, pool, config):
         port=config.get("gw_port", 5500),
         gw_group=config.get("gw_group"),
     )
-    nvmegwcli.NVMEOF_CLI_IMAGE = cli_image
 
     subsystem = dict()
     listener_port = find_free_port(gw_node)

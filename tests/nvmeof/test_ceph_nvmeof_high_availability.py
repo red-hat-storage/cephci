@@ -9,10 +9,10 @@ from copy import deepcopy
 from ceph.ceph import Ceph
 from ceph.ceph_admin.common import fetch_method
 from ceph.ceph_admin.helper import check_service_exists
-from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_set_nvme_cli_image,
     delete_nvme_service,
@@ -87,15 +87,15 @@ def configure_subsystems(pool, ha, config):
     # Add Host access
     if config.get("allow_host"):
         nvmegwcli.host.add(
-            **{"args": {**sub_args, **{"host": repr(config["allow_host"])}}}
+            **{"args": {**sub_args, **{"host-nqn": repr(config["allow_host"])}}}
         )
 
     if config.get("hosts"):
         for host in config["hosts"]:
             initiator_node = get_node_by_id(ceph_cluster, host)
-            initiator = Initiator(initiator_node)
+            initiator = NVMeInitiator(initiator_node)
             host_nqn = initiator.nqn()
-            nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
+            nvmegwcli.host.add(**{"args": {**sub_args, **{"host-nqn": host_nqn}}})
 
     # Add Namespaces
     if config.get("bdevs"):
@@ -129,7 +129,7 @@ def configure_subsystems(pool, ha, config):
 def disconnect_initiator(ceph_cluster, node):
     """Disconnect Initiator."""
     node = get_node_by_id(ceph_cluster, node)
-    initiator = Initiator(node)
+    initiator = NVMeInitiator(node)
     initiator.disconnect_all()
 
 

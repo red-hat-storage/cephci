@@ -1,5 +1,11 @@
 from ceph.nvmeof.cli.v2.base_cli import BaseCLI
 
+from .common import substitute_keys
+
+KEY_MAP = {
+    "size": "rbd_image_size",
+}
+
 
 class Namespace:
     """NVMeoF Namespace operations."""
@@ -42,6 +48,7 @@ class Namespace:
         """Lists namespaces under subsystem."""
         return self.base.run_nvme_cli(self.name, "list", **kwargs)
 
+    @substitute_keys(KEY_MAP)
     def resize(self, **kwargs):
         """Resize namespace under subsystem."""
         return self.base.run_nvme_cli(self.name, "resize", **kwargs)
