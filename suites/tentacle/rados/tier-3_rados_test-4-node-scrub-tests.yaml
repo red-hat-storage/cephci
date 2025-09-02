@@ -207,7 +207,7 @@ tests:
         delete_pool:
           - replicated_pool
   - test:
-      name: Verification of osd_scrub_load_threshold parameter functionality
+      name: Verification of osd_scrub_load_threshold
       desc: Verification of osd_scrub_load_threshold parameter functionality
       module: test_osd_scrub_load_threshold_parameter.py
       polarion-id: CEPH-83620201
