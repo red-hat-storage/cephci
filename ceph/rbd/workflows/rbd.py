@@ -644,7 +644,7 @@ def feature_ops_single_image(**kw):
         return 1
 
 
-def check_rbd_status(rbd, pool, image, timeout):
+def check_rbd_status(rbd, pool, image, timeout, namespace=None):
     """
     Keep checking rbd status until watchers is None
     """
@@ -654,15 +654,22 @@ def check_rbd_status(rbd, pool, image, timeout):
     out = str()
     sleep(5)
     while datetime.datetime.now() - starttime <= timeout:
-        out, err = rbd.status(pool=pool, image=image, format="json")
+        if namespace is not None:
+            out, err = rbd.status(
+                pool=pool, image=image, namespace=namespace, format="json"
+            )
+            imagespec = f"{pool}/{namespace}/{image}"
+        else:
+            out, err = rbd.status(pool=pool, image=image, format="json")
+            imagespec = f"{pool}/{image}"
         if err:
-            log.error(f"Error while fetching rbd status {pool}/{image}")
-            raise Exception(f"Error while fetching rbd status {pool}/{image}")
+            log.error(f"Error while fetching rbd status {imagespec}")
+            raise Exception(f"Error while fetching rbd status {imagespec}")
         rbd_status = json.loads(out)
         log.info(f"RBD Status: {rbd_status}")
         if not rbd_status.get("watchers"):
             raise Exception(
-                f"Watchers don't exist even while running IOs for {pool}/{image}"
+                f"Watchers don't exist even while running IOs for {imagespec}"
             )
         sleep(5)
     return 0
@@ -685,7 +692,11 @@ def run_io_and_check_rbd_status(**kw):
         rbd = kw.get("rbd")
         pool = kw.get("pool")
         image = kw.get("image")
-        image_spec = f"{pool}/{image}"
+        namespace = kw.get("namespace")
+        if namespace:
+            image_spec = f"{pool}/{namespace}/{image}"
+        else:
+            image_spec = f"{pool}/{image}"
         image_conf = kw.pop("image_conf", {})
         client = kw.get("client")
         test_ops_parallely = kw.get("test_ops_parallely", False)
@@ -718,34 +729,51 @@ def run_io_and_check_rbd_status(**kw):
                 "skip_mkfs": kw.get("skip_mkfs", False),
             },
         }
-        with parallel() as p:
-            p.spawn(krbd_io_handler, **io_config)
-            p.spawn(check_rbd_status, rbd=rbd, pool=pool, image=image, timeout=120)
+        if namespace:
+            with parallel() as p:
+                p.spawn(krbd_io_handler, **io_config)
+                p.spawn(
+                    check_rbd_status,
+                    rbd=rbd,
+                    pool=pool,
+                    image=image,
+                    timeout=120,
+                    namespace=namespace,
+                )
+        else:
+            with parallel() as p:
+                p.spawn(krbd_io_handler, **io_config)
+                p.spawn(check_rbd_status, rbd=rbd, pool=pool, image=image, timeout=120)
 
-        out, err = rbd.status(pool=pool, image=image, format="json")
+        if namespace:
+            out, err = rbd.status(
+                pool=pool, image=image, namespace=namespace, format="json"
+            )
+            imagespec = f"{pool}/{namespace}/{image}"
+        else:
+            out, err = rbd.status(pool=pool, image=image, format="json")
+            imagespec = f"{pool}/{image}"
         if err:
-            log.error(f"Error while fetching rbd status {pool}/{image}")
+            log.error(f"Error while fetching rbd status {imagespec}")
             if test_ops_parallely:
-                raise Exception(f"Error while fetching rbd status {pool}/{image}")
+                raise Exception(f"Error while fetching rbd status {imagespec}")
             return 1
         rbd_status = json.loads(out)
         log.info(f"RBD Status: {rbd_status}")
         if rbd_status.get("watchers"):
-            log.error(
-                f"Watchers exist even while IOs are not running for {pool}/{image}"
-            )
+            log.error(f"Watchers exist even while IOs are not running for {imagespec}")
             if test_ops_parallely:
                 raise Exception(
-                    f"Watchers exist even while IOs are not running for {pool}/{image}"
+                    f"Watchers exist even while IOs are not running for {imagespec}"
                 )
             return 1
     except Exception as e:
         log.error(
-            f"Run IOs and verify rbd status failed for {pool}/{image} with error {e}"
+            f"Run IOs and verify rbd status failed for {imagespec} with error {e}"
         )
         if test_ops_parallely:
             raise Exception(
-                f"Run IOs and verify rbd status failed for {pool}/{image} with error {e}"
+                f"Run IOs and verify rbd status failed for {imagespec} with error {e}"
             )
         return 1
 
