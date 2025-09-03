@@ -5598,3 +5598,17 @@ EOF"""
                 log.error("Error while removing contents of file")
                 return False
         return True
+
+    def get_balancer_status(self):
+        """
+        The method is used to send the balancer status
+        Args:
+            None
+        Return:
+            True -> If balancer status is active
+            False -> If balancer status in inactive
+        """
+
+        cmd_balancer_status = "ceph balancer status"
+        cmd_outPut = self.run_ceph_command(cmd_balancer_status)
+        return cmd_outPut["active"]
