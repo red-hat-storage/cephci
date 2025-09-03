@@ -220,3 +220,9 @@ tests:
       desc: verify ceph-volume lvm zap functionality without destroy flag
       config:
         zap_without_destroy_flag: true
+
+  - test:
+        name: Bluestore data compression - enhancements
+        module: test_bluestore_comp_enhancements.py
+        desc: Positive workflows for bluestore data compression enhancements
+        polarion-id: CEPH-83620071
