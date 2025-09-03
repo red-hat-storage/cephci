@@ -268,4 +268,5 @@ tests:
       desc: Test to verify rbd mirroring failback
       module: rbd_mirror_reconfigure_secondary_cluster.py
       polarion-id: CEPH-9477
+      comments: Product bug 2188227
       name: Reconfigure mirror with newly created cluster as secondary
