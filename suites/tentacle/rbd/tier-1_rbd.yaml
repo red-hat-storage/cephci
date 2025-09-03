@@ -85,6 +85,7 @@ tests:
         copy_admin_keyring: true
         id: client.1
         install_packages:
+          - git
           - ceph-common
           - rbd-nbd
           - jq
@@ -110,6 +111,7 @@ tests:
       config:
         script: rbd_groups.sh
         script_path: qa/workunits/rbd
+        branch: tentacle
       desc: "Executing upstream RBD CLI Groups scenarios"
       module: test_rbd.py
       name: 1_rbd_cli_groups
@@ -119,6 +121,7 @@ tests:
       config:
         script: import_export.sh
         script_path: qa/workunits/rbd
+        branch: tentacle
       desc: "Executing upstream RBD CLI Import Export scenarios"
       module: test_rbd.py
       name: 2_rbd_cli_import_export
@@ -128,6 +131,7 @@ tests:
       config:
         script_path: qa/workunits/rbd
         script: test_librbd_python.sh
+        branch: tentacle
       desc: Executig upstream LibRBD scenarios
       module: test_rbd.py
       name: 5_librbd_python
@@ -136,6 +140,7 @@ tests:
       config:
         script_path: qa/workunits/rbd
         script: permissions.sh
+        branch: tentacle
       desc: Executig upstream RBD permissions scenarios
       module: test_rbd.py
       name: 6_rbd_permissions
@@ -144,6 +149,7 @@ tests:
       config:
         script_path: qa/workunits/rbd
         script: read-flags.sh
+        branch: tentacle
       desc: Executig upstream RBD Read Flag scenarios
       module: test_rbd.py
       name: 7_rbd_read_flags
@@ -152,6 +158,7 @@ tests:
       config:
         script_path: qa/workunits/rbd
         script: journal.sh
+        branch: tentacle
       desc: Executig upstream RBD Journal scenarios
       module: test_rbd.py
       name: 9_journal
@@ -160,6 +167,7 @@ tests:
       config:
         script_path: qa/workunits/rbd
         script: kernel.sh
+        branch: tentacle
       desc: Executig upstream RBD Kernal scenarios
       module: test_rbd.py
       name: 10_rbd_kernel
@@ -168,6 +176,7 @@ tests:
       config:
         script_path: qa/workunits/rbd
         script: krbd_exclusive_option.sh
+        branch: tentacle
       desc: Executig upstream RBD kernel exclusive scenarios
       module: test_rbd.py
       name: 11_rbd_krbd_exclusive

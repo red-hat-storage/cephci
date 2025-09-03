@@ -89,6 +89,7 @@ tests:
           - rbd-nbd
           - jq
           - fio
+          - git
         node: node4
       desc: "Configure the client system"
       destroy-cluster: false
