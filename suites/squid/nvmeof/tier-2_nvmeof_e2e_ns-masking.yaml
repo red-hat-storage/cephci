@@ -155,13 +155,13 @@ tests:
         rbd_pool: rbd
         do_not_create_image: true
         rep-pool-only: true
+        subsystems: 5
+        namespaces: 50
         service: namespace
         steps:
           - config:
               command: add
               args:
-                subsystems: 5
-                namespaces: 50
                 pool: rbd
                 image_size: 1T
                 no-auto-visible: true
@@ -170,8 +170,6 @@ tests:
           - config:
               command: add_host
               args:
-                subsystems: 5
-                namespaces: 50
                 initiators:
                   - node8
                   - node9
@@ -183,8 +181,6 @@ tests:
           - config:
               command: del_host
               args:
-                subsystems: 5
-                namespaces: 50
                 initiators:
                   - node8
                   - node9
@@ -196,16 +192,12 @@ tests:
           - config:
               command: change_visibility
               args:
-                subsystems: 5
-                namespaces: 50
                 auto-visible: 'yes'
                 group: group1
                 validate_ns_masking_initiators: true
           - config:
               command: change_visibility
               args:
-                subsystems: 5
-                namespaces: 50
                 auto-visible: 'no'
                 group: group1
                 validate_ns_masking_initiators: true

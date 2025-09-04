@@ -41,15 +41,22 @@ def execute_io_ns_masking(ha, init_nodes, images, negative=False):
         ha.validate_io(images_node, negative=negative)
 
 
-def add_namespaces(config, command, init_nodes, hostnqn_dict, rbd_obj, ha):
-    subsystems = config["args"].pop("subsystems")
-    namespaces = config["args"].pop("namespaces")
+def add_namespaces(
+    config,
+    command,
+    init_nodes,
+    hostnqn_dict,
+    rbd_obj,
+    ha,
+    exact_ns_subsystem,
+    extra_ns_subsystem,
+    subsystems,
+):
     image_size = config["args"].pop("image_size")
     group = config["args"].pop("group", None)
     pool = config["args"].pop("pool")
     no_auto_visible = config["args"].pop("no-auto-visible")
     validate_initiators = config["args"].pop("validate_ns_masking_initiators", None)
-    namespaces_sub = int(namespaces / subsystems)
     base_cmd_args = {"format": "json"}
     subnqn_template = "nqn.2016-06.io.spdk:cnode{}"
     expected_visibility = False if no_auto_visible else True
@@ -58,13 +65,18 @@ def add_namespaces(config, command, init_nodes, hostnqn_dict, rbd_obj, ha):
 
     for sub_num in range(1, subsystems + 1):
         subnqn = f"{subnqn_template.format(sub_num)}{f'.{group}' if group else ''}"
+        namespaces_sub = exact_ns_subsystem + (
+            1 if sub_num <= extra_ns_subsystem else 0
+        )
+        LOG.info(
+            f"Subsystem {sub_num}/{subsystems} – will get {namespaces_sub} namespaces"
+        )
         name = generate_unique_id(length=4)
-        LOG.info(f"Subsystem {sub_num}/{subsystems}")
-        for num in range(1, namespaces_sub + 1):
+        for num in range(namespaces_sub):
             LOG.info(f"Namespace {num}/{namespaces_sub}")
             # Create the image
             rbd_obj.create_image(pool, f"{name}-image{num}", image_size)
-            LOG.info(f"Creating image {name}-image{num}/{namespaces}")
+            LOG.info(f"Creating image {name}-image{num}/{namespaces_sub}")
 
             config = {
                 "base_cmd_args": {"format": "json"},
@@ -96,8 +108,6 @@ def add_namespaces(config, command, init_nodes, hostnqn_dict, rbd_obj, ha):
             ha.validate_namespace_masking(
                 num,
                 subnqn,
-                namespaces_sub,
-                hostnqn_dict,
                 ns_visibility,
                 command,
                 expected_visibility,
@@ -106,44 +116,41 @@ def add_namespaces(config, command, init_nodes, hostnqn_dict, rbd_obj, ha):
     if validate_initiators:
         ha.validate_init_namespace_masking(command, init_nodes, expected_visibility)
 
-    negative = not expected_visibility
-    execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=negative)
-    return executor, io_tasks
 
-
-def add_host(config, command, init_nodes, hostnqn_dict, ha):
+def add_host(
+    config,
+    command,
+    init_nodes,
+    hostnqn_dict,
+    ha,
+    exact_ns_subsystem,
+    extra_ns_subsystem,
+    subsystems,
+):
     """Add host NQN to namespaces"""
-    subsystems = config["args"].pop("subsystems")
-    namespaces = config["args"].pop("namespaces")
     group = config["args"].pop("group", None)
     validate_initiators = config["args"].pop("validate_ns_masking_initiators", None)
     LOG.info(hostnqn_dict)
     expected_visibility = False
     nvmegwcli = ha.gateways[0]
-    namespaces_sub = int(namespaces / subsystems)
     subnqn_template = "nqn.2016-06.io.spdk:cnode{}"
-    num_namespaces_per_initiator = namespaces_sub // len(hostnqn_dict)
+    hosts = list(hostnqn_dict.items())
+    num_hosts = len(hosts)
     rbd_images_subsys = {}
 
     for sub_num in range(1, subsystems + 1):
-        LOG.info(f"Subsystem {sub_num}/{subsystems}")
+        namespaces_sub = exact_ns_subsystem + (
+            1 if sub_num <= extra_ns_subsystem else 0
+        )
+        LOG.info(f"Subsystem {sub_num}/{subsystems} has {namespaces_sub} namespaces")
+        subnqn = subnqn_template.format(sub_num)
+        if group:
+            subnqn += f".{group}"
+
         for num in range(1, namespaces_sub + 1):
             LOG.info(f"Namespace {num}/{namespaces_sub}")
             config["args"].clear()
-            subnqn = f"{subnqn_template.format(sub_num)}{f'.{group}' if group else ''}"
-
-            # Determine the correct host for the current namespace
-            for i, node in enumerate(
-                hostnqn_dict.keys(), start=1
-            ):  # Calculate the range of namespaces this initiator should handle
-                if num in range(
-                    (i - 1) * num_namespaces_per_initiator + 1,
-                    i * num_namespaces_per_initiator + 1,
-                ):
-                    host = node
-                    LOG.info(host)
-                    host_nqn = hostnqn_dict[node]
-                    break
+            host, host_nqn = hosts[(num - 1) % num_hosts]
 
             if host_nqn is None:
                 raise Exception(
@@ -183,11 +190,9 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
             ha.validate_namespace_masking(
                 num,
                 subnqn,
-                namespaces_sub,
-                hostnqn_dict,
                 ns_visibility,
                 command,
-                expected_visibility,
+                host_nqn,
             )
             if validate_initiators:
                 validate_config = {
@@ -201,40 +206,40 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
                     command, init_nodes, expected_visibility, validate_config
                 )
 
-    execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=False)
 
-
-def del_host(config, command, init_nodes, hostnqn_dict, ha):
+def del_host(
+    config,
+    command,
+    init_nodes,
+    hostnqn_dict,
+    ha,
+    exact_ns_subsystem,
+    extra_ns_subsystem,
+    subsystems,
+):
     """Delete host NQN to namespaces"""
-    subsystems = config["args"].pop("subsystems")
-    namespaces = config["args"].pop("namespaces")
     group = config["args"].pop("group", None)
     validate_initiators = config["args"].pop("validate_ns_masking_initiators", None)
     LOG.info(hostnqn_dict)
-    namespaces_sub = int(namespaces / subsystems)
     subnqn_template = "nqn.2016-06.io.spdk:cnode{}"
-    num_namespaces_per_initiator = namespaces_sub // len(hostnqn_dict)
+    hosts = list(hostnqn_dict.items())
+    num_hosts = len(hosts)
     nvmegwcli = ha.gateways[0]
     rbd_images_subsys = {}
 
     for sub_num in range(1, subsystems + 1):
-        LOG.info(f"Subsystem {sub_num}/{subsystems}")
+        namespaces_sub = exact_ns_subsystem + (
+            1 if sub_num <= extra_ns_subsystem else 0
+        )
+        LOG.info(f"Subsystem {sub_num}/{subsystems} has {namespaces_sub} namespaces")
+        subnqn = subnqn_template.format(sub_num)
+        if group:
+            subnqn += f".{group}"
+
         for num in range(1, namespaces_sub + 1):
             LOG.info(f"Namespace {num}/{namespaces_sub}")
             config["args"].clear()
-            subnqn = f"{subnqn_template.format(sub_num)}{f'.{group}' if group else ''}"
-
-            # Determine the correct host for the current namespace
-            for i, node in enumerate(hostnqn_dict.keys(), start=1):
-                # Iterate over hostnqn_dict # Calculate the range of namespaces this initiator should handle
-                if num in range(
-                    (i - 1) * num_namespaces_per_initiator + 1,
-                    i * num_namespaces_per_initiator + 1,
-                ):
-                    host = node
-                    LOG.info(host)
-                    host_nqn = hostnqn_dict[node]
-                    break
+            host, host_nqn = hosts[(num - 1) % num_hosts]
 
             if host_nqn is None:
                 raise Exception(
@@ -276,11 +281,9 @@ def del_host(config, command, init_nodes, hostnqn_dict, ha):
             ha.validate_namespace_masking(
                 num,
                 subnqn,
-                namespaces_sub,
-                hostnqn_dict,
                 ns_visibility,
                 command,
-                expected_visibility,
+                host_nqn,
             )
 
             if validate_initiators:
@@ -295,17 +298,21 @@ def del_host(config, command, init_nodes, hostnqn_dict, ha):
                     command, init_nodes, expected_visibility, validate_config
                 )
 
-    execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=True)
 
-
-def change_visibility(config, command, init_nodes, hostnqn_dict, ha):
+def change_visibility(
+    config,
+    command,
+    init_nodes,
+    hostnqn_dict,
+    ha,
+    exact_ns_subsystem,
+    extra_ns_subsystem,
+    subsystems,
+):
     """Change visibility of namespaces."""
-    subsystems = config["args"].pop("subsystems")
-    namespaces = config["args"].pop("namespaces")
     group = config["args"].pop("group", None)
     validate_initiators = config["args"].pop("validate_ns_masking_initiators", None)
     auto_visible = config["args"].pop("auto-visible")
-    namespaces_sub = int(namespaces / subsystems)
     nvmegwcli = ha.gateways[0]
     base_cmd_args = {"format": "json"}
     subnqn_template = "nqn.2016-06.io.spdk:cnode{}"
@@ -313,8 +320,13 @@ def change_visibility(config, command, init_nodes, hostnqn_dict, ha):
     rbd_images_subsys = []
 
     for sub_num in range(1, subsystems + 1):
-        subnqn = f"{subnqn_template.format(sub_num)}{f'.{group}' if group else ''}"
-        LOG.info(f"Subsystem {sub_num}/{subsystems}")
+        namespaces_sub = exact_ns_subsystem + (
+            1 if sub_num <= extra_ns_subsystem else 0
+        )
+        LOG.info(f"Subsystem {sub_num}/{subsystems} has {namespaces_sub} namespaces")
+        subnqn = subnqn_template.format(sub_num)
+        if group:
+            subnqn += f".{group}"
         for num in range(1, namespaces_sub + 1):
             LOG.info(f"Namespace {num}/{namespaces_sub}")
             config["args"].clear()
@@ -344,8 +356,6 @@ def change_visibility(config, command, init_nodes, hostnqn_dict, ha):
             ha.validate_namespace_masking(
                 num,
                 subnqn,
-                namespaces_sub,
-                hostnqn_dict,
                 ns_visibility,
                 command,
                 expected_visibility,
@@ -353,15 +363,13 @@ def change_visibility(config, command, init_nodes, hostnqn_dict, ha):
     if validate_initiators:
         ha.validate_init_namespace_masking(command, init_nodes, expected_visibility)
 
-    negative = not expected_visibility
-    execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=negative)
-    return executor, io_tasks
-
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
     LOG.info("Add ns and Configure NS masking")
     config = deepcopy(kwargs["config"])
     rbd_pool = config.get("rbd_pool", "rbd_pool")
+    subsystems = config.get("subsystems")
+    namespaces = config.get("namespaces")
 
     kwargs["config"].update(
         {
@@ -384,6 +392,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         hostnqn_dict = {}
         LOG.info(init_nodes)
         ha = HighAvailability(ceph_cluster, config["nodes"], **config)
+        exact_ns_subsystem = namespaces // subsystems
+        extra_ns_subsystem = namespaces % subsystems
 
         for node in init_nodes:
             initiator_node = get_node_by_id(ceph_cluster, node)
@@ -402,13 +412,50 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             command = cfg.pop("command")
 
             if command == "add":
-                add_namespaces(cfg, command, init_nodes, hostnqn_dict, rbd_obj, ha)
+                add_namespaces(
+                    cfg,
+                    command,
+                    init_nodes,
+                    hostnqn_dict,
+                    rbd_obj,
+                    ha,
+                    exact_ns_subsystem,
+                    extra_ns_subsystem,
+                    subsystems,
+                )
             if command == "add_host":
-                add_host(cfg, command, init_nodes, hostnqn_dict, ha)
+                add_host(
+                    cfg,
+                    command,
+                    init_nodes,
+                    hostnqn_dict,
+                    ha,
+                    exact_ns_subsystem,
+                    extra_ns_subsystem,
+                    subsystems,
+                )
             if command == "del_host":
-                del_host(cfg, command, init_nodes, hostnqn_dict, ha)
+                del_host(
+                    cfg,
+                    command,
+                    init_nodes,
+                    hostnqn_dict,
+                    ha,
+                    exact_ns_subsystem,
+                    extra_ns_subsystem,
+                    subsystems,
+                )
             if command == "change_visibility":
-                change_visibility(cfg, command, init_nodes, hostnqn_dict, ha)
+                change_visibility(
+                    cfg,
+                    command,
+                    init_nodes,
+                    hostnqn_dict,
+                    ha,
+                    exact_ns_subsystem,
+                    extra_ns_subsystem,
+                    subsystems,
+                )
         return 0
     except BaseException as be:
         LOG.error(be, exc_info=True)
