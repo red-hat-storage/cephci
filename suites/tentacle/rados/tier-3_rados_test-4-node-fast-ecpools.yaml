@@ -249,3 +249,115 @@ tests:
           osd_recovery_max_active: 16
           delete_pool: true
       desc: Verify Recovery of EC pool with only "k" shards available
+
+# 2+2@4 specific scenarios, with Fast EC features enabled:
+#        scenario-1: Test the effects of bulk flag and no IO stoppage
+#        scenario-2: Perform rolling reboot of all the OSDs on a particular host.
+#        scenario-3: OSD operations
+#        scenario-4: Stopping 1 OSD from each host
+#        scenario-5: Stopping all OSDs of 1 host
+#        scenario-6: Add new host and OSDs into the cluster
+#        scenario-7: Remove 1 OSD from 1 host
+#        scenario-8: Remove 1 host from the cluster
+  - test:
+      name: EC pool 2=2@4 LC - scenarios 1,2,3
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec22_profile
+          pool_name: test_ec_pool
+          k: 2
+          m: 2
+          enable_fast_ec_features: true
+          force: true
+          crush-failure-domain: host
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-1
+          - scenario-2
+          - scenario-3
+      desc: 2+2@4 EC pool life cycle with serviceability scenarios
+
+  - test:
+      name: EC pool 2=2@4 LC - scenarios 4,5
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec22_profile
+          pool_name: test_ec_pool
+          k: 2
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-4
+          - scenario-5
+      desc: 2+2@4 EC pool life cycle with serviceability scenarios
+
+  - test:
+      name: EC pool 2=2@4 LC - scenarios 6
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec22_profile
+          pool_name: test_ec_pool
+          k: 2
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-6
+      desc: 2+2@4 EC pool life cycle with serviceability scenarios
+
+  - test:
+      name: EC pool 2=2@4 LC - scenarios 7
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec22_profile
+          pool_name: test_ec_pool
+          k: 2
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-7
+      desc: 2+2@4 EC pool life cycle with serviceability scenarios
+
+  - test:
+      name: EC pool 2=2@4 LC - scenarios 8
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83575858
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec22_profile
+          pool_name: test_ec_pool
+          k: 2
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-8
+      desc: 2+2@4 EC pool life cycle with serviceability scenarios
