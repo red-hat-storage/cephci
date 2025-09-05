@@ -2594,12 +2594,15 @@ class RadosOrchestrator:
 
         return pgid_list
 
-    def run_pool_sanity_check(self):
+    def run_pool_sanity_check(self, ignore_list=[]):
         """
         Runs sanity on the pools after triggering scrub and deep-scrub on pools, waiting 600 Secs
 
         This method is used to assess the health of Pools after any operation, where in a scrub and deep scrub is
         triggered, and the method scans the cluster for few health warnings, if generated
+
+        Args:
+            ignore_list : List of warnings that are to be ignored
 
         Returns: True-> Pass,  false -> Fail
         """
@@ -2612,7 +2615,7 @@ class RadosOrchestrator:
         while end_time > datetime.datetime.now():
             status_report = self.run_ceph_command(cmd="ceph report", client_exec=True)
             ceph_health_status = status_report["health"]
-            health_warns = (
+            health_warns = [
                 "PG_AVAILABILITY",
                 "PG_DEGRADED",
                 "PG_RECOVERY_FULL",
@@ -2624,8 +2627,8 @@ class RadosOrchestrator:
                 "OBJECT_MISPLACED",
                 "OBJECT_UNFOUND",
                 "RECENT_CRASH",
-            )
-
+            ]
+            health_warns = list(set(health_warns) - set(ignore_list))
             flag = (
                 False
                 if any(
