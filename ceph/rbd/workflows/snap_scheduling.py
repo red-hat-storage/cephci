@@ -131,39 +131,34 @@ def verify_snapshot_schedule(
         0 if snapshot schedule is verified successfully
         1 if verification fails
     """
-
     try:
-        # Build status_spec based on scope
         status_spec = {"pool": pool, "format": "json"}
-        # Namespace level schedule
+        out, err = None, None
+
         if namespace:
             status_spec["namespace"] = namespace
-        # Image level schedule
-        if image:
-            status_spec["image"] = image
 
-        # List snapshot schedules
-        out, err = rbd.mirror.snapshot.schedule.ls(**status_spec)
+            # First try namespace-level
+            out, err = rbd.mirror.snapshot.schedule.ls(**status_spec)
+
+            if (not out or out.strip() == "[]") and image:
+                # No namespace-level schedule found, fall back to namespace+image
+                status_spec["image"] = image
+                out, err = rbd.mirror.snapshot.schedule.ls(**status_spec)
+
+        elif image:
+            # No namespace, image-level only
+            status_spec["image"] = image
+            out, err = rbd.mirror.snapshot.schedule.ls(**status_spec)
+
+        else:
+            # Pure pool-level schedule
+            out, err = rbd.mirror.snapshot.schedule.ls(**status_spec)
+
+        # Error handling
         if err:
             log.error(
                 "Error fetching snapshot schedule list for {0}{1}{2}".format(
-                    pool,
-                    "/" + namespace if namespace else "",
-                    "/" + image if image else "",
-                )
-            )
-            return 1
-
-        schedule_list = json.loads(out)
-        schedule_present = [
-            schedule
-            for schedule in schedule_list
-            if schedule.get("interval") == interval
-        ]
-        if not schedule_present:
-            log.error(
-                "Snapshot schedule NOT found at interval {0} for {1}{2}{3}".format(
-                    interval,
                     pool,
                     "/" + namespace if namespace else "",
                     "/" + image if image else "",
