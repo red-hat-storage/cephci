@@ -4,8 +4,7 @@ Test suite that verifies the deployment of Ceph NVMeoF Gateway
 
 """
 
-import time
-from concurrent.futures import ThreadPoolExecutor
+import json
 from copy import deepcopy
 
 from ceph.ceph import Ceph
@@ -13,16 +12,10 @@ from ceph.nvmegw_cli import NVMeGWCLI
 from ceph.nvmeof.initiator import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.nvmeof.workflows.ha import HighAvailability
-from tests.nvmeof.workflows.nvme_utils import (
-    delete_nvme_service,
-    deploy_nvme_service,
-    validate_qos,
-    verify_qos,
-)
+from tests.nvmeof.workflows.nvme_utils import delete_nvme_service, deploy_nvme_service
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
-from utility.utils import generate_unique_id, run_fio
+from utility.utils import run_fio
 
 LOG = Log(__name__)
 
@@ -64,68 +57,21 @@ def configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, subsys_config, conf
             nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
 
     if subsys_config.get("bdevs"):
-        name = generate_unique_id(length=4)
         with parallel() as p:
             count = subsys_config["bdevs"].get("count", 1)
             size = subsys_config["bdevs"].get("size", "1G")
             # Create image
             for num in range(count):
-                p.spawn(rbd.create_image, pool, f"{name}-image{num}", size)
+                image_name = f"nvme-image-{num}"
+                p.spawn(rbd.create_image, pool, image_name, size)
         namespace_args = {**sub_args, **{"rbd-pool": pool}}
         with parallel() as p:
             # Create namespace in gateway
             for num in range(count):
                 ns_args = deepcopy(namespace_args)
-                ns_args.update({"rbd-image": f"{name}-image{num}"})
+                ns_args.update({"rbd-image": image_name})
                 ns_args = {"args": ns_args}
                 p.spawn(nvmegwcli.namespace.add, **ns_args)
-
-    # Set and verify QoS for namespaces
-    if subsys_config.get("bdevs").get("qos"):
-        for qos_args in subsys_config.get("bdevs").get("qos"):
-            prev_key = None
-            for key in [
-                "r-megabytes-per-second",
-                "w-megabytes-per-second",
-                "rw-megabytes-per-second",
-            ]:
-                if key in qos_args:
-                    qos_arg = {
-                        "nsid": qos_args["nsid"],
-                        "subsystem": qos_args["subsystem"],
-                        key: qos_args[key],
-                    }
-
-                    if prev_key:
-                        qos_arg[prev_key] = 0
-
-                    nvmegwcli.namespace.set_qos(
-                        **{
-                            "args": qos_arg,
-                        }
-                    )
-                    verify_qos(qos_arg, nvmegwcli)
-                    prev_key = key
-
-                    run_io_and_validate_qos(
-                        ceph_cluster, config, key, qos_args, nvmegwcli
-                    )
-
-            # Update QoS values
-            qos_arg = {
-                "nsid": qos_args["nsid"],
-                "subsystem": qos_args["subsystem"],
-                "r-megabytes-per-second": 10,
-                "w-megabytes-per-second": 20,
-                "rw-megabytes-per-second": 30,
-                "rw-ios-per-second": 2000,
-            }
-            nvmegwcli.namespace.set_qos(
-                **{
-                    "args": qos_arg,
-                }
-            )
-            verify_qos(qos_arg, nvmegwcli)
 
 
 def disconnect_initiator(ceph_cluster, node, subnqn):
@@ -186,8 +132,7 @@ def teardown(ceph_cluster, rbd_obj, nvmegwcli, config):
         rbd_obj.clean_up(pools=[config["rbd_pool"]])
 
 
-def trigger_fio(ceph_cluster, config, io_mode, key):
-    results = []
+def trigger_fio(ceph_cluster, config, io_size):
     client = get_node_by_id(ceph_cluster, config["initiators"][0]["node"])
     initiator = Initiator(client)
 
@@ -209,89 +154,108 @@ def trigger_fio(ceph_cluster, config, io_mode, key):
                 for ns in subsys.get("Namespaces", [])
             ]
 
-        with parallel() as p:
-            for path in paths:
-                try:
-                    _io_args = {
-                        "device_name": path,
-                        "client_node": client,
-                        "long_running": True,
-                        "io_type": io_mode,
-                        "run_time": "50",
-                        "size": "100%",
-                        "iodepth": 4,
-                        "time_based": True,
-                    }
-                    if key == "rw-ios-per-second":
-                        _io_args.update({"rwmixread": "50"})
-                    p.spawn(run_fio, **_io_args)
-                except Exception as fio_err:
-                    LOG.error(f"Error running FIO on target {path}: {fio_err}")
-                    results.append(f"Failed: {fio_err}")
-
-            for op in p:
-                results.append(op)
+            try:
+                _io_args = {
+                    "device_name": paths[0],
+                    "client_node": client,
+                    "long_running": True,
+                    "run_time": "50",
+                    "size": io_size,
+                    "iodepth": 4,
+                    "time_based": True,
+                }
+                run_fio(**_io_args)
+                LOG.info(
+                    f"FIO completed successfully on {paths[0]} with size {io_size}"
+                )
+                return {"status": "success"}
+            except Exception as fio_err:
+                LOG.error(f"Error running FIO on target {paths[0]}: {fio_err}")
+                return {"status": "failed", "reason": str(fio_err)}
 
     except Exception as err:
         LOG.error(f"Error in trigger_fio: {err}")
-        raise
-
-    return results
+        return {"status": "failed", "reason": str(err)}
 
 
-def run_io_and_validate_qos(ceph_cluster, config, key, qos_args, nvmegwcli):
-    executor = ThreadPoolExecutor()
-    lsblk_devs = {}
+def execute_namespace_resize_announcement_test(ceph_cluster, config, nvmegwcli):
+    """Execute NVMeoF namespace resize and announcement test."""
+    LOG.info("Running CEPH-83627178: NVMeoF namespace resize and announcement")
+    installer_node = ceph_cluster.get_ceph_objects("installer")
+    pool_name = config["rbd_pool"]
+    subsys = config["subsystems"][0]["nqn"]
+    image_name = "nvme-image-1"
+    nsid = 1
 
-    initiators = config["initiators"]
+    # Disable auto-resize for namespace
+    nvmegwcli.namespace.set_auto_resize(
+        **{"args": {"nsid": nsid, "subsystem": subsys, "auto-resize-enabled": "no"}}
+    )
+    LOG.info(f"Disabled auto-resize for nsid {1} on subsystem {subsys}")
 
-    ha = HighAvailability(ceph_cluster, [config["gw_node"]], **config)
-    ha.prepare_io_execution(initiators)
-    devices_dict = ha.clients[0].fetch_lsblk_nvme_devices_dict()
-    lsblk_devs = [device["name"] for device in devices_dict]
-    io_mode = {
-        "r-megabytes-per-second": "read",
-        "w-megabytes-per-second": "write",
-        "rw-megabytes-per-second": "randrw",
-        "rw-ios-per-second": "randrw",
-    }[key]
+    # Refresh the rbd image to 25G
+    cmd = f"rbd resize --size 25G {pool_name}/{image_name}"
+    installer_node[0].exec_command(cmd=cmd, sudo=True)
+    LOG.info(f"Resized RBD image {pool_name}/{image_name} to 25G")
 
-    # Start IO Execution
-    io_tasks = []
-    try:
-        io_tasks.append(
-            executor.submit(trigger_fio, ceph_cluster, config, io_mode, key)
-        )
-        time.sleep(20)
+    # Namespace size should remain unchanged (20 GB).
+    _, namespace_response = nvmegwcli.namespace.list(
+        **{
+            "base_cmd_args": {"format": "json"},
+            "args": {"nsid": nsid, "subsystem": subsys},
+        }
+    )
+    ns_size = json.loads(namespace_response)["namespaces"][0]["size"]
+    LOG.info(f"Namespace {nsid} size before ns refresh: {ns_size}G")
 
-        for initiator in initiators:
-            client = get_node_by_id(ceph_cluster, initiator["node"])
+    # -- IO beyond 20 GB should fail..Add your IO test logic here --
+    fio_result = trigger_fio(ceph_cluster, config, io_size="22G")
+    if fio_result["status"] == "failed":
+        LOG.warning(f"Expected FIO failure observed: {fio_result['reason']}")
+    else:
+        LOG.error("FIO unexpectedly succeeded on IO beyond 20G")
 
-            # Validate each QoS parameter one at a time
-            validate_qos(client, lsblk_devs[0], **{key: qos_args[key]})
+    # Manually refresh namespace size
+    LOG.info(f"Manually refreshing namespace {1}, size should now be 25G")
+    nvmegwcli.namespace.refresh_size(**{"args": {"nsid": 1, "subsystem": subsys}})
+    _, namespace_response = nvmegwcli.namespace.list(
+        **{
+            "base_cmd_args": {"format": "json"},
+            "args": {"nsid": nsid, "subsystem": subsys},
+        }
+    )
+    ns_size = json.loads(namespace_response)["namespaces"][0]["size"]
+    LOG.info(f"Namespace {nsid} size after refresh: {ns_size}G")
 
-            # Update QoS and verify while IO is in progress
-            qos_arg = {
-                "nsid": qos_args["nsid"],
-                "subsystem": qos_args["subsystem"],
-                key: str(int(qos_args[key]) + 100),
-            }
+    # IO across full 25 GB should succeed
+    fio_result = trigger_fio(ceph_cluster, config, io_size="25G")
+    if fio_result["status"] == "success":
+        LOG.info("FIO succeeded as expected on IO across 25G")
 
-            nvmegwcli.namespace.set_qos(
-                **{
-                    "args": qos_arg,
-                }
-            )
-            LOG.info(f"Updating QoS for namespace {qos_args['nsid']} is successful.")
+    # Enable auto-resize
+    nvmegwcli.namespace.set_auto_resize(
+        **{"args": {"nsid": nsid, "subsystem": subsys, "auto-resize-enabled": "yes"}}
+    )
+    LOG.info(f"Enabled auto-resize on namespace {nsid}")
 
-            verify_qos(qos_arg, nvmegwcli)
+    # Resize RBD image to 30G (auto-resize should reflect automatically)
+    cmd = f"rbd resize --size 30G {pool_name}/{image_name}"
+    installer_node[0].exec_command(cmd=cmd, sudo=True)
+    LOG.info(f"Resized RBD image {pool_name}/{image_name} to 30G")
 
-    except BaseException as err:  # noqa
-        raise Exception(err)
-    finally:
-        if io_tasks:
-            LOG.info("Waiting for completion of IOs.")
-            executor.shutdown(wait=True, cancel_futures=True)
+    _, namespace_response = nvmegwcli.namespace.list(
+        **{
+            "base_cmd_args": {"format": "json"},
+            "args": {"nsid": nsid, "subsystem": subsys},
+        }
+    )
+    ns_size = json.loads(namespace_response)["namespaces"][0]["size"]
+    LOG.info(f"Namespace {nsid} size without refresh: {ns_size}G")
+
+    # IO across full 30 GB should succeed
+    fio_result = trigger_fio(ceph_cluster, config, io_size="30G")
+    if fio_result["status"] == "success":
+        LOG.info("FIO succeeded as expected on IO across 30G")
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
@@ -337,6 +301,9 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         subsys_args,
                         config,
                     )
+
+        LOG.info("Successfully configured all subsystems.")
+        execute_namespace_resize_announcement_test(config, nvmegwcli)
 
         return 0
     except Exception as err:

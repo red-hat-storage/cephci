@@ -849,7 +849,7 @@ def test_ceph_83616916(ceph_cluster, config):
     LOG.info("Add the host security with host nqn and check alert is in inactive state")
     initiator_node = get_node_by_id(ceph_cluster, config.get("host"))
     initiator = Initiator(initiator_node)
-    host_nqn = initiator.nqn()
+    host_nqn = initiator.initiator_nqn()
     nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
     events.monitor_alert(
         alert, timeout=time_to_fire, state="inactive", interval=intervel
