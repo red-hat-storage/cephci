@@ -1,6 +1,8 @@
+import json
 import random
 import string
 import traceback
+from json import JSONDecodeError
 from threading import Thread
 
 from ceph.ceph import CommandFailed
@@ -139,8 +141,11 @@ def run(ceph_cluster, **kw):
             log.error("Cluster health is not OK even after waiting for 300secs")
             return 1
         log.info("Cleanup existing nfs clusters")
-        out, _ = client.exec_command(sudo=True, cmd="ceph nfs cluster ls")
-        nfscluster_ls = out.split("\n")
+        try:
+            out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+            nfscluster_ls = json.loads(out)
+        except JSONDecodeError:
+            nfscluster_ls = json.dumps([out])
         for nfs_cluster_name in nfscluster_ls:
             fs_util.remove_nfs_cluster(client, nfs_cluster_name)
         byok_setup_params = {

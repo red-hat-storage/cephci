@@ -320,7 +320,7 @@ class CephfsMirroringUtils(object):
         The specified path should exist within the source filesystem.
         """
         path = path.rstrip("/")  # to avoid trailing slash mismatch
-        ceph_version = get_ceph_version_from_cluster(source_clients[0])
+        ceph_version = get_ceph_version_from_cluster(source_clients)
 
         log.info(
             f"Adding path '{path}' to mirroring configuration for filesystem '{source_fs}'..."
