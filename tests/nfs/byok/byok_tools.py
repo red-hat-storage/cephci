@@ -24,7 +24,12 @@ from utility.gklm_client.gklm_client import GklmClient
 
 
 def get_enctag(
-    gklm_client, created_client_data, gkml_client_name, gklm_cert_alias, gklm_user, cert
+    gklm_client,
+    gkml_client_name,
+    gklm_cert_alias,
+    gklm_user,
+    cert,
+    created_client_data=None,
 ):
     """
     Initialize a GKLM client, assign a certificate, and create a symmetric key object for encryption/decryption.
@@ -32,7 +37,7 @@ def get_enctag(
     Args:
         gklm_client: Instance of the GKLM REST client.
         created_client_ Dictionary containing the newly created GKLM client data.
-        gkml_client_name: Name of the GKLM client entity to be created.
+        gkml_client_name: Name of the GKLM client entity created.
         gklm_cert_alias: Alias under which the certificate will be stored in GKLM.
         gklm_user: User to be assigned access to the symmetric key.
         cert: Certificate (PEM format) to be associated with the client.
@@ -44,37 +49,53 @@ def get_enctag(
         Exception: If any step fails, logs the error and re-raises.
     """
     try:
-        log.info(
-            f"Assigning certificate '{gklm_cert_alias}' to GKLM client '{gkml_client_name}'"
-        )
-        assign_cert_data = gklm_client.clients.assign_client_certificate(
-            client_name=gkml_client_name, cert_pem=cert, alias=gklm_cert_alias
-        )
-        log.info(
-            f"Successfully created GKLM client {created_client_data} and assigned certificate {assign_cert_data}"
-        )
+
+        all_certs = [
+            x.get("alias", None) for x in gklm_client.certificates.list_certificates()
+        ]
+        if gklm_cert_alias not in all_certs:
+            log.info(f"Certificate alias '{gklm_cert_alias}' not found in GKLM")
+            log.info(
+                f"Assigning certificate '{gklm_cert_alias}' to GKLM client '{gkml_client_name}'"
+            )
+            gklm_client.clients.assign_users_to_generic_kmip_client(
+                client_name=gkml_client_name, users=[gklm_user]
+            )
+            assign_cert_data = gklm_client.clients.assign_client_certificate(
+                client_name=gkml_client_name, cert_pem=cert, alias=gklm_cert_alias
+            )
+            log.info(
+                f"Successfully created GKLM client "
+                f"{created_client_data if created_client_data is not None else gkml_client_name} "
+                f"and assigned certificate {assign_cert_data}"
+            )
 
         log.info(
             f"Creating symmetric key object for client '{gkml_client_name}', alias prefix 'AUT'"
         )
-        symmetric_data = gklm_client.objects.create_symmetric_key_object(
-            number_of_objects=1,
-            client_name=gkml_client_name,
-            alias_prefix_name="AUT",
-            cryptoUsageMask="Encrypt,Decrypt",
-        )
-        enctag = symmetric_data["id"]
-        log.info(
-            f"Created symmetric key object with UUID {enctag} for client '{gkml_client_name}'"
-        )
+        if len(gklm_client.objects.list_client_objects(gkml_client_name)) < 2:
+            symmetric_data = gklm_client.objects.create_symmetric_key_object(
+                number_of_objects=1,
+                client_name=gkml_client_name,
+                alias_prefix_name="AUT",
+                cryptoUsageMask="Encrypt,Decrypt",
+            )
 
-        log.info(
-            f"Assigning user '{gklm_user}' to GKLM client '{gkml_client_name}' for KMIP access"
-        )
-        gklm_client.clients.assign_users_to_generic_kmip_client(
-            client_name=gkml_client_name, users=[gklm_user]
-        )
-        log.info(f"User '{gklm_user}' successfully assigned to client")
+            enctag = symmetric_data["id"]
+            log.info(
+                f"Created symmetric key object with UUID {enctag} for client '{gkml_client_name}'"
+            )
+        else:
+            symmetric_data = gklm_client.objects.list_client_objects(gkml_client_name)[
+                0
+            ]
+            log.info(
+                f"Reusing existing symmetric key object with UUID {symmetric_data['uuid']} "
+                f"for client '{gkml_client_name}'"
+            )
+            enctag = symmetric_data["uuid"]
+
+        log.info(f"Using encryption tag {enctag} for client '{gkml_client_name}'")
 
         return enctag
 
@@ -429,7 +450,7 @@ def clean_up_gklm(gklm_rest_client, gkml_client_name, gklm_cert_alias):
             gklm_rest_client.objects.delete_object(key_id)
         except Exception as e:
             log.warning("Failed to delete symmetric key '%s': %s", key_id, str(e))
-    if ids:
+    if not ids:
         log.info("Symmetric key objects deleted successfully.")
     else:
         log.info("No symmetric keys found to delete.")
@@ -609,11 +630,11 @@ def nfs_byok_test_setup(byok_setup_params):
         log.info("Creating symmetric key encryption tag in GKLM")
         enctag = get_enctag(
             gklm_rest_client,
-            created_client_data,
             gklm_client_name,
             gklm_cert_alias,
             gklm_user,
             cert,
+            created_client_data,
         )
 
         # ------------------- Prerequisites and Certificate Export -------------------
@@ -634,7 +655,7 @@ def nfs_byok_test_setup(byok_setup_params):
         # ------------------- NFS Ganesha Instance Creation with BYOK -------------------
         log.info("Creating NFS Ganesha instance with BYOK/KMIP configuration")
         create_nfs_instance_for_byok(
-            installer, nfs_node, nfs_name, gklm_ip, rsa_key, cert, ca_cert
+            installer, nfs_node, nfs_name, gklm_hostname, rsa_key, cert, ca_cert
         )
         return (0, enctag, gklm_rest_client, cert)
     except Exception as ex:
@@ -714,16 +735,71 @@ def perform_io_operations_and_validate_fuse(
     nfs_name=None,
 ):
     """
-    Perform IO operations on mounted NFS exports for single or multiple clusters.
+        Perform IO operations on NFS mount(s) and validate encryption via FUSE.
+    This function performs a sequence of concurrent file operations against one or
+    more NFS mount points exposed to a set of test clients and then validates
+    encryption by mounting the same export via a FUSE mount and running a validation
+    helper. The operations are executed per-cluster when is_multicluster is True,
+    or once for a single cluster otherwise.
+    Sequence of operations (per cluster / mount_dict):
+        1. Create a set of files named "named_file.txt_<i>" (i from 0 to file_count-1)
+             on each mount point.
+        2. Write dd_command_size_in_M megabytes to each created file using a dd-based
+             helper.
+        3. Read back the contents of each file using the same dd-based helper.
+        4. Query Ceph NFS export information for the given nfs_name (or cluster name in
+             multicluster mode), mount the export via FUSE (first mount + "_fuse") with
+             an exported path parameter, and validate encryption via the FUSE mount.
+             If a client has no mounts, FUSE validation for that client is skipped.
+        5. Rename each file to "renamed_file.txt_<i>".
+        6. Delete each renamed file.
+    Parameters:
+        client_export_mount_dict (dict):
+            - If is_multicluster is False: a mapping keyed by client (same client objects
+                passed in `clients`) whose values are dicts containing at least:
+                    - "mount": list of mount point paths for that client
+                    - "export": list of corresponding export identifiers (used to look up
+                        export "path" in exports_info)
+            - If is_multicluster is True: a mapping keyed by cluster_name -> mount_dict,
+                where each mount_dict has the same structure as described above for the
+                single-cluster case.
+        clients (list): List of client objects used to perform operations and to
+            query Ceph (the first client is used to run Ceph(...).nfs.export.* calls).
+        file_count (int): Number of files to create/write/read/rename/delete per mount.
+        dd_command_size_in_M (int): Size in megabytes used by the dd-based write and
+            read helpers.
+        is_multicluster (bool): When True, client_export_mount_dict is treated as a
+            mapping of clusters to mount_dicts. When False, it is treated as a single
+            mount_dict keyed by client.
+        nfs_name (str or None): Name used when querying Ceph NFS exports. In
+            multicluster mode, the function uses the per-cluster key passed into the
+            helper when querying exports; in single-cluster mode, this value should be
+            the NFS service name to query exports for.
+    Behavior and side effects:
+        - Uses ThreadPoolExecutor (max_workers=None) to parallelize file operations
+            across clients, mounts and files and waits for all submitted tasks to
+            complete before moving to the next phase.
+        - Calls external helper functions: create_file, write_to_file_using_dd_command,
+            read_from_file_using_dd_command, rename_file, delete_file, fuse_mount_retry,
+            validate_enc_for_nfs_export_via_fuse.
+        - Calls Ceph(...).nfs.export.ls and .get to gather export metadata.
+        - Creates, writes, reads, renames and deletes files on remote mounts, and
+            mounts/unmounts FUSE targets as part of encryption validation.
+    Return:
+        None
+    Exceptions:
+        - Propagates exceptions raised by helper utilities, Ceph queries, or threading
+            execution (e.g., any failures during file operations, Ceph export lookup,
+            FUSE mount/validation). Callers should handle or surface these exceptions
+            as appropriate for test reporting.
+    Notes:
+        - The function logs progress at each major step.
+        - If a client's mount list is empty for FUSE validation, that client is skipped
+            for the FUSE-based encryption check.
+        - The specific naming convention used by this implementation is:
+                created files -> "named_file.txt_<i>"
+                renamed files -> "renamed_file.txt_<i>"
 
-    Args:
-        client_export_mount_dict (dict): For single cluster: {client: {'mount': [...], 'export': [...]}},
-                                       For multi cluster: {cluster_name: {client: {'mount': [...], 'export': [...]}}
-        clients (list): List of client nodes
-        file_count (int): Number of files to create for each operation
-        dd_command_size_in_M (int): Size in MB for dd command operations
-        multicluster (bool): Whether this is a multi-cluster operation
-        nfs_name = For single cluster
     """
     file_name = "named_file.txt"
     renamed_file_name = "renamed_file.txt"
