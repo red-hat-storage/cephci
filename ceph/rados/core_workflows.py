@@ -4435,7 +4435,7 @@ EOF"""
 
         if mnt_name in out:
             log.info("Verification successful. Device is listed in mount points.")
-            return f"{mnt_path}{mnt_name}"
+            return mnt_path, mnt_name
         else:
             log.error("Verification failed. Device is not listed in mount points.")
             return None
