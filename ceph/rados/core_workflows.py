@@ -3281,13 +3281,19 @@ EOF"""
                         log.info(
                             f"{daemon} daemon {entry['daemon_name']} is yet to restart. "
                         )
+                        """
+                        Adding "ceph orch daemon restart" in try except block, Since restarting OSDs throws below error,
+                        If all the OSDs of acting set are attempted to restart
+                        error -> "Error EINVAL: Unable to restart daemon osd.0: unsafe to stop osd(s) at this
+                         time (1 PGs are or would become offline). Warnings can be bypassed with the --force flag"
+                        """
                         try:
                             self.client.exec_command(
                                 cmd=f"ceph orch daemon restart {entry['daemon_name']}",
                                 sudo=True,
                             )
                         except CommandFailed as e:
-                            log.debug(e)
+                            log.warning(e)
                 if success_count == len(daemon_status_ls):
                     break
                 log.info("Sleeping for 120 secs")

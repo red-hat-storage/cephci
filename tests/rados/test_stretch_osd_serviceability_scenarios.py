@@ -471,8 +471,7 @@ def run(ceph_cluster, **kw):
 
         log.info("Setting crush location for each monitor for next scenario")
         for hostname in dc_1_hosts_to_remove + dc_2_hosts_to_remove:
-            host_obj = rados_obj.get_host_object(hostname=hostname)
-            if "mon" not in host_obj.get_host_label(host_name=hostname):
+            if "mon" not in rados_obj.get_host_label(host_name=hostname):
                 continue
 
             if hostname in dc_1_hosts:
