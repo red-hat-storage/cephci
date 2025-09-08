@@ -54,13 +54,15 @@ def run(ceph_cluster, **kw):
         log.info("NFS Ganesha instances created successfully")
         clean_up_happened = False
 
-        if not delete_nfs_clusters_in_parallel(installer, timeout):
-            log.error("Failed to delete NFS Ganesha instances")
+        try:
+            delete_nfs_clusters_in_parallel(installer, timeout)
+            log.info("NFS Ganesha instances deleted successfully")
+            clean_up_happened = True
+        except Exception as deletion_error:
+            log.error(f"Failed to delete NFS Ganesha instances: {deletion_error}")
             clean_up_happened = False
             return 1
-        else:
-            clean_up_happened = True
-            log.info("NFS Ganesha instances deleted successfully")
+
         return 0
     except Exception as e:
         log.error(f"An error occurred during NFS Ganesha deployment: {e}")
@@ -70,5 +72,10 @@ def run(ceph_cluster, **kw):
         # Ensure cleanup of any created NFS instances
         if not clean_up_happened:
             log.info("Cleaning up any created NFS Ganesha instances")
-            delete_nfs_clusters_in_parallel(installer, timeout)
-        log.info("Cleanup completed")
+            try:
+                delete_nfs_clusters_in_parallel(installer, timeout)
+                log.info("Cleanup completed successfully")
+            except Exception as cleanup_error:
+                log.warning(f"Cleanup failed: {cleanup_error}")
+        else:
+            log.info("No additional cleanup needed")
