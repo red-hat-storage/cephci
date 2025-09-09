@@ -298,7 +298,31 @@ tests:
         max_client_combined_bw: 8MB
         qos_type: PerShare_PerClient
         operation: restart
-
+  - test:
+      name: QoS enablement PerShare on export level with restart and QoS update
+      module: test_nfs_qos_update_on_export_level_pershare.py
+      desc: Verify QoS PerShare on export level; ensure persistence across restart; update and validate QoS and validate that updated QoS values are in play
+      polarion-id: CEPH-83615833
+      abort-on-fail: false
+      config:
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        cluster_bw:
+          - max_export_write_bw: 100MB
+            max_export_read_bw: 100MB
+            max_client_write_bw: 100MB
+            max_client_read_bw: 100MB
+        export_bw:
+          - max_export_write_bw: 8MB
+            max_export_read_bw: 8MB
+            max_client_write_bw: 8MB
+            max_client_read_bw: 8MB
+        updated_export_bw:
+          - max_export_write_bw: 4MB
+            max_export_read_bw: 4MB
+            max_client_write_bw: 4MB
+            max_client_read_bw: 4MB
+        qos_type: PerShare
   - test:
       name: deploy nfs ganesha with qos per share using spec file
       desc: Deploy nfs ganesha with qos per share using spec file and verify
