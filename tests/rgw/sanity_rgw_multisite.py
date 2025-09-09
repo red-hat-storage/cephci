@@ -94,7 +94,7 @@ def run(**kw):
     test_site_node = test_site.get_ceph_object("rgw").node
     test_client_node = test_site.get_ceph_object("client").node
     config["git-url"] = config.get(
-        "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+        "git-url", "https://github.com/yuva-gayam/ceph-qe-scripts.git"
     )
     test_data = kw.get("test_data")
     custom_config = test_data.get("custom-config", {})
