@@ -247,7 +247,7 @@ def run(ceph_cluster, **kw):
     """
     try:
         fs_util_v1 = FsUtilsV1(ceph_cluster)
-        mds_nodes = ceph_cluster.get_ceph_objects("mds")
+        mds_nodes = ceph_cluster.get_ceph_objects()
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
         osp_cred = config.get("osp_cred")
