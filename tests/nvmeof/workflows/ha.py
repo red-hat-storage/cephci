@@ -1286,6 +1286,10 @@ class HighAvailability:
 
     def calculate_max_clat_time(self, fio_outputs):
         # Extract failover time
+        # TODO: Current approach of extracting CLAT using regex will not work with different FIO
+        #  workload and clat duration calculation is invalid which needs modification using right approach.
+        #  Instead of CLI repsonse, modify the fio command to provide output json file
+        #  to parse and calculate the Completion latency.
         for idx, output in enumerate(fio_outputs):
             try:
                 max_clat_in_ms = get_max_clat_from_fio_output(output[0][0])
@@ -1346,6 +1350,9 @@ class HighAvailability:
                     with parallel() as p:
                         initiators = self.config["initiators"]
                         io_tasks = []
+
+                        # TODO: Move this outside of the run
+                        #   keep it as separate function.
                         if len(namespaces) >= 1:
                             max_workers = (
                                 len(initiators) * len(namespaces)

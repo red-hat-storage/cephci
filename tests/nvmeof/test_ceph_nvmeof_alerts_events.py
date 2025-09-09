@@ -171,8 +171,8 @@ def test_ceph_83611097(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
-    time_to_fire = 600
-    interval = 60
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 50)
     alert = "NVMeoFMissingListener"
     msg = "No listener added for {GW} NVMe-oF Gateway to {NQN} subsystem"
 
@@ -268,8 +268,8 @@ def test_ceph_83610950(ceph_cluster, config):
     """
     _rbd_pool = config["rbd_pool"]
     _rbd_obj = config["rbd_obj"]
-    time_to_fire = 60
-    interval = 50
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 50)
     alert = "NVMeoFMultipleNamespacesOfRBDImage"
     msg = "RBD image {image} cannot be reused for multiple NVMeoF namespace"
     svcs = []
@@ -426,9 +426,8 @@ def test_ceph_83611098(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
-
-    time_to_fire = config["time_to_fire"]
-    intervel = 120
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 60)
     alert = "NVMeoFZeroListenerSubsystem"
     msg = "No listeners added to {subsystem_name} subsystem"
     gateway_nodes = deepcopy(config.get("gw_nodes"))
@@ -455,14 +454,14 @@ def test_ceph_83611098(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(subsystem_name=subsystem1),
-        interval=intervel,
+        interval=interval,
     )
 
     # Add the listener and check alert is inactive state or not
     LOG.info("Add the listener")
     configure_listeners(ha, [gateway_nodes[0]], config)
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     # Delete the listener and alert should be in firing state
@@ -473,14 +472,14 @@ def test_ceph_83611098(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(subsystem_name=subsystem1),
-        interval=intervel,
+        interval=interval,
     )
 
     # Add the listener and check alert is inactive state or not
     LOG.info("Add the listener back")
     configure_listeners(ha, [gateway_nodes[0]], config)
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     # Add one more subsystem and ceph prometheus alert to be in firing state
@@ -492,7 +491,7 @@ def test_ceph_83611098(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(subsystem_name=subsystem2),
-        interval=intervel,
+        interval=interval,
     )
 
     LOG.info("CEPH-83611098 - {alert} alert validated successfully.")
@@ -508,9 +507,8 @@ def test_ceph_83611099(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
-
-    time_to_fire = config["time_to_fire"]
-    intervel = 100
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 60)
     alert = "NVMeoFSingleGateway"
     msg = "The gateway group {gw_group} consists of a single gateway - HA is not possible on cluster"
 
@@ -532,7 +530,7 @@ def test_ceph_83611099(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(gw_group=config["gw_group"]),
-        interval=intervel,
+        interval=interval,
     )
 
     # Add one more gateway and NVMeoFSingleGateway alert should be in inactive state
@@ -540,7 +538,7 @@ def test_ceph_83611099(ceph_cluster, config):
     config.update({"gw_nodes": gateway_nodes})
     deploy_nvme_service(ceph_cluster, config)
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     # scale down to one gateway and NVMeoFSingleGateway alert should be in firing state
@@ -557,7 +555,7 @@ def test_ceph_83611099(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(gw_group=config["gw_group"]),
-        interval=intervel,
+        interval=interval,
     )
 
     # Scale up to 2 gateways and alert should be in inactive state
@@ -565,7 +563,7 @@ def test_ceph_83611099(ceph_cluster, config):
     config.update({"gw_nodes": gateway_nodes})
     deploy_nvme_service(ceph_cluster, config)
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     LOG.info("CEPH-83611099 - NVMeoFSingleGateway validated successfully.")
@@ -679,12 +677,11 @@ def test_CEPH_83616917(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
-
-    time_to_fire = config["time_to_fire"]
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 60)
     rbd_pool = config["rbd_pool"]
     rbd_obj = config["rbd_obj"]
     nqn_name = config["subsystems"][0]["nqn"]
-    intervel = 60
     alert = "NVMeoFSubsystemNamespaceLimit"
     msg = "{nqn} subsystem has reached its maximum number of namespaces on cluster "
 
@@ -708,7 +705,7 @@ def test_CEPH_83616917(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(nqn=nqn_name),
-        interval=intervel,
+        interval=interval,
     )
 
     nvmegwcli = ha.gateways[0]
@@ -717,7 +714,7 @@ def test_CEPH_83616917(ceph_cluster, config):
     LOG.info("Delete an namespace and check alert should be in inactive state")
     nvmegwcli.namespace.delete(**{"args": {**sub1_args, **{"nsid": 1}}})
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     # Add namespace back and check alert should be in active state
@@ -731,7 +728,7 @@ def test_CEPH_83616917(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(nqn=nqn_name),
-        interval=intervel,
+        interval=interval,
     )
 
     LOG.info("CEPH-83616917 - NVMeoFSubsystemNamespaceLimit validated successfully.")
@@ -747,9 +744,8 @@ def test_ceph_83617544(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
-
-    time_to_fire = config["time_to_fire"]
-    intervel = 60
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 60)
     alert = "NVMeoFMaxGatewayGroupSize"
     msg = "Max gateways within a gateway group ({gw_group}) exceeded on cluster "
 
@@ -769,7 +765,7 @@ def test_ceph_83617544(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(gw_group=config["gw_group"]),
-        interval=intervel,
+        interval=interval,
     )
 
     # Deploy 8 gateways in group and NVMeoFMaxGatewayGroupSize alert should be in inactive state
@@ -779,7 +775,7 @@ def test_ceph_83617544(ceph_cluster, config):
     config.update({"gw_nodes": gateway_nodes[0:8]})
     deploy_nvme_service(ceph_cluster, config)
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     # Add more than 8 gateways and NVMeoFMaxGatewayGroupSize alert should be in firing state
@@ -792,7 +788,7 @@ def test_ceph_83617544(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(gw_group=config["gw_group"]),
-        interval=intervel,
+        interval=interval,
     )
 
     LOG.info("CEPH-83617544 - NVMeoFMaxGatewayGroupSize validated successfully.")
@@ -807,11 +803,10 @@ def test_ceph_83616916(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
-
-    time_to_fire = config["time_to_fire"]
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 60)
     rbd_pool = config["rbd_pool"]
     nqn_name = config["subsystems"][0]["nqn"]
-    intervel = 100
     alert = "NVMeoFGatewayOpenSecurity"
     msg = "Subsystem {nqn} has been defined without host level security on cluster "
 
@@ -835,7 +830,7 @@ def test_ceph_83616916(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(nqn=nqn_name),
-        interval=intervel,
+        interval=interval,
     )
 
     # Delete allow open security
@@ -848,7 +843,7 @@ def test_ceph_83616916(ceph_cluster, config):
     host_nqn = initiator.nqn()
     nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     # Allow open security and check for alert
@@ -858,7 +853,7 @@ def test_ceph_83616916(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg.format(nqn=nqn_name),
-        interval=intervel,
+        interval=interval,
     )
 
     LOG.info("CEPH-83616916 - NVMeoFGatewayOpenSecurity validated successfully.")
@@ -874,9 +869,8 @@ def test_ceph_83617404(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
-
-    time_to_fire = config["time_to_fire"]
-    intervel = 60
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 60)
     rbd_pool = config["rbd_pool"]
     alert = "NVMeoFMaxGatewayGroups"
     msg = "Max gateway groups exceeded on cluster "
@@ -903,7 +897,7 @@ def test_ceph_83617404(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg,
-        interval=intervel,
+        interval=interval,
     )
 
     # Remove one gateway and NVMeoFMaxGatewayGroups alert should be in inactive state
@@ -914,7 +908,7 @@ def test_ceph_83617404(ceph_cluster, config):
     config.update({"gw_groups": rm_add_gw_grp})
     delete_nvme_service(ceph_cluster, config)
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     # Add more than 4 gateway groups and NVMeoFMaxGatewayGroups alert should be in firing state
@@ -932,7 +926,7 @@ def test_ceph_83617404(ceph_cluster, config):
         alert,
         timeout=time_to_fire,
         msg=msg,
-        interval=intervel,
+        interval=interval,
     )
 
     # Delete all gateway groups
@@ -954,9 +948,9 @@ def test_ceph_83617622(ceph_cluster, config):
 
     # There is an BZ for not raising alert when 128 subsystems are created
     # https://bugzilla.redhat.com/show_bug.cgi?id=2362937
-    time_to_fire = config["time_to_fire"]
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 60)
     nqn_name = config["subsystems"][0]["nqn"]
-    intervel = 60
     alert = "NVMeoFTooManySubsystems"
     msg = "The number of subsystems defined to the gateway exceeds supported values on cluster "
 
@@ -981,7 +975,7 @@ def test_ceph_83617622(ceph_cluster, config):
         "NVMeoFTooManySubsystems should be firing because we have created 128 subsystems in group"
     )
     events = PrometheusAlerts(ha.orch)
-    events.monitor_alert(alert, timeout=time_to_fire, interval=intervel, msg=msg)
+    events.monitor_alert(alert, timeout=time_to_fire, interval=interval, msg=msg)
 
     # Delete few subsystems and check alert is in inactive state
     LOG.info(
@@ -994,7 +988,7 @@ def test_ceph_83617622(ceph_cluster, config):
 
     # Check for alert and it should be in inactive state
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     # Add the deleted nqns and check the alert is in firing state or not
@@ -1005,7 +999,7 @@ def test_ceph_83617622(ceph_cluster, config):
         sub_args = {"subsystem": nqn}
         nvmegwcl1.subsystem.add(**{"args": {**sub_args, **{"no-group-append": True}}})
 
-    events.monitor_alert(alert, timeout=time_to_fire, interval=intervel, msg=msg)
+    events.monitor_alert(alert, timeout=time_to_fire, interval=interval, msg=msg)
 
     LOG.info("CEPH-83617622 - NVMeoFTooManySubsystems validated successfully.")
 
@@ -1023,11 +1017,11 @@ def test_ceph_83617545(ceph_cluster, config):
 
     # There is an BZ for not raising alert when 1024 namespaces are created
     # https://bugzilla.redhat.com/show_bug.cgi?id=2362951
-    time_to_fire = config["time_to_fire"]
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 60)
     rbd_pool = config["rbd_pool"]
     rbd_obj = config["rbd_obj"]
     nqn_name = config["subsystems"][0]["nqn"]
-    intervel = 60
     alert = "NVMeoFTooManyNamespaces"
     msg = "The number of namespaces defined to the gateway exceeds supported values on cluster "
 
@@ -1051,7 +1045,7 @@ def test_ceph_83617545(ceph_cluster, config):
         "NVMeoFTooManyNamespaces should be firing because we have created 1024 namespaces"
     )
     events = PrometheusAlerts(ha.orch)
-    events.monitor_alert(alert, timeout=time_to_fire, interval=intervel, msg=msg)
+    events.monitor_alert(alert, timeout=time_to_fire, interval=interval, msg=msg)
 
     # Delete few subsystems and check alert is in inactive state
     LOG.info(
@@ -1063,7 +1057,7 @@ def test_ceph_83617545(ceph_cluster, config):
 
     # Check for alert and it should be in inactive state
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     # Add the namespaces upto 1024 and check alert is in firing state or not
@@ -1076,7 +1070,7 @@ def test_ceph_83617545(ceph_cluster, config):
     nvmegwcl1.namespace.add(**{"args": {**sub1_args, **img_args}})
 
     #  Check for the alert
-    events.monitor_alert(alert, timeout=time_to_fire, interval=intervel, msg=msg)
+    events.monitor_alert(alert, timeout=time_to_fire, interval=interval, msg=msg)
 
     LOG.info("CEPH-83617545 - NVMeoFTooManyNamespaces validated successfully.")
 
@@ -1091,11 +1085,10 @@ def test_ceph_83617640(ceph_cluster, config):
         ceph_cluster: Ceph cluster object
         config: test case config
     """
-
-    time_to_fire = config["time_to_fire"]
+    time_to_fire = config.get("time_to_fire", 60)
+    interval = config.get("interval", 60)
     rbd_pool = config["rbd_pool"]
     nvme_diff_version = config["nvme_diff_version"]
-    intervel = 900
     alert = "NVMeoFVersionMismatch"
     msg = "Too many different NVMe-oF gateway releases active on cluster "
 
@@ -1117,7 +1110,7 @@ def test_ceph_83617640(ceph_cluster, config):
     LOG.info("NVMeoFVersionMismatch should in inactive state")
     events = PrometheusAlerts(ha.orch)
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     # Get the image version of nvmeof daemon
@@ -1151,7 +1144,7 @@ def test_ceph_83617640(ceph_cluster, config):
 
     # Check if alert is in firing state or not
     LOG.info("Check for firing state of alert")
-    events.monitor_alert(alert, timeout=time_to_fire, interval=intervel, msg=msg)
+    events.monitor_alert(alert, timeout=time_to_fire, interval=interval, msg=msg)
 
     # Set the initial version of nvmeof image
     LOG.info("Set the initial version of nvmeof image")
@@ -1174,7 +1167,7 @@ def test_ceph_83617640(ceph_cluster, config):
     # Check alert is in inactive state or not
     LOG.info("Check alert is in inactive state or not")
     events.monitor_alert(
-        alert, timeout=time_to_fire, state="inactive", interval=intervel
+        alert, timeout=time_to_fire, state="inactive", interval=interval
     )
 
     LOG.info("CEPH-83617640 - NVMeoFVersionMismatch validated successfully.")

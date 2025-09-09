@@ -157,8 +157,8 @@ class NVMeInitiator(Initiator):
         with parallel(max_workers=len(paths) + 4) as p:
             for path in paths:
                 _io_args = {}
-                # TODO: blockdiscard is temporary until solution is found
-                # for same image used for IO progression for twice
+                # TODO: blkdiscard is temporary workaround for same image usage
+                #  in the IO progression tasks especially HA failover and failback.
                 self.node.exec_command(cmd=f"blkdiscard {path}", sudo=True)
                 if io_args.get("test_name"):
                     test_name = f"{io_args['test_name']}-" f"{path.replace('/', '_')}"
