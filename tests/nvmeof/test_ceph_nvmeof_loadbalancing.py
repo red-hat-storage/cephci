@@ -539,7 +539,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
                         # Prepare FIO Execution
                         namespaces = ha.fetch_namespaces(ha.gateways[0])
-                        ha.prepare_io_execution(gw, initiators)
+                        ha.prepare_io_execution(initiators)
 
                         # Check for targets at clients
                         ha.compare_client_namespace([i["uuid"] for i in namespaces])
@@ -560,7 +560,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
 
                         # Prepare FIO execution for existing namespaces
                         old_namespaces = ha.fetch_namespaces(gw)
-                        ha.prepare_io_execution(gw, initiators)
+                        ha.prepare_io_execution(initiators)
 
                         # Start IO Execution into already existing namespaces/nodes
                         LOG.info("Initiating IO before scale up ")
@@ -598,7 +598,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                                 )
 
                             # Prepare FIO Execution for new namespaces
-                            ha.prepare_io_execution(gw, initiators)
+                            ha.prepare_io_execution(initiators)
                             new_namespaces = ha.fetch_namespaces(ha.gateways[-1])
 
                             # Check for targets at clients for new namespaces

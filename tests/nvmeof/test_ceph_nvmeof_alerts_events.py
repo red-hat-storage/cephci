@@ -10,7 +10,6 @@ from urllib.parse import urljoin, urlparse
 import requests
 
 from ceph.ceph import Ceph
-from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.waiter import WaitUntil
 from tests.nvmeof.test_ceph_nvmeof_high_availability import (
@@ -21,6 +20,7 @@ from tests.nvmeof.test_ceph_nvmeof_high_availability import (
     get_node_by_id,
     teardown,
 )
+from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_set_nvme_cli_image,
     delete_nvme_service,
@@ -172,7 +172,7 @@ def test_ceph_83611097(ceph_cluster, config):
         config: test case config
     """
     time_to_fire = 600
-    interval = 30
+    interval = 60
     alert = "NVMeoFMissingListener"
     msg = "No listener added for {GW} NVMe-oF Gateway to {NQN} subsystem"
 
@@ -269,7 +269,7 @@ def test_ceph_83610950(ceph_cluster, config):
     _rbd_pool = config["rbd_pool"]
     _rbd_obj = config["rbd_obj"]
     time_to_fire = 60
-    interval = 30
+    interval = 50
     alert = "NVMeoFMultipleNamespacesOfRBDImage"
     msg = "RBD image {image} cannot be reused for multiple NVMeoF namespace"
     svcs = []
@@ -295,7 +295,9 @@ def test_ceph_83610950(ceph_cluster, config):
     image = f"image-{generate_unique_id(4)}"
     _rbd_obj.create_image(_rbd_pool, image, "10G")
 
-    img_args = {"rbd-pool": _rbd_pool, "rbd-image": image, "nsid": 1}
+    # Removing nsid because we have https://tracker.ceph.com/issues/72681
+    # img_args = {"rbd-pool": _rbd_pool, "rbd-image": image, "nsid": 1}
+    img_args = {"rbd-pool": _rbd_pool, "rbd-image": image, "force": ""}
     nvmegwcl1.namespace.add(**{"args": {**sub1_args, **img_args}})
     nvmegwcl2.namespace.add(**{"args": {**sub2_args, **img_args}})
     events = PrometheusAlerts(ha1.orch)
@@ -426,7 +428,7 @@ def test_ceph_83611098(ceph_cluster, config):
     """
 
     time_to_fire = config["time_to_fire"]
-    intervel = 100
+    intervel = 120
     alert = "NVMeoFZeroListenerSubsystem"
     msg = "No listeners added to {subsystem_name} subsystem"
     gateway_nodes = deepcopy(config.get("gw_nodes"))
@@ -508,7 +510,7 @@ def test_ceph_83611099(ceph_cluster, config):
     """
 
     time_to_fire = config["time_to_fire"]
-    intervel = 60
+    intervel = 100
     alert = "NVMeoFSingleGateway"
     msg = "The gateway group {gw_group} consists of a single gateway - HA is not possible on cluster"
 
@@ -722,7 +724,8 @@ def test_CEPH_83616917(ceph_cluster, config):
     LOG.info("Add namespace back and check alert should be in active state")
     image = f"image-{generate_unique_id(4)}"
     rbd_obj.create_image(rbd_pool, image, "10G")
-    img_args = {"rbd-pool": rbd_pool, "rbd-image": image, "nsid": 1}
+    img_args = {"rbd-pool": rbd_pool, "rbd-image": image}
+    # img_args = {"rbd-pool": rbd_pool, "rbd-image": image, "nsid": 1}
     nvmegwcli.namespace.add(**{"args": {**sub1_args, **img_args}})
     events.monitor_alert(
         alert,
@@ -808,7 +811,7 @@ def test_ceph_83616916(ceph_cluster, config):
     time_to_fire = config["time_to_fire"]
     rbd_pool = config["rbd_pool"]
     nqn_name = config["subsystems"][0]["nqn"]
-    intervel = 60
+    intervel = 100
     alert = "NVMeoFGatewayOpenSecurity"
     msg = "Subsystem {nqn} has been defined without host level security on cluster "
 
@@ -841,7 +844,7 @@ def test_ceph_83616916(ceph_cluster, config):
     # Add the host security with host nqn and check the alert is in inactive state
     LOG.info("Add the host security with host nqn and check alert is in inactive state")
     initiator_node = get_node_by_id(ceph_cluster, config.get("host"))
-    initiator = Initiator(initiator_node)
+    initiator = NVMeInitiator(initiator_node)
     host_nqn = initiator.nqn()
     nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
     events.monitor_alert(
@@ -953,7 +956,7 @@ def test_ceph_83617622(ceph_cluster, config):
     # https://bugzilla.redhat.com/show_bug.cgi?id=2362937
     time_to_fire = config["time_to_fire"]
     nqn_name = config["subsystems"][0]["nqn"]
-    intervel = 30
+    intervel = 60
     alert = "NVMeoFTooManySubsystems"
     msg = "The number of subsystems defined to the gateway exceeds supported values on cluster "
 
@@ -1024,7 +1027,7 @@ def test_ceph_83617545(ceph_cluster, config):
     rbd_pool = config["rbd_pool"]
     rbd_obj = config["rbd_obj"]
     nqn_name = config["subsystems"][0]["nqn"]
-    intervel = 30
+    intervel = 60
     alert = "NVMeoFTooManyNamespaces"
     msg = "The number of namespaces defined to the gateway exceeds supported values on cluster "
 
@@ -1068,7 +1071,8 @@ def test_ceph_83617545(ceph_cluster, config):
     image = f"image-{generate_unique_id(4)}"
     rbd_obj.create_image(rbd_pool, image, "10G")
 
-    img_args = {"rbd-pool": rbd_pool, "rbd-image": image, "nsid": 1}
+    img_args = {"rbd-pool": rbd_pool, "rbd-image": image}
+    # img_args = {"rbd-pool": rbd_pool, "rbd-image": image, "nsid": 1}
     nvmegwcl1.namespace.add(**{"args": {**sub1_args, **img_args}})
 
     #  Check for the alert
@@ -1091,7 +1095,7 @@ def test_ceph_83617640(ceph_cluster, config):
     time_to_fire = config["time_to_fire"]
     rbd_pool = config["rbd_pool"]
     nvme_diff_version = config["nvme_diff_version"]
-    intervel = 600
+    intervel = 900
     alert = "NVMeoFVersionMismatch"
     msg = "Too many different NVMe-oF gateway releases active on cluster "
 

@@ -88,7 +88,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 cfg["args"].update(
                     {"host-name": gw_node.hostname, "traddr": gw_node.ip_address}
                 )
-                cfg["base_cmd_args"] = {"server-address": gw_node.ip_address}
+                if nvmegwcli.cli_version != "v2":
+                    cfg["base_cmd_args"] = {"server-address": gw_node.ip_address}
             func = fetch_method(_cls, command)
             func(**cfg)
 

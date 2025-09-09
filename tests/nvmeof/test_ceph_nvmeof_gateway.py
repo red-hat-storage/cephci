@@ -124,24 +124,7 @@ def initiators(ceph_cluster, gateway, config):
     LOG.debug(initiator.connect(**_conn_cmd))
 
     # List NVMe targets
-    targets = initiator.list_devices()
-    if not targets:
-        raise Exception(f"NVMe Targets not found on {client.hostname}")
-    LOG.debug(targets)
-
-    paths = []
-    for target in targets:
-        if "DevicePath" in target:
-            paths.append(target["DevicePath"])
-
-        elif "Subsystems" in target:
-            for subsys in target.get("Subsystems", []):
-                for ns in subsys.get("Namespaces", []):
-                    if "NameSpace" in ns:
-                        paths.append(f"/dev/{ns['NameSpace']}")
-
-    if not paths:
-        raise Exception("No paths found")
+    paths = initiator.list_devices()
 
     results = []
     io_args = {"size": "100%"}

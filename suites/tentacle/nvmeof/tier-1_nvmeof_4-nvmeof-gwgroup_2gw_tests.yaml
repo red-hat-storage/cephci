@@ -94,7 +94,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode2
                 no-group-append: True
                 listener_port: 4420
@@ -103,7 +102,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node7
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node6
@@ -126,7 +124,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode4
                 no-group-append: True
                 listener_port: 4420
@@ -135,7 +132,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node9
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node8
@@ -158,7 +154,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node10
               - nqn: nqn.2016-06.io.spdk:cnode6
                 no-group-append: True
                 listener_port: 4420
@@ -167,7 +162,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node11
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node10
@@ -227,21 +221,21 @@ tests:
               - node7
             subsystems:                       # Configure subsystems with all sub-entities
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node6, node7]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode17
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node6, node7]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node7
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node6
@@ -258,21 +252,21 @@ tests:
               - node9
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node8, node9]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode17
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node8, node9]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node9
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node8
@@ -289,6 +283,7 @@ tests:
               - node11
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node10, node11]
                 allow_host: "*"
@@ -311,6 +306,7 @@ tests:
               - node13
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node12, node13]
                 allow_host: "*"
@@ -353,21 +349,21 @@ tests:
               - node7
             subsystems:                       # Configure subsystems with all sub-entities
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node6, node7]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode17
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node6, node7]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node7
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node6
@@ -384,21 +380,21 @@ tests:
               - node9
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node8, node9]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode17
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node8, node9]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node9
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node8
@@ -414,6 +410,7 @@ tests:
               - node11
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node10, node11]
                 allow_host: "*"
@@ -435,6 +432,7 @@ tests:
               - node13
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node12, node13]
                 allow_host: "*"
@@ -478,21 +476,21 @@ tests:
               - node7
             subsystems:                                # Configure subsystems with all sub-entities
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node6, node7]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode17
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node6, node7]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node7
             fault-injection-methods:                   # Failure induction
               - tool: systemctl
                 nodes: node6
@@ -508,21 +506,21 @@ tests:
               - node9
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node8, node9]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode17
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node8, node9]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node9
             fault-injection-methods:                   # Failure induction
               - tool: systemctl
                 nodes: node8
@@ -538,6 +536,7 @@ tests:
               - node11
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node10, node11]
                 allow_host: "*"
@@ -559,6 +558,7 @@ tests:
               - node13
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node12, node13]
                 allow_host: "*"
@@ -603,21 +603,21 @@ tests:
               - node7
             subsystems:                                # Configure subsystems with all sub-entities
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node6, node7]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode17
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node6, node7]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node7
             fault-injection-methods:                   # Failure induction
               - tool: systemctl
                 nodes: node6
@@ -634,21 +634,21 @@ tests:
               - node9
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node8, node9]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode17
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node8, node9]
                 allow_host: "*"
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node9
             fault-injection-methods:                   # Failure induction
               - tool: systemctl
                 nodes: node8
@@ -665,6 +665,7 @@ tests:
               - node11
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node10, node11]
                 allow_host: "*"
@@ -687,6 +688,7 @@ tests:
               - node13
             subsystems:
               - nqn: nqn.2016-06.io.spdk:cnode16
+                no-group-append: True
                 listener_port: 4420
                 listeners: [node12, node13]
                 allow_host: "*"

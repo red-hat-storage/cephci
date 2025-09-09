@@ -108,7 +108,7 @@ class NVMeCLI(Cli):
 
         if rhel_version == "9.5":
             return [
-                dev
+                dev["DevicePath"]
                 for dev in devs
                 if dev["ModelNumber"].startswith("Ceph bdev Controller")
             ]
@@ -117,11 +117,15 @@ class NVMeCLI(Cli):
             devices = []
             for dev in devs:
                 for subsys in dev.get("Subsystems", []):
-                    for ctrl in subsys.get("Controllers", []):
-                        if ctrl.get("ModelNumber", "").startswith(
-                            "Ceph bdev Controller"
-                        ) and subsys.get("Namespaces"):
-                            devices.append(dev)
+                    # Check if at least one controller in this subsystem is a Ceph bdev Controller
+                    has_ceph_bdev = any(
+                        ctrl.get("ModelNumber") == "Ceph bdev Controller"
+                        for ctrl in subsys.get("Controllers", [])
+                    )
+                    if has_ceph_bdev:
+                        for ns in subsys.get("Namespaces", []):
+                            devices.append(f"/dev/{ns['NameSpace']}")
+
             return devices
 
         return []

@@ -91,7 +91,7 @@ tests:
               validate-spec-services: true
               specs:
                 - service_type: nvmeof
-                  service_id: rbd.group1
+                  service_id: rbd.gw_group1
                   placement:
                     nodes:
                       - node6
@@ -123,6 +123,7 @@ tests:
           - node7
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
+            no-group-append: true
             serial: 1
             bdevs:
               - count: 10
@@ -133,6 +134,7 @@ tests:
               - node7
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
+            no-group-append: true
             serial: 2
             bdevs:
               - count: 10

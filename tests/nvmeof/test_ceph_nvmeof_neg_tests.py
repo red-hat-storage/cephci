@@ -140,12 +140,12 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
         # Create image
         img = f"{name}-image"
         rbd.create_image(pool, img, "1G")
+        # TODO: Removing nsid because in 9.0 we have known issue
         ns_args = {
             "args": {
                 "subsystem": subsystem["nqn"],
                 "rbd-pool": pool,
                 "rbd-image": img,
-                "nsid": 1,
             }
         }
         nvmegwcli.namespace.add(**ns_args)
@@ -181,22 +181,10 @@ def test_ceph_83576084(ceph_cluster, rbd, pool, config):
             _conn_cmd = {**_cmd_args, **conn_port}
             LOG.debug(initiator.connect(**_conn_cmd))
             targets = initiator.list_devices()
-            rhel_version = initiator.distro_version()
-            if not targets:
-                raise Exception(f"NVMe Targets not found on {client.hostname}")
-            if rhel_version == "9.5":
-                _target = targets[0]["DevicePath"]
-            elif rhel_version == "9.6":
-                paths = [
-                    f"/dev/{ns['NameSpace']}"
-                    for device in targets
-                    for subsys in device.get("Subsystems", [])
-                    for ns in subsys.get("Namespaces", [])
-                ]
-                _target = paths[0]
+
             if not verify:
-                return _target
-            client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+                return targets[0]
+            client.exec_command(sudo=True, cmd=f"mount {targets[0]} {_dir}")
             client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
 
         target = check_client()
@@ -395,29 +383,16 @@ def test_ceph_83576085(ceph_cluster, rbd, pool, config):
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
         targets = initiator.list_devices()
-        rhel_version = initiator.distro_version()
-        if not targets:
-            raise Exception(f"NVMe Targets not found on {client.hostname}")
-        if rhel_version == "9.5":
-            _target = targets[0]["DevicePath"]
-        elif rhel_version == "9.6":
-            paths = [
-                f"/dev/{ns['NameSpace']}"
-                for device in targets
-                for subsys in device.get("Subsystems", [])
-                for ns in subsys.get("Namespaces", [])
-            ]
-            _target = paths[0]
 
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
-        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
-        client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {targets[0]}")
+        client.exec_command(sudo=True, cmd=f"mount {targets[0]} {_dir}")
         client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
 
         for _ in "check":
             client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
             client.exec_command(sudo=True, cmd=f"umount {_dir}")
-            client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+            client.exec_command(sudo=True, cmd=f"mount {targets[0]} {_dir}")
         LOG.info("Validation of CEPH-83576085 is successful.")
     except Exception as err:
         raise Exception(err)
@@ -506,23 +481,10 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
         targets = initiator.list_devices()
-        rhel_version = initiator.distro_version()
-        if not targets:
-            raise Exception(f"NVMe Targets not found on {client.hostname}")
-        if rhel_version == "9.5":
-            _target = targets[0]["DevicePath"]
-        elif rhel_version == "9.6":
-            paths = [
-                f"/dev/{ns['NameSpace']}"
-                for device in targets
-                for subsys in device.get("Subsystems", [])
-                for ns in subsys.get("Namespaces", [])
-            ]
-            _target = paths[0]
 
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
-        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
-        client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {targets[0]}")
+        client.exec_command(sudo=True, cmd=f"mount {targets[0]} {_dir}")
         client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
         client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
 
@@ -533,20 +495,7 @@ def test_ceph_83576087(ceph_cluster, rbd, pool, config):
         initiator.configure()
         LOG.debug(initiator.connect(**_cmd_args))
         targets = initiator.list_devices()
-        rhel_version = initiator.distro_version()
-        if not targets:
-            raise Exception(f"NVMe Targets not found on {client.hostname}")
-        if rhel_version == "9.5":
-            _target = targets[0]["DevicePath"]
-        elif rhel_version == "9.6":
-            paths = [
-                f"/dev/{ns['NameSpace']}"
-                for device in targets
-                for subsys in device.get("Subsystems", [])
-                for ns in subsys.get("Namespaces", [])
-            ]
-            _target = paths[0]
-        client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+        client.exec_command(sudo=True, cmd=f"mount {targets[0]} {_dir}")
         client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
         LOG.info("Validation of CEPH-83576087 is successful.")
     except Exception as err:
@@ -634,23 +583,10 @@ def test_ceph_83576093(ceph_cluster, rbd, pool, config):
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
         targets = initiator.list_devices()
-        rhel_version = initiator.distro_version()
-        if not targets:
-            raise Exception(f"NVMe Targets not found on {client.hostname}")
-        if rhel_version == "9.5":
-            _target = targets[0]["DevicePath"]
-        elif rhel_version == "9.6":
-            paths = [
-                f"/dev/{ns['NameSpace']}"
-                for device in targets
-                for subsys in device.get("Subsystems", [])
-                for ns in subsys.get("Namespaces", [])
-            ]
-            _target = paths[0]
 
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
-        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
-        client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {targets[0]}")
+        client.exec_command(sudo=True, cmd=f"mount {targets[0]} {_dir}")
         client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
         client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
 
@@ -759,26 +695,9 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         _conn_cmd = {**_cmd_args, **conn_port}
         LOG.debug(initiator.connect(**_conn_cmd))
         targets = initiator.list_devices()
-        rhel_version = initiator.distro_version()
-        if not targets:
-            raise Exception(f"NVMe Targets not found on {client.hostname}")
-        if rhel_version == "9.5":
-            _target = targets[0]["DevicePath"]
-        elif rhel_version == "9.6":
-            paths = [
-                f"/dev/{ns['NameSpace']}"
-                for device in targets
-                for subsys in device.get("Subsystems", [])
-                for ns in subsys.get("Namespaces", [])
-            ]
-            _target = paths[0]
-
-        if not _target:
-            raise Exception("No paths")
-
         client.exec_command(sudo=True, cmd=f"mkdir {_dir}")
-        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {_target}")
-        client.exec_command(sudo=True, cmd=f"mount {_target} {_dir}")
+        client.exec_command(sudo=True, cmd=f"mkfs.ext4 {targets[0]}")
+        client.exec_command(sudo=True, cmd=f"mount {targets[0]} {_dir}")
         client.exec_command(sudo=True, cmd=f"cp /var/log/messages {_file}")
         client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}")
 
@@ -802,17 +721,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
 
         sleep(20)
         targets = initiator.list_devices()
-        if targets[0].get("Subsystems"):
-            namespaces_present = not (
-                all(
-                    not subsystem.get("Namespaces")
-                    for host in targets
-                    for subsystem in host.get("Subsystems", [])
-                )
-            )
-        else:
-            namespaces_present = targets
-        if namespaces_present:
+        if targets:
             raise Exception(f"NVMe Targets found on {client.hostname}!!!")
         LOG.info(f"NVMe targets not found on {client.hostname} as expected..")
         try:
@@ -832,17 +741,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         nvmegwcli.host.add(**host_args)
         sleep(10)
         targets = initiator.list_devices()
-        if targets[0].get("Subsystems"):
-            namespaces_present = not (
-                all(
-                    not subsystem.get("Namespaces")
-                    for host in targets
-                    for subsystem in host.get("Subsystems", [])
-                )
-            )
-        else:
-            namespaces_present = targets
-        if not namespaces_present:
+        if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
         client.exec_command(
             sudo=True, cmd=f"dd if=/dev/zero of={_file}_test bs=1M count=1000"

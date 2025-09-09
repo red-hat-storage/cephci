@@ -778,7 +778,7 @@ class HighAvailability:
 
         return namespaces
 
-    def failover(self, gateway, fail_tool, namespaces):
+    def failover(self, gateway, fail_tool):
         """HA Failover on the NVMeoF Gateways.
 
         Initiate Failover
@@ -791,26 +791,8 @@ class HighAvailability:
         - Check for 5 Consecutive times for the increments in write/read to validate IO continuation.
         """
         hostname = gateway.hostname
-        initiators = self.config["initiators"]
-        io_tasks = []
-        if len(namespaces) >= 1:
-            max_workers = (
-                len(initiators) * len(namespaces) if initiators else len(namespaces)
-            )  # 20 devices + 10 buffer per initiator
-            executor = ThreadPoolExecutor(
-                max_workers=max_workers,
-            )
-        else:
-            executor = ThreadPoolExecutor()
 
         try:
-            # Start IO Execution
-            for initiator in self.clients:
-                io_tasks.append(executor.submit(initiator.start_fio, "1G"))
-            time.sleep(20)  # time sleep for IO to Kick-in
-
-            self.validate_io(namespaces)
-
             # Initiate Failover
             fail_op = self.fail_ops[fail_tool]
             LOG.info(
@@ -834,7 +816,6 @@ class HighAvailability:
                     # Find optimized path
                     # Condition to fail if multiple Active path exists for a gateway.
                     if active and 1 <= len(active) < 2:
-                        end_counter, end_time = get_current_timestamp()
                         LOG.info(
                             f"{list(active[0])} is new and only Active GW for failed {hostname}"
                         )
@@ -850,7 +831,6 @@ class HighAvailability:
                 raise TimeoutError(
                     f"[ {hostname} ] Failover of NVMeofGW service failed after 60s timeout.."
                 )
-            self.validate_io(namespaces)
 
             return {
                 "failed-gw": gateway,
@@ -859,29 +839,7 @@ class HighAvailability:
         except BaseException as err:  # noqa
             raise Exception(err)
 
-        finally:
-            # Wait for IO to complete and collect FIO outputs
-            if io_tasks:
-                LOG.info("Waiting for completion of IOs.")
-                executor.shutdown(wait=True, cancel_futures=True)
-                fio_outputs = []
-
-                for task in io_tasks:
-                    try:
-                        fio_outputs.append(task.result())
-                    except Exception as e:
-                        LOG.error(f"FIO execution failed: {e}")
-
-            # Extract failover time
-            for idx, output in enumerate(fio_outputs):
-                try:
-                    max_clat_in_ms = get_max_clat_from_fio_output(output[0][0])
-                    max_clat_in_sec = max_clat_in_ms / 1000
-                    LOG.info(f"Failover time for {max_clat_in_sec} ms")
-                except Exception as e:
-                    LOG.error(f"Failed to parse FIO output: {e}")
-
-    def failback(self, gateway, fail_tool, namespaces):
+    def failback(self, gateway, fail_tool):
         """Failback the Gateways.
 
         Args:
@@ -889,17 +847,6 @@ class HighAvailability:
             fail_tool: tool to fail the GW service
         """
         hostname = gateway.hostname
-        initiators = self.config["initiators"]
-        io_tasks = []
-        if len(namespaces) >= 1:
-            max_workers = (
-                len(initiators) * len(namespaces) if initiators else len(namespaces)
-            )  # 20 devices + 10 buffer per initiator
-            executor = ThreadPoolExecutor(
-                max_workers=max_workers,
-            )
-        else:
-            executor = ThreadPoolExecutor()
 
         # Initiate Fail-back
         fail_op = self.fail_ops[fail_tool]
@@ -907,13 +854,6 @@ class HighAvailability:
             f"[ {hostname} ]: Failback / Restore Gateway using {fail_tool} command"
         )
         try:
-            # Start IO Execution
-            for initiator in self.clients:
-                io_tasks.append(executor.submit(initiator.start_fio, "2G"))
-            time.sleep(20)  # time sleep for IO to Kick-in
-
-            self.validate_io(namespaces)
-
             res = fail_op(gateway=gateway, action="start", wait_for_active_state=True)
             if not res:
                 raise Exception(
@@ -931,7 +871,6 @@ class HighAvailability:
 
                         # check gateway for its own original path.
                         if gateway.ana_group["name"] in state:
-                            end_counter, end_time = get_current_timestamp()
                             LOG.info(
                                 f"{hostname} restored to original path - {log_json_dump(state)}"
                             )
@@ -951,7 +890,6 @@ class HighAvailability:
                 raise TimeoutError(
                     f"[ {hostname} ] Fail-back of NVMeofGW service failed even after 60s timeout.."
                 )
-            self.validate_io(namespaces)
 
             return {
                 "failed-gw": gateway,
@@ -959,28 +897,6 @@ class HighAvailability:
 
         except BaseException as err:  # noqa
             raise Exception(err)
-
-        finally:
-            # Wait for IO to complete and collect FIO outputs
-            if io_tasks:
-                LOG.info("Waiting for completion of IOs.")
-                executor.shutdown(wait=True, cancel_futures=True)
-                fio_outputs = []
-
-                for task in io_tasks:
-                    try:
-                        fio_outputs.append(task.result())
-                    except Exception as e:
-                        LOG.error(f"FIO execution failed: {e}")
-
-            # Extract failback time
-            for idx, output in enumerate(fio_outputs):
-                try:
-                    max_clat_in_ms = get_max_clat_from_fio_output(output[0][0])
-                    max_clat_in_sec = max_clat_in_ms / 1000
-                    LOG.info(f"Failback time for {max_clat_in_sec} ms")
-                except Exception as e:
-                    LOG.error(f"Failed to parse FIO output: {e}")
 
     @retry(IOError, tries=3, delay=3)
     def compare_client_namespace(self, uuids):
@@ -1368,6 +1284,16 @@ class HighAvailability:
                     f"NS {nsid} of {subnqn} has wrong visibility.Expected {expected_visibility} got {ns_visibility}"
                 )
 
+    def calculate_max_clat_time(self, fio_outputs):
+        # Extract failover time
+        for idx, output in enumerate(fio_outputs):
+            try:
+                max_clat_in_ms = get_max_clat_from_fio_output(output[0][0])
+                max_clat_in_sec = max_clat_in_ms / 1000
+                LOG.info(f"Failover time for {max_clat_in_sec} ms")
+            except Exception as e:
+                LOG.error(f"Failed to parse FIO output: {e}")
+
     def run(self):
         """Execute the HA failover and failback with IO validation."""
         fail_methods = self.config["fault-injection-methods"]
@@ -1418,22 +1344,49 @@ class HighAvailability:
 
                     # Fail Over
                     with parallel() as p:
+                        initiators = self.config["initiators"]
+                        io_tasks = []
+                        if len(namespaces) >= 1:
+                            max_workers = (
+                                len(initiators) * len(namespaces)
+                                if initiators
+                                else len(namespaces)
+                            )  # 20 devices + 10 buffer per initiator
+                            executor = ThreadPoolExecutor(
+                                max_workers=max_workers,
+                            )
+                        else:
+                            executor = ThreadPoolExecutor()
+
+                        # Start IO Execution
+                        for initiator in self.clients:
+                            io_tasks.append(
+                                executor.submit(initiator.start_fio, "100%")
+                            )
+                        time.sleep(20)  # time sleep for IO to Kick-in
+
+                        self.validate_io(namespaces)
+
+                        LOG.info("Failover started")
                         for gw in fail_gws:
                             if fail_tool == "daemon_redeploy":
                                 p.spawn(self.daemon_redeploy, gw)
                             else:
-                                p.spawn(self.failover, gw, fail_tool, namespaces)
+                                p.spawn(self.failover, gw, fail_tool)
                         for result in p:
                             if not isinstance(result, dict):
                                 raise Exception("Failover failed")
                             failed_gw = result.pop("failed-gw", None)
                             if not failed_gw:
                                 raise Exception("Failover failed")
+                        LOG.info("Failover Completed")
+
+                        self.validate_io(namespaces)
 
                         for gw in fail_gws:
                             active = self.get_optimized_state(gw.ana_group_id)
                             active_gw = list(active[0])[0]
-                            LOG.info(log_json_dump(result))
+                            LOG.info(log_json_dump(active_gw))
                             active_gw_obj = [
                                 gw
                                 for gw in self.gateways
@@ -1453,11 +1406,50 @@ class HighAvailability:
                             )
                             validate_initiator(self.clients, active_gw_obj, ns_list, gw)
 
+                        # Wait for IO to complete and collect FIO outputs
+                        fio_outputs = []
+                        if io_tasks:
+                            LOG.info("Waiting for completion of IOs.")
+                            executor.shutdown(wait=True, cancel_futures=True)
+
+                            for task in io_tasks:
+                                try:
+                                    fio_outputs.append(task.result())
+                                except Exception as e:
+                                    LOG.error(f"FIO execution failed: {e}")
+
+                        self.calculate_max_clat_time(fio_outputs)
+
                     # Fail Back
                     if fail_tool != "daemon_redeploy":
                         with parallel() as p:
+
+                            initiators = self.config["initiators"]
+                            io_tasks = []
+                            if len(namespaces) >= 1:
+                                max_workers = (
+                                    len(initiators) * len(namespaces)
+                                    if initiators
+                                    else len(namespaces)
+                                )  # 20 devices + 10 buffer per initiator
+                                executor = ThreadPoolExecutor(
+                                    max_workers=max_workers,
+                                )
+                            else:
+                                executor = ThreadPoolExecutor()
+
+                            # Start IO Execution
+                            for initiator in self.clients:
+                                io_tasks.append(
+                                    executor.submit(initiator.start_fio, "100%")
+                                )
+                            time.sleep(20)  # time sleep for IO to Kick-in
+
+                            self.validate_io(namespaces)
+
+                            LOG.info("Failback started")
                             for gw in fail_gws:
-                                p.spawn(self.failback, gw, fail_tool, namespaces)
+                                p.spawn(self.failback, gw, fail_tool)
                             for result in p:
                                 if not isinstance(result, dict):
                                     raise Exception("Failback failed")
@@ -1477,6 +1469,23 @@ class HighAvailability:
                                     f"Active gateway after failback is {failed_gw.node.ip_address}"
                                 )
                                 validate_initiator(self.clients, failed_gw, ns_list)
+                            LOG.info("Failback completed started")
+
+                            self.validate_io(namespaces)
+                            # Wait for IO to complete and collect FIO outputs
+                            fio_outputs = []
+                            if io_tasks:
+                                LOG.info("Waiting for completion of IOs.")
+                                executor.shutdown(wait=True, cancel_futures=True)
+
+                                for task in io_tasks:
+                                    try:
+                                        fio_outputs.append(task.result())
+                                    except Exception as e:
+                                        LOG.error(f"FIO execution failed: {e}")
+
+                            self.calculate_max_clat_time(fio_outputs)
+
                         time.sleep(20)
         except BaseException as err:  # noqa
             raise Exception(err)

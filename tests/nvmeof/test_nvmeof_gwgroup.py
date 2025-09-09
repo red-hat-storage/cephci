@@ -1,11 +1,11 @@
 from copy import deepcopy
 
 from ceph.ceph import Ceph
-from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_nvmeof
 from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.initiator import NVMeInitiator
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_set_nvme_cli_image,
     deploy_nvme_service,
@@ -159,7 +159,7 @@ def run_gateway_group_operations(ceph_cluster, gwgroup_config, config):
 def disconnect_initiator(ceph_cluster, node):
     """Disconnect Initiator."""
     node = get_node_by_id(ceph_cluster, node)
-    initiator = Initiator(node)
+    initiator = NVMeInitiator(node)
     initiator.disconnect_all()
 
 

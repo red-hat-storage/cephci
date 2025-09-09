@@ -18,6 +18,7 @@ KEY_MAP = {
     "rw-megabytes-per-second": "rw_mbytes_per_second",
     "r-megabytes-per-second": "r_mbytes_per_second",
     "w-megabytes-per-second": "w_mbytes_per_second",
+    "level": "log_level",
 }
 
 

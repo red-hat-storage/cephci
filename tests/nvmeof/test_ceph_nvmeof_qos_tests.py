@@ -192,25 +192,15 @@ def teardown(ceph_cluster, rbd_obj, nvmegwcli, config):
 def trigger_fio(ceph_cluster, config, io_mode, key):
     results = []
     client = get_node_by_id(ceph_cluster, config["initiators"][0]["node"])
+    # TODO: change to nvme initiator
     initiator = Initiator(client)
 
     try:
         # List NVMe targets
-        targets = initiator.list_spdk_drives()
-        if not targets:
+        paths = initiator.list_spdk_drives()
+        if not paths:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
-        LOG.debug(targets)
-
-        rhel_version = initiator.distro_version()
-        if rhel_version == "9.5":
-            paths = [target["DevicePath"] for target in targets]
-        elif rhel_version == "9.6":
-            paths = [
-                f"/dev/{ns['NameSpace']}"
-                for device in targets
-                for subsys in device.get("Subsystems", [])
-                for ns in subsys.get("Namespaces", [])
-            ]
+        LOG.debug(paths)
 
         with parallel() as p:
             for path in paths:
