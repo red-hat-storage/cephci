@@ -38,19 +38,131 @@ def create_export_and_mount_for_existing_nfs_cluster(
     nfs_server=None,
     **kwargs,
 ):
+    """
+    Create exports and mount them from existing NFS clusters.
 
+    Args:
+        clients: List of client nodes
+        nfs_export: Export path(s) for single/multi cluster
+        nfs_mount: Mount path(s)
+        export_num: Number of exports per cluster
+        fs_name: Filesystem name(s)
+        nfs_name: NFS cluster name(s)
+        fs: Filesystem(s)
+        port: NFS server port(s)
+        version: NFS version(s)
+        ha: High availability flag
+        vip: Virtual IP for HA
+        nfs_server: NFS server address(es)
+        kwargs: Additional arguments for export creation
+    """
+    # Detect multi-cluster mode
+    if isinstance(nfs_name, list):
+        num_clusters = len(nfs_name)
+        log.info(f"Multi-cluster mode: {num_clusters} clusters")
+
+        # Ensure nfs_server list matches number of clusters if provided
+        if isinstance(nfs_server, list):
+            if len(nfs_server) < num_clusters:
+                log.warning(
+                    f"nfs_server list ({len(nfs_server)}) shorter than number of clusters ({num_clusters})"
+                )
+                # Extend nfs_server list by repeating the last server
+                nfs_server.extend([nfs_server[-1]] * (num_clusters - len(nfs_server)))
+
+        all_clusters_export_mounts = {}
+        for i in range(num_clusters):
+            _nfs_export = nfs_export[i] if isinstance(nfs_export, list) else nfs_export
+            _nfs_mount = nfs_mount[i] if isinstance(nfs_mount, list) else nfs_mount
+            _nfs_name = nfs_name[i]
+            _fs = fs[i] if isinstance(fs, list) else fs
+            _port = port[i] if isinstance(port, list) else port
+            _nfs_server = nfs_server[i] if isinstance(nfs_server, list) else nfs_server
+
+            log.info(
+                f"Creating/mounting for cluster {i + 1}/{num_clusters}:"
+                f"\n - Name: {_nfs_name}"
+                f"\n - Export: {_nfs_export}"
+                f"\n - Mount: {_nfs_mount}"
+                f"\n - Server: {_nfs_server}"
+                f"\n - Port: {_port}"
+            )
+
+            # Use the rest of the logic as for single cluster
+            client_export_mount_dict = exports_mounts_perclient(
+                clients, _nfs_export, _nfs_mount, export_num
+            )
+            for client_num in range(len(clients)):
+                for export_idx in range(
+                    len(client_export_mount_dict[clients[client_num]]["export"])
+                ):
+                    export_name = client_export_mount_dict[clients[client_num]][
+                        "export"
+                    ][export_idx]
+                    mount_name = client_export_mount_dict[clients[client_num]]["mount"][
+                        export_idx
+                    ]
+
+                    if kwargs:
+                        Ceph(clients[client_num]).nfs.export.create(
+                            fs_name=fs_name,
+                            nfs_name=_nfs_name,
+                            nfs_export=export_name,
+                            fs=_fs,
+                            **kwargs,
+                        )
+                    else:
+                        Ceph(clients[client_num]).nfs.export.create(
+                            fs_name=fs_name,
+                            nfs_name=_nfs_name,
+                            nfs_export=export_name,
+                            fs=_fs,
+                        )
+                    sleep(1)
+
+                    # Get the mount versions specific to clients
+                    mount_versions = _get_client_specific_mount_versions(
+                        version, clients
+                    )
+                    # Use only the i-th nfs_server if passed as a list
+                    _cluster_nfs_server = _nfs_server
+                    if isinstance(_nfs_server, list):
+                        _cluster_nfs_server = _nfs_server[i]
+                    if ha:
+                        _cluster_nfs_server = vip.split("/")[0]  # Remove the port
+                    for mount_version, _clients in mount_versions.items():
+                        _clients[client_num].create_dirs(dir_path=mount_name, sudo=True)
+                        if not mount_retry(
+                            client=_clients[client_num],
+                            mount_name=mount_name,
+                            version=mount_version,
+                            port=_port,
+                            nfs_server=_cluster_nfs_server,
+                            export_name=export_name,
+                        ):
+                            log.info(f"Mount failed, {mount_name}")
+                            raise OperationFailedError(
+                                f"Failed to mount nfs on {_clients[client_num].hostname}"
+                            )
+                        sleep(1)
+                    log.info("Mount succeeded on all clients.")
+
+            all_clusters_export_mounts[_nfs_name] = client_export_mount_dict
+        return all_clusters_export_mounts
+
+    # ---------- single-cluster logic ----------
     client_export_mount_dict = exports_mounts_perclient(
         clients, nfs_export, nfs_mount, export_num
     )
     for client_num in range(len(clients)):
-        for export_num in range(
+        for export_idx in range(
             len(client_export_mount_dict[clients[client_num]]["export"])
         ):
             export_name = client_export_mount_dict[clients[client_num]]["export"][
-                export_num
+                export_idx
             ]
             mount_name = client_export_mount_dict[clients[client_num]]["mount"][
-                export_num
+                export_idx
             ]
             if kwargs:
                 Ceph(clients[client_num]).nfs.export.create(
@@ -65,139 +177,161 @@ def create_export_and_mount_for_existing_nfs_cluster(
                     fs_name=fs_name, nfs_name=nfs_name, nfs_export=export_name, fs=fs
                 )
             sleep(1)
-            # Get the mount versions specific to clients
             mount_versions = _get_client_specific_mount_versions(version, clients)
-            # Step 4: Perform nfs mount
-            # If there are multiple nfs servers provided, only one is required for mounting
-            if isinstance(nfs_server, list):
-                nfs_server = nfs_server[0]
+            # If list, only mount on first nfs_server for single cluster for backward compatibility
+            _nfs_server = nfs_server[0] if isinstance(nfs_server, list) else nfs_server
             if ha:
-                nfs_server = vip.split("/")[0]  # Remove the port
-            for version, clients in mount_versions.items():
-                clients[client_num].create_dirs(dir_path=mount_name, sudo=True)
-
+                _nfs_server = vip.split("/")
+            for mount_version, _clients in mount_versions.items():
+                _clients[client_num].create_dirs(dir_path=mount_name, sudo=True)
                 if not mount_retry(
-                    clients,
-                    client_num,
-                    mount_name,
-                    version,
-                    port,
-                    nfs_server,
-                    export_name,
+                    client=_clients[client_num],
+                    mount_name=mount_name,
+                    version=mount_version,
+                    port=port,
+                    nfs_server=_nfs_server,
+                    export_name=export_name,
                 ):
                     log.info(f"Mount failed, {mount_name}")
                     raise OperationFailedError(
-                        "Failed to mount nfs on %s" % clients[client_num].hostname
+                        f"Failed to mount nfs on {_clients[client_num].hostname}"
                     )
                 sleep(1)
-            log.info("Mount succeeded on all clients")
-
+            log.info("Mount succeeded on all clients.")
     return client_export_mount_dict
 
 
 def perform_io_operations_in_loop(
-    client_export_mount_dict, clients, file_count, dd_command_size_in_M
+    client_export_mount_dict,
+    clients,
+    file_count,
+    dd_command_size_in_M,
+    multicluster=False,
 ):
     """
-    Perform IO operations on the mounted NFS exports.
+    Perform IO operations on mounted NFS exports for single or multiple clusters.
 
     Args:
-        client_export_mount_dict (dict): Dictionary containing client export and mount information.
-        clients (list): List of client nodes.
-        file_count (int): Number of files to create for each operation.
-        dd_command_size_in_M (str): Size in MB for dd command operations.
+        client_export_mount_dict (dict): For single cluster: {client: {'mount': [...], 'export': [...]}},
+                                       For multi cluster: {cluster_name: {client: {'mount': [...], 'export': [...]}}
+        clients (list): List of client nodes
+        file_count (int): Number of files to create for each operation
+        dd_command_size_in_M (int): Size in MB for dd command operations
+        multicluster (bool): Whether this is a multi-cluster operation
     """
     file_name = "created_during_upgrade_file"
     renamed_file_name = "re_renamed_during_upgrade_file"
-    log.info("Creating files in parallel using ThreadPoolExecutor")
-    with ThreadPoolExecutor(max_workers=None) as executor:
-        for client in clients:
-            for mount in client_export_mount_dict[client]["mount"]:
-                futures = [
-                    executor.submit(
-                        create_file,
-                        client,
-                        mount,
-                        file_name + "_{0}".format(i),
-                    )
-                    for i in range(file_count)
-                ]
-        for future in futures:
-            future.result()
-    log.info("All files created successfully")
 
-    # write to file using dd command parellel using ThreadPoolExecutor
-    log.info("Writing to files in parallel using ThreadPoolExecutor")
-    with ThreadPoolExecutor(max_workers=None) as executor:
-        for client in clients:
-            for mount in client_export_mount_dict[client]["mount"]:
-                futures = [
-                    executor.submit(
-                        write_to_file_using_dd_command,
-                        client,
-                        mount,
-                        file_name + "_{0}".format(i),
-                        dd_command_size_in_M,
-                    )
-                    for i in range(file_count)
-                ]
-        for future in futures:
-            future.result()
-    log.info("All files written successfully")
-
-    # read from file using dd command parellel using ThreadPoolExecutor
-    log.info("Reading from files in parallel using ThreadPoolExecutor")
-    with ThreadPoolExecutor(max_workers=None) as executor:
-        for client in clients:
-            for mount in client_export_mount_dict[client]["mount"]:
-                futures = [
-                    executor.submit(
-                        read_from_file_using_dd_command,
-                        client,
-                        mount,
-                        file_name + "_{0}".format(i),
-                        dd_command_size_in_M,
-                    )
-                    for i in range(file_count)
-                ]
+    def _process_single_cluster(mount_dict):
+        """Helper function to process IO for a single cluster's mounts"""
+        # Create files
+        log.info(f"Creating {file_count} files on each mount point")
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = []
+            for client in clients:
+                for mount in mount_dict[client]["mount"]:
+                    for i in range(file_count):
+                        futures.append(
+                            executor.submit(
+                                create_file,
+                                client,
+                                mount,
+                                f"{file_name}_{i}",
+                            )
+                        )
             for future in futures:
                 future.result()
-    log.info("All files read successfully")
+        log.info("File creation completed")
 
-    # rename file in parellel using ThreadPoolExecutor
-    log.info("Renaming files in parallel using ThreadPoolExecutor")
-    with ThreadPoolExecutor(max_workers=None) as executor:
-        for client in clients:
-            for mount in client_export_mount_dict[client]["mount"]:
-                futures = [
-                    executor.submit(
-                        rename_file,
-                        client,
-                        mount,
-                        file_name + "_{0}".format(i),
-                        renamed_file_name + "_{0}".format(i),
-                    )
-                    for i in range(file_count)
-                ]
+        # Write to files using dd
+        log.info(f"Writing {dd_command_size_in_M}M to each file")
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = []
+            for client in clients:
+                for mount in mount_dict[client]["mount"]:
+                    for i in range(file_count):
+                        futures.append(
+                            executor.submit(
+                                write_to_file_using_dd_command,
+                                client,
+                                mount,
+                                f"{file_name}_{i}",
+                                dd_command_size_in_M,
+                            )
+                        )
             for future in futures:
                 future.result()
-    log.info("All files renamed successfully")
+        log.info("Write operations completed")
 
-    log.info("delete files in parallel using ThreadPoolExecutor during upgrade")
-    with ThreadPoolExecutor(max_workers=None) as executor:
-        for client in clients:
-            for mount in client_export_mount_dict[client]["mount"]:
-                futures = [
-                    executor.submit(
-                        delete_file,
-                        client,
-                        mount,
-                        renamed_file_name + "_{0}".format(i),
-                    )
-                    for i in range(file_count)
-                ]
+        # Read from files using dd
+        log.info("Reading back written files")
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = []
+            for client in clients:
+                for mount in mount_dict[client]["mount"]:
+                    for i in range(file_count):
+                        futures.append(
+                            executor.submit(
+                                read_from_file_using_dd_command,
+                                client,
+                                mount,
+                                f"{file_name}_{i}",
+                                dd_command_size_in_M,
+                            )
+                        )
             for future in futures:
                 future.result()
+        log.info("Read operations completed")
+
+        # Rename files
+        log.info("Renaming all files")
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = []
+            for client in clients:
+                for mount in mount_dict[client]["mount"]:
+                    for i in range(file_count):
+                        futures.append(
+                            executor.submit(
+                                rename_file,
+                                client,
+                                mount,
+                                f"{file_name}_{i}",
+                                f"{renamed_file_name}_{i}",
+                            )
+                        )
+            for future in futures:
+                future.result()
+        log.info("Rename operations completed")
+
+        # Delete files
+        log.info("Deleting all files")
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = []
+            for client in clients:
+                for mount in mount_dict[client]["mount"]:
+                    for i in range(file_count):
+                        futures.append(
+                            executor.submit(
+                                delete_file,
+                                client,
+                                mount,
+                                f"{renamed_file_name}_{i}",
+                            )
+                        )
+            for future in futures:
+                future.result()
+        log.info("Delete operations completed")
+
+    if multicluster:
+        log.info(f"Running IO operations on {len(client_export_mount_dict)} clusters")
+        for cluster_name, mount_dict in client_export_mount_dict.items():
+            log.info(f"Processing IO operations for cluster: {cluster_name}")
+            _process_single_cluster(mount_dict)
+            log.info(f"Completed IO operations for cluster: {cluster_name}")
+    else:
+        log.info("Running IO operations on single cluster")
+        _process_single_cluster(client_export_mount_dict)
+        log.info("Completed all IO operations")
 
 
 def remove_exports_and_unmount(client_export_mount_dict, clients, nfs_name):

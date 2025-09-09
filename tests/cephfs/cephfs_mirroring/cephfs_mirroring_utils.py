@@ -10,10 +10,13 @@ import random
 import secrets
 import string
 
+from looseversion import LooseVersion
+
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
 from utility.retry import retry
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -303,22 +306,21 @@ class CephfsMirroringUtils(object):
             log.error(f"Error validating Peer Connection: {e}")
             return 1
 
-    def add_path_for_mirroring(self, source_clients, source_fs, path, build=None):
+    def add_path_for_mirroring(self, source_clients, source_fs, path):
         """
         Add a path for mirroring on the source filesystem.
         Args:
             source_clients (CephNode): The source Ceph clients responsible for mirroring setup.
             source_fs (str): The name of the source Ceph filesystem where mirroring is configured.
             path (str): The path to be added for mirroring within the source filesystem.
-            build (str, optional): Ceph build version string (e.g., "6.1.2", "7.0.1").
-                                   If build starts with "6", validation is skipped since
-                                   'snapshot mirror ls' is not supported.
+            ceph_version (str): Ceph version string (e.g., "7.1.", "7.2").
+                            Validation is skipped for Ceph < 7.0.0.
         This function adds the specified path to the mirroring configuration of the source filesystem.
-        For Ceph builds >= 7, validates the configuration by listing mirrored paths.
-        Note:
-            The specified path should exist within the source filesystem.
+        For Ceph builds >= 7.0.0, validates the configuration by listing mirrored paths.        Note:
+        The specified path should exist within the source filesystem.
         """
         path = path.rstrip("/")  # to avoid trailing slash mismatch
+        ceph_version = get_ceph_version_from_cluster(source_clients)
 
         log.info(
             f"Adding path '{path}' to mirroring configuration for filesystem '{source_fs}'..."
@@ -327,13 +329,13 @@ class CephfsMirroringUtils(object):
             sudo=True, cmd=f"ceph fs snapshot mirror add {source_fs} {path}"
         )
 
-        # Skip validation for 6.x builds
-        if build and build.startswith("6"):
+        if LooseVersion(ceph_version) < LooseVersion("19.2"):
             log.info(
-                f"Skipping mirror path validation as build '{build}' is < 7.x and it's not supported"
+                "Skipping mirror path validation as ceph_version '%s' < 19.2.0 and it's not supported",
+                ceph_version,
             )
+            return
         else:
-            # Run validation only for builds 7.x and above
             out, _ = source_clients.exec_command(
                 sudo=True, cmd=f"ceph fs snapshot mirror ls {source_fs}"
             )

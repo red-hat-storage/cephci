@@ -202,7 +202,7 @@ def smbclient_check_shares(
                             sudo=True,
                             cmd=cmd,
                         )
-                    sleep(1)
+                    sleep(3)
         else:
             for smb_node in smb_nodes:
                 for smb_share in smb_shares:
@@ -250,17 +250,21 @@ def smb_cleanup(
         sleep(9)
         # Remove subvolume and subvolume group
         # List subvolumes
-        cmd = f"ceph fs subvolume ls {volume} --group_name {group_name}"
+        cmd = (
+            f"cephadm shell -- ceph fs subvolume ls {volume} --group_name {group_name}"
+        )
         out, _ = installer.exec_command(sudo=True, cmd=cmd)
         subvols = json.loads(out)
         # Remove all subvolumes
         for sv in [s["name"] for s in subvols]:
             installer.exec_command(
                 sudo=True,
-                cmd=f"ceph fs subvolume rm {volume} {sv} --group_name {group_name}",
+                cmd=f"cephadm shell -- ceph fs subvolume rm {volume} {sv} --group_name {group_name}",
             )
         # Remove subvolumegroup
-        cmd = f"ceph fs subvolumegroup rm {volume} {group_name} --force"
+        cmd = (
+            f"cephadm shell -- ceph fs subvolumegroup rm {volume} {group_name} --force"
+        )
         installer.exec_command(sudo=True, cmd=cmd)
         sleep(9)
 

@@ -248,3 +248,57 @@ tests:
       module: test_rbd_live_migration_encryption_two_cluster.py
       name: Live migration of encrypted rbd images from one cluster to another
       polarion-id: CEPH-83597863
+
+  - test:
+      name: >
+        Live migration of sparse import with an NBD
+        source of RAW data format
+      desc: >
+        live migration of images with external data source as RAW data format
+        from one ceph cluster to another ceph cluster with an NBD source.
+      module: test_rbd_migration_external_nbd.py
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+      polarion-id: CEPH-83598705
+
+  - test:
+      name: Test Live migration of namespace level images
+      desc: live migration with namespace level RBD images
+      module: test_rbd_migration_namespace_image.py
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+      polarion-id: CEPH-83597865

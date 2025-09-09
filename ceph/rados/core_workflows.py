@@ -17,6 +17,7 @@ import re
 import time
 from collections import namedtuple
 
+from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
 from ceph.rados import utils as osd_utils
@@ -1448,6 +1449,87 @@ class RadosOrchestrator:
         cmd = "ceph osd crush rule ls"
         return self.run_ceph_command(cmd=cmd)
 
+    def enable_fast_ec_feature_on_pool(
+        self,
+        **kwargs,
+    ) -> bool:
+        """
+        Enable Fast EC features on a given pool.
+
+        Steps:
+        1. Ensure require_osd_release is at least 'tentacle'.
+        2. Ensure min_compat_client is 'tentacle'.
+        3. Enable EC overwrites on the pool if required.
+        4. Enable Fast EC optimizations on the pool.
+
+        Args: to be passed as kwargs via suite file configs
+            set_osd_release (bool): Whether to update require_osd_release if not set.
+            set_min_client (bool): Whether to update min_compat_client if not set.
+            set_overwrites (bool): Whether to enable allow_ec_overwrites if not set.
+        Note: The above options kept for testing the -ve scenarios with Fast EC enablement,
+            passed to module as additional kwargs if needed.
+        Returns:
+            bool: True if Fast EC features successfully enabled, False otherwise.
+        """
+        pool_name = kwargs.get("pool_name")
+        set_osd_release = kwargs.get("set_osd_release", True)
+        set_min_client = kwargs.get("set_min_client", True)
+        set_overwrites = kwargs.get("set_overwrites", True)
+
+        # 1. Check Ceph version (must be tentacle/>=9)
+        if int(self.rhbuild.split(".")[0]) < 9:
+            log.error("Ceph version < tentacle, cannot enable fast EC features")
+            return False
+
+        cluster_dump = self.run_ceph_command(cmd="ceph osd dump")
+        osd_release = cluster_dump.get("require_osd_release")
+        client_release = cluster_dump.get("min_compat_client")
+
+        # 2. Ensure OSD release correct
+        if osd_release != "tentacle":
+            if set_osd_release:
+                self.run_ceph_command(cmd="ceph osd set-require-osd-release tentacle")
+                log.info("Set require_osd_release to tentacle")
+            else:
+                log.warning("OSD release is %s, not tentacle", osd_release)
+
+        # 3. Ensure min compat client correct
+        if client_release != "tentacle":
+            if set_min_client:
+                config_cmd = "ceph osd set-require-min-compat-client tentacle --yes-i-really-mean-it"
+                self.client.exec_command(cmd=config_cmd, sudo=True)
+                log.info("Set min_compat_client to tentacle")
+            else:
+                log.warning("min_compat_client is %s, not tentacle", client_release)
+
+        # 4. Ensure EC overwrites
+        ec_overwrites = self.get_pool_property(
+            pool=pool_name, props="allow_ec_overwrites"
+        )["allow_ec_overwrites"]
+        if not ec_overwrites and set_overwrites:
+            self.set_pool_property(
+                pool=pool_name, props="allow_ec_overwrites", value="true"
+            )
+            log.info("Enabled allow_ec_overwrites on pool %s", pool_name)
+        elif not ec_overwrites:
+            log.warning("EC overwrites not enabled on pool %s", pool_name)
+
+        # 5. Enable Fast EC optimization
+        self.set_pool_property(
+            pool=pool_name, props="allow_ec_optimizations", value="true"
+        )
+
+        # 6. Verify
+        fast_ec_enabled = self.get_pool_property(
+            pool=pool_name, props="allow_ec_optimizations"
+        )
+        if not fast_ec_enabled:
+            log.error("Failed to enable Fast EC features on pool %s", pool_name)
+            return False
+
+        log.info("Fast EC features enabled successfully on pool %s", pool_name)
+        return True
+
     def create_erasure_pool(self, **kwargs) -> bool:
         """
         Creates an erasure code profile and then creates a pool with the same
@@ -1462,9 +1544,10 @@ class RadosOrchestrator:
                 4. crush-failure-domain -> crush object to be us to store replica sets (str)
                 5. plugin -> plugin to be set (str)
                     supported plugins:
-                    1. jerasure (default)
+                    1. jerasure (default until Squid)
                     2. lrc -> Upstream Only
                     3. clay -> Upstream Only
+                    4. isa ( default from Tentacle )
                 6. pool_name -> pool name to create and associate with the EC profile being created
                 7. force -> Override an existing profile by the same name.
                 8. crush-osds-per-failure-domain -> number of OSDs per failure domain
@@ -1473,8 +1556,9 @@ class RadosOrchestrator:
                 11. profile_name -> Name of the profile to be created
                 12. yes_i_mean_it -> Needed to be passed for profile modification along with --force from 8.0
                 13. name: Name of the profile/rule to create if none is provided
-                14. negative_test: pass true if performing -ve tests. min_compact_client won't be updated for pool
+                14. negative_test -> pass true if performing -ve tests. min_compact_client won't be updated for pool
                 creation when this param is set to true. Required for MSR EC pool tests with min_compact_client
+                15. enable_fast_ec_features -> Pass true if the Fast EC features need to be enabled on the created pool
         Returns: True -> pass, False -> fail
         """
         failure_domain = kwargs.get("crush-failure-domain", "osd")
@@ -1487,8 +1571,10 @@ class RadosOrchestrator:
         )
         crush_num_failure_domains = kwargs.get("crush-num-failure-domains", None)
         create_rule = kwargs.get("create_rule", False)
-        plugin = kwargs.get("plugin", "jerasure")
-        pool_name = kwargs.get("pool_name", "name")
+        major_version = int(self.rhbuild.split(".")[0])
+        default_plugin = "jerasure" if major_version < 9 else "isa"
+        plugin = kwargs.get("plugin", default_plugin)
+        pool_name = kwargs.get("pool_name", "test-ec-pool")
         if not pool_name:
             log.error("No name provided. Exiting")
             return False
@@ -1498,6 +1584,7 @@ class RadosOrchestrator:
         yes_i_mean_it = kwargs.get("yes_i_mean_it", False)
         profile_name = kwargs.get("profile_name", f"ecp_{pool_name}")
         rule_name = f"rule_{pool_name}"
+        enable_fast_ec_features = kwargs.get("enable_fast_ec_features", False)
 
         # Creating an erasure coded profile with the options provided
         cmd = (
@@ -1505,7 +1592,7 @@ class RadosOrchestrator:
             f" crush-failure-domain={failure_domain} k={k} m={m} plugin={plugin}"
         )
         if crush_osds_per_failure_domain:
-            if self.rhbuild and self.rhbuild.split(".")[0] >= "8":
+            if major_version >= 8:
                 min_client_version = self.run_ceph_command(cmd="ceph osd dump")[
                     "require_min_compat_client"
                 ]
@@ -1590,6 +1677,20 @@ class RadosOrchestrator:
                 ):
                     log.error(f"Failed to create Pool {pool_name}")
                     return False
+
+        # Checking if enable Fast EC features flag passed
+        if enable_fast_ec_features:
+            try:
+                if not self.enable_fast_ec_feature_on_pool(**kwargs):
+                    log.error("Could not enable fast EC features on the provided pool")
+                    return False
+                log.info("Enabled Fast EC feature on the EC pool created")
+            except Exception as err:
+                log.error(
+                    f"Exception hit while enabling Fast EC features on the pool created: {err}"
+                )
+                return False
+
         try:
             log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
             cmd = f"ceph osd crush rule dump {pool_name}"
@@ -2494,12 +2595,15 @@ class RadosOrchestrator:
 
         return pgid_list
 
-    def run_pool_sanity_check(self):
+    def run_pool_sanity_check(self, ignore_list=[]):
         """
         Runs sanity on the pools after triggering scrub and deep-scrub on pools, waiting 600 Secs
 
         This method is used to assess the health of Pools after any operation, where in a scrub and deep scrub is
         triggered, and the method scans the cluster for few health warnings, if generated
+
+        Args:
+            ignore_list : List of warnings that are to be ignored
 
         Returns: True-> Pass,  false -> Fail
         """
@@ -2512,7 +2616,7 @@ class RadosOrchestrator:
         while end_time > datetime.datetime.now():
             status_report = self.run_ceph_command(cmd="ceph report", client_exec=True)
             ceph_health_status = status_report["health"]
-            health_warns = (
+            health_warns = [
                 "PG_AVAILABILITY",
                 "PG_DEGRADED",
                 "PG_RECOVERY_FULL",
@@ -2524,8 +2628,8 @@ class RadosOrchestrator:
                 "OBJECT_MISPLACED",
                 "OBJECT_UNFOUND",
                 "RECENT_CRASH",
-            )
-
+            ]
+            health_warns = list(set(health_warns) - set(ignore_list))
             flag = (
                 False
                 if any(
@@ -3140,7 +3244,6 @@ EOF"""
             within timeout
         """
         daemon_map = dict()
-        success = False
         daemon_services = self.list_orch_services(service_type=daemon)
         # capture current start time for each daemon part of the services
         for service in daemon_services:
@@ -3167,6 +3270,7 @@ EOF"""
                 daemon_status_ls = self.run_ceph_command(
                     cmd=f"ceph orch ps --service_name {service} --refresh"
                 )
+                success_count = 0
                 for entry in daemon_status_ls:
                     try:
                         restart_time, _ = self.client.exec_command(
@@ -3175,21 +3279,28 @@ EOF"""
                         assert restart_time > daemon_map[entry["daemon_name"]]
                         assert entry["status_desc"] != "stopped"
                         log.info(f"{entry['daemon_name']} has started")
-                        success = True
+                        success_count += 1
                     except Exception:
                         log.info(
                             f"{daemon} daemon {entry['daemon_name']} is yet to restart. "
-                            f"Sleeping for 120 secs"
                         )
-                        self.client.exec_command(
-                            cmd=f"ceph orch daemon restart {entry['daemon_name']}",
-                            sudo=True,
-                        )
-                        time.sleep(120)
-                        success = False
-                        break
-                if success:
+                        """
+                        Adding "ceph orch daemon restart" in try except block, Since restarting OSDs throws below error,
+                        If all the OSDs of acting set are attempted to restart
+                        error -> "Error EINVAL: Unable to restart daemon osd.0: unsafe to stop osd(s) at this
+                         time (1 PGs are or would become offline). Warnings can be bypassed with the --force flag"
+                        """
+                        try:
+                            self.client.exec_command(
+                                cmd=f"ceph orch daemon restart {entry['daemon_name']}",
+                                sudo=True,
+                            )
+                        except CommandFailed as e:
+                            log.warning(e)
+                if success_count == len(daemon_status_ls):
                     break
+                log.info("Sleeping for 120 secs")
+                time.sleep(120)
             else:
                 log.error(
                     f"All the daemons part of the service {service} did not restart within "
@@ -4334,7 +4445,7 @@ EOF"""
 
         if mnt_name in out:
             log.info("Verification successful. Device is listed in mount points.")
-            return f"{mnt_path}{mnt_name}"
+            return mnt_path, mnt_name
         else:
             log.error("Verification failed. Device is not listed in mount points.")
             return None
@@ -4498,7 +4609,21 @@ EOF"""
                 cmd=f"{base_cmd} {daemon_type}.{daemon_id}", client_exec=True
             )
 
-        out = self.run_ceph_command(cmd=f"{base_cmd} {daemon_id}", client_exec=True)
+        for _ in range(3):
+            try:
+                out = self.run_ceph_command(
+                    cmd=f"{base_cmd} {daemon_id}", client_exec=True
+                )
+                break
+            except Exception as e:
+                debug_msg = f"Passed daemon type : {daemon_type}, Daemon ID : {daemon_id}, Error : {e}"
+                log.debug(debug_msg)
+                log.warning("ceph metadata command failed. retrying after 30 seconds.")
+                time.sleep(30)
+        else:
+            log.debug("Metadata command execution failed for 3 consecutive tries")
+            return None
+
         if out is None:
             log.error(
                 f"Metadata info for the input daemon: {daemon_type} {daemon_id} not found"
@@ -5486,3 +5611,17 @@ EOF"""
                 log.error("Error while removing contents of file")
                 return False
         return True
+
+    def get_balancer_status(self):
+        """
+        The method is used to send the balancer status
+        Args:
+            None
+        Return:
+            True -> If balancer status is active
+            False -> If balancer status in inactive
+        """
+
+        cmd_balancer_status = "ceph balancer status"
+        cmd_outPut = self.run_ceph_command(cmd_balancer_status)
+        return cmd_outPut["active"]

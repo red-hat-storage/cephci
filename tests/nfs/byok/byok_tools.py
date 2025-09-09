@@ -1,12 +1,24 @@
+import json
+from concurrent.futures import ThreadPoolExecutor
+
 import yaml
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError
 from cli.utilities.packages import Package
-from tests.nfs.nfs_operations import create_nfs_via_file_and_verify, log
+from tests.nfs.nfs_operations import (
+    create_multiple_nfs_instance_via_spec_file,
+    create_nfs_via_file_and_verify,
+    fuse_mount_retry,
+    log,
+)
 from tests.nfs.test_nfs_multiple_operations_for_upgrade import (
     create_file,
+    delete_file,
     lookup_in_directory,
+    read_from_file_using_dd_command,
+    rename_file,
+    write_to_file_using_dd_command,
 )
 from utility.gklm_client.gklm_client import GklmClient
 
@@ -119,7 +131,13 @@ def validate_enc_for_nfs_export_via_fuse(client, fuse_mount, nfs_mount):
 
 
 def create_nfs_instance_for_byok(
-    installer, nfs_node, nfs_name, kmip_host_list, rsa_key, cert, ca_cert
+    installer,
+    nfs_node,
+    nfs_name,
+    kmip_host_list,
+    rsa_key,
+    cert,
+    ca_cert,
 ):
     """
     Create an NFS Ganesha service instance with BYOK (Bring Your Own Key) KMIP configuration,
@@ -230,7 +248,12 @@ def setup_gklm_infrastructure(
 
 
 def get_gklm_ca_certificate(
-    gklm_ip, gklm_node_password, gklm_node_username, exe_node, gklm_rest_client
+    gklm_ip,
+    gklm_node_password,
+    gklm_node_username,
+    exe_node,
+    gklm_rest_client,
+    gkml_servering_cert_name="self-signed-cert1",
 ):
     """
     Retrieve the GKLM CA certificate for use in the cluster:
@@ -259,23 +282,24 @@ def get_gklm_ca_certificate(
         certificate_uuid_to_export = [
             x["uuid"]
             for x in certs
-            if x.get("usage") == "SSLSERVER" and x.get("alias") == "self-signed-cert1"
+            if x.get("usage") == "SSLSERVER"
+            and x.get("alias") == gkml_servering_cert_name
         ][0]
         log.info(f"Found target certificate with UUID: {certificate_uuid_to_export}")
     except IndexError:
         log.error(
-            "No certificate with alias 'self-signed-cert1' and usage 'SSLSERVER' found in GKLM"
+            f"No certificate with alias {gkml_servering_cert_name} and usage 'SSLSERVER' found in GKLM"
         )
         raise
 
     log.info(
         "Checking if CA certificate is already exported at "
-        "/opt/IBM/WebSphere/Liberty/products/sklm/data/export1/exportedCert"
+        f"/opt/IBM/WebSphere/Liberty/products/sklm/data/export1/{gkml_servering_cert_name}"
     )
     file_check_cmd = (
         f"sshpass -p {gklm_node_password} ssh -o StrictHostKeyChecking=no {gklm_node_username}@{gklm_ip} "
-        '\'[ -f /opt/IBM/WebSphere/Liberty/products/sklm/data/export1/exportedCert ] && echo "File exists" '
-        '|| echo "File does not exist"\''
+        f"'[ -f /opt/IBM/WebSphere/Liberty/products/sklm/data/export1/{gkml_servering_cert_name} ] && "
+        'echo "File exists" || echo "File does not exist"\''
     )
     log.debug(f"Executing remote file check: {file_check_cmd}")
     is_cert_exists = Ceph(exe_node).execute(cmd=file_check_cmd)
@@ -301,7 +325,8 @@ def get_gklm_ca_certificate(
         log.info("Set required permissions on export directory")
 
         gklm_rest_client.certificates.export_certificate(
-            uuid=certificate_uuid_to_export, file_name="export1/exportedCert"
+            uuid=certificate_uuid_to_export,
+            file_name=f"export1/{gkml_servering_cert_name}",
         )
         log.info(
             f"Exported certificate (UUID {certificate_uuid_to_export}) from GKLM server"
@@ -310,11 +335,12 @@ def get_gklm_ca_certificate(
         log.info("CA certificate already exists at configured path; skipping export")
 
     log.info(
-        "Fetching CA certificate contents from /opt/IBM/WebSphere/Liberty/products/sklm/data/export1/exportedCert"
+        "Fetching CA certificate contents from "
+        f"/opt/IBM/WebSphere/Liberty/products/sklm/data/export1/{gkml_servering_cert_name}"
     )
     cert_fetch_cmd = (
         f"sshpass -p {gklm_node_password} ssh -o StrictHostKeyChecking=no {gklm_node_username}@{gklm_ip} "
-        "'cat /opt/IBM/WebSphere/Liberty/products/sklm/data/export1/exportedCert'"
+        f"'cat /opt/IBM/WebSphere/Liberty/products/sklm/data/export1/{gkml_servering_cert_name}'"
     )
     ca_cert = Ceph(exe_node).execute(cmd=cert_fetch_cmd)[0]
     log.info("CA certificate successfully retrieved from GKLM server")
@@ -364,6 +390,7 @@ def pre_requisite_for_gklm_get_ca(
             gklm_node_username=gklm_node_username,
             exe_node=exe_node,
             gklm_rest_client=gklm_rest_client,
+            gkml_servering_cert_name=gklm_hostname,
         )
         log.info("Successfully retrieved GKLM CA certificate")
         return ca_cert
@@ -600,6 +627,7 @@ def nfs_byok_test_setup(byok_setup_params):
             gklm_node_password=gklm_node_password,
             exe_node=exe_node,
             gklm_rest_client=gklm_rest_client,
+            gkml_servering_cert_name=gklm_hostname,
         )
         log.info("CA certificate successfully retrieved \n %s", ca_cert)
 
@@ -612,3 +640,230 @@ def nfs_byok_test_setup(byok_setup_params):
     except Exception as ex:
         log.error(ex)
         return (1, None, None, None)
+
+
+def create_multiple_nfs_instance_for_byok(
+    spec: dict,
+    replication_number: int,
+    installer,
+    cert: str,
+    rsa_key: str,
+    ca_cert: str,
+    kmip_host_list: str,
+    timeout: int = 300,
+) -> int:
+    """
+    Create multiple BYOK-enabled NFS Ganesha service instances using a given service spec.
+
+    This function injects KMIP (BYOK) certificate, private key, CA certificate,
+    and KMIP host list into the NFS Ganesha spec, then calls
+    `create_multiple_nfs_instance_via_spec_file` to deploy the instances.
+
+    Args:
+        spec (dict): Base NFS Ganesha service spec.
+        replication_number (int): Number of service instances to create.
+        installer: Installer node or handler object for deployment.
+        cert (str): PEM-encoded KMIP client certificate.
+        rsa_key (str): PEM-encoded KMIP client private key.
+        ca_cert (str): PEM-encoded KMIP server CA certificate.
+        kmip_host_list (str): Hostname(s) or IP(s) of the KMIP server(s).
+        timeout (int, optional): Timeout in seconds for creation & verification. Defaults to 300.
+
+    Returns:
+        int: 0 on success, 1 on failure.
+    """
+
+    try:
+        # Clean up certificate formatting — YAML style block string ('|')
+        # with proper newline termination, avoiding tuple creation
+        spec["kmip_cert"] = "|\n" + cert.strip("\n")
+        spec["kmip_key"] = "|\n" + rsa_key.strip("\n")
+        spec["kmip_ca_cert"] = "|\n" + ca_cert.strip("\n")
+        spec["kmip_host_list"] = [kmip_host_list]
+
+        log.debug(f"Prepared BYOK-enabled NFS Ganesha service spec:\n{spec}")
+
+        # Call core spec deployment function
+        result = create_multiple_nfs_instance_via_spec_file(
+            spec=spec,
+            replication_number=replication_number,
+            installer=installer,
+            timeout=timeout,
+        )
+
+        if result == 0:
+            log.info(
+                f"Successfully created {replication_number} BYOK-enabled "
+                f"NFS Ganesha instance(s) using base service_id '{spec.get('service_id')}'"
+            )
+        else:
+            log.error(" Failed to create BYOK-enabled NFS Ganesha instances.")
+        return result
+
+    except Exception as e:
+        log.error(f"Unexpected error during BYOK NFS instance creation: {e}")
+        return 1
+
+
+def perform_io_operations_and_validate_fuse(
+    client_export_mount_dict,
+    clients,
+    file_count,
+    dd_command_size_in_M,
+    is_multicluster=False,
+    nfs_name=None,
+):
+    """
+    Perform IO operations on mounted NFS exports for single or multiple clusters.
+
+    Args:
+        client_export_mount_dict (dict): For single cluster: {client: {'mount': [...], 'export': [...]}},
+                                       For multi cluster: {cluster_name: {client: {'mount': [...], 'export': [...]}}
+        clients (list): List of client nodes
+        file_count (int): Number of files to create for each operation
+        dd_command_size_in_M (int): Size in MB for dd command operations
+        multicluster (bool): Whether this is a multi-cluster operation
+        nfs_name = For single cluster
+    """
+    file_name = "named_file.txt"
+    renamed_file_name = "renamed_file.txt"
+
+    def _process_single_cluster(mount_dict, nfs_name, is_multicluster):
+        """Helper function to process IO for a single cluster's mounts"""
+        # Create files
+        log.info(f"Creating {file_count} files on each mount point")
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = []
+            for client in clients:
+                for mount in mount_dict[client]["mount"]:
+                    for i in range(file_count):
+                        futures.append(
+                            executor.submit(
+                                create_file,
+                                client,
+                                mount,
+                                f"{file_name}_{i}",
+                            )
+                        )
+            for future in futures:
+                future.result()
+        log.info("File creation completed")
+
+        # Write to files using dd
+        log.info(f"Writing {dd_command_size_in_M}M to each file")
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = []
+            for client in clients:
+                for mount in mount_dict[client]["mount"]:
+                    for i in range(file_count):
+                        futures.append(
+                            executor.submit(
+                                write_to_file_using_dd_command,
+                                client,
+                                mount,
+                                f"{file_name}_{i}",
+                                dd_command_size_in_M,
+                            )
+                        )
+            for future in futures:
+                future.result()
+        log.info("Write operations completed")
+
+        # Read from files using dd
+        log.info("Reading back written files")
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = []
+            for client in clients:
+                for mount in mount_dict[client]["mount"]:
+                    for i in range(file_count):
+                        futures.append(
+                            executor.submit(
+                                read_from_file_using_dd_command,
+                                client,
+                                mount,
+                                f"{file_name}_{i}",
+                                dd_command_size_in_M,
+                            )
+                        )
+            for future in futures:
+                future.result()
+        log.info("Read operations completed")
+
+        log.info("Validating encryption via FUSE mounts")
+        export_list = json.loads(Ceph(clients[0]).nfs.export.ls(nfs_name))
+        exports_info = {
+            e: json.loads(Ceph(clients[0]).nfs.export.get(nfs_name, e, format="json"))
+            for e in export_list
+        }
+        for client in clients:
+            mounts = (
+                client_export_mount_dict[nfs_name][client]["mount"]
+                if is_multicluster
+                else client_export_mount_dict[client]["mount"]
+            )
+            if mounts:
+                fuse_mount = mounts[0] + "_fuse"
+                fuse_mount_retry(
+                    client=client,
+                    mount=fuse_mount,
+                    extra_params=(
+                        f'-r {exports_info[client_export_mount_dict[nfs_name][client]["export"][0]]["path"]}'
+                        if is_multicluster
+                        else f'-r {exports_info[client_export_mount_dict[client]["export"][0]]["path"]}'
+                    ),
+                )
+                validate_enc_for_nfs_export_via_fuse(
+                    client=client,
+                    fuse_mount=fuse_mount,
+                    nfs_mount=mounts[0],
+                )
+
+        # Rename files
+        log.info("Renaming all files")
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = []
+            for client in clients:
+                for mount in mount_dict[client]["mount"]:
+                    for i in range(file_count):
+                        futures.append(
+                            executor.submit(
+                                rename_file,
+                                client,
+                                mount,
+                                f"{file_name}_{i}",
+                                f"{renamed_file_name}_{i}",
+                            )
+                        )
+            for future in futures:
+                future.result()
+        log.info("Rename operations completed")
+
+        # Delete files
+        log.info("Deleting all files")
+        with ThreadPoolExecutor(max_workers=None) as executor:
+            futures = []
+            for client in clients:
+                for mount in mount_dict[client]["mount"]:
+                    for i in range(file_count):
+                        futures.append(
+                            executor.submit(
+                                delete_file,
+                                client,
+                                mount,
+                                f"{renamed_file_name}_{i}",
+                            )
+                        )
+            for future in futures:
+                future.result()
+        log.info("Delete operations completed")
+
+    if is_multicluster:
+        log.info(f"Running IO operations on {len(client_export_mount_dict)} clusters")
+        for cluster_name, mount_dict in client_export_mount_dict.items():
+            log.info(f"Processing IO operations for cluster: {cluster_name}")
+            _process_single_cluster(mount_dict, cluster_name, is_multicluster)
+            log.info(f"Completed IO operations for cluster: {cluster_name}")
+    else:
+        log.info("Running IO operations on single cluster")
+        _process_single_cluster(client_export_mount_dict, nfs_name, is_multicluster)
+        log.info("Completed all IO operations")

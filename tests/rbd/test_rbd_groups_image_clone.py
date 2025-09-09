@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 
 from ceph.rbd.initial_config import initial_rbd_config
 from ceph.rbd.utils import getdict, random_string
@@ -71,7 +72,7 @@ def test_rbd_groups_image_clone(rbd_obj, client, **kw):
 
     for pool_type in rbd_obj.get("pool_types"):
         rbd_config = kw.get("config", {}).get(pool_type, {})
-        multi_pool_config = getdict(rbd_config)
+        multi_pool_config = deepcopy(getdict(rbd_config))
         for pool, pool_config in multi_pool_config.items():
             if "data_pool" in pool_config.keys():
                 _ = pool_config.pop("data_pool")

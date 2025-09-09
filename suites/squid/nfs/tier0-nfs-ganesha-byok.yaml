@@ -172,13 +172,56 @@ tests:
        module: test_client.py
        name: configure client
 
+
    - test:
-       name: Test Encryption with the correct keys
-       module: byok.test_byok_with_io_fuse_validation.py
-       desc: byok Encryption with the correct keys
-       polarion-id: CEPH-83625072
-       abort-on-fail: true
-       config:
-         nfs_version: 4.2
-         total_export_num: 4
-         clients: 1
+      name: Test Encryption with the correct keys (single cluster)
+      module: byok.test_byok_single_multi_restart.py
+      desc: BYOK single-cluster with FUSE encryption validation
+      polarion-id: CEPH-83625072
+      abort-on-fail: true
+      config:
+        nfs_version: 4.2
+        total_export_num: 4
+        clients: 1
+        nfs_replication_number: 1           # Single cluster mode
+        nfs_mount: /mnt/nfs_byok
+        nfs_export: /export_byok
+        nfs_instance_name: nfs_byok
+
+   - test:
+      name: byok multicluster with io and restart - parallel module
+      module: test_parallel.py
+      desc: byok multicluster + restart - parallel module
+      parallel:
+        - test:
+            name: Test multiple clusters with IO
+            module: byok.test_byok_single_multi_restart.py
+            desc: Test multiple clusters with IO
+            polarion-id: CEPH-83627655
+            abort-on-fail: true
+            config:
+              nfs_version: 4.2
+              total_export_num: 4
+              clients: 1
+              nfs_replication_number: 4           # Multi-cluster mode - number of clusters
+              nfs_mount_common_name: nfs_byok     # Used for multi-cluster cleanup naming
+              nfs_export: /export_byok
+              spec:                              # Multi-cluster NFS deployment spec
+                service_type: nfs
+                service_id: nfs_byok
+                placement:
+                  host_pattern: '*'
+                spec:
+                  port: 62000
+                  monitoring_port: 62500
+
+        - test:
+              name: Restart NFS Ganesha services -byok
+              desc: Restart NFS Ganesha services for given time - byok
+              module: scripts_tools.restart_nfs_ganesha_services.py
+              config:
+                clients: 1
+                restart_interval: 2 #in minutes
+                longevity: true
+                # longevity_duration: 1 # in hours
+                longevity_loop: 3 # 3 iterations/loops

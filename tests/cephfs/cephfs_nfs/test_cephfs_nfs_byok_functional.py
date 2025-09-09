@@ -1,6 +1,8 @@
+import json
 import random
 import string
 import traceback
+from json import JSONDecodeError
 from threading import Thread
 
 from ceph.ceph import CommandFailed
@@ -138,6 +140,14 @@ def run(ceph_cluster, **kw):
         if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
             log.error("Cluster health is not OK even after waiting for 300secs")
             return 1
+        log.info("Cleanup existing nfs clusters")
+        try:
+            out, rc = client.exec_command(sudo=True, cmd="ceph nfs cluster ls -f json")
+            nfscluster_ls = json.loads(out)
+        except JSONDecodeError:
+            nfscluster_ls = json.dumps([out])
+        for nfs_cluster_name in nfscluster_ls:
+            fs_util.remove_nfs_cluster(client, nfs_cluster_name)
         byok_setup_params = {
             "gklm_ip": gklm_ip,
             "gklm_user": gklm_user,
@@ -209,7 +219,7 @@ def run(ceph_cluster, **kw):
                 if enctag is not None:
                     clean_up_gklm(
                         gklm_rest_client=byok_setup_params["gklm_rest_client"],
-                        gkml_client_name=byok_test_params["gklm_client_name"],
+                        gkml_client_name=byok_setup_params["gklm_client_name"],
                         gklm_cert_alias=byok_setup_params["gklm_cert_alias"],
                     )
                 if byok_test_params is not None:
@@ -217,7 +227,7 @@ def run(ceph_cluster, **kw):
                         clean_up_gklm(
                             gklm_rest_client=byok_setup_params["gklm_rest_client"],
                             gkml_client_name=byok_test_params["gklm_client_name_1"],
-                            gklm_cert_alias=byok_setup_params["gklm_cert_alias_1"],
+                            gklm_cert_alias=byok_test_params["gklm_cert_alias_1"],
                         )
 
             except Exception as ex:
@@ -230,7 +240,7 @@ def run(ceph_cluster, **kw):
                             sv["nfs_client"].exec_command(
                                 sudo=True, cmd=f"umount -l {sv['nfs_mount_dir']}"
                             )
-                        except CommandFailed as ex:
+                        except Exception as ex:
                             log.error(ex)
                 if byok_test_params.get("export_list"):
                     for export in byok_test_params["export_list"]:
@@ -292,6 +302,7 @@ def nfs_byok_cephfs_test_run():
             if op == "set" and op_status:
                 log.error("Enctag set failed")
                 return 1
+
     log.info("Create NFS export to subvolume using enctag as kmip_key_id")
     extra_args = f" --kmip_key_id {byok_test_params['byok_params']['enctag']}"
     for sv in sv_list:

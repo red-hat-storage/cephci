@@ -135,8 +135,9 @@ def run(ceph_cluster, **kw):
             return 1
 
         configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
-
-        log.info("Scenario1: The osd logs are set to default value")
+        log.info(
+            "Scenario1:The OSD log debug level has been configured to its default value."
+        )
         end_time, _ = installer.exec_command(
             cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
         )
@@ -161,7 +162,7 @@ def run(ceph_cluster, **kw):
         remove_parameter_configuration(mon_obj)
         method_should_succeed(rados_object.delete_pool, pool_name)
         log.info(
-            "===Scenario1: End of the  osd and mgr logs are set to default value==="
+            "===Scenario1: End of the verification of the osd_scrub_load_threshold feature with the value 0 ==="
         )
 
         log.info(
@@ -229,7 +230,9 @@ def run(ceph_cluster, **kw):
             return 1
 
         configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
-        log.info("Scenario2: The osd and mgr logs are set to default value")
+        log.info(
+            "Scenario2:The OSD log debug level has been configured to its default value."
+        )
         end_time, _ = installer.exec_command(
             cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
         )
@@ -377,7 +380,75 @@ def run(ceph_cluster, **kw):
         #     "===Scenario3: End of the verification of the osd_scrub_load_threshold parameter "
         #     "with the default value which is 10.0==="
         # )
+        log.info(
+            "===== Scenario 4:Verification of user initiated scrub as higher priority than scheduled scrub for the "
+            "osd_scrub_load_threshold parameter"
+        )
+        # Perform the tests by modifying the
+        mon_obj.set_config(section="osd", name="osd_scrub_load_threshold", value=0)
 
+        acting_pg_set = rados_object.get_pg_acting_set(pool_name=pool_name)
+        msg_acting_set = f"The {pool_name} pool acting set is -{acting_pg_set}"
+        log.info(msg_acting_set)
+
+        # Truncate the osd logs
+        rados_object.remove_log_file_content(osd_nodes, daemon_type="osd")
+        log.info("Scenario4: The content of osd log are removed")
+
+        init_time, _ = installer.exec_command(
+            cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
+        )
+        init_time = init_time.strip()
+
+        configure_log_level(mon_obj, acting_pg_set, set_to_default=False)
+        log.info("Initiating the user initiated scrub")
+        try:
+            chk_deep_scrub = rados_object.start_check_deep_scrub_complete(
+                pg_id=pg_id, user_initiated=True, wait_time=wait_time
+            )
+            log.info("The user initiated scrub is completed")
+
+        except Exception:
+            log.info(
+                "Scenario 4:The user initiated scrub operation not started after setting the osd_scrub_load_threshold "
+                "value to 0"
+            )
+            return 1
+        configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
+        log.info("Scenario4: The osd logs are set to default value")
+        end_time, _ = installer.exec_command(
+            cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
+        )
+        end_time = end_time.strip()
+        log_msgs = [
+            log_line_no_scrub,
+            "operator-requested",
+            f'"{pg_id} deep-scrub starts"',
+        ]
+        for log_line in log_msgs:
+            msg_info = f"Verification of the log message -{log_line} in the osd logs"
+            log.info(msg_info)
+            if (
+                rados_object.lookup_log_message(
+                    init_time=init_time,
+                    end_time=end_time,
+                    daemon_type="osd",
+                    daemon_id=acting_pg_set[0],
+                    search_string=log_line,
+                )
+                is False
+            ):
+                msg_error = (
+                    f"Scenario4:During the user initiated scrub, after setting the osd_scrub_load_threshold to "
+                    f"0 the {log_line} not exists in the logs"
+                )
+                log.error(msg_error)
+                return 1
+
+        log.info(
+            "===== Scenario 4:Verification of user initiated scrub as higher priority than scheduled scrub for the "
+            "osd_scrub_load_threshold parameter completed"
+        )
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())

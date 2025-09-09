@@ -269,6 +269,23 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                                     "with interval: {}".format(level, image, interval)
                                 )
 
+                # Remove snapshot schedule after verification
+                out, err = remove_snapshot_scheduling(
+                    rbd_primary,
+                    pool=pool,
+                    image=image,
+                    level=level,
+                    interval=interval,
+                    namespace=namespace,
+                )
+                if err:
+                    raise Exception(
+                        f"Removing snapshot schedule failed with error {err}"
+                    )
+
+                # Sets level and interval for the remaining test
+                level = "image"
+                interval = "1m"
                 # Verify namespace mirroring UUIDs and remote namespaces
                 verify_namespace_mirror_uuid(
                     rbd_primary, rbd_secondary, pool, namespace, remote_namespace
@@ -285,9 +302,8 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                     )
                 log.info(f"Demoted image {pri_image_spec} successfully")
 
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
-                )
+                log.info("waiting for 120 sec for the changes to reflect in other site")
+                time.sleep(120)
 
                 # Promoting Secondary Image on cluster-2
                 log.info(f"Promoting secondary image {sec_image_spec} on Cluster-2")
@@ -311,6 +327,7 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                     )
                 log.info(f"Resync initiated for image {pri_image_spec}")
 
+                log.info("waiting for 120 sec for the changes to reflect in other site")
                 time.sleep(120)
 
                 wait_for_status(
@@ -338,9 +355,8 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                     )
                 log.info(f"Demoted image {sec_image_spec} successfully")
 
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
-                )
+                log.info("waiting for 120 sec for the changes to reflect in other site")
+                time.sleep(120)
 
                 log.info(f"Promoting primary image {pri_image_spec} on Cluster-1")
                 out, err = rbd_primary.mirror.image.promote(
@@ -366,9 +382,23 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                     state_pattern="up+replaying",
                 )
 
+                # Add snapshot scheduling after promoting primary image again
+                out, err = add_snapshot_scheduling(
+                    rbd_primary,
+                    pool=pool,
+                    image=image,
+                    level=level,
+                    interval=interval,
+                    namespace=namespace,
+                )
+                if err:
+                    raise Exception(f"Adding snapshot schedule failed with error {err}")
+
                 # Rename the image on Primary
-                new_image_spec_pri = f"{pool}/{namespace}/{image}_renamed"
-                log.info(f"Renaming image {image} to {new_image_spec_pri} on Cluster-1")
+                renamed_image = f"{image}_renamed"
+                new_image_spec_pri = f"{pool}/{namespace}/{renamed_image}"
+
+                log.info(f"Renaming image {image} to {renamed_image} on Cluster-1")
                 out, err = rbd_primary.rename(
                     **{
                         "source-image-spec": pri_image_spec,
@@ -381,11 +411,10 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                     )
                 log.info(f"Renamed image {pri_image_spec} to {new_image_spec_pri}")
 
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 180
-                )
+                log.info("waiting for 120 sec for the changes to reflect in other site")
+                time.sleep(120)
 
-                new_image_spec_sec = f"{pool}/{remote_namespace}/{image}_renamed"
+                new_image_spec_sec = f"{pool}/{remote_namespace}/{renamed_image}"
                 out, err = rbd_secondary.info(
                     **{"image-or-snap-spec": new_image_spec_sec}
                 )
@@ -413,9 +442,8 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                     )
                 log.info(f"Resized image {new_image_spec_pri} to {resize_size}")
 
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
-                )
+                log.info("waiting for 120 sec for the changes to reflect in other site")
+                time.sleep(120)
 
                 out, err = rbd_secondary.info(
                     **{"image-or-snap-spec": new_image_spec_sec, "format": "json"}
@@ -439,6 +467,20 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                     )
                 log.info(f"Resize verified for image {new_image_spec_sec} on Cluster-2")
 
+                # Remove snapshot schedule after verification
+                out, err = remove_snapshot_scheduling(
+                    rbd_primary,
+                    pool=pool,
+                    image=renamed_image,
+                    level=level,
+                    interval=interval,
+                    namespace=namespace,
+                )
+                if err:
+                    raise Exception(
+                        f"Removing snapshot schedule failed with error {err}"
+                    )
+
                 # Remove image on Cluster-1
                 log.info(f"Removing image {new_image_spec_pri} on Cluster-1")
                 out, err = rbd_primary.rm(**{"image-spec": new_image_spec_pri})
@@ -448,9 +490,8 @@ def test_namespace_mirror_operations(pri_config, sec_config, pool_types, **kw):
                     )
                 log.info(f"Removed image {new_image_spec_pri} on Cluster-1")
 
-                time.sleep(
-                    int(image_config_val["snap_schedule_intervals"][-1][:-1]) * 120
-                )
+                log.info("waiting for 120 sec for the changes to reflect in other site")
+                time.sleep(120)
 
                 out, err = rbd_secondary.info(
                     **{"image-or-snap-spec": new_image_spec_sec}
