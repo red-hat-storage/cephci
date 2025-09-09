@@ -65,6 +65,7 @@ erasure:
     k: 5
     m: 2
     plugin: isa
+    enable_fast_ec_features: true
     crush-failure-domain: host
   sample-pool-8:
     pool_name: ec_pool_52_1
@@ -72,6 +73,7 @@ erasure:
     k: 5
     m: 2
     plugin: isa
+    enable_fast_ec_features: true
     crush-failure-domain: host
   sample-pool-9:
     pool_name: ec_pool_62
@@ -79,6 +81,7 @@ erasure:
     k: 6
     m: 2
     plugin: isa
+    enable_fast_ec_features: true
     crush-failure-domain: host
   sample-pool-10:
     pool_name: ec_pool_62_1
@@ -86,5 +89,24 @@ erasure:
     k: 6
     m: 2
     plugin: isa
+    enable_fast_ec_features: true
     crush-failure-domain: host
-
+  sample-pool-11:
+    pool_name: ec_pool_22_2
+    pool_type: erasure
+    k: 2
+    m: 2
+    crush-failure-domain: host
+    enable_fast_ec_features: true
+  sample-pool-12:
+    profile_name: ec86_profile
+    pool_name: ec86_msr_pool_1
+    pool_type: erasure
+    k: 8
+    m: 6
+    create_rule: false
+    crush-osds-per-failure-domain: 4
+    crush-num-failure-domains: 4
+    plugin: jerasure
+    crush-failure-domain: host
+    enable_fast_ec_features: true

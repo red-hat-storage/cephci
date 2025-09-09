@@ -22,6 +22,7 @@
 #     15.https://bugzilla.redhat.com/show_bug.cgi?id=2213766
 #     16.https://bugzilla.redhat.com/show_bug.cgi?id=2253735
 #     17.https://bugzilla.redhat.com/show_bug.cgi?id=2336352
+#     18.https://bugzilla.redhat.com/show_bug.cgi?id=2370168
 #===============================================================================================
 tests:
   - test:
@@ -236,5 +237,13 @@ tests:
         Single_Client_watcher: true
     polarion-id: CEPH-83616882
     desc: Ensures watchers do not persist after client disconnects or interruptions
+
+  - test:
+      name: Verify that OSDs can be added-moved to new spec
+      module: test_bug_fixes.py
+      config:
+        test_osd_spec_update: true
+      polarion-id: CEPH-83615839
+      desc: Verify that OSDs can be added-moved to new spec
 
 
