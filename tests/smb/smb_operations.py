@@ -202,7 +202,7 @@ def smbclient_check_shares(
                             sudo=True,
                             cmd=cmd,
                         )
-                    sleep(1)
+                    sleep(3)
         else:
             for smb_node in smb_nodes:
                 for smb_share in smb_shares:

@@ -2,7 +2,6 @@ from smb_operations import (
     check_ctdb_health,
     check_rados_clustermeta,
     deploy_smb_service_imperative,
-    remove_sub_vol_group,
     smb_cleanup,
     smbclient_check_shares,
 )
@@ -125,6 +124,5 @@ def run(ceph_cluster, **kw):
             log.error(f"Failed to deploy samba service : {e}")
             return 1
     finally:
-        smb_cleanup(installer, smb_shares, smb_cluster_id)
-        remove_sub_vol_group(installer, cephfs_vol, smb_subvol_group, smb_subvols)
+        smb_cleanup(installer, smb_shares, smb_cluster_id, cephfs_vol, smb_subvol_group)
     return 0
