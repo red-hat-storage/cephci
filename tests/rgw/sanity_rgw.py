@@ -128,7 +128,7 @@ def run(ceph_cluster, **kw):
     log.info("Flushing iptables")
     exec_from.exec_command(cmd="sudo iptables -F", check_ec=False)
     config["git-url"] = config.get(
-        "git-url", "https://github.com/red-hat-storage/ceph-qe-scripts.git"
+        "git-url", "https://github.com/yuva-gayam/ceph-qe-scripts.git"
     )
 
     test_folder = "rgw-tests"
