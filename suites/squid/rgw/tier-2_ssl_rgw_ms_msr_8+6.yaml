@@ -58,7 +58,7 @@ tests:
                           - node4
                       spec:
                         ssl: true
-                        rgw_frontend_ssl_certificate: create-cert
+                        generate_cert: true
               - config:
                   args:
                     - "ceph osd set-require-min-compat-client squid"
@@ -130,7 +130,7 @@ tests:
                           - node4
                       spec:
                         ssl: true
-                        rgw_frontend_ssl_certificate: create-cert
+                        generate_cert: true
               - config:
                   args:
                     - "ceph osd set-require-min-compat-client squid"
