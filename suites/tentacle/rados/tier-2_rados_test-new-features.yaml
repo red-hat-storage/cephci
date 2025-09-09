@@ -175,3 +175,139 @@ tests:
         param-check:
           stalled-reads: true
       polarion-id: CEPH-83620336
+
+  - test:
+      name: Track availability -MTBF,MTTR and Score check
+      desc: Verification of MTBF,MTTR and score data in the availability-status output
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case1
+  - test:
+      name: Track availability-multiple pools and logs check
+      desc: Verification of multiple pools  and log messages
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case2
+
+  - test:
+      name: Track availability-Recovery check
+      desc: Verification of track availability tests after recovery
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case3
+  - test:
+      name: Track availability- Backfill check
+      desc: Verification of track availability tests after backfill state
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case4
+  - test:
+      name: Track availability-Scrub operation check
+      desc: Verification of track availability tests after scrub operations
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case5
+
+  - test:
+      name: Track availability- PG split & merge check
+      desc: Verification of track availability tests by pg split & merge
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 128
+        case_to_run:
+          - case6
+  - test:
+      name: Track availability-Balancer check
+      desc: Verification of track availability tests by enabling the balancer
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case7
+  - test:
+      name: Track availability-enable_availability_tracking check
+      desc: Verification enable_availability_tracking parameter
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case8
+  - test:
+      name: Track availability- Mon operation check
+      desc: Verification of track availability tests by performing the mon operations
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case9
+  - test:
+      name: Track availability- clear-availability-status check
+      desc: Verification clear-availability-status command on pool
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case10
+  - test:
+      name: Track availability- Reboot OSD node check
+      desc: Verification of track availability tests by rebooting the osd node
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case11
+
