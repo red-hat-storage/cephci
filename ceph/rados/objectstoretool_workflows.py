@@ -377,7 +377,7 @@ class objectstoreToolWorkflows:
         _cmd = f"--pgid {pgid} '{obj}' rm-attr {attr}"
         return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
 
-    def fetch_object_dump(self, osd_id: int, pgid: str, obj: str):
+    def fetch_object_dump(self, osd_id: int, obj: str, pgid: str = None):
         """Module to fetch object dump
         Args:
             osd_id: OSD ID for which cot will be executed
@@ -387,7 +387,9 @@ class objectstoreToolWorkflows:
             Returns the output of
             ceph-objectstore-tool --data-path $PATH_TO_OSD $OBJECT dump
         """
-        _cmd = f"--pgid {pgid} '{obj}' dump"
+        _cmd = f" '{obj}' dump"
+        if pgid:
+            _cmd = f" --pgid {pgid} {_cmd}"
         return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
 
     def get_superblock(self, osd_id: int):
@@ -412,7 +414,7 @@ class objectstoreToolWorkflows:
             Returns the output of
             ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op get-osdmap
         """
-        # Extracting the osdmap from the osd
+        # Extracting the osdmap for the input obj from the osd
         _cmd = "--op get-osdmap"
         if pgid:
             _cmd = f"{_cmd} --pgid {pgid}"
@@ -448,7 +450,7 @@ class objectstoreToolWorkflows:
             Returns the output of
             ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op meta-list
         """
-        # Extracting the incremental osdmap from the osd
+        # Extracting the meta-list for the object
         _cmd = "--op meta-list"
         if pgid:
             _cmd = f"{_cmd} --pgid {pgid}"
@@ -466,7 +468,7 @@ class objectstoreToolWorkflows:
             Returns the output of
             ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op export
         """
-        # Extracting the incremental osdmap from the osd
+        # Extracting the content of OSD
         _cmd = "--op export"
         if pgid:
             _cmd = f"{_cmd} --pgid {pgid}"
