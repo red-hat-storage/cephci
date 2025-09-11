@@ -204,3 +204,9 @@ tests:
       module: test_objectstoretool_workflows.py
       polarion-id: CEPH-83581811
       desc: Verify ceph-objectstore-tool functionalities
+
+  - test:
+      name: ceph-kvstore-tool utility
+      module: test_kvstoretool_workflows.py
+      polarion-id: CEPH-83629905
+      desc: Verify ceph-kvstore-tool functionalities
