@@ -204,8 +204,8 @@ class kvstoreToolWorkflows:
             key: ket of the KV pair
         Returns:
             Returns the output of
-            ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> exists <prefix>
-            e.g - ceph-kvstore-tool bluestore-kv /var/lib/ceph/osd/ceph-6 dump C
+            ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> exists <prefix> [<key>]
+            e.g - ceph-kvstore-tool bluestore-kv /var/lib/ceph/osd/ceph-6 exists C
         """
         _cmd = f"exists {prefix}"
         if key:
