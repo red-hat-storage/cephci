@@ -1264,68 +1264,56 @@ class HighAvailability:
         self,
         nsid,
         subnqn,
-        namespaces_sub,
-        hostnqn_dict,
         ns_visibility,
         command,
-        expected_visibility,
+        host_nqn,
     ):
         """Validate that the namespace visibility is correct."""
 
         if command == "add_host":
             LOG.info(command)
-            num_namespaces_per_node = namespaces_sub // len(hostnqn_dict)
-
-            # Determine the initiator node responsible for this nsid based on the calculated range
-            node_index = (nsid - 1) // num_namespaces_per_node
-            expected_host = list(hostnqn_dict.values())[node_index]
 
             # Log the visibility of the namespace
-            if expected_host in ns_visibility:
+            if host_nqn in ns_visibility:
                 LOG.info(
                     f"Validated - Namespace {nsid} of {subnqn} has the correct nqn {ns_visibility}"
                 )
             else:
                 LOG.error(
-                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Expected {expected_host}, but got {ns_visibility}"
+                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Expected {host_nqn}, but got {ns_visibility}"
                 )
                 raise Exception(
-                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Expected {expected_host}, but got {ns_visibility}"
+                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Expected {host_nqn}, but got {ns_visibility}"
                 )
 
         elif command == "del_host":
             LOG.info(command)
-            num_namespaces_per_node = namespaces_sub // len(hostnqn_dict)
-
-            # Determine the initiator node responsible for this nsid based on the calculated range
-            node_index = (nsid - 1) // num_namespaces_per_node
-            expected_host = list(hostnqn_dict.values())[node_index]
 
             # Log the visibility of the namespace
-            if expected_host not in ns_visibility:
+            if host_nqn not in ns_visibility:
                 LOG.info(
-                    f"Validated - Namespace {nsid} of {subnqn} does not has {expected_host}"
+                    f"Validated - Namespace {nsid} of {subnqn} does not has {host_nqn}"
                 )
             else:
                 LOG.error(
                     f"Namespace {nsid} of {subnqn} has {ns_visibility} which was removed"
                 )
                 raise Exception(
-                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Not expecting {ns_visibility} in {expected_host}"
+                    f"Namespace {nsid} of {subnqn} has incorrect NQN. Not expecting {ns_visibility} in {host_nqn}"
                 )
 
         else:
             # Validate visibility based on the expected value (for non-add/del host commands)
-            if str(ns_visibility).lower() == str(expected_visibility).lower():
+            if str(ns_visibility).lower() == str(host_nqn).lower():
                 LOG.info(
                     f"Validated - Namespace {nsid} has correct visibility: {ns_visibility}"
                 )
             else:
                 LOG.error(
-                    f"NS {nsid} of {subnqn} has wrong visibility.Expected {expected_visibility} got {ns_visibility}"
+                    f"NS {nsid} of {subnqn} has wrong visibility.Expected {host_nqn} got {ns_visibility}"
                 )
                 raise Exception(
-                    f"NS {nsid} of {subnqn} has wrong visibility.Expected {expected_visibility} got {ns_visibility}"
+                    f"NS {nsid} of {subnqn} has wrong visibility.Expected {host_nqn} got {ns_visibility}"
                 )
 
     def run(self):
