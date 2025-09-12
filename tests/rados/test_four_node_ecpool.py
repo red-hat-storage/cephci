@@ -100,6 +100,7 @@ def run(ceph_cluster, **kw):
     # Due to below tracker, suppressing few heath warnings when fast ec is enabled on pools.
     # https://tracker.ceph.com/issues/71645 . ( bugzilla to be raised soon )
     fast_ec_enabled = ec_config.get("enable_fast_ec_features")
+    warning_ignore_list = ["OSD_SCRUB_ERRORS", "PG_DAMAGED"] if fast_ec_enabled else []
 
     try:
         if set_debug:
@@ -350,9 +351,7 @@ def run(ceph_cluster, **kw):
                 # fast EC has issues, where there are scrub errors reported.
                 method_should_succeed(
                     rados_obj.run_pool_sanity_check,
-                    ignore_list=(
-                        ["OSD_SCRUB_ERRORS", "PG_DAMAGED"] if fast_ec_enabled else []
-                    ),
+                    ignore_list=warning_ignore_list,
                 )
                 log.info(f"reboot of OSD host : {node.hostname} is successful.")
             log.debug("Done with reboot of all the OSD hosts")
@@ -432,9 +431,7 @@ def run(ceph_cluster, **kw):
             # Checking cluster health after OSD removal
             method_should_succeed(
                 rados_obj.run_pool_sanity_check,
-                ignore_list=(
-                    ["OSD_SCRUB_ERRORS", "PG_DAMAGED"] if fast_ec_enabled else []
-                ),
+                ignore_list=warning_ignore_list,
             )
             log.info(
                 f"Removal of OSD : {target_osd} is successful. Proceeding to add back the OSD daemon."
@@ -475,9 +472,7 @@ def run(ceph_cluster, **kw):
             # Checking cluster health after OSD removal
             method_should_succeed(
                 rados_obj.run_pool_sanity_check,
-                ignore_list=(
-                    ["OSD_SCRUB_ERRORS", "PG_DAMAGED"] if fast_ec_enabled else []
-                ),
+                ignore_list=warning_ignore_list,
             )
             log.info(
                 f"Addition of OSD : {target_osd} back into the cluster was successful, and the health is good!"
@@ -512,9 +507,7 @@ def run(ceph_cluster, **kw):
 
             method_should_succeed(
                 rados_obj.run_pool_sanity_check,
-                ignore_list=(
-                    ["OSD_SCRUB_ERRORS", "PG_DAMAGED"] if fast_ec_enabled else []
-                ),
+                ignore_list=warning_ignore_list,
             )
             log.info("PG's are active + clean post OSD Host Addition and Removal")
             log.info("\nscenario-8: Remove 1 host from the cluster- COMPLETE\n")

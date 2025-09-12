@@ -722,7 +722,7 @@ def run(ceph_cluster, **kw):
         log.info("Running test to Verify that OSDs can be added/moved to new spec")
 
         try:
-            if float(rhbuild.split("-")[0]) < 8.1:
+            if float(rhbuild.split("-")[0]) < 7.1:
                 log.info("Passing without execution, BZ yet to be backported")
                 return 0
 
