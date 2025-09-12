@@ -10,7 +10,7 @@ from ceph.ceph import Ceph
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.common import fetch_method
 from ceph.nvmegw_cli.common import NVMeCLI, find_gateway_hostname
-from ceph.nvmeof.initiator import Initiator
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.utils import get_node_by_id
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log

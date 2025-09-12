@@ -23,14 +23,16 @@ Approach 2: Multiple clients
 
 import re
 import time
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 from ceph.ceph_admin import CephAdmin
-from ceph.ceph_admin import CephAdmin as Node
 from ceph.rados.core_workflows import RadosOrchestrator
 from utility.log import Log
 
 log = Log(__name__)
+
+# Tracks mapped devices for robust cleanup: {client_hostname: {image_name: device_path}}
+mapped_devices: Dict[str, Dict[str, str]] = {}
 
 
 def run(ceph_cluster, **kw):
@@ -66,7 +68,7 @@ def run(ceph_cluster, **kw):
     """
     log.info(run.__doc__)
     config: Dict = kw.get("config", {})
-    log.info("Debug: Received config dictionary: %s", config)
+    log.info("Debug: Received config dictionary: ", config)
     cephadm: CephAdmin = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj: RadosOrchestrator = RadosOrchestrator(node=cephadm)
     client_nodes: List = ceph_cluster.get_nodes(role="client")
@@ -75,25 +77,17 @@ def run(ceph_cluster, **kw):
     # We need one image for each cleanup method (unmap, umount, restart, crash)
     # plus one extra image specifically for the blacklist test.
 
-    cleanup_methods: List[str] = [
-        "unmap",
-        "umount",
-        "restart",
-        "crash",
-    ]
     num_images_to_create_per_client: int = 5
 
-    # Tracks mapped devices for robust cleanup: {client_hostname: {image_name: device_path}}
-    mapped_devices: Dict[str, Dict[str, str]] = {}
     # List to keep track of all images created for final cleanup
     all_created_images: List[str] = []
 
     try:
-        log.info("Creating test pool: %s", pool)
+        log.info("Creating test pool: %s" % pool)
         # Passing app_name="rbd" here, so create_pool handles the rbd pool init
         if not rados_obj.create_pool(pool_name=pool, app_name="rbd"):
-            raise Exception(f"Failed to create and initialize pool {pool}")
-        log.info(f"RBD pool {pool} created and initialized.")
+            raise Exception("Failed to create and initialize pool %s" % pool)
+        log.info("RBD pool %s created and initialized." % pool)
 
         # --- Phase 1: Create, Map, Mount Images and Verify Watchers ---
         log.info(
@@ -103,63 +97,44 @@ def run(ceph_cluster, **kw):
         # Handle Single Client scenario if enabled
         if config.get("Single_Client_watcher"):
             log.info("Preparing images for Single Client Watcher Test.")
-            if not client_nodes:
-                raise Exception(
-                    "No client nodes found. Cannot run Single Rados Watcher Test."
-                )
 
             client = client_nodes[0]
-            log.info("Processing client: %s", client.hostname)
+            log.info("Processing client: %s" % client.hostname)
 
             for i in range(num_images_to_create_per_client):
-                image_name: str = f"img_single_client_test_{i}"
+                image_name = f"img_single_client_test_{i}"
                 all_created_images.append(
                     image_name
                 )  # Add to the list for final cleanup
-                try:
-                    _add_watchers(
-                        client_obj=client,
-                        pool=pool,
-                        rados_orchestrator_obj=rados_obj,
-                        image_name=image_name,
-                        mapped_devices=mapped_devices,
-                    )
-                except Exception as e:
-                    log.error(e)
-                    log.error("Failed to create image and watcher for {image_name}")
-                    return 1  # Fail test if watcher creation fails
+                _add_watchers(
+                    client_obj=client,
+                    pool=pool,
+                    rados_orchestrator_obj=rados_obj,
+                    image_name=image_name,
+                )
 
         # Handle Multiple Client scenario if enabled
         if config.get("Multiple_Client_watcher"):
             log.info("Preparing images for Multiple Rados Watcher Test.")
-            clients_for_multi_test: List = client_nodes
 
-            if len(clients_for_multi_test) < 2:
+            if len(client_nodes) < 2:
                 raise Exception(
                     "Not enough client nodes (need at least 2) for Multiple Rados Watcher Test."
                 )
 
-            for client_idx, client in enumerate(clients_for_multi_test):
-                log.info("Processing client: %s", client.hostname)
+            for client_idx, client in enumerate(client_nodes):
+                log.info("Processing client: %s" % client.hostname)
                 for i in range(num_images_to_create_per_client):
                     image_name: str = f"img_multi_client_{client_idx}_{i}"
                     all_created_images.append(
                         image_name
                     )  # Add to the list for final cleanup
-                    try:
-                        _add_watchers(
-                            client_obj=client,
-                            pool=pool,
-                            rados_orchestrator_obj=rados_obj,
-                            image_name=image_name,
-                            mapped_devices=mapped_devices,
-                        )
-                    except Exception as e:
-                        log.error(e)
-                        log.error(
-                            f"Failed to create image and watcher for {image_name}"
-                        )
-                        return 1  # Fail test if watcher creation fails
+                    _add_watchers(
+                        client_obj=client,
+                        pool=pool,
+                        rados_orchestrator_obj=rados_obj,
+                        image_name=image_name,
+                    )
 
         log.info(
             "\n--- Phase 1: All images created, mapped, mounted, and watchers verified. Proceeding to cleanup. ---"
@@ -177,10 +152,11 @@ def run(ceph_cluster, **kw):
         ]
         # Ensure we have enough images for each method per client
         if num_images_to_create_per_client < len(cleanup_methods):
-            raise Exception(
-                f"Not enough images created ({num_images_to_create_per_client}) for all"
-                "cleanup methods ({len(cleanup_methods)}). Increase num_images_to_create_per_client."
+            exp_msg = (
+                f"Not enough images created ({num_images_to_create_per_client}) for all "
+                f"cleanup methods ({len(cleanup_methods)}). Increase num_images_to_create_per_client."
             )
+            raise Exception(exp_msg)
 
         # Iterate through mapped devices to apply cleanup methods
         for client_hostname, images_info in list(mapped_devices.items()):
@@ -189,8 +165,8 @@ def run(ceph_cluster, **kw):
 
             if not client:
                 log.warning(
-                    "Client %s not found, skipping cleanup for its images.",
-                    client_hostname,
+                    "Client %s not found, skipping cleanup for its images."
+                    % client_hostname
                 )
                 continue
 
@@ -208,10 +184,8 @@ def run(ceph_cluster, **kw):
                 device_path = images_info[image_name]
 
                 log.info(
-                    "Testing cleanup for Image: %s on Client: %s using method '%s'",
-                    image_name,
-                    client.hostname,
-                    method,
+                    "Testing cleanup for Image: %s on Client: %s using method '%s'"
+                    % (image_name, client.hostname, method)
                 )
 
                 try:
@@ -223,28 +197,23 @@ def run(ceph_cluster, **kw):
                         device_path,
                         rados_obj,
                         pool,
-                        client.ip_address,
                     )
                     log.info(
-                        "Cleanup method '%s' verified successfully for %s.",
-                        method,
-                        image_name,
+                        "Cleanup method '%s' verified successfully for %s."
+                        % (method, image_name)
                     )
                 except Exception as e:
                     log.error(
-                        "Cleanup method '%s' FAILED for image '%s': %s",
-                        method,
-                        image_name,
-                        e,
+                        "Cleanup method '%s' FAILED for image '%s': %s"
+                        % (method, image_name, e)
                     )
                     log.exception(e)
                     return 1
                 finally:
                     # Ensure cleanup after each method test iteration
                     log.info(
-                        "Ensuring clean state after '%s' test for %s.",
-                        method,
-                        image_name,
+                        "Ensuring clean state after '%s' test for %s."
+                        % (method, image_name)
                     )
                     # The image should ideally be fully unmapped here
                     _perform_individual_cleanup(
@@ -253,7 +222,6 @@ def run(ceph_cluster, **kw):
                         image_name,
                         rados_obj,
                         pool,
-                        mapped_devices,
                     )
                     # Small delay to allow cluster state to settle
                     time.sleep(5)
@@ -283,8 +251,8 @@ def run(ceph_cluster, **kw):
                     blacklist_image_name = img_name
                     blacklist_device = dev_path
                     log.info(
-                        "Found existing image {blacklist_image_name} ({blacklist_device}) "
-                        "on {client_hostname} for blacklist test."
+                        "Found existing image %s (%s) on %s for blacklist test."
+                        % (blacklist_image_name, blacklist_device, client_hostname)
                     )
                     break
 
@@ -304,7 +272,6 @@ def run(ceph_cluster, **kw):
                         pool=pool,
                         rados_orchestrator_obj=rados_obj,
                         image_name=blacklist_image_name,
-                        mapped_devices=mapped_devices,
                     )
                     # After _add_watchers, the image should be in mapped_devices
                     if (
@@ -323,11 +290,12 @@ def run(ceph_cluster, **kw):
                         blacklist_image_name
                     )  # Track the newly created image
                     log.info(
-                        "Successfully created new image {blacklist_image_name} ({blacklist_device}) "
-                        "on {client_hostname} for blacklist test."
+                        "Successfully created new image %s (%s) "
+                        "on %s for blacklist test."
+                        % (blacklist_image_name, blacklist_device, client_hostname)
                     )
                 except Exception as e:
-                    log.error("Failed to create new image for blacklist test: {e}")
+                    log.error("Failed to create new image for blacklist test: %s" % e)
                     log.exception(e)
                     return 1
 
@@ -335,9 +303,8 @@ def run(ceph_cluster, **kw):
             if blacklist_image_name and blacklist_device:
                 try:
                     log.info(
-                        "--- Applying cleanup method: 'blacklist' for %s on %s ---",
-                        blacklist_image_name,
-                        client.hostname,
+                        "--- Applying cleanup method: 'blacklist' for %s on %s ---"
+                        % (blacklist_image_name, client.hostname)
                     )
                     _delete_watcher_and_verify(
                         "blacklist",
@@ -346,50 +313,53 @@ def run(ceph_cluster, **kw):
                         blacklist_device,
                         rados_obj,
                         pool,
-                        client.ip_address,
                     )
                     log.info(
-                        "Cleanup method 'blacklist' verified successfully for %s.",
-                        blacklist_image_name,
+                        "Cleanup method 'blacklist' verified successfully for %s "
+                        % blacklist_image_name
                     )
                     blacklist_test_passed = True
                 except Exception as e:
                     log.error(
-                        "Cleanup method 'blacklist' FAILED for image '%s': %s",
-                        blacklist_image_name,
-                        e,
+                        "Cleanup method 'blacklist' FAILED for image '%s': %s"
+                        % (blacklist_image_name, e)
                     )
                     log.exception(e)
                     blacklist_test_passed = False
                 finally:
                     log.info(
-                        "Ensuring clean state after 'blacklist' test for %s.",
-                        blacklist_image_name,
+                        "Ensuring clean state after 'blacklist' test for %s"
+                        % blacklist_image_name
                     )
                     # Ensure the blacklist is removed and image is unmapped/deleted
                     log.info(
-                        "Attempting to remove client %s from Ceph OSD blacklist.",
-                        client.ip_address,
+                        "Attempting to remove client %s from Ceph OSD blacklist."
+                        % client.ip_address
                     )
                     try:
-                        out, err, rc = client.exec_command(
-                            cmd=f"ceph osd blacklist rm {client.ip_address}", sudo=True
+                        out, err, rc, _ = client.exec_command(
+                            cmd=f"ceph osd blacklist rm {client.ip_address}",
+                            sudo=True,
+                            verbose=True,
                         )
                         if rc != 0 and "No such entry" not in err:
                             log.error(
-                                "Failed to remove {client.ip_address} from blacklist: {err}"
+                                "Failed to remove %s from blacklist: %s"
+                                % (client.ip_address, err)
                             )
                             raise Exception(
-                                f"Blacklist removal failed with error: {err}"
+                                "Blacklist removal failed with error: %s" % err
                             )
                         log.info(
-                            "Successfully removed {client.ip_address} from blacklist."
+                            "Successfully removed %s from blacklist."
+                            % client.ip_address
                         )
                     except Exception as e:
-                        log.warning(
-                            f"Could not remove {client.ip_address} from blacklist"
+                        msg = (
+                            f"Could not remove {client.ip_address} from blacklist "
                             f"(might already be removed or another error): {e}"
                         )
+                        log.warning(msg)
                     time.sleep(5)
 
                     if (
@@ -401,12 +371,11 @@ def run(ceph_cluster, **kw):
                             blacklist_image_name,
                             rados_obj,
                             pool,
-                            mapped_devices,
                         )
                     else:
                         log.info(
-                            "Blacklist test image %s was not mapped, skipping individual cleanup for device.",
-                            blacklist_image_name,
+                            "Blacklist test image %s was not mapped, skipping individual cleanup for device. %s"
+                            % blacklist_image_name
                         )
             else:
                 log.error(
@@ -433,13 +402,13 @@ def run(ceph_cluster, **kw):
             log.info(
                 "Attempting final cleanup of any remaining mapped devices or images."
             )
-            _final_cleanup_mapped_devices(client_nodes, pool, rados_obj, mapped_devices)
+            _final_cleanup_mapped_devices(client_nodes, pool)
             _final_cleanup_rbd_images(pool, rados_obj, all_created_images)
-            log.info("Attempting to delete pool: %s.", pool)
+            log.info("Attempting to delete pool: %s" % pool)
             if not rados_obj.delete_pool(pool=pool):
-                log.error("Failed to delete pool {pool} during final cleanup.")
+                log.error("Failed to delete pool %s during final cleanup." % pool)
         except Exception as e:
-            log.error("Critical error during final cleanup of pool: %s", e)
+            log.error("Critical error during final cleanup of pool: %s" % e)
             log.exception(e)
         if rados_obj.check_crash_status():
             log.error(
@@ -453,7 +422,6 @@ def _add_watchers(
     pool: str,
     rados_orchestrator_obj: RadosOrchestrator,
     image_name: str,
-    mapped_devices: Dict[str, Dict[str, str]],
 ) -> None:
     """
     Creates an RBD image, maps and mounts it on the client, and verifies watcher presence.
@@ -464,17 +432,16 @@ def _add_watchers(
         pool (str): The name of the pool.
         rados_orchestrator_obj (RadosOrchestrator): The RadosOrchestrator object.
         image_name (str): The name of the RBD image to create and map.
-        mapped_devices (Dict): Dictionary to track mapped devices for cleanup.
 
     Raises:
         Exception: If image creation, mapping, mounting, or watcher verification fails.
     """
-    log.info("Creating image '%s' for client %s.", image_name, client_obj.hostname)
+    log.info("Creating image '%s' for client %s." % (image_name, client_obj.hostname))
 
     rados_orchestrator_obj.create_rbd_image(
         pool_name=pool, img_name=image_name, size="1G"
     )
-    log.info("The {image_name} created.")
+    log.info("Image %s has been created on pool %s" % (image_name, pool))
 
     desired_mount_path: str = f"/mnt/{image_name}"
 
@@ -493,34 +460,35 @@ def _add_watchers(
     # Check if mounting was successful by verifying actual_mount_directory and rbd_block_device_path are not None
     if actual_mount_directory and rbd_block_device_path:
         log.info(
-            "Image %s mapped to %s and mounted to %s on %s",
-            image_name,
-            rbd_block_device_path,  # Log the actual device path (e.g., /dev/rbd0)
-            actual_mount_directory,  # Log the actual mount directory (e.g., /mnt/img_name)
-            client_obj.hostname,
+            "Image %s mapped to %s and mounted to %s on %s"
+            % (
+                image_name,
+                rbd_block_device_path,  # Log the actual device path (e.g., /dev/rbd0)
+                actual_mount_directory,  # Log the actual mount directory (e.g., /mnt/img_name)
+                client_obj.hostname,
+            )
         )
         # Store the actual rbd_block_device_path for cleanup
         mapped_devices.setdefault(client_obj.hostname, {})[
             image_name
         ] = rbd_block_device_path
         log.debug(
-            "Added %s to mapped_devices: %s",
-            image_name,
-            mapped_devices[client_obj.hostname][image_name],
-        )
-
-        # Now verify the watcher
-        _verify_watcher_presence(
-            image_name,
-            client_obj,
-            pool,
-            rados_orchestrator_obj,  # client_obj.ip_address is now fetched inside
+            "Added %s to mapped_devices: %s"
+            % (rbd_block_device_path, mapped_devices[client_obj.hostname][image_name])
         )
     else:
-        raise Exception(
+        exp_msg = (
             f"Failed to map and mount image {image_name} on client {client_obj.hostname}. "
             f"Actual mount dir: {actual_mount_directory}, RBD device: {rbd_block_device_path}"
         )
+        raise Exception(exp_msg)
+    # Now verify the watcher
+    _verify_watcher_presence(
+        image_name,
+        client_obj,
+        pool,
+        rados_orchestrator_obj,  # client_obj.ip_address is now fetched inside
+    )
 
 
 def _verify_watcher_presence(
@@ -528,7 +496,7 @@ def _verify_watcher_presence(
     client_obj,
     pool: str,
     rados_orchestrator_obj: RadosOrchestrator,
-) -> str:
+) -> bool:
     """
     Verifies the presence of a specific RBD watcher for an image.
 
@@ -550,24 +518,21 @@ def _verify_watcher_presence(
         Exception: If the watcher is not found after multiple retries.
     """
     client_ip = client_obj.ip_address  # Fetch client_ip directly from client_obj
-    log.info("Verifying watcher created for %s from %s", image_name, client_ip)
-    max_retries: int = 10
-    for i in range(max_retries):
+    log.info("Verifying watcher created for %s from %s" % (image_name, client_ip))
+    for i in range(10):
         watchers: List[str] = rados_orchestrator_obj.get_rbd_client_ips(
             pool, image_name
         )
         if watchers and client_ip in watchers:
             log.info(
-                "Watcher successfully created for %s by %s.", image_name, client_ip
+                "Watcher successfully created for %s by %s." % (image_name, client_ip)
             )
             return True
         log.debug(
-            "Watcher not yet seen for %s by %s. Retrying... (Attempt %d)",
-            image_name,
-            client_ip,
-            i + 1,
+            "Watcher not yet seen for %s by %s. Retrying... (Attempt %d)"
+            % (image_name, client_ip, i + 1)
         )
-        time.sleep(2)
+        time.sleep(10)
     raise Exception(
         "Watcher for %s not found after mapping from %s. Current watchers: %s"
         % (image_name, client_ip, watchers)
@@ -579,8 +544,7 @@ def _verify_watcher_cleanup(
     pool: str,
     image_name: str,
     method: str,
-    client_node: Optional["Node"] = None,
-    client_ip: Optional[str] = None,
+    client_node,
 ) -> None:
     """
     Verifies that RBD watchers for a given image are properly cleaned up.
@@ -590,8 +554,7 @@ def _verify_watcher_cleanup(
         pool (str): The Ceph pool where the RBD image resides.
         image_name (str): Name of the RBD image to verify.
         method (str): Cleanup method used before this check (e.g., "umount").
-        client_node (Node, optional): Client node object to run fallback commands like rbd unmap.
-        client_ip (str, optional): IP of the client expected to be removed from watchers list.
+        client_node (Node): Client node object to run fallback commands like rbd unmap.
 
     Raises:
         Exception: If watcher is still present even after retries and fallback.
@@ -599,13 +562,12 @@ def _verify_watcher_cleanup(
     max_retries = 10
     retry_interval = 5
     watcher_cleaned = False
+    client_ip = client_node.ip_address
 
-    for attempt in range(1, max_retries + 1):
+    for attempt in range(max_retries):
         log.info(
-            "Verifying watchers after '%s' cleanup (Attempt %d/%d)...",
-            method,
-            attempt,
-            max_retries,
+            "Verifying watchers after '%s' cleanup (Attempt %d/%d)..."
+            % (method, attempt + 1, max_retries)
         )
         time.sleep(retry_interval)
 
@@ -616,28 +578,25 @@ def _verify_watcher_cleanup(
         if client_ip:
             if client_ip not in watchers:
                 log.info(
-                    "Watcher from %s successfully removed for %s.",
-                    client_ip,
-                    image_name,
+                    "Watcher from %s successfully removed for %s."
+                    % (client_ip, image_name)
                 )
                 watcher_cleaned = True
                 break
             else:
                 log.warning(
-                    "Watcher from %s still present for %s. Retrying...",
-                    client_ip,
-                    image_name,
+                    "Watcher from %s still present for %s. Retrying..."
+                    % (client_ip, image_name)
                 )
         else:
             if not watchers:
-                log.info("All watchers successfully cleaned up for %s.", image_name)
+                log.info("All watchers successfully cleaned up for %s" % image_name)
                 watcher_cleaned = True
                 break
             else:
                 log.warning(
-                    "Watchers still present for %s: %s. Retrying...",
-                    image_name,
-                    watchers,
+                    "Watchers still present for %s: %s. Retrying..."
+                    % (image_name, watchers)
                 )
 
     # Fallback logic: try rbd unmap if umount failed
@@ -646,45 +605,32 @@ def _verify_watcher_cleanup(
             "Watchers still exist after umount. Trying fallback: 'rbd unmap'..."
         )
 
-        if not client_node:
-            log.error(
-                "client_node is required for fallback 'rbd unmap' but was not provided."
-            )
-        else:
-            try:
-                out, _ = client_node.exec_command(cmd="rbd showmapped", sudo=True)
-                for line in out.strip().splitlines():
-                    fields = line.split()
-                    if len(fields) >= 5 and fields[2] == image_name:
-                        rbd_dev = fields[4]
-                        log.info("Attempting fallback rbd unmap on device: %s", rbd_dev)
-                        try:
-                            client_node.exec_command(
-                                cmd="rbd unmap %s" % rbd_dev, sudo=True
-                            )
-                            log.info("Successfully unmapped %s via fallback.", rbd_dev)
-                        except Exception as unmap_err:
-                            log.error(
-                                "Fallback 'rbd unmap' failed for %s: %s",
-                                rbd_dev,
-                                unmap_err,
-                            )
-                        break
-                else:
-                    log.warning("Image %s not found in showmapped output.", image_name)
-
-                time.sleep(3)
-                watchers = rados_orchestrator_obj.get_rbd_client_ips(pool, image_name)
-                if client_ip and client_ip not in watchers:
-                    log.info(
-                        "Watcher removed via fallback 'rbd unmap' for %s.", client_ip
+        out, _ = client_node.exec_command(cmd="rbd showmapped", sudo=True)
+        for line in out.strip().splitlines():
+            fields = line.split()
+            if len(fields) >= 5 and fields[2] == image_name:
+                rbd_dev = fields[4]
+                log.info("Attempting fallback rbd unmap on device: %s" % rbd_dev)
+                try:
+                    client_node.exec_command(cmd=f"rbd unmap {rbd_dev}", sudo=True)
+                    log.info("Successfully unmapped %s via fallback." % rbd_dev)
+                    break
+                except Exception as unmap_err:
+                    log.error(
+                        "Fallback 'rbd unmap' failed for %s: %s" % (rbd_dev, unmap_err)
                     )
-                    return
-                elif not client_ip and not watchers:
-                    log.info("All watchers removed via fallback 'rbd unmap'.")
-                    return
-            except Exception as e:
-                log.error("Fallback 'rbd unmap' execution failed: %s", str(e))
+                    raise
+        else:
+            log.warning("Image %s not found in showmapped output." % image_name)
+
+        time.sleep(3)
+        watchers = rados_orchestrator_obj.get_rbd_client_ips(pool, image_name)
+        if client_ip and client_ip not in watchers:
+            log.info("Watcher removed via fallback 'rbd unmap' for %s" % client_ip)
+            return
+        elif not client_ip and not watchers:
+            log.info("All watchers removed via fallback 'rbd unmap'")
+            return
 
     if not watcher_cleaned:
         raise Exception(
@@ -700,7 +646,6 @@ def _delete_watcher_and_verify(
     device: str,
     rados_orchestrator_obj,
     pool: str,
-    client_ip: str,
 ) -> None:
     """
     Deletes an RBD watcher using a specified method and verifies its removal.
@@ -712,21 +657,19 @@ def _delete_watcher_and_verify(
         device (str): Device path (e.g., /dev/rbd0).
         rados_orchestrator_obj (RadosOrchestrator): Object to fetch watcher info.
         pool (str): Pool name.
-        client_ip (str): IP of the client holding the watcher.
 
     Raises:
         Exception: If watcher cleanup fails.
     """
     log.info(
-        "Attempting to delete watcher using '%s' for image: %s on client %s",
-        method,
-        image_name,
-        client.hostname,
+        "Attempting to delete watcher using '%s' for image: %s on client %s"
+        % (method, image_name, client.hostname)
     )
     mount_path = f"/mnt/{image_name}"
+    client_ip = client.ip_address
 
     if method == "unmap":
-        log.info("Performing rbd unmap of device %s.", device)
+        log.info("Performing rbd unmap of device %s" % device)
         _, err = client.exec_command(
             cmd=f"rbd unmap {device}", sudo=True, check_ec=False
         )
@@ -737,35 +680,34 @@ def _delete_watcher_and_verify(
             _, err = client.exec_command(
                 cmd=f"rbd unmap {device}", sudo=True, check_ec=False
             )
-            if err and "is not mapped" not in err:
-                raise Exception(f"rbd unmap retry failed: {err}")
-        elif err and "is not mapped" not in err:
-            raise Exception(f"rbd unmap failed: {err}")
+
+        if err and "is not mapped" not in err:
+            raise Exception(f"rbd unmap retry failed: {err}")
         time.sleep(5)
         client.exec_command(cmd=f"rm -rf {mount_path}", sudo=True)
 
     elif method == "umount":
-        log.info("Unmounting %s.", mount_path)
+        log.info("Unmounting %s" % mount_path)
         _, err = client.exec_command(
             cmd=f"umount {mount_path}", sudo=True, check_ec=False
         )
         if "not mounted" in err:
-            log.warning("The mount path %s was not mounted.", mount_path)
+            log.warning("The mount path %s was not mounted." % mount_path)
         elif err:
             raise Exception(f"umount failed: {err}")
         time.sleep(5)
 
     elif method == "blacklist":
-        log.info("Blacklisting client IP %s.", client_ip)
+        log.info("Blacklisting client IP ", client_ip)
         current_watchers = rados_orchestrator_obj.get_rbd_client_ips(pool, image_name)
         if client_ip not in current_watchers:
-            log.warning("Client IP %s not a watcher. Skipping blacklist.", client_ip)
+            log.warning("Client IP %s not a watcher. Skipping blacklist." % client_ip)
         else:
             _, err = client.exec_command(
                 cmd=f"ceph osd blacklist add {client_ip}", sudo=True, check_ec=False
             )
             if err and "already exists" not in err:
-                raise Exception(f"Blacklist failed: {err}")
+                raise Exception("Blacklist failed: %s" % err)
         time.sleep(10)
 
     elif method == "restart":
@@ -783,13 +725,12 @@ def _delete_watcher_and_verify(
             if "rbd-nbd" not in svc_check:
                 log.warning("rbd-nbd service not found. Skipping restart.")
             else:
-                client.exec_command(cmd="systemctl stop rbd-nbd", sudo=True)
+                client.exec_command(cmd="systemctl restart rbd-nbd", sudo=True)
                 time.sleep(3)
-                client.exec_command(cmd="systemctl start rbd-nbd", sudo=True)
                 log.info("rbd-nbd restarted.")
                 time.sleep(10)
         except Exception as e:
-            raise Exception(f"Restart method failed: {e}")
+            raise Exception("Restart method failed: %s" % e)
         client.exec_command(cmd=f"rbd unmap {device}", sudo=True, check_ec=False)
         client.exec_command(cmd=f"rm -rf {mount_path}", sudo=True)
 
@@ -808,30 +749,29 @@ def _delete_watcher_and_verify(
                     "Connection reset",
                 ]
             ):
-                log.info("Expected disconnect after reboot: %s", e)
+                log.info("Expected disconnect after reboot: %s" % e)
             else:
-                raise Exception(f"Unexpected error during reboot: {e}")
+                raise Exception("Unexpected error during reboot: %s" % e)
 
         # Wait for SSH to become available again
         max_wait = 300
         interval = 10
-        log.info("Waiting for client %s to come back online...", client.hostname)
+        log.info("Waiting for client %s to come back online..." % client.hostname)
         for _ in range(0, max_wait, interval):
             try:
                 client.reconnect()
-                log.info("Client %s is back online after reboot.", client.hostname)
+                log.info("Client %s is back online after reboot." % client.hostname)
                 break
             except Exception:
                 time.sleep(interval)
         else:
             raise Exception(
-                f"Client {client.hostname} did not come back online after reboot."
+                "Client %s did not come back online after reboot." % client.hostname
             )
-
         time.sleep(10)
 
     else:
-        log.warning("Unknown method: %s", method)
+        log.warning("Unknown method: %s" % method)
 
     _verify_watcher_cleanup(
         rados_orchestrator_obj=rados_orchestrator_obj,
@@ -839,7 +779,6 @@ def _delete_watcher_and_verify(
         image_name=image_name,
         method=method,
         client_node=client,
-        client_ip=client_ip,
     )
 
 
@@ -849,7 +788,6 @@ def _perform_individual_cleanup(
     image_name: str,
     rados_obj: RadosOrchestrator,
     pool: str,
-    mapped_devices: Dict[str, Dict[str, str]],
 ) -> None:
     """
     Performs cleanup for a single image, including unmapping and deleting the RBD image.
@@ -866,53 +804,51 @@ def _perform_individual_cleanup(
             Example: rados_obj (instance created in run function)
         pool (str): The name of the pool.
             Example: "watcher_test_pool"
-        mapped_devices (Dict[str, Dict[str, str]]): Dictionary tracking currently mapped devices.
-            Used to remove the entry for the cleaned-up image.
-            Example: {"client1_hostname": {"img1": "/dev/rbd0"}}
 
     Returns:
         None
     """
     try:
         log.info(
-            "Performing individual cleanup for image %s using device %s.",
-            image_name,
-            device,
+            "Performing individual cleanup for image %s using device %s."
+            % (image_name, device)
         )
         mount_path = f"/mnt/{image_name}"
         log.info(
-            "Attempting to unmount %s if mounted for individual cleanup.", mount_path
+            "Attempting to unmount %s if mounted for individual cleanup." % mount_path
         )
         try:
             client.exec_command(cmd=f"umount {mount_path}", sudo=True)
         except Exception as e:
             if "not mounted" not in str(e):
                 log.warning(
-                    f"Umount of {mount_path} failed unexpectedly during individual cleanup: {e}"
+                    "Umount of %s failed unexpectedly during individual cleanup: %s"
+                    % (mount_path, e)
                 )
         time.sleep(1)
 
-        log.info("Attempting rbd unmap %s for individual cleanup.", device)
+        log.info("Attempting rbd unmap %s for individual cleanup." % device)
         try:
             client.exec_command(cmd=f"rbd unmap {device}", sudo=True)
         except Exception as e:
             if "is not mapped" not in str(e):
                 log.warning(
-                    f"Rbd unmap for {device} failed unexpectedly during individual cleanup: {e}"
+                    "Rbd unmap for %s failed unexpectedly during individual cleanup: %s"
+                    % (device, e)
                 )
         time.sleep(10)
         client.exec_command(cmd=f"rm -rf {mount_path}", sudo=True)
 
-        rados_obj.delete_rbd_image(pool_name=pool, img_name=image_name)
+        rados_obj.client.exec_command(cmd=f"rbd rm {pool}/{image_name}", sudo=True)
         if (
             client.hostname in mapped_devices
             and image_name in mapped_devices[client.hostname]
         ):
             del mapped_devices[client.hostname][image_name]
-            log.info("Removed %s from mapped_devices tracking.", image_name)
+            log.info("Removed %s from mapped_devices tracking." % image_name)
     except Exception as cleanup_e:
         log.warning(
-            "Error during individual cleanup for image %s: %s", image_name, cleanup_e
+            "Error during individual cleanup for image %s: %s" % (image_name, cleanup_e)
         )
         log.exception(cleanup_e)
 
@@ -920,8 +856,6 @@ def _perform_individual_cleanup(
 def _final_cleanup_mapped_devices(
     client_nodes: List,
     pool: str,
-    rados_obj: RadosOrchestrator,
-    mapped_devices: Dict[str, Dict[str, str]],
 ) -> None:
     """
     Performs a final cleanup of any remaining mapped RBD devices across all client nodes
@@ -932,11 +866,6 @@ def _final_cleanup_mapped_devices(
             Example: [client_node_1, client_node_2]
         pool (str): The name of the test pool.
             Example: "watcher_test_pool"
-        rados_obj (RadosOrchestrator): The RadosOrchestrator object for Ceph operations.
-            Example: rados_obj (instance created in run function)
-        mapped_devices (Dict[str, Dict[str, str]]): Dictionary tracking currently mapped devices
-            from the test execution. This is updated as devices are unmapped.
-            Example: {"client1_hostname": {"img1": "/dev/rbd0"}}
 
     Returns:
         None
@@ -955,16 +884,18 @@ def _final_cleanup_mapped_devices(
                     device_to_unmap: str = match.group(3)
                     if mapped_pool == pool:
                         log.info(
-                            "Found mapped device %s (image: %s) from test pool on %s. Attempting unmap and unmount.",
-                            device_to_unmap,
-                            mapped_image,
-                            client.hostname,
+                            "Found mapped device %s (image: %s) from test pool on %s. Attempting unmap and unmount."
+                            % (
+                                device_to_unmap,
+                                mapped_image,
+                                client.hostname,
+                            )
                         )
                         try:
                             mount_path_final = f"/mnt/{mapped_image}"
                             log.info(
-                                "Attempting to unmount %s if mounted for final cleanup.",
-                                mount_path_final,
+                                "Attempting to unmount %s if mounted for final cleanup."
+                                % mount_path_final
                             )
                             try:
                                 client.exec_command(
@@ -973,13 +904,14 @@ def _final_cleanup_mapped_devices(
                             except Exception as e:
                                 if "not mounted" not in str(e):
                                     log.warning(
-                                        f"Umount of {mount_path_final} failed unexpectedly during final cleanup: {e}"
+                                        "Umount of %s failed unexpectedly during final cleanup: %s"
+                                        % (mount_path_final, e)
                                     )
                             time.sleep(1)
 
                             log.info(
-                                "Attempting rbd unmap %s for final cleanup.",
-                                device_to_unmap,
+                                "Attempting rbd unmap %s for final cleanup."
+                                % device_to_unmap
                             )
                             try:
                                 client.exec_command(
@@ -988,7 +920,8 @@ def _final_cleanup_mapped_devices(
                             except Exception as e:
                                 if "is not mapped" not in str(e):
                                     log.warning(
-                                        f"Rbd unmap for {device_to_unmap} failed unexpectedly during final cleanup: {e}"
+                                        "Rbd unmap for %s failed unexpectedly during final cleanup: %s"
+                                        % (device_to_unmap, e)
                                     )
                             time.sleep(10)
                             client.exec_command(
@@ -1001,23 +934,24 @@ def _final_cleanup_mapped_devices(
                             ):
                                 del mapped_devices[client.hostname][mapped_image]
                                 log.info(
-                                    "Removed %s from mapped_devices tracking during final cleanup.",
-                                    mapped_image,
+                                    "Removed %s from mapped_devices tracking during final cleanup."
+                                    % mapped_image
                                 )
                         except Exception as inner_cleanup_e:
                             log.warning(
-                                "Failed to clean up mapped device %s for image %s on %s during final cleanup: %s",
-                                device_to_unmap,
-                                mapped_image,
-                                client.hostname,
-                                inner_cleanup_e,
+                                "Failed to clean up mapped device %s for image %s on %s during final cleanup: %s"
+                                % (
+                                    device_to_unmap,
+                                    mapped_image,
+                                    client.hostname,
+                                    inner_cleanup_e,
+                                )
                             )
                             log.exception(inner_cleanup_e)
         except Exception as client_cleanup_e:
             log.warning(
-                "Error during client-specific final cleanup on %s: %s",
-                client.hostname,
-                client_cleanup_e,
+                "Error during client-specific final cleanup on %s: %s"
+                % (client.hostname, client_cleanup_e)
             )
             log.exception(client_cleanup_e)
 
@@ -1042,18 +976,17 @@ def _final_cleanup_rbd_images(
     for image_to_delete in images_to_delete:
         try:
             log.info(
-                "Attempting to delete image %s/%s in final cleanup block.",
-                pool,
-                image_to_delete,
+                "Attempting to delete image %s/%s in final cleanup block."
+                % (pool, image_to_delete)
             )
             # Deleting an image is expected to succeed if it exists and is not in use.
-            # If it's still in use, the delete_rbd_image method will handle it
-            rados_obj.delete_rbd_image(pool_name=pool, img_name=image_to_delete)
+            # If it's still in use, the rbd remove command will handle it
+            rados_obj.client.exec_command(
+                cmd=f"rbd rm {pool}/{image_to_delete}", sudo=True
+            )
         except Exception as img_del_e:
             log.warning(
-                "Failed to delete image %s/%s in final cleanup block: %s",
-                pool,
-                image_to_delete,
-                img_del_e,
+                "Failed to delete image %s/%s in final cleanup block: %s"
+                % (pool, image_to_delete, img_del_e)
             )
             log.exception(img_del_e)

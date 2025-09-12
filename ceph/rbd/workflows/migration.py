@@ -49,7 +49,7 @@ def verify_migration_state(action, image_spec, cluster_name="ceph", **kw):
 
 
 def prepare_migration_source_spec(
-    cluster_name, client, pool_name, image_name, snap_name
+    cluster_name, client, pool_name, image_name, snap_name, namespace_name=None
 ):
     """
     Create a native source spec file for migration.
@@ -68,6 +68,8 @@ def prepare_migration_source_spec(
         "image_name": image_name,
         "snap_name": snap_name,
     }
+    if namespace_name is not None:
+        native_spec["pool_namespace"] = namespace_name
 
     temp_file = tempfile.NamedTemporaryFile(dir="/tmp", suffix=".json")
     spec_file = client.remote_file(sudo=True, file_name=temp_file.name, file_mode="w")

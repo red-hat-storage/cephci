@@ -1,8 +1,9 @@
 import json
 
 from ceph.ceph import CommandFailed
-from ceph.nvmeof.initiator import Initiator
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
+from tests.nvmeof.workflows.exceptions import NoDevicesFound
 from utility.log import Log
 from utility.retry import retry
 from utility.utils import log_json_dump, run_fio
@@ -11,9 +12,8 @@ LOG = Log(__name__)
 
 
 class NVMeInitiator(Initiator):
-    def __init__(self, node, gateway, nqn=""):
+    def __init__(self, node, nqn=""):
         super().__init__(node)
-        self.gateway = gateway
         self.discovery_port = 8009
         self.subsys_key = None
         self.host_key = None
@@ -76,14 +76,14 @@ class NVMeInitiator(Initiator):
         LOG.debug(f"[ {self.node.hostname} ] LSBLK UUIds : {log_json_dump(out)}")
         return uuids
 
-    def connect_targets(self, config):
+    def connect_targets(self, gateway, config):
         if not config:
             config = self.config
 
         # Discover the subsystem endpoints
         cmd_args = {
             "transport": "tcp",
-            "traddr": self.gateway.node.ip_address,
+            "traddr": gateway.node.ip_address,
         }
         json_format = {"output-format": "json"}
 
@@ -133,34 +133,33 @@ class NVMeInitiator(Initiator):
 
             LOG.debug(self.connect(**_conn_cmd))
 
+    @retry((NoDevicesFound))
     def list_devices(self):
         """List NVMe targets."""
         targets = self.list_spdk_drives()
         if not targets:
-            raise Exception(f"NVMe Targets not found on {self.node.hostname}")
+            raise NoDevicesFound(f"NVMe Targets not found on {self.node.hostname}")
         LOG.debug(targets)
         return targets
 
     def start_fio(self, io_size="100%"):
         """Start FIO on the all targets on client node."""
-        targets = self.list_devices()
-        paths = []
+        paths = self.list_devices()
         results = []
         io_args = {"size": io_size}
-        for target in targets:
-            if "DevicePath" in target:
-                paths.append(target["DevicePath"])
 
-            elif "Subsystems" in target:
-                for subsys in target.get("Subsystems", []):
-                    for ns in subsys.get("Namespaces", []):
-                        if "NameSpace" in ns:
-                            paths.append(f"/dev/{ns['NameSpace']}")
+        if not paths:
+            raise Exception("No paths found")
+
+        LOG.info(f"Paths found are {paths}")
 
         # Use max_workers to ensure all FIO processes can start simultaneously
         with parallel(max_workers=len(paths) + 4) as p:
             for path in paths:
                 _io_args = {}
+                # TODO: blkdiscard is temporary workaround for same image usage
+                #  in the IO progression tasks especially HA failover and failback.
+                self.node.exec_command(cmd=f"blkdiscard {path}", sudo=True)
                 if io_args.get("test_name"):
                     test_name = f"{io_args['test_name']}-" f"{path.replace('/', '_')}"
                     _io_args.update({"test_name": test_name})

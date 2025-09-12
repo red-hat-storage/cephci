@@ -305,3 +305,13 @@ tests:
             script-name: test_Mbuckets_with_Nobjects.py
             verify-io-on-site: ["ceph-sec"]
             config-file-name: test_Mbuckets_with_Nobjects_multipart.yaml
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3_swift/test_swift_tenanted_user.py
+            config-file-name: ../../s3_swift/multisite_configs/test_swift_tenanted_user.yaml
+      name: test_swift_tenanted_user
+      desc: test_swift_tenanted_user
+      polarion-id: CEPH-10734
+      module: sanity_rgw_multisite.py

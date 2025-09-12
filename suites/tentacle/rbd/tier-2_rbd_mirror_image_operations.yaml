@@ -282,6 +282,7 @@ tests:
                 size: 2G
                 io_total: 10
       name: Testing change of image feature reflection from primary to secondary
+      comments: Product bug 2177167
       polarion-id: CEPH-9520
 
   - test:

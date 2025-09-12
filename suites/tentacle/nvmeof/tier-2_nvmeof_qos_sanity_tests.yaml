@@ -88,6 +88,7 @@ tests:
           - gateway
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
+            no-group-append: true
             serial: 1
             bdevs:
               count: 1

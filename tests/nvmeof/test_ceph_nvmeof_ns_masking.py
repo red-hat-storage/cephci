@@ -4,10 +4,10 @@ from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 
 from ceph.ceph import Ceph
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmeof.initiator import Initiator
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id
@@ -77,7 +77,7 @@ def add_namespaces(config, command, init_nodes, hostnqn_dict, rbd_obj, ha):
             if no_auto_visible:
                 config["args"]["no-auto-visible"] = ""
                 expected_visibility = False
-            _, namespaces_response = nvmegwcli.namespace.add(**config)
+            namespaces_response, _ = nvmegwcli.namespace.add(**config)
             nsid = json.loads(namespaces_response)["nsid"]
 
             _config = {
@@ -88,7 +88,7 @@ def add_namespaces(config, command, init_nodes, hostnqn_dict, rbd_obj, ha):
                 },
             }
 
-            _, namespace_response = nvmegwcli.namespace.list(**_config)
+            namespace_response, _ = nvmegwcli.namespace.list(**_config)
             ns_visibility = json.loads(namespace_response)["namespaces"][0][
                 "auto_visible"
             ]
@@ -169,7 +169,7 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
                 },
             }
             # list namespaces and check visibility
-            _, namespace_response = nvmegwcli.namespace.list(**_config)
+            namespace_response, _ = nvmegwcli.namespace.list(**_config)
             ns_obj = json.loads(namespace_response)["namespaces"][0]
             if rbd_images_subsys.get(host):
                 rbd_images_subsys[host].extend(
@@ -261,7 +261,7 @@ def del_host(config, command, init_nodes, hostnqn_dict, ha):
                 },
             }
             # list namespaces and check visibility
-            _, namespace_response = nvmegwcli.namespace.list(**_config)
+            namespace_response, _ = nvmegwcli.namespace.list(**_config)
             ns_obj = json.loads(namespace_response)["namespaces"][0]
             if rbd_images_subsys.get(host):
                 rbd_images_subsys[host].extend(
@@ -333,7 +333,7 @@ def change_visibility(config, command, init_nodes, hostnqn_dict, ha):
                 "base_cmd_args": base_cmd_args,
                 "args": {"nsid": num, "subsystem": subnqn},
             }
-            _, namespace_response = nvmegwcli.namespace.list(**_config)
+            namespace_response, _ = nvmegwcli.namespace.list(**_config)
             ns_obj = json.loads(namespace_response)["namespaces"][0]
             rbd_images_subsys.append(
                 f"{subnqn}|{ns_obj['rbd_pool_name']}|{ns_obj['rbd_image_name']}"
@@ -373,10 +373,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
+    check_and_set_nvme_cli_image(ceph_cluster, config=overrides)
 
     try:
         steps = config.get("steps", [])
@@ -384,6 +381,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         hostnqn_dict = {}
         LOG.info(init_nodes)
         ha = HighAvailability(ceph_cluster, config["nodes"], **config)
+        ha.initialize_gateways()
 
         for node in init_nodes:
             initiator_node = get_node_by_id(ceph_cluster, node)

@@ -294,20 +294,30 @@ tests:
       name: create non-tenanted user
 
   - test:
-      name: bucket granular sync policy with sync from differnt bucket
-      desc: Test bucket granular sync with sync from differnt bucket
-      polarion-id: CEPH-83575140
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../s3cmd/test_s3cmd.py
+            config-file-name: ../../s3cmd/multisite_configs/test_s3cmd_put_obj_primary_cp_obj_secondary.yaml
+      desc: test put object from primary and copy objevts from secondary
+      module: sanity_rgw_multisite.py
+      name: Put object from primary and copy objevts from secondary
+      polarion-id: CEPH-83628287
+
+  - test:
+      name: bucket granular sync policy via s3 replication
+      desc: Test bucket granular sync policy via s3 replication
+      polarion-id: CEPH-83575876
       module: sanity_rgw_multisite.py
       clusters:
         ceph-pri:
           config:
-            script-name: test_multisite_bucket_granular_sync_policy.py
-            config-file-name: test_multisite_granular_bucketsync_sync_from_diff_bucket.yaml
-            timeout: 5500
+            script-name: ../aws/test_aws_s3_replication.py
+            config-file-name: ../../aws/multisite_configs/test_aws_s3_bucket_replication.yaml
 
   - test:
-      name: bucket granular sync policy with sync to differnt bucket
-      desc: Test bucket granular sync with sync to differnt bucket
+      name: bucket granular sync policy with sync to different bucket
+      desc: Test bucket granular sync with sync to different bucket
       polarion-id: CEPH-83575141
       module: sanity_rgw_multisite.py
       clusters:
@@ -315,4 +325,16 @@ tests:
           config:
             script-name: test_multisite_bucket_granular_sync_policy.py
             config-file-name: test_multisite_granular_bucketsync_sync_to_diff_bucket.yaml
+            timeout: 5500
+
+  - test:
+      name: bucket granular sync policy with sync from different bucket
+      desc: Test bucket granular sync with sync from different bucket
+      polarion-id: CEPH-83575140
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_multisite_bucket_granular_sync_policy.py
+            config-file-name: test_multisite_granular_bucketsync_sync_from_diff_bucket.yaml
             timeout: 5500

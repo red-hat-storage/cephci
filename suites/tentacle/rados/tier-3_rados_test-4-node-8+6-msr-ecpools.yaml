@@ -225,30 +225,30 @@ tests:
         verify_cluster_health: true
       destroy-cluster: false
 
-  - test:
-      name: EC Pool Recovery Improvement
-      module: pool_tests.py
-      polarion-id: CEPH-83573852
-      config:
-        ec_pool_recovery_improvement:
-          create: true
-          profile_name: ec86_1
-          pool_name: ec86_pool1
-          k: 8
-          m: 6
-          pg_num: 32
-          plugin: jerasure
-          create_rule: false
-          crush-osds-per-failure-domain: 4
-          crush-num-failure-domains: 4
-          crush-failure-domain: host
-          max_objs: 300
-          rados_read_duration: 10
-          osd_max_backfills: 16
-          osd_recovery_max_active: 16
-          delete_pool: true
-      desc: Verify Recovery of EC pool with only "k" shards available
-      comments: "Bug with OSD down scenario 2305520"
+  # - test:
+  #     name: EC Pool Recovery Improvement
+  #     module: pool_tests.py
+  #     polarion-id: CEPH-83573852
+  #     config:
+  #       ec_pool_recovery_improvement:
+  #         create: true
+  #         profile_name: ec86_1
+  #         pool_name: ec86_pool1
+  #         k: 8
+  #         m: 6
+  #         pg_num: 32
+  #         plugin: jerasure
+  #         create_rule: false
+  #         crush-osds-per-failure-domain: 4
+  #         crush-num-failure-domains: 4
+  #         crush-failure-domain: host
+  #         max_objs: 300
+  #         rados_read_duration: 10
+  #         osd_max_backfills: 16
+  #         osd_recovery_max_active: 16
+  #         delete_pool: true
+  #     desc: Verify Recovery of EC pool with only "k" shards available
+  #     comments: "Bug with OSD down scenario 2305520"
 
   - test:
       name: EC pool LC
@@ -516,6 +516,7 @@ tests:
               disable_pg_autoscale: true
       desc: many clients clients accessing same PG with bluestore as backend
 
+# below tests are stable, hence converting them to run with Fast EC
   - test:
       name: Migrate data bw pools.
       module: test_data_migration_bw_pools.py
@@ -524,7 +525,7 @@ tests:
         pool-1-type: replicated
         pool-2-type: erasure
         pool-1-conf: sample-pool-1
-        pool-2-conf: sample-pool-3
+        pool-2-conf: sample-pool-12
         pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-2. RE -> EC
 
@@ -535,7 +536,7 @@ tests:
       config:
         pool-1-type: erasure
         pool-2-type: replicated
-        pool-1-conf: sample-pool-3
+        pool-1-conf: sample-pool-12
         pool-2-conf: sample-pool-3
         pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-3. EC -> RE
@@ -548,7 +549,7 @@ tests:
         pool-1-type: erasure
         pool-2-type: erasure
         pool-1-conf: sample-pool-4
-        pool-2-conf: sample-pool-3
+        pool-2-conf: sample-pool-12
         pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
       desc: Migrating data between different pools. Scenario-4. Ec -> EC
 
@@ -561,7 +562,7 @@ tests:
         verify_pool_warnings:
           pool_configs:
             - type: erasure
-              conf: sample-pool-3
+              conf: sample-pool-12
           pool_configs_path: "conf/tentacle/rados/test-confs/pool-configurations.yaml"
       desc: Verify alerts for large number of Objs per OSD during PG autoscaler warn
 

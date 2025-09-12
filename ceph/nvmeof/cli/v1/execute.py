@@ -29,8 +29,8 @@ class ExecuteCommandMixin:
 
         return _path
 
-    def run_nvme_cli(self, action, **kwargs):
-        LOG.info(f"NVMe CLI command : {self.name} {action}")
+    def run_nvme_cli(self, entity, action, **kwargs):
+        LOG.info(f"NVMe CLI command : {entity} {action}")
         base_cmd_args = kwargs.get("base_cmd_args", {})
 
         if self.mtls:
@@ -48,7 +48,7 @@ class ExecuteCommandMixin:
                 self.__local_mtls_cert_path(),
                 self.NVMEOF_CLI_IMAGE,
                 config_dict_to_string(base_cmd_args),
-                self.name,
+                entity,
                 action,
                 config_dict_to_string(cmd_args),
             ]
@@ -62,4 +62,4 @@ class ExecuteCommandMixin:
             #   this BZ (https://bugzilla.redhat.com/show_bug.cgi?id=2304066) is fixed.
             out = out.split("\n", 1)[-1]
 
-        return err, out
+        return out, err

@@ -469,6 +469,31 @@ def run(ceph_cluster, **kw):
             log.info(f'Waiting for OSD {target_osd} to be "up" state')
             wait_for_osd_daemon_state(client, target_osd, "up")
 
+        log.info("Setting crush location for each monitor for next scenario")
+        for hostname in dc_1_hosts_to_remove + dc_2_hosts_to_remove:
+            if "mon" not in rados_obj.get_host_label(host_name=hostname):
+                continue
+
+            if hostname in dc_1_hosts:
+                crush_bucket_val = dc_1_name
+            else:
+                crush_bucket_val = dc_2_name
+
+            cmd = (
+                f"ceph mon set_location {hostname} {stretch_bucket}={crush_bucket_val}"
+            )
+            if rados_obj.run_ceph_command(cmd=cmd) is None:
+                log_msg = (
+                    f"Failed to set mon location of {hostname} to {crush_bucket_val}"
+                )
+                log.error(log_msg)
+                raise Exception(log_msg)
+
+            log_info_msg = (
+                f"Successfully set mon location of {hostname} to {crush_bucket_val}"
+            )
+            log.info(log_info_msg)
+
         log.info(
             """Performing following checks on the cluster after OSD removal
 1) PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2

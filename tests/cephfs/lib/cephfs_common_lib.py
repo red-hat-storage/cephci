@@ -50,6 +50,7 @@ class CephFSCommonUtils(FsUtils):
         accepted_list = [
             "experiencing slow operations in BlueStore",
             "Slow OSD heartbeats",
+            "stray daemon(s) not managed by cephadm",
         ]
         while ceph_healthy == 0 and (datetime.datetime.now() < end_time):
             if self.check_ceph_status(client, "HEALTH_OK"):

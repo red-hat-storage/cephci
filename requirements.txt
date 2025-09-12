@@ -1,5 +1,6 @@
 -e .
 xmltodict == 0.14.2
+python-openstackclient==8.0.0
 tfacon == 1.1.4
 uplink == 0.9.7
 pylero == 0.1.1

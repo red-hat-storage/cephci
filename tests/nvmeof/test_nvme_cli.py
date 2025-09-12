@@ -9,10 +9,14 @@ from copy import deepcopy
 
 from ceph.ceph import Ceph
 from ceph.ceph_admin.common import fetch_method
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmegw_cli.common import find_gateway_hostname
+from ceph.ceph_admin.orch import Orch
 from ceph.utils import get_node_by_id
-from tests.nvmeof.workflows.nvme_utils import validate_nvme_metadata
+from tests.nvmeof.workflows.nvme_gateway import create_gateway
+from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
+    nvme_gw_cli_version_adapter,
+    validate_nvme_metadata,
+)
 from utility.log import Log
 
 LOG = Log(__name__)
@@ -54,18 +58,24 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     LOG.info("Manage Ceph NVMeoF entities over CLI.")
     config = deepcopy(kwargs["config"])
     node = get_node_by_id(ceph_cluster, config["node"])
-    port = config.get("port", 5500)
     pool = config.get("pool")
     group = config.get("gw_group", "")
+    custom_config = kwargs.get("test_data", {}).get("custom-config")
+    ceph = Orch(ceph_cluster, **{})
 
-    overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
+    nvmegwcli = None
+    check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
 
-    nvmegwcli = NVMeGWCLI(node, port)
     try:
+        nvmegwcli = create_gateway(
+            nvme_gw_cli_version_adapter(ceph_cluster),
+            node,
+            mtls=config.get("mtls"),
+            shell=getattr(ceph, "shell"),
+            port=config.get("gw_port", 5500),
+            gw_group=config.get("gw_group"),
+        )
+
         steps = config.get("steps", [])
         for step in steps:
             cfg = deepcopy(step["config"])
@@ -75,11 +85,11 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             _cls = fetch_method(nvmegwcli, service)
             if service in "listener" and command in ["add", "delete"]:
                 gw_node = get_node_by_id(ceph_cluster, cfg["args"]["host-name"])
-                hostname = find_gateway_hostname(gw_node)
                 cfg["args"].update(
-                    {"host-name": hostname, "traddr": gw_node.ip_address}
+                    {"host-name": gw_node.hostname, "traddr": gw_node.ip_address}
                 )
-                cfg["base_cmd_args"] = {"server-address": gw_node.ip_address}
+                if nvmegwcli.cli_version != "v2":
+                    cfg["base_cmd_args"] = {"server-address": gw_node.ip_address}
             func = fetch_method(_cls, command)
             func(**cfg)
 
