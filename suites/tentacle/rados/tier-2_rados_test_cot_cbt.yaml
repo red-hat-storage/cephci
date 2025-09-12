@@ -49,11 +49,12 @@ tests:
                 placement:
                   label: mon
           - config:
-              command: apply
-              service: crash
-              args:
+              command: apply_spec
+              service: orch
+              specs:
+              - service_type: crash
                 placement:
-                  label: crash
+                  host_pattern: "*"
       destroy-cluster: false
       abort-on-fail: true
 
@@ -216,7 +217,7 @@ tests:
   - test:
       name: ceph-objectstore-tool functionalities during enospc
       module: test_objectstoretool_workflows.py
-      polarion-id: CEPH-83581811
+      polarion-id: CEPH-83620743
       config:
         bluestore-enospc: true
       desc: Verify ceph-objectstore-tool functionalities during ENOSPC

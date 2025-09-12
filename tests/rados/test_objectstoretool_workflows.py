@@ -99,9 +99,8 @@ def run(ceph_cluster, **kw):
         readonly_ops = [
             "list_objects",
             "list_pgs",
-            "list_omap",
-            "list_attributes",
-            "get_omap",
+            "list_get_omap",
+            "list_get_attributes",
             "get_omap_header",
             "get_attributes",
             "get_bytes",
@@ -142,10 +141,6 @@ def run(ceph_cluster, **kw):
             )
             time.sleep(30)
 
-            # determine the number of objects to be written to the pool
-            # to achieve ENOPSC state
-            objs_enospc = int(primary_osd_size / bench_obj_size_kb) + 1
-
             # set nearfull, backfill-full and full-ratio to 100%
             # set noout and norebalance flags
             cmds = [
@@ -158,6 +153,23 @@ def run(ceph_cluster, **kw):
 
             [cephadm.shell(args=[cmd]) for cmd in cmds]
 
+            # determine the number of objects to be written to the pool
+            # to achieve ENOPSC state
+            objs_enospc = int(primary_osd_size / bench_obj_size_kb * 0.9)
+
+            # perform rados bench to fill OSDs till 90%
+            rados_obj.bench_write(
+                pool_name=_pool_name,
+                rados_write_duration=600,
+                max_objs=objs_enospc,
+                byte_size=f"{bench_obj_size_kb}KB",
+                verify_stats=False,
+                check_ec=False,
+            )
+            time.sleep(30)
+
+            # calculate the number of 3KB objects needed to utilize 15% of the OSD
+            objs_enospc = int(primary_osd_size / 3 * 0.15)
             init_time, _ = rados_obj.client.exec_command(
                 cmd="sudo date '+%Y-%m-%d %H:%M:%S'"
             )
@@ -167,9 +179,9 @@ def run(ceph_cluster, **kw):
                 # perform rados bench to trigger ENOSPC warning
                 rados_obj.bench_write(
                     pool_name=_pool_name,
-                    rados_write_duration=500,
+                    rados_write_duration=600,
                     max_objs=objs_enospc,
-                    byte_size=f"{bench_obj_size_kb}KB",
+                    byte_size="3072",
                     verify_stats=False,
                     check_ec=False,
                 )
@@ -217,7 +229,7 @@ def run(ceph_cluster, **kw):
                 if osd_down:
                     down_osds = rados_obj.get_osd_list(status="down")
                     log.info("Down OSDs on the cluster: %s" % down_osds)
-                    _osd_id = acting_set[0]
+                    # _osd_id = random.choice(down_osds)
                     break  # exit outer for-loop if even a single OSD is down
             else:
                 log.error("Could not generate ENOSPC on OSDs after 3 attempts")
@@ -245,6 +257,9 @@ def run(ceph_cluster, **kw):
                 log.error(err_msg)
                 raise Exception(err_msg)
 
+            omap_pg, omap_obj = get_omap_obj(_osd_id, cot_obj=objectstore_enospc_obj)
+            bench_pg, bench_obj = get_bench_obj(_osd_id, cot_obj=objectstore_enospc_obj)
+
             # execute COT commands that are now feasible in read-only mode
             for operation in operations:
                 log.info("Next operation will be performed for ENOSPC OSD %s" % _osd_id)
@@ -260,13 +275,6 @@ def run(ceph_cluster, **kw):
                     log.info(f"List of objects in OSD {_osd_id}: \n\n {obj_list}")
                     assert 'oid":"benchmark_data_' in out
 
-                    # Execute ceph-objectstore-tool --data-path <osd_path> --op list $OBJECT_ID
-                    log.info(
-                        f"\n -------------------------------------------"
-                        f"\n Identify the placement group (PG) that an object belongs to for OSD {_osd_id}"
-                        f"\n -------------------------------------------"
-                    )
-
                 if operation == "list_pgs":
                     # Execute ceph-objectstore-tool --data-path <osd_path> --op list-pgs
                     log.info(
@@ -278,14 +286,7 @@ def run(ceph_cluster, **kw):
                     pg_list = out.split()
                     log.info(f"List of PGs in OSD {_osd_id}: \n\n {pg_list}")
 
-                omap_pg, omap_obj = get_omap_obj(
-                    _osd_id, cot_obj=objectstore_enospc_obj
-                )
-                bench_pg, bench_obj = get_bench_obj(
-                    _osd_id, cot_obj=objectstore_enospc_obj
-                )
-
-                if operation == "get_omap":
+                if operation == "list_get_omap":
                     # Use the ceph-objectstore-tool to list the contents of the object map (OMAP).
                     # The output is a list of keys.
                     log.info(
@@ -425,15 +426,6 @@ def run(ceph_cluster, **kw):
                     out, _ = osd_host.exec_command(sudo=True, cmd="cat /tmp/obj_work")
                     log.info(out)
 
-                    # verify manipulation of object data
-                    log.info(f"Fetch object bytes for obj {bench_obj} post injection")
-                    objectstore_enospc_obj.get_bytes(
-                        osd_id=_osd_id,
-                        obj=bench_obj,
-                        pgid=bench_pg,
-                        out_file="/tmp/mod_obj",
-                    )
-
                 if operation == "dump":
                     # Obtain the object dump for objects of the OSD or placement group.
                     log.info(
@@ -515,6 +507,17 @@ def run(ceph_cluster, **kw):
                         f"\n ------------------------------------------------------"
                     )
                     out = objectstore_enospc_obj.get_superblock(osd_id=_osd_id)
+                    log.info(out)
+                if operation == "get-inc-osdmap":
+                    # get the objectstore inc-osdmap of an object from an OSD
+                    log.info(
+                        f"\n ------------------------------------------------------"
+                        f"\n Fetch the objectstore inc-osdmap for an object in OSD {_osd_id}"
+                        f"\n ------------------------------------------------------"
+                    )
+                    out = objectstore_enospc_obj.get_inc_osdmap(
+                        osd_id=_osd_id, pgid=bench_pg, obj_name=bench_obj
+                    )
                     log.info(out)
         else:
             operations = config.get("operations", all_ops)
