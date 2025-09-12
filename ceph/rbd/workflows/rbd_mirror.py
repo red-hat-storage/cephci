@@ -616,8 +616,10 @@ def config_mirror_multi_pool(
             pool_config["rbd_client"] = pool_config.get("rbd_client", "client.admin")
             if pool_config.get("mode") == "image":
                 kw["wait_for_status"] = False
-            if kw.get("way"):
-                pool_config["way"] = kw.get("way")
+
+            if pool_config.get("way"):
+                kw["way"] = pool_config.get("way")
+
             config_mirror(
                 rbd_primary,
                 rbd_secondary,
@@ -650,12 +652,12 @@ def config_mirror_multi_pool(
                     }
                     # for image, image_config in multi_image_config.items():
                     for image, image_config_val in image_config.items():
-
                         image_enable_config = {
                             "pool": pool,
                             "image": image,
                             "mirrormode": mirrormode,
                             "io_total": image_config_val.get("io_total", None),
+                            "way": pool_config.get("way"),
                         }
                         out = enable_image_mirroring(
                             primary_config, secondary_config, **image_enable_config
