@@ -358,11 +358,11 @@ def gklm_setup():
     log.info("Creating symmetric key encryption tag in GKLM")
     enctag = get_enctag(
         gklm_rest_client,
-        created_client_data,
         gklm_client_name,
         gklm_cert_alias,
         gklm_user,
         cert,
+        created_client_data,
     )
 
     # ------------------- Prerequisites and Certificate Export -------------------
