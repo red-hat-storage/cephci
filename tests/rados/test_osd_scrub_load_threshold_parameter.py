@@ -34,7 +34,6 @@ log = Log(__name__)
 
 
 def run(ceph_cluster, **kw):
-    global chk_deep_scrub
     log.info(run.__doc__)
     config = kw["config"]
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
@@ -51,7 +50,7 @@ def run(ceph_cluster, **kw):
     try:
 
         log_line_no_scrub = "'scrub_load_below_threshold:.* = no'"
-        # log_line_scrub = "'scrub_load_below_threshold:.* = yes'"
+        log_line_scrub = "'scrub_load_below_threshold:.* = yes'"
         # enable the file logging
         if not rados_object.enable_file_logging():
             log.error("Error while setting config to enable logging into file")
@@ -119,20 +118,17 @@ def run(ceph_cluster, **kw):
         set_scheduled_scrub_parameters(scrub_object, acting_pg_set)
 
         try:
-            chk_deep_scrub = rados_object.start_check_deep_scrub_complete(
+            if rados_object.start_check_deep_scrub_complete(
                 pg_id=pg_id, user_initiated=False, wait_time=wait_time
-            )
+            ):
+                log.error(
+                    "Scrub operation started after setting the osd_scrub_load_threshold value to 0"
+                )
+                return 1
         except Exception:
             log.info(
                 "Scrub operation not started after setting the osd_scrub_load_threshold value to 0"
             )
-            chk_deep_scrub = False
-
-        if chk_deep_scrub:
-            log.error(
-                "Scrub operation started after setting the osd_scrub_load_threshold value to 0"
-            )
-            return 1
 
         configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
         log.info(
@@ -214,20 +210,17 @@ def run(ceph_cluster, **kw):
         set_scheduled_scrub_parameters(scrub_object, acting_pg_set)
 
         try:
-            chk_deep_scrub = rados_object.start_check_deep_scrub_complete(
+            if rados_object.start_check_deep_scrub_complete(
                 pg_id=pg_id, user_initiated=False, wait_time=wait_time
-            )
+            ):
+                log.error(
+                    "Scenario2: Scrub operation started after setting the osd_scrub_load_threshold value to 0"
+                )
+                return 1
         except Exception:
             log.info(
-                "Scrub operation not started after setting the osd_scrub_load_threshold value to 0"
+                "Scenario2: Scrub operation not started after setting the osd_scrub_load_threshold value to 0"
             )
-            chk_deep_scrub = False
-
-        if chk_deep_scrub:
-            log.error(
-                "Scrub operation started after setting the osd_scrub_load_threshold value to 0"
-            )
-            return 1
 
         configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
         log.info(
@@ -322,21 +315,15 @@ def run(ceph_cluster, **kw):
         # wait_time = 200
         #
         # try:
-        #     chk_deep_scrub = rados_object.start_check_deep_scrub_complete(
+        #     rados_object.start_check_deep_scrub_complete(
         #         pg_id=pg_id,
         #         pg_dump=init_pool_pg_dump,
         #         user_initiated=False,
         #         wait_time=wait_time,
         #     )
         # except Exception:
-        #     log.info(
-        #         "Scrub operation not started after setting the osd_scrub_load_threshold value to 0"
-        #     )
-        #     chk_deep_scrub = False
-        #
-        # if chk_deep_scrub is False:
         #     log.error(
-        #         "Scenario3:Scrub operation not started after setting the osd_scrub_load_threshold value to 10.0"
+        #         "Scrub operation not started after setting the osd_scrub_load_threshold value to 10.0"
         #     )
         #     return 1
         #
@@ -381,7 +368,186 @@ def run(ceph_cluster, **kw):
         #     "with the default value which is 10.0==="
         # )
         log.info(
-            "===== Scenario 4:Verification of user initiated scrub as higher priority than scheduled scrub for the "
+            "===== Scenario 4:Verification of osd_scrub_load_threshold below and above the node load average ===="
+        )
+        log.info(
+            "Scenario4.1: Testing the negative scenario that, set the osd_scrub_load_threshold value lesser than "
+            "the average load of node"
+        )
+        decrease_parameter = 0.5
+        acting_pg_set = rados_object.get_pg_acting_set(pool_name=pool_name)
+        msg_acting_set = f"The {pool_name} pool acting set is -{acting_pg_set}"
+        log.info(msg_acting_set)
+        primary_osd_host = rados_object.fetch_host_node(
+            daemon_type="osd", daemon_id=acting_pg_set[0]
+        )
+        log.info("Before starting the test waiting for the PG into active+clean state")
+        if not wait_for_clean_pg_sets(rados_object, timeout=900):
+            log.error("Cluster cloud not reach active+clean state within 900")
+        load_threshold = get_node_avg_load(primary_osd_host)
+
+        new_scrub_load_threshold_vale = load_threshold - (
+            load_threshold * decrease_parameter
+        )
+        msg_threshold = (
+            f"Scenario 4.1:The new osd_scrub_load_threshold value will be"
+            f" set to-{new_scrub_load_threshold_vale}"
+        )
+        log.info(msg_threshold)
+        assert mon_obj.set_config(
+            section="global",
+            name="osd_scrub_load_threshold",
+            value=new_scrub_load_threshold_vale,
+        ), "Could not set osd_scrub_load_threshold value "
+        # Truncate the osd logs
+        rados_object.remove_log_file_content(osd_nodes, daemon_type="osd")
+        # set the debug log to 20
+        configure_log_level(mon_obj, acting_pg_set, set_to_default=False)
+        log.info("Scenario4.1: The osd  logs are set to 20")
+        init_time, _ = installer.exec_command(
+            cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
+        )
+        init_time = init_time.strip()
+        set_scheduled_scrub_parameters(scrub_object, acting_pg_set)
+        wait_time = 300
+        try:
+            if rados_object.start_check_deep_scrub_complete(
+                pg_id=pg_id, user_initiated=False, wait_time=wait_time
+            ):
+                msg_err = (
+                    f"Scenario 4.1-Scrub operation started after setting the osd_scrub_load_threshold value less "
+                    f"than average load.The actual load is {load_threshold} and the osd_scrub_load_threshold "
+                    f"parameter value is set to {new_scrub_load_threshold_vale}"
+                )
+                log.error(msg_err)
+                return 1
+        except Exception:
+            log.info(
+                "Scenario4.1- Scrub operation not started after setting the osd_scrub_load_threshold value to lesser "
+                "than the average load of node"
+            )
+
+        configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
+        log.info(
+            "Scenario4.1:The OSD log debug level has been configured to its default value."
+        )
+        end_time, _ = installer.exec_command(
+            cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
+        )
+        end_time = end_time.strip()
+
+        if (
+            rados_object.lookup_log_message(
+                init_time=init_time,
+                end_time=end_time,
+                daemon_type="osd",
+                daemon_id=acting_pg_set[0],
+                search_string=log_line_no_scrub,
+            )
+            is False
+        ):
+            msg_error = (
+                f"Scenario4.1:The log contain the scrub initiated messages after setting the "
+                f"osd_scrub_load_threshold parameter value to {new_scrub_load_threshold_vale} where the "
+                f"actual load is {load_threshold}"
+            )
+            log.error(msg_error)
+            return 1
+        log.info("Setting to the configurations to the default values")
+        remove_parameter_configuration(mon_obj)
+
+        log.info(
+            "Scenario4.1: Testing the negative scenario that, set the osd_scrub_load_threshold value lesser than "
+            "the average load of node completed"
+        )
+        log.info(
+            "Scenario4.2: Testing the positive scenario that, set the osd_scrub_load_threshold value greater than "
+            "the average load of node"
+        )
+        log.info("Before starting the test waiting for the PG into active+clean state")
+        if not wait_for_clean_pg_sets(rados_object, timeout=900):
+            log.error("Cluster cloud not reach active+clean state within 900")
+        load_threshold = get_node_avg_load(primary_osd_host)
+        new_scrub_load_threshold_vale = load_threshold + (
+            load_threshold * decrease_parameter
+        )
+        msg_threshold = (
+            f" Scenario4.2:The new osd_scrub_load_threshold value will"
+            f" be set to -{new_scrub_load_threshold_vale}"
+        )
+        log.info(msg_threshold)
+        assert mon_obj.set_config(
+            section="global",
+            name="osd_scrub_load_threshold",
+            value=new_scrub_load_threshold_vale,
+        ), "Could not set osd_scrub_load_threshold value"
+
+        # Truncate the osd logs
+        rados_object.remove_log_file_content(osd_nodes, daemon_type="osd")
+        # set the debug log to 20
+        configure_log_level(mon_obj, acting_pg_set, set_to_default=False)
+        log.info("Scenario4.2: The osd  logs are set to 20")
+        init_time, _ = installer.exec_command(
+            cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
+        )
+        init_time = init_time.strip()
+        set_scheduled_scrub_parameters(scrub_object, acting_pg_set)
+        wait_time = 600
+        try:
+            rados_object.start_check_deep_scrub_complete(
+                pg_id=pg_id, user_initiated=False, wait_time=wait_time
+            )
+        except Exception:
+            msg_err = (
+                f"Scenario 4.2-Scrub operation not started after setting the osd_scrub_load_threshold value "
+                f"greater than average load.The actual load is {load_threshold} and the "
+                f"osd_scrub_load_threshold parameter value is set to {new_scrub_load_threshold_vale}"
+            )
+            log.error(msg_err)
+            return 1
+        configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
+        log.info(
+            "Scenario4.2:The OSD log debug level has been configured to its default value."
+        )
+        end_time, _ = installer.exec_command(
+            cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
+        )
+        end_time = end_time.strip()
+
+        if (
+            rados_object.lookup_log_message(
+                init_time=init_time,
+                end_time=end_time,
+                daemon_type="osd",
+                daemon_id=acting_pg_set[0],
+                search_string=log_line_scrub,
+            )
+            is False
+        ):
+            msg_error = (
+                f"Scenario4.2:The log not contain the scrub initiated messages after setting the "
+                f"osd_scrub_load_threshold parameter value to {new_scrub_load_threshold_vale} where the "
+                f"actual load is {load_threshold}"
+            )
+            log.error(msg_error)
+            return 1
+
+        log.info(
+            "Scenario4.2:Testing the positive scenario that, set the osd_scrub_load_threshold value greater than"
+            "the average load of node completed"
+        )
+        log.info(
+            "===== Scenario 4:Verification of osd_scrub_load_threshold below and above the node load average is "
+            "completed===="
+        )
+        log.info("Setting to the configurations to the default values")
+        remove_parameter_configuration(mon_obj)
+        log.info("Waiting for the PG into active+clean state")
+        if not wait_for_clean_pg_sets(rados_object, timeout=900):
+            log.error("Cluster cloud not reach active+clean state within 900")
+
+        log.info(
+            "===== Scenario 5:Verification of user initiated scrub as higher priority than scheduled scrub for the "
             "osd_scrub_load_threshold parameter"
         )
         # Perform the tests by modifying the
@@ -393,7 +559,7 @@ def run(ceph_cluster, **kw):
 
         # Truncate the osd logs
         rados_object.remove_log_file_content(osd_nodes, daemon_type="osd")
-        log.info("Scenario4: The content of osd log are removed")
+        log.info("Scenario5: The content of osd log are removed")
 
         init_time, _ = installer.exec_command(
             cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
@@ -403,19 +569,18 @@ def run(ceph_cluster, **kw):
         configure_log_level(mon_obj, acting_pg_set, set_to_default=False)
         log.info("Initiating the user initiated scrub")
         try:
-            chk_deep_scrub = rados_object.start_check_deep_scrub_complete(
+            rados_object.start_check_deep_scrub_complete(
                 pg_id=pg_id, user_initiated=True, wait_time=wait_time
             )
             log.info("The user initiated scrub is completed")
-
         except Exception:
             log.info(
-                "Scenario 4:The user initiated scrub operation not started after setting the osd_scrub_load_threshold "
+                "Scenario 5:The user initiated scrub operation not started after setting the osd_scrub_load_threshold "
                 "value to 0"
             )
             return 1
         configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
-        log.info("Scenario4: The osd logs are set to default value")
+        log.info("Scenario5: The osd logs are set to default value")
         end_time, _ = installer.exec_command(
             cmd="sudo date '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
         )
@@ -439,16 +604,17 @@ def run(ceph_cluster, **kw):
                 is False
             ):
                 msg_error = (
-                    f"Scenario4:During the user initiated scrub, after setting the osd_scrub_load_threshold to "
+                    f"Scenario5:During the user initiated scrub, after setting the osd_scrub_load_threshold to "
                     f"0 the {log_line} not exists in the logs"
                 )
                 log.error(msg_error)
                 return 1
 
         log.info(
-            "===== Scenario 4:Verification of user initiated scrub as higher priority than scheduled scrub for the "
+            "===== Scenario 5:Verification of user initiated scrub as higher priority than scheduled scrub for the "
             "osd_scrub_load_threshold parameter completed"
         )
+
     except Exception as e:
         log.info(e)
         log.info(traceback.format_exc())
@@ -643,3 +809,30 @@ def configure_log_level(mon_obj, acting_set, set_to_default: True):
             mon_obj.set_config(section=f"osd.{osd_id}", name="debug_osd", value="20/20")
             msg_debug = f"The osd.{osd_id} debug_osd value is set to 20"
             log.info(msg_debug)
+
+
+def get_node_avg_load(cluster_node):
+    """
+    This method is used to calculate the average load of a provided node.
+     Args:
+          cluster_node : The node whose average load is being calculated
+     Returns:
+              load_threshold: Average load in float
+    """
+    cmd_get_load_avg = "cut -d ' ' -f1 /proc/loadavg"
+    load_avg_output = cluster_node.exec_command(cmd=cmd_get_load_avg)
+    load_avg = float(load_avg_output[0].strip())
+    msg_load_avg = f"The load-average of the {cluster_node.hostname} is {load_avg}"
+    log.info(msg_load_avg)
+    cmd_count_cpu = "grep -c ^processor /proc/cpuinfo"
+    cpu_count_output = cluster_node.exec_command(cmd=cmd_count_cpu)
+    cpu_count = int(cpu_count_output[0].strip())
+    msg_count_cpu = f"The CPU count of the {cluster_node.hostname} is {cmd_count_cpu}"
+    log.info(msg_count_cpu)
+    load_threshold = round(load_avg / cpu_count, 3)
+    msg_threshold = (
+        f"The node load threshold value on"
+        f" {cluster_node.hostname}  node is-{load_threshold}"
+    )
+    log.info(msg_threshold)
+    return load_threshold
