@@ -1,6 +1,7 @@
 # Basic Ceph-NvmeoF sanity Test suite
 # cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_sanity.yaml
 # Inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
+# TODO: We have issues for new cli so we need to re-look once issues are fixed
 
 tests:
 # Set up the cluster

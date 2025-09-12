@@ -8,11 +8,17 @@ import json
 from copy import deepcopy
 
 from ceph.ceph import Ceph
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmeof.initiator import Initiator
+from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.nvmeof.workflows.nvme_utils import delete_nvme_service, deploy_nvme_service
+from tests.nvmeof.workflows.initiator import NVMeInitiator
+from tests.nvmeof.workflows.nvme_gateway import create_gateway
+from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
+    delete_nvme_service,
+    deploy_nvme_service,
+    nvme_gw_cli_version_adapter,
+)
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id, run_fio
@@ -46,15 +52,15 @@ def configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, config):
     nvmegwcli.listener.add(**{"args": {**listener_cfg, **sub_args}})
     if config.get("allow_host"):
         nvmegwcli.host.add(
-            **{"args": {**sub_args, **{"host": repr(config["allow_host"])}}}
+            **{"args": {**sub_args, **{"host-nqn": repr(config["allow_host"])}}}
         )
 
     if config.get("hosts"):
         for host in config["hosts"]:
             initiator_node = get_node_by_id(ceph_cluster, host)
-            initiator = Initiator(initiator_node)
+            initiator = NVMeInitiator(initiator_node)
             host_nqn = initiator.nqn()
-            nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
+            nvmegwcli.host.add(**{"args": {**sub_args, **{"host-nqn": host_nqn}}})
 
     if config.get("bdevs"):
         name = generate_unique_id(length=4)
@@ -93,7 +99,7 @@ def initiators(ceph_cluster, gateway, config):
             node: node7
     """
     client = get_node_by_id(ceph_cluster, config["node"])
-    initiator = Initiator(client)
+    initiator = NVMeInitiator(client)
     cmd_args = {
         "transport": "tcp",
         "traddr": gateway.node.ip_address,
@@ -118,21 +124,7 @@ def initiators(ceph_cluster, gateway, config):
     LOG.debug(initiator.connect(**_conn_cmd))
 
     # List NVMe targets
-    targets = initiator.list_spdk_drives()
-    if not targets:
-        raise Exception(f"NVMe Targets not found on {client.hostname}")
-    LOG.debug(targets)
-
-    paths = []
-    for target in targets:
-        if "DevicePath" in target:
-            paths.append(target["DevicePath"])
-
-        elif "Subsystems" in target:
-            for subsys in target.get("Subsystems", []):
-                for ns in subsys.get("Namespaces", []):
-                    if "NameSpace" in ns:
-                        paths.append(f"/dev/{ns['NameSpace']}")
+    paths = initiator.list_devices()
 
     results = []
     io_args = {"size": "100%"}
@@ -164,7 +156,7 @@ def initiators(ceph_cluster, gateway, config):
 def disconnect_initiator(ceph_cluster, node, subnqn):
     """Disconnect Initiator."""
     node = get_node_by_id(ceph_cluster, node)
-    initiator = Initiator(node)
+    initiator = NVMeInitiator(node)
     initiator.disconnect(**{"nqn": subnqn})
 
 
@@ -172,7 +164,7 @@ def disconnect_all_initiator(ceph_cluster, nodes):
     """Disconnect all connections on Initiator."""
     for node in nodes:
         node = get_node_by_id(ceph_cluster, node)
-        initiator = Initiator(node)
+        initiator = NVMeInitiator(node)
         initiator.disconnect_all()
 
 
@@ -281,28 +273,33 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         - initiators
                         - gateway
     """
-    LOG.info("Starting Ceph Ceph NVMEoF deployment.")
     config = kwargs["config"]
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
-    overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
-
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gw_port = config.get("gw_port", 5500)
-    nvmegwcli = NVMeGWCLI(gw_node, gw_port)
+    custom_config = kwargs.get("test_data", {}).get("custom-config")
 
-    if config.get("cleanup-only"):
-        teardown(ceph_cluster, rbd_obj, nvmegwcli, config)
-        return 0
+    ceph = Orch(ceph_cluster, **{})
 
+    nvmegwcli = None
+    check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
     try:
         if config.get("install"):
             deploy_nvme_service(ceph_cluster, config)
+
+        nvmegwcli = create_gateway(
+            nvme_gw_cli_version_adapter(ceph_cluster),
+            gw_node,
+            mtls=config.get("mtls"),
+            shell=getattr(ceph, "shell"),
+            port=config.get("gw_port", 5500),
+            gw_group=config.get("gw_group"),
+        )
+
+        if config.get("cleanup-only"):
+            teardown(ceph_cluster, rbd_obj, nvmegwcli, config)
+            return 0
 
         if config.get("subsystems"):
             with parallel() as p:
