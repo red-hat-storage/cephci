@@ -6,7 +6,7 @@ from ceph.parallel import parallel
 from tests.nvmeof.workflows.exceptions import NoDevicesFound
 from utility.log import Log
 from utility.retry import retry
-from utility.utils import log_json_dump, run_fio
+from utility.utils import generate_unique_id, log_json_dump, run_fio
 
 LOG = Log(__name__)
 
@@ -176,6 +176,143 @@ class NVMeInitiator(Initiator):
                 p.spawn(run_fio, **_io_args)
             for op in p:
                 results.append(op)
+        return results
+
+    def acquire(self, base, acquire_args, crkey, client_node):
+        """
+        Helper to perform the acquire_reservation and report_reservation on a client.
+        Returns a tuple (acquire_out, report_out).
+        """
+        # Unpack base + acquire_args + crkey into kwargs
+        acquire_out = self.acquire_reservation(
+            **{**base, **acquire_args, "crkey": crkey}
+        )
+        namespace = base.get("device")
+        nsid = base.get("namespace-id")
+        LOG.debug(f"Acquire ({namespace} nsid {nsid} on {client_node}): {acquire_out}")
+
+        report_out = self.report_reservation(**base)
+        LOG.debug(
+            f"Acquire Report for ({namespace} nsid {nsid} on {client_node}): {report_out}"
+        )
+
+        return acquire_out, report_out
+
+    def register(self, base, register_args, nrkey, client_node):
+        register_out = self.register_reservation(
+            **{**base, **register_args, "nrkey": nrkey}
+        )
+        namespace = base.get("device")
+        nsid = base.get("namespace-id")
+        LOG.debug(
+            f"Register ({namespace} nsid {nsid} on {client_node}): {register_out}"
+        )
+
+        report_out = self.report_reservation(**base)
+        LOG.debug(
+            f"Register Report for ({namespace} nsid {nsid} on {client_node}): {report_out}"
+        )
+
+        return register_out, report_out
+
+    def release(self, base, release_args, crkey, client_node):
+        release_out = self.release_reservation(
+            **{**base, **release_args, "crkey": crkey}
+        )
+        namespace = base.get("device")
+        nsid = base.get("namespace-id")
+        LOG.debug(f"Release ({namespace} nsid {nsid} on {client_node}): {release_out}")
+
+        report_out = self.report_reservation(**base)
+        LOG.debug(
+            f"Release Report for ({namespace} nsid {nsid} on {client_node}): {report_out}"
+        )
+
+        return release_out, report_out
+
+    def unregister(self, base, register_args, crkey, client_node):
+        unregister_out = self.register_reservation(
+            **{**base, **register_args, "crkey": crkey}
+        )
+        namespace = base.get("device")
+        nsid = base.get("namespace-id")
+        LOG.debug(
+            f"Unregister ({namespace} nsid {nsid} on {client_node}): {unregister_out}"
+        )
+
+        report_out = self.report_reservation(**base)
+        LOG.debug(
+            f"Unregister Report for ({namespace} nsid {nsid} on {client_node}): {report_out}"
+        )
+
+        return unregister_out, report_out
+
+    def reservation_lifecycle(
+        self,
+        client_nodes,
+        namespace_list,
+        register_args,
+        acquire_args,
+        release_args,
+        initiators,
+    ):
+        """
+        Reservation lifecycle: for each namespace in namespace_list,
+        do: register → acquire → report → release.
+        **kwargs holds optional arguments like rtype, rrega, cptpl, racqa, rrela etc.
+        """
+        results = []
+
+        for ns in namespace_list:
+            namespace = ns.get("NameSpace")
+            nsid = ns.get("NSID")
+            if namespace is None or nsid is None:
+                LOG.warning(
+                    f"Skipping namespace entry with missing NameSpace or NSID: {ns}"
+                )
+                continue
+
+            ns_result = {"NameSpace": namespace, "NSID": nsid}
+            nrkey, crkey = generate_unique_id(length=6)
+
+            base = {
+                "device": namespace,
+                "namespace-id": nsid,
+            }
+
+            try:
+                reg_out, reg_report = self.register(
+                    base, register_args, nrkey, client_node=initiators
+                )
+                ns_result["register"] = reg_out
+                ns_result["register_report"] = reg_report
+
+                acq_out, acq_report = self.acquire(
+                    base, acquire_args, crkey, client_node=initiators
+                )
+                ns_result["acquire"] = acq_out
+                ns_result["acquire_report"] = acq_report
+
+                rel_out, rel_report = self.release(
+                    base, release_args, crkey, client_node=initiators
+                )
+                ns_result["release"] = rel_out
+                ns_result["release_report"] = rel_report
+
+                unreg_out, unreg_report = self.unregister(
+                    base, register_args, crkey, client_node=initiators
+                )
+                ns_result["unregister"] = unreg_out
+                ns_result["unregister_report"] = unreg_report
+
+            except Exception as e:
+                LOG.error(
+                    f"Error in reservation lifecycle for {namespace} nsid {nsid}: {e}"
+                )
+                ns_result["error"] = str(e)
+
+            results.append(ns_result)
+
         return results
 
 

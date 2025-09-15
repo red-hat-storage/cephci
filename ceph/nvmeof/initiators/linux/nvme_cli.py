@@ -89,7 +89,7 @@ class NVMeCLI(Cli):
             cmd=f"nvme list-subsys {device} {config_dict_to_string(kwargs)}", sudo=True
         )
 
-    def list_spdk_drives(self):
+    def list_spdk_drives(self, nsid_device_pair=None):
         """List the NVMe Targets only SPDK drives.
 
         Return:
@@ -114,6 +114,24 @@ class NVMeCLI(Cli):
             ]
 
         elif rhel_version == "9.6":
+            if nsid_device_pair:
+                namespace_list = []
+                for dev in devs:
+                    for subsys in dev.get("Subsystems", []):
+                        # Check if at least one controller in this subsystem is a Ceph bdev Controller
+                        has_ceph_bdev = any(
+                            ctrl.get("ModelNumber") == "Ceph bdev Controller"
+                            for ctrl in subsys.get("Controllers", [])
+                        )
+                        if has_ceph_bdev:
+                            for ns in subsys.get("Namespaces", []):
+                                pair = {
+                                    "NameSpace": ns.get("NameSpace"),
+                                    "NSID": ns.get("NSID"),
+                                }
+                                namespace_list.append(pair)
+                return namespace_list
+
             devices = []
             for dev in devs:
                 for subsys in dev.get("Subsystems", []):
@@ -150,4 +168,42 @@ class NVMeCLI(Cli):
         """Connects all controllers connected to subsystems."""
         return self.execute(
             cmd=f"nvme connect-all {config_dict_to_string(kwargs)}", sudo=True
+        )
+
+    def register_reservation(self, **kwargs):
+        """
+        Register reservation for a namespace on an initiator
+        """
+        device = kwargs.pop("device", "")
+        return self.execute(
+            cmd=f"nvme resv-register {device} {config_dict_to_string(kwargs)} -v",
+            sudo=True,
+        )
+
+    def acquire_reservation(self, **kwargs):
+        """
+        Acquire reservation for a namespace on an initiator
+        """
+        device = kwargs.pop("device", "")
+        return self.execute(
+            f"nvme resv-acquire {device} {config_dict_to_string(kwargs)} -v", sudo=True
+        )
+
+    def report_reservation(self, **kwargs):
+        """
+        Report reservation for a namespace on an initiator
+        """
+        device = kwargs.pop("device", "")
+        return self.execute(
+            f"nvme resv-report {device} {config_dict_to_string(kwargs)} -o json",
+            sudo=True,
+        )
+
+    def release_reservation(self, **kwargs):
+        """
+        Release reservation for a namespace on an initiator
+        """
+        device = kwargs.pop("device", "")
+        return self.execute(
+            f"nvme resv-release {device} {config_dict_to_string(kwargs)} -v", sudo=True
         )
