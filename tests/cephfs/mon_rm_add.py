@@ -65,11 +65,11 @@ def mon_rm_add(fs_util, mons, client, fs_name="cephfs"):
         initial_mon_count = str(len(mon_hosts))
         initial_mon_count.rstrip()
         count = str(int(initial_mon_count) - 1)
-        cmd = f"ceph orch --verbose apply mon {fs_name} --placement='{mons_hosts}'"
+        cmd = f"ceph orch --verbose apply mon --placement='{mons_hosts}'"
         client.exec_command(sudo=True, cmd=cmd)
         wait_for_cmd(client, "mon", count)
         mons_hosts = " ".join([str(elem) for elem in mon_hosts])
-        cmd = f"ceph orch  --verbose apply mon {fs_name} --placement='{mons_hosts}'"
+        cmd = f"ceph orch --verbose apply mon --placement='{mons_hosts}'"
         client.exec_command(sudo=True, cmd=cmd)
         wait_for_cmd(client, "mon", initial_mon_count)
         stop_flag = True
