@@ -107,7 +107,11 @@ def run(ceph_cluster, **kw):
         if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 1200):
             log.error("Cluster health is not OK even after waiting for 20 mins.")
             return 1
+        out, _ = clients[0].exec_command(sudo=True, cmd="ceph health detail")
+        log.info("Ceph health details After 3 min sleep:\n%s", out)
         time.sleep(180)  # Waiting to remove all stale entries for cephfs
+        out, _ = clients[0].exec_command(sudo=True, cmd="ceph health detail")
+        log.info("Ceph health details:\n%s", out)
         fs_util.wait_for_mds_process(clients[0], process_name="", ispresent=False)
         default_fs = "cephfs"
         fs_details = fs_util.get_fs_info(clients[0], default_fs)
