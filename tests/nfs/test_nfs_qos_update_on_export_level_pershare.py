@@ -1,3 +1,6 @@
+import json
+from time import sleep
+
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
@@ -10,7 +13,7 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def enable_disable_qos_for_export(
+def qos_update_pershare_for_export(
     enable_flag,
     ceph_export_nfs_obj,
     cluster_name,
@@ -73,6 +76,7 @@ def run(ceph_cluster, **kw):
     nfs_export = "/export"
     nfs_mount = "/mnt/nfs"
     fs = "cephfs"
+    operation = config.get("operation", None)
     qos_type = config.get("qos_type", "PerShare")
 
     cluster_bw = config["cluster_bw"][0]
@@ -121,7 +125,7 @@ def run(ceph_cluster, **kw):
         )
 
         # Enable export-level QoS (initial values)
-        enable_disable_qos_for_export(
+        qos_update_pershare_for_export(
             enable_flag=True,
             ceph_export_nfs_obj=ceph_nfs_client.export,
             cluster_name=cluster_name,
@@ -130,13 +134,47 @@ def run(ceph_cluster, **kw):
             export=nfs_export,
             **{k: export_bw[k] for k in export_bw},
         )
+        # Then capture QoS
+        for _ in range(5):
+            qos_before_restart = json.loads(
+                ceph_nfs_client.export.get(nfs_name=nfs_name, nfs_export=nfs_export)
+            ).get("qos_block", {})
+            if qos_before_restart:
+                break
+            sleep(2)
+        log.info(f"Stored QoS before restart: {qos_before_restart}")
+
+        # Restart NFS service if operation is restart
+        if operation == "restart":
+            log.info("Restart operation requested. Restarting the NFS cluster.")
+            data = json.loads(Ceph(client).orch.ls(format="json"))
+            [service_name] = [
+                x["service_name"] for x in data if x.get("service_id") == cluster_name
+            ]
+            Ceph(client).orch.restart(service_name)
+            if cluster_name not in [x["service_name"] for x in data]:
+                sleep(5)
+
+            # Validate QoS after restart
+            export_data_after_restart = json.loads(
+                ceph_nfs_client.export.get(nfs_name=nfs_name, nfs_export=nfs_export)
+            )
+            qos_after_restart = export_data_after_restart.get("qos_block", {})
+
+            log.info(f"QoS before restart: {qos_before_restart}")
+            log.info(f"QoS after restart: {qos_after_restart}")
+
+            if qos_before_restart != qos_after_restart:
+                raise OperationFailedError(
+                    f"QoS mismatch after restart.\nBefore: {qos_before_restart}\nAfter: {qos_after_restart}"
+                )
 
         # Run IO and capture speeds (initial QoS)
         initial_speed = capture_copy_details(client, nfs_mount, "sample.txt")
         log.info(f"Initial Transfer Speeds: {initial_speed}")
 
         # Update export-level QoS (updated values)
-        enable_disable_qos_for_export(
+        qos_update_pershare_for_export(
             enable_flag=True,
             ceph_export_nfs_obj=ceph_nfs_client.export,
             cluster_name=cluster_name,
@@ -164,7 +202,7 @@ def run(ceph_cluster, **kw):
             )
 
         # Disable QoS
-        enable_disable_qos_for_export(
+        qos_update_pershare_for_export(
             enable_flag=False,
             nfs_name=nfs_name,
             export=nfs_export,
