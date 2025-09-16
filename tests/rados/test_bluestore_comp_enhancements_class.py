@@ -1,4 +1,6 @@
 import concurrent.futures
+import json
+import time
 
 from ceph.ceph import CephNode
 from ceph.ceph_admin import CephAdmin
@@ -7,9 +9,29 @@ from ceph.rados.rados_scrub import RadosScrubber
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.rados_test_util import wait_for_daemon_status
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
+from tests.rados.test_bluestore_data_compression import get_pool_stats
 from utility.log import Log
 
 log = Log(__name__)
+
+
+class BLUESTORE_ALLOC_HINTS:
+    SEQUENTIAL_WRITE = 1
+    RANDOM_WRITE = 2
+    SEQUENTIAL_READ = 4
+    RANDOM_READ = 8
+    APPEND_ONLY = 16
+    IMMUTABLE = 32
+    COMPRESSIBLE = 256
+    INCOMPRESSIBLE = 512
+    NOHINT = 0
+
+
+class COMPRESSION_MODES:
+    PASSIVE = "passive"
+    AGGRESSIVE = "aggressive"
+    FORCE = "force"
+    NONE = "none"
 
 
 class BluestoreDataCompression:
@@ -204,3 +226,169 @@ class BluestoreDataCompression:
             f"Successfully set bluestore_write_v2 to {toggle_value} on {osd_list}"
         )
         log.info(log_info_msg)
+
+    def check_compression_based_on_mode_and_hints(self, mode, hint):
+        """
+        Determine whether compression should be applied based on the given mode and hint.
+
+        This method evaluates compression behavior depending on the specified
+        compression mode and allocation hint.
+
+        Args:
+            mode : compression mode.
+                - passsive
+                - aggresive
+                - force
+                - none
+            hint : allocation hint provided for the data.
+                - 0 - no hint
+                - 256 - compressible hint
+                - 512 - incompressible hint
+
+        Returns:
+            bool: True if compression should be applied, False otherwise.
+        """
+        if mode == COMPRESSION_MODES.PASSIVE:
+            if hint == BLUESTORE_ALLOC_HINTS.COMPRESSIBLE:
+                return True
+            return False
+
+        elif mode == COMPRESSION_MODES.AGGRESSIVE:
+            if hint == BLUESTORE_ALLOC_HINTS.INCOMPRESSIBLE:
+                return False
+            else:
+                return True
+
+        elif mode == COMPRESSION_MODES.FORCE:
+            return True
+
+        elif mode == COMPRESSION_MODES.NONE:
+            return False
+
+    def validate_compression_modes(self, **kwargs):
+        """
+        1> Create a pool
+        2> Enable compression on pool
+        Compression algorithm :- Snappy
+
+        NOTE: Based on Compression mode passed step3 - step8 will vary
+        Compression mode :- Passive
+        3> Write an object to the pool with compressible hint
+        4> In passive mode compression will be applied only when compressible hint is set, So data should be compressed
+        5> Write an object to the pool without any hint
+        6> Data should not be compressed
+        7> Write an object to the pool with incompressible hint only.
+        8> Data should not be compressed.
+
+        Compression mode :- Aggressive
+        3> Write an object to the pool with compressible hint
+        4> Data should compress
+        5> Write an object to the pool without any hint
+        6> Data should compress
+        7> Write an object to the pool with an incompressible hint.
+        8> Data should not be compressed.
+
+         Compression mode :- Force
+        3> Write an object to the pool with compressible hint
+        4> Data should compress
+        5> Write an object to the pool without any hint
+        6> Data should compress
+        7> Write an object to the pool with an incompressible hint.
+        8> Data should compress
+
+         Compression mode :- None
+        3> Write an object to the pool with compressible hint
+        4> Data should not compress
+        5> Write an object to the pool without any hint
+        6> Data should not compress
+        7> Write an object to the pool with an incompressible hint.
+        8> Data should not compress
+        """
+        compression_algorithm = kwargs.get("compression_algorithm", "snappy")
+        compression_required_ratio = kwargs.get("compression_required_ratio", "0.875")
+        object_size = kwargs.get("object_size", "100000")
+        compression_mode = kwargs.get("compression_mode", "force")
+        pool_name = kwargs["pool_name"]
+        alloc_hint = kwargs.get("alloc_hint", BLUESTORE_ALLOC_HINTS.NOHINT)
+
+        log.info("---1. Create pools to test bluestore data compression---")
+        log_info_msg = f"Creating pool {pool_name}"
+        log.info(log_info_msg)
+        assert self.rados_obj.create_pool(
+            pool_name=pool_name, pg_num=1, disable_pg_autoscale=True, app_name="rbd"
+        )
+
+        log_info_msg = f"---2. Enabling compression on pool {pool_name} \
+                    \n compression_mode: {compression_mode} \
+                    \n compression_algorithm: {compression_algorithm} \
+                    \n compression_required_ratio: {compression_required_ratio} \
+                    \n compression_mode: {compression_mode}"
+        log.info(log_info_msg)
+
+        if (
+            self.rados_obj.pool_inline_compression(
+                pool_name=pool_name,
+                compression_mode=compression_mode,
+                compression_algorithm=compression_algorithm,
+                compression_required_ratio=compression_required_ratio,
+            )
+            is False
+        ):
+            err_msg = f"Error enabling compression on pool : {pool_name}"
+            log.error(err_msg)
+            raise Exception(err_msg)
+
+        log_info_msg = f"---3. Write IO to the pool {pool_name}---"
+        log.info(log_info_msg)
+
+        # install dependencies for g++
+        cmd = "yum groupinstall 'Development Tools' -y"
+        self.client_node.exec_command(
+            cmd=cmd, pretty_print=True, verbose=True, sudo=True
+        )
+
+        cmd = "yum install librados2-devel libradospp-devel -y"
+        self.client_node.exec_command(
+            cmd=cmd, pretty_print=True, verbose=True, sudo=True
+        )
+
+        cpp_file_name = "write_object_with_alloc_hints.cpp"
+        url = f"https://raw.githubusercontent.com/red-hat-storage/cephci/refs/heads/main/tests/rados/{cpp_file_name}"
+        cmd = f"""curl -L {url} -o ~/{cpp_file_name};
+                g++ -std=c++17 -Wall -O2 -o ~/write_obj ~/{cpp_file_name} -lrados ;chmod 700 ~/write_obj;
+                ~/write_obj {pool_name} 1 {object_size} {alloc_hint}"""
+        self.client_node.exec_command(
+            cmd=cmd, pretty_print=True, verbose=True, sudo=True
+        )
+
+        log.info("Sleeping for 120 seconds until ceph df populates")
+        time.sleep(120)
+
+        log_info_msg = f"---4. Validate compression mode on pool {pool_name}---"
+        log.info(log_info_msg)
+
+        pool_stats = get_pool_stats(rados_obj=self.rados_obj, pool_name=pool_name)
+        log.info(json.dumps(pool_stats))
+        compress_under_bytes = pool_stats["compress_under_bytes"]
+
+        log_msg = (
+            f"\n compressed bytes -> {compress_under_bytes} "
+            f"\n mode -> {compression_mode}"
+            f"\n hint -> {alloc_hint}"
+        )
+        if (
+            self.check_compression_based_on_mode_and_hints(compression_mode, alloc_hint)
+            is True
+        ):
+            log_msg += "\n compression should occur"
+            log.info(log_msg)
+            assert int(compress_under_bytes) > 0
+        else:
+            log_msg += "\n compression should not occur"
+            log.info(log_msg)
+            assert int(compress_under_bytes) == 0
+
+        log.info("Validated compression mode successfully")
+
+        if self.rados_obj.delete_pool(pool=pool_name) is False:
+            raise Exception(f"Deleting pool {pool_name} failed")
