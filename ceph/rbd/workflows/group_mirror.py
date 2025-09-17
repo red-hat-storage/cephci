@@ -370,7 +370,7 @@ def verify_group_snapshot_ls(rbd, group_spec, interval, **status_spec):
             err,
         )
         return 1
-
+    out = str(out).strip("'<>() ").replace("'", '"')
     schedule_list = json.loads(out)
     schedule_present = [
         schedule for schedule in schedule_list if schedule["interval"] == interval
