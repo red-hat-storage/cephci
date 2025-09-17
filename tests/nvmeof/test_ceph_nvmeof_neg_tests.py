@@ -706,9 +706,7 @@ def test_ceph_83575455(ceph_cluster, rbd, pool, config):
         # Create a file to check IO failure on mount point
         LOG.info("Remove client host access to the namespaces")
         try:
-            host_args = {
-                "args": {"subsystem": subsystem["nqn"], "host-nqn": initiator_nqn}
-            }
+            host_args = {"args": {"subsystem": subsystem["nqn"], "host": initiator_nqn}}
             nvmegwcli.host.delete(**host_args)
         except Exception as host_del_err:
             if (

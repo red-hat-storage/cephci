@@ -87,15 +87,15 @@ def configure_subsystems(pool, ha, config):
     # Add Host access
     if config.get("allow_host"):
         nvmegwcli.host.add(
-            **{"args": {**sub_args, **{"host-nqn": repr(config["allow_host"])}}}
+            **{"args": {**sub_args, **{"host": repr(config["allow_host"])}}}
         )
 
     if config.get("hosts"):
         for host in config["hosts"]:
             initiator_node = get_node_by_id(ceph_cluster, host)
             initiator = NVMeInitiator(initiator_node)
-            host_nqn = initiator.nqn()
-            nvmegwcli.host.add(**{"args": {**sub_args, **{"host-nqn": host_nqn}}})
+            host_nqn = initiator.initiator_nqn()
+            nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
 
     # Add Namespaces
     if config.get("bdevs"):
