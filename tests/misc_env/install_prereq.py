@@ -4,7 +4,7 @@ import re
 import time
 
 from ceph.parallel import parallel
-from ceph.utils import config_ntp, is_client, update_ca_cert
+from ceph.utils import config_ntp, enable_coredump, is_client, update_ca_cert
 from ceph.waiter import WaitUntil
 from cli.exceptions import ConfigError
 from cli.utilities.packages import Package
@@ -115,6 +115,12 @@ def run(**kw):
                     workaround_openssl_issue,
                     ceph,
                 )
+
+    # enable coredump on all nodes
+    with parallel() as p:
+        for ceph in ceph_nodes:
+            p.spawn(enable_coredump, ceph)
+            time.sleep(20)
     return 0
 
 

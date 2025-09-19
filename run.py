@@ -27,7 +27,7 @@ from ceph.utils import (
     create_ceph_nodes,
     create_ibmc_ceph_nodes,
 )
-from cephci.cluster_info import get_ceph_var_logs
+from cephci.cluster_info import collect_ceph_coredumps, get_ceph_var_logs
 from cli.performance.memory_and_cpu_utils import (
     start_logging_processes,
     stop_logging_process,
@@ -90,6 +90,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--enable-eus]
         [--skip-enabling-rhel-rpms]
         [--skip-sos-report]
+        [--collect-coredump]
         [--skip-tc <items>]
         [--monitor-performance]
         [--disable-console-log]
@@ -153,6 +154,8 @@ Options:
   --skip-enabling-rhel-rpms         skip adding rpms from subscription if using beta
                                     rhel images for Interop runs
   --skip-sos-report                 Enables to collect sos-report on test suite failures
+                                    [default: false]
+  --collect-coredump                Enables presevation of coredump directory
                                     [default: false]
   --skip-tc <items>                 skip test case provided in comma seperated fashion
   --monitor-performance             Monitor performance and CPU usage on all/required nodes
@@ -530,6 +533,7 @@ def run(args):
     enable_eus = args.get("--enable-eus")
     skip_enabling_rhel_rpms = args.get("--skip-enabling-rhel-rpms")
     skip_sos_report = args.get("--skip-sos-report")
+    collect_coredump = args.get("--collect-coredump")
 
     # load config, suite and inventory yaml files
     conf = load_file(glb_file)
@@ -1065,6 +1069,13 @@ def run(args):
     }
 
     email_results(test_result=test_res)
+
+    if jenkins_rc or collect_coredump:
+        log.info("\n\nPreserving core-dump directory due to failures in testcase")
+        for cluster in ceph_cluster_dict.keys():
+            # method to collect coredumps from ceph nodes
+            collect_ceph_coredumps(ceph_cluster_dict[cluster], run_dir)
+        log.info(f"Generated coredump location : {url_base}/ceph_coredumps\n")
 
     if jenkins_rc and not skip_sos_report:
         log.info(
