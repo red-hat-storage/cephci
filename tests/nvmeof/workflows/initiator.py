@@ -17,6 +17,7 @@ class NVMeInitiator(Initiator):
         self.discovery_port = 8009
         self.subsys_key = None
         self.host_key = None
+        # TODO: Need to cosume initiator nqn rather than getting from outside
         self.nqn = nqn
         self.auth_mode = ""
 

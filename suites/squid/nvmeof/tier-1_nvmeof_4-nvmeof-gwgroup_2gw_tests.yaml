@@ -95,7 +95,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode2
                 no-group-append: True
                 listener_port: 4420
@@ -104,7 +103,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node7
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node6
@@ -127,7 +125,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode4
                 no-group-append: True
                 listener_port: 4420
@@ -136,7 +133,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node9
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node8
@@ -159,7 +155,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node10
               - nqn: nqn.2016-06.io.spdk:cnode6
                 no-group-append: True
                 listener_port: 4420
@@ -168,7 +163,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node11
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node10
@@ -234,7 +228,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode17
                 listener_port: 4420
                 listeners: [node6, node7]
@@ -242,7 +235,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node7
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node6
@@ -265,7 +257,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode17
                 listener_port: 4420
                 listeners: [node8, node9]
@@ -273,7 +264,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node9
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node8
@@ -360,7 +350,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode17
                 listener_port: 4420
                 listeners: [node6, node7]
@@ -368,7 +357,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node7
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node6
@@ -391,7 +379,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode17
                 listener_port: 4420
                 listeners: [node8, node9]
@@ -399,7 +386,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node9
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node8
@@ -485,7 +471,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode17
                 listener_port: 4420
                 listeners: [node6, node7]
@@ -493,7 +478,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node7
             fault-injection-methods:                   # Failure induction
               - tool: systemctl
                 nodes: node6
@@ -515,7 +499,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode17
                 listener_port: 4420
                 listeners: [node8, node9]
@@ -523,7 +506,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node9
             fault-injection-methods:                   # Failure induction
               - tool: systemctl
                 nodes: node8
@@ -610,7 +592,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node6
               - nqn: nqn.2016-06.io.spdk:cnode17
                 listener_port: 4420
                 listeners: [node6, node7]
@@ -618,7 +599,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node7
             fault-injection-methods:                   # Failure induction
               - tool: systemctl
                 nodes: node6
@@ -641,7 +621,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node8
               - nqn: nqn.2016-06.io.spdk:cnode17
                 listener_port: 4420
                 listeners: [node8, node9]
@@ -649,7 +628,6 @@ tests:
                 bdevs:
                   - count: 2
                     size: 4G
-                    lb_group: node9
             fault-injection-methods:                   # Failure induction
               - tool: systemctl
                 nodes: node8
