@@ -296,6 +296,19 @@ tests:
         config-file-name: test_manual_resharding_without_bucket_delete.yaml
         run-on-haproxy: true
 
+  #  Parquet object access post-reshard
+
+  - test:
+      name: verify parquet object access after bucket reshard
+      desc: verify objects with parquet files uploaded are accessible post reshard of the bucket
+      polarion-id: CEPH-83575183
+      module: sanity_rgw.py
+      config:
+        script-name: test_s3select_resharding.py
+        config-file-name: test_s3select_parquet_resharding.yaml
+        run-on-haproxy: true
+
+
   # test checksum with awscli v1 and v2
 
   - test:
@@ -343,15 +356,3 @@ tests:
       config:
         script-name: test_Mbuckets_with_Nobjects.py
         config-file-name: test_bucket_instance_delete.yaml
-
-  # Parquet object access post-reshard
-
-  - test:
-      name: verify parquet object access after bucket reshard
-      desc: verify objects with parquet files uploaded are accessible post reshard of the bucket
-      polarion-id: CEPH-83575183
-      module: sanity_rgw.py
-      config:
-        script-name: test_s3select_resharding.py
-        config-file-name: test_s3select_parquet_resharding.yaml
-        run-on-haproxy: true
