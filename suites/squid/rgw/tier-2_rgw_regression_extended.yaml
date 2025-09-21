@@ -252,6 +252,7 @@ tests:
       polarion-id: CEPH-9793
       module: sanity_rgw.py
       config:
+        install_keystone_ldap: true
         script-name: ../aws/test_ldap_auth.py
         config-file-name: ../../aws/configs/test_ldap_auth.yaml
         run-on-rgw: true
