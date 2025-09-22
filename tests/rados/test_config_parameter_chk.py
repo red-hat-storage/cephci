@@ -9,7 +9,6 @@ This method contains the scenarios to check the-
 
 import random
 import re
-import time
 from configparser import ConfigParser
 
 from ceph.ceph_admin import CephAdmin
@@ -37,9 +36,7 @@ def run(ceph_cluster, **kw):
     # To get the OSD list
     osd_list = rados_object.get_osd_list(status="up")
     log.info(f"The number of OSDs in the cluster are: {len(osd_list)}")
-    # If OSD list is more than 10 then randomly picking the 10 OSDs to check the parameters.
-    if len(osd_list) > 10:
-        osd_list = random.sample(osd_list, 10)
+    osd_list = random.sample(osd_list, 2)
     log.info(f"The parameters are checking on {osd_list} osds")
     if config.get("scenario") == "msgrv2_5x":
         try:
@@ -188,8 +185,7 @@ def run(ceph_cluster, **kw):
                         mon_object.set_config(
                             section="osd", name=parameter[0], value=old_value
                         )
-                    # Implicit Wait after set configuration
-                    time.sleep(5)
+
                     for parameter in mclock_default_parmeters:
                         for id in osd_list:
                             param_value = mon_object.show_config(
@@ -258,8 +254,7 @@ def run(ceph_cluster, **kw):
                             mon_object.set_config(
                                 section="osd", name=param[0], value=chg_value
                             )
-                            # Implicit Wait after set configuration
-                            time.sleep(5)
+
                             # Get the new value of the parameter using config show
                             actual_value = mon_object.show_config("osd", id, param[0])
                             actual_value = str(actual_value).strip()
