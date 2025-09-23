@@ -99,9 +99,35 @@ def run(ceph_cluster, **kw):
             )
 
         if "scenario-4" in scenarios_to_run:
-            log.info("STARTED: Scenario 4: Disable bluestore_write_v2 and validate")
+            log.info("STARTED: Scenario 4: Validate blob sizes")
+            compression_mode = COMPRESSION_MODES.FORCE
+            for obj_alloc_hint in [
+                BLUESTORE_ALLOC_HINTS.COMPRESSIBLE,
+                BLUESTORE_ALLOC_HINTS.INCOMPRESSIBLE,
+                BLUESTORE_ALLOC_HINTS.IMMUTABLE & BLUESTORE_ALLOC_HINTS.SEQUENTIAL_READ,
+                BLUESTORE_ALLOC_HINTS.APPEND_ONLY
+                & BLUESTORE_ALLOC_HINTS.SEQUENTIAL_READ,
+            ]:
+                for device_class in ["SSD", "HDD"]:
+                    pool_name = (
+                        f"test-{compression_mode}-{obj_alloc_hint}-{device_class}"
+                    )
+                    kwargs = {
+                        "pool_name": pool_name,
+                        "compression_mode": compression_mode,
+                        "alloc_hint": obj_alloc_hint,
+                        "device_class": device_class,
+                    }
+                    log.info("Compression parameters are :")
+                    log.info(kwargs)
+                    bluestore_compression.test_blob_sizes(**kwargs)
+
+            log.info("STARTED: Scenario 4: Validate blob sizes")
+
+        if "scenario-5" in scenarios_to_run:
+            log.info("STARTED: Scenario 5: Disable bluestore_write_v2 and validate")
             bluestore_compression.toggle_bluestore_write_v2(toggle_value="false")
-            log.info("COMPELTED: Scenario 4: Disable bluestore_write_v2 and validate")
+            log.info("COMPELTED: Scenario 5: Disable bluestore_write_v2 and validate")
 
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
