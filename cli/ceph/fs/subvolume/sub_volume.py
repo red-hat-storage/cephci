@@ -45,7 +45,7 @@ class SubVolume(Cli):
             return out[0].strip()
         return out
 
-    def rm(self, volume, subvolume, group=None, force=False):
+    def rm(self, volume, subvolume, force=False, **kwargs):
         """
         Removes ceph subvol
         Args:
@@ -55,10 +55,9 @@ class SubVolume(Cli):
             force (bool): Force tag
         """
         cmd = f"{self.base_cmd} rm {volume} {subvolume}"
-        if group:
-            cmd += f" {group}"
         if force:
             cmd += " --force"
+        cmd += f" {build_cmd_from_args(**kwargs)}"
         try:
             out = self.execute(sudo=True, cmd=cmd, check_ec=True)
         except Exception as e:
@@ -69,7 +68,7 @@ class SubVolume(Cli):
             return out[0].strip()
         return out
 
-    def ls(self, volume, group=None):
+    def ls(self, volume, **kwargs):
         """
         List subvol groups
         Args:
@@ -77,8 +76,7 @@ class SubVolume(Cli):
             group (str): subvol group name
         """
         cmd = f"{self.base_cmd} ls {volume}"
-        if group:
-            cmd += f" {group}"
+        cmd += f" {build_cmd_from_args(**kwargs)}"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
