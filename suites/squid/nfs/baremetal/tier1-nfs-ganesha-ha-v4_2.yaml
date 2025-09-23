@@ -7,6 +7,56 @@
 #    - Bootstrap RHCS 8.x cluster
 #    - Deploy NFS-Ganesha with HA using spec file
 #    - Verify NFS-Ganesha HA scenarios
+
+# ===============================================================================
+# To run BYOK tests with NFS-Ganesha-HA
+#
+# This suite performs end-to-end testing of:
+#   - GKLM integration for key and certificate management (BYOK/KMIP)
+#   - Deployment and configuration of NFS Ganesha v4.2
+#   - I/O operations validation on NFS exports
+#   - Encryption enforcement verification via FUSE mounts
+#
+# Prerequisites:
+#   • CephCI environment configured for your cloud (openstack or baremetal)
+#   • GKLM credentials supplied via:
+#       a) --custom-config-file <gklm_file.yaml>
+#          gklm_file.yaml should include:
+#            gklm:
+#              gklm_ip:           "0.0.0.0"    # GKLM server IP
+#              gklm_user:         "admin"      # GKLM REST API user
+#              gklm_password:     "password"   # GKLM REST API password
+#              gklm_node_username:"user"       # SSH user on GKLM host
+#              gklm_node_password:"password"   # SSH password on GKLM host
+#              gklm_hostname:     "myhost"     # GKLM server hostname
+#
+#       OR
+#       b) Multiple --custom-config entries:
+#          --custom-config "gklm_ip=0.0.0.0"
+#          --custom-config "gklm_user=admin"
+#          --custom-config "gklm_password=password"
+#          --custom-config "gklm_node_username=user"
+#          --custom-config "gklm_node_password=password"
+#          --custom-config "gklm_hostname=myhost"
+#
+#       OR
+#       c) In ~/.cephci.yaml under 'gklm_config':
+#          gklm_config:
+#            openstack:
+#              gklm_ip:             "0.0.0.0"
+#              gklm_user:           "user"
+#              gklm_password:       "password"
+#              gklm_node_username:  "user"
+#              gklm_node_password:  "password"
+#              gklm_hostname:       "hostname"
+#            ibmc:
+#              gklm_ip:             "0.0.0.0"
+#              gklm_user:           "user"
+#              gklm_password:       "password"
+#              gklm_node_username:  "user"
+#              gklm_node_password:  "password"
+#              gklm_hostname:       "hostname"
+# ===============================================================================
 #===============================================================================================
 tests:
   - test:
@@ -218,3 +268,21 @@ tests:
         servers: 2
         ha: true
         vip: 10.8.130.231/21
+
+  - test:
+      name: Test Encryption with the correct keys ha
+      module: byok.test_byok_nfs_ha_failover_encryption.py
+      desc: BYOK single-cluster with FUSE encryption validation
+      polarion-id: CEPH-83630277
+      abort-on-fail: true
+      config:
+        nfs_version: 4.2
+        total_export_num: 2
+        servers: 2
+        clients: 1
+        ha: true
+        vip: 10.8.128.200
+        active_standby: true
+        nfs_mount: /mnt/nfs_byok
+        nfs_export: /export_byok
+        nfs_instance_name: nfs_byok
