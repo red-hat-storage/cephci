@@ -6,9 +6,9 @@ globals:
         public:
           - 10.8.128.0/21
       nodes:
-        - hostname: mero017
+        - hostname: mero001
           id: node1
-          ip: 10.8.129.237
+          ip: 10.8.129.221
           role:
             - _admin
             - installer
@@ -31,7 +31,6 @@ globals:
             - /dev/sdj
             - /dev/sdk
             - /dev/nvme0n1
-            - /dev/sdl
         - hostname: mero018
           id: node2
           ip: 10.8.129.238
