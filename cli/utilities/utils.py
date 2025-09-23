@@ -25,6 +25,7 @@ CEPHADM_ANSIBLE_PATH = "/usr/share/cephadm-ansible"
 RHBUILD_PATTERN = r"(\d\.\d)-(rhel-\d)"
 
 CEPH_PUB_KEY = "/etc/ceph/ceph.pub"
+GDB_PATH = "gdb"
 
 
 def get_disk_list(node, expr=None, **kw):
@@ -1065,3 +1066,72 @@ def get_process_info(node, process="", awk=""):
         cmd = cmd + " | awk {{'print $" + f"{awk}" + "'}}"
     out, _ = node.exec_command(cmd=cmd, sudo=True)
     return out.split("\n")
+
+
+def _find_core_files(core_dirs, node):
+    """Find core files on the node."""
+    cores = []
+    for core_dir in core_dirs:
+        cmd = f"test -d {core_dir} && find {core_dir} -type f -name '*core*' || true"
+        out = node.exec_command(cmd=cmd, sudo=True)
+        for line in out[0].splitlines():
+            if line.strip():
+                cores.append(line.strip())
+    return cores
+
+
+def _get_executable(core_file, node):
+    """Use gdb to find the executable associated with the core dump."""
+    try:
+        cmd = f"{GDB_PATH} -c {core_file} --batch -ex 'info files'"
+        out, _, _ = node.exec_command(cmd=cmd, sudo=True)
+        exe_path = None
+        for line in out.read().decode().splitlines():
+            if "Symbols from" in line:
+                exe_path = line.split('"')[1]
+                break
+        return exe_path
+    except Exception as e:
+        log.error(f"Failed to get the exe associated with core {e}")
+    return None
+
+
+def _get_backtrace(core_file, exe_file, node):
+    """Run gdb to get a backtrace for the core dump."""
+    try:
+        cmd = f"{GDB_PATH} {exe_file} {core_file} --batch -ex 'bt'"
+        out = node.exec_command(cmd=cmd, sudo=True)
+        return out[0]
+    except Exception as e:
+        return f"[!] Failed to get backtrace for {core_file}: {e}"
+
+
+def get_coredump_details(node, core_path=None):
+    """
+    Collects the coredump data from the given node for all
+    the core paths specified
+    Args:
+        node (ceph): Node where the cmd has to be executed
+        core_path (list): List of core paths to be analysed
+    """
+    core_path = core_path if type(core_path) in (list, tuple) else [core_path]
+    if not core_path:
+        # Directories to search for core dumps
+        core_path = ["/var/lib/systemd/coredump"]
+    cores = _find_core_files(core_path)
+    if not cores:
+        print("No core dumps found in the specified directories.")
+        return
+
+    print(f"Found {len(cores)} core dumps.\n{'=' * 60}\n")
+
+    for core in cores:
+        print(f"[+] Processing core dump: {core}")
+        exe = _get_executable(core, node)
+        if not exe:
+            print(f"[!] Executable not found for {core}, skipping...\n{'-' * 60}\n")
+            continue
+
+        print(f"[+] Found executable: {exe}")
+        bt = _get_backtrace(core, exe, node)
+        print(f"Backtrace for {core}:\n{bt}\n{'-' * 60}\n")
