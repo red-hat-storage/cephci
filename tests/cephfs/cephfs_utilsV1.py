@@ -2499,8 +2499,9 @@ os.system('sudo systemctl start  network')
         :return:
         """
         out, rc = client.exec_command(
-            sudo=True, cmd=f"cd {directory};ls -lrt |  awk {{'print $9'}}"
+            sudo=True, cmd=f"find {directory} -maxdepth 1 -type f -printf '%f\n'"
         )
+
         file_list = out.strip().split()
         file_dict = {}
         for file in file_list:
