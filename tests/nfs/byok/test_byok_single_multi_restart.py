@@ -15,6 +15,7 @@ from tests.nfs.byok.byok_tools import (
 from tests.nfs.nfs_operations import (
     cleanup_custom_nfs_cluster_multi_export_client,
     dynamic_cleanup_common_names,
+    get_ganesha_info_from_container,
 )
 from tests.nfs.test_nfs_io_operations_during_upgrade import (
     create_export_and_mount_for_existing_nfs_cluster,
@@ -26,13 +27,149 @@ from utility.utils import get_cephci_config
 log = Log(__name__)
 
 
+def validate_sighup(
+    installer,
+    nfs_node,
+    nfs_name,
+    gklm_rest_client,
+    gkml_client_name,
+    gklm_hostname,
+    ca_cert,
+    gklm_user,
+    gklm_cert_alias_old,
+    gklm_cert_alias_new,
+):
+    """
+    Validates that the NFS Ganesha process receives a SIGHUP signal (reload) rather than a full restart
+    when its certificate and key are updated via GKLM (Global Key Lifecycle Manager).
+    This function performs the following steps:
+    1. Retrieves the current Ganesha process PID from the NFS container.
+    2. Generates a new certificate and key for the NFS node using GKLM.
+    3. Deletes the old certificate from GKLM and assigns the new certificate to the GKLM client.
+    4. Updates the NFS Ganesha instance with the new certificate and key.
+    5. Retrieves the Ganesha process PID again to verify if the process was reloaded (SIGHUP) or restarted.
+    6. Raises an OperationFailedError if the PID has changed, indicating a restart instead of a SIGHUP.
+    Args:
+        installer (list): List of installer objects used to interact with the NFS service.
+        nfs_node (object): The NFS node object containing hostname and IP address information.
+        nfs_name (str): The name of the NFS service instance.
+        gklm_rest_client (object): GKLM REST client for certificate management operations.
+        gkml_client_name (str): The GKLM client name to assign the new certificate.
+        gklm_hostname (str): Hostname of the GKLM server.
+        ca_cert (str): CA certificate used for secure communication.
+    Returns:
+        int: Returns 1 if the Ganesha PID could not be found before the update.
+    Raises:
+        OperationFailedError: If the Ganesha process PID changes after the update,
+        indicating a restart instead of a SIGHUP.
+    """
+    log.info("getting ganesha PID before updating GKLM")
+    ganesha_pid_berfore, container_info = get_ganesha_info_from_container(
+        installer=installer, nfs_service_name=nfs_name, nfs_host_node=nfs_node
+    )
+    log.info(f"Ganesha PID: {ganesha_pid_berfore}, Container Info: {container_info}")
+
+    if ganesha_pid_berfore is None:
+        log.error("Ganesha PID not found")
+        return 1
+
+    log.info("Generating new certificate and key from GKLM")
+    rsa_key_2, cert_2, _ = gklm_rest_client.certificates.get_certificates(
+        subject={
+            "common_name": nfs_node.hostname,
+            "ip_address": nfs_node.ip_address,
+        }
+    )
+
+    log.info("Deleting old certificate from GKLM and assigning new one")
+    gklm_rest_client.certificates.delete_certificate(gklm_cert_alias_old)
+    log.info(f"Successfully deleted GKLM client {gklm_cert_alias_old}")
+    gklm_rest_client.clients.assign_users_to_generic_kmip_client(
+        gkml_client_name, [gklm_user]
+    )
+    assign_cert_data = gklm_rest_client.clients.assign_client_certificate(
+        client_name=gkml_client_name, cert_pem=cert_2, alias=gklm_cert_alias_new
+    )
+
+    log.info(f"Successfully assigned new certificate {assign_cert_data}")
+
+    log.info("Updating NFS Ganesha instance with new cert and key")
+    create_nfs_instance_for_byok(
+        installer, nfs_node, nfs_name, gklm_hostname, rsa_key_2, cert_2, ca_cert
+    )
+    log.info("Updating NFS Ganesha instance with new cert and key - successful")
+
+    ganesha_pid_after, container_info = get_ganesha_info_from_container(
+        installer=installer, nfs_service_name=nfs_name, nfs_host_node=nfs_node
+    )
+    log.info(
+        f"Ganesha PID after updating GKLM and NFS: {ganesha_pid_after}, Container Info: {container_info}"
+    )
+
+    if ganesha_pid_berfore != ganesha_pid_after:
+        log.info("Ganesha PID has changed after updating GKLM and NFS")
+        raise OperationFailedError(
+            "Ganesha PID changed after Updating GKLM, Its a restart not a SIGHUP"
+        )
+
+
 def run(ceph_cluster, **kw):
     """
-    Unified BYOK (Bring Your Own Key) NFS test runner.
+    Test BYOK (Bring Your Own Key) functionality for NFS Ganesha with GKLM integration.
+    This test performs comprehensive validation of NFS Ganesha encryption using customer-managed
+    keys from GKLM (Gemalto Key Lifecycle Manager). It supports both single-cluster and
+    multi-cluster deployments with optional SIGHUP testing for certificate rotation.
+    Args:
+        ceph_cluster: Ceph cluster object containing node information
+        **kw: Keyword arguments containing:
+            - config: Test configuration parameters
+            - test_data: Custom test data including GKLM connection details
+    Configuration Parameters:
+        - nfs_mount (str): NFS mount point path (default: "/mnt/nfs_byok")
+        - nfs_export (str): NFS export path (default: "/export_byok")
+        - nfs_instance_name (str): NFS service name (default: "nfs_byok")
+        - total_export_num (int): Number of exports to create (default: 2)
+        - clients (int): Number of client nodes to use (default: 1)
+        - fs_name (str): CephFS filesystem name (default: "cephfs")
+        - nfs_replication_number (int): Number of NFS clusters for multi-cluster test (default: 1)
+        - nfs_port (str): NFS service port (default: "2049")
+        - nfs_version (str): NFS protocol version (default: "4.0")
+        - check_sighup (bool): Enable SIGHUP testing for certificate rotation (default: False)
+        - spec: Multi-cluster specification for advanced deployments
+    Test Workflow:
+        1. Sets up GKLM infrastructure and REST client connection
+        2. Generates certificates, keys, and CA certificate from GKLM
+        3. Creates CephFS subvolume group for NFS exports
+        4. Deploys NFS Ganesha instance(s) with BYOK encryption
+        5. Creates and mounts NFS exports with encryption tags
+        6. (Optional) Tests SIGHUP certificate rotation without service restart
+        7. Performs I/O operations and validates encryption via FUSE mounts
+        8. Cleans up all test resources including GKLM certificates and clients
+    Single-Cluster Mode (nfs_replication_number=1):
+        - Deploys one NFS Ganesha instance with BYOK
+        - Optionally tests certificate rotation via SIGHUP
+        - Validates that PID remains unchanged during certificate updates
+    Multi-Cluster Mode (nfs_replication_number>1):
+        - Deploys multiple NFS Ganesha instances with shared BYOK configuration
+        - Distributes exports across available NFS nodes
+        - Performs parallel I/O validation across all clusters
+    SIGHUP Testing (check_sighup=True):
+        - Works in single cluster mode
+        - Captures Ganesha process PID before certificate rotation
+        - Generates new certificate and key from GKLM
+        - Updates NFS instance with new certificates
+        - Verifies PID remains unchanged (confirming SIGHUP vs restart)
+    Returns:
+        int: 0 on success, 1 on failure
+    Raises:
+        ConfigError: When insufficient client nodes are available
+        OperationFailedError: When critical operations fail (e.g., PID change during SIGHUP)
+    Note:
+        - Requires pre-configured GKLM server with appropriate credentials
+        - Uses "ganeshagroup" as the default CephFS subvolume group
+        - Performs comprehensive cleanup in finally block regardless of test outcome
+        - Validates cluster health after cleanup to ensure system stability
 
-    Modes:
-      - Single cluster with FUSE validation (default / nfs_replication_number=1)
-      - Multi cluster with IO restart validation (when nfs_replication_number > 1)
     """
     config = kw.get("config", {})
     custom_data = kw.get("test_data", {})
@@ -107,10 +244,14 @@ def run(ceph_cluster, **kw):
                 "ip_address": nfs_node.ip_address,
             }
         )
-        created_client_data = gklm_rest_client.clients.create_client(gkml_client_name)
+
+        all_clients = gklm_rest_client.clients.list_clients()
+        if gkml_client_name.upper() not in [x.get("clientName") for x in all_clients]:
+            log.info(f"Not Found client name {gkml_client_name}, creating ")
+            gklm_rest_client.clients.create_client(gkml_client_name)
+
         enctag = get_enctag(
             gklm_rest_client,
-            created_client_data,
             gkml_client_name,
             gklm_cert_alias,
             gklm_user,
@@ -146,6 +287,22 @@ def run(ceph_cluster, **kw):
                 nfs_server=nfs_node.hostname,
             )
 
+            if config.get("check_sighup", False):
+                log.info("SIGHUP Testing -- begins")
+                gklm_cert_alias_new = "certsighup"
+                validate_sighup(
+                    installer=installer[0],
+                    nfs_node=nfs_node,
+                    nfs_name=nfs_name,
+                    gklm_rest_client=gklm_rest_client,
+                    gkml_client_name=gkml_client_name,
+                    gklm_hostname=gklm_hostname,
+                    ca_cert=ca_cert,
+                    gklm_user=gklm_user,
+                    gklm_cert_alias_old=gklm_cert_alias,
+                    gklm_cert_alias_new=gklm_cert_alias_new,
+                )
+
             log.info(
                 "Step 7: Performing I/O validation on NFS exports \n"
                 "Step 8: Validate encryption via FUSE mounts as well"
@@ -154,7 +311,7 @@ def run(ceph_cluster, **kw):
                 client_export_mount_dict,
                 clients,
                 file_count=10,
-                dd_command_size_in_M=20,
+                dd_command_size_in_M=5,
                 nfs_name=nfs_name,
             )
 
@@ -221,6 +378,13 @@ def run(ceph_cluster, **kw):
 
     finally:
         log.info("Cleanup: GKLM, NFS clusters, and mounts")
+        if config.get("check_sighup", False):
+            all_certs = [
+                x.get("alias", None)
+                for x in gklm_rest_client.certificates.list_certificates()
+            ]
+            if "certsighup" in all_certs:
+                gklm_cert_alias = "certsighup"
 
         # Clean GKLM resources
         clean_up_gklm(

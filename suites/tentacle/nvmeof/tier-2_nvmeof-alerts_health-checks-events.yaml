@@ -78,12 +78,8 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
-              lb_group: node6
-            - count: 2
-              size: 5G
-              lb_group: node5
             listener_port: 4420
             listeners:
               - node6
@@ -104,6 +100,8 @@ tests:
       config:
         rbd_pool: rbd
         test_case: CEPH-83610950
+        time_to_fire: 60
+        interval: 50
         cleanup:
           - pool
           - gateway
@@ -127,6 +125,8 @@ tests:
       config:
         rbd_pool: rbd
         test_case: CEPH-83611097
+        time_to_fire: 600
+        interval: 60
         cleanup:
           - pool
           - gateway
@@ -148,6 +148,7 @@ tests:
           - node5
         rbd_pool: rbd
         time_to_fire: 600
+        interval: 120
         gw_group: gw_group1
         listener_port: 4420
         test_case: CEPH-83611098
@@ -168,6 +169,7 @@ tests:
           - node5
         rbd_pool: rbd
         time_to_fire: 300
+        interval: 100
         gw_group: gw_group1
         subsystems:                             # Configure subsystems
           - nqn: nqn.2016-06.io.spdk:cnode1
@@ -195,7 +197,6 @@ tests:
             bdevs:
             - count: 512
               size: 1G
-              lb_group: node5
             listener_port: 4420
             listeners:
               - node5
@@ -206,7 +207,6 @@ tests:
             bdevs:
             - count: 512
               size: 1G
-              lb_group: node6
             listener_port: 4420
             listeners:
               - node5
@@ -230,6 +230,7 @@ tests:
           - node6
         rbd_pool: rbd
         time_to_fire: 60
+        interval: 60
         gw_group: gw_group1
         subsystems:
           - nqn: nqn.2016-06.io.spdk:cnode1
@@ -238,7 +239,6 @@ tests:
             bdevs:
             - count: 10
               size: 5G
-              lb_group: node5
             listener_port: 4420
             listeners:
               - node5
@@ -267,6 +267,7 @@ tests:
           - node9
           - node10
         time_to_fire: 60
+        interval: 60
         rbd_pool: nvme_of_pool
         gw_group: gw_group1
         test_case: CEPH-83617544
@@ -287,6 +288,7 @@ tests:
           - node6
         rbd_pool: rbd
         time_to_fire: 300
+        interval: 100
         gw_group: gw_group1
         subsystems:
           - nqn: nqn.2016-06.io.spdk:cnode1
@@ -311,6 +313,7 @@ tests:
       config:
         rbd_pool: rbd
         time_to_fire: 60
+        interval: 60
         gw_groups:
           - gw_group: group1
             gw_nodes:
@@ -345,6 +348,7 @@ tests:
           - node6
         rbd_pool: rbd
         time_to_fire: 60
+        interval: 60
         gw_group: gw_group1
         subsystems:
           - nqn: nqn.2016-06.io.spdk:cnode1
@@ -366,6 +370,7 @@ tests:
           - node6
         rbd_pool: nvme_of_pool
         time_to_fire: 60
+        interval: 60
         gw_group: gw_group1
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
@@ -373,7 +378,6 @@ tests:
             bdevs:
               - count: 1024
                 size: 1G
-                lb_group: node5
             listener_port: 4420
             listeners:
               - node5
@@ -398,6 +402,7 @@ tests:
         nvme_diff_version: cp.stg.icr.io/cp/ibm-ceph/nvmeof-rhel9:1.4.11-2
         rbd_pool: nvme_of_pool
         time_to_fire: 3600
+        interval: 900
         gw_group: gw_group1
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
@@ -405,7 +410,6 @@ tests:
             bdevs:
               - count: 5
                 size: 1G
-                lb_group: node5
             listener_port: 4420
             listeners:
               - node6

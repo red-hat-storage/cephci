@@ -92,7 +92,6 @@ tests:
             bdevs:
             - count: 2
               size: 2G
-              lb_group: node6
             listener_port: 4420
             listeners:
               - node6
@@ -103,7 +102,6 @@ tests:
             bdevs:
             - count: 2
               size: 2G
-              lb_group: node7
             listener_port: 4420
             listeners:
               - node6
@@ -145,7 +143,6 @@ tests:
             bdevs:
             - count: 2
               size: 2G
-              lb_group: node6
             listener_port: 4420
             listeners:
               - node6
@@ -156,7 +153,6 @@ tests:
             bdevs:
             - count: 2
               size: 2G
-              lb_group: node7
             listener_port: 4420
             listeners:
               - node6

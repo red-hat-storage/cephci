@@ -386,7 +386,9 @@ class ServiceabilityMethods:
 
         Note: If Spec is not provided, 1st available - managed OSD spec name would be used
         """
-        if not float(self.rhbuild.split("-")[0]) >= 8.1:
+        # 8.1 : https://bugzilla.redhat.com/show_bug.cgi?id=2304314
+        # 7.1 : https://bugzilla.redhat.com/show_bug.cgi?id=2370168
+        if not float(self.rhbuild.split("-")[0]) >= 7.1:
             log.info(
                 "Feature not backport-ed on versions lower than 8.1. Skipping workflow"
                 "Tests running on build : %s",

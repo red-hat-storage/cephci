@@ -226,7 +226,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         # Prepare and Run FIO on NVMe devices
         namespaces = ha.fetch_namespaces(nvmegwcli)
         initiators = config["initiators"]
-        ha.prepare_io_execution(initiators)
+        ha.prepare_io_execution(nvmegwcli, initiators)
         ha.compare_client_namespace([i["uuid"] for i in namespaces])
         for initiator in ha.clients:
             io_tasks.append(executor.submit(initiator.start_fio))

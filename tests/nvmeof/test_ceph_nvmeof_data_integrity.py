@@ -3,11 +3,17 @@ import time
 from copy import deepcopy
 
 from ceph.ceph import Ceph
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmeof.initiator import Initiator
+from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.nvmeof.workflows.nvme_utils import delete_nvme_service, deploy_nvme_service
+from tests.nvmeof.workflows.initiator import NVMeInitiator
+from tests.nvmeof.workflows.nvme_gateway import create_gateway
+from tests.nvmeof.workflows.nvme_utils import (
+    check_and_set_nvme_cli_image,
+    delete_nvme_service,
+    deploy_nvme_service,
+    nvme_gw_cli_version_adapter,
+)
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id
@@ -50,8 +56,8 @@ def configure_subsystems(ceph_cluster, rbd, pool, nvmegwcli, config):
     if config.get("hosts"):
         for host in config["hosts"]:
             initiator_node = get_node_by_id(ceph_cluster, host)
-            initiator = Initiator(initiator_node)
-            host_nqn = initiator.nqn()
+            initiator = NVMeInitiator(initiator_node)
+            host_nqn = initiator.initiator_nqn()
             nvmegwcli.host.add(**{"args": {**sub_args, **{"host": host_nqn}}})
 
     if config.get("bdevs"):
@@ -110,7 +116,7 @@ def initiators(ceph_cluster, gateway, config):
             node: node7
     """
     client = get_node_by_id(ceph_cluster, config["node"])
-    initiator = Initiator(client)
+    initiator = NVMeInitiator(client)
     cmd_args = {
         "transport": "tcp",
         "traddr": gateway.node.ip_address,
@@ -148,7 +154,7 @@ def initiators(ceph_cluster, gateway, config):
 def disconnect_initiator(ceph_cluster, node):
     """Disconnect Initiator."""
     node = get_node_by_id(ceph_cluster, node)
-    initiator = Initiator(node)
+    initiator = NVMeInitiator(node)
     initiator.disconnect_all()
 
 
@@ -209,15 +215,12 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
     rbd_obj.ceph_client = get_node_by_id(ceph_cluster, config["initiators"]["node"])
 
-    overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
+    nvmegwcli = None
+    custom_config = kwargs.get("test_data", {}).get("custom-config")
+    check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
 
     gw_node = get_node_by_id(ceph_cluster, config["gw_node"])
-    gw_port = config.get("gw_port", 5500)
-    nvmegwcli = NVMeGWCLI(gw_node, gw_port)
+    ceph = Orch(ceph_cluster, **{})
 
     if config.get("cleanup-only"):
         teardown(ceph_cluster, rbd_obj, nvmegwcli, config)
@@ -226,6 +229,16 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     try:
         if config.get("install"):
             deploy_nvme_service(ceph_cluster, config)
+
+        nvmegwcli = create_gateway(
+            nvme_gw_cli_version_adapter(ceph_cluster),
+            gw_node,
+            mtls=config.get("mtls"),
+            shell=getattr(ceph, "shell"),
+            port=config.get("gw_port", 5500),
+            gw_group=config.get("gw_group"),
+        )
+
         if config.get("subsystems"):
             with parallel() as p:
                 for subsys_args in config["subsystems"]:
@@ -239,21 +252,13 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                     )
 
         if config.get("initiators"):
-            targets, rhel_version = initiators(
+            paths, rhel_version = initiators(
                 ceph_cluster, nvmegwcli, config["initiators"]
             )
-            LOG.info(f"Targets discovered: {targets}")
+            LOG.info(f"Targets discovered: {paths}")
 
-            if rhel_version == "9.5":
-                paths = [target["DevicePath"] for target in targets]
-            elif rhel_version == "9.6":
-                paths = [
-                    f"/dev/{ns['NameSpace']}"
-                    for device in targets
-                    for subsys in device.get("Subsystems", [])
-                    for ns in subsys.get("Namespaces", [])
-                ]
-
+            if not paths:
+                raise RuntimeError("No paths")
             # verifying data integrity on NVMe targets
             for path in paths:
                 nvme = generate_unique_id(length=4)
@@ -332,20 +337,10 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 time.sleep(10)
                 # Connect to Initiator
                 if config.get("initiators"):
-                    targets, rhel_version = initiators(
+                    paths, rhel_version = initiators(
                         ceph_cluster, nvmegwcli, config["initiators"]
                     )
-                    LOG.info(f"Targets discovered: {targets}")
-
-                    if rhel_version == "9.5":
-                        paths = [target["DevicePath"] for target in targets]
-                    elif rhel_version == "9.6":
-                        paths = [
-                            f"/dev/{ns['NameSpace']}"
-                            for device in targets
-                            for subsys in device.get("Subsystems", [])
-                            for ns in subsys.get("Namespaces", [])
-                        ]
+                    LOG.info(f"Targets discovered: {paths}")
 
                 path = paths[0]
                 # mount the NVMe target

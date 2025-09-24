@@ -1,8 +1,15 @@
 import ast
 import json
+import re
 import time
+from typing import Type, Union
 
+from packaging.version import Version
+
+from ceph.ceph import Ceph
 from ceph.ceph_admin.orch import Orch
+from ceph.nvmeof.cli.v1 import NVMeGWCLI
+from ceph.nvmeof.cli.v2 import NVMeGWCLIV2
 from ceph.utils import get_node_by_id, get_nodes_by_ids
 from tests.cephadm import test_nvmeof
 from utility.log import Log
@@ -180,6 +187,7 @@ def deploy_nvme_service(ceph_cluster, config):
     - gw_group      # optional, as per release
     - mtls          # optional
     """
+    LOG.info("Starting Ceph Ceph NVMEoF deployment.")
     _cfg = apply_nvme_sdk_cli_support(ceph_cluster, config)
     test_nvmeof.run(ceph_cluster, **_cfg)
 
@@ -348,7 +356,7 @@ def verify_qos(expected_config, nvmegwcli):
         "base_cmd_args": {"format": "json"},
         "args": {"subsystem": subnqn, "nsid": nsid},
     }
-    _, namespace = nvmegwcli.namespace.list(**_config)
+    namespace, _ = nvmegwcli.namespace.list(**_config)
     namespace_data = json.loads(namespace)["namespaces"][0]
 
     def transform_rw_ios(value):
@@ -422,3 +430,50 @@ def validate_nvme_metadata(cluster, config, pool, group=""):
     LOG.info(
         f"[ OMAP VALIDATION SUCCESSFULL ] - {entity} Found in nvmeof state OMAP file.\n{out}."
     )
+
+
+def nvme_gw_cli_version_adapter(
+    ceph: Ceph,
+) -> Union[Type[NVMeGWCLI], Type[NVMeGWCLIV2]]:
+    """Select the appropriate NVMe Gateway CLI obj based on the Ceph version.
+
+    This function determines which NVMe Gateway CLI implementation to use
+    depending on the Ceph version number(upstream, basically which starts from 20.x.x).
+    It ensures that commands are executed with the correct CLI for compatibility
+    with the target gateway.
+
+    Args:
+        ceph (Ceph): CephCI Ceph object
+
+    Returns:
+        type[NVMeGWCLI] | type[NVMeGWCLIV2]: CLI class (not an instance).
+    """
+    out, _ = Orch(ceph, **{}).shell(args=["ceph", "--format", "json", "version"])
+
+    match = re.search(r"[0-9]+(\.[0-9]+)*", out)
+    if not match:
+        raise RuntimeError("Ceph version not found.")
+
+    version = Version(match.group())
+    return NVMeGWCLIV2 if version.major >= 20 else NVMeGWCLI
+
+
+def check_and_set_nvme_cli_image(
+    ceph: Ceph, image: str = "", config: list = []
+) -> None:
+    """Set CLI image on NVMeGWCLI Version1."""
+    version = nvme_gw_cli_version_adapter(ceph)
+    if version is NVMeGWCLIV2:
+        return
+
+    if not (image or config):
+        raise RuntimeError(
+            "NVMe CLI image not provided. user --custom-config to provide CLI image"
+        )
+    if image:
+        NVMeGWCLI.NVMEOF_CLI_IMAGE = image
+    elif config:
+        for key, value in dict(item.split("=") for item in config).items():
+            if key == "nvmeof_cli_image":
+                NVMeGWCLI.NVMEOF_CLI_IMAGE = value
+                break

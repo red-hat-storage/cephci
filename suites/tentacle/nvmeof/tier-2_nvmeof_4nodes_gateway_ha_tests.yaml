@@ -150,18 +150,8 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 8
               size: 5G
-              lb_group: node6
-            - count: 2
-              size: 5G
-              lb_group: node7
-            - count: 2
-              size: 5G
-              lb_group: node8
-            - count: 2
-              size: 5G
-              lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -209,18 +199,8 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 8
               size: 5G
-              lb_group: node6
-            - count: 2
-              size: 5G
-              lb_group: node7
-            - count: 2
-              size: 5G
-              lb_group: node8
-            - count: 2
-              size: 5G
-              lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -266,18 +246,8 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 8
               size: 5G
-              lb_group: node6
-            - count: 2
-              size: 5G
-              lb_group: node7
-            - count: 2
-              size: 5G
-              lb_group: node8
-            - count: 2
-              size: 5G
-              lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -325,7 +295,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node6
             listener_port: 4420
             listeners:
               - node6
@@ -338,7 +307,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node7
             listener_port: 4420
             listeners:
               - node6
@@ -351,7 +319,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node8
             listener_port: 4420
             listeners:
               - node6
@@ -364,7 +331,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -411,18 +377,8 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
-              size: 5G
-              lb_group: node6
-            - count: 2
-              size: 5G
-              lb_group: node7
-            - count: 2
-              size: 5G
-              lb_group: node8
-            - count: 2
-              size: 5G
-              lb_group: node9
+            - count: 8
+              size: 8G
             listener_port: 4420
             listeners:
               - node6
@@ -473,18 +429,8 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 8
               size: 5G
-              lb_group: node6
-            - count: 2
-              size: 5G
-              lb_group: node7
-            - count: 2
-              size: 5G
-              lb_group: node8
-            - count: 2
-              size: 5G
-              lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -535,12 +481,8 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode1
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
-              lb_group: node6
-            - count: 2
-              size: 5G
-              lb_group: node7
             listener_port: 4420
             listeners:
               - node6
@@ -551,12 +493,8 @@ tests:
           - nqn: nqn.2016-06.io.spdk:cnode2
             serial: 1
             bdevs:
-            - count: 2
+            - count: 4
               size: 5G
-              lb_group: node8
-            - count: 2
-              size: 5G
-              lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -609,7 +547,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node6
             listener_port: 4420
             listeners:
               - node6
@@ -622,7 +559,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node7
             listener_port: 4420
             listeners:
               - node6
@@ -635,7 +571,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node8
             listener_port: 4420
             listeners:
               - node6
@@ -648,7 +583,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -701,7 +635,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node6
             listener_port: 4420
             listeners:
               - node6
@@ -714,7 +647,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node7
             listener_port: 4420
             listeners:
               - node6
@@ -727,7 +659,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node8
             listener_port: 4420
             listeners:
               - node6
@@ -740,7 +671,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -795,7 +725,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node6
             listener_port: 4420
             listeners:
               - node6
@@ -808,7 +737,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node7
             listener_port: 4420
             listeners:
               - node6
@@ -821,7 +749,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node8
             listener_port: 4420
             listeners:
               - node6
@@ -834,7 +761,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node9
             listener_port: 4420
             listeners:
               - node6
@@ -885,7 +811,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node6
             listener_port: 4420
             listeners:
               - node6
@@ -898,7 +823,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node7
             listener_port: 4420
             listeners:
               - node6
@@ -911,7 +835,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node8
             listener_port: 4420
             listeners:
               - node6
@@ -924,7 +847,6 @@ tests:
             bdevs:
             - count: 2
               size: 5G
-              lb_group: node9
             listener_port: 4420
             listeners:
               - node6

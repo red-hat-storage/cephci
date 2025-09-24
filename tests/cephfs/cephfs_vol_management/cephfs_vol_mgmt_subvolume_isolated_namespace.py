@@ -2,9 +2,11 @@ import json
 import random
 import string
 import traceback
+from distutils.version import LooseVersion
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -50,7 +52,11 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"ceph fs subvolume info {fs_name} {subvol_name}  --format json",
         )
-        isolated_pool_name = f"fsvolumens_{subvol_name}"
+        ceph_version = get_ceph_version_from_cluster(client1)
+        if LooseVersion(ceph_version) > LooseVersion("20"):
+            isolated_pool_name = f"fsvolumens___{subvol_name}"
+        else:
+            isolated_pool_name = f"fsvolumens_{subvol_name}"
         output1 = json.loads(out1)
         target_ns_name = output1["pool_namespace"]
         if target_ns_name != isolated_pool_name:

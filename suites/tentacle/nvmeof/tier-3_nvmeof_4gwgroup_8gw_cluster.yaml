@@ -147,18 +147,8 @@ tests:
                 listeners: [node14, node15, node16, node17]
                 allow_host: "*"
                 bdevs:
-                  - count: 2
+                  - count: 8
                     size: 4G
-                    lb_group: node14
-                  - count: 2
-                    size: 5G
-                    lb_group: node15
-                  - count: 2
-                    size: 2G
-                    lb_group: node16
-                  - count: 2
-                    size: 3G
-                    lb_group: node17
             fault-injection-methods:                # Failure induction
               - tool: systemctl
                 nodes: node14

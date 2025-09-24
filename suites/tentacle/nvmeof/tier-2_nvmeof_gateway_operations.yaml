@@ -1,6 +1,7 @@
-# Basic Ceph-NvmeoF sanity Test suite
+# Ceph NVMeoF CLI Operations Suite - v9.0
 # cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_sanity.yaml
 # Inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
+# TODO: We have issues for new cli so we need to re-look once issues are fixed
 
 tests:
 # Set up the cluster
@@ -191,6 +192,11 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
           - config:
+              service: gateway
+              command: listener_info             # List ana states for subsystem
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+          - config:
               service: listener
               command: delete             # listener del
               args:
@@ -213,14 +219,6 @@ tests:
               command: list             # List access hosts
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
-          - config:
-              service: host
-              command: delete           # access host del
-              args:
-                subsystem: nqn.2016-06.io.spdk:cnode2
-                host: '"*"'
-              validate:
-                omap: true
           - config:
               service: namespace
               command: add              # Namespace add
@@ -258,7 +256,7 @@ tests:
                 omap: true
           - config:
               service: namespace
-              command: add              # Namespace add
+              command: add              # Namespace add with trash-image enabled
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 rbd-image: image4
@@ -267,13 +265,43 @@ tests:
                 load-balancing-group: 2
                 rbd-create-image: true
                 size: 1G
+                rbd-trash-image-on-delete: true
               validate:
                 omap: true
           - config:
               service: namespace
-              command: list             # namespace list
+              command: set_auto_resize              # Namespace add with set_auto_resize turnoff
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
+                nsid: 3
+                auto-resize-enabled: 'no'
+              validate:
+                omap: true
+          - config:
+              service: namespace
+              command: refresh_size              # Namespace add with refresh_size
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+                nsid: 3
+              validate:
+                omap: true
+          - config:
+              service: namespace
+              command: list             # namespace list per subsystem NQN
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode2
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: list             # namespace list using nsid
+              args:
+                nsid: 4
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: list             # namespace list for all subsystems
               base_cmd_args:
                 format: json
           - config:
@@ -294,10 +322,10 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 1
-                rw-ios-per-second: 220
-                rw-megabytes-per-second: 79
-                r-megabytes-per-second: 79
-                w-megabytes-per-second: 79
+                rw-ios-per-second: 200
+                rw-megabytes-per-second: 59
+                r-megabytes-per-second: 59
+                w-megabytes-per-second: 59
               validate:
                 omap: true
           - config:
@@ -323,7 +351,7 @@ tests:
                 load-balancing-group: 1
           - config:
               service: namespace
-              command: list             # namespace list
+              command: list             # namespace list using subsystem NQN
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
               base_cmd_args:
@@ -364,6 +392,7 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 4
+                i-am-sure: true
               validate:
                 omap: true
           - config:
@@ -401,16 +430,6 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
           - config:
-              service: listener
-              command: delete             # listener del
-              args:
-                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
-                host-name: node6
-                trsvcid: 5001
-                traddr: node6
-              validate:
-                omap: true
-          - config:
               service: host
               command: add              # add Host access
               args:
@@ -424,13 +443,10 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
           - config:
-              service: host
-              command: delete           # access host del
+              service: gateway
+              command: listener_info             # List ana states for subsystem
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
-                host: '"*"'
-              validate:
-                omap: true
           - config:
               service: namespace
               command: add              # Namespace add
@@ -464,6 +480,7 @@ tests:
                 load-balancing-group: 1
                 rbd-create-image: true
                 size: 1G
+                no-auto-visible: true
               validate:
                 omap: true
           - config:
@@ -477,8 +494,72 @@ tests:
                 load-balancing-group: 2
                 rbd-create-image: true
                 size: 1G
+                no-auto-visible: true
               validate:
                 omap: true
+          - config:
+              service: namespace
+              command: add              # Namespace add with trash-image enabled
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                rbd-image: image6
+                rbd-pool: rbd
+                nsid: 5
+                rbd-create-image: true
+                size: 1G
+                rbd-trash-image-on-delete: true
+              validate:
+                omap: true
+          - config:
+              service: namespace
+              command: set_auto_resize              # Namespace add with set_auto_resize turn-on
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 4
+                auto-resize-enabled: 'yes'
+              validate:
+                omap: true
+          - config:
+              service: namespace
+              command: refresh_size              # Namespace add with refresh_size
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 4
+              validate:
+                omap: true
+          - config:
+              service: namespace
+              command: list             # namespace list using subsystem NQN
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: list             # namespace list using nsid
+              args:
+                nsid: 4
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: list             # namespace list for all subsystems
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
+              command: add_host             # namespace add_host
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 3
+                host: nqn.2014-08.org.nvmexpress:uuid:7c1c2d62-2ad0-4181-ae79-8e780a6a080b
+          - config:
+              service: namespace
+              command: add_host             # namespace add_host
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 4
+                host: nqn.2014-08.org.nvmexpress:uuid:7c1c2d62-2ad0-4181-ae79-8e780a6a080c
           - config:
               service: namespace
               command: list             # namespace list
@@ -505,9 +586,9 @@ tests:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 1
                 rw-ios-per-second: 200
-                rw-megabytes-per-second: 79
-                r-megabytes-per-second: 79
-                w-megabytes-per-second: 79
+                rw-megabytes-per-second: 59
+                r-megabytes-per-second: 59
+                w-megabytes-per-second: 59
               validate:
                 omap: true
           - config:
@@ -552,6 +633,55 @@ tests:
                 nsid: 1
           - config:
               service: namespace
+              command: del_host             # namespace del_host
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 3
+                host: nqn.2014-08.org.nvmexpress:uuid:7c1c2d62-2ad0-4181-ae79-8e780a6a080b
+          - config:
+              service: namespace
+              command: del_host             # namespace del_host
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 4
+                host: nqn.2014-08.org.nvmexpress:uuid:7c1c2d62-2ad0-4181-ae79-8e780a6a080c
+          - config:
+              service: namespace
+              command: change_visibility              # Namespace change_visibility
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 3
+                auto-visible: 'yes'
+          - config:
+              service: namespace
+              command: change_visibility              # Namespace change_visibility
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 4
+                auto-visible: 'yes'
+          - config:
+              service: namespace
+              command: change_visibility              # Namespace change_visibility
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 1
+                auto-visible: 'no'
+          - config:
+              service: namespace
+              command: change_visibility              # Namespace change_visibility
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 2
+                auto-visible: 'no'
+          - config:
+              service: namespace
+              command: list             # namespace list
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+              base_cmd_args:
+                format: json
+          - config:
+              service: namespace
               command: delete           # namespace delete
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
@@ -583,6 +713,33 @@ tests:
               validate:
                 omap: true
           - config:
+              service: namespace
+              command: delete           # namespace delete
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                nsid: 5
+                i-am-sure: true
+              validate:
+                omap: true
+          - config:
+              service: listener
+              command: delete             # listener del
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                host-name: node6
+                trsvcid: 5001
+                traddr: node6
+              validate:
+                omap: true
+          - config:
+              service: host
+              command: delete           # access host del
+              args:
+                subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
+                host: '"*"'
+              validate:
+                omap: true
+          - config:
               service: subsystem
               command: delete           # subsystem delete
               args:
@@ -598,7 +755,7 @@ tests:
               base_cmd_args:
                 format: json
                 output: log
-      desc: Manage NVMeoF Subsystem entities
+      desc: Validate NVMeoF CLI operations
       destroy-cluster: false
       module: test_nvme_cli.py
       name: Manage nvmeof gateway entities

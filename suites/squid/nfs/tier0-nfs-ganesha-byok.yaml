@@ -187,7 +187,14 @@ tests:
         nfs_mount: /mnt/nfs_byok
         nfs_export: /export_byok
         nfs_instance_name: nfs_byok
-
+   - test:
+      name: Test Encryption with the incorrect key and kmip certs (single cluster)
+      module: byok.test_byok_neg_incorrect_key_cert.py
+      desc: BYOK Negative test Incorrect key kmip certs
+      polarion-id: CEPH-83628801
+      abort-on-fail: true
+      config:
+        nfs_version: 4.2
    - test:
       name: byok multicluster with io and restart - parallel module
       module: test_parallel.py
@@ -225,3 +232,19 @@ tests:
                 longevity: true
                 # longevity_duration: 1 # in hours
                 longevity_loop: 3 # 3 iterations/loops
+
+   - test:
+      name: Test SIGHUP-reload after KMIP and nfs update (single cluster)
+      module: byok.test_byok_single_multi_restart.py
+      desc: Confirm nfs receives SIGHUP and reloads after KMIP certs in existing NFS service spec update
+      polarion-id: CEPH-83628800
+      abort-on-fail: true
+      config:
+        nfs_version: 4.2
+        total_export_num: 4
+        clients: 1
+        nfs_replication_number: 1           # Single cluster mode
+        nfs_mount: /mnt/nfs_byok
+        nfs_export: /export_byok
+        nfs_instance_name: nfs_byok
+        check_sighup: true

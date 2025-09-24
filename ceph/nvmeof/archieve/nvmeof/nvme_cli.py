@@ -102,10 +102,6 @@ class NVMeCLI(Cli):
         out, _ = self.list(**json_kwargs)
         devs = json.loads(out)["Devices"]
 
-        if not devs:
-            LOG.debug("No NVMe devices found.")
-            return []
-
         if rhel_version == "9.5":
             return [
                 dev

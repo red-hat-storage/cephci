@@ -1,11 +1,13 @@
 from ceph.ceph import Ceph
-from ceph.nvmegw_cli import NVMeGWCLI
-from ceph.nvmeof.initiator import Initiator
+from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
 from tests.cephadm import test_nvmeof
 from tests.nvmeof.workflows.ha import HighAvailability
-from tests.nvmeof.workflows.nvme_utils import apply_nvme_sdk_cli_support
+from tests.nvmeof.workflows.nvme_utils import (
+    apply_nvme_sdk_cli_support,
+    check_and_set_nvme_cli_image,
+)
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.log import Log
 from utility.utils import generate_unique_id
@@ -92,12 +94,13 @@ def configure_subsystems(pool, auth_mode, ha, gw_group, subsys_config):
                 initiator_node = get_node_by_id(ceph_cluster, host.get("node"))
                 initiator = Initiator(initiator_node)
 
-                # unidirectional inband authentication
-                if not subsys_config.get("inband_auth") and host.get("inband_auth"):
-                    ha.create_dhchap_key(subsys_config)
-                    sub_args["dhchap-key"] = subsys_config["dhchap-key"]
+                # Generate key for host NQN
+                sub_args.pop("dhchap-key", None)
+                if host.get("inband_auth"):
+                    ha.create_dhchap_key(subsys_config, update_host_key=True)
+                    sub_args["dhchap-key"] = host["dhchap-key"]
                 nvmegwcli.host.add(
-                    **{"args": {**sub_args, **{"host": initiator.nqn()}}}
+                    **{"args": {**sub_args, **{"host": initiator.initiator_nqn()}}}
                 )
 
         # Add Namespaces
@@ -135,6 +138,7 @@ def configure_subsystems(pool, auth_mode, ha, gw_group, subsys_config):
         if subsys_update_key:
             ha.create_dhchap_key(subsys_config)
             sub_args["dhchap-key"] = subsys_config["dhchap-key"]
+            LOG.info(f"Updating DHCHAP key for Subsystem {nqn}")
             nvmegwcli.subsystem.change_key(
                 **{
                     "args": {
@@ -148,12 +152,14 @@ def configure_subsystems(pool, auth_mode, ha, gw_group, subsys_config):
             host_update_key = host.get("update_dhchap_key", False)
             initiator_node = get_node_by_id(ceph_cluster, host.get("node"))
             initiator = Initiator(initiator_node)
-            if subsys_update_key or host_update_key:
-                if not subsys_update_key:
-                    ha.create_dhchap_key(subsys_config, update_host_key=True)
-                    sub_args["dhchap-key"] = subsys_config["dhchap-key"]
+            if host_update_key:
+                # if not subsys_update_key:
+                ha.create_dhchap_key(subsys_config, update_host_key=True)
+                sub_args.pop("dhchap-key", None)
+                sub_args["dhchap-key"] = host["dhchap-key"]
+                LOG.info(f"Updating DHCHAP key for Host {initiator.initiator_nqn()}")
                 nvmegwcli.host.change_key(
-                    **{"args": {**sub_args, **{"host": initiator.nqn()}}}
+                    **{"args": {**sub_args, **{"host": initiator.initiator_nqn()}}}
                 )
 
 
@@ -290,10 +296,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
     overrides = kwargs.get("test_data", {}).get("custom-config")
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
+    check_and_set_nvme_cli_image(ceph_cluster, config=overrides)
 
     try:
         for gwgroup_config in config["gw_groups"]:
@@ -313,6 +316,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                 ha = HighAvailability(
                     ceph_cluster, gwgroup_config["gw_nodes"], **gwgroup_config
                 )
+                ha.initialize_gateways()
 
             # Configure subsystems and run HA
             if config.get("test_case"):

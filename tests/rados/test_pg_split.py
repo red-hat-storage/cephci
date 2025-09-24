@@ -64,6 +64,15 @@ def run(ceph_cluster, **kw):
         method_should_succeed(
             wait_for_clean_pg_sets, rados_obj, timeout=timeout, test_pool=pool_name
         )
+        # Due to below tracker, suppressing few heath warnings when fast ec is enabled on pools.
+        # https://tracker.ceph.com/issues/71645 . ( bugzilla to be raised soon )
+        fast_ec_enabled = any(
+            pool.get("create_pool", {}).get("enable_fast_ec_features", False)
+            for pool in config.get("create_pools", [])
+        )
+        warning_ignore_list = (
+            ["OSD_SCRUB_ERRORS", "PG_DAMAGED"] if fast_ec_enabled else []
+        )
 
         init_pg_count = rados_obj.get_pool_property(
             pool=pool["pool_name"], props="pg_num"
@@ -301,7 +310,9 @@ def run(ceph_cluster, **kw):
         )
 
         # Checking cluster health after OSD removal
-        method_should_succeed(rados_obj.run_pool_sanity_check)
+        method_should_succeed(
+            rados_obj.run_pool_sanity_check, ignore_list=warning_ignore_list
+        )
         log.info("Sanity check post test execution, Test complete, Pass")
 
         if add_network_delay:
@@ -340,11 +351,7 @@ def run(ceph_cluster, **kw):
             assert service_obj.add_osds_to_managed_service()
             rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
 
-        if config.get("delete_pools"):
-            for name in config["delete_pools"]:
-                method_should_succeed(rados_obj.delete_pool, name)
-            log.info("deleted all the given pools successfully")
-
+        rados_obj.rados_pool_cleanup()
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution

@@ -230,6 +230,7 @@ tests:
               mirrormode: snapshot
               snap_schedule_intervals:
                 - 1m
+              way: "one-way"
             ec_pool_config:
               num_pools: 1
               num_images: 1
@@ -241,6 +242,7 @@ tests:
               mirrormode: snapshot
               snap_schedule_intervals:
                 - 1m
+              way: "one-way"
             fio:
               size: 100M
               ODF_CONFIG:

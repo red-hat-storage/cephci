@@ -1098,3 +1098,141 @@ def dynamic_cleanup_common_names(
     sleep(30)
     check_nfs_daemons_removed(client)
     log.info("Dynamic cleanup of NFS resources completed")
+
+
+def get_ganesha_info_from_container(installer, nfs_service_name, nfs_host_node):
+    """
+    Retrieves Ganesha NFS daemon information from a containerized NFS service.
+    This function extracts the process ID (PID) and related container information
+    for a Ganesha NFS daemon running inside a container managed by Ceph orchestrator.
+    Args:
+        installer: CephAdm installer object used to execute ceph orchestrator commands
+        nfs_service_name (str): Name of the NFS service to query (without 'nfs.' prefix)
+        nfs_host_node: Host node object where the NFS container is running, used for
+                       executing commands on the host system
+    Returns:
+        tuple: A tuple containing:
+            - int or None: Host PID of the Ganesha process, or None if not found
+            - dict or None: Dictionary containing container information with keys:
+                - 'container_id': Container ID of the NFS service
+                - 'hostname': Hostname where the container is running
+                - 'container_pid': PID of the container process on the host
+                - 'ganesha_pid_in_container': PID of Ganesha process inside container
+                - 'host_ganesha_pid': Host PID of the Ganesha process
+              Returns None if information cannot be retrieved
+    Raises:
+        Exception: Catches and logs any exceptions that occur during the process,
+                   returning (None, None) on failure
+    Note:
+        This function uses podman commands to inspect containers and find process IDs.
+        It requires sudo privileges on the host node to execute container inspection
+        and process listing commands.
+
+    """
+    try:
+        log.info(f"Getting Ganesha PID for service: {nfs_service_name}")
+
+        # Get NFS service container information
+        out = CephAdm(installer).ceph.orch.ps(
+            service_name=f"nfs.{nfs_service_name}", format="json"
+        )
+
+        nfs_processes = json.loads(out)
+
+        if not nfs_processes:
+            log.error(f"No running processes found for NFS service {nfs_service_name}")
+            return (None, None)
+
+        nfs_process = nfs_processes[0]
+        container_id = nfs_process.get("container_id", "")
+        hostname = nfs_process.get("hostname", "")
+
+        if not container_id:
+            log.error("Container ID not found for NFS service")
+            return (None, None)
+
+        log.info(f"NFS container ID: {container_id} on host: {hostname}")
+
+        # Method 1: Get PID from container inspection
+        cmd = f"podman inspect {container_id} --format '{{{{.State.Pid}}}}'"
+        out, err = nfs_host_node.exec_command(cmd=cmd, sudo=True)
+
+        if not err and out.strip().isdigit():
+            container_pid = int(out.strip())
+            log.info(f"Container PID: {container_pid}")
+
+            # Method 2: Find Ganesha process inside container
+            cmd = f"podman exec {container_id} ps aux | grep '[g]anesha.nfsd' | awk '{{print $2}}'"
+            out, err = nfs_host_node.exec_command(cmd=cmd, sudo=True)
+
+            if not err and out.strip():
+                ganesha_pid_in_container = out.strip()
+                log.info(f"Ganesha PID inside container: {ganesha_pid_in_container}")
+
+                # Get the actual host PID (container PID + offset usually)
+                # For most container runtimes, we can find the host PID through /proc
+                cmd = "ps -ef | grep '[g]anesha.nfsd' | grep -v grep | awk '{print $2}'"
+                out, err = nfs_host_node.exec_command(cmd=cmd, sudo=True)
+
+                if not err and out.strip():
+                    host_ganesha_pid = out.strip().split("\n")[0]
+                    log.info(f"Ganesha host PID: {host_ganesha_pid}")
+
+                    return (
+                        int(host_ganesha_pid),
+                        {
+                            "container_id": container_id,
+                            "hostname": hostname,
+                            "container_pid": container_pid,
+                            "ganesha_pid_in_container": ganesha_pid_in_container,
+                            "host_ganesha_pid": host_ganesha_pid,
+                        },
+                    )
+
+        log.error("Could not determine Ganesha PID")
+        return (None, None)
+
+    except Exception as e:
+        log.error(f"Failed to get Ganesha PID: {e}")
+        return (None, None)
+
+
+def nfs_log_parser(client, nfs_node, nfs_name, expect_list):
+    """
+    This method parses the nfs debug log for given list of strings and returns 0 on Success
+    and 1 on failure
+    Required args:
+    client : for ceph cmds
+    nfs_node : Node object where nfs_daemon is hosted
+    nfs_name : Name of nfs cluster
+    expect_list : List of strings to be parsed
+    """
+    cmd = f"ceph orch ps | grep {nfs_name}"
+    out = list(client.exec_command(sudo=True, cmd=cmd))[0]
+    nfs_daemon_name = out.split()[0]
+    results = {"expect": {}}
+    for search_str in expect_list:
+        cmd = f"cephadm logs --name {nfs_daemon_name} > nfs_log"
+        nfs_node.exec_command(sudo=True, cmd=cmd)
+        try:
+            cmd = f'grep "{search_str}" nfs_log'
+            out = nfs_node.exec_command(sudo=True, cmd=cmd)
+            if len(out) > 0:
+                log.info(
+                    f"Found {search_str} in {nfs_daemon_name} log on {nfs_node.hostname}:\n {out}"
+                )
+                results["expect"].update({search_str: nfs_node})
+        except BaseException as ex:
+            log.info(ex)
+
+    expect_not_found = []
+    for exp_str in expect_list:
+        if exp_str not in results["expect"]:
+            expect_not_found.append(exp_str)
+    if len(expect_not_found):
+        log.error(
+            f"Some of expected strings not found in debug logs for {nfs_daemon_name}:{expect_not_found}"
+        )
+        return 1
+
+    return 0

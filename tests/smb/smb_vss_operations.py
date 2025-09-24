@@ -177,6 +177,14 @@ def run(ceph_cluster, **kw):
                         f"VSS feature not working. File content before editing {out}, "
                         f"File content of snapshot {out4}"
                     )
+            # Delete snapshot
+            elif operation == "delete_snapshot":
+                cmd = (
+                    f"cd {cifs_mount_point} && ceph fs subvolume snapshot rm {cephfs_vol} {smb_subvols[0]} {snap} "
+                    f"{smb_subvol_group}"
+                )
+                out, _ = client.exec_command(sudo=True, cmd=cmd)
+                log.info("Deleted snapshot : {}".format(snap))
 
     except Exception as e:
         log.error(f"Failed to deploy samba with auth_mode {auth_mode} : {e}")

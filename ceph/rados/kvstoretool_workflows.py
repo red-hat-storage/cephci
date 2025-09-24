@@ -103,7 +103,7 @@ class kvstoreToolWorkflows:
         timeout: int = 300,
         mount: bool = False,
         exclude_stderr: bool = True,
-    ) -> str:
+    ):
         """
         Runs ceph-kvstore-tool commands within OSD container
         Args:
@@ -137,6 +137,8 @@ class kvstoreToolWorkflows:
         finally:
             if not self.nostart:
                 self.rados_obj.change_osd_state(action="start", target=osd_id)
+        if not exclude_stderr:
+            return str(out), str(err)
         return str(out)
 
     def help(self, osd_id: int):
@@ -204,8 +206,8 @@ class kvstoreToolWorkflows:
             key: ket of the KV pair
         Returns:
             Returns the output of
-            ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> exists <prefix>
-            e.g - ceph-kvstore-tool bluestore-kv /var/lib/ceph/osd/ceph-6 dump C
+            ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> exists <prefix> [<key>]
+            e.g - ceph-kvstore-tool bluestore-kv /var/lib/ceph/osd/ceph-6 exists C
         """
         _cmd = f"exists {prefix}"
         if key:
@@ -225,10 +227,12 @@ class kvstoreToolWorkflows:
             ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> get <prefix> <key> [out <file>]
             e.g - ceph-kvstore-tool bluestore-kv /var/lib/ceph/osd/ceph-6 get C
         """
+        mnt = False
         _cmd = f"get {prefix} {key}"
         if out_file:
-            _cmd = f"out {out_file}"
-        return self.run_ckvt_command(cmd=_cmd, osd_id=osd_id)
+            mnt = True
+            _cmd += f" out {out_file}"
+        return self.run_ckvt_command(cmd=_cmd, osd_id=osd_id, mount=mnt)
 
     def get_crc(self, osd_id: int, prefix: str, key: str):
         """Module to get the CRC of the KV pair stored with the URL encoded prefix and key.
@@ -279,12 +283,14 @@ class kvstoreToolWorkflows:
             Returns the output of
             ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> set <prefix> <key> [ver <N>|in <file>]
         """
+        mnt = False
         _cmd = f"set {prefix} {key}"
         if in_file:
-            _cmd = f"in {in_file}"
+            mnt = True
+            _cmd += f" in {in_file}"
         elif version_t:
-            _cmd = f"ver {version_t}"
-        return self.run_ckvt_command(cmd=_cmd, osd_id=osd_id)
+            _cmd += f" ver {version_t}"
+        return self.run_ckvt_command(cmd=_cmd, osd_id=osd_id, mount=mnt)
 
     def remove(self, osd_id: int, prefix: str, key: str):
         """Module to remove the KV pair stored with the URL encoded prefix and key.
@@ -339,24 +345,28 @@ class kvstoreToolWorkflows:
         _cmd = f"store-crc {path}"
         return self.run_ckvt_command(cmd=_cmd, osd_id=osd_id)
 
-    def compact(self, osd_id: int):
+    def compact(self, osd_id: int, exclude_stderr: bool = True):
         """Module to trigger subcommand compact is used to compact all data of kvstore.
         It will open the database, and trigger a database’s compaction. After compaction,
         some disk space may be released.
         Args:
             osd_id: OSD ID for which ckvt will be executed
+            exclude_stderr: flag to control logging stderr
         Returns:
             Returns the output of
             ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> compact
         """
         _cmd = "compact"
-        return self.run_ckvt_command(cmd=_cmd, osd_id=osd_id)
+        return self.run_ckvt_command(
+            cmd=_cmd, osd_id=osd_id, exclude_stderr=exclude_stderr
+        )
 
-    def compact_prefix(self, osd_id: int, prefix: str):
+    def compact_prefix(self, osd_id: int, prefix: str, exclude_stderr: bool = True):
         """Module to compact all entries specified by the URL encoded prefix.
         Args:
             osd_id: OSD ID for which ckvt will be executed
             prefix: arg to filter entries
+            exclude_stderr: flag to control logging stderr
         Returns:
             Returns the output of
             ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> compact-prefix <prefix>
@@ -364,21 +374,33 @@ class kvstoreToolWorkflows:
         _cmd = "compact-prefix"
         if prefix:
             _cmd = f"{_cmd} {prefix}"
-        return self.run_ckvt_command(cmd=_cmd, osd_id=osd_id)
+        return self.run_ckvt_command(
+            cmd=_cmd, osd_id=osd_id, exclude_stderr=exclude_stderr
+        )
 
-    def compact_range(self, osd_id: int, prefix: str, start: str, end: str):
+    def compact_range(
+        self,
+        osd_id: int,
+        prefix: str,
+        start: int,
+        end: int,
+        exclude_stderr: bool = True,
+    ):
         """Module to compact some entries specified by the URL encoded prefix and range.
         Args:
             osd_id: OSD ID for which ckvt will be executed
             prefix: arg to filter entries
             start: start of range
             end: end of range
+            exclude_stderr: flag to control logging stderr
         Returns:
             Returns the output of
             ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> compact-range <prefix> <start> <end>
         """
         _cmd = f"compact-prefix {prefix} {start} {end}"
-        return self.run_ckvt_command(cmd=_cmd, osd_id=osd_id)
+        return self.run_ckvt_command(
+            cmd=_cmd, osd_id=osd_id, exclude_stderr=exclude_stderr
+        )
 
     def destructive_repair(self, osd_id: int):
         """Module to recover a corrupted database even if it is potentially destructive

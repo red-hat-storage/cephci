@@ -91,34 +91,38 @@ tests:
           - node13
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode3
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
@@ -177,34 +181,38 @@ tests:
           - node13
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode3
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
@@ -263,34 +271,38 @@ tests:
           - node13
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode3
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode4
+            no-group-append: True
             serial: 1
             bdevs:
             - count: 2
-              size: 8G
+              size: 5G
             listener_port: 4420
             listeners: [node6, node7, node8, node9, node10, node11, node12, node13]
             allow_host: "*"

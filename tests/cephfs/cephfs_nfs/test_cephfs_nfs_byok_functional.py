@@ -444,11 +444,11 @@ def nfs_byok_cephfs_test_run():
     created_client_data = gklm_rest_client.clients.create_client(gklm_client_name_1)
     new_enctag = get_enctag(
         gklm_rest_client,
-        created_client_data,
         gklm_client_name_1,
         gklm_cert_alias_1,
         gklm_user,
         cert,
+        created_client_data,
     )
     log.info("Umount Clone and remove NFS export")
     for clone in clone_list:

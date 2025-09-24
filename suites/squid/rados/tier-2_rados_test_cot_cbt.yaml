@@ -48,6 +48,13 @@ tests:
               args:
                 placement:
                   label: mon
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+              - service_type: crash
+                placement:
+                  host_pattern: "*"
       destroy-cluster: false
       abort-on-fail: true
 
@@ -205,3 +212,25 @@ tests:
       module: test_objectstoretool_workflows.py
       polarion-id: CEPH-83581811
       desc: Verify ceph-objectstore-tool functionalities
+
+  - test:
+      name: ceph-kvstore-tool utility
+      module: test_kvstoretool_workflows.py
+      polarion-id: CEPH-83629905
+      desc: Verify ceph-kvstore-tool functionalities
+
+  - test:
+      name: ceph-objectstore-tool functionalities during enospc
+      module: test_objectstoretool_workflows.py
+      polarion-id: CEPH-83620743
+      config:
+        bluestore-enospc: true
+      desc: Verify ceph-objectstore-tool functionalities during ENOSPC
+
+  - test:
+      name: ceph-kvstore-tool functionalities during enospc
+      module: test_kvstoretool_workflows.py
+      polarion-id: CEPH-83629283
+      config:
+        bluestore-enospc: true
+      desc: Verify ceph-kvstore-tool functionalities during ENOSPC

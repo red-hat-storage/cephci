@@ -455,6 +455,7 @@ tests:
               profile_name: ec86_8
               pool_name: ec86_pool8
               pg_num: 32
+              enable_fast_ec_features: true
               rados_put: true
               num_objs: 200
               byte_size: 1024
@@ -462,8 +463,6 @@ tests:
               k: 2
               m: 2
               crush-failure-domain: host
-        delete_pools:
-          - ec86_pool8
 
   - test:
       name: Verify PG split and merge with network delay
@@ -476,6 +475,7 @@ tests:
               profile_name: ec86_9
               pool_name: ec86_pool9
               pg_num: 32
+              enable_fast_ec_features: true
               rados_put: true
               num_objs: 200
               byte_size: 1024
@@ -484,8 +484,6 @@ tests:
               m: 2
               crush-failure-domain: host
         add_network_delay: true
-        delete_pools:
-          - ec86_pool9
 
   - test:
       name: Verify scrub logs
@@ -640,6 +638,7 @@ tests:
               profile_name: ec86_15
               pool_name: ec86_pool15
               pool_type: erasure
+              enable_fast_ec_features: true
               k: 2
               m: 2
               crush-failure-domain: host
