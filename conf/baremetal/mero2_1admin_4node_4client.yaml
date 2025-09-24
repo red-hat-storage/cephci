@@ -1,0 +1,135 @@
+---
+globals:
+  - ceph-cluster:
+      name: ceph
+      networks:
+        public:
+          - 10.8.128.0/21
+      nodes:
+        - hostname: mero017
+          id: node1
+          ip: 10.8.129.237
+          role:
+            - _admin
+            - installer
+            - osd
+            - mon
+            - mgr
+            - rgw
+            - nfs
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/nvme0n1
+            - /dev/sdl
+        - hostname: mero018
+          id: node2
+          ip: 10.8.129.238
+          role:
+            - mgr
+            - rgw
+            - mon
+            - osd
+            - mds
+            - _admin
+            - nfs
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/nvme0n1
+            - /dev/sdl
+        - hostname: mero019
+          id: node3
+          ip: 10.8.129.239
+          role:
+            - mds
+            - mon
+            - mgr
+            - osd
+            - osd-bak
+            - nfs
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/nvme0n1
+            - /dev/sdl
+        - hostname: mero020
+          id: node4
+          ip: 10.8.129.240
+          role:
+            - osd
+            - mds
+            - node-exporter
+            - alertmanager
+            - grafana
+            - prometheus
+            - nfs
+          root_password: passwd
+          volumes:
+            - /dev/sda
+            - /dev/sdb
+            - /dev/sdc
+            - /dev/sdd
+            - /dev/sde
+            - /dev/sdf
+            - /dev/sdg
+            - /dev/sdh
+            - /dev/sdi
+            - /dev/sdj
+            - /dev/sdk
+            - /dev/nvme0n1
+            - /dev/sdl
+        - hostname: clara012
+          id: node5
+          ip: 10.8.129.12
+          role:
+            - client
+          root_password: passwd
+        - hostname: clara013
+          id: node6
+          ip: 10.8.129.13
+          role:
+            - client
+          root_password: passwd
+        - hostname: clara014
+          id: node7
+          ip: 10.8.129.14
+          role:
+            - client
+          root_password: passwd
+        - hostname: clara015
+          id: node8
+          ip: 10.8.129.15
+          role:
+            - client
+          root_password: passwd
