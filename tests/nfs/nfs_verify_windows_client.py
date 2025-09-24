@@ -77,6 +77,8 @@ def run(ceph_cluster, **kw):
         log.info("Successfully setup NFS HA cluster")
 
         # Mount windows client
+        return 0
+
     except Exception as e:
         log.error(f"Failed to setup nfs ha cluster {e}")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
@@ -86,4 +88,3 @@ def run(ceph_cluster, **kw):
         cmd = r"umount Z:"
         execute_command_on_windows_node(win_clients[0], cmd)
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
-    return 0

@@ -76,6 +76,7 @@ def run(ceph_cluster, **kw):
             else:
                 log.info("Attribute 'myattr' set to 'value' not found in the output.")
                 return 1
+        return 0
 
     except Exception as e:
         log.error(f"Failed to perform export client addr validation : {e}")
@@ -87,4 +88,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

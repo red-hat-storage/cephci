@@ -122,6 +122,7 @@ def run(ceph_cluster, **kw):
 
         # Fetch the extended attribute of the file
         out = getfattr(client=clients[0], file_path=f"{nfs_mount1}/{filename}")
+        return 0
 
     except Exception as e:
         log.error(f"Failed to validate export rootsquash: {e}")
@@ -139,4 +140,3 @@ def run(ceph_cluster, **kw):
         # Cleaning up the remaining export and deleting the nfs cluster
         cleanup_cluster(clients[0], nfs_mount1, nfs_name, nfs_export1)
         log.info("Cleaning up successfull")
-    return 0

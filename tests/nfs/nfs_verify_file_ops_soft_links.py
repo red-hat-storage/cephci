@@ -103,6 +103,7 @@ def run(ceph_cluster, **kw):
         # Wait for all operation to finish
         for operation in operations:
             operation.join()
+        return 0
 
     except Exception as e:
         log.error(f"Error : {e}")
@@ -110,4 +111,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successfull")
-    return 0

@@ -87,11 +87,10 @@ def run(ceph_cluster, **kw):
                     raise OperationFailedError(
                         f"File permission is different than default {out}"
                     )
-
+        return 0
     except Exception as e:
         log.error(f"Failed to validate nfs dir operations and permission checks : {e}")
         return 1
     finally:
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

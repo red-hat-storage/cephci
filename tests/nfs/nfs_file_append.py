@@ -76,7 +76,7 @@ def run(ceph_cluster, **kw):
         # Wait for io to complete on all clients
         for th in thread_pool:
             th.join()
-
+        return 0
     except Exception as e:
         log.error(f"Failed to validate file append operation : {e}")
         return 1
@@ -84,4 +84,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

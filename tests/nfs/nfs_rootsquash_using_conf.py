@@ -128,7 +128,7 @@ def run(ceph_cluster, **kw):
         if "squashuser" not in out:
             raise OperationFailedError("File is not created by squashed user")
         log.info("File created by squashed user")
-
+        return 0
     except Exception as e:
         log.error(f"Failed to validate export rootsquash: {e}")
         return 1
@@ -148,4 +148,3 @@ def run(ceph_cluster, **kw):
         # Cleaning up the remaining export and deleting the nfs cluster
         cleanup_cluster(clients[0], nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successfull")
-    return 0

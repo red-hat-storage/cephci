@@ -63,11 +63,10 @@ def run(ceph_cluster, **kw):
             threads.append(io)
         for th in threads:
             th.join()
-
+        return 0
     except Exception as e:
         log.error(f"Failed to setup nfs-ganesha cluster {e}")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
     finally:
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
-    return 0

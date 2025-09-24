@@ -73,6 +73,7 @@ def run(ceph_cluster, **kw):
             log.info("Expected : Attributes cannot be set on readpnly file")
         else:
             raise OperationFailedError("Unexpected: Attributes set on Readonly file")
+        return 0
 
     except Exception as e:
         log.error(
@@ -92,4 +93,3 @@ def run(ceph_cluster, **kw):
             clients[0].exec_command(cmd=cmd, sudo=True)
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

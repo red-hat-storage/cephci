@@ -84,7 +84,7 @@ def run(ceph_cluster, **kw):
             pass
         else:
             log.error(f"Mount passed on unauthorized client: {clients[0].hostname}")
-
+        return 0
     except Exception as e:
         log.error(f"Failed to perform export client addr validation : {e}")
         return 1
@@ -103,4 +103,3 @@ def run(ceph_cluster, **kw):
 
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

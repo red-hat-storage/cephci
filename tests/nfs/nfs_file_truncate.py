@@ -75,7 +75,7 @@ def run(ceph_cluster, **kw):
                     break
                 if w.expired:
                     raise ValueError("The file created is not truncated")
-
+        return 0
     except Exception as e:
         log.error(f"Failed to perform truncate operations : {e}")
         return 1
@@ -83,4 +83,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

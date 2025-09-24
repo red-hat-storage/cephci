@@ -55,6 +55,7 @@ def run(ceph_cluster, **kw):
             log.info("Test Passed: 'cmount_path': '/' is present.")
         else:
             log.info("Test Failed: 'cmount_path': '/' is not present.")
+        return 0
 
     except Exception as e:
         log.error(f"Failed to validate the cmount_param in export file : {e}")
@@ -66,5 +67,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-
-    return 0

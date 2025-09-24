@@ -62,7 +62,7 @@ def run(ceph_cluster, **kw):
             log.info(f"selinux lable is set correctly: {out[0]}")
         else:
             raise OperationFailedError("Failed to set/get the selinux context")
-
+        return 0
     except Exception as e:
         log.error(f"Failed to set the selinux label on NFS v4.2 : {e}")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
@@ -73,4 +73,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

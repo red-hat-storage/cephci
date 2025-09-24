@@ -85,6 +85,7 @@ def run(ceph_cluster, **kw):
             return 1
         except Exception as e:
             log.info(f"Expected. Failed to create file when rootsquash enabled. {e}")
+        return 0
 
     except Exception as e:
         log.error(f"Failed to validate read dir operations : {e}")
@@ -93,4 +94,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0
