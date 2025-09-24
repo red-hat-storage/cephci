@@ -257,13 +257,8 @@ tests:
               - "ceph_version=$(ceph version | cut -d ' ' -f 3 | cut -d '-' -f 1); if [ \"$ceph_version\" = \"19.2.0\" ]; then ceph orch cert-store get cert cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; else ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; fi"
               - "sudo yum install -y sshpass"
               - "sleep 20"
-<<<<<<< HEAD
-              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-sec#node5}:/etc/pki/ca-trust/source/anchors/"
-              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-sec#node6}:/etc/pki/ca-trust/source/anchors/"
-=======
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-sec#node7}:/etc/pki/ca-trust/source/anchors/"
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-sec#node8}:/etc/pki/ca-trust/source/anchors/"
->>>>>>> 0d639e239 (changed files:)
         ceph-sec:
           config:
             commands:
@@ -282,13 +277,8 @@ tests:
               - "sudo yum install -y sshpass"
               - "sleep 120"
               - "ceph_version=$(ceph version | cut -d ' ' -f 3 | cut -d '-' -f 1); if [ \"$ceph_version\" = \"19.2.0\" ]; then ceph orch cert-store get cert cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; else ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; fi"
-<<<<<<< HEAD
-              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node5}:/etc/pki/ca-trust/source/anchors/"
-              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node6}:/etc/pki/ca-trust/source/anchors/"
-=======
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node7}:/etc/pki/ca-trust/source/anchors/"
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node8}:/etc/pki/ca-trust/source/anchors/"
->>>>>>> 0d639e239 (changed files:)
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite

@@ -272,12 +272,11 @@ tests:
           config:
             commands:
               - "sudo update-ca-trust"
-              - "ceph config set client.rgw rgw_verify_ssl False"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
               - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node4} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
               - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node4} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node4} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw rgw_verify_ssl False"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"

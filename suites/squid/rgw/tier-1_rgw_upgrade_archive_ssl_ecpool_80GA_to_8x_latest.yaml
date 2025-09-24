@@ -381,8 +381,6 @@ tests:
               - "sleep 20"
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node3}:/etc/pki/ca-trust/source/anchors/"
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node4}:/etc/pki/ca-trust/source/anchors/"
-              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-arc#node3}:/etc/pki/ca-trust/source/anchors/"
-              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-arc#node4}:/etc/pki/ca-trust/source/anchors/"
         ceph-arc:
           config:
             commands:
@@ -402,8 +400,6 @@ tests:
               - "sleep 20"
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node3}:/etc/pki/ca-trust/source/anchors/"
               - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node4}:/etc/pki/ca-trust/source/anchors/"
-              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-sec#node3}:/etc/pki/ca-trust/source/anchors/"
-              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-sec#node4}:/etc/pki/ca-trust/source/anchors/"
       desc: Setting up RGW multisite replication environment with archive zone
       module: exec.py
       name: setup multisite

@@ -82,7 +82,7 @@ tests:
                           - node7
                       spec:
                         ssl: true
-                        rgw_frontend_ssl_certificate: create-cert
+                        generate_cert: true
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -148,7 +148,7 @@ tests:
                           - node7
                       spec:
                         ssl: true
-                        rgw_frontend_ssl_certificate: create-cert
+                        generate_cert: true
       desc: RHCS-ssl multisite cluster deployment using cephadm.
       polarion-id: CEPH-83575222
       destroy-cluster: false
@@ -269,7 +269,7 @@ tests:
           config:
             commands:
               - "sudo update-ca-trust"
-              - "ceph config set client.rgw rgw_verify_ssl False"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
               - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
               - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
