@@ -82,7 +82,7 @@ tests:
                           - node7
                       spec:
                         ssl: true
-                        rgw_frontend_ssl_certificate: create-cert
+                        generate_cert: true
         ceph-sec:
           config:
             verify_cluster_health: true
@@ -148,7 +148,7 @@ tests:
                           - node7
                       spec:
                         ssl: true
-                        rgw_frontend_ssl_certificate: create-cert
+                        generate_cert: true
       desc: RHCS-ssl multisite cluster deployment using cephadm.
       polarion-id: CEPH-83575222
       destroy-cluster: false
@@ -254,29 +254,81 @@ tests:
               - "radosgw-admin user create --uid=repuser --display_name='Replication user' --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --rgw-realm india --system"
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.shared.pri rgw_realm india"
-              - "ceph config set client.rgw.shared.pri rgw_zonegroup shared"
-              - "ceph config set client.rgw.shared.pri rgw_zone primary"
-              - "ceph config set client.rgw.shared.pri rgw_verify_ssl False"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_realm india"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zonegroup shared"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_zone primary"
+              - "ceph config set client.rgw rgw_verify_ssl False"
+              - "ceph config set client.rgw.{daemon_id:shared.pri} rgw_verify_ssl False"
               - "ceph orch restart {service_name:shared.pri}"
+              - "ceph_version=$(ceph version | cut -d ' ' -f 3 | cut -d '-' -f 1); if [ \"$ceph_version\" = \"19.2.0\" ]; then ceph orch cert-store get cert cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; else ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; fi"
+              - "sudo yum install -y sshpass"
+              - "sleep 20"
+              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-sec#node7}:/etc/pki/ca-trust/source/anchors/"
+              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-sec#node8}:/etc/pki/ca-trust/source/anchors/"
         ceph-sec:
           config:
             commands:
-              - "sleep 120"
+              - "sudo update-ca-trust"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
               - "radosgw-admin realm pull --rgw-realm india --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
               - "radosgw-admin period pull --url https://{node_ip:ceph-pri#node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints https://{node_ip:node7} --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
-              - "ceph config set client.rgw.shared.sec rgw_verify_ssl False"
-              - "ceph config set client.rgw.shared.sec rgw_realm india"
-              - "ceph config set client.rgw.shared.sec rgw_zonegroup shared"
-              - "ceph config set client.rgw.shared.sec rgw_zone secondary"
+              - "ceph config set client.rgw rgw_verify_ssl False"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_verify_ssl False"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zonegroup shared"
+              - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_zone secondary"
               - "ceph orch restart {service_name:shared.sec}"
+              - "sudo yum install -y sshpass"
               - "sleep 120"
+              - "ceph_version=$(ceph version | cut -d ' ' -f 3 | cut -d '-' -f 1); if [ \"$ceph_version\" = \"19.2.0\" ]; then ceph orch cert-store get cert cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; else ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; fi"
+              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node7}:/etc/pki/ca-trust/source/anchors/"
+              - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:ceph-pri#node8}:/etc/pki/ca-trust/source/anchors/"
       desc: Setting up RGW multisite replication environment
       module: exec.py
       name: setup multisite
       polarion-id: CEPH-10362
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            role: rgw
+            sudo: True
+            commands:
+              - "update-ca-trust"
+        ceph-sec:
+          config:
+            role: rgw
+            sudo: True
+            commands:
+              - "update-ca-trust"
+      desc: update-ca-trust on rgw nodes
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: update-ca-trust on rgw nodes
+
+  - test:
+      abort-on-fail: true
+      clusters:
+        ceph-pri:
+          config:
+            role: client
+            sudo: True
+            commands:
+              - "update-ca-trust"
+        ceph-sec:
+          config:
+            role: client
+            sudo: True
+            commands:
+              - "update-ca-trust"
+      desc: update-ca-trust on client nodes
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: update-ca-trust on client nodes
 
   - test:
       abort-on-fail: true
@@ -329,6 +381,30 @@ tests:
       abort-on-fail: true
 
   # Baseline tests before upgrade
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_dynamic_resharding_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+      desc: Create bucket for Testing dynamic resharding brownfield scenario pre upgrade
+      module: sanity_rgw_multisite.py
+      name: Create bucket for Testing dynamic resharding brownfield scenario pre upgrade
+      polarion-id: CEPH-83574736
+
+  - test:
+      clusters:
+        ceph-pri:
+          config:
+            script-name: test_Mbuckets_with_Nobjects.py
+            config-file-name: test_multisite_manual_resharding_brownfield.yaml
+            verify-io-on-site: ["ceph-pri", "ceph-sec"]
+      desc: Create bucket for Testing manual resharding brownfield scenario pre upgrade
+      module: sanity_rgw_multisite.py
+      name: Create bucket for Testing manual resharding brownfield scenario pre upgrade
+      polarion-id: CEPH-83574735
 
   - test:
       name: S3CMD object download on primary pre upgarde
@@ -395,59 +471,3 @@ tests:
             run-on-rgw: true
             script-name: ../nfs_ganesha/nfs_cluster.py
             config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            install:
-              - agent
-            run-on-rgw: true
-        ceph-sec:
-          config:
-            install:
-              - agent
-            run-on-rgw: true
-      desc: Setup and configure vault agent
-      destroy-cluster: false
-      module: install_vault.py
-      name: configure vault agent
-      polarion-id: CEPH-83575226
-  - test:
-      abort-on-fail: true
-      clusters:
-        ceph-sec:
-          config:
-            cephadm: true
-            commands:
-              - "ceph config set client.rgw.shared.sec rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_prefix /v1/transit "
-              - "ceph config set client.rgw.shared.sec rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart {service_name:shared.sec}"
-        ceph-pri:
-          config:
-            cephadm: true
-            commands:
-              - "ceph config set client.rgw.shared.pri rgw_crypt_require_ssl false"
-              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_backend vault"
-              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_addr http://127.0.0.1:8100"
-              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_auth agent"
-              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_prefix /v1/transit "
-              - "ceph config set client.rgw.shared.pri rgw_crypt_sse_s3_vault_secret_engine transit"
-              - "ceph orch restart {service_name:shared.pri}"
-      desc: Setting vault configs for sse-s3 on multisite
-      module: exec.py
-      name: set sse-s3 vault configs on multisite
-
-  - test:
-      clusters:
-        ceph-pri:
-          config:
-            script-name: test_sse_s3_kms_with_vault.py
-            config-file-name: test_sse_s3_per_object.yaml
-      desc: test_sse_s3_per_object pre upgarde
-      module: sanity_rgw.py
-      name: sse-s3 per object encryption test pre upgarde
-      polarion-id: CEPH-83575153
