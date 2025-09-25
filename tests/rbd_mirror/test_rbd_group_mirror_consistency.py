@@ -524,7 +524,6 @@ def test_mirror_group_snapshot_consistency(
 
             snap_schedule_rm_config = deepcopy(snap_schedule_config)
             snap_schedule_rm_config.update({"interval": interval})
-            snap_schedule_rm_config.pop("image")
             snap_schedule_rm_config.pop("level")
             out, err = rbd_primary.mirror.group.snapshot.schedule.remove_(
                 **snap_schedule_rm_config
@@ -542,20 +541,6 @@ def test_mirror_group_snapshot_consistency(
                 raise Exception("Map, mount and run IOs failed for " + str(image_spec))
             else:
                 log.info("Map, mount and IOs successful for " + str(image_spec))
-
-            md5sum_second_write_site_a = []
-            for image in image_spec:
-                md5sum_second_write_site_a.append(
-                    get_md5sum_rbd_image(
-                        image_spec=image,
-                        rbd=rbd_primary,
-                        client=client_primary,
-                        file_path="file" + random_string(len=5),
-                    )
-                )
-            log.info(
-                "md5sums on site A after second write: %s", md5sum_second_write_site_a
-            )
 
             if verify_group_snapshot_schedule(
                 rbd_primary,
@@ -661,6 +646,26 @@ def test_mirror_group_snapshot_consistency(
             wait_for_idle(rbd_primary, **{"group-spec": group_spec})
             log.info(
                 "Data replay state is idle for all images in the group. Syncing completed"
+            )
+
+            time.sleep(120)
+            snap_list, err = rbd_secondary.group.snap.list(
+                **{"group-spec": group_spec, "format": "json"}
+            )
+            log.info(snap_list)
+
+            md5sum_second_write_site_a = []
+            for image in image_spec:
+                md5sum_second_write_site_a.append(
+                    get_md5sum_rbd_image(
+                        image_spec=image,
+                        rbd=rbd_primary,
+                        client=client_primary,
+                        file_path="file" + random_string(len=5),
+                    )
+                )
+            log.info(
+                "md5sums on site A after second write: %s", md5sum_second_write_site_a
             )
 
             md5sum_after_manual_snap_site_b = []
