@@ -47,6 +47,11 @@ instance:
           insecure = true
 
           [[registry]]
+          location = "nginx-vm-01.qe.ceph.eu.lab:5000/rh-stage"
+          prefix = "quay.io"
+          insecure = true
+
+          [[registry]]
           location = "nginx-vm-01.qe.ceph.eu.lab:5000/rh-prod"
           prefix = "registry.redhat.io"
           insecure = true
