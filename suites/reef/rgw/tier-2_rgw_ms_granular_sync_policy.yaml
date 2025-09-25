@@ -378,3 +378,14 @@ tests:
             script-name: test_multisite_bucket_granular_sync_policy.py
             config-file-name: test_bucket_granularsync_user_mode_direc.yaml
             timeout: 5000
+
+  - test:
+      name: modify bucket granular sync policy which has user mode set
+      desc: Test modify bucket granular sync policy which has user mode set
+      polarion-id: CEPH-83629972
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_aws_s3_replication.py
+            config-file-name: ../../aws/multisite_configs/test_aws_granular_sync_policy_pipe_modify.yaml

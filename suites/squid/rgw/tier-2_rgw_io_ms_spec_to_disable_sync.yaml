@@ -316,6 +316,17 @@ tests:
             config-file-name: ../../aws/multisite_configs/test_aws_s3_bucket_replication.yaml
 
   - test:
+      name: modify bucket granular sync policy which has user mode set
+      desc: Test modify bucket granular sync policy which has user mode set
+      polarion-id: CEPH-83629972
+      module: sanity_rgw_multisite.py
+      clusters:
+        ceph-pri:
+          config:
+            script-name: ../aws/test_aws_s3_replication.py
+            config-file-name: ../../aws/multisite_configs/test_aws_granular_sync_policy_pipe_modify.yaml
+
+  - test:
       name: bucket granular sync policy with sync to different bucket
       desc: Test bucket granular sync with sync to different bucket
       polarion-id: CEPH-83575141
