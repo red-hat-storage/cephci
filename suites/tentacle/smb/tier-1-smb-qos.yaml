@@ -1,0 +1,550 @@
+tests:
+  - test:
+      name: setup pre-requisites
+      desc: Install software pre-requisites for cluster deployment
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: Deploy cluster using cephadm
+      desc: Bootstrap and deploy services
+      module: test_cephadm.py
+      polarion-id: CEPH-83573713
+      config:
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+          - config:
+              args:
+                - "ceph fs volume create cephfs"
+              command: shell
+          - config:
+              args:
+                placement:
+                  label: mds
+              base_cmd_args:
+                verbose: true
+              command: apply
+              pos_args:
+                - cephfs
+              service: mds
+          - config:
+              args:
+                - "ceph osd pool create rbd"
+              command: shell
+          - config:
+              args:
+                - "rbd pool init rbd"
+              command: shell
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: configure client
+      desc: Configure client system
+      module: test_client.py
+      config:
+        command: add
+        id: client.1
+        node: node4
+        install_packages:
+          - ceph-common
+          - samba-client
+          - cifs-utils
+          - fio
+      copy_admin_keyring: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Verify SMB QoS via CLI command (Imperative Style)
+      desc: Verify SMB QoS via CLI command (Imperative Style)
+      module: test_smb_qos.py
+      polarion-id: CEPH-83630256
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 10
+          size: 1G
+          runtime: 60
+          numjobs: 1
+
+  - test:
+      name: Verify SMB QoS via CLI command with multiple shares (Imperative Style)
+      desc: Verify SMB QoS via CLI command with multiple shares (Imperative Style)
+      module: test_smb_qos.py
+      polarion-id: CEPH-83630263
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1, sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1, share2]
+        path: "/"
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+          share2:
+            read_iops_limit: 100
+            write_iops_limit: 200
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 10
+          size: 1G
+          runtime: 60
+          numjobs: 1
+
+
+  - test:
+      name: Verify SMB QoS using CLI with two shares - one configured with QoS and one without. (Imperative Style)
+      desc: Verify SMB QoS using CLI with two shares - one configured with QoS and one without. (Imperative Style)
+      module: test_smb_qos.py
+      polarion-id: CEPH-83630267
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1, sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1, share2]
+        path: "/"
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 100
+            write_iops_limit: 200
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 10
+          size: 1G
+          runtime: 300
+          numjobs: 1
+
+  - test:
+      name: Verify SMB QoS via spec file (Declarative Style)
+      desc: Verify SMB QoS via spec file (Declarative Style)
+      module: test_smb_qos.py
+      polarion-id: CEPH-83630271
+      config:
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 10
+          size: 1G
+          runtime: 60
+          numjobs: 1
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        file_type: yaml
+        file_mount: /tmp
+        deployment_method: declarative
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+              qos:
+                read_iops_limit: 300
+                write_iops_limit: 300
+                read_bw_limit: 1048576
+                write_bw_limit: 2097152
+                read_delay_max: 30
+                write_delay_max: 30
+
+  - test:
+      name: Verify SMB QoS via spec file with multiple shares (Declarative Style)
+      desc: Verify SMB QoS via spec file with multiple shares (Declarative Style)
+      module: test_smb_qos.py
+      polarion-id: CEPH-83630272
+      config:
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 10
+          size: 1G
+          runtime: 60
+          numjobs: 1
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+          share2:
+            read_iops_limit: 100
+            write_iops_limit: 200
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        file_type: yaml
+        file_mount: /tmp
+        deployment_method: declarative
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+              qos:
+                read_iops_limit: 300
+                write_iops_limit: 300
+                read_bw_limit: 1048576
+                write_bw_limit: 2097152
+                read_delay_max: 30
+                write_delay_max: 30
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv2
+              path: /
+              qos:
+                read_iops_limit: 100
+                write_iops_limit: 200
+                read_bw_limit: 1048576
+                write_bw_limit: 2097152
+                read_delay_max: 30
+                write_delay_max: 30
+
+  - test:
+      name: Verify SMB QoS using spec file with two shares - one configured with QoS and one without. (Declarative Style)
+      desc:  Verify SMB QoS using spec file with two shares - one configured with QoS and one without. (Declarative Style)
+      module: test_smb_qos.py
+      polarion-id: CEPH-83630273
+      config:
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 10
+          size: 1G
+          runtime: 60
+          numjobs: 1
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        file_type: yaml
+        file_mount: /tmp
+        deployment_method: declarative
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: user
+            user_group_settings:
+              - {source_type: resource, ref: ug1}
+            placement:
+              label: smb
+          - resource_type: ceph.smb.usersgroups
+            users_groups_id: ug1
+            values:
+              users:
+                - {name: user1, password: passwd}
+              groups: []
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+              qos:
+                read_iops_limit: 300
+                write_iops_limit: 300
+                read_bw_limit: 1048576
+                write_bw_limit: 2097152
+                read_delay_max: 30
+                write_delay_max: 30
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv2
+              path: /
+
+  - test:
+      name: Verify set x qos limit on a share and verify throughput remains within the limit
+      desc: Verify set x qos limit on a share and verify throughput remains within the limit
+      module: test_smb_qos.py
+      polarion-id: CEPH-83627424
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 10
+          size: 1G
+          runtime: 60
+          numjobs: 1
+
+  - test:
+      name: Verify set X qos limits on multiple shares and verify per-share enforcement
+      desc: Verify set X qos limits on multiple shares and verify per-share enforcement
+      module: test_smb_qos.py
+      polarion-id: CEPH-83627425
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1, sv2]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1, share2]
+        path: "/"
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+          share2:
+            read_iops_limit: 100
+            write_iops_limit: 200
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 10
+          size: 1G
+          runtime: 60
+          numjobs: 1
+
+  - test:
+      name: Verify that the SMB QoS settings are updated as expected in the smb conf
+      desc: Verify that the SMB QoS settings are updated as expected in the smb conf
+      module: test_smb_qos.py
+      polarion-id: CEPH-83630274
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 10
+          size: 1G
+          runtime: 60
+          numjobs: 1
+
+  - test:
+      name: Verify that the user is able to list the SMB QoS values.
+      desc: Verify that the user is able to list the SMB QoS values.
+      module: test_smb_qos.py
+      polarion-id: CEPH-83630274
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 10
+          size: 1G
+          runtime: 60
+          numjobs: 1
