@@ -4,9 +4,13 @@ import random
 import string
 import traceback
 
+from looseversion import LooseVersion
+
 from ceph.parallel import parallel
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_refinode_utils import RefInodeUtils
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -86,6 +90,8 @@ def run(ceph_cluster, **kw):
         build = config.get("build", config.get("rhbuild"))
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        ref_inode_utils = RefInodeUtils(ceph_cluster)
+        ceph_version = get_ceph_version_from_cluster(clients[0])
         log.info("checking Pre-requisites")
         if len(clients) < 1:
             log.info(
@@ -129,6 +135,41 @@ def run(ceph_cluster, **kw):
             fuse_mounting_dir_1,
             extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
+
+        if LooseVersion(ceph_version) >= LooseVersion("20.1"):
+            ref_inode_utils.allow_referent_inode_feature_enablement(
+                client1, default_fs, enable=True
+            )
+            log.info("Ceph version >= 20.1 detected. Creating referent inode setup.")
+            ref_base_path = fuse_mounting_dir_1
+            ref_inode_utils.create_directories(
+                client1, ref_base_path, ["dirA", "dirA/dirB"]
+            )
+            ref_inode_utils.create_file_with_content(
+                client1, "%s/dirA/fileA1" % ref_base_path, "data in file A1"
+            )
+            ref_inode_utils.create_file_with_content(
+                client1, "%s/dirA/dirB/fileB1" % ref_base_path, "data in file B1"
+            )
+            main_file = "%s/file1" % ref_base_path
+            ref_inode_utils.create_file_with_content(
+                client1, main_file, "original file content"
+            )
+            hardlinks = [
+                "%s/file1_hardlink1" % ref_base_path,
+                "%s/file1_hardlink2" % ref_base_path,
+                "%s/dirA/file1_hardlink_in_dirA" % ref_base_path,
+            ]
+            for hl in hardlinks:
+                ref_inode_utils.create_hardlink_and_validate(
+                    client1,
+                    fs_util,
+                    main_file,
+                    hl,
+                    "cephfs.%s.data" % default_fs,
+                    default_fs,
+                )
+
         client1.exec_command(
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 4000 "
@@ -210,6 +251,12 @@ def run(ceph_cluster, **kw):
                     f"cloning is in progress for {status_list.count('in-progress')} out of {len(clone_list)}"
                 )
             log.info(f"Iteration {iteration} has been completed")
+
+        if LooseVersion(ceph_version) >= LooseVersion("20.1"):
+            ref_inode_utils.allow_referent_inode_feature_enablement(
+                client1, default_fs, enable=False
+            )
+
         return 0
     except Exception as e:
         log.error(e)

@@ -1,9 +1,13 @@
 import traceback
 
+from looseversion import LooseVersion
+
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_refinode_utils import RefInodeUtils
 from utility.log import Log
 from utility.retry import retry
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -47,6 +51,8 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         fs_util.prepare_clients(clients, build)
         fs_util.auth_list(clients)
+        ref_inode_utils = RefInodeUtils(ceph_cluster)
+        ceph_version = get_ceph_version_from_cluster(clients[0])
         log.info("checking Pre-requisites")
         if not clients:
             log.info(
@@ -88,6 +94,34 @@ def run(ceph_cluster, **kw):
             "/mnt/mycephfs1",
             extra_params=f" -r {subvol_path.strip()} --client_fs {fs_name}",
         )
+        base_path = "/mnt/mycephfs1"
+        main_file = "%s/file1" % base_path
+        if LooseVersion(ceph_version) >= LooseVersion("20.1"):
+            ref_inode_utils.allow_referent_inode_feature_enablement(
+                client1, fs_name, enable=True
+            )
+            ref_inode_utils.create_directories(
+                client1, base_path, ["dirA", "dirA/dirB"]
+            )
+            ref_inode_utils.create_file_with_content(
+                client1, "%s/dirA/fileA1" % base_path, "data in file A1"
+            )
+            ref_inode_utils.create_file_with_content(
+                client1, "%s/dirA/dirB/fileB1" % base_path, "data in file B1"
+            )
+
+            ref_inode_utils.create_file_with_content(
+                client1, main_file, "original file content"
+            )
+            hardlinks = [
+                "%s/file1_hardlink1" % base_path,
+                "%s/file1_hardlink2" % base_path,
+                "%s/dirA/file1_hardlink_in_dirA" % base_path,
+            ]
+            for hl in hardlinks:
+                ref_inode_utils.create_hardlink_and_validate(
+                    client1, fs_util, main_file, hl, pool_name, fs_name
+                )
 
         fs_util.create_file_data(client1, "/mnt/mycephfs1", 3, "snap1", "snap_1_data ")
         client1.exec_command(
@@ -110,7 +144,9 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd="cd /mnt/mycephfs1;rm -rf snap1*")
 
         log.info("copy files from snapshot")
-        client1.exec_command(sudo=True, cmd="cd /mnt/mycephfs1;cp .snap/_snap_1_*/* .")
+        client1.exec_command(
+            sudo=True, cmd="cd /mnt/mycephfs1;cp -a .snap/_snap_1_*/* ."
+        )
 
         snap1_files_checksum = fs_util.get_files_and_checksum(client1, "/mnt/mycephfs1")
         if expected_files_checksum != snap1_files_checksum:
@@ -121,7 +157,9 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd="cd /mnt/mycephfs1;rm -rf snap2*")
 
         log.info("copy files from snapshot")
-        client1.exec_command(sudo=True, cmd="cd /mnt/mycephfs1;cp .snap/_snap_2_*/* .")
+        client1.exec_command(
+            sudo=True, cmd="cd /mnt/mycephfs1;cp -a .snap/_snap_2_*/* ."
+        )
 
         snap2_files_checksum = fs_util.get_files_and_checksum(client1, "/mnt/mycephfs1")
         log.info(f"expected_files_checksum : {expected_files_checksum}")
@@ -129,6 +167,12 @@ def run(ceph_cluster, **kw):
         if expected_files_checksum != snap2_files_checksum:
             log.error("checksum is not matching after snapshot1 revert")
             return 1
+
+        if LooseVersion(ceph_version) >= LooseVersion("20.1"):
+            ref_inode_utils.allow_referent_inode_feature_enablement(
+                client1, fs_name, enable=False
+            )
+
         log.info("unmount the drive")
         client1.exec_command(sudo=True, cmd="fusermount -u /mnt/mycephfs1")
 
