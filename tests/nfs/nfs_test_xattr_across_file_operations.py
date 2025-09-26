@@ -98,6 +98,7 @@ def run(ceph_cluster, **kw):
 
         # Fetch the extended attribute of the file
         fetch_xattr(client=clients[0], file_path=f"{nfs_mount}/{copy_filename}")
+        return 0
 
     except Exception as e:
         log.error(
@@ -111,4 +112,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

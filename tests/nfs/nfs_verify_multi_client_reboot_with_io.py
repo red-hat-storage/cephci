@@ -101,6 +101,7 @@ def run(ceph_cluster, **kw):
 
         readdir1.join()
         readdir2.join()
+        return 0
 
     except Exception as e:
         log.error(f"Failed to setup nfs-ganesha cluster {e}")
@@ -113,4 +114,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleanup")
         linux_clients[0].exec_command(sudo=True, cmd=f"rm -rf  {nfs_mount}/*")
         cleanup_cluster(linux_clients, nfs_mount, nfs_name, nfs_export)
-    return 0

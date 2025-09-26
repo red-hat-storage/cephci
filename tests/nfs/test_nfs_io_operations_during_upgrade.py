@@ -118,6 +118,11 @@ def create_export_and_mount_for_existing_nfs_cluster(
                             nfs_export=export_name,
                             fs=_fs,
                         )
+                    all_exports = Ceph(clients[0]).nfs.export.ls(nfs_name)
+                    if export_name not in all_exports:
+                        raise OperationFailedError(
+                            f"Export {export_name} not found in the list of exports {all_exports}"
+                        )
                     sleep(1)
 
                     # Get the mount versions specific to clients

@@ -152,6 +152,7 @@ def run(ceph_cluster, **kw):
         for th in threads:
             th.join()
         log.info("Completed running IO on all mounts")
+        return 0
 
     except Exception as e:
         log.error(f"Failed to perform scale ops : {e}")
@@ -171,4 +172,3 @@ def run(ceph_cluster, **kw):
                 client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_mounting_dir}")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

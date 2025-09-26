@@ -101,6 +101,7 @@ def run(ceph_cluster, **kw):
 
         # Wait for the IO to complete
         th.join()
+        return 0
 
     except Exception as e:
         log.error(f"Failed to setup nfs cluster {e}")
@@ -109,4 +110,3 @@ def run(ceph_cluster, **kw):
     finally:
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         pass
-    return 0

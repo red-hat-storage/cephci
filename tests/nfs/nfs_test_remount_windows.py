@@ -90,7 +90,7 @@ def run(ceph_cluster, **kw):
                     log.info(f"File win_file{i} is present.")
             except Exception:
                 raise OperationFailedError("File not found on NFS share")
-
+        return 0
     except Exception as e:
         log.error(f"Failed to setup nfs-ganesha cluster {e}")
         # Cleanup
@@ -102,4 +102,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleanup")
         linux_clients[0].exec_command(sudo=True, cmd=f"rm -rf  {nfs_mount}/*")
         cleanup_cluster(linux_clients, nfs_mount, nfs_name, nfs_export)
-    return 0

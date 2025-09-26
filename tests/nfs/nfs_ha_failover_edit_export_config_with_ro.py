@@ -131,6 +131,7 @@ def run(ceph_cluster, **kw):
         else:
             log.error("failed to create file on RW export")
             return 1
+        return 0
     except Exception as e:
         log.error(f"Error : {e}")
         return 1
@@ -148,4 +149,3 @@ def run(ceph_cluster, **kw):
         # Cleaning up the remaining export and deleting the nfs cluster
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successfull")
-    return 0

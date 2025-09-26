@@ -77,7 +77,7 @@ def run(ceph_cluster, **kw):
 
         # Wait to complete linux untar
         th.join()
-
+        return 0
     except Exception as e:
         log.error(f"Error : {e}")
         log.info("Cleaning up")
@@ -90,4 +90,3 @@ def run(ceph_cluster, **kw):
         sleep(100)
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successfull")
-    return 0

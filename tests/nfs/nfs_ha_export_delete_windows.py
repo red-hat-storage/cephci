@@ -132,6 +132,7 @@ def run(ceph_cluster, **kw):
         # Wait for the ops to complete
         for op in operations:
             op.join()
+        return 0
 
     except Exception as e:
         log.error(
@@ -154,4 +155,3 @@ def run(ceph_cluster, **kw):
             cmd = f"umount {window_nfs_mount}"
             windows_client.exec_command(cmd=cmd)
         cleanup_cluster(linux_clients, nfs_mount, nfs_name, nfs_export)
-    return 0

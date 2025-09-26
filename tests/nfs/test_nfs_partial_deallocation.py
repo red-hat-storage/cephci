@@ -81,7 +81,7 @@ def run(ceph_cluster, **kw):
                 raise OperationFailedError(
                     f"File {filename}{i} took incorrect space utilization. Expected: 1.0G , Actual: {file_size}"
                 )
-
+        return 0
     except Exception as e:
         log.error(
             f"Failed to  verify the partial space deallocation test on NFS v4.2 : {e}"
@@ -94,4 +94,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

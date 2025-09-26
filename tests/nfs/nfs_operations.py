@@ -77,6 +77,11 @@ def setup_nfs_cluster(
             fs_name=fs_name, nfs_name=nfs_name, nfs_export=export_name, fs=fs
         )
         i += 1
+        all_exports = Ceph(client).nfs.export.ls(nfs_name)
+        if export_name not in all_exports:
+            raise OperationFailedError(
+                f"Export {export_name} not found in the list of exports {all_exports}"
+            )
         export_list.append(export_name)
         sleep(1)
 
@@ -232,6 +237,8 @@ def setup_custom_nfs_cluster_multi_export_client(
     vip=None,
     export_num=None,
     ceph_cluster=None,
+    active_standby=None,
+    **kwargs,
 ):
     # Get ceph cluter object and setup start time
     global ceph_cluster_obj
@@ -251,7 +258,12 @@ def setup_custom_nfs_cluster_multi_export_client(
 
     # Step 2: Create an NFS cluster
     Ceph(clients[0]).nfs.cluster.create(
-        name=nfs_name, nfs_server=nfs_server, ha=ha, vip=vip
+        name=nfs_name,
+        nfs_server=nfs_server,
+        ha=ha,
+        vip=vip,
+        active_standby=active_standby,
+        **{"in-file": kwargs.get("in-file", None)},
     )
     sleep(3)
 
@@ -276,7 +288,13 @@ def setup_custom_nfs_cluster_multi_export_client(
                 nfs_name=nfs_name,
                 nfs_export=export_name,
                 fs=fs,
+                enctag=kwargs.get("enctag") if kwargs.get("enctag") else None,
             )
+            all_exports = Ceph(clients[0]).nfs.export.ls(nfs_name)
+            if export_name not in all_exports:
+                raise OperationFailedError(
+                    f"Export {export_name} not found in the list of exports {all_exports}"
+                )
             sleep(1)
             # Get the mount versions specific to clients
             mount_versions = _get_client_specific_mount_versions(version, clients)

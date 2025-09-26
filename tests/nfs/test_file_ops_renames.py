@@ -135,9 +135,9 @@ def run(ceph_cluster, **kw):
             )
 
         log.info("Successfully completed the rename tests for files and dirs")
+        return 0
 
     finally:
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successfull")
-    return 0

@@ -86,7 +86,7 @@ def run(ceph_cluster, **kw):
 
         # Validate the total disk usage of mount point
         verify_disk_usage(client=clients[0], mount_point=nfs_mount, size="6G")
-
+        return 0
     except Exception as e:
         log.error(f"Failed to  verify the space allocation test on NFS v4.2 : {e}")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
@@ -97,4 +97,3 @@ def run(ceph_cluster, **kw):
         log.info("Cleaning up")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

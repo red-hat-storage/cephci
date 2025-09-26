@@ -115,6 +115,7 @@ def run(ceph_cluster, **kw):
         else:
             log.error("Failed to validate export rootsquash")
             return 1
+        return 0
 
     finally:
         log.info("Cleaning up")
@@ -131,4 +132,3 @@ def run(ceph_cluster, **kw):
         # Cleaning up the remaining export and deleting the nfs cluster
         cleanup_cluster(clients[0], nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successfull")
-    return 0

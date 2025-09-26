@@ -125,6 +125,7 @@ def run(ceph_cluster, **kw):
         # Wait to complete operations
         for Thread_operation in Thread_operations:
             Thread_operation.join()
+        return 0
 
     except Exception as e:
         log.error(
@@ -134,4 +135,3 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
-    return 0

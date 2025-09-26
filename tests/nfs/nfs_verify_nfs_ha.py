@@ -55,10 +55,11 @@ def run(ceph_cluster, **kw):
             ceph_cluster=ceph_cluster,
         )
         log.info("Successfully setup NFS HA cluster")
+        return 0
+
     except Exception as e:
         log.error(f"Failed to setup nfs ha cluster {e}")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         return 1
     finally:
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
-    return 0

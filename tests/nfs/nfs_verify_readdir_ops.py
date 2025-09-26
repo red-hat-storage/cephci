@@ -81,6 +81,8 @@ def run(ceph_cluster, **kw):
         # Perform Linux untar from 1 client and do readir operation from other client (finds)
         cmd = f"find {nfs_mount} -name *.txt"
         clients[3].exec_command(cmd=cmd, sudo=True)
+        return 0
+
     except Exception as e:
         log.error(f"Failed to validate read dir operations : {e}")
         return 1
@@ -89,4 +91,3 @@ def run(ceph_cluster, **kw):
         sleep(30)
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0

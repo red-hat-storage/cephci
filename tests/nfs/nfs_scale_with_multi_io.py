@@ -250,7 +250,7 @@ def run(ceph_cluster, **kw):
         # Get RSS value
         log.info("RSS value post IO")
         get_mem_usage(vip_node)
-
+        return 0
     except Exception as e:
         log.error(f"Failed to perform scale ops : {e}")
         return 1
@@ -300,5 +300,3 @@ def run(ceph_cluster, **kw):
         # Delete the subvolumegroup
         cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
         client.exec_command(sudo=True, cmd=cmd)
-
-    return 0

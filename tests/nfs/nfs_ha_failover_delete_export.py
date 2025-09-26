@@ -95,7 +95,7 @@ def run(ceph_cluster, **kw):
         if out != "[]":
             raise OperationFailedError("All export not deleted")
             return 1
-
+        return 0
     except Exception as e:
         log.error(f"Error : {e}")
         log.info("Cleaning up")
@@ -116,7 +116,6 @@ def run(ceph_cluster, **kw):
         cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
         clients[0].exec_command(sudo=True, cmd=cmd)
         return 1
-
     finally:
         log.info("Cleaning up")
         Ceph(clients[0]).nfs.cluster.delete(nfs_name)
@@ -135,4 +134,3 @@ def run(ceph_cluster, **kw):
         # Delete the subvolume group
         cmd = "ceph fs subvolumegroup rm cephfs ganeshagroup --force"
         clients[0].exec_command(sudo=True, cmd=cmd)
-    return 0

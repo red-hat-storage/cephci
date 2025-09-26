@@ -93,6 +93,7 @@ def run(ceph_cluster, **kw):
             )
 
         log.info("Export update succeeded with access_type updated as NONE")
+        return 0
     except Exception as e:
         log.error(f"Error : {e}")
         return 1
@@ -103,4 +104,3 @@ def run(ceph_cluster, **kw):
         # Cleaning up the remaining export and deleting the nfs cluster
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
         log.info("Cleaning up successful")
-    return 0
