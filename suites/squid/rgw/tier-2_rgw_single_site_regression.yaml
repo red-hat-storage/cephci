@@ -265,6 +265,7 @@ tests:
       polarion-id: CEPH-83572907
       module: sanity_rgw.py
       config:
+        install_keystone_ldap: true
         script-name: ../aws/test_unified_namespace.py
         config-file-name: ../../aws/configs/test_unified_namespace.yaml
 
@@ -274,6 +275,7 @@ tests:
       polarion-id: CEPH-10169
       module: sanity_rgw.py
       config:
+        install_keystone_ldap: true
         script-name: ../aws/test_keystone_auth.py
         config-file-name: ../../aws/configs/test_keystone_integration.yaml
 
@@ -284,6 +286,7 @@ tests:
       polarion-id: CEPH-83572657
       module: sanity_rgw.py
       config:
+        install_keystone_ldap: true
         script-name: ../s3_swift/test_swift_acl_with_keystone.py
         config-file-name: ../../s3_swift/configs/test_swift_acl_with_keystone.yaml
 
