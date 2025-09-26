@@ -49,7 +49,10 @@ output = []
 
 magna_server = "http://magna002.ceph.redhat.com"
 magna_url = f"{magna_server}/cephci-jenkins/"
-magna_rhcs_artifacts = f"{magna_server}/cephci-jenkins/latest-rhceph-container-info/"
+
+CEPH_MANIFEST = (
+    "https://raw.githubusercontent.com/ibmstorage/qe-ceph-manifest/refs/heads/main/"
+)
 KAFKA_HOME = "/usr/local/kafka"
 
 
@@ -944,15 +947,15 @@ def get_latest_container(version):
             'docker_tag': docker_tag
         }
     """
-    url = f"{magna_rhcs_artifacts}latest-RHCEPH-{version}.json"
-    data = requests.get(url, verify=False)
-    docker_registry, docker_tag = data.json()["repository"].split("/rh-osbs/rhceph:")
-    docker_image = "rh-osbs/rhceph"
+    build_info = get_build_manifest(build="nightly", ceph_version=version)
+    log.info(build_info)
+    registry, image_name = build_info["images"]["ceph-base"].split(":")[0].split("/", 1)
+    image_tag = build_info["images"]["ceph-base"].split(":")[-1]
 
     return {
-        "docker_registry": docker_registry,
-        "docker_image": docker_image,
-        "docker_tag": docker_tag,
+        "docker_registry": registry,
+        "docker_image": image_name,
+        "docker_tag": image_tag,
     }
 
 
@@ -972,12 +975,12 @@ def get_release_repo(version):
             'image': <CEPH and monitoring images related to the RC build>
         }
     """
-    recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
-    url = f"{recipe_url}release.yaml"
-    data = requests.get(url, verify=False)
-    repo_details = yaml.safe_load(data.text)[version]
-
-    return repo_details
+    build_info = get_build_manifest(build="nightly", ceph_version=version)
+    log.info(build_info)
+    return {
+        "composes": build_info["repositories"],
+        "image": build_info["image"]["ceph-base"],
+    }
 
 
 def yaml_to_dict(file_name):
@@ -1439,6 +1442,46 @@ def generate_self_signed_certificate(subject: Dict) -> Tuple:
     )
 
 
+def get_build_manifest(build, ceph_version, upstream_build=None, ibm_build=False):
+    """Retrieves build details from magna002.ceph.redhat.com.
+
+    if "{build}" is "upstream"  "{build}.yaml" would be file name
+    else its "RHCEPH-{ceph_version}.yaml" which is
+    searched in magna002 Ceph artifacts location.
+
+    Args:
+        build:          build section to be fetched
+        ceph_version:   The major-minor version of ceph to be fetched.
+        upstream_build: upstream build(ex., pacific/quincy)
+        ibm_build:      flag to decide if IBM artifact needs to be fetched
+    Returns:
+        base_url, container_registry, image-name, image-tag
+    """
+    manifest_file = f"{ceph_version}.yaml"
+    manifest_url = CEPH_MANIFEST
+
+    if ibm_build:
+        manifest_url += f"ibm/{manifest_file}"
+    elif build == "upstream":
+        manifest_url += f"ceph/{upstream_build}.yaml"
+    else:
+        manifest_url += f"redhat/{manifest_file}"
+
+    try:
+        data = requests.get(manifest_url, verify=False)
+    except requests.RequestException as e:
+        raise RuntimeError(
+            "Unable to download the Ceph QE manifest file %s \n%s", manifest_url, e
+        )
+
+    try:
+        yml_data = yaml.safe_load(data.text)
+    except yaml.YAMLError:
+        raise RuntimeError("Unable to process the Ceph QE manifest file")
+
+    return yml_data[build]
+
+
 def fetch_build_artifacts(
     build, ceph_version, platform, upstream_build=None, ibm_build=False
 ):
@@ -1457,42 +1500,15 @@ def fetch_build_artifacts(
     Returns:
         base_url, container_registry, image-name, image-tag
     """
-    try:
-        recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
-        filename = f"RHCEPH-{ceph_version}.yaml"
-        if ibm_build:
-            filename = f"IBMCEPH-{ceph_version}.yaml"
-        if build == "upstream":
-            version = str(upstream_build).upper() if upstream_build else "MAIN"
-            filename = f"UPSTREAM-{version}.yaml"
+    build_info = get_build_manifest(build, ceph_version, upstream_build, ibm_build)
 
-        url = f"{recipe_url}{filename}"
-        data = requests.get(url, verify=False)
-        yml_data = yaml.safe_load(data.text)
+    ceph_image = build_info["images"]["ceph-base"]
+    registry, image_name = ceph_image.split(":")[0].split("/", 1)
+    image_tag = ceph_image.split(":")[-1]
 
-        build_info = yml_data["latest"] if build == "upstream" else yml_data[build]
+    repo_url = build_info["repositories"][platform]
 
-        container_image = build_info["repository"]
-
-        registry, image_name = container_image.split(":")[0].split("/", 1)
-        image_tag = container_image.split(":")[-1]
-        base_url = build_info["composes"][platform]
-
-        # Todo: Extend the support for RH builds if RH staging repos
-        # are no longer maintained in future
-        if ibm_build:
-            _release = str(ceph_version)[0]
-            ibm_cdn_repo = (
-                f"https://public.dhe.ibm.com/ibmdl/export/pub/"
-                f"storage/ceph/ibm-storage-ceph-{_release}-{platform}.repo"
-            )
-            repo_data = requests.get(base_url)
-            if repo_data.status_code != 200:
-                base_url = ibm_cdn_repo
-
-        return base_url, registry, image_name, image_tag
-    except Exception as e:
-        raise TestSetupFailure(f"Could not fetch build details of : {e}")
+    return repo_url, registry, image_name, image_tag
 
 
 def fetch_image_manifest(
@@ -1512,60 +1528,15 @@ def fetch_image_manifest(
     Returns:
         Tuple: (build_info_dict, custom_images_dict)
     """
-    try:
-        recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
+    build_info = build_info = get_build_manifest(
+        build, ceph_version, upstream_build, ibm_build
+    )
+    images = deepcopy(build_info["images"])
+    del images["ceph-base"]
 
-        # Determine filename
-        if ibm_build:
-            filename = f"IBMCEPH-{ceph_version}.yaml"
-        elif build == "upstream":
-            version = str(upstream_build).upper() if upstream_build else "MAIN"
-            filename = f"UPSTREAM-{version}.yaml"
-        else:
-            filename = f"RHCEPH-{ceph_version}.yaml"
+    Log.debug(platform)
 
-        url = f"{recipe_url}{filename}"
-        response = requests.get(url, verify=False)
-        if response.status_code != 200:
-            raise TestSetupFailure(
-                f"Failed to fetch: {url} [HTTP {response.status_code}]"
-            )
-
-        yml_data = yaml.safe_load(response.text)
-
-        # Fetch the dictionary for the specific build tag
-        build_info = yml_data.get(build)
-        if not build_info:
-            raise TestSetupFailure(f"Build tag '{build}' not found in {filename}")
-
-        # For IBM builds, handle fallback logic for repo URL
-        if (
-            ibm_build
-            and "composes" in build_info
-            and platform in build_info["composes"]
-        ):
-            base_url = build_info["composes"][platform]
-            repo_data = requests.get(base_url)
-            if repo_data.status_code != 200:
-                release_major = str(ceph_version).split(".")[0]
-                build_info["composes"][platform] = (
-                    f"https://public.dhe.ibm.com/ibmdl/export/pub/"
-                    f"storage/ceph/ibm-storage-ceph-{release_major}-{platform}.repo"
-                )
-
-        # Extract all custom image URLs
-        custom_images = {}
-
-        custom_configs = build_info.get("custom-configs", {})
-        if isinstance(custom_configs, dict):
-            custom_images = deepcopy(custom_configs)
-        elif isinstance(custom_configs, list):
-            custom_images = dict(item.split("=") for item in custom_configs)
-
-        return build_info, custom_images
-
-    except Exception as e:
-        raise TestSetupFailure(f"Could not fetch build details: {e}")
+    return build_info, images
 
 
 def check_build_overrides(
@@ -2300,19 +2271,8 @@ def fetch_image_tag(rhbuild):
     Returns:
         image-tag
     """
-    try:
-        recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
-        filename = f"RHCEPH-{rhbuild}.yaml"
-        url = f"{recipe_url}{filename}"
-        data = requests.get(url, verify=False)
-        yml_data = yaml.safe_load(data.text)
-        if "rc" in yml_data.keys():
-            container_image = yml_data["latest"]["repository"]
-            image_tag = container_image.split(":")[-1]
-            return image_tag
-        raise TestSetupFailure("Not a live testing")
-    except Exception as e:
-        raise TestSetupFailure(f"Could not fetch image tag : {e}")
+    build_info = get_build_manifest(build="rc", ceph_version=rhbuild)
+    return build_info["images"]["ceph-base"].split(":")[-1]
 
 
 def fetch_build_version(rhbuild, version, ibm_build=None):
@@ -2327,21 +2287,12 @@ def fetch_build_version(rhbuild, version, ibm_build=None):
             ceph-version from recipe file
             e.g. - 19.2.1-230 | 18.2.1-340
     """
-    try:
-        # Todo: add support for Upstream build if necessary
-        _ver = str(rhbuild).split("-")[0]
-        recipe_url = get_cephci_config().get("build-url", magna_rhcs_artifacts)
-        filename = f"RHCEPH-{_ver}.yaml"
-        if ibm_build:
-            filename = f"IBMCEPH-{_ver}.yaml"
-
-        url = f"{recipe_url}{filename}"
-        data = requests.get(url, verify=False)
-        yml_data = yaml.safe_load(data.text)
-
-        return yml_data[version]["ceph-version"]
-    except Exception as e:
-        raise TestSetupFailure(f"Could not fetch build details of : {e}")
+    rhbuild_str = str(rhbuild).strip()
+    prod_ver = rhbuild_str.split("-", 1)[0]
+    build_info = get_build_manifest(
+        build=version, ceph_version=prod_ver, ibm_build=ibm_build
+    )
+    return build_info["version"]
 
 
 def validate_conf(conf):
