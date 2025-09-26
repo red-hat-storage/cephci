@@ -51,3 +51,16 @@ class Share(Cli):
         if isinstance(out, tuple):
             return out[0].strip()
         return out
+
+    def update_cephfs_qos(self, cluster_id, share_id, **kw):
+        """Update qos per share
+
+        Args:
+            cluster_id (str): A short string uniquely identifying the cluster
+            share_id (str):  A short string uniquely identifying the share
+        """
+        cmd = f"{self.base_cmd} update cephfs qos {cluster_id} {share_id} {build_cmd_from_args(**kw)}"
+        out = self.execute(sudo=True, cmd=cmd)
+        if isinstance(out, tuple):
+            return out[0].strip()
+        return out
