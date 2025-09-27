@@ -81,13 +81,13 @@ def run(ceph_cluster, **kw):
         )
         log.debug(log_lines)
         method_should_succeed(utils.set_osd_out, ceph_cluster, osd_id1)
-        utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id1)
-        method_should_succeed(wait_for_device_rados, host, osd_id1, action="add")
+        utils.add_osd(ceph_cluster, host.hostname, dev_path, osd_id)
+        method_should_succeed(wait_for_device_rados, host, osd_id, action="add")
         method_should_succeed(
             wait_for_daemon_status,
             rados_obj=rados_obj,
             daemon_type="osd",
-            daemon_id=osd_id1,
+            daemon_id=osd_id,
             status="running",
             timeout=60,
         )
