@@ -17,6 +17,7 @@ from cli.utilities.filesys import FuseMount, Mount, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
 from utility.log import Log
 from utility.retry import retry
+from cli.exceptions import ConfigError
 
 log = Log(__name__)
 
@@ -1315,3 +1316,106 @@ def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None):
                 log.info(
                     "Since we are collecting logs, ignoring the exception will not fail the test"
                 )
+    return 0
+
+
+def verify_ops_control_settings(client, cluster_name, export_path=None):
+    """Verify ops control settings at cluster and export level"""
+    try:
+        # Verify cluster settings
+        cluster_settings = json.loads(
+            client.exec_command(cmd=f"ceph nfs cluster qos get {cluster_name}")[0]
+        )
+        log.info(f"Current cluster ops control settings: {cluster_settings}")
+        
+        # Verify export settings if path provided
+        if export_path:
+            export_settings = json.loads(
+                client.exec_command(cmd=f"ceph nfs export qos get {cluster_name} {export_path}")[0]
+            )
+            log.info(f"Current export ops control settings for {export_path}: {export_settings}")
+            return cluster_settings, export_settings
+        return cluster_settings, None
+    except Exception as e:
+        log.error(f"Failed to get ops control settings: {str(e)}")
+        return None, None
+
+
+def extract_dd_time(dd_output):
+    """Extract time taken from dd command output"""
+    try:
+        # Get the last line containing 'copied'
+        for line in dd_output.split('\n')[::-1]:
+            if 'copied' in line:
+                time_str = line.split("copied,")[1].split("s,")[0].strip()
+                return float(time_str)
+        return None
+    except Exception as e:
+        log.error(f"Failed to extract time from dd output: {str(e)}")
+        return None
+
+
+def validate_ops_limit(dd_time, expected_limit):
+    """
+    Validate ops control limit using formula: ops_limit = 278/dd_time
+    Returns: (bool, calculated_limit)
+    """
+    if not dd_time:
+        return False, None
+    
+    calculated_limit = int(278/dd_time)  # Using only integer part as per requirement
+    log.info(f"Validation Summary:")
+    log.info(f"- Time taken: {dd_time} seconds")
+    log.info(f"- Calculated ops limit: {calculated_limit} (278/{dd_time})")
+    log.info(f"- Expected ops limit: {expected_limit}")
+    
+    # Compare with expected limit
+    matches = calculated_limit == expected_limit
+    if matches:
+        log.info(f"✓ Validation PASSED: calculated limit {calculated_limit} matches expected {expected_limit}")
+    else:
+        log.warning(f"✗ Validation FAILED: calculated limit {calculated_limit} differs from expected {expected_limit}")
+    
+    return matches, calculated_limit
+
+
+def validate_ops_control(client, nfs_mount, file_name, dd_params):
+    """Validate ops control by measuring IO operations"""
+    # Create test file
+    cmd = f"touch {nfs_mount}/{file_name}"
+    client.exec_command(sudo=True, cmd=cmd)
+
+    # Run write test
+    write_cmd = (
+        f"dd if={dd_params['input_file']} of={nfs_mount}/{file_name} "
+        f"bs={dd_params['block_size']} count={dd_params['count']} status=progress"
+    )
+    write_results = client.exec_command(sudo=True, cmd=write_cmd)[1]
+    log.info(f"Write test results: {write_results}")
+
+    # Extract time taken for write
+    write_time = extract_dd_time(write_results)
+    log.info(f"Write operation took {write_time} seconds")
+
+    # Drop cache
+    client.exec_command(sudo=True, cmd="echo 3 > /proc/sys/vm/drop_caches")
+    log.info("Cache dropped successfully")
+
+    # Run read test
+    read_cmd = f"dd if={nfs_mount}/{file_name} of=/dev/null bs={dd_params['block_size']} count={dd_params['count']} status=progress"
+    read_results = client.exec_command(sudo=True, cmd=read_cmd)[1]
+    log.info(f"Read test results: {read_results}")
+
+    # Extract time taken for read
+    read_time = extract_dd_time(read_results)
+    log.info(f"Read operation took {read_time} seconds")
+
+    # Cleanup
+    client.exec_command(sudo=True, cmd=f"rm -rf {nfs_mount}/{file_name}")
+
+    return {
+        "write_results": write_results,
+        "read_results": read_results,
+        "write_time": write_time,
+        "read_time": read_time
+    }
