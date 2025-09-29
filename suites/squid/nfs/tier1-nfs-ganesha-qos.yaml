@@ -325,7 +325,7 @@ tests:
       name: NFS QoS ops control test - export level
       module: test_nfs_qos_ops_control.py
       desc: Verify QoS ops control at export level overrides cluster level
-      polarion-id: 
+      polarion-id:
       abort-on-fail: false
       config:
           cephfs_volume: cephfs
@@ -345,7 +345,6 @@ tests:
               count: 32
               input_file: "/dev/zero"
               iterations: 3
-          
 
   - test:
       name: deploy nfs ganesha with qos per share using spec file
