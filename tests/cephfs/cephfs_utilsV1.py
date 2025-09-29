@@ -3878,10 +3878,13 @@ os.system('sudo systemctl start  network')
         if mnt_type == "nfs":
             mounting_dir = f"/mnt/cephfs_nfs_{mount_suffix}/"
             if mount_params["export_created"] == 0:
+                cmd = f"ceph nfs export create cephfs {mount_params['nfs_name']} {mount_params['nfs_export_name']}"
+                cmd += f" {mount_params['fs_name']} --path {fs_vol_path}"
+                if mount_params.get("kmip_key_id"):
+                    cmd += f" --kmip_key_id {mount_params['kmip_key_id']}"
                 client.exec_command(
                     sudo=True,
-                    cmd=f"ceph nfs export create cephfs {mount_params['nfs_name']} "
-                    f"{mount_params['nfs_export_name']} {mount_params['fs_name']} path={fs_vol_path}",
+                    cmd=cmd,
                 )
                 mount_params["export_created"] = 1
             self.cephfs_nfs_mount(
