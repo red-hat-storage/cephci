@@ -202,14 +202,16 @@ def run(ceph_cluster, **kw):
                 sleep(10)
 
                 # Verify settings persist after restart
-                post_restart_settings, post_restart_export = verify_ops_control_settings(
-                    client,
-                    cluster_name,
-                    nfs_export_path if export_ops else None
+                post_restart_settings, post_restart_export = (
+                    verify_ops_control_settings(
+                        client, cluster_name, nfs_export_path if export_ops else None
+                    )
                 )
 
                 if post_restart_settings != cluster_settings:
-                    raise OperationFailedError("Ops control settings changed after restart")
+                    raise OperationFailedError(
+                        "Ops control settings changed after restart"
+                    )
 
                 # Verify ops control is still effective
                 post_restart_test = validate_ops_control(
