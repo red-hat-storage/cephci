@@ -1484,6 +1484,8 @@ tests:
             desc: Run Disruptive tests during IO - Add and Remove OSD
             module: cephfs_system.cephfs_systest_disruptive_tests.py
             name: "Add and Remove OSD with snapshot create"
+            config:
+              osd_rm_limit : 25
         -
           test:
             abort-on-fail: true
@@ -1523,6 +1525,35 @@ tests:
       desc: Running all System test workflows in parallel
       abort-on-fail: false
 
+  ### System test Execution 3
+  - test:
+      name: CephFS_System_test_3
+      module: test_parallel.py
+      parallel:
+        -
+          test:
+            abort-on-fail: false
+            desc: Run Client IO workflows on BYOK Enabled NFS Exports
+            module: cephfs_system.cephfs_systest_client_io.py
+            name: "CephFS System Test Client IO on BYOK NFS Exports"
+            config:
+              byok_run : 1
+        -
+          test:
+            abort-on-fail: false
+            desc: Run MDS ops
+            module: cephfs_system.cephfs_systest_mds_ops.py
+            name: "CephFS System Test MDS ops"
+        -
+          test:
+            abort-on-fail: true
+            desc: System monitor
+            module: cephfs_system.cephfs_systest_monitor.py
+            name: "CephFS System monitor"
+
+      desc: Running all System test workflows in parallel
+      abort-on-fail: false
+
   ### Post-test Crash Checks
   -
     test:
@@ -1532,7 +1563,7 @@ tests:
       name: cephfs-crash-check
       config:
         crash_check : 1
-        daemon_list : ['mds','osd','mgr','mon']
+        daemon_list : ['mds','osd','mgr','mon','nfs']
   ### Disable debug logging
   -
     test:

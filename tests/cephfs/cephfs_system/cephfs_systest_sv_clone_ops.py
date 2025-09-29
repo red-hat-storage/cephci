@@ -42,7 +42,7 @@ def run(ceph_cluster, **kw):
         common_util = CephFSCommonUtils(ceph_cluster)
         config = kw.get("config")
         cephfs_config = {}
-        run_time = config.get("run_time_hrs", 4)
+        run_time = config.get("run_time_hrs", 8)
         nested_dir = config.get("nested_dir", True)
         sv_cnt = config.get("sv_cnt", 100)
         clone_cnt = config.get("clone_cnt", 10)
