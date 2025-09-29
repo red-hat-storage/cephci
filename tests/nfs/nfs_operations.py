@@ -1329,9 +1329,13 @@ def verify_ops_control_settings(client, cluster_name, export_path=None):
         # Verify export settings if path provided
         if export_path:
             export_settings = json.loads(
-                client.exec_command(cmd=f"ceph nfs export qos get {cluster_name} {export_path}")[0]
+                client.exec_command(
+                    cmd=f"ceph nfs export qos get {cluster_name} {export_path}"
+                )[0]
             )
-            log.info(f"Current export ops control settings for {export_path}: {export_settings}")
+            log.info(
+                f"Current export ops control settings for {export_path}: {export_settings}"
+            )
             return cluster_settings, export_settings
         return cluster_settings, None
     except Exception as e:
@@ -1343,8 +1347,8 @@ def extract_dd_time(dd_output):
     """Extract time taken from dd command output"""
     try:
         # Get the last line containing 'copied'
-        for line in dd_output.split('\n')[::-1]:
-            if 'copied' in line:
+        for line in dd_output.split("\n")[::-1]:
+            if "copied" in line:
                 time_str = line.split("copied,")[1].split("s,")[0].strip()
                 return float(time_str)
         return None
@@ -1360,7 +1364,7 @@ def validate_ops_limit(dd_time, expected_limit):
     """
     if not dd_time:
         return False, None
-    calculated_limit = int(278/dd_time)  # Using only integer part as per requirement
+    calculated_limit = int(278 / dd_time)  # Using only integer part as per requirement
     log.info("Validation Summary:")
     log.info(f"- Time taken: {dd_time} seconds")
     log.info(f"- Calculated ops limit: {calculated_limit} (278/{dd_time})")
@@ -1368,9 +1372,13 @@ def validate_ops_limit(dd_time, expected_limit):
     # Compare with expected limit
     matches = calculated_limit == expected_limit
     if matches:
-        log.info(f"✓ Validation PASSED: calculated limit {calculated_limit} matches expected {expected_limit}")
+        log.info(
+            f" Validation PASSED: calculated limit {calculated_limit} matches expected {expected_limit}"
+        )
     else:
-        log.warning(f"✗ Validation FAILED: calculated limit {calculated_limit} differs from expected {expected_limit}")
+        log.warning(
+            f" Validation FAILED: calculated limit {calculated_limit} differs from expected {expected_limit}"
+        )
     return matches, calculated_limit
 
 
@@ -1415,5 +1423,5 @@ def validate_ops_control(client, nfs_mount, file_name, dd_params):
         "write_results": write_results,
         "read_results": read_results,
         "write_time": write_time,
-        "read_time": read_time
+        "read_time": read_time,
     }
