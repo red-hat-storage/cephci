@@ -46,12 +46,15 @@ def run(ceph_cluster, **kw):
 
     """
     try:
+        global byok_run
         fs_system_utils = CephFSSystemUtils(ceph_cluster)
         fs_io = FSIO(ceph_cluster)
         config = kw.get("config")
         cephfs_config = {}
-        run_time = config.get("run_time_hrs", 4)
-        clients = ceph_cluster.get_ceph_objects("client")
+        run_time = config.get("run_time_hrs", 8)
+        byok_run = config.get("byok_run", 0)
+        clients_orig = ceph_cluster.get_ceph_objects("client")
+        clients = clients_orig[1:11]
 
         file = "cephfs_systest_data.json"
 
@@ -170,6 +173,17 @@ def io_test_runner(
     }
     if io_test == "io_test_workflow_9" or io_test == "io_test_workflow_11":
         sv_info = fs_system_utils.get_test_object(cephfs_config, "shared")
+        if byok_run == 1:
+            k = 1
+            sv_info = fs_system_utils.get_test_object(cephfs_config, "unique")
+            while k < 20:
+                for i in sv_info:
+                    sv_name = i
+                if sv_info[sv_name]["mnt_type"] != "nfs":
+                    sv_info = fs_system_utils.get_test_object(cephfs_config, "unique")
+                    k += 1
+                else:
+                    k = 20
         io_proc_check_status = io_tests[io_test](
             run_time, log_path, cleanup, clients, fs_system_utils, sv_info
         )
@@ -177,17 +191,25 @@ def io_test_runner(
         sv_info_list = []
         sv_name_list = []
         k = 0
+        sv_cnt = 1 if byok_run == 1 else 10
         if io_test == "io_test_workflow_7":
             log.info("Undo Ephemeral Random pinning")
             cmd = "ceph config set mds mds_export_ephemeral_random false;"
             clients[0].exec_command(sudo=True, cmd=cmd)
-        while len(sv_name_list) < 10 and k < 20:
+        while len(sv_name_list) < sv_cnt and k < 20:
             sv_info = fs_system_utils.get_test_object(cephfs_config, "shared")
+            if byok_run == 1:
+                sv_info = fs_system_utils.get_test_object(cephfs_config, "unique")
             for i in sv_info:
                 sv_name = i
             if sv_name not in sv_name_list:
-                sv_info_list.append(sv_info)
-                sv_name_list.append(sv_name)
+                if byok_run == 1:
+                    if sv_info[sv_name]["mnt_type"] == "nfs":
+                        sv_info_list.append(sv_info)
+                        sv_name_list.append(sv_name)
+                else:
+                    sv_info_list.append(sv_info)
+                    sv_name_list.append(sv_name)
             k += 1
         if io_test == "io_test_workflow_12":
             io_proc_check_status = io_tests[io_test](

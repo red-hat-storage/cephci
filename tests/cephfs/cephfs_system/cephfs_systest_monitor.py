@@ -36,7 +36,7 @@ def run(ceph_cluster, **kw):
         cpu_limit = config.get("mds_cpu_limit", 180)
         disk_limit = config.get("disk_limit", 80)
         client = clients[0]
-        update_system_status(client, "NA")
+        update_system_status(clients, "NA")
         mds_names_hostname = []
         for mds in mds_nodes:
             mds_names_hostname.append(mds.node.hostname)
@@ -45,6 +45,7 @@ def run(ceph_cluster, **kw):
 
         mds_list = fs_scale_utils.get_daemon_names(clients[0], "mds")
         cmd_list = [
+            "ceph mgr module enable stats",
             "ceph fs status",
             "ceph fs perf stats",
             "ceph -s",
@@ -62,7 +63,7 @@ def run(ceph_cluster, **kw):
 
         log.info("Start logging the Ceph Cluster Cluster status to a log dir")
         fs_scale_utils.start_logging(client, cmd_list, log_dir)
-        run_time = config.get("run_time", 3600)
+        run_time = config.get("run_time", 28800)
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=run_time)
 
         while datetime.datetime.now() < end_time:
@@ -104,6 +105,7 @@ def check_health(client):
         log.error(f"Ceph Health is in Error state: {out}")
         out, _ = client.exec_command(sudo=True, cmd="ceph health detail")
         log.info(out)
+        return 1
     return 0
 
 
