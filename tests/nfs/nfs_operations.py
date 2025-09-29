@@ -16,7 +16,6 @@ from cli.utilities.filesys import FuseMount, Mount, Unmount
 from cli.utilities.utils import check_coredump_generated, get_ip_from_node, reboot_node
 from utility.log import Log
 from utility.retry import retry
-from cli.exceptions import ConfigError
 
 log = Log(__name__)
 
@@ -1264,8 +1263,7 @@ def verify_ops_control_settings(client, cluster_name, export_path=None):
         cluster_settings = json.loads(
             client.exec_command(cmd=f"ceph nfs cluster qos get {cluster_name}")[0]
         )
-        log.info(f"Current cluster ops control settings: {cluster_settings}")
-        
+        log.info(f"Current cluster ops control settings: {cluster_settings}")        
         # Verify export settings if path provided
         if export_path:
             export_settings = json.loads(
@@ -1299,21 +1297,18 @@ def validate_ops_limit(dd_time, expected_limit):
     Returns: (bool, calculated_limit)
     """
     if not dd_time:
-        return False, None
-    
+        return False, None   
     calculated_limit = int(278/dd_time)  # Using only integer part as per requirement
-    log.info(f"Validation Summary:")
+    log.info("Validation Summary:")
     log.info(f"- Time taken: {dd_time} seconds")
     log.info(f"- Calculated ops limit: {calculated_limit} (278/{dd_time})")
-    log.info(f"- Expected ops limit: {expected_limit}")
-    
+    log.info(f"- Expected ops limit: {expected_limit}")  
     # Compare with expected limit
     matches = calculated_limit == expected_limit
     if matches:
         log.info(f"✓ Validation PASSED: calculated limit {calculated_limit} matches expected {expected_limit}")
     else:
         log.warning(f"✗ Validation FAILED: calculated limit {calculated_limit} differs from expected {expected_limit}")
-    
     return matches, calculated_limit
 
 
@@ -1340,7 +1335,10 @@ def validate_ops_control(client, nfs_mount, file_name, dd_params):
     log.info("Cache dropped successfully")
 
     # Run read test
-    read_cmd = f"dd if={nfs_mount}/{file_name} of=/dev/null bs={dd_params['block_size']} count={dd_params['count']} status=progress"
+    read_cmd = (
+        f"dd if={nfs_mount}/{file_name} of=/dev/null "
+        f"bs={dd_params['block_size']} count={dd_params['count']} status=progress"
+    )
     read_results = client.exec_command(sudo=True, cmd=read_cmd)[1]
     log.info(f"Read test results: {read_results}")
 
