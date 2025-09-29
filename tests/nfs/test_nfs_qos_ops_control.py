@@ -104,7 +104,7 @@ def run(ceph_cluster, **kw):
             client=client,
             nfs_mount=nfs_mount,
             file_name="baseline.txt",
-            dd_params=dd_params
+            dd_params=dd_params,
         )
         log.info("Baseline Results:")
         log.info(f"- Write time: {baseline['write_time']} seconds")
@@ -127,7 +127,7 @@ def run(ceph_cluster, **kw):
             client=client,
             nfs_mount=nfs_mount,
             file_name="cluster_ops.txt",
-            dd_params=dd_params
+            dd_params=dd_params,
         )
 
         # Validate cluster ops control limits
@@ -136,8 +136,7 @@ def run(ceph_cluster, **kw):
             log.info(f"- Expected limit: {cluster_ops['max_export_iops']} IOPS")
             log.info(f"- Write time: {cluster_test['write_time']} seconds")
             matches, calc_limit = validate_ops_limit(
-                cluster_test["write_time"],
-                cluster_ops["max_export_iops"]
+                cluster_test["write_time"], cluster_ops["max_export_iops"]
             )
             if not matches:
                 raise OperationFailedError(
@@ -155,8 +154,7 @@ def run(ceph_cluster, **kw):
             log.info(f"Export ops control configuration: {export_ops}")
             nfs_export_path = f"{nfs_export}_0"
             export_cmd = enable_export_ops_control(
-                client, cluster_name, nfs_export_path,
-                qos_type, export_ops
+                client, cluster_name, nfs_export_path, qos_type, export_ops
             )
             log.info(f"Enabled export ops control with command: {export_cmd}")
             # Verify settings and test performance
@@ -168,7 +166,7 @@ def run(ceph_cluster, **kw):
                 client=client,
                 nfs_mount=nfs_mount,
                 file_name="export_ops.txt",
-                dd_params=dd_params
+                dd_params=dd_params,
             )
 
             # Validate export ops control limits
@@ -177,8 +175,7 @@ def run(ceph_cluster, **kw):
                 log.info(f"- Expected limit: {export_ops['max_export_iops']} IOPS")
                 log.info(f"- Write time: {export_test['write_time']} seconds")
                 matches, calc_limit = validate_ops_limit(
-                    export_test["write_time"],
-                    export_ops["max_export_iops"]
+                    export_test["write_time"], export_ops["max_export_iops"]
                 )
                 if not matches:
                     raise OperationFailedError(
@@ -193,8 +190,12 @@ def run(ceph_cluster, **kw):
             log.info("STEP 4: Testing ops control persistence after restart...")
             data = json.loads(Ceph(client).orch.ls(format="json"))
             service_name = next(
-                (x["service_name"] for x in data if x.get("service_id") == cluster_name),
-                None
+                (
+                    x["service_name"]
+                    for x in data
+                    if x.get("service_id") == cluster_name
+                ),
+                None,
             )
             if service_name:
                 Ceph(client).orch.restart(service_name)
@@ -215,7 +216,7 @@ def run(ceph_cluster, **kw):
                     client=client,
                     nfs_mount=nfs_mount,
                     file_name="post_restart.txt",
-                    dd_params=dd_params
+                    dd_params=dd_params,
                 )
                 log.info(f"Post-restart performance: {post_restart_test}")
         log.info("=" * 80)
