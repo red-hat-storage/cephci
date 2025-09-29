@@ -1325,7 +1325,7 @@ def verify_ops_control_settings(client, cluster_name, export_path=None):
         cluster_settings = json.loads(
             client.exec_command(cmd=f"ceph nfs cluster qos get {cluster_name}")[0]
         )
-        log.info(f"Current cluster ops control settings: {cluster_settings}")        
+        log.info(f"Current cluster ops control settings: {cluster_settings}")
         # Verify export settings if path provided
         if export_path:
             export_settings = json.loads(
@@ -1359,12 +1359,12 @@ def validate_ops_limit(dd_time, expected_limit):
     Returns: (bool, calculated_limit)
     """
     if not dd_time:
-        return False, None   
+        return False, None
     calculated_limit = int(278/dd_time)  # Using only integer part as per requirement
     log.info("Validation Summary:")
     log.info(f"- Time taken: {dd_time} seconds")
     log.info(f"- Calculated ops limit: {calculated_limit} (278/{dd_time})")
-    log.info(f"- Expected ops limit: {expected_limit}")  
+    log.info(f"- Expected ops limit: {expected_limit}")
     # Compare with expected limit
     matches = calculated_limit == expected_limit
     if matches:

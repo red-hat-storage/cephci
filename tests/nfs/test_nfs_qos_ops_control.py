@@ -17,7 +17,7 @@ log = Log(__name__)
 
 def enable_cluster_ops_control(client, cluster_name, qos_type, ops_config):
     """Enable ops control at cluster level"""
-    cmd = f"ceph nfs cluster qos enable ops_control {cluster_name} {qos_type}"    
+    cmd = f"ceph nfs cluster qos enable ops_control {cluster_name} {qos_type}"
     if qos_type.lower() == "pershare":
         if "max_export_iops" not in ops_config:
             raise ConfigError("max_export_iops required for PerShare ops control")
@@ -31,7 +31,7 @@ def enable_cluster_ops_control(client, cluster_name, qos_type, ops_config):
             raise ConfigError("Both max_export_iops and max_client_iops required")
         cmd += f" {ops_config['max_export_iops']} {ops_config['max_client_iops']}"
     else:
-        raise ConfigError(f"Invalid ops control type: {qos_type}")    
+        raise ConfigError(f"Invalid ops control type: {qos_type}")
     client.exec_command(sudo=True, cmd=cmd)
     return cmd
 
@@ -136,7 +136,7 @@ def run(ceph_cluster, **kw):
             log.info(f"- Expected limit: {cluster_ops['max_export_iops']} IOPS")
             log.info(f"- Write time: {cluster_test['write_time']} seconds")
             matches, calc_limit = validate_ops_limit(
-                cluster_test["write_time"], 
+                cluster_test["write_time"],
                 cluster_ops["max_export_iops"]
             )
             if not matches:
@@ -177,7 +177,7 @@ def run(ceph_cluster, **kw):
                 log.info(f"- Expected limit: {export_ops['max_export_iops']} IOPS")
                 log.info(f"- Write time: {export_test['write_time']} seconds")
                 matches, calc_limit = validate_ops_limit(
-                    export_test["write_time"], 
+                    export_test["write_time"],
                     export_ops["max_export_iops"]
                 )
                 if not matches:
