@@ -6,9 +6,9 @@ from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.nfs_operations import (
     cleanup_cluster,
     setup_nfs_cluster,
-    verify_ops_control_settings,
     validate_ops_control,
-    validate_ops_limit
+    validate_ops_limit,
+    verify_ops_control_settings,
 )
 from utility.log import Log
 
