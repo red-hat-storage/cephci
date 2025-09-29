@@ -4,7 +4,7 @@ from time import sleep
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from tests.nfs.nfs_operations import (
-    cleanup_cluster, 
+    cleanup_cluster,
     setup_nfs_cluster,
     verify_ops_control_settings,
     validate_ops_control,
@@ -17,8 +17,7 @@ log = Log(__name__)
 
 def enable_cluster_ops_control(client, cluster_name, qos_type, ops_config):
     """Enable ops control at cluster level"""
-    cmd = f"ceph nfs cluster qos enable ops_control {cluster_name} {qos_type}"
-    
+    cmd = f"ceph nfs cluster qos enable ops_control {cluster_name} {qos_type}"    
     if qos_type.lower() == "pershare":
         if "max_export_iops" not in ops_config:
             raise ConfigError("max_export_iops required for PerShare ops control")
@@ -32,8 +31,7 @@ def enable_cluster_ops_control(client, cluster_name, qos_type, ops_config):
             raise ConfigError("Both max_export_iops and max_client_iops required")
         cmd += f" {ops_config['max_export_iops']} {ops_config['max_client_iops']}"
     else:
-        raise ConfigError(f"Invalid ops control type: {qos_type}")
-    
+        raise ConfigError(f"Invalid ops control type: {qos_type}")    
     client.exec_command(sudo=True, cmd=cmd)
     return cmd
 
@@ -41,7 +39,6 @@ def enable_cluster_ops_control(client, cluster_name, qos_type, ops_config):
 def enable_export_ops_control(client, cluster_name, pseudo_path, qos_type, ops_config):
     """Enable ops control at export level"""
     cmd = f"ceph nfs export qos enable ops_control {cluster_name} {pseudo_path}"
-    
     if qos_type.lower() == "pershare":
         if "max_export_iops" not in ops_config:
             raise ConfigError("max_export_iops required for PerShare ops control")
@@ -52,7 +49,6 @@ def enable_export_ops_control(client, cluster_name, pseudo_path, qos_type, ops_c
         cmd += f" {ops_config['max_export_iops']} {ops_config['max_client_iops']}"
     elif qos_type.lower() == "perclient":
         raise ConfigError("PerClient ops control not allowed at export level")
-    
     client.exec_command(sudo=True, cmd=cmd)
     return cmd
 
@@ -113,7 +109,7 @@ def run(ceph_cluster, **kw):
         log.info("Baseline Results:")
         log.info(f"- Write time: {baseline['write_time']} seconds")
         log.info(f"- Read time: {baseline['read_time']} seconds")
-        
+
         # Enable cluster level ops control
         log.info("=" * 80)
         log.info("STEP 2: Setting up cluster level ops control...")
@@ -133,7 +129,7 @@ def run(ceph_cluster, **kw):
             file_name="cluster_ops.txt",
             dd_params=dd_params
         )
-        
+
         # Validate cluster ops control limits
         if qos_type in ["pershare", "pershare_perclient"]:
             log.info("Validating cluster level ops control limits:")
@@ -163,7 +159,6 @@ def run(ceph_cluster, **kw):
                 qos_type, export_ops
             )
             log.info(f"Enabled export ops control with command: {export_cmd}")
-            
             # Verify settings and test performance
             cluster_settings, export_settings = verify_ops_control_settings(
                 client, cluster_name, nfs_export_path
@@ -175,7 +170,7 @@ def run(ceph_cluster, **kw):
                 file_name="export_ops.txt",
                 dd_params=dd_params
             )
-            
+
             # Validate export ops control limits
             if qos_type in ["pershare", "pershare_perclient"]:
                 log.info("Validating export level ops control limits:")
@@ -201,21 +196,20 @@ def run(ceph_cluster, **kw):
                 (x["service_name"] for x in data if x.get("service_id") == cluster_name),
                 None
             )
-            
             if service_name:
                 Ceph(client).orch.restart(service_name)
                 sleep(10)
 
                 # Verify settings persist after restart
                 post_restart_settings, post_restart_export = verify_ops_control_settings(
-                    client, 
+                    client,
                     cluster_name,
                     nfs_export_path if export_ops else None
                 )
-                
+
                 if post_restart_settings != cluster_settings:
                     raise OperationFailedError("Ops control settings changed after restart")
-                
+
                 # Verify ops control is still effective
                 post_restart_test = validate_ops_control(
                     client=client,
@@ -224,7 +218,7 @@ def run(ceph_cluster, **kw):
                     dd_params=dd_params
                 )
                 log.info(f"Post-restart performance: {post_restart_test}")
-        log.info("=" * 80)    
+        log.info("=" * 80)
         log.info("NFS ops control test completed successfully")
         return 0
 
