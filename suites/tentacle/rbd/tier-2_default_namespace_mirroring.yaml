@@ -160,7 +160,6 @@ tests:
       name: deploy rbd-mirror daemon
 
   - test:
-      abort-on-fail: True
       desc: Verify non-default to default namespace mirroring
       name: >
         Snapshot based Namespace level mirroring from
@@ -208,7 +207,6 @@ tests:
                 io_type: randrw
 
   - test:
-      abort-on-fail: True
       desc: Verify default to non-default namespace mirroring
       comments: Product bug 2358634
       name: >
@@ -257,7 +255,6 @@ tests:
                 io_type: randrw
 
   - test:
-      abort-on-fail: True
       desc: Verify multi level snapshot schedule in namespace mirroring
       name: >
         pool and namespace level snapshot scheduling from
@@ -303,7 +300,6 @@ tests:
                 io_type: randrw
 
   - test:
-      abort-on-fail: True
       desc: >
         image operations demote, promote and resync
         rename, resize, remove for namespace mirroring
@@ -351,7 +347,6 @@ tests:
                 io_type: randrw
 
   - test:
-      abort-on-fail: True
       desc: >
         Failover cluster from secondary to primary
         in deafult namespace mirroring
@@ -393,7 +388,6 @@ tests:
                 io_type: randrw
 
   - test:
-      abort-on-fail: True
       desc: >
         Failover cluster from secondary to primary
         in deafult namespace mirroring with force promote
@@ -426,6 +420,54 @@ tests:
             test_function: CEPH-83613956
             fio:
               size: 200M
+              ODF_CONFIG:
+                num_jobs: 4
+                iodepth: 32
+                rwmixread: 70
+                direct: 1
+                invalidate: 1
+                io_type: randrw
+
+  - test:
+      desc: >
+        Disable and re-enable Snapshot based default and
+        non-default Namespace level mirroring
+      comments: Product bug 2358634
+      name: Test to disable and re-enable namespace mirroring
+      module: test_rbd_non-default_to_default_namespace_mirroring.py
+      polarion-id: CEPH-83613952
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: True
+              size: 1G
+              mode: image
+              mirror_level: namespace
+              namespace_mirror_type: default_to_non-default
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - image
+              snap_schedule_intervals:
+                - 1m
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              do_not_create_image: True
+              size: 1G
+              mode: image
+              mirror_level: namespace
+              namespace_mirror_type: non-default_to_default
+              mirrormode: snapshot
+              snap_schedule_levels:
+                - namespace
+              snap_schedule_intervals:
+                - 1m
+            test_function: CEPH-83613952
+            fio:
+              size: 100M
               ODF_CONFIG:
                 num_jobs: 4
                 iodepth: 32
