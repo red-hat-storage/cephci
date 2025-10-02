@@ -1,6 +1,6 @@
 from time import sleep
 
-from nfs_operations import cleanup_cluster, setup_nfs_cluster, open_mandatory_v3_ports
+from nfs_operations import cleanup_cluster, open_mandatory_v3_ports, setup_nfs_cluster
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
