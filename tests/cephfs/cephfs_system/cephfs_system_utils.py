@@ -31,6 +31,7 @@ class CephFSSystemUtils(object):
         self.mgrs = ceph_cluster.get_ceph_objects("mgr")
         self.mdss = ceph_cluster.get_ceph_objects("mds")
         self.osds = ceph_cluster.get_ceph_objects("osd")
+        self.nfss = ceph_cluster.get_ceph_objects("nfs")
         self.clients = ceph_cluster.get_ceph_objects("client")
         self.fs_util = FsUtils(ceph_cluster)
 
@@ -61,17 +62,9 @@ class CephFSSystemUtils(object):
                             sv_objs.append(sv_obj)
 
         sv_obj = random.choice(sv_objs)
-        if req_type == "unique":
-            retry_cnt = 1
-            while sv_obj["in_use"] == 1 and retry_cnt < 10:
-                sv_obj = random.choice(sv_objs)
-                retry_cnt += 1
-            if sv_obj["in_use"] == 1:
-                return 1
+
         for i in sv_obj:
             sv_obj[i].update({"fs_util": self.fs_util})
-
-        # log.info(f"SV test object selected : {sv_obj}")
         return sv_obj
 
     def configure_logger(self, logdir, logname):
@@ -173,36 +166,47 @@ class CephFSSystemUtils(object):
     def crash_check(self, client, crash_copy=1, daemon_list=["mds"]):
         """
         Check if Crash dir exists in all daemon hosting nodes, save meta file if crash exists
+        return 1 if crash exists, else 0
         """
         daemon_nodes = {
             "mds": self.mdss,
             "mgr": self.mgrs,
             "mon": self.mons,
             "osd": self.osds,
+            "nfs": self.nfss,
         }
 
         out, _ = client.exec_command(sudo=True, cmd="ceph fsid")
         fsid = out.strip()
-        crash_dir = f"/var/lib/ceph/{fsid}/crash"
-        crash_data = {}
+        crash_dir1 = f"/var/lib/ceph/{fsid}/crash"
+        crash_dir2 = "/var/lib/systemd/coredump"
+        crash_data = {"ceph_crash": {}, "crash": {}}
         crash_checked_nodes = []
         for daemon in daemon_list:
             nodes = daemon_nodes[daemon]
             for node in nodes:
                 if node.node.hostname not in crash_checked_nodes:
-                    crash_list = []
-                    cmd = f"ls {crash_dir}"
-                    out, _ = node.exec_command(sudo=True, cmd=cmd)
-                    crash_items = out.split()
-                    crash_items.remove("posted")
-                    if len(crash_items) > 0:
-                        for crash_item in crash_items:
-                            crash_path = f"{crash_dir}/{crash_item}"
-                            node.exec_command(
-                                sudo=True, cmd=f"ceph crash post -i {crash_path}/meta"
-                            )
-                            crash_list.append(crash_item)
-                        crash_data.update({node: crash_list})
+                    for crash_type in crash_data:
+                        crash_list = []
+                        crash_dir = (
+                            crash_dir1 if crash_type == "ceph_crash" else crash_dir2
+                        )
+                        cmd = f"ls {crash_dir}"
+                        out, _ = node.exec_command(sudo=True, cmd=cmd)
+                        crash_items = out.split()
+                        log.info(crash_items)
+                        if crash_type == "ceph_crash":
+                            crash_items.remove("posted")
+                        if len(crash_items) > 0:
+                            for crash_item in crash_items:
+                                if crash_type == "ceph_crash":
+                                    crash_path = f"{crash_dir}/{crash_item}"
+                                    node.exec_command(
+                                        sudo=True,
+                                        cmd=f"ceph crash post -i {crash_path}/meta",
+                                    )
+                                crash_list.append(crash_item)
+                            crash_data[crash_type].update({node: crash_list})
                     crash_checked_nodes.append(node.node.hostname)
 
         log_base_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
@@ -214,23 +218,38 @@ class CephFSSystemUtils(object):
         log.info(f"crash_data:{crash_data}")
 
         if crash_copy == 1:
-            for crash_node in crash_data:
-                crash_list = crash_data[crash_node]
-                node_name = crash_node.node.hostname
-                tmp_path = f"{crash_log_path}/{node_name}"
-                os.mkdir(tmp_path)
-                for crash_item in crash_list:
-                    crash_dst_path = f"{crash_log_path}/{node_name}/{crash_item}"
-                    os.mkdir(crash_dst_path)
-                    crash_path = f"{crash_dir}/{crash_item}"
-
-                    out, _ = crash_node.exec_command(sudo=True, cmd=f"ls {crash_path}")
-                    crash_files = out.split()
-                    for crash_file in crash_files:
-                        src_path = f"{crash_path}/{crash_file}"
-                        dst_path = f"{crash_dst_path}/{crash_file}"
-                        crash_node.download_file(src=src_path, dst=dst_path, sudo=True)
-                    log.info(f"Copied {crash_path} to {crash_dst_path}")
+            for crash_type in crash_data:
+                for crash_node in crash_data[crash_type]:
+                    crash_list = crash_data[crash_type][crash_node]
+                    node_name = crash_node.node.hostname
+                    tmp_path = f"{crash_log_path}/{node_name}"
+                    if not os.path.isdir(tmp_path):
+                        os.mkdir(tmp_path)
+                    for crash_item in crash_list:
+                        crash_dst_path = f"{crash_log_path}/{node_name}/{crash_item}"
+                        crash_dir = (
+                            crash_dir1 if crash_type == "ceph_crash" else crash_dir2
+                        )
+                        crash_path = f"{crash_dir}/{crash_item}"
+                        if crash_type == "ceph_crash":
+                            os.mkdir(crash_dst_path)
+                            out, _ = crash_node.exec_command(
+                                sudo=True, cmd=f"ls {crash_path}"
+                            )
+                            crash_files = out.split()
+                            for crash_file in crash_files:
+                                src_path = f"{crash_path}/{crash_file}"
+                                dst_path = f"{crash_dst_path}/{crash_file}"
+                                crash_node.download_file(
+                                    src=src_path, dst=dst_path, sudo=True
+                                )
+                        else:
+                            crash_node.download_file(
+                                src=crash_path, dst=crash_dst_path, sudo=True
+                            )
+                        log.info(f"Copied {crash_path} to {crash_dst_path}")
+        if (len(crash_data["ceph_crash"]) > 0) or (len(crash_data["crash"]) > 0):
+            return 1
         return 0
 
     def wait_for_two_active_mds(

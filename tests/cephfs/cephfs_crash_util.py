@@ -68,9 +68,13 @@ def run(ceph_cluster, **kw):
             log_dir = os.path.dirname(log.logger.handlers[0].baseFilename)
             log.info(f"log path:{log_dir}")
             log.info(f"Check for crash from : {daemon_list}")
-            fs_system_utils.crash_check(
+            if fs_system_utils.crash_check(
                 client, crash_copy=crash_copy, daemon_list=daemon_list
-            )
+            ):
+                log.error(
+                    "Found crash/es on cluster, please check for logs in test log dir"
+                )
+                return 1
         return 0
 
     except Exception as e:
