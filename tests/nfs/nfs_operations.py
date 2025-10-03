@@ -77,11 +77,6 @@ def setup_nfs_cluster(
             fs_name=fs_name, nfs_name=nfs_name, nfs_export=export_name, fs=fs
         )
         i += 1
-        all_exports = Ceph(client).nfs.export.ls(nfs_name)
-        if export_name not in all_exports:
-            raise OperationFailedError(
-                f"Export {export_name} not found in the list of exports {all_exports}"
-            )
         export_list.append(export_name)
         sleep(1)
 
@@ -235,9 +230,9 @@ def setup_custom_nfs_cluster_multi_export_client(
     nfs_export,
     ha=False,
     vip=None,
+    active_standby=None,
     export_num=None,
     ceph_cluster=None,
-    active_standby=None,
     **kwargs,
 ):
     # Get ceph cluter object and setup start time
@@ -290,11 +285,6 @@ def setup_custom_nfs_cluster_multi_export_client(
                 fs=fs,
                 enctag=kwargs.get("enctag") if kwargs.get("enctag") else None,
             )
-            all_exports = Ceph(clients[0]).nfs.export.ls(nfs_name)
-            if export_name not in all_exports:
-                raise OperationFailedError(
-                    f"Export {export_name} not found in the list of exports {all_exports}"
-                )
             sleep(1)
             # Get the mount versions specific to clients
             mount_versions = _get_client_specific_mount_versions(version, clients)
@@ -349,6 +339,8 @@ def setup_custom_nfs_cluster_multi_export_client(
 
     # Step 5: Enable nfs coredump to nfs nodes
     Enable_nfs_coredump(nfs_nodes)
+
+    return client_export_mount_dict
 
 
 def exports_mounts_perclient(clients, nfs_export, nfs_mount, export_num) -> dict:
@@ -1077,7 +1069,7 @@ def dynamic_cleanup_common_names(
 
     # Step 3: Delete all CephFS subvolumes associated with the exports
     subvols = json.loads(
-        Ceph(client).fs.sub_volume.ls(volume="cephfs", group=group_name)
+        Ceph(client).fs.sub_volume.ls(volume="cephfs", group_name=group_name)
     )
     for cluster in clusters:
         exports = json.loads(Ceph(client).nfs.export.ls(cluster))
@@ -1090,21 +1082,21 @@ def dynamic_cleanup_common_names(
         sub_vols_infos = []
         for subvol in subvols:
             subvol_info = Ceph(client).fs.sub_volume.info(
-                volume="cephfs", subvolume=subvol["name"], group=group_name
+                volume="cephfs", subvolume=subvol["name"], group_name=group_name
             )
             sub_vols_infos.append(subvol_info)
             for export in exports:
                 # Check if export is referenced in the subvolume's pool_namespace
-                if re.findall(export, subvol_info["pool_namespace"])[1:]:
+                if re.findall(export[1:], subvol_info["pool_namespace"]):
                     log.info(f"Export '{export}' found in subvolume '{subvol['name']}'")
                     Ceph(client).fs.sub_volume.rm(
                         volume="cephfs",
                         subvolume=subvol["name"],
-                        group=group_name,
+                        group_name=group_name,
                         force=True,
                     )
                     log.info(
-                        f"Deleted subvolume '{subvol['name']}' in group '{group_name}'"
+                        f"Deleted subvolume '{subvol['name']}' in group_name '{group_name}'"
                     )
 
         # Step 4: Remove the NFS cluster itself
@@ -1254,3 +1246,12 @@ def nfs_log_parser(client, nfs_node, nfs_name, expect_list):
         return 1
 
     return 0
+
+
+def get_active_node_ha(client, nfs_name, nfs_nodes):
+    out = Ceph(client).nfs.cluster.info(nfs_name)
+    active_node_hostname = out[nfs_name]["backend"][0]["hostname"]
+    for nfs_node in nfs_nodes:
+        if nfs_node.hostname == active_node_hostname:
+            return nfs_node
+    return None
