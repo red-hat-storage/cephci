@@ -103,6 +103,12 @@ class Qos(Cli):
     def _execute_qos_cmd(
         self, action: str, operation: str, nfs_name: str, export: int, params: list
     ) -> str:
+        # Ensure --combined-rw-bw-ctrl is not duplicated
+        if len([x for x in params if x.startswith("--combined")]) > 1:
+            params[-1] = [x for x in params if x.startswith("--combined")][-1].replace(
+                "--combined-rw-bw-ctrl ", ""
+            )
+
         cmd = " ".join(
             [self.base_cmd, action, operation, nfs_name, str(export), " ".join(params)]
         )

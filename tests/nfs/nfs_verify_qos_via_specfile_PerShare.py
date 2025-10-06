@@ -31,12 +31,15 @@ def run(ceph_cluster, **kw):
     port = config.get("port", "2049")
     version = config.get("nfs_version")
     nfs_server_name = nfs_nodes[0].hostname
+    subvolume_group = "ganeshagroup"
     read_bw = original_config["spec"]["cluster_qos_config"]["max_export_read_bw"]
     write_bw = original_config["spec"]["cluster_qos_config"]["max_export_write_bw"]
 
     # If the setup doesn't have required number of clients, exit.
     if no_clients > len(clients):
         raise ConfigError("The test requires more clients than available")
+
+    Ceph(clients[0]).fs.sub_volume_group.create(volume=fs_name, group=subvolume_group)
 
     clients = clients[:no_clients]  # Select only the required number of clients
     try:
