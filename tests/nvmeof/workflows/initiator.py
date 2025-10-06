@@ -183,7 +183,6 @@ class NVMeInitiator(Initiator):
         """
         Helper to perform the register_reservation and report_reservation on a client.
         Validate the report for nrkey
-        Validate the RBD image metadata for nrkey - TBD
         Parameters:
         base: Common/base arguments needed for reservation that includes device name and NSID
         register_args: Additional args for registering from config file
@@ -196,19 +195,18 @@ class NVMeInitiator(Initiator):
         namespace = base.get("device")
         nsid = base.get("namespace-id")
         LOG.debug(
-            f"Register ({namespace} nsid {nsid} on {client_node}): {register_out}"
+            f"Register ({namespace} nsid {nsid} on {client_node.hostname}): {register_out}"
         )
-        report_out = self.report_reservation(**base)
+        report_out, report_err = self.report_reservation(**base)
         LOG.debug(
-            f"Register Report for ({namespace} nsid {nsid} on {client_node}): {report_out}"
+            f"Register Report for ({namespace} nsid {nsid} on {client_node.hostname}): {report_out}"
         )
         return register_out, report_out
 
     def acquire(self, base, acquire_args, crkey, client_node):
         """
         Helper to perform the acquire_reservation and report_reservation on a client.
-        Validate the report for crkey
-        Validate the RBD image metadata for crkey - TBD
+        Validate the report for rtype and rcsts
         Parameters:
         base: Common/base arguments needed for reservation that includes device name and NSID
         acquire_args: Additional args for acquiring reservation from config file
@@ -220,32 +218,35 @@ class NVMeInitiator(Initiator):
         )
         namespace = base.get("device")
         nsid = base.get("namespace-id")
-        LOG.debug(f"Acquire ({namespace} nsid {nsid} on {client_node}): {acquire_out}")
-
-        report_out = self.report_reservation(**base)
         LOG.debug(
-            f"Acquire Report for ({namespace} nsid {nsid} on {client_node}): {report_out}"
+            f"Acquire ({namespace} nsid {nsid} on {client_node.hostname}): {acquire_out}"
+        )
+
+        report_out, report_err = self.report_reservation(**base)
+        LOG.debug(
+            f"Acquire Report for ({namespace} nsid {nsid} on {client_node.hostname}): {report_out}"
         )
         data = json.loads(report_out)
         regctlext = data.get("regctlext", [])
         first_entry = regctlext[0] if regctlext else {}
-        rkey_value = first_entry.get("rkey") if first_entry else None
-        if rkey_value == crkey:
+        rtype_value = data.get("rtype")
+        rcsts_value = first_entry.get("rcsts") if first_entry else None
+        if rtype_value == acquire_args.get("rtype") and rcsts_value == 1:
             LOG.info(
-                f"Acquire Report validation successfull for ({namespace} nsid {nsid} on {client_node})"
+                f"Acquire Report validation successfull for ({namespace} nsid {nsid} on {client_node.hostname}: "
+                f"rcsts is {rcsts_value}, rtype is {rtype_value})"
             )
         else:
             raise Exception(
-                f"Acquire Report validation **failed** for ({namespace} nsid {nsid} on {client_node}): "
-                f"crkey ({crkey}) vs report rkey ({rkey_value}) do not match"
+                f"Acquire Report validation **failed** for ({namespace} nsid {nsid} on {client_node.hostname}): "
+                f"rcsts is {rcsts_value}, rtype is {rtype_value})"
             )
         return acquire_out, report_out
 
     def release(self, base, release_args, crkey, client_node):
         """
         Helper to perform the release_reservation and report_reservation on a client.
-        Validate the report for crkey
-        Validate the RBD image metadata for crkey - TBD
+        Validate the report for rcsts
         Parameters:
         base: Common/base arguments needed for reservation that includes device name and NSID
         release_args: Additional args for releasing NS
@@ -257,11 +258,13 @@ class NVMeInitiator(Initiator):
         )
         namespace = base.get("device")
         nsid = base.get("namespace-id")
-        LOG.debug(f"Release ({namespace} nsid {nsid} on {client_node}): {release_out}")
-
-        report_out = self.report_reservation(**base)
         LOG.debug(
-            f"Release Report for ({namespace} nsid {nsid} on {client_node}): {report_out}"
+            f"Release ({namespace} nsid {nsid} on {client_node.hostname}): {release_out}"
+        )
+
+        report_out, report_err = self.report_reservation(**base)
+        LOG.debug(
+            f"Release Report for ({namespace} nsid {nsid} on {client_node.hostname}): {report_out}"
         )
         data = json.loads(report_out)
         regctlext = data.get("regctlext", [])
@@ -269,12 +272,13 @@ class NVMeInitiator(Initiator):
         rcsts_value = first_entry.get("rcsts") if first_entry else None
         if rcsts_value == 0:
             LOG.info(
-                f"Release Report validation successfull for ({namespace} nsid {nsid} on {client_node})"
+                f"Release Report validation successfull for ({namespace} nsid {nsid} on {client_node.hostname}:"
+                f"rcsts value is {rcsts_value})"
             )
         else:
             raise Exception(
-                f"Release Report validation **failed** for ({namespace} nsid {nsid} on {client_node}): "
-                f"rcsts_value is ({rcsts_value}) which says {client_node} is still reservation holder"
+                f"Release Report validation **failed** for ({namespace} nsid {nsid} on {client_node.hostname}): "
+                f"rcsts_value is ({rcsts_value}) which says {client_node.hostname} is still reservation holder"
             )
         return release_out, report_out
 
@@ -282,7 +286,6 @@ class NVMeInitiator(Initiator):
         """
         Helper to perform the unregister_reservation and report_reservation on a client.
         Validate the report for crkey
-        Validate the RBD image metadata for crkey - TBD
         Parameters:
         base: Common/base arguments needed for reservation that includes device name and NSID
         unregister_args: Additional args for unregistering NS from config file
@@ -295,16 +298,16 @@ class NVMeInitiator(Initiator):
         namespace = base.get("device")
         nsid = base.get("namespace-id")
         LOG.debug(
-            f"Unregister ({namespace} nsid {nsid} on {client_node}): {unregister_out}"
+            f"Unregister ({namespace} nsid {nsid} on {client_node.hostname}): {unregister_out}"
         )
 
-        report_out = self.report_reservation(**base)
+        report_out, report_err = self.report_reservation(**base)
         LOG.debug(
-            f"Unregister Report for ({namespace} nsid {nsid} on {client_node}): {report_out}"
+            f"Unregister Report for ({namespace} nsid {nsid} on {client_node.hostname}): {report_out}"
         )
         data = json.loads(report_out)
         regctl_count = data.get("regctl")
-        if regctl_count is None:
+        if regctl_count == 0:
             LOG.info("No registered controllers left; regctl is 0")
         else:
             raise Exception(f"Other registrants remain; regctl={regctl_count}")

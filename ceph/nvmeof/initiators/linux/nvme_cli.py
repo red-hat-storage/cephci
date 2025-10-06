@@ -179,16 +179,20 @@ class NVMeCLI(Cli):
         """
         device = kwargs.pop("device")
         nsid = kwargs.pop("namespace-id")
-        nrkey = kwargs.pop("nrkey")
-        if not (device and nsid and nrkey):
-            raise ValueError(
-                "device, namespace-id, and nrkey must all be provided and non-empty"
-            )
 
-        cmd = (
-            f"nvme resv-register {device} --namespace-id {nsid} --nrkey {nrkey} "
-            f"{config_dict_to_string(kwargs)} -v"
-        )
+        if not (device and nsid):
+            raise ValueError("device, namespace-id must be provided")
+
+        if kwargs.get("crkey"):
+            cmd = (
+                f"nvme resv-register {device} --namespace-id {nsid} "
+                f"{config_dict_to_string(kwargs)} -v"
+            )
+        else:
+            cmd = (
+                f"nvme resv-register {device} --namespace-id {nsid} "
+                f"{config_dict_to_string(kwargs)} -v"
+            )
         return self.execute(cmd=cmd, sudo=True)
 
     def acquire_reservation(self, **kwargs):
