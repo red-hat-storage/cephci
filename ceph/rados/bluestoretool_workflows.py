@@ -53,7 +53,12 @@ class BluestoreToolWorkflows:
         self.nostart = nostart
 
     def run_cbt_command(
-        self, cmd: str, osd_id: int, timeout: int = 300, env: Dict = None
+        self,
+        cmd: str,
+        osd_id: int,
+        timeout: int = 300,
+        env: Dict = None,
+        file_redirect: bool = False,
     ) -> str:
         """
         Runs ceph-bluestore-tool commands within OSD container
@@ -63,6 +68,7 @@ class BluestoreToolWorkflows:
             timeout: Maximum time allowed for execution.
             env: any environment variables that needs be declared
                 e.g. - env_dict = {"env": f"CEPH_ARGS='--bluestore_block_db_size={db_size}"}
+            file_redirect: flag to control redirecting stdout/stderrs to file
         Returns:
             output of respective ceph-bluestore-tool command in string format
         """
@@ -74,6 +80,8 @@ class BluestoreToolWorkflows:
             env_cmd = config_dict_to_string(env)
             base_cmd = f"{base_cmd} {env_cmd}"
         _cmd = f"{base_cmd} -- {cmd} --path /var/lib/ceph/osd/ceph-{osd_id}"
+        if file_redirect:
+            _cmd = f"{_cmd} &> /tmp/cbt_stdout"
         try:
             if not self.nostop:
                 self.rados_obj.change_osd_state(action="stop", target=osd_id)
