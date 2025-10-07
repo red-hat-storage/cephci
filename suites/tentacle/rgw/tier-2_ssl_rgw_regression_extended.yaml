@@ -1,0 +1,183 @@
+# Tier 1: RGW extension suites
+
+# This test suite is executed in QE pipeline. The primary objective of
+# the test suite is to evaluate the STS functionality of RGW.
+
+# Requires a 5 node cluster layout having only one node with RGW role.
+# global-conf: conf/tentacle/rgw/tier-0_rgw.yaml
+
+tests:
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply_spec
+              service: orch
+              specs:
+                - service_type: rgw
+                  service_id: rgw.ssl
+                  placement:
+                    nodes:
+                      - node3
+                      - node4
+                      - node5
+                  spec:
+                    ssl: true
+                    generate_cert: true
+      desc: RHCS cluster deployment using cephadm.
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+      polarion-id: CEPH-83574478
+
+  - test:
+      name: Monitoring Services deployment
+      desc: Add monitoring services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83574727
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: prometheus
+                  placement:
+                    count: 1
+                    nodes:
+                      - node1
+                - service_type: grafana
+                  placement:
+                    nodes:
+                      - node1
+                - service_type: alertmanager
+                  placement:
+                    count: 1
+                - service_type: node-exporter
+                  placement:
+                    host_pattern: "*"
+                - service_type: crash
+                  placement:
+                    host_pattern: "*"
+
+  - test:
+      name: Test NFS cluster and export create
+      desc: Test NFS cluster and export create
+      polarion-id: CEPH-83574597
+      module: sanity_rgw.py
+      config:
+        run-on-rgw: true
+        script-name: ../nfs_ganesha/nfs_cluster.py
+        config-file-name: ../../nfs_ganesha/config/nfs_cluster.yaml
+
+  - test:
+      abort-on-fail: true
+      name: Test NFS V4 mount
+      desc: Test NFS V4 mount
+      polarion-id: CEPH-83574598
+      module: sanity_rgw.py
+      config:
+        script-name: ../nfs_ganesha/nfs_cluster.py
+        config-file-name: ../../nfs_ganesha/config/nfs_mount_creation.yaml
+
+  - test:
+      name: NFS export delete
+      desc: NFS cluster and exports delete
+      polarion-id: CEPH-83574600 # also covers CEPH-83574601
+      module: sanity_rgw.py
+      config:
+        script-name: ../nfs_ganesha/nfs_cluster.py
+        config-file-name: ../../nfs_ganesha/config/nfs_cluster_delete.yaml
+
+  - test:
+      name: Test no crash during deleting bucket with aborted multipart upload
+      desc: Test no crash during deleting bucket with aborted multipart upload
+      polarion-id: CEPH-83574831
+      module: sanity_rgw.py
+      config:
+        script-name: test_LargeObjGet_GC.py
+        config-file-name: test_bucket_remove_with_multipart_abort.yaml
+
+  - test:
+      name: Test functionality of bucket check fix
+      desc: Test functionality of bucket check fix
+      polarion-id: CEPH-83574832
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_bucket_check_fix.yaml
+
+  - test:
+      name: Test functionality of user stat reset
+      desc: Test functionality of user stat reset
+      polarion-id: CEPH-83575439
+      module: sanity_rgw.py
+      config:
+        script-name: test_Mbuckets_with_Nobjects.py
+        config-file-name: test_user_stats_reset.yaml
+
+  # kafka broker type broker with persistent flag enabled
+  - test:
+      name: notify put,delete events with kafka_broker_persistent with rgw ssl
+      desc: notify put,delete events with kafka_broker_persistent with rgw ssl
+      module: sanity_rgw.py
+      polarion-id: CEPH-83574489
+      config:
+        run-on-rgw: true
+        extra-pkgs:
+          - jdk
+        install_start_kafka: true
+        script-name: test_bucket_notifications.py
+        config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
+
+  # checksum tests with go
+  - test:
+      name: test checksum with go script
+      desc: test checksum with go script. rgw ssl required for chunked upload with trailing checksum
+      module: sanity_rgw.py
+      polarion-id: CEPH-83591699
+      config:
+        script-name: ../go_scripts/test_rgw_using_go.py
+        config-file-name: ../../go_scripts/configs/test_checksum_using_go.yaml
