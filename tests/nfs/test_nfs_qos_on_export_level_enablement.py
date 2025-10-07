@@ -198,6 +198,14 @@ def run(ceph_cluster, **kw):
                 x["service_name"] for x in data if x.get("service_id") == cluster_name
             ]
 
+            export_data_before_restart = ceph_nfs_client.export.get(
+                nfs_name=nfs_name, nfs_export=nfs_export
+            )
+
+            log.info(
+                "export_data_before_restart: {0}".format(export_data_before_restart)
+            )
+
             # restart the service
             Ceph(client).orch.restart(service_name)
             if cluster_name not in [x["service_name"] for x in data]:
