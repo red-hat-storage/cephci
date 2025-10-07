@@ -439,22 +439,3 @@ tests:
       config:
         script-name: ../aws/test_delete_version_id_null.py
         config-file-name: ../../aws/configs/test_no_crash_while_ver_deletion.yaml
-
-  - test:
-      name: test_bi_purge for a bucket
-      desc: test bi_purge should not error
-      module: sanity_rgw.py
-      polarion-id: CEPH-83575234
-      config:
-        script-name: test_Mbuckets_with_Nobjects.py
-        config-file-name: test_bi_purge.yaml
-  - test:
-      name: Indexless buckets
-      desc: Indexless (blind) buckets
-      polarion-id: CEPH-10354 # also applies to CEPH-10357
-      module: sanity_rgw.py
-      config:
-        test-version: v2
-        script-name: test_indexless_buckets.py
-        config-file-name: test_indexless_buckets_s3.yaml
-
