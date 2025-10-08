@@ -118,3 +118,13 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
+  ######################################################################################################################
+  # Features Covered
+  # Cephfs Subvolume Metrics
+  ######################################################################################################################
+  - test:
+      name: test cephfs subvolume metrics - functional
+      module: cephfs_subvol_metrics.test_subvol_metrics.py
+      polarion-id: CEPH-83621832
+      desc: Test fs subvolume metrics
+      abort-on-fail: false
