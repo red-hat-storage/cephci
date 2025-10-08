@@ -35,7 +35,7 @@ def run(ceph_cluster, **kw):
         cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         config = kw.get("config")
         cephfs_config = {}
-        run_time = config.get("run_time_hrs", 4)
+        run_time = config.get("run_time_hrs", 8)
         # Derive OSD usage limit to trigger OSD removal
         osd_rm_limit_def = random.randrange(5, 26)
         osd_rm_limit = config.get("osd_rm_limit", osd_rm_limit_def)
