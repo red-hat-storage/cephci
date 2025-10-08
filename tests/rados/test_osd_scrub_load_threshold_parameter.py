@@ -386,12 +386,12 @@ def run(ceph_cluster, **kw):
             log.error("Cluster cloud not reach active+clean state within 900")
         load_threshold = get_node_avg_load(primary_osd_host)
 
-        new_scrub_load_threshold_vale = load_threshold - (
-            load_threshold * decrease_parameter
+        new_scrub_load_threshold_vale = round(
+            load_threshold - (load_threshold * decrease_parameter), 3
         )
         msg_threshold = (
             f"Scenario 4.1:The new osd_scrub_load_threshold value will be"
-            f" set to-{new_scrub_load_threshold_vale}"
+            f" set to {new_scrub_load_threshold_vale}"
         )
         log.info(msg_threshold)
         assert mon_obj.set_config(
@@ -473,7 +473,7 @@ def run(ceph_cluster, **kw):
         )
         msg_threshold = (
             f" Scenario4.2:The new osd_scrub_load_threshold value will"
-            f" be set to -{new_scrub_load_threshold_vale}"
+            f" be set to {new_scrub_load_threshold_vale}"
         )
         log.info(msg_threshold)
         assert mon_obj.set_config(
