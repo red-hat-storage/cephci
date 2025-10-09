@@ -33,6 +33,7 @@ from ceph.rados.pool_workflows import PoolFunctions
 from utility.log import Log
 
 log = Log(__name__)
+STOPPED_OSDS = []
 
 
 def run(ceph_cluster, **kw):
@@ -87,8 +88,20 @@ def run(ceph_cluster, **kw):
         "print_histogram",
     ]
 
+    def pick_random_osd():
+        """
+        Method to choose an OSD from UP OSDs and stop it
+        Returns:
+            OSD ID
+        """
+        osd_list = rados_obj.get_osd_list(status="up")
+        osd_id = random.choice(osd_list)
+        rados_obj.change_osd_state(action="stop", target=osd_id)
+        STOPPED_OSDS.append(osd_id)
+        return osd_id
+
     def execute_ops(op):
-        if operation == "print_usage":
+        if op == "print_usage":
             # Execute ceph-kvstore-tool --help
             intro = (
                 f"\n ----------------------------------"
@@ -181,7 +194,7 @@ def run(ceph_cluster, **kw):
             assert f"({prefix}, {_key})  crc" in out
             assert f"({prefix}, {_key}) does not exist" not in out
 
-        if operation == "set_value":
+        if op == "set_value":
             # Use the ceph-kvstore-tool utility to set value of a key.
             # preserve the original value of key 'meta'
             # Use the ceph-kvstore-tool utility to get value of a key.
@@ -378,13 +391,13 @@ def run(ceph_cluster, **kw):
 
             # retrieving the size of each osd part of acting set for the pool
             acting_set = rados_obj.get_pg_acting_set(pool_name=_pool_name)
-            osd_sizes = {}
-            for osd_id in acting_set:
-                osd_df_stats = rados_obj.get_osd_df_stats(
-                    tree=False, filter_by="name", filter=f"osd.{osd_id}"
-                )
-                osd_sizes[osd_id] = osd_df_stats["nodes"][0]["kb"]
-            primary_osd_size = osd_sizes[acting_set[0]]
+            # osd_sizes = {}
+            # for osd_id in acting_set:
+            osd_df_stats = rados_obj.get_osd_df_stats(
+                tree=False, filter_by="name", filter=f"osd.{acting_set[0]}"
+            )
+            #   osd_sizes[osd_id] = osd_df_stats["nodes"][0]["kb"]
+            primary_osd_size = osd_df_stats["nodes"][0]["kb"]
 
             log.info(
                 "Write OMAP entries to the pool using librados, 200 objects with 5 omap entries each"
@@ -482,7 +495,6 @@ def run(ceph_cluster, **kw):
                 if osd_down:
                     down_osds = rados_obj.get_osd_list(status="down")
                     log.info("Down OSDs on the cluster: %s" % down_osds)
-                    # _osd_id = random.choice(down_osds)
                     break  # exit outer for-loop if even a single OSD is down
             else:
                 log.error("Could not generate ENOSPC on OSDs after 3 attempts")
@@ -519,10 +531,6 @@ def run(ceph_cluster, **kw):
                 "ceph-kvstore-tool read-only functionalities verified successfully"
             )
         else:
-            osd_list = rados_obj.get_osd_list(status="up")
-            log.info(f"List of OSDs: \n{osd_list}")
-            _osd_id = random.choice(osd_list)
-
             log.info("Create a data pool with default config")
             assert rados_obj.create_pool(pool_name="ckt-pool")
 
@@ -541,6 +549,7 @@ def run(ceph_cluster, **kw):
                 pool_name="ckt-pool", obj_start=0, obj_end=200, num_keys_obj=5
             )
 
+            _osd_id = pick_random_osd()
             for operation in all_ops:
                 log.info("Next operation will be performed on UP OSD %s" % _osd_id)
                 execute_ops(op=operation)
@@ -556,12 +565,10 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("\n\n\n*********** Execution of finally block starts ***********\n\n")
         # start stopped OSD
-        if (
-            "_osd_id" in globals()
-            or "_osd_id" in locals()
-            and not config.get("bluestore-enospc")
-        ):
-            rados_obj.change_osd_state(action="start", target=_osd_id)
+        if not config.get("bluestore-enospc"):
+            for osd_id in STOPPED_OSDS:
+                log.debug("Starting stopped OSD %s" % osd_id)
+                rados_obj.change_osd_state(action="start", target=osd_id)
 
         # reset nearfull, backfill-full and full-ratio to 100%
         # reset noout and norebalance flags

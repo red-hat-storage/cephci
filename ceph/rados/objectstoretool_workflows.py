@@ -84,6 +84,7 @@ class objectstoreToolWorkflows:
         timeout: int = 300,
         mount: bool = False,
         file_redirect: bool = False,
+        return_err: bool = False,
     ) -> str:
         """
         Runs ceph-objectstore-tool commands within OSD container
@@ -116,7 +117,7 @@ class objectstoreToolWorkflows:
         finally:
             if not self.nostart:
                 self.rados_obj.change_osd_state(action="start", target=osd_id)
-        return str(out)
+        return str(err) if return_err else str(out)
 
     def help(self, osd_id: int):
         """Module to run help command with ceph-objectstore-tool to display usage
@@ -476,29 +477,18 @@ class objectstoreToolWorkflows:
             _cmd = f"{_cmd} '{obj_name}'"
         return self.run_cot_command(cmd=_cmd, osd_id=osd_id)
 
-    def export(
-        self,
-        osd_id: int,
-        pgid: str = None,
-        obj_name: str = None,
-        file_redirect: bool = False,
-    ):
-        """Module to export content of input OSD
+    def export(self, osd_id: int, pgid: str, out_file: str):
+        """Module to export content of input PG in an OSD
         Args:
             osd_id: OSD ID for which cot will be executed
-            pgid: pg ID for which objs will be listed
-            obj_name: name of a specific object to be listed
-            file_redirect: flag to control redirecting stdout/stderr to file
+            pgid: pg ID for which data will be exported
+            out_file: file to save exported data
         Returns:
             Returns the output of
-            ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op export
+            ceph-objectstore-tool --data-path $PATH_TO_OSD --pgid $PG_ID --op export --file outfile
         """
-        # Extracting the content of OSD
-        _cmd = "--op export"
-        if pgid:
-            _cmd = f"{_cmd} --pgid {pgid}"
-        if obj_name:
-            _cmd = f"{_cmd} '{obj_name}'"
+        # Extracting the content of a PG in an OSD
+        _cmd = f"--op export --pgid {pgid} --file {out_file}"
         return self.run_cot_command(
-            cmd=_cmd, osd_id=osd_id, file_redirect=file_redirect
+            cmd=_cmd, osd_id=osd_id, mount=True, return_err=True
         )
