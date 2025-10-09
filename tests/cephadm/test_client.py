@@ -111,6 +111,10 @@ def add(cls, config: Dict) -> None:
                     "rhel-9-for-x86_64-appstream-rpms",
                     "rhel-9-for-x86_64-baseos-rpms",
                 ],
+                "10": {
+                    "rhel-10-for-x86_64-appstream-rpms",
+                    "rhel-10-for-x86_64-baseos-rpms",
+                },
             }
 
             # Collecting already enabled repos
