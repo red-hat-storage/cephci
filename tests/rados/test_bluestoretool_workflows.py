@@ -726,15 +726,21 @@ def run(ceph_cluster, **kw):
                 rhbuild.startswith("6") and dedicated_db
             ):
                 pattern_list = [
+                    "Settings",
                     "device size",
-                    "DEV/LEV",
                     "LOG",
                     "WAL",
                     "DB",
                     "SLOW",
                     "MAXIMUMS",
                     "TOTAL",
+                    "SIZE",
                 ]
+                (
+                    pattern_list.append("LEV/DEV")
+                    if rhbuild.split(".")[0] > "8"
+                    else pattern_list.append("DEV/LEV")
+                )
             for pattern in pattern_list:
                 assert (
                     pattern in out
