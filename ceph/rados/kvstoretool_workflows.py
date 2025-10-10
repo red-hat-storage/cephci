@@ -103,7 +103,8 @@ class kvstoreToolWorkflows:
         timeout: int = 300,
         mount: bool = False,
         exclude_stderr: bool = True,
-    ):
+        file_redirect: bool = False,
+    ) -> str:
         """
         Runs ceph-kvstore-tool commands within OSD container
         Args:
@@ -114,7 +115,7 @@ class kvstoreToolWorkflows:
             mount: boolean to control mounting of /tmp directory
             to cephadm container
             exclude_stderr: flag to control logging of STDERR
-
+            file_redirect: flag to control redirecting stdout/stderr to file
         Returns:
             output of respective ceph-kvstore-tool command in string format
         """
@@ -127,6 +128,8 @@ class kvstoreToolWorkflows:
         _cmd = f"{base_cmd} -- ceph-kvstore-tool {kv_store} /var/lib/ceph/osd/ceph-{osd_id} {cmd}"
         if exclude_stderr:
             _cmd += " 2> /dev/null"
+        if file_redirect:
+            _cmd = f"{_cmd} > /tmp/ckt_stdouts"
         try:
             if not self.nostop:
                 self.rados_obj.change_osd_state(action="stop", target=osd_id)
@@ -182,11 +185,12 @@ class kvstoreToolWorkflows:
             _cmd = f"{_cmd} {prefix}"
         return self.run_ckvt_command(cmd=_cmd, osd_id=osd_id)
 
-    def dump(self, osd_id: int, prefix: str = None):
+    def dump(self, osd_id: int, prefix: str = None, file_redirect: bool = False):
         """Module to dump all KV pairs
         Args:
             osd_id: OSD ID for which ckvt will be executed
             prefix: arg to filter entries
+            file_redirect: flag to control redirecting stdout/stderr to file
         Returns:
             Returns the output of
             ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> dump <prefix>
@@ -195,7 +199,9 @@ class kvstoreToolWorkflows:
         _cmd = "dump"
         if prefix:
             _cmd = f"{_cmd} {prefix}"
-        return self.run_ckvt_command(cmd=_cmd, osd_id=osd_id)
+        return self.run_ckvt_command(
+            cmd=_cmd, osd_id=osd_id, file_redirect=file_redirect
+        )
 
     def check_existence(self, osd_id: int, prefix: str, key: str = None):
         """Module to check if there is any KV pair stored with the URL encoded prefix.

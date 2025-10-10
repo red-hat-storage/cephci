@@ -124,7 +124,7 @@ def run(ceph_cluster, **kw):
             log.info("List of CRCs in OSD : ", _osd_id)
             log.info(crc_list)
 
-        if op == "dump" and False:
+        if op == "dump":
             # Use the ceph-kvstore-tool to dump KV pair
             # Execute ceph-kvstore-tool <rocksdb|bluestore-kv> <store path> dump <prefix>
             intro = (
@@ -133,7 +133,8 @@ def run(ceph_cluster, **kw):
                 f"\n --------------------"
             )
             log.info(intro)
-            out = kvstore_obj.dump(osd_id=_osd_id)
+            out = kvstore_obj.dump(osd_id=_osd_id, file_redirect=True)
+
             log.info(out)
 
         if op == "check_existence":
