@@ -1,0 +1,154 @@
+# Basic Ceph-NvmeoF sanity Test suite
+# cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_sanity.yaml
+# inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
+
+tests:
+# Set up the cluster
+  - test:
+      abort-on-fail: true
+      module: install_prereq.py
+      name: install ceph pre-requisites
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                mon-ip: node1
+                registry-url: registry.redhat.io
+                allow-fqdn-hostname: true
+                log-to-file: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+      desc: RHCS cluster deployment using cephadm
+      destroy-cluster: false
+      module: test_cephadm.py
+      name: deploy cluster
+
+#  Test cases to be executed
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        nodes:
+          - node8
+          - node9
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+      desc: Setup client on NVMEoF gateway
+      destroy-cluster: false
+      module: test_client.py
+      name: configure Ceph client for NVMe tests
+      polarion-id: CEPH-83573758
+
+  #  Configure Ceph NVMeoF gateway
+  #  Configure Initiators
+  #  Run IO on NVMe Targets
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create rbd
+          - config:
+              command: shell
+              args:
+                - ceph osd pool application enable rbd rbd
+          - config:
+              command: shell
+              args:
+                - ceph osd pool create nvmeof_pool
+          - config:
+              command: shell
+              args:
+                - ceph osd pool application enable nvmeof_pool nvmeof_pool
+          - config:
+              command: apply
+              service: nvmeof
+              args:
+                placement:
+                  label: nvmeof-gw
+              pos_args:
+                - nvmeof_pool
+                - group1
+      desc: NVMeoF Gateway deployment using cephadm
+      destroy-cluster: false
+      do-not-skip-tc: true
+      module: test_cephadm.py
+      name: deploy nvmeof gateway
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_node: node4
+        rbd_pool: rbd
+        gw_group: group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 4420
+            allow_host: "*"
+        reservation:
+          - register_args:
+              rrega: 0
+          - acquire_args:
+              racqa: 0
+              rtype: 1
+          - release_args:
+              rrela: 0
+              rtype: 1
+          - unregister_args:
+              rrega: 1
+        initiators:                             # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:cnode1
+            listener_port: 4420
+            node: node8
+          - subnqn: nqn.2016-06.io.spdk:cnode1
+            listener_port: 4420
+            node: node9
+      desc: E2E ns reservation test with all operations along with IO
+      destroy-cluster: false
+      module: test_ceph_nvmeof_gateway_ns_reservation.py
+      name: Basic E2E NS reservation test
+      polarion-id: CEPH-83626134
