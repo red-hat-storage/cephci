@@ -299,14 +299,18 @@ tests:
         qos_type: PerShare_PerClient
         operation: restart
   - test:
-      name: QoS enablement PerShare on export level with restart and QoS update
+      name: QoS enablement PerShare on export level with QoS update and restart
       module: test_nfs_qos_update_on_export_level_pershare.py
-      desc: Verify QoS PerShare on export level; ensure persistence across restart; update and validate QoS and validate that updated QoS values are in play
+      desc: >
+        Verify QoS PerShare on export level; update QoS values for PerShare,
+        restart cluster, and validate that updated QoS values persist and reflect in IO.
       polarion-id: CEPH-83615833
       abort-on-fail: false
       config:
         cephfs_volume: cephfs
         cluster_name: cephfs-nfs
+        operation: restart
+        qos_type: PerShare
         cluster_bw:
           - max_export_write_bw: 100MB
             max_export_read_bw: 100MB
@@ -322,7 +326,26 @@ tests:
             max_export_read_bw: 4MB
             max_client_write_bw: 4MB
             max_client_read_bw: 4MB
-        qos_type: PerShare
+
+  - test:
+      name: QoS enablement PerShare_PerClient test with update
+      module: test_nfs_qos_update_on_export_level_pershare_perclient.py
+      desc: Verify QoS PerShare_PerClient on export level; update QoS values and validate that updated QoS values for PerShare_PerClient are in play
+      polarion-id: CEPH-83615834
+      config:
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        cluster_bw:
+          max_export_combined_bw: 16MB
+          max_client_combined_bw: 16MB
+        export_bw:
+          max_export_combined_bw: 16MB
+          max_client_combined_bw: 16MB
+        updated_export_bw:
+          max_export_combined_bw: 10MB
+          max_client_combined_bw: 10MB
+        operation: restart
+        qos_type: PerShare_PerClient
   - test:
       name: deploy nfs ganesha with qos per share using spec file
       desc: Deploy nfs ganesha with qos per share using spec file and verify
