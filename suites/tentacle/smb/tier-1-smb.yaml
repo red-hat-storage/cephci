@@ -344,3 +344,57 @@ tests:
         smb_user_password: passwd
         smb_shares: [share1]
         path: "/"
+
+  - test:
+      name: Create a share using a seperate share name
+      desc: Validate the share creation using --share-name flag
+      module: smb_create_share_using_share_name.py
+      polarion-id: CEPH-83630715
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        smb_share_name: "x9fL2qvB7eT1mZpK4sW8dJxYcV0aR3nGhU6oMbEiTqNzL5wCyHdKvAjXsQbRtFg"
+        path: "/"
+
+  - test:
+      name: Create a share using a seperate share name
+      desc: Validate the share creation using --share-name flag
+      module: smb_create_share_using_share_name.py
+      polarion-id: CEPH-83630715
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        smb_share_name: "922fL2qvB7eT1mZpK4sW8dJxYcV0aR3nGhU6oMbEiTqNzL5wCyHdKvAjXsQbRtFg"
+        path: "/"
+
+  - test:
+      name: Create a share using a seperate share name
+      desc: Validate the share creation using --share-name flag
+      module: smb_create_share_using_share_name.py
+      polarion-id: CEPH-83630715
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        smb_share_name: "_922fL2qvB7eT1mZpK4sW8dJxYcV0aR3nGhU6oMbEiTqNzL5wCyHdKvAjXsQbRtF"
+        path: "/"
