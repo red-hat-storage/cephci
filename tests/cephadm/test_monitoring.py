@@ -17,8 +17,7 @@ MONITORING = {
 
 
 def run(ceph_cluster, **kw):
-    """
-    Ceph-admin module to manage ceph-iscsi service
+    """Ceph-admin module to manage ceph-iscsi service
 
     Args:
         ceph_cluster (ceph.ceph.Ceph): Ceph cluster object
@@ -27,8 +26,9 @@ def run(ceph_cluster, **kw):
     check ceph.ceph_admin.iscsi for test config
     """
     log.info("Running Ceph-admin Provisioning test")
+
     config = kw.get("config")
-    config["overrides"] = kw.get("test_data", {}).get("custom-config")
+    config["overrides"] = kw.get("test_data", {}).get("custom_config_dict")
 
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
@@ -37,7 +37,9 @@ def run(ceph_cluster, **kw):
     command = config.pop("command")
     service = config.pop("service")
     _monitoring = MONITORING[service]
+
     log.info("Executing %s %s service" % (service, command))
+
     monitoring = _monitoring(cluster=ceph_cluster, **config)
     try:
         method = fetch_method(monitoring, command)
@@ -45,4 +47,5 @@ def run(ceph_cluster, **kw):
     finally:
         # Get cluster state
         get_cluster_state(monitoring)
+
     return 0

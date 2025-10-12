@@ -575,9 +575,12 @@ def run(ceph_cluster, **kw):
                     fsid: <id>
     """
     config = kw.get("config")
+    config["overrides"] = kw.get("test_data", {}).get("custom_config_dict")
+
+    # FixMe: [psathyan] Need to understand why build is referenced.
+    #        Currently, this is not compatable with CephTestManifest.
     build = config.get("build", config.get("rhbuild"))
     ceph_cluster.rhcs_version = build
-    config["overrides"] = kw.get("test_data", {}).get("custom-config")
 
     # Manage Ceph using ceph-admin orchestration
     command = config.pop("command")
@@ -588,6 +591,7 @@ def run(ceph_cluster, **kw):
     if "shell" in command:
         instance.shell(args=config["args"])
         return 0
+
     try:
         method = fetch_method(instance, command)
         out, err = method(config)
@@ -600,4 +604,5 @@ def run(ceph_cluster, **kw):
     finally:
         log.debug("Gathering cluster state after running test_bootstrap")
         get_cluster_state(instance)
+
     return 0

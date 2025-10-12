@@ -6,8 +6,8 @@ Test module that verifies the Upgrade of Ceph Storage via the cephadm CLI.
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.rados_bench import RadosBench
 from ceph.utils import is_legacy_container_present
+from cephci.utils.build_info import CephTestManifest
 from utility.log import Log
-from utility.utils import fetch_image_manifest
 
 log = Log(__name__)
 
@@ -40,38 +40,45 @@ def run(ceph_cluster, **kwargs) -> int:
     Since image are part of main config, no need of any args here.
     """
     log.info("Upgrade Ceph cluster...")
+
     config = kwargs["config"]
-    config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
+    config["overrides"] = kwargs.get("test_data", {}).get("custom_config_dict")
     verify_image = bool(config.get("verify_cluster_health", False))
+
+    ctm: CephTestManifest = config["manifest"]
+
+    # Check if test requires overrides
     if config.get("args", {}).get("rhcs-version", None):
-        _rhcs_version = config.get("args").get("rhcs-version", None)
-        _rhcs_release = config.get("args").get("release", None)
-        rhbuild = config.get("rhbuild")
-        _platform = "-".join(rhbuild.split("-")[1:])
-        build_info, custom_images = fetch_image_manifest(
-            _rhcs_release, _rhcs_version, _platform
+
+        _ceph_version = config["args"]["rhcs-version"]
+        _target_release = config["args"].get("release", "released")
+        _platform = config["args"].get("platform", config["platform"])
+        ctm = CephTestManifest(
+            product=config["product"],
+            release=_ceph_version,
+            build_type=_target_release,
+            platform=_platform,
         )
 
-        _base_url = build_info.get("composes", {}).get(_platform)
-        _repository = build_info.get("repository", "")
-        _registry, _image_name = _repository.split(":")[0].split("/", 1)
-        _image_tag = _repository.split(":")[-1]
-        log.debug("Fetched build info from manifest:")
-        log.debug("  Base URL     : %s", _base_url)
-        log.debug("  Registry     : %s", _registry)
-        log.debug("  Image Name   : %s", _image_name)
-        log.debug("  Image Tag    : %s", _image_tag)
-        log.debug("  Custom Images: %s", custom_images)
+        _rhcs_version = config.get("args").get("rhcs-version", None)
+        _rhcs_release = config.get("args").get("release", None)
+
+        log.debug("Build details fetched from manifest:")
+        log.debug("  Base URL     : %s", ctm.repository)
+        log.debug("  Registry     : %s", ctm.ceph_image_dtr)
+        log.debug("  Image Name   : %s", ctm.ceph_image_path)
+        log.debug("  Image Tag    : %s", ctm.ceph_image_tag)
+        log.debug("  Custom Images: %s", ctm.custom_images)
         # The cluster object is configured so that the values are persistent till
         # an upgrade occurs. This enables us to execute the test in the right
         # context.
-        config["base_url"] = _base_url
-        config["container_image"] = f"{_registry}/{_image_name}:{_image_tag}"
-        config["ceph_docker_registry"] = _registry
-        config["ceph_docker_image"] = _image_name
-        config["ceph_docker_image_tag"] = _image_tag
-        ceph_cluster.rhcs_version = _rhcs_version or rhbuild
-        config["rhbuild"] = f"{_rhcs_version}-{_platform}"
+        config["base_url"] = ctm.repository
+        config["container_image"] = ctm.ceph_image
+        config["ceph_docker_registry"] = ctm.ceph_image_dtr
+        config["ceph_docker_image"] = ctm.ceph_image_path
+        config["ceph_docker_image_tag"] = ctm.ceph_image_tag
+        ceph_cluster.rhcs_version = ctm.release
+        config["rhbuild"] = f"{ctm.release}-{ctm.platform}"
         config["args"]["rhcs-version"] = _rhcs_version
         config["args"]["release"] = _rhcs_release
         config["args"]["image"] = config["container_image"]
@@ -96,6 +103,7 @@ def run(ceph_cluster, **kwargs) -> int:
         rm_repo_cmd = "find /etc/yum.repos.d/ -type f ! -name hashicorp.repo ! -name redhat.repo -delete"
         for node in ceph_cluster.get_nodes():
             node.exec_command(sudo=True, cmd=rm_repo_cmd)
+
         # Set repo to newer RPMs
         orch.set_tool_repo()
 
@@ -108,7 +116,7 @@ def run(ceph_cluster, **kwargs) -> int:
         # work around for upgrading from 5.1 and 5.2 to 5.1 and 5.2 latest
         installer = ceph_cluster.get_nodes(role="installer")[0]
         base_cmd = "sudo cephadm shell -- ceph"
-        ceph_version, err = installer.exec_command(cmd=f"{base_cmd} version")
+        ceph_version, _ = installer.exec_command(cmd=f"{base_cmd} version")
         if ceph_version.startswith("ceph version 16.2."):
             installer.exec_command(
                 cmd=f"{base_cmd} config set mgr mgr/cephadm/no_five_one_rgw true --force"
@@ -118,6 +126,7 @@ def run(ceph_cluster, **kwargs) -> int:
         # Start Upgrade
         if not config.get("args", {}).get("rhcs-version", None):
             config.update({"args": {"image": "latest"}})
+
         orch.start_upgrade(config)
 
         # Monitor upgrade status, till completion
@@ -144,6 +153,7 @@ def run(ceph_cluster, **kwargs) -> int:
                 rhbuild=config.get("rhbuild"), client=orch.installer
             ):
                 raise UpgradeFailure("Cluster is in HEALTH_ERR state")
+
         ceph_cluster.rhcs_version = config.get("rhbuild")
     except BaseException as be:  # noqa
         log.error(be, exc_info=True)

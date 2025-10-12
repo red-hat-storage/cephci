@@ -57,8 +57,11 @@
 #  resource-id: <deployed-instance-resource-id>
 #  location-constraint: <storage-class>
 
-# URI to be used for retrieving the RHCS build details
+# [Depricated] URI to be used for retrieving the RHCS build details
 # build-url: <URI to fileserver>
+
+# Datacenter to be used for retrieving build details
+# datacenter: any of ["eu-de", "redhat", "tucson"]
 
 # Web based location to retrieve root CA key and cert
 root-ca-location: <URL to base location of rootCA cert>
