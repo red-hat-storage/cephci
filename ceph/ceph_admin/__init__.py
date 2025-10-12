@@ -8,8 +8,9 @@ Over here, we create a glue between the CLI and CephCI to allow the QE to write 
 scenarios for verifying and validating cephadm.
 """
 
-from typing import Dict
+from typing import Dict, Optional
 
+from cephci.utils.build_info import CephTestManifest
 from cli.utilities.configure import setup_ibm_licence
 from utility.log import Log
 
@@ -32,8 +33,7 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
     direct_calls = ["bootstrap", "shell"]
 
     def __init__(self, cluster, **config):
-        """
-        Initialize Cephadm with ceph_cluster object
+        """Initialize Cephadm with ceph_cluster object
 
         Args:
             cluster (Ceph.Ceph): Ceph cluster object
@@ -50,8 +50,7 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
         self.installer = self.cluster.get_ceph_object("installer")
 
     def read_cephadm_gen_pub_key(self, ssh_key_path=None):
-        """
-        Read cephadm generated public key.
+        """Read cephadm generated public key.
 
         Arg:
             ssh_key_path ( Str ): custom ssh public key path
@@ -61,11 +60,11 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
         """
         path = ssh_key_path if ssh_key_path else "/etc/ceph/ceph.pub"
         ceph_pub_key, _ = self.installer.exec_command(sudo=True, cmd=f"cat {path}")
+
         return ceph_pub_key.strip()
 
     def distribute_cephadm_gen_pub_key(self, ssh_key_path=None, nodes=None):
-        """
-        Distribute cephadm generated public key to all nodes in the list.
+        """Distribute cephadm generated public key to all nodes in the list.
 
         Args:
             ssh_key_path (Str): custom SSH ceph public key path (default: None)
@@ -83,18 +82,19 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
 
         for each_node in nodes:
             each_node.exec_command(sudo=True, cmd="install -d -m 0700 /root/.ssh")
+
             keys_file = each_node.remote_file(
                 sudo=True, file_name="/root/.ssh/authorized_keys", file_mode="a"
             )
             keys_file.write(ceph_pub_key)
             keys_file.flush()
+
             each_node.exec_command(
                 sudo=True, cmd="chmod 0600 /root/.ssh/authorized_keys"
             )
 
     def set_tool_repo(self, repo=None):
-        """
-        Add the given repo on every node part of the cluster.
+        """Add the given repo on every node part of the cluster.
 
         Args:
             repo (Str): repository (default: None)
@@ -102,6 +102,7 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
         """
         cloud_type = self.config.get("cloud-type", "openstack")
         logger.info(f"cloud type is {cloud_type}")
+
         hotfix_repo = self.config.get("hotfix_repo")
         base_url = self.config["base_url"]
         if hotfix_repo:
@@ -140,54 +141,29 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
             for node in self.cluster.get_nodes():
                 node.exec_command(sudo=True, cmd=cmd)
 
-    def set_cdn_tool_repo(self, release=None):
-        """
-        Enable the cdn Tools repo on all ceph node.
+    def set_cdn_tool_repo(
+        self, release: Optional[str] = None, ctm: Optional[CephTestManifest] = None
+    ) -> None:
+        """Enable customer facing CDN.
 
         Args:
             release (Str): Ceph Release Version (default: None)
+            ctm (CephTestManifest): Details of the build.
         """
-        rh_cdn_repos = {
-            "8": {"9": "rhceph-8-tools-for-rhel-9-x86_64-rpms"},
-            "7": {"9": "rhceph-7-tools-for-rhel-9-x86_64-rpms"},
-            "6": {"9": "rhceph-6-tools-for-rhel-9-x86_64-rpms"},
-            "5": {
-                "8": "rhceph-5-tools-for-rhel-8-x86_64-rpms",
-                "9": "rhceph-5-tools-for-rhel-9-x86_64-rpms",
-            },
-        }
-        ibm_cdn_repos = {
-            "8": {
-                "9": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-8-rhel-9.repo"
-            },
-            "7": {
-                "9": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-7-rhel-9.repo"
-            },
-            "6": {
-                "9": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-6-rhel-9.repo"
-            },
-            "5": {
-                "9": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-5-rhel-9.repo",
-                "8": "https://public.dhe.ibm.com/ibmdl/export/pub/storage/ceph/ibm-storage-ceph-5-rhel-8.repo",
-            },
-        }
-
-        rh_build = self.config.get("rhbuild", "7.1-rhel-9")
-        _release = rh_build[0]
         if release:
-            _release = release[0]
-        os_major_version = rh_build.split("-")[-1]
-        ibm_build = self.config.get("ibm_build")
+            logger.warning("[Deprecated] Avoid setting release.")
 
-        if ibm_build:
-            repo = ibm_cdn_repos[_release][os_major_version]
-        else:
-            repo = rh_cdn_repos[_release][os_major_version]
+        if ctm is None:
+            ctm = self.config["manifest"]
+
+        cmd = f"subscription-manager repos --enable={ctm.repo_id}"
+        if ctm.product == "ibm":
+            # Pick the customer facing repositories as it would be
+            # CDN testing.
+            _repo = ctm.build_info["released"]["repositories"]["default"]
+            cmd = f"dnf config-manager --add-repo {_repo}"
 
         for node in self.cluster.get_nodes(ignore="client"):
-            cmd = f"subscription-manager repos --enable={repo}"
-            if ibm_build:
-                cmd = f"yum-config-manager --add-repo {repo}"
             node.exec_command(sudo=True, cmd=cmd)
 
     def setup_upstream_repository(self, repo_url=None):
@@ -237,7 +213,6 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
         Args:
           kwargs (Dict): Key/value pairs that needs to be provided to the installer
 
-
         Example::
 
             Supported keys:
@@ -248,7 +223,6 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
 
 
         :Note: At present, they are prefixed with -- hence use long options
-
         """
         cmd = "yum -y install cephadm"
         if kwargs.get("rpm_version", None):
@@ -261,21 +235,24 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
         if kwargs.get("upgrade", False):
             if kwargs.get("upgrade_client", True):
                 nodes = self.cluster.get_nodes()  # list of all nodes, includes clients
+
             for node in nodes:
                 if self.config.get("ibm_build"):
                     setup_ibm_licence(node, build_type=None)
+
                 node.exec_command(sudo=True, cmd="yum update metadata", check_ec=False)
                 upd_cmd = "yum update --nogpgcheck -y ceph*"
                 if kwargs.get("rpm_version", None):
                     upd_cmd = f"{upd_cmd}-{kwargs['rpm_version']}"
-                node.exec_command(sudo=True, cmd=upd_cmd)
 
+                node.exec_command(sudo=True, cmd=upd_cmd)
                 node.exec_command(cmd="rpm -qa | grep ceph")
 
         else:
             for node in nodes:
-                if self.config.get("ibm_build"):
+                if self.config["product"] == "ibm":
                     setup_ibm_licence(node, build_type=None)
+
                 node.exec_command(
                     sudo=True,
                     cmd=cmd,
@@ -285,9 +262,7 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
                 node.exec_command(cmd="rpm -qa | grep cephadm")
 
     def get_cluster_state(self, commands):
-        """
-        Display cluster state by executing commands provided
-        Just used for sanity.
+        """Retrieve the state of Ceph Cluster.
 
         Args:
             commands (List): list of commands
@@ -295,5 +270,6 @@ class CephAdmin(BootstrapMixin, ShellMixin, RegistryLoginMixin):
         for cmd in commands:
             out, err = self.shell(args=[cmd])
             logger.info(out)
+
             if err:
                 logger.error(err)

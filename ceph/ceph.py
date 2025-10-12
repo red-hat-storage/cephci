@@ -100,7 +100,9 @@ class Ceph(object):
         self.__rhcs_version = version
         luminous_demons = self.get_ceph_objects("mgr") + self.get_ceph_objects("nfs")
         for luminous_demon in luminous_demons:  # type: CephDemon
-            luminous_demon.is_active = False if self.rhcs_version < "3" else True
+            luminous_demon.is_active = (
+                False if self.rhcs_version < LooseVersion("3") else True
+            )
 
     def get_nodes(self, role=None, ignore=None):
         """
@@ -951,22 +953,28 @@ class Ceph(object):
         repo_file = ""
         for repo in repos:
             base_url = base_url.rstrip("/")
-            if "ibmc" in cloud_type:
-                repo_to_use = f"{base_url}/{repo}/"
-            else:
+            if cloud_type == "openstack":
                 repo_to_use = f"{base_url}/compose/{repo}/x86_64/os/"
+            else:
+                # The expecatation in other datacenters is Tools suffix is
+                # added by default. This is done for support of earlier
+                # versions of Ceph.
+                # ToDo -- we can deprecate it.
+                repo_to_use = f"{base_url}/{repo}/"
 
             logger.info(f"repo to use is {repo_to_use}")
             r = requests.get(repo_to_use, timeout=10, verify=False)
             logger.info("Checking %s", repo_to_use)
+
             if r.status_code == 200:
-                logger.info("Using %s", repo_to_use)
                 header = "[ceph-" + repo + "]" + "\n"
                 name = "name=ceph-" + repo + "\n"
                 baseurl = "baseurl=" + repo_to_use + "\n"
                 gpgcheck = "gpgcheck=0\n"
                 enabled = "enabled=1\n\n"
                 repo_file = repo_file + header + name + baseurl + gpgcheck + enabled
+            else:
+                logger.error("Unable to reach the given repository %s", base_url)
 
         return repo_file
 
