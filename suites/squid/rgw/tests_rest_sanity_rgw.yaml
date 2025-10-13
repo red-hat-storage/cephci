@@ -78,3 +78,5 @@ tests:
         args:
           rgw1:
             uid: user1
+            lifecycle: {"Rules": [{"Expiration": {"Date": "2028-1-1"}, "ID": "rule1", "Status": "Enabled"}]}
+            ratelimit: {"enabled": true, "max_read_ops": 10, "max_write_ops": 10, "max_read_bytes": 2048, "max_write_bytes": 2048}

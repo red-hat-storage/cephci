@@ -42,13 +42,24 @@ def sanity_rgw_workflow(config):
             continue
 
         uid = bucket_cfg.get("uid")
+        lifecycle = bucket_cfg.get("lifecycle")
+        ratelimit_config = bucket_cfg.get("ratelimit")
         if not uid:
             log.error(f"Missing 'uid' for bucket '{bucket_name}'")
             return 1
 
+        if not lifecycle:
+            log.error(f"Missing 'lifecycle' for bucket '{bucket_name}'")
+            return 1
+
         log.info(f"Step 2: Creating and verifying bucket '{bucket_name}'")
         rc = create_bucket_verify(
-            bucket=bucket_name, uid=uid, rest=_rest, rest_v1=_rest_v1
+            bucket=bucket_name,
+            uid=uid,
+            rest=_rest,
+            rest_v1=_rest_v1,
+            lifecycle=lifecycle,
+            ratelimit=ratelimit_config,
         )
         if rc != 0:
             log.error(
