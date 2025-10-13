@@ -78,3 +78,4 @@ tests:
         args:
           rgw1:
             uid: user1
+            lifecycle: '{"Rules": [{"Expiration": {"Date": "2028-1-1",}, "ID": "rule1", "Status": "Enabled",},]}'

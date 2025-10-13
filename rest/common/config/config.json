@@ -12,6 +12,8 @@
         "rgw": {
             "LIST_BUCKET": "/api/rgw/bucket",
             "CREATE_BUCKET": "/api/rgw/bucket",
+            "GET_BUCKET": "/api/rgw/bucket/{bucket}",
+            "DELETE_BUCKET": "/api/rgw/bucket/{bucket}",
             "LIST_USER": "/api/rgw/user",
             "CREATE_USER": "/api/rgw/user",
             "DELETE_BUCKET_ENCRYPTION": "/api/rgw/bucket/deleteEncryption",
