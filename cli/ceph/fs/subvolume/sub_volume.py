@@ -21,7 +21,7 @@ class SubVolume(Cli):
 
     def __init__(self, nodes, base_cmd):
         super(SubVolume, self).__init__(nodes)
-        self.base_cmd = f"{base_cmd} subvolume"
+        self.base_cmd = "{} subvolume".format(base_cmd)
         self.earmark = Earmark(nodes, self.base_cmd)
         self.charmap = Charmap(nodes, self.base_cmd)
 
@@ -33,7 +33,9 @@ class SubVolume(Cli):
             subvolume (str): Name of the subvol
             kw: Key/value pairs of configuration information to be used in the test.
         """
-        cmd = f"{self.base_cmd} create {volume} {subvolume} {build_cmd_from_args(**kwargs)}"
+        cmd = "{} create {} {} {}".format(
+            self.base_cmd, volume, subvolume, build_cmd_from_args(**kwargs)
+        )
         try:
             out = self.execute(sudo=True, cmd=cmd, check_ec=True)
         except Exception as e:
@@ -45,7 +47,7 @@ class SubVolume(Cli):
             return out[0].strip()
         return out
 
-    def rm(self, volume, subvolume, group=None, force=False):
+    def rm(self, volume, subvolume, group=None, force=False, **kwargs):
         """
         Removes ceph subvol
         Args:
@@ -59,6 +61,8 @@ class SubVolume(Cli):
             cmd += f" {group}"
         if force:
             cmd += " --force"
+
+        cmd += f" {build_cmd_from_args(**kwargs)}"
         try:
             out = self.execute(sudo=True, cmd=cmd, check_ec=True)
         except Exception as e:
@@ -69,7 +73,7 @@ class SubVolume(Cli):
             return out[0].strip()
         return out
 
-    def ls(self, volume, group=None):
+    def ls(self, volume, group=None, **kwargs):
         """
         List subvol groups
         Args:
@@ -79,6 +83,8 @@ class SubVolume(Cli):
         cmd = f"{self.base_cmd} ls {volume}"
         if group:
             cmd += f" {group}"
+
+        cmd += f" {build_cmd_from_args(**kwargs)}"
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
