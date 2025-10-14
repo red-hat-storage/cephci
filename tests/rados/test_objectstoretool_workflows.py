@@ -51,7 +51,9 @@ def run(ceph_cluster, **kw):
     bench_obj_size_kb = 4096
 
     def get_bench_obj(_osd_id, cot_obj=objectstore_obj):
-        out = cot_obj.list_objects(osd_id=_osd_id)
+        cot_obj.list_objects(osd_id=_osd_id, file_redirect=True)
+        osd_host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=_osd_id)
+        out, _ = osd_host.exec_command(sudo=True, cmd="cat /tmp/cot_stdout")
         obj_list = [json.loads(x) for x in out.split()]
         found = False
         for obj in obj_list:
@@ -66,7 +68,9 @@ def run(ceph_cluster, **kw):
             )
 
     def get_omap_obj(_osd_id, cot_obj=objectstore_obj):
-        out = cot_obj.list_objects(osd_id=_osd_id)
+        cot_obj.list_objects(osd_id=_osd_id, file_redirect=True)
+        osd_host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=_osd_id)
+        out, _ = osd_host.exec_command(sudo=True, cmd="cat /tmp/cot_stdout")
         obj_list = [json.loads(x) for x in out.split()]
         # find an object with OMAP data
         found = False
@@ -270,9 +274,15 @@ def run(ceph_cluster, **kw):
                         f"\n Identify all objects within an OSD: {_osd_id}"
                         f"\n ------------------------------------------"
                     )
-                    out = objectstore_enospc_obj.list_objects(osd_id=_osd_id)
+                    objectstore_enospc_obj.list_objects(
+                        osd_id=_osd_id, file_redirect=True
+                    )
+                    osd_host = rados_obj.fetch_host_node(
+                        daemon_type="osd", daemon_id=_osd_id
+                    )
+                    out, _ = osd_host.exec_command(sudo=True, cmd="cat /tmp/cot_stdout")
                     obj_list = [json.loads(x) for x in out.split()]
-                    log.info(f"List of objects in OSD {_osd_id}: \n\n {obj_list}")
+                    log.info(f"Last 50 objects in OSD {_osd_id}: \n\n {obj_list[-50:]}")
                     assert 'oid":"benchmark_data_' in out
 
                 if operation == "list_pgs":
@@ -444,25 +454,29 @@ def run(ceph_cluster, **kw):
                     log.info("Object dump extents: \n %s" % obj_dump_extents)
 
                 if operation == "export":
-                    log.warning(
-                        "Automation framework is currently incapable of handling "
-                        "the o/p of COT export, skipping execution"
+                    # log.warning(
+                    #     "Automation framework is currently incapable of handling "
+                    #     "the o/p of COT export, skipping execution"
+                    # )
+                    # log.warning(
+                    #     "Tracker: https://issues.redhat.com/browse/RHCEPHQE-20426"
+                    # )
+                    # export the content of an object from an OSD
+                    log.info(
+                        f"\n ------------------------------------------------------"
+                        f"\n Export the content of an object in OSD {_osd_id}"
+                        f"\n ------------------------------------------------------"
                     )
-                    log.warning(
-                        "Tracker: https://issues.redhat.com/browse/RHCEPHQE-20426"
+                    # bench_pg, bench_obj = get_bench_obj(_osd_id, cot_obj=objectstore_enospc_obj)
+                    objectstore_enospc_obj.export(
+                        osd_id=_osd_id,
+                        pgid=bench_pg,
+                        obj_name=bench_obj,
+                        file_redirect=True,
                     )
-                    if False:
-                        # export the content of an object from an OSD
-                        log.info(
-                            f"\n ------------------------------------------------------"
-                            f"\n Export the content of an object in OSD {_osd_id}"
-                            f"\n ------------------------------------------------------"
-                        )
-                        # pg_id, obj = get_bench_obj(_osd_id, cot_obj=objectstore_enospc_obj)
-                        out = objectstore_enospc_obj.export(
-                            osd_id=_osd_id, pgid=bench_pg, obj_name=bench_obj
-                        )
-                        log.info(out)
+                    out, _ = osd_host.exec_command(sudo=True, cmd="cat /tmp/cot_stdout")
+                    log.info(out)
+
                 if operation == "meta-list":
                     # get the meta-list of an object from an OSD
                     log.info(
@@ -567,9 +581,13 @@ def run(ceph_cluster, **kw):
                         f"\n Identify all objects within an OSD: {osd_id}"
                         f"\n ------------------------------------------"
                     )
-                    out = objectstore_obj.list_objects(osd_id=osd_id)
+                    objectstore_obj.list_objects(osd_id=osd_id, file_redirect=True)
+                    osd_host = rados_obj.fetch_host_node(
+                        daemon_type="osd", daemon_id=osd_id
+                    )
+                    out, _ = osd_host.exec_command(sudo=True, cmd="cat /tmp/cot_stdout")
                     obj_list = [json.loads(x) for x in out.split()]
-                    log.info(f"List of objects in OSD {osd_id}: \n\n {obj_list}")
+                    log.info(f"Last 50 objects in OSD {osd_id}: \n\n {obj_list[-50:]}")
                     assert 'oid":"benchmark_data_' in out
 
                     # Execute ceph-objectstore-tool --data-path <osd_path> --op list $OBJECT_ID
