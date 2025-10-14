@@ -189,7 +189,7 @@ tests:
         debug_enable: False
         delete_pool:
           - ecpool
-      comments: Intermittent active bug 2277111
+      comments: Intermittent active bug 2277111, 2299659
 
   - test:
       name: Inconsistent objects in replicated pool functionality check

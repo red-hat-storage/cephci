@@ -135,7 +135,7 @@ tests:
       name: Upgrade cluster to latest 7.x ceph version
       desc: Upgrade cluster to latest version
       module: test_upgrade_warn.py
-      polarion-id: CEPH-83574934,CEPH-83573790
+      polarion-id: CEPH-83574934
       abort-on-fail: true
       config:
         command: start
