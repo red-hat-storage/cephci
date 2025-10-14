@@ -1,4 +1,5 @@
 import json
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
 import yaml
@@ -296,7 +297,9 @@ def get_gklm_ca_certificate(
         Exception: If any step fails, logs the error and re-raises.
     """
     log.info(
-        "Locating target SSL server certificate (alias: self-signed-cert1, usage: SSLSERVER) in GKLM"
+        "Locating target SSL server certificate (alias: {0}, usage: SSLSERVER) in GKLM".format(
+            gkml_servering_cert_name
+        )
     )
     certs = gklm_rest_client.certificates.list_certificates()
     try:
@@ -941,5 +944,55 @@ def perform_io_operations_and_validate_fuse(
             log.info(f"Completed IO operations for cluster: {cluster_name}")
     else:
         log.info("Running IO operations on single cluster")
-        _process_single_cluster(client_export_mount_dict, nfs_name, is_multicluster)
+        _process_single_cluster(
+            mount_dict=client_export_mount_dict,
+            nfs_name=nfs_name,
+            is_multicluster=is_multicluster,
+        )
         log.info("Completed all IO operations")
+
+
+def create_in_file_certs(certs_dict, node):
+    """
+    Create a temporary YAML file containing certificate specifications and return its path.
+    This function serializes the provided certificate documents into YAML (using
+    yaml.dump_all with sort_keys=False and an indent of 2), writes the encoded bytes
+    to a temporary file created with tempfile.NamedTemporaryFile, and returns the
+    temporary file path. If installer_node is a sequence, the first element is
+    used. The function opens a remote file handle via installer_node.remote_file(...)
+    with sudo=True and file_mode="wb" and writes the YAML bytes to that handle,
+    flushing the file before returning.
+    Args:
+        certs_dict: dict of certs
+        installer_node: installer
+    Returns:
+        str: The filesystem path of the created temporary YAML file (tempfile.NamedTemporaryFile.name).
+    Side effects:
+        - Creates a temporary file on the installer filesystem.
+        - Uses installer_node.remote_file to obtain a writable file handle (sudo=True)
+          and writes the YAML-encoded certificate data to that handle.
+        - Logs the path of the created temporary certificate spec file.
+    Raises:
+        Any exception raised by tempfile.NamedTemporaryFile, yaml.dump_all, the
+        installer_node.remote_file call, or the file write/flush operations may be
+        propagated to the caller.
+    Notes:
+        - The temporary file remains until explicitly removed or closed; callers
+          should clean up the file when it is no longer needed.
+        - The function encodes YAML output as UTF-8 before writing.
+    """
+    temp_file = tempfile.NamedTemporaryFile(suffix=".yaml", delete=False)
+
+    # Handle case where installer_node is a list
+    if isinstance(node, list):
+        node = node[0]
+
+    spec_file = node.remote_file(sudo=True, file_name=temp_file.name, file_mode="wb")
+    spec = yaml.dump(certs_dict, sort_keys=False, indent=2).encode("utf-8")
+    spec_file.write(spec)
+    spec_file.flush()
+    log.info(
+        f"Created temporary certificate spec file at {temp_file.name} in {node.hostname}"
+    )
+
+    return temp_file.name
