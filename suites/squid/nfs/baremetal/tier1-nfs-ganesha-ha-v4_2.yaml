@@ -218,3 +218,40 @@ tests:
         servers: 2
         ha: true
         vip: 10.8.130.231/21
+
+  - test:
+      name: Test Encryption with the correct keys ha
+      module: byok.test_byok_nfs_ha_failover_encryption.py
+      desc: BYOK single-cluster with FUSE encryption validation
+      polarion-id: CEPH-83630277
+      abort-on-fail: true
+      config:
+        nfs_version: 4.2
+        total_export_num: 2
+        servers: 2
+        clients: 1
+        ha: true
+        vip: 10.8.128.200
+        active_standby: true
+        nfs_mount: /mnt/nfs_byok
+        nfs_export: /export_byok
+        nfs_instance_name: nfs_byok
+
+  - test:
+      name: Test byok with correct and incorrect keys
+      module: byok.test_byok_nfs_ha_failover_encryption.py
+      desc: BYOK single-cluster with correct and incorrect keys
+      polarion-id: CEPH-83630827
+      abort-on-fail: true
+      config:
+        nfs_version: 4.2
+        total_export_num: 1
+        servers: 2
+        clients: 1
+        ha: true
+        vip: 10.8.128.200
+        active_standby: true
+        nfs_mount: /mnt/nfs_byok_neg
+        nfs_export: /export_byok_neg
+        nfs_instance_name: nfs_byok_neg
+        operation: correct_incorrect_key
