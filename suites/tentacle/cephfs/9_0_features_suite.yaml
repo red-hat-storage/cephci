@@ -128,3 +128,15 @@ tests:
       polarion-id: CEPH-83621832
       desc: Test fs subvolume metrics
       abort-on-fail: false
+
+  ######################################################################################################################
+  # Feature Enhancement
+  # Cephfs Case insensitivity - Subvolume
+  # BZ - 2355303
+  ######################################################################################################################
+  - test:
+      name: test cephfs attributes - subvolumegroup
+      module: cephfs_case_sensitivity.case_sensitivity_subvolumegroup.py
+      polarion-id: CEPH-83630825
+      desc: Validate the subvolumegroup using flags for case sensitivity feature
+      abort-on-fail: false

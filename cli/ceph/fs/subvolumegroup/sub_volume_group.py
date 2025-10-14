@@ -2,7 +2,11 @@ import json
 
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
-from tests.cephfs.exceptions import SubvolumeGroupDeleteError, SubvolumeGroupGetError
+from tests.cephfs.exceptions import (
+    SubvolumeGroupCreateError,
+    SubvolumeGroupDeleteError,
+    SubvolumeGroupGetError,
+)
 from utility.log import Log
 
 from .charmap import Charmap
@@ -27,7 +31,16 @@ class SubVolumeGroup(Cli):
             kw: Key/value pairs of configuration information to be used in the test.
         """
         cmd = f"{self.base_cmd} create {volume} {group} {build_cmd_from_args(**kwargs)}"
-        out = self.execute(sudo=True, cmd=cmd)
+
+        try:
+            out = self.execute(sudo=True, cmd=cmd, check_ec=True)
+        except Exception as e:
+            raise SubvolumeGroupCreateError(
+                "Failed to build command to create subvolumegroup {}: {}".format(
+                    group, str(e)
+                )
+            )
+
         if isinstance(out, tuple):
             return out[0].strip()
         return out
@@ -97,6 +110,9 @@ class SubVolumeGroup(Cli):
             raise SubvolumeGroupGetError(
                 "Failed to get subvolumegroup info for {}: {}".format(group, str(e))
             )
+        if isinstance(out, tuple):
+            out = out[0]
+        out = out.strip()
 
         try:
             return json.loads(out)
