@@ -199,12 +199,12 @@ tests:
         script-name: test_swift_bulk_upload.py
         config-file-name: test_swift_bulk_upload.yaml
 
-  # - test:
-  #     name: test deletion of default realm clears realm id in default info
-  #     desc: test deletion of default realm clears realm id in default info
-  #     polarion-id: CEPH-83623614
-  #     comments: known issue BZ-2268063 targetted to 9.0
-  #     module: sanity_rgw.py
-  #     config:
-  #       script-name: test_check_sharding_enabled.py
-  #       config-file-name: test_realm_deletion.yaml
+  - test:
+      name: test deletion of default realm clears realm id in default info
+      desc: test deletion of default realm clears realm id in default info
+      polarion-id: CEPH-83623614
+      comments: known issue BZ-2404076 targetted to 7.1z9
+      module: sanity_rgw.py
+      config:
+        script-name: test_check_sharding_enabled.py
+        config-file-name: test_realm_deletion.yaml
