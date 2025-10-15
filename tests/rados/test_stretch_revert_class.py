@@ -3,9 +3,13 @@ from collections import namedtuple
 
 from ceph.ceph import CephNode
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.monitor_workflows import MonitorWorkflows
+from tests.rados.monitor_configurations import MonElectionStrategies
+from tests.rados.test_election_strategies import check_mon_status
 from tests.rados.test_stretch_site_down import get_stretch_site_hosts
 from tests.rados.test_stretch_site_reboot import get_host_obj_from_hostname
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -35,6 +39,9 @@ class StretchMode:
         self.pool_obj = kwargs.get("pool_obj")
         self.custom_crush_rule = {}
         self.stretch_bucket = kwargs.get("stretch_bucket", "datacenter")
+        self.mon_election_obj = kwargs.get(
+            "mon_election_obj", MonElectionStrategies(self.rados_obj)
+        )
 
         # parameters to be populated by segregate_hosts_based_on_stretch_bucket()
         self.site_1_hosts = None
@@ -45,6 +52,12 @@ class StretchMode:
         self.segregate_hosts_based_on_stretch_bucket()
 
         self.client_node = kwargs.get("client_node", None)
+
+        self.site_1_mon_hosts = list()
+        self.site_2_mon_hosts = list()
+        self.host_labels_map = dict()
+        mon_obj: MonitorWorkflows = kwargs.get("mon_obj")
+        self.segregate_mon_hosts_based_on_stretch_bucket(mon_obj=mon_obj)
 
     def get_tiebreaker_mon(self):
         """
@@ -240,6 +253,60 @@ class StretchMode:
             )
             return False
         return True
+
+    @retry(Exception, tries=4, delay=600, backoff=1)
+    def wait_till_stretch_mode_status(self, degraded=False):
+        """
+        Method to check if stretch mode is degraded stretch mode or not.
+        Retuns:
+
+        """
+        stretch_details = self.rados_obj.get_stretch_mode_dump()
+        if degraded and not stretch_details["degraded_stretch_mode"]:
+            err_msg = (
+                f"Stretch Cluster is not marked as degraded : {stretch_details}"
+                f"Waiting for stretch mode to be degraded state"
+            )
+            log.error(err_msg)
+            raise Exception(err_msg)
+        elif not degraded and stretch_details["degraded_stretch_mode"]:
+            err_msg = (
+                f"Stretch Cluster is still in healthy state : {stretch_details}"
+                f"Waiting for stretch mode to be health state"
+            )
+            log.error(err_msg)
+            raise Exception(err_msg)
+
+    def segregate_mon_hosts_based_on_stretch_bucket(self, mon_obj: MonitorWorkflows):
+        for host in self.site_1_hosts + self.site_2_hosts + self.tiebreaker_hosts:
+            self.host_labels_map[host] = mon_obj.get_host_labels(host=host)
+        log_msg = f"Host labels are {self.host_labels_map}"
+        log.info(log_msg)
+        for host in self.host_labels_map:
+            if "mon" in self.host_labels_map[host] and host in self.site_1_hosts:
+                self.site_1_mon_hosts.append(host)
+            elif "mon" in self.host_labels_map[host] and host in self.site_2_hosts:
+                self.site_2_mon_hosts.append(host)
+        log_msg = (
+            f"Site 1 Mons -> {self.site_1_mon_hosts}"
+            f"Site 2 Mons -> {self.site_2_mon_hosts}"
+        )
+        log.info(log_msg)
+
+    @retry(
+        Exception,
+        tries=5,
+        delay=10,
+        backoff=1,
+    )
+    def check_mon_in_running_state(self):
+        log.info("checking if all mons are in 'running' state")
+        if (
+            check_mon_status(rados_obj=self.rados_obj, mon_obj=self.mon_election_obj)
+            is False
+        ):
+            raise Exception("All mons are not in 'running' state")
+        log.info("all mons daemons are in 'running' state")
 
 
 class RevertStretchModeFunctionalities(StretchMode):
