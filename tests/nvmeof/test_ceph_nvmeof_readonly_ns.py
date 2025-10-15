@@ -228,8 +228,9 @@ def test_ceph_83624617(ceph_cluster, config):
     LOG.info("Perform FIO read on namespaces")
     execute_io(config, ha, ceph_cluster, ns_data, io_type="read")
 
-    # Convert namespaces into readonly
-    # To convert namespaces into readonly, we have to delete namespaces and add with --readonly option
+    # Adding read-only namespaces on existing rbd images
+    # To add namespaces into readonly mode, we have to delete namespaces
+    # and add existing images with --readonly option
     LOG.info("Delete the namespaces for adding same images as read-only namespaces")
     delete_namespaces(nvmegwcli, ns_data)
 
@@ -290,7 +291,6 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
 
     try:
-        # NVMe alert test case to run
         if config.get("test_case"):
             test_case_run = testcases[config["test_case"]]
             config.update({"rbd_obj": rbd_obj})
