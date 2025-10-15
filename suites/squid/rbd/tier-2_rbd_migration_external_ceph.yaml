@@ -325,3 +325,32 @@ tests:
       module: test_rbd_migration_clone_encryption.py
       name: Live migration of parent image with LUKS1 and child image with LUKS2
       polarion-id: CEPH-83598689
+
+  - test:
+      name: >
+        Live migration of sparse import with an NBD
+        source of QCOW data format
+      desc: >
+        live migration of images with external data source as qcow data format
+        from one ceph cluster to another ceph cluster with an NBD source.
+      module: test_rbd_migration_qcow_nbd.py
+      clusters:
+        ceph-rbd1:
+          config:
+            rep_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+            ec_pool_config:
+              num_pools: 1
+              num_images: 1
+              size: 4G
+              create_pool_parallely: true
+              create_image_parallely: true
+              test_ops_parallely: true
+              io_size: 1G
+      polarion-id: CEPH-83598692
