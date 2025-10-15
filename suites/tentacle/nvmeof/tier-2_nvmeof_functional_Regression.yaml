@@ -324,3 +324,39 @@ tests:
       name: Validate Host accessibility to NVMe namespaces
       polarion-id: CEPH-83575455
 
+  - test:
+      abort-on-fail: true
+      config:
+        rbd_pool: pool1
+        gw_group: gw_group1
+        install: true                         # Run SPDK with all pre-requisites
+        test_case: CEPH-83624617
+        cleanup:
+          - pool
+          - gateway
+          - initiators
+        gw_nodes:
+          - node2
+          - node6
+        subsystems:                             # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            listener_port: 4420
+            listeners:
+              - node2
+              - node6
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            listener_port: 4420
+            listeners:
+              - node2
+              - node6
+            allow_host: "*"
+        initiators:                             # Configure Initiators with all pre-req
+          - nqn: connect-all
+            listener_port: 4420
+            node: node10
+      desc: CEPH-83624617 - Test E2E read only namespace operations
+      destroy-cluster: false
+      module: test_ceph_nvmeof_readonly_ns.py
+      name: Test E2E nvmeof namespace resize
+      polarion-id: CEPH-83624617
