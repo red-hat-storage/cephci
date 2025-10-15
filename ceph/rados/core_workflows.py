@@ -1473,7 +1473,7 @@ class RadosOrchestrator:
         """
         pool_name = kwargs.get("pool_name")
         set_osd_release = kwargs.get("set_osd_release", True)
-        set_min_client = kwargs.get("set_min_client", True)
+        # set_min_client = kwargs.get("set_min_client", True)
         set_overwrites = kwargs.get("set_overwrites", True)
 
         # 1. Check Ceph version (must be tentacle/>=9)
@@ -1483,7 +1483,7 @@ class RadosOrchestrator:
 
         cluster_dump = self.run_ceph_command(cmd="ceph osd dump")
         osd_release = cluster_dump.get("require_osd_release")
-        client_release = cluster_dump.get("min_compat_client")
+        # client_release = cluster_dump.get("min_compat_client")
 
         # 2. Ensure OSD release correct
         if osd_release != "tentacle":
@@ -1494,13 +1494,14 @@ class RadosOrchestrator:
                 log.warning("OSD release is %s, not tentacle", osd_release)
 
         # 3. Ensure min compat client correct
-        if client_release != "tentacle":
-            if set_min_client:
-                config_cmd = "ceph osd set-require-min-compat-client tentacle --yes-i-really-mean-it"
-                self.client.exec_command(cmd=config_cmd, sudo=True)
-                log.info("Set min_compat_client to tentacle")
-            else:
-                log.warning("min_compat_client is %s, not tentacle", client_release)
+        # Required only for direct reads. This feature is missing from 9.0.
+        # if client_release != "tentacle":
+        #     if set_min_client:
+        #         config_cmd = "ceph osd set-require-min-compat-client tentacle --yes-i-really-mean-it"
+        #         self.client.exec_command(cmd=config_cmd, sudo=True)
+        #         log.info("Set min_compat_client to tentacle")
+        #     else:
+        #         log.warning("min_compat_client is %s, not tentacle", client_release)
 
         # 4. Ensure EC overwrites
         ec_overwrites = self.get_pool_property(
