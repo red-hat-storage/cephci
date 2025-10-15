@@ -116,4 +116,6 @@ def run(ceph_cluster, **kw):
             windows_client.exec_command(cmd=cmd)
             cmd = f"umount {window_nfs_mount}"
             windows_client.exec_command(cmd=cmd)
-        cleanup_cluster(linux_clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(
+            linux_clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=servers
+        )

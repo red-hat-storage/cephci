@@ -328,4 +328,6 @@ def run(ceph_cluster, **kw):
     finally:
         if operation == "after_upgrade":
             # Cleanup NFS Cluster
-            cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+            cleanup_cluster(
+                clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
+            )

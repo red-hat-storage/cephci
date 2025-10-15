@@ -170,5 +170,5 @@ def run(ceph_cluster, **kw):
                     )
                 log.info("Removing nfs-ganesha mount dir on client:")
                 client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_mounting_dir}")
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         log.info("Cleaning up successful")

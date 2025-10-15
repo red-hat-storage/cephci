@@ -131,5 +131,5 @@ def run(ceph_cluster, **kw):
             log.info("Removing nfs-ganesha client addr dir on client:")
             client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_client_mount}")
             Ceph(client).nfs.export.delete(nfs_name, nfs_export_client)
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=servers)
         log.info("Cleaning up successfull")

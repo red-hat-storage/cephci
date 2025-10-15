@@ -181,5 +181,5 @@ def run(ceph_cluster, **kw):
         Ceph(clients[0]).nfs.export.delete(nfs_name, nfs_export_client)
 
         # Cleaning up the remaining export and deleting the nfs cluster
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=servers)
         log.info("Cleaning up successfull")
