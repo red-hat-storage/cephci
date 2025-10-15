@@ -1,0 +1,328 @@
+# Suite to verify EC Partial Write Optimization (Fast EC Feature)
+# This suite tests erasure coded pools with allow_ec_optimizations enabled
+# to verify partial write optimization reduces write amplification
+#
+# Prerequisites: Run with conf: 4-node-ec-cluster-1-client.yaml
+# Minimum requirements: 4 OSD nodes + 1 client node
+
+tests:
+  - test:
+      name: setup install pre-requisistes
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+                log-to-file: true
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+          # Adding below WA to set bulk flag to false until bug fix : 2308623
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - "ceph osd pool set cephfs.cephfs.data bulk false"
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id:  CEPH-83573758
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1                      # client Id (<type>.<Id>)
+        node: node6                     # client node
+        install_packages:
+          - ceph-common
+          - rbd-nbd
+        copy_admin_keyring: true          # Copy admin keyring to node
+        caps:                             # authorize client capabilities
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  - test:
+      name: Set configs for 4 node cluster
+      desc: Set configs for 4 node cluster
+      module: test_cephadm.py
+      config:
+        steps:
+          - config:
+              command: shell
+              args:
+                - ceph
+                - config
+                - set
+                - mon
+                - mon_osd_down_out_subtree_limit
+                - host
+
+  # Test 1: ISA Plugin - 4KB chunk size (Stripe width = 8KB)
+  - test:
+      name: EC Partial Write Optimization - ISA 4KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_4k
+        metadata_pool_name: test_ec_meta_isa_4k
+        image_name: test_ec_image_isa_4k
+        image_size: 1G
+        ec_k: 2
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        chunk_size: 4096  # 4KB chunks, stripe width = 8KB
+      desc: Test EC optimization with ISA plugin, 4KB chunks.
+
+  # Test 2: ISA Plugin - 16KB chunk size (Stripe width = 32KB)
+  - test:
+      name: EC Partial Write Optimization - ISA 16KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_16k
+        metadata_pool_name: test_ec_meta_isa_16k
+        image_name: test_ec_image_isa_16k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        chunk_size: 16384  # 16KB chunks, stripe width = 32KB
+      desc: Test EC optimization with ISA plugin, 16KB chunks.
+
+  # Test 3: ISA Plugin - 64KB chunk size (Stripe width = 128KB)
+  - test:
+      name: EC Partial Write Optimization - ISA 64KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_64k
+        metadata_pool_name: test_ec_meta_isa_64k
+        image_name: test_ec_image_isa_64k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        chunk_size: 65536  # 64KB chunks, stripe width = 128KB
+      desc: Test EC optimization with ISA plugin, 64KB chunks.
+
+  # Test 4: ISA Plugin - 128KB chunk size (Stripe width = 256KB)
+  - test:
+      name: EC Partial Write Optimization - ISA 128KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83590734
+      config:
+        ec_pool_name: test_ec_isa_128k
+        metadata_pool_name: test_ec_meta_isa_128k
+        image_name: test_ec_image_isa_128k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        chunk_size: 131072  # 128KB chunks, stripe width = 256KB
+      desc: Test EC optimization with ISA plugin, 128KB chunks.
+
+  # Test 5: Jerasure Plugin - 4KB chunk size (Stripe width = 8KB)
+  - test:
+      name: EC Partial Write Optimization - Jerasure 4KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_jerasure_4k
+        metadata_pool_name: test_ec_meta_jerasure_4k
+        image_name: test_ec_image_jerasure_4k
+        image_size: 1G
+        ec_k: 2
+        ec_m: 2
+        plugin: jerasure
+        technique: reed_sol_van
+        chunk_size: 4096  # 4KB chunks, stripe width = 8KB
+      desc: Test EC optimization with Jerasure plugin, 4KB chunks.
+
+  # Test 6: Jerasure Plugin - 16KB chunk size (Stripe width = 32KB)
+  - test:
+      name: EC Partial Write Optimization - Jerasure 16KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_jerasure_16k
+        metadata_pool_name: test_ec_meta_jerasure_16k
+        image_name: test_ec_image_jerasure_16k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: jerasure
+        technique: reed_sol_van
+        chunk_size: 16384  # 16KB chunks, stripe width = 32KB
+      desc: Test EC optimization with Jerasure plugin, 16KB chunks.
+
+  # Test 7: Jerasure Plugin - 64KB chunk size (Stripe width = 128KB)
+  - test:
+      name: EC Partial Write Optimization - Jerasure 64KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_jerasure_64k
+        metadata_pool_name: test_ec_meta_jerasure_64k
+        image_name: test_ec_image_jerasure_64k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: jerasure
+        technique: reed_sol_van
+        chunk_size: 65536  # 64KB chunks, stripe width = 128KB
+      desc: Test EC optimization with Jerasure plugin, 64KB chunks.
+
+  # Test 8: Jerasure Plugin - 128KB chunk size (Stripe width = 256KB)
+  - test:
+      name: EC Partial Write Optimization - Jerasure 128KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83590734
+      config:
+        ec_pool_name: test_ec_jerasure_128k
+        metadata_pool_name: test_ec_meta_jerasure_128k
+        image_name: test_ec_image_jerasure_128k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: jerasure
+        technique: reed_sol_van
+        chunk_size: 131072  # 128KB chunks, stripe width = 256KB
+      desc: Test EC optimization with Jerasure plugin, 128KB chunks.
+
+  - test:
+      name: ceph-bluestore-tool utility
+      module: test_bluestoretool_workflows.py
+      polarion-id: CEPH-83620448
+      desc: Verify ceph-bluestore-tool functionalities
+
+  - test:
+      name: ceph-objectstore-tool utility
+      module: test_objectstoretool_workflows.py
+      polarion-id: CEPH-83620448
+      desc: Verify ceph-objectstore-tool functionalities

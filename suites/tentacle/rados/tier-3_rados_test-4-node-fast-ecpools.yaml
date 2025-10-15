@@ -303,36 +303,9 @@ tests:
       desc: Create, modify & delete EC pools and run IO
 
   - test:
-      name: EC pool with Overwrites
-      module: rados_prep.py
-      polarion-id: CEPH-83571730
-      config:
-        ec_pool:
-          create: true
-          pool_name: ec_pool_overwrite
-          app_name: rbd
-          pg_num: 32
-          enable_fast_ec_features: "true"
-          erasure_code_use_overwrites: "true"
-          k: 2
-          m: 2
-          plugin: isa
-          crush-failure-domain: host
-          max_objs: 300
-          rados_read_duration: 10
-          test_overwrites_pool: true
-          metadata_pool: re_pool_overwrite
-          image_name: image_ec_pool
-          image_size: 100M
-        delete_pools:
-          - ec_pool_overwrite
-          - re_pool_overwrite
-      desc: EC pool with Overwrites & create RBD pool
-
-  - test:
       name: EC Pool Recovery Improvement
       module: pool_tests.py
-      polarion-id: CEPH-83573852
+      polarion-id: CEPH-83620449
       config:
         ec_pool_recovery_improvement:
           create: true
@@ -370,7 +343,7 @@ tests:
   - test:
       name: EC pool 2=2@4 LC - scenarios 1,2,3
       module: test_four_node_ecpool.py
-      polarion-id: CEPH-83575858
+      polarion-id: CEPH-83620449
       abort-on-fail: true
       config:
         ec_pool:
@@ -392,7 +365,7 @@ tests:
   - test:
       name: EC pool 2=2@4 LC - scenarios 4,5
       module: test_four_node_ecpool.py
-      polarion-id: CEPH-83575858
+      polarion-id: CEPH-83620449
       abort-on-fail: true
       config:
         ec_pool:
@@ -413,7 +386,7 @@ tests:
   - test:
       name: EC pool 2=2@4 LC - scenarios 6
       module: test_four_node_ecpool.py
-      polarion-id: CEPH-83575858
+      polarion-id: CEPH-83620449
       abort-on-fail: true
       config:
         ec_pool:
@@ -433,7 +406,7 @@ tests:
   - test:
       name: EC pool 2=2@4 LC - scenarios 7
       module: test_four_node_ecpool.py
-      polarion-id: CEPH-83575858
+      polarion-id: CEPH-83620449
       abort-on-fail: true
       config:
         ec_pool:
@@ -453,7 +426,7 @@ tests:
   - test:
       name: EC pool 2=2@4 LC - scenarios 8
       module: test_four_node_ecpool.py
-      polarion-id: CEPH-83575858
+      polarion-id: CEPH-83620449
       abort-on-fail: true
       config:
         ec_pool:
