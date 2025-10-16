@@ -1548,17 +1548,22 @@ class RadosOrchestrator:
                     2. lrc -> Upstream Only
                     3. clay -> Upstream Only
                     4. isa ( default from Tentacle )
-                6. pool_name -> pool name to create and associate with the EC profile being created
-                7. force -> Override an existing profile by the same name.
-                8. crush-osds-per-failure-domain -> number of OSDs per failure domain
-                9. crush-num-failure-domains -> Number of failure domains present on the cluster
-                10. create_rule -> Arg to specify if the CRUSH rule should be created or not
-                11. profile_name -> Name of the profile to be created
-                12. yes_i_mean_it -> Needed to be passed for profile modification along with --force from 8.0
-                13. name: Name of the profile/rule to create if none is provided
-                14. negative_test -> pass true if performing -ve tests. min_compact_client won't be updated for pool
+                6. technique -> erasure code technique to be used with the plugin (str)
+                    supported techniques vary by plugin:
+                    jerasure: reed_sol_van, reed_sol_r6_op, cauchy_orig, cauchy_good, liberation, blaum_roth, liber8tion
+                    isa: reed_sol_van, cauchy
+                    clay: reed_sol_van, reed_sol_r6_op, cauchy_orig, cauchy_good, liber8tion
+                7. pool_name -> pool name to create and associate with the EC profile being created
+                8. force -> Override an existing profile by the same name.
+                9. crush-osds-per-failure-domain -> number of OSDs per failure domain
+                10. crush-num-failure-domains -> Number of failure domains present on the cluster
+                11. create_rule -> Arg to specify if the CRUSH rule should be created or not
+                12. profile_name -> Name of the profile to be created
+                13. yes_i_mean_it -> Needed to be passed for profile modification along with --force from 8.0
+                14. name: Name of the profile/rule to create if none is provided
+                15. negative_test -> pass true if performing -ve tests. min_compact_client won't be updated for pool
                 creation when this param is set to true. Required for MSR EC pool tests with min_compact_client
-                15. enable_fast_ec_features -> Pass true if the Fast EC features need to be enabled on the created pool
+                16. enable_fast_ec_features -> Pass true if the Fast EC features need to be enabled on the created pool
         Returns: True -> pass, False -> fail
         """
         failure_domain = kwargs.get("crush-failure-domain", "osd")
@@ -1574,6 +1579,7 @@ class RadosOrchestrator:
         major_version = int(self.rhbuild.split(".")[0])
         default_plugin = "jerasure" if major_version < 9 else "isa"
         plugin = kwargs.get("plugin", default_plugin)
+        technique = kwargs.get("technique")
         pool_name = kwargs.get("pool_name", "test-ec-pool")
         if not pool_name:
             log.error("No name provided. Exiting")
@@ -1591,13 +1597,16 @@ class RadosOrchestrator:
             f"ceph osd erasure-code-profile set {profile_name}"
             f" crush-failure-domain={failure_domain} k={k} m={m} plugin={plugin}"
         )
+        if technique:
+            cmd = cmd + f" technique={technique}"
         if crush_osds_per_failure_domain:
             if major_version >= 8:
                 min_client_version = self.run_ceph_command(cmd="ceph osd dump")[
                     "require_min_compat_client"
                 ]
                 log.debug(
-                    f"require_min_compat_client before starting the tests is {min_client_version}"
+                    "require_min_compat_client before starting the tests is %s",
+                    min_client_version,
                 )
                 if not negative_test:
                     if min_client_version not in ["squid"]:
@@ -1611,9 +1620,9 @@ class RadosOrchestrator:
                             "Set the min_compact client on the cluster to Squid on the cluster"
                         )
                 cmd = (
-                    cmd
-                    + f" crush-osds-per-failure-domain={crush_osds_per_failure_domain} "
-                    f" crush-num-failure-domains={crush_num_failure_domains}"
+                    cmd + " crush-osds-per-failure-domain=%s "
+                    " crush-num-failure-domains=%s"
+                    % (crush_osds_per_failure_domain, crush_num_failure_domains)
                 )
             else:
                 log.info(
@@ -1630,22 +1639,22 @@ class RadosOrchestrator:
         if yes_i_mean_it:
             cmd = cmd + " --yes-i-really-mean-it "
 
-        log.debug(f"Final command to create EC Profile : {cmd}")
+        log.debug("Final command to create EC Profile : %s", cmd)
         try:
             self.run_ceph_command(cmd=cmd)
             time.sleep(5)
             profiles = self.get_ec_profiles()
             if profile_name not in profiles:
                 raise Exception(
-                    f"Profile not found in list error.\n profile name :{profile_name} "
-                    f"\n profiles on cluster : {profiles}"
+                    "Profile not found in list error.\n profile name :%s "
+                    "\n profiles on cluster : %s" % (profile_name, profiles)
                 )
         except Exception as err:
-            log.error(f"Failed to create ec profile : {profile_name}")
+            log.error("Failed to create ec profile : %s", profile_name)
             log.error(err)
             return False
 
-        cmd = f"ceph osd erasure-code-profile get {profile_name}"
+        cmd = "ceph osd erasure-code-profile get %s" % profile_name
         log.info("Profile created : \n %s", self.run_ceph_command(cmd=cmd))
         log.debug("EC profile created. Proceeding to create pool")
 
@@ -1658,7 +1667,9 @@ class RadosOrchestrator:
             rule_list = self.get_crush_rule_names()
             if rule_name not in rule_list:
                 log.error(
-                    f"unable to create rule: {rule_name}. list obtained from cluster: {rule_list}"
+                    "unable to create rule: %s. list obtained from cluster: %s",
+                    rule_name,
+                    rule_list,
                 )
                 return False
             if create_ecpool:
@@ -1667,7 +1678,7 @@ class RadosOrchestrator:
                     crush_rule=rule_name,
                     **kwargs,
                 ):
-                    log.error(f"Failed to create Pool {pool_name}")
+                    log.error("Failed to create Pool %s", pool_name)
                     return False
         else:
             if create_ecpool:
@@ -1675,7 +1686,7 @@ class RadosOrchestrator:
                     ec_profile_name=profile_name,
                     **kwargs,
                 ):
-                    log.error(f"Failed to create Pool {pool_name}")
+                    log.error("Failed to create Pool %s", pool_name)
                     return False
 
         # Checking if enable Fast EC features flag passed
@@ -1687,7 +1698,8 @@ class RadosOrchestrator:
                 log.info("Enabled Fast EC feature on the EC pool created")
             except Exception as err:
                 log.error(
-                    f"Exception hit while enabling Fast EC features on the pool created: {err}"
+                    "Exception hit while enabling Fast EC features on the pool created: %s",
+                    err,
                 )
                 return False
 
@@ -1695,10 +1707,10 @@ class RadosOrchestrator:
             log.info(f"Created the ec profile : {profile_name} and pool : {pool_name}")
             cmd = f"ceph osd crush rule dump {pool_name}"
             log.debug(
-                f"Printing the crush rule used : \n{self.run_ceph_command(cmd=cmd)}\n"
+                "Printing the crush rule used : \n%s\n", self.run_ceph_command(cmd=cmd)
             )
         except Exception as err:
-            log.error(f"Exception hit while listing the EC Crush rule used: {err}")
+            log.error("Exception hit while listing the EC Crush rule used: %s", err)
         return True
 
     def change_osd_state(self, action: str, target: int, timeout: int = 180) -> bool:
