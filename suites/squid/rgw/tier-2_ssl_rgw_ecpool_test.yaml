@@ -203,7 +203,6 @@ tests:
       name: test deletion of default realm clears realm id in default info
       desc: test deletion of default realm clears realm id in default info
       polarion-id: CEPH-83623614
-      comments: known issue BZ-2268063 targetted to 9.0
       module: sanity_rgw.py
       config:
         script-name: test_check_sharding_enabled.py
