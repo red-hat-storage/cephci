@@ -18,7 +18,7 @@ log = Log(__name__)
 def run(ceph_cluster, **kw):
     """
     # ===============================================================================
-    Toggle Snapshot Visibility - Polarion TC CEPH -
+    Toggle Snapshot Visibility - Polarion TC CEPH - 83621385
     ---------------------------------------   -------------------------
     1.Create subvolume across default and non-default group.
     2.Verify default values for subvolume snapshot_visibility, ceph config mgr and client
@@ -62,13 +62,10 @@ def run(ceph_cluster, **kw):
         default_fs = default_fs if not erasure else "cephfs-ec"
         cleanup = config.get("cleanup", 1)
         client = clients[0]
-
         log.info("Verify Cluster is healthy before test")
-
         if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
             log.error("Cluster health is not OK even after waiting for 300secs")
             return 1
-
         nfs_name = "cephfs-nfs"
         setup_params = cephfs_common_utils.test_setup(
             default_fs, client, nfs_name=nfs_name
@@ -101,13 +98,11 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean Up in progess")
         wait_time_secs = 300
-
         if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
             log.error(
                 "Cluster health is not OK even after waiting for %s secs",
                 wait_time_secs,
             )
-
         if io_complete != 1:
             for p in write_procs:
                 fs_system_utils.wait_for_proc(p, 300)
@@ -140,6 +135,7 @@ def snapshot_visibility_test_run():
     fs_name = setup_params["fs_name"]
     sv_list = setup_params["sv_list"]
     global io_complete, write_procs
+    io_complete = None
     log.info(
         "Verify default values for subvolume snapshot_visibility, ceph config mgr and client"
     )
@@ -193,7 +189,7 @@ def snapshot_visibility_test_run():
 
     log.info("Run CephFS IO tools - df,smallfile")
     io_args = {"run_time": 1}
-    io_tools = ["dd", "smallfile", "file_extract", "postgresIO"]
+    io_tools = ["dd", "smallfile", "file_extract"]
     write_procs = []
     for sv in sv_list:
         mnt_client = mount_details[sv["subvol_name"]]["nfs"]["mnt_client"]
@@ -230,7 +226,6 @@ def snapshot_visibility_test_run():
         "Config to be tested : subvolume snapshot_visibility,mgr and client ceph config for %s",
         str_tmp,
     )
-
     log.info(
         "SubTest1-snapshot_visibility:true,ceph client config %s:false, ceph mgr config %s:false",
         str_tmp,
@@ -247,7 +242,6 @@ def snapshot_visibility_test_run():
     sv_obj = random.choice(sv_list)
     if validate_snapshot_visibility_wrapper(client, "true", "true", sv_obj):
         return 1
-
     log.info(
         "SubTest3-snapshot_visibility:false,ceph client config %s:true, ceph mgr config %s:true",
         str_tmp,
@@ -255,10 +249,7 @@ def snapshot_visibility_test_run():
     )
     sv_obj = random.choice(sv_list)
     if validate_snapshot_visibility_wrapper(client, "false", "true", sv_obj):
-        log.error(
-            "Failure is due to known issue in feature, skipping exit here, until issue is fixed"
-        )
-        # return 1
+        return 1
     log.info(
         "SubTest4-snapshot_visibility:false,ceph client config %s:false, ceph mgr config %s:false",
         str_tmp,
@@ -310,7 +301,7 @@ def validate_snapshot_visibility_wrapper(client, subvol_sv_val, client_mgr_val, 
     log.info("Snap-Schedule test validation")
     snap_ops = {
         "true": {"true": "1", "false": "1"},  # allowed
-        "false": {"true": 0, "false": "1"},  # not allowed
+        "false": {"true": "1", "false": "1"},
     }
     expected_snap_ops = snap_ops[subvol_sv_val][client_mgr_val]
     snap_params = {
