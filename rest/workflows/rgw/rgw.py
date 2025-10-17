@@ -53,5 +53,38 @@ def create_bucket_verify(bucket, uid, rest, rest_v1):
         log.error(f"FAILED :Bucket '{bucket}' not found in bucket list after creation.")
         return 1
 
+    # List bucket lifecycle policies on bucket
+    rgw_rest_v1.list_bucket_lifecycle(bucket=bucket)
+
+    # List Global Ratelimits on bucket
+    rgw_rest_v1.list_bucket_ratelimit()
+
+    # List bucket encryption for the bucket
+    rgw_rest_v1.list_bucket_encryptionConfig()
+
+    # Put bucket lifecycle
+    # log.info(f"Put licycle configuration for {bucket}")
+    # try:
+    #     bucket_resp = rgw_rest.update_bucket_lifecycle(bucket=bucket, lifecycle=lifecycle)
+    #     log.info(f"the bucket_repsonse {bucket_resp}")
+    # except Exception as e:
+    #     log.error(f"Put bucket lifecycke failed for '{bucket}': with exception {str(e)}")
+    #     return 1
+    # log.info(f"PASS: Put LC config successful for {bucket}")
+
+    # Get details of the bucket
+    bucket_resp = rgw_rest.get_bucket(bucket=bucket)
+    log.info(f"the bucket_repsonse {bucket_resp}")
+
+    # Delete bucket
+    log.info(f"Deleting bucket '{bucket}'")
+    try:
+        bucket_resp = rgw_rest.delete_bucket(bucket=bucket)
+        log.info(f"the bucket_repsonse {bucket_resp}")
+    except Exception as e:
+        log.error(f"Bucket deletion failed for '{bucket}': with exception {str(e)}")
+        return 1
+    log.info(f"PASS: Bucket {bucket} deletion succesfull")
+
     log.info(f"PASSED : Bucket '{bucket}' successfully created and verified.")
     return 0

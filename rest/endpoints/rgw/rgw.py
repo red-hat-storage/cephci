@@ -75,3 +75,71 @@ class RGW:
         if isinstance(resp, list):
             return resp
         return []
+
+    def list_bucket_lifecycle(self, **kwargs):
+        """
+        GET /api/rgw/bucket/lifecycle
+        Returns lifecycle configuration on the bucket
+        """
+        url = self._endpoints["LIST_BUCKET_LIFECYCLE"]
+        data = {"bucket": kwargs.get("bucket")}
+        resp = self._rest.get(relative_url=url, data=json.dumps(data))
+        log.info(f"Get_bucket_lifecycle response: {resp}")
+        return resp
+
+    def list_bucket_encryptionConfig(self):
+        """
+        GET /api/rgw/bucket/getEncryptionConfig
+        Returns encryption configuration on the bucket
+        """
+        url = self._endpoints["LIST_BUCKET_ENCRYPTCONF"]
+        resp = self._rest.get(relative_url=url)
+        log.info(f"Get_bucket_encryptionConfig response: {resp}")
+        return resp
+
+    def list_bucket_ratelimit(self):
+        """
+        GET /api/rgw/bucket/ratelimit
+        Returns Global ratelimits on the bucket
+        """
+        url = self._endpoints["LIST_BUCKET_RATELIMIT"]
+        resp = self._rest.get(relative_url=url)
+        log.info(f"Get_bucket_encryption response: {resp}")
+        return resp
+
+    def update_bucket_lifecycle(self, **kwargs):
+        """
+        PUT /api/rgw/bucket/lifecycle
+        Required payload:
+        {
+            "bucket": "string",
+            "lifecycle": "string"
+        }
+        """
+        url = self._endpoints["UPDATE_BUCKET_LIFECYCLE"]
+        data = {"bucket": kwargs.get("bucket"), "lifecycle": kwargs.get("lifecycle")}
+        resp = self._rest.put(relative_url=url, data=json.dumps(data))
+        log.info(f"Put_bucket_lifecycle response: {resp}")
+        return resp
+
+    def get_bucket(self, **kwargs):
+        """
+        GET /api/rgw/bucket/{bucket}
+        Get details of the specified bucket
+        """
+        data = {"bucket": kwargs.get("bucket")}
+        url = self._endpoints["GET_BUCKET"].format(bucket=data["bucket"])
+        resp = self._rest.get(relative_url=url)
+        log.info(f"get_bucket response: {resp}")
+        return resp
+
+    def delete_bucket(self, **kwargs):
+        """
+        DELETE /api/rgw/bucket/{bucket}
+        Deletes the specified bucket
+        """
+        data = {"bucket": kwargs.get("bucket")}
+        url = self._endpoints["DELETE_BUCKET"].format(bucket=data["bucket"])
+        resp = self._rest.delete(relative_url=url)
+        log.info(f"delete_bucket response: {resp}")
+        return resp

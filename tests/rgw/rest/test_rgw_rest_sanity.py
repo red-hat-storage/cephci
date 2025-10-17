@@ -42,8 +42,13 @@ def sanity_rgw_workflow(config):
             continue
 
         uid = bucket_cfg.get("uid")
+        lifecycle = bucket_cfg.get("lifecycle")
         if not uid:
             log.error(f"Missing 'uid' for bucket '{bucket_name}'")
+            return 1
+
+        if not lifecycle:
+            log.error(f"Missing 'lifecycle' for bucket '{bucket_name}'")
             return 1
 
         log.info(f"Step 2: Creating and verifying bucket '{bucket_name}'")
