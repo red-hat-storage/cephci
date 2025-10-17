@@ -21,6 +21,7 @@ from utility.log import Log
 log = Log(__name__)
 
 CEPH_VAR_LOG_DIR = "/var/log/ceph"
+CEPH_COREDUMP_DIR = "/var/lib/systemd/coredump/"
 
 doc = """
 Utility to gather cluster information
@@ -179,6 +180,25 @@ def get_ceph_var_logs(cluster, log_dir):
         log.info(f"Downloading {tar_file} from {node.hostname} to {download_dir}")
 
 
+def collect_ceph_coredumps(cluster, _dir):
+    """
+    This method is to download and store
+    ceph coredumps into custom directory.
+    """
+    download_dir = os.path.join(_dir, "ceph_coredumps")
+    os.makedirs(download_dir, exist_ok=True)
+    for node in cluster.get_nodes():
+        tar_file = f"{node.hostname}-coredump.tar"
+        node.exec_command(cmd=f"tar -cvzf {tar_file} {CEPH_COREDUMP_DIR}", sudo=True)
+
+        node.download_file(
+            src=tar_file,
+            dst=os.path.join(download_dir, tar_file),
+            sudo=True,
+        )
+        log.info(f"Downloading {tar_file} from {node.hostname} to {download_dir}")
+
+
 def write_output(data, output):
     """Write output data to stream"""
     with open(output, "w") as fp:
@@ -193,12 +213,15 @@ if __name__ == "__main__":
     config = args.get("--reuse")
     output = args.get("--output")
     ceph_logs = args.get("--ceph-logs")
+    ceph_coredump = args.get("--ceph-coredump")
 
     # Collect cluster information
     _dict, _info = _load_cluster_config(config), {}
     for name in _dict:
         if ceph_logs in ["true", True]:
             get_ceph_var_logs(_dict.get(name), output)
+        if ceph_coredump in ["true", True]:
+            collect_ceph_coredumps(_dict.get(name), output)
 
         _info = gather_info(_dict.get(name))
 
