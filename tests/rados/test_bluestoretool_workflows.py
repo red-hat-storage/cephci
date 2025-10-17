@@ -31,6 +31,7 @@ from tests.misc_env.lvm_deployer import create_lvms
 from utility.log import Log
 
 log = Log(__name__)
+STOPPED_OSDS = []
 
 
 def run(ceph_cluster, **kw):
@@ -54,6 +55,17 @@ def run(ceph_cluster, **kw):
     client = ceph_cluster.get_nodes(role="client")[0]
     bench_obj = RadosBench(mon_node=cephadm, clients=client)
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
+
+    def pick_random_osd():
+        """
+        Method to choose an OSD from UP OSDs and stop it
+        Returns:
+            OSD ID
+        """
+        osd_list = rados_obj.get_osd_list(status="up")
+        osd_id = random.choice(osd_list)
+        rados_obj.change_osd_state(action="stop", target=osd_id)
+        return osd_id
 
     try:
         osd_list = rados_obj.get_osd_list(status="up")
@@ -220,7 +232,7 @@ def run(ceph_cluster, **kw):
             # Migrating new DB device to existing collocated OSD
             # ceph-bluestore-tool bluefs-bdev-migrate --dev-target {new_device} --devs-source {device_source}
             # Not part of execution due to blocker BZ-2269101
-            if not True:
+            if False:
                 log.info(
                     f"\n -----------------------------------------------"
                     f"\n Migrating a dedicated DB device for OSD.{osd_id}"
@@ -251,7 +263,6 @@ def run(ceph_cluster, **kw):
             # addition of small device as wal/db fails with CBT
             # BZ - https://bugzilla.redhat.com/show_bug.cgi?id=2309610
             if False:
-                osd_id = random.choice(osd_list)
 
                 log.info(
                     f"\n -------------------------------------------"
@@ -271,7 +282,6 @@ def run(ceph_cluster, **kw):
                         f"OSD.{osd_id} already has WAL/DB partition, choosing another OSD"
                     )
 
-                    osd_id = random.choice(osd_list)
                     log.info(
                         f"\n -------------------------------------------"
                         f"\n Adding a dedicated WAL/DB device for OSD.{osd_id}"
@@ -452,8 +462,11 @@ def run(ceph_cluster, **kw):
             log.info(
                 "\n\n Execution begins for CBT collocated scenarios ************ \n\n"
             )
+
+            osd_id = pick_random_osd()
+            log.info("All operations will be performed for DOWN OSD : %s" % osd_id)
+
             # Execute ceph-bluestore-tool --help
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Running cbt help for OSD {osd_id}"
@@ -463,7 +476,6 @@ def run(ceph_cluster, **kw):
             log.info(out)
 
             # Execute ceph-bluestore-tool fsck --path <osd_path>
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Running consistency check for OSD {osd_id}"
@@ -474,7 +486,6 @@ def run(ceph_cluster, **kw):
             assert "success" in out
 
             # Execute ceph-bluestore-tool fsck --deep --path <osd_path>
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Running deep consistency check for OSD {osd_id}"
@@ -486,7 +497,6 @@ def run(ceph_cluster, **kw):
 
             if rhbuild.split(".")[0] >= "6":
                 # Execute ceph-bluestore-tool qfsck --path <osd_path>
-                osd_id = random.choice(osd_list)
                 log.info(
                     f"\n --------------------"
                     f"\n Running quick consistency check for OSD {osd_id}"
@@ -497,7 +507,6 @@ def run(ceph_cluster, **kw):
                 assert "success" in out
 
                 # Execute ceph-bluestore-tool allocmap --path <osd_path>
-                osd_id = random.choice(osd_list)
                 log.info(
                     f"\n --------------------"
                     f"\n Fetching allocmap for OSD {osd_id}"
@@ -508,7 +517,6 @@ def run(ceph_cluster, **kw):
                 assert "success" in out
 
             # Execute ceph-bluestore-tool repair --path <osd_path>
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Run BlueFS repair for OSD {osd_id}"
@@ -520,7 +528,6 @@ def run(ceph_cluster, **kw):
 
             """
             # Execute ceph-bluestore-tool restore_cfb --path <osd_path>
-            osd_id = random.choice(osd_list)
             log.info(f"\n --------------------"
                      f"\n Restoring Column-Family B for OSD {osd_id}"
                      f"\n --------------------")
@@ -541,7 +548,6 @@ def run(ceph_cluster, **kw):
             """
 
             # Execute ceph-bluestore-tool bluefs-export --out-dir <dir> --path <osd_path>
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Exporting BlueFS contents to an output directory for OSD {osd_id}"
@@ -552,7 +558,6 @@ def run(ceph_cluster, **kw):
             assert f"/var/lib/ceph/osd/ceph-{osd_id}/" in out
 
             # Execute ceph-bluestore-tool bluefs-bdev-sizes --path <osd_path>
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Print the device sizes, as understood by BlueFS, to stdout for OSD {osd_id}"
@@ -563,7 +568,6 @@ def run(ceph_cluster, **kw):
             assert "device size" in out
 
             # Execute ceph-bluestore-tool bluefs-bdev-expand --path <osd_path>
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Checking if size of block device is expanded for OSD {osd_id}"
@@ -574,7 +578,6 @@ def run(ceph_cluster, **kw):
             assert "device size" in out and "Expanding" in out
 
             # Execute ceph-bluestore-tool show-label
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Dump label content for block device for live OSD {osd_id}"
@@ -593,7 +596,6 @@ def run(ceph_cluster, **kw):
             log.info(out)
             assert f"/var/lib/ceph/osd/ceph-{osd_id}/" in out
 
-            osd_id = random.choice(osd_list)
             osd_metadata = ceph_cluster.get_osd_metadata(
                 osd_id=int(osd_id), client=client
             )
@@ -621,7 +623,6 @@ def run(ceph_cluster, **kw):
                 assert dev in out
 
             # Execute ceph-bluestore-tool prime-osd-dir --dev <main_device> --path <osd_path>
-            osd_id = random.choice(osd_list)
             osd_node = rados_obj.fetch_host_node(
                 daemon_type="osd", daemon_id=str(osd_id)
             )
@@ -642,7 +643,6 @@ def run(ceph_cluster, **kw):
             log.info(out)
 
             # ceph-bluestore-tool free-dump --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Dump all free regions in allocator for OSD {osd_id}"
@@ -657,7 +657,6 @@ def run(ceph_cluster, **kw):
             assert "alloc_name" in out and "extents" in out
 
             # ceph-bluestore-tool free-score --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Get fragmentation score for OSD {osd_id}"
@@ -672,7 +671,6 @@ def run(ceph_cluster, **kw):
             assert "fragmentation_rating" in out
 
             # Execute ceph-bluestore-tool show-sharding --path <osd_path>
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Show sharding that is currently applied to "
@@ -684,7 +682,6 @@ def run(ceph_cluster, **kw):
             assert "block_cache" in out
 
             # Execute ceph-bluestore-tool --sharding="<>" reshard --path <osd_path>
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n -----------------------------------------"
                 f"\n Reshard with custom value for for OSD {osd_id}"
@@ -700,7 +697,6 @@ def run(ceph_cluster, **kw):
             assert new_shard in out
 
             # Execute ceph-bluestore-tool bluefs-stats --path <osd_path>
-            osd_id = random.choice(osd_list)
             log.info(
                 f"\n --------------------"
                 f"\n Display BlueFS statistics for OSD {osd_id}"
@@ -726,15 +722,21 @@ def run(ceph_cluster, **kw):
                 rhbuild.startswith("6") and dedicated_db
             ):
                 pattern_list = [
+                    "Settings",
                     "device size",
-                    "DEV/LEV",
                     "LOG",
                     "WAL",
                     "DB",
                     "SLOW",
                     "MAXIMUMS",
                     "TOTAL",
+                    "SIZE",
                 ]
+                (
+                    pattern_list.append("LEV/DEV")
+                    if rhbuild.split(".")[0] > "8"
+                    else pattern_list.append("DEV/LEV")
+                )
             for pattern in pattern_list:
                 assert (
                     pattern in out
@@ -765,6 +767,10 @@ def run(ceph_cluster, **kw):
             vgname = lvm.split("/")[2]
             node13_obj.exec_command(cmd=f"vgremove -y {vgname}", sudo=True)
             node13_obj.exec_command(cmd=f"pvremove -y {empty_devices[0]}", sudo=True)
+
+        for osd_id in STOPPED_OSDS:
+            log.debug("Starting stopped OSD %s" % osd_id)
+            rados_obj.change_osd_state(action="start", target=osd_id)
 
         # delete all rados pools
         rados_obj.rados_pool_cleanup()

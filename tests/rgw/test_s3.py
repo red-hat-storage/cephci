@@ -65,13 +65,6 @@ access_key = {{ data.alt.access_key }}
 secret_key = {{ data.alt.secret_key }}
 email = {{ data.alt.email }}
 
-[s3 tenant]
-display_name = {{ data.tenant.name }}
-user_id = {{ data.tenant.id }}
-access_key = {{ data.tenant.access_key }}
-secret_key = {{ data.tenant.secret_key }}
-email = {{ data.tenant.email }}
-
 {%- if data.iam %}
 [iam]
 display_name = {{ data.iam.name }}
@@ -106,6 +99,24 @@ secret_key = bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 user_id = RGW22222222222222222
 email = account2@ceph.com
 {% endif %}
+"""
+S3CONF_TENANT = """
+[s3 tenant]
+display_name = {{ data.tenant.name }}
+user_id = {{ data.tenant.id }}
+access_key = {{ data.tenant.access_key }}
+secret_key = {{ data.tenant.secret_key }}
+email = {{ data.tenant.email }}
+"""
+
+S3CONF_TENANT_Tentacle = """
+[s3 tenant]
+display_name = {{ data.tenant.name }}
+user_id = {{ data.tenant.id }}
+access_key = {{ data.tenant.access_key }}
+secret_key = {{ data.tenant.secret_key }}
+email = {{ data.tenant.email }}
+tenant = {{ data.tenant.name }}
 """
 
 
@@ -454,6 +465,14 @@ def create_s3_conf(
 
     global S3CONF
     global S3CONF_ACC
+    global S3CONF_TENANT_Tentacle
+    global S3CONF_TENANT
+
+    if build.split(".")[0] >= "9":
+        S3CONF = S3CONF + S3CONF_TENANT_Tentacle
+    else:
+        S3CONF = S3CONF + S3CONF_TENANT
+
     if build.split(".")[0] >= "8":
         S3CONF = S3CONF + S3CONF_ACC
 

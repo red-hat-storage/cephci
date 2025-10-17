@@ -222,3 +222,9 @@ tests:
       module: quota.quota_bytes.py
       polarion-id: CEPH-83573399
       desc: Tests the Byte attr
+  - test:
+      name: test cephfs subvolume metrics - functional
+      module: cephfs_subvol_metrics.test_subvol_metrics.py
+      polarion-id: CEPH-83621832
+      desc: Test fs subvolume metrics
+      abort-on-fail: false

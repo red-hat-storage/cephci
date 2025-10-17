@@ -2,7 +2,7 @@
 tests:
   ######################################################################################################################
   # Conf File : conf/squid/cephfs/tier-2_cephfs_7-node-cluster.yaml
-  # Features Covered - <TBD>
+  # Features Covered - subvolume metrics,case insensitivity subvolumegroup,toggle snapshot visibility
   # Pre-Requisites
   # Cluster Deployment
   # Configure 4 Cephfs clients
@@ -118,3 +118,35 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
+  ######################################################################################################################
+  # Features Covered
+  # Cephfs Subvolume Metrics
+  ######################################################################################################################
+  - test:
+      name: test cephfs subvolume metrics - functional
+      module: cephfs_subvol_metrics.test_subvol_metrics.py
+      polarion-id: CEPH-83621832
+      desc: Test fs subvolume metrics
+      abort-on-fail: false
+
+  ######################################################################################################################
+  # Feature Enhancement
+  # Cephfs Case insensitivity - Subvolume
+  # BZ - 2355303
+  ######################################################################################################################
+  - test:
+      name: test cephfs attributes - subvolumegroup
+      module: cephfs_case_sensitivity.case_sensitivity_subvolumegroup.py
+      polarion-id: CEPH-83630825
+      desc: Validate the subvolumegroup using flags for case sensitivity feature
+      abort-on-fail: false
+  ######################################################################################################################
+  # Feature: Toggle Snapshot visibility
+  # Tests : Basic
+  ######################################################################################################################
+  - test:
+      name: Toggle snapshot visibility basic test
+      module: snapshot_clone.test_snapshot_visibility_basic.py
+      polarion-id: CEPH-83621385
+      desc: Toggle snapshot visibility basic test
+      abort-on-fail: false

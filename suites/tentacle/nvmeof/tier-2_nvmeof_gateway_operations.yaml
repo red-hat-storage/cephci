@@ -1,7 +1,6 @@
 # Ceph NVMeoF CLI Operations Suite - v9.0
 # cluster configuration file: conf/squid/nvmeof/ceph_nvmeof_sanity.yaml
 # Inventory: conf/inventory/rhel-9.6-server-x86_64-xlarge.yaml
-# TODO: We have issues for new cli so we need to re-look once issues are fixed
 
 tests:
 # Set up the cluster
@@ -117,7 +116,6 @@ tests:
               command: version         # gateway Version
               base_cmd_args:
                 format: json
-                output: log
           - config:
               service: gateway
               command: info             # gateway info
@@ -126,22 +124,18 @@ tests:
               command: get
               base_cmd_args:
                 format: json
-                output: stdio
           - config:
               service: loglevel
               command: set
               base_cmd_args:
                 format: json
-                output: stdio
               args:
                 level: error
-                print: error
           - config:
               service: loglevel
               command: disable
               base_cmd_args:
                 format: json
-                output: stdio
           - config:
               service: subsystem
               command: add              # Subsystem add with groupName
@@ -251,6 +245,7 @@ tests:
                 nsid: 3
                 load-balancing-group: 1
                 rbd-create-image: true
+                read-only: true
                 size: 1G
               validate:
                 omap: true
@@ -392,7 +387,7 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode2
                 nsid: 4
-                i-am-sure: true
+                force: 'true'
               validate:
                 omap: true
           - config:
@@ -480,6 +475,7 @@ tests:
                 load-balancing-group: 1
                 rbd-create-image: true
                 size: 1G
+                read-only: true
                 no-auto-visible: true
               validate:
                 omap: true
@@ -718,7 +714,7 @@ tests:
               args:
                 subsystem: nqn.2016-06.io.spdk:cnode1.gw-group1
                 nsid: 5
-                i-am-sure: true
+                force: 'true'
               validate:
                 omap: true
           - config:
@@ -750,11 +746,10 @@ tests:
               service: gateway
               command: info
           - config:
-              service: version          # CLI Version
+              service: gateway          # CLI Version
               command: version
               base_cmd_args:
                 format: json
-                output: log
       desc: Validate NVMeoF CLI operations
       destroy-cluster: false
       module: test_nvme_cli.py

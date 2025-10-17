@@ -180,7 +180,7 @@ tests:
       name: Upgrade cluster to latest 8.x ceph version
       desc: Upgrade cluster to latest version
       module: test_upgrade_warn.py
-      polarion-id: CEPH-83574934,CEPH-83573790
+      polarion-id: CEPH-83574934
       config:
         command: start
         service: upgrade
@@ -188,6 +188,7 @@ tests:
           verbose: true
         verify_cluster_health: true
       destroy-cluster: false
+      abort-on-fail: true
 
 # 2+2@4 specific scenarios:
 #        scenario-1: Test the effects of bulk flag and no IO stoppage

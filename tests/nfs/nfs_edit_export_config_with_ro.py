@@ -1,6 +1,6 @@
 from time import sleep
 
-from nfs_operations import cleanup_cluster, setup_nfs_cluster
+from nfs_operations import cleanup_cluster, open_mandatory_v3_ports, setup_nfs_cluster
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
@@ -85,6 +85,14 @@ def run(ceph_cluster, **kw):
             original_access_type,
             new_access_type,
         )
+
+        # Open the mountd port for RO export
+        log.info("Check build version")
+        build = config.get("build", config.get("rhbuild"))
+        if build.startswith("7"):
+            sleep(10)
+            ports_to_open = ["portmapper", "mountd"]
+            open_mandatory_v3_ports(nfs_node, ports_to_open)
 
         # Mount the RO export on client
         clients[0].create_dirs(dir_path=nfs_readonly_mount, sudo=True)

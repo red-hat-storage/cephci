@@ -8,8 +8,11 @@ import traceback
 from tests.cephfs.cephfs_scale.cephfs_scale_utils import CephfsScaleUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
+from tests.nfs.byok.byok_tools import load_gklm_config, nfs_byok_test_setup
 from utility.log import Log
+from utility.utils import get_cephci_config
 
 global log
 log = Log(__name__)
@@ -33,17 +36,24 @@ def run(ceph_cluster, **kw):
         fs_util_v1 = FsUtilsV1(ceph_cluster)
         fs_scale_utils = CephfsScaleUtils(ceph_cluster)
         snap_util = SnapUtils(ceph_cluster)
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         config = kw.get("config")
         cephfs_config = {}
         build = config.get("build", config.get("rhbuild"))
         systest_monitor = config.get("systest_monitor", 1)
-        clients = ceph_cluster.get_ceph_objects("client")
+        clients_orig = ceph_cluster.get_ceph_objects("client")
+        clients = clients_orig[1:11]
+        nfs_nodes = ceph_cluster.get_nodes("nfs")
+        installer = ceph_cluster.get_nodes(role="installer")[0]
         fs_util_v1.prepare_clients(clients, build)
+        cephci_data = get_cephci_config()
         fs_util_v1.auth_list(clients)
         file = "cephfs_systest_data.json"
         mnt_type_list = ["kernel", "fuse", "nfs"]
         client1 = clients[0]
         ephemeral_pin = config.get("ephemeral_pin", 1)
+        nfs_name = "cephfs_systest_nfs_byok"
+
         client1.upload_file(
             sudo=True,
             src=f"tests/cephfs/cephfs_system/{file}",
@@ -56,12 +66,43 @@ def run(ceph_cluster, **kw):
         )
         cephfs_config = json.load(f)
 
-        nfs_name = "cephfs_systest_nfs"
-        nfs_servers = ceph_cluster.get_ceph_objects("nfs")
-        nfs_server = nfs_servers[0].node.hostname
-        client1.exec_command(
-            sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
-        )
+        # BYOK Setup
+        # ------------------- Retrieving GKLM DATA -------------------
+        custom_data = kw.get("test_data", None)
+        rand_str = "".join(secrets.choice(string.digits) for i in range(3))
+        gklm_client_name = f"cephfs_systest_byok_client_{rand_str}"
+        gklm_cert_alias = f"cephfs_systest_byok_client_cert_{rand_str}"
+        #
+        gklm_params = load_gklm_config(custom_data, config, cephci_data)
+        nfs_nodes_1 = get_free_nodes_for_nfs(client1, nfs_nodes)
+        for nfs_node in nfs_nodes_1:
+            log.info(nfs_node.hostname)
+        byok_setup_params = {
+            "gklm_ip": gklm_params["gklm_ip"],
+            "gklm_user": gklm_params["gklm_user"],
+            "gklm_password": gklm_params["gklm_password"],
+            "gklm_node_user": gklm_params["gklm_node_username"],
+            "gklm_node_password": gklm_params["gklm_node_password"],
+            "gklm_hostname": gklm_params["gklm_hostname"],
+            "gklm_client_name": gklm_client_name,
+            "gklm_cert_alias": gklm_cert_alias,
+            "nfs_nodes": nfs_nodes_1,
+            "installer": installer,
+            "nfs_name": nfs_name,
+        }
+        _, enctag, _, _ = nfs_byok_test_setup(byok_setup_params)
+        nfs_node = byok_setup_params["nfs_nodes"][0]
+        nfs_server = nfs_node.hostname
+        for i in cephfs_config:
+            cephfs_config[i].update(
+                {
+                    "byok": {
+                        "gklm_client_name": gklm_client_name,
+                        "gklm_cert_alias": gklm_cert_alias,
+                    },
+                    "nfs": {"nfs_name": nfs_name},
+                }
+            )
         if wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             log.info("ceph nfs cluster created successfully")
             nfs_export = "/export_" + "".join(
@@ -120,6 +161,16 @@ def run(ceph_cluster, **kw):
                             f"Creating subvolume {sv_name} in {j} group in FS volume {i}"
                         )
                         fs_util_v1.create_subvolume(client1, **sv_iter)
+                        if "unique" in type:
+                            # Apply enctag
+                            enc_args = {
+                                "enc_tag": enctag,
+                                "group_name": sv_iter.get("group_name", None),
+                                "fs_name": sv_iter["vol_name"],
+                            }
+                            cephfs_common_utils.enc_tag(
+                                client1, "set", sv_iter["subvol_name"], **enc_args
+                            )
                         cephfs_config[i]["group"][j][type].update({sv_name: {}})
                         mnt_client1 = random.choice(clients)
                         mnt_client2 = random.choice(clients)
@@ -166,6 +217,8 @@ def run(ceph_cluster, **kw):
                                     "nfs_server": nfs_server,
                                 }
                             )
+                            if "unique" in type:
+                                mount_params.update({"kmip_key_id": enctag})
                         log.info(f"Perform {mnt_type} mount of {sv_name}")
                         mount_params.update({"client": mnt_client1})
                         mounting_dir1, _ = fs_util_v1.mount_ceph(mnt_type, mount_params)
@@ -247,3 +300,26 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Stop logging the Ceph Cluster Cluster status to a log dir")
         fs_scale_utils.stop_logging()
+
+
+# HELPER ROUTINES
+
+
+def get_free_nodes_for_nfs(client, nfs_nodes):
+    """
+    This method will assist in finding unalloted nfs labelled nodes and return as list
+    """
+    alloted_nodes = []
+    unalloted_nodes = []
+    out, _ = client.exec_command(sudo=True, cmd="ceph nfs cluster ls --f json")
+    parsed_data = json.loads(out)
+    for nfs_name in parsed_data:
+        out, _ = client.exec_command(sudo=True, cmd=f"ceph nfs cluster info {nfs_name}")
+        log.info(out)
+        for nfs_node in nfs_nodes:
+            if nfs_node.hostname in out:
+                alloted_nodes.append(nfs_node.hostname)
+    for nfs_node in nfs_nodes:
+        if nfs_node.hostname not in alloted_nodes:
+            unalloted_nodes.append(nfs_node)
+    return unalloted_nodes

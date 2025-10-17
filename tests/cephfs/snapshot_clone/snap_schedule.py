@@ -121,7 +121,7 @@ def run(ceph_cluster, **kw):
             extra_params=f",fs={default_fs}",
         )
 
-        if LooseVersion(ceph_version) >= LooseVersion("20.1"):
+        if LooseVersion(ceph_version) > LooseVersion("20.1"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, default_fs, enable=True
             )
@@ -213,7 +213,7 @@ def run(ceph_cluster, **kw):
             schedule=f"1{m_granularity}",
         )
 
-        if LooseVersion(ceph_version) >= LooseVersion("20.1"):
+        if LooseVersion(ceph_version) > LooseVersion("20.1"):
             ref_inode_utils.unlink_hardlinks(
                 client1, default_fs, main_file, ref_base_path
             )

@@ -8,7 +8,11 @@ scenario-3: Disable bluestore_write_v2 and validate
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonConfigMethods
-from tests.rados.test_bluestore_comp_enhancements_class import BluestoreDataCompression
+from tests.rados.test_bluestore_comp_enhancements_class import (
+    BLUESTORE_ALLOC_HINTS,
+    COMPRESSION_MODES,
+    BluestoreDataCompression,
+)
 from utility.log import Log
 
 log = Log(__name__)
@@ -66,9 +70,38 @@ def run(ceph_cluster, **kw):
             log.info("COMPELTED: Scenario 2: Enable bluestore_write_v2 and validate")
 
         if "scenario-3" in scenarios_to_run:
-            log.info("STARTED: Scenario 3: Disable bluestore_write_v2 and validate")
+            log.info(
+                "STARTED: Scenario 3: Compression mode tests ( passive, aggressive, force, none )"
+            )
+            for compression_mode in [
+                COMPRESSION_MODES.PASSIVE,
+                COMPRESSION_MODES.AGGRESSIVE,
+                COMPRESSION_MODES.FORCE,
+                COMPRESSION_MODES.NONE,
+            ]:
+                for obj_alloc_hint in [
+                    BLUESTORE_ALLOC_HINTS.NOHINT,
+                    BLUESTORE_ALLOC_HINTS.COMPRESSIBLE,
+                    BLUESTORE_ALLOC_HINTS.INCOMPRESSIBLE,
+                ]:
+                    pool_name = f"test-{compression_mode}-{obj_alloc_hint}"
+                    kwargs = {
+                        "pool_name": pool_name,
+                        "compression_mode": compression_mode,
+                        "alloc_hint": obj_alloc_hint,
+                    }
+                    bluestore_compression.validate_compression_modes(**kwargs)
+
+                    if rados_obj.delete_pool(pool=pool_name) is False:
+                        raise Exception(f"Deleting pool {pool_name} failed")
+            log.info(
+                "STARTED: Scenario 3: Compression mode tests ( passive, aggressive, force, none )"
+            )
+
+        if "scenario-4" in scenarios_to_run:
+            log.info("STARTED: Scenario 4: Disable bluestore_write_v2 and validate")
             bluestore_compression.toggle_bluestore_write_v2(toggle_value="false")
-            log.info("COMPELTED: Scenario 3: Disable bluestore_write_v2 and validate")
+            log.info("COMPELTED: Scenario 4: Disable bluestore_write_v2 and validate")
 
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")

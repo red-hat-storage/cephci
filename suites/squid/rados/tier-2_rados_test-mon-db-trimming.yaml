@@ -287,3 +287,12 @@ tests:
           osd_max_backfills: 10
           osd_recovery_max_active: 10
       desc: Verification of mon DB trimming during various cluster operations
+
+  - test:
+      name: Rados hotfix OSD beacons
+      module: test_mon_osd_mgr_resiliency.py
+      polarion-id: TBD
+      config:
+        test_duration: 10
+        heartbeat_interval: 30
+      desc: Rados hotfix OSD beacons adhere to heartbeat interval
