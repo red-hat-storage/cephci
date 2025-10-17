@@ -4,6 +4,9 @@ from .common import substitute_keys
 
 KEY_MAP = {
     "size": "rbd_image_size",
+    # TODO : Fix this once BZ is resolved https://bugzilla.redhat.com/show_bug.cgi?id=2402045
+    "auto-resize-enabled-true": "auto-resize-enabled=true",
+    "auto-resize-enabled-false": "auto-resize-enabled=false",
 }
 
 
@@ -57,6 +60,7 @@ class Namespace:
         """Set QoS for a namespace."""
         return self.base.run_nvme_cli(self.name, "set_qos", **kwargs)
 
+    @substitute_keys(KEY_MAP)
     def set_auto_resize(self, **kwargs):
         """Set auto-resize for a namespace."""
         return self.base.run_nvme_cli(self.name, "set_auto_resize", **kwargs)
