@@ -196,6 +196,7 @@ def smbclient_check_shares(
                     elif auth_mode == "user":
                         cmd = (
                             f"smbclient -U {smb_user_name}%{smb_user_password}"
+                            f" -p {smb_port} "
                             f" //{public_addr.split('/')[0]}/{smb_share} -c ls"
                         )
                         client.exec_command(
@@ -220,6 +221,7 @@ def smbclient_check_shares(
                     elif auth_mode == "user":
                         cmd = (
                             f"smbclient -U {smb_user_name}%{smb_user_password}"
+                            f" -p {smb_port} "
                             f" //{smb_node.ip_address}/{smb_share} -c ls"
                         )
                         client.exec_command(
