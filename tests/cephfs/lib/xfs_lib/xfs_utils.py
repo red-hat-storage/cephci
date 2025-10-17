@@ -62,6 +62,12 @@ class XfsTestSetup:
                 sudo=True,
                 cmd="subscription-manager repos --enable codeready-builder-for-rhel-9-$(arch)-rpms",
             )
+        elif 'VERSION_ID="10' in rhel_version:
+            epel_cmd = "dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm"
+            self.client.exec_command(
+                sudo=True,
+                cmd="subscription-manager repos --enable codeready-builder-for-rhel-10-$(arch)-rpms",
+            )
         else:
             log.error("Unsupported RHEL version")
             return 1

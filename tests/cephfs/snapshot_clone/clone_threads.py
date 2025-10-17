@@ -136,7 +136,7 @@ def run(ceph_cluster, **kw):
             extra_params=f" -r {subvol_path.strip()} --client_fs {default_fs}",
         )
 
-        if LooseVersion(ceph_version) > LooseVersion("20.1"):
+        if LooseVersion(ceph_version) > LooseVersion("20.1.1"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, default_fs, enable=True
             )
@@ -252,7 +252,7 @@ def run(ceph_cluster, **kw):
                 )
             log.info(f"Iteration {iteration} has been completed")
 
-        if LooseVersion(ceph_version) > LooseVersion("20.1"):
+        if LooseVersion(ceph_version) > LooseVersion("20.1.1"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, default_fs, enable=False
             )
