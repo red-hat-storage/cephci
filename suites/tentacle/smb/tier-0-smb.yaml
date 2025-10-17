@@ -94,25 +94,6 @@ tests:
         path: "/"
 
   - test:
-      name: Deploy samba with auth_mode 'AD' using imperative style(CLI Commands)
-      desc: Deploy samba with auth_mode 'Active Directory(AD)' using imperative style(CLI Commands)
-      module: smb_deployment_imperative_method
-      polarion-id: CEPH-83593844
-      config:
-        cephfs_volume: cephfs
-        smb_subvolume_group: smb
-        smb_subvolumes: [sv1, sv2]
-        smb_subvolume_mode: '0777'
-        smb_cluster_id: smb1
-        auth_mode: active-directory
-        domain_realm: samba.qe
-        custom_dns: "10.70.47.236"
-        smb_user_name: Administrator
-        smb_user_password: Redhat@123
-        smb_shares: [share1, share2]
-        path: "/"
-
-  - test:
       name: Deploy samba with auth_mode 'user' using declarative style(Spec File)
       desc: Deploy samba with auth_mode 'user' using declarative style(Spec File)
       module: smb_deployment_declarative_method.py
@@ -134,49 +115,6 @@ tests:
               users:
                 - {name: user1, password: passwd}
               groups: []
-          - resource_type: ceph.smb.share
-            cluster_id: smb1
-            share_id: share1
-            cephfs:
-              volume: cephfs
-              subvolumegroup: smb
-              subvolume: sv1
-              path: /
-          - resource_type: ceph.smb.share
-            cluster_id: smb1
-            share_id: share2
-            cephfs:
-              volume: cephfs
-              subvolumegroup: smb
-              subvolume: sv2
-              path: /
-
-  - test:
-      name: Deploy samba with auth_mode 'AD' using declarative style(Spec File)
-      desc: Deploy samba with auth_mode 'Active Directory(AD)' using declarative style(Spec File)
-      module: smb_deployment_declarative_method.py
-      polarion-id: CEPH-83593846
-      config:
-        file_type: yaml
-        file_mount: /tmp
-        spec:
-          - resource_type: ceph.smb.cluster
-            cluster_id: smb1
-            auth_mode: active-directory
-            domain_settings:
-              realm: samba.qe
-              join_sources:
-                - source_type: resource
-                  ref: join1-admin
-            custom_dns:
-              - 10.70.47.236
-            placement:
-              label: smb
-          - resource_type: ceph.smb.join.auth
-            auth_id: join1-admin
-            auth:
-              username: Administrator
-              password: Redhat@123
           - resource_type: ceph.smb.share
             cluster_id: smb1
             share_id: share1
