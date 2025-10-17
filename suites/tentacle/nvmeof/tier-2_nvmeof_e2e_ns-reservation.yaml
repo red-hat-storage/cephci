@@ -140,7 +140,7 @@ tests:
               rtype: 1
           - unregister_args:
               rrega: 1
-        initiators:                             # Configure Initiators with all pre-req
+        initiators: # Configure Initiators with all pre-req
           - subnqn: nqn.2016-06.io.spdk:cnode1
             listener_port: 4420
             node: node8
@@ -152,3 +152,67 @@ tests:
       module: test_ceph_nvmeof_gateway_ns_reservation.py
       name: Basic E2E NS reservation test
       polarion-id: CEPH-83626134
+
+  - test:
+      abort-on-fail: true
+      config:
+        gw_node:
+          - node5
+          - node6
+        rbd_pool: rbd
+        nvme_metadata_pool: rbd
+        install: true
+        gw_group: gw_group1
+        do_not_create_image: true
+        rep-pool-only: true
+        rep_pool_config:
+          pool: rbd_pool
+        cleanup:
+          - subsystems
+          - disconnect_all
+          - pool
+          - gateway
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            serial: 1
+            bdevs:
+              count: 1
+              size: 1G
+              ns_create_image: true
+            listeners:
+              - node5
+              - node6
+            listener_port: 4420
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            serial: 1
+            bdevs:
+              count: 1
+              size: 1G
+              ns_create_image: true
+            listeners:
+              - node5
+              - node6
+            listener_port: 4420
+            allow_host: "*"
+        reservation:
+          - register_args:
+              rrega: 0
+          - acquire_args:
+              racqa: 0
+              rtype: 1
+          - release_args:
+              rrela: 0
+              rtype: 1
+          - unregister_args:
+              rrega: 1
+        initiators: # Configure Initiators with all pre-req
+          - node10
+          - node11
+      desc: >
+            verifies the read and write operations from two clients
+            for the various reservation types
+      destroy-cluster: false
+      module: test_ceph_nvmeof_ns_reservation_multi_init.py
+      name: Verify NVMe namespace reservation types across multiple initiators
+      polarion-id: CEPH-83627298
