@@ -32,6 +32,7 @@ from utility.log import Log
 
 log = Log(__name__)
 STOPPED_OSDS = []
+NC_OSDS = []
 
 
 def run(ceph_cluster, **kw):
@@ -50,11 +51,33 @@ def run(ceph_cluster, **kw):
     rhbuild = config.get("rhbuild")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
-    bluestore_obj = BluestoreToolWorkflows(node=cephadm)
+    bluestore_obj = BluestoreToolWorkflows(node=cephadm, nostart=True)
     bluestore_obj_live = BluestoreToolWorkflows(node=cephadm, nostop=True)
     client = ceph_cluster.get_nodes(role="client")[0]
     bench_obj = RadosBench(mon_node=cephadm, clients=client)
     service_obj = ServiceabilityMethods(cluster=ceph_cluster, **config)
+
+    all_ops = [
+        "print_usage",
+        "fsck",
+        "fsck-deep",
+        "fsck-quick",
+        "allocmap",
+        "repair",
+        "restore-cfb",
+        "bluefs-export",
+        "bluefs-bdev-sizes",
+        "bluefs-bdev-expand",
+        "show-label-live",
+        "show-label",
+        "show-label-device",
+        "prime-osd-dir",
+        "free-dump",
+        "free-score",
+        "show-sharding",
+        "reshard",
+        "bluefs-stats",
+    ]
 
     def pick_random_osd():
         """
@@ -65,29 +88,339 @@ def run(ceph_cluster, **kw):
         osd_list = rados_obj.get_osd_list(status="up")
         osd_id = random.choice(osd_list)
         rados_obj.change_osd_state(action="stop", target=osd_id)
+        STOPPED_OSDS.append(osd_id)
         return osd_id
+
+    def execute_ops(op, cbt_obj, _osd_id):
+        """
+        Method to execute an operation on desired OSD
+        Args:
+            op: operation to perform
+            cbt_obj: library object to use
+            _osd_id: OSD ID on which operation will be performed
+        Return:
+            None
+        """
+        if op == "print_usage":
+            # Execute ceph-bluestore-tool --help
+            intro = (
+                f"\n --------------------"
+                f"\n Running cbt help for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.help(osd_id=_osd_id)
+            log.info(out)
+
+        if op == "fsck":
+            # Execute ceph-bluestore-tool fsck --path <osd_path>
+            intro = (
+                f"\n --------------------"
+                f"\n Running consistency check for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.run_consistency_check(osd_id=_osd_id)
+            log.info(out)
+            assert "success" in out
+
+        if op == "fsck-deep":
+            # Execute ceph-bluestore-tool fsck --deep --path <osd_path>
+            intro = (
+                f"\n --------------------"
+                f"\n Running deep consistency check for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.run_consistency_check(osd_id=_osd_id, deep=True)
+            log.info(out)
+            assert "success" in out
+
+        if op == "fsck-quick" and rhbuild.split(".")[0] >= "6":
+            # Execute ceph-bluestore-tool qfsck --path <osd_path>
+            intro = (
+                f"\n --------------------"
+                f"\n Running quick consistency check for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.run_quick_consistency_check(osd_id=_osd_id)
+            log.info(out)
+            assert "success" in out
+
+        if op == "allocmap" and rhbuild.split(".")[0] >= "6":
+            # Execute ceph-bluestore-tool allocmap --path <osd_path>
+            intro = (
+                f"\n --------------------"
+                f"\n Fetching allocmap for OSD {_osd_id}"
+                f"\n ---------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.fetch_allocmap(osd_id=_osd_id)
+            log.info(out)
+            assert "success" in out
+
+        if op == "repair":
+            # Execute ceph-bluestore-tool repair --path <osd_path>
+            intro = (
+                f"\n --------------------"
+                f"\n Run BlueFS repair for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.repair(osd_id=_osd_id)
+            log.info(out)
+            assert "success" in out
+
+        if op == "restore-cfb":
+            """
+            # Execute ceph-bluestore-tool restore_cfb --path <osd_path>
+            log.info(f"\n --------------------"
+            f"\n Restoring Column-Family B for OSD {_osd_id}"
+            f"\n --------------------")
+            out = cbt_obj.restore_cfb(osd_id=_osd_id)
+            log.info(out)
+
+            Execution failed with below msg -
+            restore_cfb failed: (1) Operation not permitted
+            7fe3c5c80600 -1 bluestore::NCB::push_allocation_to_rocksdb::cct->_conf->bluestore_allocation_from_file
+            must be cleared first
+            7fe3c5c80600 -1 bluestore::NCB::push_allocation_to_rocksdb::please
+             change default to false in ceph.conf file>
+            *** Needs further investigation as upstream documentation says this command is supposed to reserve changes
+            done by the new NCB code | restore_cfb: Reverses changes done by the new NCB code (either through
+             ceph restart or when running allocmap command) and restores RocksDB B Column-Family (allocator-map).
+            The failure may only be applicable in certain scenarios, BZ will be raised if found otherwise.
+            https://docs.ceph.com/en/quincy/man/8/ceph-bluestore-tool/#commands
+            """
+
+        if op == "bluefs-export":
+            # Execute ceph-bluestore-tool bluefs-export --out-dir <dir> --path <osd_path>
+            intro = (
+                f"\n --------------------"
+                f"\n Exporting BlueFS contents to an output directory for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.do_bluefs_export(osd_id=_osd_id, output_dir="/tmp/")
+            log.info(out)
+            assert f"/var/lib/ceph/osd/ceph-{_osd_id}/" in out
+
+        if op == "bluefs-bdev-sizes":
+            # Execute ceph-bluestore-tool bluefs-bdev-sizes --path <osd_path>
+            intro = (
+                f"\n --------------------"
+                f"\n Print the device sizes, as understood by BlueFS, to stdout for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.block_device_sizes(osd_id=_osd_id)
+            log.info(out)
+            assert "device size" in out
+
+        if op == "bluefs-bdev-expand":
+            # Execute ceph-bluestore-tool bluefs-bdev-expand --path <osd_path>
+            intro = (
+                f"\n --------------------"
+                f"\n Checking if size of block device is expanded for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.block_device_expand(osd_id=_osd_id)
+            log.info(out)
+            assert "device size" in out and "Expanding" in out
+
+        if op == "show-label-live":
+            # Execute ceph-bluestore-tool show-label
+            intro = (
+                f"\n --------------------"
+                f"\n Dump label content for block device for live OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.show_label(osd_id=_osd_id)
+            log.info(out)
+            assert f"/var/lib/ceph/osd/ceph-{_osd_id}/" in out
+
+        if op == "show-label":
+            intro = (
+                f"\n --------------------"
+                f"\n Dump label content for block device for stopped OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.show_label(osd_id=_osd_id)
+            log.info(out)
+            assert f"/var/lib/ceph/osd/ceph-{_osd_id}/" in out
+
+        if op == "show-label-device":
+            osd_metadata = ceph_cluster.get_osd_metadata(
+                osd_id=int(_osd_id), client=client
+            )
+            osd_meta_devices = [
+                value
+                for key, value in osd_metadata.items()
+                if key
+                in [
+                    "bluestore_bdev_partition_path",
+                    "bluefs_db_partition_path",
+                    "bluefs_wal_partition_path",
+                ]
+                and value
+            ]
+
+            # Execute ceph-bluestore-tool show-label --dev <device>
+            for dev in osd_meta_devices:
+                intro = (
+                    f"\n ----------------------------------------"
+                    f"\n Dump label content for device {dev} for OSD {_osd_id}"
+                    f"\n ----------------------------------------"
+                )
+                log.info(intro)
+                out = cbt_obj.show_label(osd_id=_osd_id, device=dev)
+                log.info(out)
+                assert dev in out
+
+        if op == "prime-osd-dir":
+            # Execute ceph-bluestore-tool prime-osd-dir --dev <main_device> --path <osd_path>
+            osd_metadata = ceph_cluster.get_osd_metadata(
+                osd_id=int(_osd_id), client=client
+            )
+            dev = f"{osd_metadata['osd_data']}/block"
+            intro = (
+                f"\n --------------------"
+                f"\n Generate the content for an OSD data directory "
+                f"that can start up a Bluestore OSD for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.generate_prime_osd_dir(osd_id=_osd_id, device=dev)
+            log.info(out)
+
+        if op == "free-dump":
+            # ceph-bluestore-tool free-dump --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
+            intro = (
+                f"\n --------------------"
+                f"\n Dump all free regions in allocator for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = (
+                cbt_obj.get_free_dump(osd_id=_osd_id)
+                if rhbuild.split(".")[0] >= "6"
+                else cbt_obj.get_free_dump(osd_id=_osd_id, allocator_type="block")
+            )
+            log.debug(out)
+            assert "alloc_name" in out and "extents" in out
+
+        if op == "free-score":
+            # ceph-bluestore-tool free-score --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
+            intro = (
+                f"\n --------------------"
+                f"\n Get fragmentation score for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = (
+                cbt_obj.get_free_score(osd_id=_osd_id)
+                if rhbuild.split(".")[0] >= "6"
+                else cbt_obj.get_free_score(osd_id=_osd_id, allocator_type="block")
+            )
+            log.info(out)
+            assert "fragmentation_rating" in out
+
+        if op == "show-sharding":
+            # Execute ceph-bluestore-tool show-sharding --path <osd_path>
+            intro = (
+                f"\n --------------------"
+                f"\n Show sharding that is currently applied to "
+                f"BlueStore's RocksDB for OSD {_osd_id}"
+                f"\n --------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.show_sharding(osd_id=_osd_id)
+            log.info(out)
+            assert "block_cache" in out
+
+        if op == "reshard":
+            # Execute ceph-bluestore-tool --sharding="<>" reshard --path <osd_path>
+            intro = (
+                f"\n -----------------------------------------"
+                f"\n Reshard with custom value for for OSD {_osd_id}"
+                f"\n -----------------------------------------"
+            )
+            log.info(intro)
+            new_shard = "m(3) p(3,0-12) O(3,0-13)=block_cache={type=binned_lru} L P"
+            log.info(f"New shard: {new_shard}")
+            out = cbt_obj.do_reshard(osd_id=_osd_id, new_shard=new_shard)
+            log.info(out)
+            assert "reshard success" in out
+            out = cbt_obj.show_sharding(osd_id=_osd_id)
+            log.info(
+                "Output of show_sharding after new shard was applied: \n " + str(out)
+            )
+            assert new_shard in out
+
+        if op == "bluefs-stats":
+            # Execute ceph-bluestore-tool bluefs-stats --path <osd_path>
+            intro = (
+                f"\n ----------------------------------------"
+                f"\n Display BlueFS statistics for OSD {_osd_id}"
+                f"\n ----------------------------------------"
+            )
+            log.info(intro)
+            out = cbt_obj.show_bluefs_stats(osd_id=_osd_id)
+            log.info(out)
+            if rhbuild.startswith("6"):
+                log.info(
+                    "Check if the chosen OSD has a dedicated DB device. Fetching metadata..."
+                )
+                osd_metadata = ceph_cluster.get_osd_metadata(
+                    osd_id=int(osd_id), client=client
+                )
+                # 1 if dedicated DB device is present, 0 otherwise
+                dedicated_db = int(osd_metadata["bluefs_dedicated_db"])
+
+            # default bluefs-stats for releases older than Reef
+            pattern_list = ["device size", "wal_total", "db_total", "slow_total"]
+
+            # verbose updated stats for Reef and above
+            if rhbuild.split(".")[0] > "6" or (
+                rhbuild.startswith("6") and dedicated_db
+            ):
+                pattern_list = [
+                    "Settings",
+                    "device size",
+                    "LOG",
+                    "WAL",
+                    "DB",
+                    "SLOW",
+                    "MAXIMUMS",
+                    "TOTAL",
+                    "SIZE",
+                ]
+                (
+                    pattern_list.append("LEV/DEV")
+                    if rhbuild.split(".")[0] > "8"
+                    else pattern_list.append("DEV/LEV")
+                )
+            for pattern in pattern_list:
+                assert (
+                    pattern in out
+                ), f"{pattern} not found in bluefs stats output for build {rhbuild}"
 
     try:
         osd_list = rados_obj.get_osd_list(status="up")
-        log.info(f"List of OSDs: \n{osd_list}")
+        log.info("List of UP OSDs: \n %s" % osd_list)
 
         if config.get("non-collocated"):
             log.info(
-                "\n\n Execution begins for CBT non-collocated scenarios ************ \n\n"
+                "\n\n ************ Execution begins for CBT non-collocated scenarios ************ \n\n"
             )
-            # Execute ceph-bluestore-tool --help
-            osd_id = random.choice(osd_list)
-            log.info(
-                f"\n ---------------------------------"
-                f"\n Running cbt help for OSD {osd_id}"
-                f"\n ---------------------------------"
-            )
-            out = bluestore_obj.help(osd_id=osd_id)
-            log.info(out)
-
             # Add a new dedicated WAL device to existing collocated OSD
             # ceph-bluestore-tool bluefs-bdev-new-wal --path osd path --dev-target new-device
             osd_id = random.choice(osd_list)
+            NC_OSDS.append(osd_id)
             log.info(
                 f"\n -------------------------------------------"
                 f"\n Adding a dedicated WAL device for OSD.{osd_id}"
@@ -130,6 +463,7 @@ def run(ceph_cluster, **kw):
             out = bluestore_obj.add_wal_device(osd_id=osd_id, new_device=wal_target)
             log.info(out)
             assert "WAL device added" in out
+            rados_obj.change_osd_state(action="start", target=osd_id)
 
             for _ in range(3):
                 osd_metadata = ceph_cluster.get_osd_metadata(
@@ -187,6 +521,7 @@ def run(ceph_cluster, **kw):
             )
             log.info(out)
             assert "DB device added" in out
+            rados_obj.change_osd_state(action="start", target=osd_id)
 
             for _ in range(3):
                 osd_metadata = ceph_cluster.get_osd_metadata(
@@ -253,7 +588,27 @@ def run(ceph_cluster, **kw):
                 )
                 log.info(out)
                 log.debug(f"OSD metadata for osd.{osd_id}: \n {osd_metadata}")
-        if config.get("bluefs-spillover"):
+
+            osd_id = random.choice(NC_OSDS)
+            STOPPED_OSDS.append(osd_id)
+            for operation in all_ops:
+                op_osd = osd_id
+                _cbt_obj = bluestore_obj
+                if operation in ["show-label-live", "prime-osd-dir"]:
+                    osd_list = rados_obj.get_osd_list(status="up")
+                    op_osd = random.choice(osd_list)
+                    _cbt_obj = bluestore_obj_live
+                log.info(
+                    "\n\n Next operation will be performed for Non-collocated OSD %s"
+                    % op_osd
+                )
+                execute_ops(op=operation, cbt_obj=_cbt_obj, _osd_id=op_osd)
+
+            log.info(
+                "ceph-bluestore-tool functionalities verified successfully on non-collocated OSDs"
+            )
+
+        elif config.get("bluefs-spillover"):
             log.info(
                 "\n\n ******** Running test to check BlueFS spillover **********"
                 "\n CEPH-83595766"
@@ -458,296 +813,30 @@ def run(ceph_cluster, **kw):
                 )
 
             log.info("BlueFS spillover warning successfully generated")
+
         else:
             log.info(
-                "\n\n Execution begins for CBT collocated scenarios ************ \n\n"
+                "\n\n ************ Execution begins for CBT collocated scenarios ************ \n\n"
             )
 
             osd_id = pick_random_osd()
-            log.info("All operations will be performed for DOWN OSD : %s" % osd_id)
 
-            # Execute ceph-bluestore-tool --help
-            log.info(
-                f"\n --------------------"
-                f"\n Running cbt help for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.help(osd_id=osd_id)
-            log.info(out)
-
-            # Execute ceph-bluestore-tool fsck --path <osd_path>
-            log.info(
-                f"\n --------------------"
-                f"\n Running consistency check for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.run_consistency_check(osd_id=osd_id)
-            log.info(out)
-            assert "success" in out
-
-            # Execute ceph-bluestore-tool fsck --deep --path <osd_path>
-            log.info(
-                f"\n --------------------"
-                f"\n Running deep consistency check for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.run_consistency_check(osd_id=osd_id, deep=True)
-            log.info(out)
-            assert "success" in out
-
-            if rhbuild.split(".")[0] >= "6":
-                # Execute ceph-bluestore-tool qfsck --path <osd_path>
+            for operation in all_ops:
+                op_osd = osd_id
+                _cbt_obj = bluestore_obj
+                if operation in ["show-label-live", "prime-osd-dir"]:
+                    osd_list = rados_obj.get_osd_list(status="up")
+                    op_osd = random.choice(osd_list)
+                    _cbt_obj = bluestore_obj_live
                 log.info(
-                    f"\n --------------------"
-                    f"\n Running quick consistency check for OSD {osd_id}"
-                    f"\n --------------------"
+                    "\n\n Next operation will be performed for collocated DOWN OSD : %s"
+                    % osd_id
                 )
-                out = bluestore_obj.run_quick_consistency_check(osd_id=osd_id)
-                log.info(out)
-                assert "success" in out
-
-                # Execute ceph-bluestore-tool allocmap --path <osd_path>
-                log.info(
-                    f"\n --------------------"
-                    f"\n Fetching allocmap for OSD {osd_id}"
-                    f"\n ---------------------"
-                )
-                out = bluestore_obj.fetch_allocmap(osd_id=osd_id)
-                log.info(out)
-                assert "success" in out
-
-            # Execute ceph-bluestore-tool repair --path <osd_path>
-            log.info(
-                f"\n --------------------"
-                f"\n Run BlueFS repair for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.repair(osd_id=osd_id)
-            log.info(out)
-            assert "success" in out
-
-            """
-            # Execute ceph-bluestore-tool restore_cfb --path <osd_path>
-            log.info(f"\n --------------------"
-                     f"\n Restoring Column-Family B for OSD {osd_id}"
-                     f"\n --------------------")
-            out = bluestore_obj.restore_cfb(osd_id=osd_id)
-            log.info(out)
-
-            Execution failed with below msg -
-            restore_cfb failed: (1) Operation not permitted
-            7fe3c5c80600 -1 bluestore::NCB::push_allocation_to_rocksdb::cct->_conf->bluestore_allocation_from_file
-            must be cleared first
-            7fe3c5c80600 -1 bluestore::NCB::push_allocation_to_rocksdb::please
-             change default to false in ceph.conf file>
-            *** Needs further investigation as upstream documentation says this command is supposed to reserve changes
-            done by the new NCB code | restore_cfb: Reverses changes done by the new NCB code (either through
-             ceph restart or when running allocmap command) and restores RocksDB B Column-Family (allocator-map).
-            The failure may only be applicable in certain scenarios, BZ will be raised if found otherwise.
-            https://docs.ceph.com/en/quincy/man/8/ceph-bluestore-tool/#commands
-            """
-
-            # Execute ceph-bluestore-tool bluefs-export --out-dir <dir> --path <osd_path>
-            log.info(
-                f"\n --------------------"
-                f"\n Exporting BlueFS contents to an output directory for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.do_bluefs_export(osd_id=osd_id, output_dir="/tmp/")
-            log.info(out)
-            assert f"/var/lib/ceph/osd/ceph-{osd_id}/" in out
-
-            # Execute ceph-bluestore-tool bluefs-bdev-sizes --path <osd_path>
-            log.info(
-                f"\n --------------------"
-                f"\n Print the device sizes, as understood by BlueFS, to stdout for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.block_device_sizes(osd_id=osd_id)
-            log.info(out)
-            assert "device size" in out
-
-            # Execute ceph-bluestore-tool bluefs-bdev-expand --path <osd_path>
-            log.info(
-                f"\n --------------------"
-                f"\n Checking if size of block device is expanded for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.block_device_expand(osd_id=osd_id)
-            log.info(out)
-            assert "device size" in out and "Expanding" in out
-
-            # Execute ceph-bluestore-tool show-label
-            log.info(
-                f"\n --------------------"
-                f"\n Dump label content for block device for live OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj_live.show_label(osd_id=osd_id)
-            log.info(out)
-            assert f"/var/lib/ceph/osd/ceph-{osd_id}/" in out
+                execute_ops(op=operation, cbt_obj=_cbt_obj, _osd_id=op_osd)
 
             log.info(
-                f"\n --------------------"
-                f"\n Dump label content for block device for stopped OSD {osd_id}"
-                f"\n --------------------"
+                "ceph-bluestore-tool functionalities verified successfully on collocated OSDs"
             )
-            out = bluestore_obj.show_label(osd_id=osd_id)
-            log.info(out)
-            assert f"/var/lib/ceph/osd/ceph-{osd_id}/" in out
-
-            osd_metadata = ceph_cluster.get_osd_metadata(
-                osd_id=int(osd_id), client=client
-            )
-            osd_meta_devices = [
-                value
-                for key, value in osd_metadata.items()
-                if key
-                in [
-                    "bluestore_bdev_partition_path",
-                    "bluefs_db_partition_path",
-                    "bluefs_wal_partition_path",
-                ]
-                and value
-            ]
-
-            # Execute ceph-bluestore-tool show-label --dev <device>
-            for dev in osd_meta_devices:
-                log.info(
-                    f"\n ----------------------------------------"
-                    f"\n Dump label content for device {dev} for OSD {osd_id}"
-                    f"\n ----------------------------------------"
-                )
-                out = bluestore_obj.show_label(osd_id=osd_id, device=dev)
-                log.info(out)
-                assert dev in out
-
-            # Execute ceph-bluestore-tool prime-osd-dir --dev <main_device> --path <osd_path>
-            osd_node = rados_obj.fetch_host_node(
-                daemon_type="osd", daemon_id=str(osd_id)
-            )
-
-            osd_metadata = ceph_cluster.get_osd_metadata(
-                osd_id=int(osd_id), client=client
-            )
-            dev = f"{osd_metadata['osd_data']}/block"
-            log.info(
-                f"\n --------------------"
-                f"\n Generate the content for an OSD data directory "
-                f"that can start up a BlueStore OSD for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj_live.generate_prime_osd_dir(osd_id=osd_id, device=dev)
-            log.info(out)
-            out = bluestore_obj.generate_prime_osd_dir(osd_id=osd_id, device=dev)
-            log.info(out)
-
-            # ceph-bluestore-tool free-dump --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
-            log.info(
-                f"\n --------------------"
-                f"\n Dump all free regions in allocator for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = (
-                bluestore_obj.get_free_dump(osd_id=osd_id)
-                if rhbuild.split(".")[0] >= "6"
-                else bluestore_obj.get_free_dump(osd_id=osd_id, allocator_type="block")
-            )
-            log.debug(out)
-            assert "alloc_name" in out and "extents" in out
-
-            # ceph-bluestore-tool free-score --path <osd_path> [--allocator block/bluefs-wal/bluefs-db/bluefs-slow]
-            log.info(
-                f"\n --------------------"
-                f"\n Get fragmentation score for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = (
-                bluestore_obj.get_free_score(osd_id=osd_id)
-                if rhbuild.split(".")[0] >= "6"
-                else bluestore_obj.get_free_score(osd_id=osd_id, allocator_type="block")
-            )
-            log.info(out)
-            assert "fragmentation_rating" in out
-
-            # Execute ceph-bluestore-tool show-sharding --path <osd_path>
-            log.info(
-                f"\n --------------------"
-                f"\n Show sharding that is currently applied to "
-                f"BlueStore's RocksDB for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.show_sharding(osd_id=osd_id)
-            log.info(out)
-            assert "block_cache" in out
-
-            # Execute ceph-bluestore-tool --sharding="<>" reshard --path <osd_path>
-            log.info(
-                f"\n -----------------------------------------"
-                f"\n Reshard with custom value for for OSD {osd_id}"
-                f"\n -----------------------------------------"
-            )
-            new_shard = "m(3) p(3,0-12) O(3,0-13)=block_cache={type=binned_lru} L P"
-            log.info(f"New shard: {new_shard}")
-            out = bluestore_obj.do_reshard(osd_id=osd_id, new_shard=new_shard)
-            log.info(out)
-            assert "reshard success" in out
-            out = bluestore_obj.show_sharding(osd_id=osd_id)
-            log.info(f"Output of show_sharding after new shard was applied: \n {out}")
-            assert new_shard in out
-
-            # Execute ceph-bluestore-tool bluefs-stats --path <osd_path>
-            log.info(
-                f"\n --------------------"
-                f"\n Display BlueFS statistics for OSD {osd_id}"
-                f"\n --------------------"
-            )
-            out = bluestore_obj.show_bluefs_stats(osd_id=osd_id)
-            log.info(out)
-            if rhbuild.startswith("6"):
-                log.info(
-                    "Check if the chosen OSD has a dedicated DB device. Fetching metadata..."
-                )
-                osd_metadata = ceph_cluster.get_osd_metadata(
-                    osd_id=int(osd_id), client=client
-                )
-                # 1 if dedicated DB device is present, 0 otherwise
-                dedicated_db = int(osd_metadata["bluefs_dedicated_db"])
-
-            # default bluefs-stats for releases older than Reef
-            pattern_list = ["device size", "wal_total", "db_total", "slow_total"]
-
-            # verbose updated stats for Reef and above
-            if rhbuild.split(".")[0] > "6" or (
-                rhbuild.startswith("6") and dedicated_db
-            ):
-                pattern_list = [
-                    "Settings",
-                    "device size",
-                    "LOG",
-                    "WAL",
-                    "DB",
-                    "SLOW",
-                    "MAXIMUMS",
-                    "TOTAL",
-                    "SIZE",
-                ]
-                (
-                    pattern_list.append("LEV/DEV")
-                    if rhbuild.split(".")[0] > "8"
-                    else pattern_list.append("DEV/LEV")
-                )
-            for pattern in pattern_list:
-                assert (
-                    pattern in out
-                ), f"{pattern} not found in bluefs stats output for build {rhbuild}"
-
-            # restart OSD services
-            osd_services = rados_obj.list_orch_services(service_type="osd")
-            for osd_service in osd_services:
-                cephadm.shell(args=[f"ceph orch restart {osd_service}"])
-            time.sleep(30)
-
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)
@@ -758,6 +847,9 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
+        # delete all rados pools
+        rados_obj.rados_pool_cleanup()
+
         # fail-safe removal of all OSDs from node13
         if "node13_osds" in locals() or "node13_osds" in globals():
             service_obj.remove_osds_from_host(host_obj=node13_obj)
@@ -772,8 +864,6 @@ def run(ceph_cluster, **kw):
             log.debug("Starting stopped OSD %s" % osd_id)
             rados_obj.change_osd_state(action="start", target=osd_id)
 
-        # delete all rados pools
-        rados_obj.rados_pool_cleanup()
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
