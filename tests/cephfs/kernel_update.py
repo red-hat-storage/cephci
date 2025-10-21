@@ -109,7 +109,7 @@ def run(ceph_cluster, **kw):
                 kernel_cmds.append(kernel_core_package)
                 kernel_cmds.append(kernel_modules_package)
                 kernel_cmds.append(url + kernel_package)
-            if "rhel-9" in url:
+            else:
                 kernel_package = url.split("/")[-1]
                 url = url.strip(kernel_package)
                 kernel_modules_core = "kernel-modules-core" + kernel_package.strip(

@@ -96,7 +96,7 @@ def run(ceph_cluster, **kw):
         )
         base_path = "/mnt/mycephfs1"
         main_file = "%s/file1" % base_path
-        if LooseVersion(ceph_version) > LooseVersion("20.1"):
+        if LooseVersion(ceph_version) > LooseVersion("20.1.1"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, fs_name, enable=True
             )
@@ -168,15 +168,25 @@ def run(ceph_cluster, **kw):
             log.error("checksum is not matching after snapshot1 revert")
             return 1
 
-        if LooseVersion(ceph_version) > LooseVersion("20.1"):
+        if LooseVersion(ceph_version) > LooseVersion("20.1.1"):
             ref_inode_utils.allow_referent_inode_feature_enablement(
                 client1, fs_name, enable=False
             )
 
+        log.info(f"Testcase {tc1} passed")
+        return 0
+
+    except Exception as e:
+        log.info(e)
+        log.info(traceback.format_exc())
+        return 1
+
+    finally:
+        log.info("cleanup the system")
+
         log.info("unmount the drive")
         client1.exec_command(sudo=True, cmd="fusermount -u /mnt/mycephfs1")
 
-        log.info("cleanup the system")
         commands = [
             f"ceph fs subvolume snapshot rm {fs_name} snap_vol snap_1 --group_name snap_group",
             f"ceph fs subvolume snapshot rm {fs_name} snap_vol snap_2 --group_name snap_group",
@@ -188,15 +198,3 @@ def run(ceph_cluster, **kw):
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command)
-            results.append(f"{command} successfully executed")
-
-        log.info(f"Execution of testcase {tc1} ended")
-        log.info("Testcase Results:")
-        for res in results:
-            log.info(res)
-        return 0
-
-    except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
-        return 1
