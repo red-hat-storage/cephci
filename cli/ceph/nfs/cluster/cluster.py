@@ -1,6 +1,7 @@
 import json
 
 from cli import Cli
+from cli.utilities.utils import build_cmd_from_args
 
 from .qos import Qos
 
@@ -11,7 +12,9 @@ class Cluster(Cli):
         self.base_cmd = f"{base_cmd} cluster"
         self.qos = Qos(nodes, self.base_cmd)
 
-    def create(self, name, nfs_server, ha=False, vip=None, active_standby=False):
+    def create(
+        self, name, nfs_server, ha=False, vip=None, active_standby=False, **kwargs
+    ):
         """
         Perform create operation for nfs cluster
         Args:
@@ -25,9 +28,11 @@ class Cluster(Cli):
         nfs_server = " ".join(nfs_server)
         if active_standby and ha:
             nfs_server = "1 " + nfs_server
-        cmd = f"{self.base_cmd} create {name} '{nfs_server}'"
+        cmd = f"{self.base_cmd} create {name} '{nfs_server}' "
         if ha:
-            cmd += f" --ingress --virtual-ip {vip}"
+            cmd += f" --ingress --virtual-ip {vip} "
+
+        cmd += build_cmd_from_args(kwargs)
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
