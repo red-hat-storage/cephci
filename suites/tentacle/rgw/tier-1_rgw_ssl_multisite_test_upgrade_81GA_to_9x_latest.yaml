@@ -214,7 +214,6 @@ tests:
       clusters:
         ceph-pri:
           config:
-            cephadm: true
             commands:
               - "radosgw-admin realm create --rgw-realm india --default"
               - "radosgw-admin zonegroup create --rgw-realm india --rgw-zonegroup shared --endpoints https://{node_ip:node5} --master --default"
