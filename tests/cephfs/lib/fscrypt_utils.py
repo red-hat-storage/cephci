@@ -106,6 +106,7 @@ class FscryptUtils(object):
             return 0
         except BaseException as ex:
             if "command not found" in str(ex):
+                log.error(ex)
                 return 1
 
     def setup(self, client, mnt_pt, validate=True):

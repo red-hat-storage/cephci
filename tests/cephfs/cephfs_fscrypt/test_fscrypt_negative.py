@@ -270,6 +270,8 @@ def fscrypt_key_remove_diff_clients(fscrypt_test_params):
     }
     log.info("Mount the same subvolume %s in client2", sv_name)
     mnt_pt_2, _ = cephfs_common_utils.mount_ceph("fuse", mount_params)
+    if fscrypt_util.setup(mnt_client_2, mnt_pt_2):
+        return 1
     encrypt_info = fscrypt_util.encrypt_dir_setup(mount_details)
     encrypt_path_1 = encrypt_info[sv_name]["path"]
     encrypt_params = encrypt_info[sv_name]["encrypt_params"]
