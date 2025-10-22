@@ -1,0 +1,88 @@
+tests:
+  - test:
+      name: Executes RGW, RBD, FS and NVMEoTCP operations
+      desc: Run object, block, filesystem AND NVMEoTCP basic operations parallelly.
+      module: test_parallel.py
+      parallel:
+        - test:
+            name: Test M buckets with N objects
+            desc: test to create "M" no of buckets and "N" no of objects
+            polarion-id: CEPH-9789
+            module: sanity_rgw.py
+            config:
+              script-name: test_Mbuckets_with_Nobjects.py
+              config-file-name: test_Mbuckets_with_Nobjects.yaml
+              timeout: 300
+
+        - test:
+            name: Run RBD tier-0 operations
+            desc: Run RBD tier-0 operations
+            polarion-id: CEPH-83575401
+            module: rbd_tier0.py
+            config:
+              ec-pool-k-m: 2,1
+              ec-pool-only: False
+              ec_pool_config:
+                pool: rbd_pool
+                data_pool: rbd_ec_pool
+                ec_profile: rbd_ec_profile
+                image: rbd_image
+                image_thick_provision: rbd_thick_image
+                snap_thick_provision: rbd_thick_snap
+                clone_thick_provision: rbd_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_ec_pool_snap
+                clone: rbd_ec_pool_clone
+              rep_pool_config:
+                pool: rbd_rep_pool
+                image: rbd_rep_image
+                image_thick_provision: rbd_rep_thick_image
+                snap_thick_provision: rbd_rep_thick_snap
+                clone_thick_provision: rbd_rep_thick_clone
+                thick_size: 2G
+                size: 10G
+                snap: rbd_rep_pool_snap
+                clone: rbd_rep_pool_clone
+              operations:
+                map: true
+                io: true
+                nounmap: false
+
+        - test:
+            name: cephfs-basics
+            desc: "cephfs basic operations"
+            polarion-id: "CEPH-11293,CEPH-11296,CEPH-11297,CEPH-11295"
+            module: cephfs_basic_tests.py
+
+        - test:
+            name: NVMEoTCP-basics
+            desc: Test NVMEoF basic operations
+            config:
+              gw_node: node3
+              rbd_pool: rbd
+              gw_group: gw_group1
+              do_not_create_image: true
+              rep-pool-only: true
+              rep_pool_config:
+                pool: rbd
+              install: true
+              cleanup:
+                - subsystems
+                - initiators
+                - pool
+                - gateway
+              subsystems:
+                - nqn: nqn.2016-06.io.spdk:cnode1
+                  serial: 1
+                  bdevs:
+                    count: 1
+                    size: 10G
+                  listener_port: 5001
+                  allow_host: "*"
+              initiators:
+                - subnqn: nqn.2016-06.io.spdk:cnode1
+                  listener_port: 5001
+                  node: node4
+            module: test_ceph_nvmeof_bvt.py
+            polarion-id: CEPH-83575441
