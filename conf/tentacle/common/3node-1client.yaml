@@ -18,6 +18,7 @@ globals:
           - crash
           - rgw
           - osd
+          - nfs
         no-of-volumes: 6
         disk-size: 20
       node3:
@@ -27,6 +28,7 @@ globals:
           - crash
           - mds
           - osd
+          - nfs
         no-of-volumes: 6
         disk-size: 20
       node4:
