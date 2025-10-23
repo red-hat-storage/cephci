@@ -440,6 +440,19 @@ def create_smb_share(
         raise CephadmOpsExecutionError(f"Fail to create smb shares, Error {e}")
 
 
+def get_smb_shares(installer, smb_cluster_id):
+    """Get SMB shares
+    Args:
+        installer (obj): Installer node obj
+        smb_cluster_id (str): Smb cluster id
+    Return:
+        List of shares
+    """
+    shares = CephAdm(installer).ceph.smb.share.ls(smb_cluster_id)
+    list_shares = json.loads(shares)
+    return list_shares
+
+
 def verify_smb_service(node, service_name):
     """
     Verifies service is up
