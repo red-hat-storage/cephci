@@ -45,18 +45,135 @@ tests:
                 placement:
                   label: mon
           - config:
-              command: apply
-              service: osd
-              args:
-                all-available-devices: true
+              command: apply_spec
+              service: orch
+              specs:
+              - service_type: crash
+                placement:
+                  host_pattern: "*"
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Encrypted OSD deployment on LVMs
+      desc: Deploy encrypted OSDs on LVs
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osd_encrypted_lv
+                  encrypted: "true"
+                  placement:
+                    label: osd_encrypt_lv
+                  spec:
+                    data_devices:
+                      size: "'1G:'"
+
+  - test:
+      name: Encrypted OSD deployment on RAW device
+      desc: Deploy encrypted OSDs on RAW devices
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osd_encrypted_raw
+                  encrypted: "true"
+                  placement:
+                    label: osd_encrypt_raw
+                  spec:
+                    method: raw
+                    data_devices:
+                      size: "'1G:'"
+
+  - test:
+      name: non-encrypted OSD deployment on LVM
+      desc: Deploy non-encrypted OSDs on LVs
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osd_lv
+                  placement:
+                    label: osd_lv
+                  spec:
+                    data_devices:
+                      size: "'1G:'"
+
+  - test:
+      name: non-encrypted OSD deployment on RAW device
+      desc: Deploy non-encrypted OSDs on RAW devices
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osd_raw
+                  placement:
+                    label: osd_raw
+                  spec:
+                    method: raw
+                    data_devices:
+                      size: "'1G:'"
+
+  - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
           - config:
               command: shell
-              args:          # arguments to ceph orch
+              args:               # arguments to ceph orch
                 - ceph
                 - fs
                 - volume
                 - create
                 - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
           - config:
               command: apply
               service: rgw
@@ -65,22 +182,6 @@ tests:
               args:
                 placement:
                   label: rgw
-          - config:
-              command: apply
-              service: mds
-              base_cmd_args:          # arguments to ceph orch
-                verbose: true
-              pos_args:
-                - cephfs              # name of the filesystem
-              args:
-                placement:
-                  nodes:
-                    - node2
-                    - node6
-                  limit: 2            # no of daemons
-                  sep: " "            # separator to be used for placements
-      destroy-cluster: false
-      abort-on-fail: true
 
   - test:
       name: Configure client admin
@@ -90,7 +191,7 @@ tests:
       config:
         command: add
         id: client.1                      # client Id (<type>.<Id>)
-        node: node7                       # client node
+        node: node6                       # client node
         install_packages:
           - ceph-common
         copy_admin_keyring: true          # Copy admin keyring to node
