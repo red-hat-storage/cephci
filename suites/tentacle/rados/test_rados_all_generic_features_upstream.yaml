@@ -480,17 +480,8 @@ tests:
       module: test_osd_inconsistency_pg.py
       polarion-id: CEPH-9924
       config:
-        verify_osd_omap_entries:
-          configurations:
-            pool-1:
-              pool_name: Inconsistent_pool
-              pool_type: replicated
-              pg_num: 1
-          omap_config:
-            obj_start: 0
-            obj_end: 5
-            num_keys_obj: 10
-        delete_pool: true
+        pool_name: Inconsistent_pool
+        pg_num_max: 1
 
   - test:
       name: Inconsistent object pg check using pool snapshot for RE pools
@@ -1577,15 +1568,7 @@ tests:
       module: test_inconsistency_osd_epoch.py
       polarion-id: CEPH-9947
       config:
-        verify_osd_omap_entries:
-          configurations:
-            pool_name: test_pool_4
-            pool_type: replicated
-          omap_config:
-            obj_start: 0
-            obj_end: 50
-            num_keys_obj: 100
-        delete_pool: true
+        pool_name: test_pool
 
   - test:
       name: Omap creations on objects

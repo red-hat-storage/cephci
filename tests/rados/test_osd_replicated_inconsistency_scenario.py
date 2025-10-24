@@ -34,7 +34,7 @@ from test_osd_ecpool_inconsistency_scenario import (
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
-from ceph.rados.pool_workflows import PoolFunctions
+from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
 from ceph.rados.rados_scrub import RadosScrubber
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
@@ -56,15 +56,13 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     scrub_object = RadosScrubber(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
-    pool_obj = PoolFunctions(node=cephadm)
     scrub_obj = RadosScrubber(node=cephadm)
-    global replicated_pool_name
+    objectstore_obj = objectstoreToolWorkflows(node=cephadm, nostart=True)
     wait_time = 30
 
     try:
 
-        replicated_config = config.get("replicated_pool")
-        replicated_pool_name = replicated_config["pool_name"]
+        pool_name = config["pool_name"]
         no_of_objects = config.get("inconsistent_obj_count")
 
         # Set the default values
@@ -82,9 +80,26 @@ def run(ceph_cluster, **kw):
         scrub_obj.set_osd_flags("set", "noscrub")
 
         try:
-            pg_info = create_pool_inconsistent_object(
-                rados_obj, no_of_objects, pool_obj, **replicated_config
+            if not rados_obj.create_pool(**config):
+                log.error("Failed to create the replicated Pool")
+                return 1
+            log.info("Generating the inconsistent object")
+            obj_pg_map = rados_obj.create_inconsistent_object(
+                objectstore_obj, pool_name, no_of_objects
             )
+            if obj_pg_map is None:
+                log.error(
+                    "Inconsistent objects are not created.Not executing the further test"
+                )
+                return 1
+
+            pg_id = list(set(obj_pg_map.values()))[0]
+            msg_pgid = f"The inconsistent object created in{pg_id} pg and the pool is {pool_name}"
+            log.info(msg_pgid)
+            msg_obj = (
+                f"The objects in the {pool_name} pool is - {list(obj_pg_map.keys())}"
+            )
+            log.info(msg_obj)
         except Exception as e:
             log.error(e)
             log.error(
@@ -95,16 +110,11 @@ def run(ceph_cluster, **kw):
             return 1
 
         # getting the acting set for the created pool
-        acting_pg_set = rados_obj.get_pg_acting_set(pool_name=replicated_pool_name)
+        acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
 
         if config.get("debug_enable"):
             mon_obj.set_config(section="osd", name="debug_osd", value="20/20")
             mon_obj.set_config(section="mgr", name="debug_mgr", value="20/20")
-        pg_id, inconsistent_obj_count = pg_info
-        msg_inconsistent = (
-            f"The inconsistent object count is- {inconsistent_obj_count} on pg -{pg_id}"
-        )
-        log.info(msg_inconsistent)
 
         # Check the default values of the osd_scrub_auto_repair_num_errors and osd_scrub_auto_repair
         auto_repair_num_value = mon_obj.get_config(
@@ -487,14 +497,13 @@ def run(ceph_cluster, **kw):
         log.info(traceback.format_exc())
         return 1
     finally:
-        log.info("Execution of finally block")
+        log.info("===============Execution of finally block=======================")
         scrub_obj.set_osd_flags("unset", "nodeep-scrub")
         scrub_obj.set_osd_flags("unset", "noscrub")
         mon_obj.remove_config(section="osd", name="debug_osd")
         mon_obj.remove_config(section="mgr", name="debug_mgr")
-        if config.get("delete_pool"):
-            method_should_succeed(rados_obj.delete_pool, replicated_pool_name)
-            log.info("deleted the pool successfully")
+        method_should_succeed(rados_obj.delete_pool, pool_name)
+        log.info("deleted the pool successfully")
         # The values used for the  replicated and ec pool are same.Using the same method to set the default values
         set_ecpool_inconsistent_default_param_value(mon_obj, scrub_object)
         rados_obj.log_cluster_health()
@@ -508,69 +517,14 @@ def run(ceph_cluster, **kw):
 def create_pool_inconsistent_object(
     rados_object,
     no_of_objects,
-    pool_obj,
+    objectstore_obj,
     **config,
 ):
-    """
-     The method create a replicated pool and generate the inconsistent objects
-    Args:
-        rados_object: Rados object
-        no_of_objects: numer of objects to convert into inconsistent objects
-        pool_obj: pool object
-        config: pool configurations
-    Returns: Returns  the pg id and no of inconsistent object count
-             None if the inconsistent object count is 0
-    """
-    pg_id_list = []
     pool_name = config["pool_name"]
     if not rados_object.create_pool(**config):
         log.error("Failed to create the replicated Pool")
         return 1
-    if not pool_obj.fill_omap_entries(
-        pool_name=pool_name, obj_end=50, num_keys_obj=100
-    ):
-        msg_err = f"Omap entries not generated on pool {pool_name}"
-        log.error(msg_err)
-        raise Exception(msg_err)
-    rep_obj_list = rados_object.get_object_list(pool_name)
-    rep_count = 0
-    for obj in rep_obj_list:
-        try:
-            # Create inconsistency objects
-            try:
-                pg_id = rados_object.create_inconsistent_object(
-                    pool_name, obj, num_keys=1
-                )
-                pg_id_list.append(pg_id)
-            except Exception as err:
-                msg_err = (
-                    f"Cannot able to convert the object-{obj} into inconsistent object.Picking another object "
-                    f"to convert-{err}.Currently the {rep_count} objects converted into inconsistent objects"
-                )
-                log.info(msg_err)
-                continue
-            rep_count = rep_count + 1
-            msg_rep_count = (
-                f"The {rep_count} objects are converted into inconsistent objects"
-            )
-            log.info(msg_rep_count)
-            if rep_count == no_of_objects:
-                msg_rep_count = (
-                    f"The inconsistent count on the replicated pool is - {rep_count}"
-                )
-                log.info(msg_rep_count)
-                break
-        except Exception as err:
-            msg_err = f"Unable to create inconsistent object. error {err}"
-            log.error(msg_err)
-            raise Exception("inconsistent object not generated error")
-    if rep_count == 0:
-        msg_err = f"The inconsistent object count is- {rep_count}.The inconsistent object should be greater than 1"
-        log.error(msg_err)
-        return None
-    pg_id_set = set(pg_id_list)
-    if pg_id_set is None:
-        log.error("The inconsistent objects are not crated in any PG.The pg_id is none")
-        return 1
-    pg_id = pg_id_set.pop()
-    return pg_id, rep_count
+    pg_id_list = rados_object.create_inconsistent_object(
+        objectstore_obj, pool_name, no_of_objects
+    )
+    return pg_id_list[0]
