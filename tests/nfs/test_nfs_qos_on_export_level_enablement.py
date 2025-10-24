@@ -333,4 +333,4 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Cleanup in progress")
         log.debug("deleting NFS cluster {0}".format(cluster_name))
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)

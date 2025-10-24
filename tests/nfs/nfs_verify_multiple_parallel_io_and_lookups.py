@@ -96,5 +96,7 @@ def run(ceph_cluster, **kw):
             import time
 
             time.sleep(20)
-            cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+            cleanup_cluster(
+                clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_nodes[0]
+            )
             log.info("Cleaning up successful")

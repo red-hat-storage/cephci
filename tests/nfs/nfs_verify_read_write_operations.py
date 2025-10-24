@@ -176,5 +176,5 @@ def run(ceph_cluster, **kw):
         log.error(f"Failed to validate read write operations : {e}")
         return 1
     finally:
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         log.info("Cleaning up successful")

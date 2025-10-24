@@ -86,11 +86,11 @@ def run(ceph_cluster, **kw):
         log.error(
             f"Failed to  verify the partial space deallocation test on NFS v4.2 : {e}"
         )
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         log.info("Cleaning up successful")
         return 1
 
     finally:
         log.info("Cleaning up")
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         log.info("Cleaning up successful")

@@ -165,5 +165,7 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Cleaning up")
         cleanup_exports_and_filesystems(clients[0])
-        cleanup_cluster(clients[0], "/mnt/nfs", "cephfs-nfs", "/export")
+        cleanup_cluster(
+            clients[0], "/mnt/nfs", "cephfs-nfs", "/export", nfs_nodes=nfs_nodes[0]
+        )
         log.info("Cleanup successful")

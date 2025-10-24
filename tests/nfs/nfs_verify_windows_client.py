@@ -87,4 +87,4 @@ def run(ceph_cluster, **kw):
         # Unmount windows mount
         cmd = r"umount Z:"
         execute_command_on_windows_node(win_clients[0], cmd)
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=servers)

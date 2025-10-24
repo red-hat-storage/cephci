@@ -101,5 +101,5 @@ def run(ceph_cluster, **kw):
             client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_client_addr_mount}")
             Ceph(client).nfs.export.delete(nfs_name, nfs_export_client)
 
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
         log.info("Cleaning up successful")

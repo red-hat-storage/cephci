@@ -101,4 +101,6 @@ def run(ceph_cluster, **kw):
         # Cleanup
         log.info("Cleanup")
         linux_clients[0].exec_command(sudo=True, cmd=f"rm -rf  {nfs_mount}/*")
-        cleanup_cluster(linux_clients, nfs_mount, nfs_name, nfs_export)
+        cleanup_cluster(
+            linux_clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_nodes
+        )

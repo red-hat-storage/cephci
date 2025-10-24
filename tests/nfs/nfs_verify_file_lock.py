@@ -139,5 +139,5 @@ def run(ceph_cluster, **kw):
         client.exec_command(sudo=True, cmd=f"rm -rf  {nfs_lock_mount}")
     Ceph(clients[0]).nfs.export.delete(nfs_name, nfs_lock_export)
 
-    cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
+    cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
     return 0
