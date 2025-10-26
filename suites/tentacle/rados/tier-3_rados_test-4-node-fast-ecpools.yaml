@@ -250,6 +250,15 @@ tests:
           delete_pool: true
       desc: Verify Recovery of EC pool with only "k" shards available
 
+  - test:
+      name: EC enhancements Config checks
+      module: test_fast_ec_config_params.py
+      polarion-id: CEPH-83620447
+      abort-on-fail: true
+      config:
+        test_fast_ec_optimization_params: true
+      desc: Verification of EC enhancements Configs for pool and global level
+
 # 2+2@4 specific scenarios, with Fast EC features enabled:
 #        scenario-1: Test the effects of bulk flag and no IO stoppage
 #        scenario-2: Perform rolling reboot of all the OSDs on a particular host.
