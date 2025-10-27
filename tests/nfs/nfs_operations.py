@@ -9,7 +9,6 @@ from time import sleep
 
 import yaml
 
-from ceph.ceph import CommandFailed
 from ceph.waiter import WaitUntil
 from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
@@ -1263,7 +1262,6 @@ def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None):
             nfs_node = [nfs_node]
         for node in nfs_node:
             try:
-
                 log.info(
                     "\n\n" + "-" * 30 + "Fetching logs and Ganesha confs" + "-" * 30
                 )
@@ -1313,12 +1311,7 @@ def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None):
 
                 for container, logs in zip(nfs_containers_deatail, container_logs):
                     log.info("\nLogs for container {0}:\n{1}\n".format(container, logs))
-            except CommandFailed as e:
-                if nfs_daemon_name in e or nfs_name in e:
-                    log.error(
-                        "Failed to fetch logs for {0} on {1}\n".format(
-                            nfs_daemon_name, node.hostname
-                        )
-                    )
-                else:
-                    raise CommandFailed
+            except Exception:
+                log.info(
+                    "Since we are collecting logs, ignoring the exception will not fail the test"
+                )
