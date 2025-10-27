@@ -38,7 +38,7 @@ class Cthon(Cli):
         """Add cthon repos"""
         try:
             SubscriptionManager(self.client).repos.enable(
-                "codeready-builder-for-rhel-9-$(arch)-rpms"
+                "codeready-builder-for-rhel-$(rpm -E %rhel)-$(arch)-rpms"
             )
             return True
         except Exception as e:
@@ -48,7 +48,7 @@ class Cthon(Cli):
         """Remove cthon repos"""
         try:
             SubscriptionManager(self.client).repos.disable(
-                "codeready-builder-for-rhel-9-$(arch)-rpms"
+                "codeready-builder-for-rhel-$(rpm -E %rhel)-$(arch)-rpms"
             )
             return True
         except Exception as e:
