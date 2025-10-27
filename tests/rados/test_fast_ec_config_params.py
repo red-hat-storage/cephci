@@ -81,7 +81,7 @@ def run(ceph_cluster, **kw):
             log.info(
                 "Test skipped: Fast EC optimizations feature is only available in 9.0 and above"
             )
-            log.info(f"Current version: {rhbuild}")
+            log.info("Current version: %s", rhbuild)
             return 0
 
         pool_name_1 = "test_ec_pool_1"
@@ -121,27 +121,27 @@ def run(ceph_cluster, **kw):
             # Step 2: Create first EC pool with optimizations enabled (default)
             log.info("Step 2: Creating first EC pool and verifying optimizations")
             ec_config["pool_name"] = pool_name_1
-            assert rados_obj.create_erasure_pool(
-                **ec_config
-            ), f"Failed to create pool {pool_name_1}"
-            log.info(f"Created EC pool: {pool_name_1}")
+            assert rados_obj.create_erasure_pool(**ec_config), (
+                "Failed to create pool %s" % pool_name_1
+            )
+            log.info("Created EC pool: %s", pool_name_1)
             time.sleep(2)
 
             # Create metadata pool for first EC pool
             metadata_pool_name_1 = "test_metadata_pool_1"
             assert rados_obj.create_pool(pool_name=metadata_pool_name_1, app_name="rbd")
-            log.info(f"Created metadata pool: {metadata_pool_name_1}")
+            log.info("Created metadata pool: %s", metadata_pool_name_1)
 
             # Check allow_ec_optimizations
             ec_opt_value_dict = rados_obj.get_pool_property(
                 pool=pool_name_1, props="allow_ec_optimizations"
             )
             ec_opt_value = ec_opt_value_dict.get("allow_ec_optimizations")
-            log.info(f"Pool {pool_name_1} - allow_ec_optimizations: {ec_opt_value} ")
+            log.info("Pool %s - allow_ec_optimizations: %s ", pool_name_1, ec_opt_value)
 
             if ec_opt_value is not True:
-                log.error(f"allow_ec_optimizations is not True for {pool_name_1}")
-                raise Exception(f"EC optimizations check failed for {pool_name_1}")
+                log.error("allow_ec_optimizations is not True for %s", pool_name_1)
+                raise Exception("EC optimizations check failed for %s" % pool_name_1)
 
             # Try to set allow_ec_optimizations to false (should fail)
             log.info("Attempting to set allow_ec_optimizations to false (should fail)")
@@ -192,15 +192,15 @@ def run(ceph_cluster, **kw):
                 "Step 4: Creating second EC pool with optimizations disabled at global level"
             )
             ec_config["pool_name"] = pool_name_2
-            assert rados_obj.create_erasure_pool(
-                **ec_config
-            ), f"Failed to create pool {pool_name_2}"
-            log.info(f"Created EC pool: {pool_name_2}")
+            assert rados_obj.create_erasure_pool(**ec_config), (
+                "Failed to create pool %s" % pool_name_2
+            )
+            log.info("Created EC pool: %s", pool_name_2)
 
             # Create metadata pool for second EC pool
             metadata_pool_name_2 = "test_metadata_pool_2"
             assert rados_obj.create_pool(pool_name=metadata_pool_name_2, app_name="rbd")
-            log.info(f"Created metadata pool: {metadata_pool_name_2}")
+            log.info("Created metadata pool: %s", metadata_pool_name_2)
 
             time.sleep(2)
 
@@ -210,16 +210,18 @@ def run(ceph_cluster, **kw):
             )
             ec_opt_value_2 = ec_opt_value_2_dict.get("allow_ec_optimizations")
             log.info(
-                f"Pool {pool_name_2} - allow_ec_optimizations: {ec_opt_value_2} "
-                f"(type: {type(ec_opt_value_2)})"
+                "Pool %s - allow_ec_optimizations: %s (type: %s)",
+                pool_name_2,
+                ec_opt_value_2,
+                type(ec_opt_value_2),
             )
 
             if ec_opt_value_2 is not False:
                 log.error(
-                    f"allow_ec_optimizations is not False for {pool_name_2},"
-                    f" even when it's set to false at global level"
+                    "allow_ec_optimizations is not False for %s, even when it's set to false at global level",
+                    pool_name_2,
                 )
-                raise Exception(f"EC optimizations should be False for {pool_name_2}")
+                raise Exception("EC optimizations should be False for %s" % pool_name_2)
 
             # Step 5: Create RBD images on both pools and write objects
             log.info("Step 5: Creating RBD images on both pools and writing objects")
@@ -231,8 +233,10 @@ def run(ceph_cluster, **kw):
             )
             client_node.exec_command(cmd=image_create_cmd_1, sudo=True)
             log.info(
-                f"Created RBD image {image_name_1} with data-pool {pool_name_1} "
-                f"and metadata-pool {metadata_pool_name_1}"
+                "Created RBD image %s with data-pool %s and metadata-pool %s",
+                image_name_1,
+                pool_name_1,
+                metadata_pool_name_1,
             )
 
             # Create RBD image on second EC pool with metadata pool
@@ -242,8 +246,10 @@ def run(ceph_cluster, **kw):
             )
             client_node.exec_command(cmd=image_create_cmd_2, sudo=True)
             log.info(
-                f"Created RBD image {image_name_2} with data-pool {pool_name_2} "
-                f"and metadata-pool {metadata_pool_name_2}"
+                "Created RBD image %s with data-pool %s and metadata-pool %s",
+                image_name_2,
+                pool_name_2,
+                metadata_pool_name_2,
             )
 
             # Mount first image
@@ -254,7 +260,10 @@ def run(ceph_cluster, **kw):
                 mount_path="/tmp/ec_test_mount_1/",
             )
             log.info(
-                f"Mapped and mounted image {image_name_1} to device {device_map_1} at {mount_path_1}"
+                "Mapped and mounted image %s to device %s at %s",
+                image_name_1,
+                device_map_1,
+                mount_path_1,
             )
 
             # Mount second image
@@ -265,7 +274,10 @@ def run(ceph_cluster, **kw):
                 mount_path="/tmp/ec_test_mount_2/",
             )
             log.info(
-                f"Mapped and mounted image {image_name_2} to device {device_map_2} at {mount_path_2}"
+                "Mapped and mounted image %s to device %s at %s",
+                image_name_2,
+                device_map_2,
+                mount_path_2,
             )
 
             # Step 6: Write 10 objects and verify read
@@ -280,7 +292,7 @@ def run(ceph_cluster, **kw):
             rados_obj.set_pool_property(
                 pool=pool_name_2, props="allow_ec_optimizations", value="true"
             )
-            log.info(f"Enabled allow_ec_optimizations on {pool_name_2}")
+            log.info("Enabled allow_ec_optimizations on %s", pool_name_2)
 
             time.sleep(5)
 
@@ -290,13 +302,15 @@ def run(ceph_cluster, **kw):
             )
             ec_opt_value_2_new = ec_opt_value_2_new_dict.get("allow_ec_optimizations")
             log.info(
-                f"Pool {pool_name_2} - allow_ec_optimizations after enabling: {ec_opt_value_2_new} "
-                f"(type: {type(ec_opt_value_2_new)})"
+                "Pool %s - allow_ec_optimizations after enabling: %s (type: %s)",
+                pool_name_2,
+                ec_opt_value_2_new,
+                type(ec_opt_value_2_new),
             )
 
             if ec_opt_value_2_new is not True:
-                log.error(f"Failed to enable allow_ec_optimizations for {pool_name_2}")
-                raise Exception(f"EC optimizations not enabled for {pool_name_2}")
+                log.error("Failed to enable allow_ec_optimizations for %s", pool_name_2)
+                raise Exception("EC optimizations not enabled for %s" % pool_name_2)
 
             # Step 8: Write 10 more objects and verify all 20
             log.info(
@@ -316,7 +330,7 @@ def run(ceph_cluster, **kw):
             rados_obj.set_pool_property(
                 pool=pool_name_1, props="compression_algorithm", value="snappy"
             )
-            log.info(f"Enabled compression on {pool_name_1}")
+            log.info("Enabled compression on %s", pool_name_1)
 
             rados_obj.set_pool_property(
                 pool=pool_name_2, props="compression_mode", value="force"
@@ -324,7 +338,7 @@ def run(ceph_cluster, **kw):
             rados_obj.set_pool_property(
                 pool=pool_name_2, props="compression_algorithm", value="snappy"
             )
-            log.info(f"Enabled compression on {pool_name_2}")
+            log.info("Enabled compression on %s", pool_name_2)
 
             time.sleep(5)
 
@@ -359,8 +373,8 @@ def run(ceph_cluster, **kw):
                 )
 
                 if not pool_stats:
-                    log.error(f"Could not retrieve stats for pool {pool_name}")
-                    raise Exception(f"Failed to get stats for {pool_name}")
+                    log.error("Could not retrieve stats for pool %s", pool_name)
+                    raise Exception("Failed to get stats for %s" % pool_name)
 
                 stats = pool_stats.get("stats", {})
                 compress_bytes = stats.get("compress_bytes_used", 0)
@@ -373,14 +387,15 @@ def run(ceph_cluster, **kw):
                 }
 
                 log.info(
-                    f"Pool {pool_name} compression stats (baseline): "
-                    f"compress_bytes_used={compress_bytes}, "
-                    f"compress_under_bytes={compress_under_bytes}"
+                    "Pool %s compression stats (baseline): compress_bytes_used=%s, compress_under_bytes=%s",
+                    pool_name,
+                    compress_bytes,
+                    compress_under_bytes,
                 )
 
                 if compress_bytes <= 0:
-                    log.error(f"No compressed data found in pool {pool_name}")
-                    raise Exception(f"Compression not working on {pool_name}")
+                    log.error("No compressed data found in pool %s", pool_name)
+                    raise Exception("Compression not working on %s" % pool_name)
 
             # Step 12: Remove compression
             log.info("Step 12: Removing compression from both pools")
@@ -388,12 +403,12 @@ def run(ceph_cluster, **kw):
             rados_obj.set_pool_property(
                 pool=pool_name_1, props="compression_mode", value="none"
             )
-            log.info(f"Disabled compression on {pool_name_1}")
+            log.info("Disabled compression on %s", pool_name_1)
 
             rados_obj.set_pool_property(
                 pool=pool_name_2, props="compression_mode", value="none"
             )
-            log.info(f"Disabled compression on {pool_name_2}")
+            log.info("Disabled compression on %s", pool_name_2)
 
             time.sleep(5)
 
@@ -417,7 +432,7 @@ def run(ceph_cluster, **kw):
                 return 1
 
         except Exception as e:
-            log.error(f"Failed with exception: {e.__doc__}")
+            log.error("Failed with exception: %s", e.__doc__)
             log.exception(e)
             rados_obj.log_cluster_health()
             return 1
@@ -438,78 +453,82 @@ def run(ceph_cluster, **kw):
                     # Unmount filesystem
                     umount_cmd_1 = f"umount {mount_path_1}"
                     client_node.exec_command(cmd=umount_cmd_1, sudo=True)
-                    log.info(f"Unmounted {image_name_1} from {mount_path_1}")
+                    log.info("Unmounted %s from %s", image_name_1, mount_path_1)
                 except Exception as e:
-                    log.warning(f"Failed to unmount {image_name_1}: {e}")
+                    log.warning("Failed to unmount %s: %s", image_name_1, e)
 
                 try:
                     # Unmap device
                     unmap_cmd_1 = f"rbd device unmap {device_map_1}"
                     client_node.exec_command(cmd=unmap_cmd_1, sudo=True)
-                    log.info(f"Unmapped image {image_name_1} from {device_map_1}")
+                    log.info("Unmapped image %s from %s", image_name_1, device_map_1)
                 except Exception as e:
-                    log.warning(f"Failed to unmap {device_map_1}: {e}")
+                    log.warning("Failed to unmap %s: %s", device_map_1, e)
 
                 try:
                     # Remove mount directory
                     rmdir_cmd_1 = f"rm -rf {mount_path_1}"
                     client_node.exec_command(cmd=rmdir_cmd_1, sudo=True)
-                    log.info(f"Removed mount directory {mount_path_1}")
+                    log.info("Removed mount directory %s", mount_path_1)
                 except Exception as e:
-                    log.warning(f"Failed to remove mount directory {mount_path_1}: {e}")
+                    log.warning(
+                        "Failed to remove mount directory %s: %s", mount_path_1, e
+                    )
 
             if device_map_2:
                 try:
                     # Unmount filesystem
                     umount_cmd_2 = f"umount {mount_path_2}"
                     client_node.exec_command(cmd=umount_cmd_2, sudo=True)
-                    log.info(f"Unmounted {image_name_2} from {mount_path_2}")
+                    log.info("Unmounted %s from %s", image_name_2, mount_path_2)
                 except Exception as e:
-                    log.warning(f"Failed to unmount {image_name_2}: {e}")
+                    log.warning("Failed to unmount %s: %s", image_name_2, e)
 
                 try:
                     # Unmap device
                     unmap_cmd_2 = f"rbd device unmap {device_map_2}"
                     client_node.exec_command(cmd=unmap_cmd_2, sudo=True)
-                    log.info(f"Unmapped image {image_name_2} from {device_map_2}")
+                    log.info("Unmapped image %s from %s", image_name_2, device_map_2)
                 except Exception as e:
-                    log.warning(f"Failed to unmap {device_map_2}: {e}")
+                    log.warning("Failed to unmap %s: %s", device_map_2, e)
 
                 try:
                     # Remove mount directory
                     rmdir_cmd_2 = f"rm -rf {mount_path_2}"
                     client_node.exec_command(cmd=rmdir_cmd_2, sudo=True)
-                    log.info(f"Removed mount directory {mount_path_2}")
+                    log.info("Removed mount directory %s", mount_path_2)
                 except Exception as e:
-                    log.warning(f"Failed to remove mount directory {mount_path_2}: {e}")
+                    log.warning(
+                        "Failed to remove mount directory %s: %s", mount_path_2, e
+                    )
 
             if pool_name_1 in existing_pools:
                 try:
                     rados_obj.delete_pool(pool=pool_name_1)
-                    log.info(f"Deleted EC pool {pool_name_1}")
+                    log.info("Deleted EC pool %s", pool_name_1)
                 except Exception as e:
-                    log.warning(f"Failed to delete pool {pool_name_1}: {e}")
+                    log.warning("Failed to delete pool %s: %s", pool_name_1, e)
 
             if pool_name_2 in existing_pools:
                 try:
                     rados_obj.delete_pool(pool=pool_name_2)
-                    log.info(f"Deleted EC pool {pool_name_2}")
+                    log.info("Deleted EC pool %s", pool_name_2)
                 except Exception as e:
-                    log.warning(f"Failed to delete pool {pool_name_2}: {e}")
+                    log.warning("Failed to delete pool %s: %s", pool_name_2, e)
 
             if metadata_pool_name_1 in existing_pools:
                 try:
                     rados_obj.delete_pool(pool=metadata_pool_name_1)
-                    log.info(f"Deleted metadata pool {metadata_pool_name_1}")
+                    log.info("Deleted metadata pool %s", metadata_pool_name_1)
                 except Exception as e:
-                    log.warning(f"Failed to delete pool {metadata_pool_name_1}: {e}")
+                    log.warning("Failed to delete pool %s: %s", metadata_pool_name_1, e)
 
             if metadata_pool_name_2 in existing_pools:
                 try:
                     rados_obj.delete_pool(pool=metadata_pool_name_2)
-                    log.info(f"Deleted metadata pool {metadata_pool_name_2}")
+                    log.info("Deleted metadata pool %s", metadata_pool_name_2)
                 except Exception as e:
-                    log.warning(f"Failed to delete pool {metadata_pool_name_2}: {e}")
+                    log.warning("Failed to delete pool %s: %s", metadata_pool_name_2, e)
 
             # Reset osd_pool_default_flag_ec_optimizations to true
             try:
@@ -521,7 +540,7 @@ def run(ceph_cluster, **kw):
                 )
             except Exception as e:
                 log.warning(
-                    f"Failed to reset osd_pool_default_flag_ec_optimizations: {e}"
+                    "Failed to reset osd_pool_default_flag_ec_optimizations: %s", e
                 )
 
             # Log cluster health
@@ -548,12 +567,15 @@ def read_and_verify_objects(client_node, mount_path_1, mount_path_2, count, step
         step_desc: Description of the read step for logging
     """
     log.info(
-        f"Reading and verifying ALL {count} objects (range: 0-{count - 1}) - {step_desc}"
+        "Reading and verifying ALL %s objects (range: 0-%s) - %s",
+        count,
+        count - 1,
+        step_desc,
     )
 
     try:
         # Read all objects from mount path 1 (from offset 0 to count-1)
-        log.info(f"Starting read verification for mount {mount_path_1}")
+        log.info("Starting read verification for mount %s", mount_path_1)
         failed_reads_1 = []
         for i in range(count):
             file_path = f"{mount_path_1}file_{i}"
@@ -566,21 +588,29 @@ def read_and_verify_objects(client_node, mount_path_1, mount_path_2, count, step
             # Check exit code
             if exit_code != 0:
                 log.error(
-                    f"Failed to read file {i} from {mount_path_1}: exit_code={exit_code}, err={err}"
+                    "Failed to read file %s from %s: exit_code=%s, err=%s",
+                    i,
+                    mount_path_1,
+                    exit_code,
+                    err,
                 )
                 failed_reads_1.append(i)
 
         if failed_reads_1:
             raise Exception(
-                f"Failed to read {len(failed_reads_1)} files from {mount_path_1}: {failed_reads_1}"
+                "Failed to read %s files from %s: %s"
+                % (len(failed_reads_1), mount_path_1, failed_reads_1)
             )
 
         log.info(
-            f" Successfully read ALL {count} files (0-{count - 1}) from {mount_path_1}"
+            " Successfully read ALL %s files (0-%s) from %s",
+            count,
+            count - 1,
+            mount_path_1,
         )
 
         # Read all objects from mount path 2 (from offset 0 to count-1)
-        log.info(f"Starting read verification for mount {mount_path_2}")
+        log.info("Starting read verification for mount %s", mount_path_2)
         failed_reads_2 = []
         for i in range(count):
             file_path = f"{mount_path_2}file_{i}"
@@ -593,25 +623,35 @@ def read_and_verify_objects(client_node, mount_path_1, mount_path_2, count, step
             # Check exit code
             if exit_code != 0:
                 log.error(
-                    f"Failed to read file {i} from {mount_path_2}: exit_code={exit_code}, err={err}"
+                    "Failed to read file %s from %s: exit_code=%s, err=%s",
+                    i,
+                    mount_path_2,
+                    exit_code,
+                    err,
                 )
                 failed_reads_2.append(i)
 
         if failed_reads_2:
             raise Exception(
-                f"Failed to read {len(failed_reads_2)} files from {mount_path_2}: {failed_reads_2}"
+                "Failed to read %s files from %s: %s"
+                % (len(failed_reads_2), mount_path_2, failed_reads_2)
             )
 
         log.info(
-            f" Successfully read ALL {count} files (0-{count - 1}) from {mount_path_2}"
+            " Successfully read ALL %s files (0-%s) from %s",
+            count,
+            count - 1,
+            mount_path_2,
         )
         log.info(
-            f" {step_desc} - All {count} files verified successfully from both mounts "
-            f"(Total: {count * 2} reads completed)"
+            " %s - All %s files verified successfully from both mounts (Total: %s reads completed)",
+            step_desc,
+            count,
+            count * 2,
         )
 
     except Exception as e:
-        log.error(f"Failed during {step_desc}: {str(e)}")
+        log.error("Failed during %s: %s", step_desc, str(e))
         raise
 
 
@@ -631,68 +671,75 @@ def verify_config_db_and_runtime(
 
     Returns: True if all checks pass, else Raises exception
     """
-    log.info(f"Verifying config parameter '{param_name}' = '{expected_value}'")
+    log.info("Verifying config parameter '%s' = '%s'", param_name, expected_value)
 
     # Get OSD and Mon IDs if not provided
     if osd_id is None:
         osd_list = rados_obj.get_osd_list(status="up")
         osd_id = osd_list[0]
-        log.debug(f"Picked OSD : {osd_id} for checking config at runtime")
+        log.debug("Picked OSD : %s for checking config at runtime", osd_id)
 
     if mon_id is None:
         mon_list = rados_obj.run_ceph_command(cmd="ceph mon dump", client_exec=True)[
             "mons"
         ]
         mon_id = mon_list[0]["name"]
-        log.debug(f"Picked Mon : {mon_id} for checking config at runtime")
+        log.debug("Picked Mon : %s for checking config at runtime", mon_id)
 
     # Check at OSD level - both DB and runtime
-    log.debug(f"Checking OSD level for '{param_name}'")
+    log.debug("Checking OSD level for '%s'", param_name)
 
     # Check runtime value (ceph config show)
     osd_runtime = mon_obj.show_config(daemon="osd", id=osd_id, param=param_name)
     osd_runtime = str(osd_runtime).strip()
-    log.debug(f"  OSD {osd_id} - Runtime (config show): {osd_runtime}")
+    log.debug("  OSD %s - Runtime (config show): %s", osd_id, osd_runtime)
 
     # Check DB value (ceph config get)
     osd_db = mon_obj.get_config(section="osd", param=param_name)
     osd_db = str(osd_db).strip()
-    log.debug(f"  OSD - DB (config get): {osd_db}")
+    log.debug("  OSD - DB (config get): %s", osd_db)
 
     # Check at mon level - both DB and runtime
-    log.debug(f"Checking Mon level for '{param_name}'")
+    log.debug("Checking Mon level for '%s'", param_name)
 
     # Check runtime value (ceph config show)
     mon_runtime = mon_obj.show_config(daemon="mon", id=mon_id, param=param_name)
     mon_runtime = str(mon_runtime).strip()
-    log.debug(f"  Mon {mon_id} - Runtime (config show): {mon_runtime}")
+    log.debug("  Mon %s - Runtime (config show): %s", mon_id, mon_runtime)
 
     # Check DB value (ceph config get)
     mon_db = mon_obj.get_config(section="mon", param=param_name)
     mon_db = str(mon_db).strip()
-    log.debug(f"  Mon - DB (config get): {mon_db}")
+    log.debug("  Mon - DB (config get): %s", mon_db)
 
     # Verify all values match expected
     errors = []
 
     if osd_runtime != expected_value:
-        errors.append(f"OSD runtime value mismatch: {osd_runtime} != {expected_value}")
+        errors.append(
+            "OSD runtime value mismatch: %s != %s" % (osd_runtime, expected_value)
+        )
     if osd_db != expected_value:
-        errors.append(f"OSD DB value mismatch: {osd_db} != {expected_value}")
+        errors.append("OSD DB value mismatch: %s != %s" % (osd_db, expected_value))
     if mon_runtime != expected_value:
-        errors.append(f"Mon runtime value mismatch: {mon_runtime} != {expected_value}")
+        errors.append(
+            "Mon runtime value mismatch: %s != %s" % (mon_runtime, expected_value)
+        )
     if mon_db != expected_value:
-        errors.append(f"Mon DB value mismatch: {mon_db} != {expected_value}")
+        errors.append("Mon DB value mismatch: %s != %s" % (mon_db, expected_value))
 
     if errors:
-        error_msg = f"Config verification failed for '{param_name}':\n" + "\n".join(
-            errors
+        error_msg = "Config verification failed for '%s':\n%s" % (
+            param_name,
+            "\n".join(errors),
         )
         log.error(error_msg)
         raise Exception(error_msg)
 
     log.info(
-        f" Verified: {param_name} = {expected_value} (both DB and runtime for OSD and Mon)"
+        " Verified: %s = %s (both DB and runtime for OSD and Mon)",
+        param_name,
+        expected_value,
     )
     return True
 
@@ -716,7 +763,11 @@ def write_and_verify_objects(
     """
     end_offset = start_offset + count
     log.info(
-        f"Writing {count} objects (offset {start_offset}-{end_offset-1}) - {step_desc}"
+        "Writing %s objects (offset %s-%s) - %s",
+        count,
+        start_offset,
+        end_offset - 1,
+        step_desc,
     )
 
     try:
@@ -729,9 +780,13 @@ def write_and_verify_objects(
             )
             if exit_code != 0:
                 log.error(
-                    f"Failed to write file {i} to {mount_path_1}: exit_code={exit_code}, err={err}"
+                    "Failed to write file %s to %s: exit_code=%s, err=%s",
+                    i,
+                    mount_path_1,
+                    exit_code,
+                    err,
                 )
-                raise Exception(f"Write failed for file {i} at {mount_path_1}")
+                raise Exception("Write failed for file %s at %s" % (i, mount_path_1))
 
             file_path_2 = f"{mount_path_2}file_{i}"
             write_cmd_2 = f"dd if=/dev/urandom of={file_path_2} bs=4M count=1"
@@ -740,19 +795,25 @@ def write_and_verify_objects(
             )
             if exit_code != 0:
                 log.error(
-                    f"Failed to write file {i} to {mount_path_2}: exit_code={exit_code}, err={err}"
+                    "Failed to write file %s to %s: exit_code=%s, err=%s",
+                    i,
+                    mount_path_2,
+                    exit_code,
+                    err,
                 )
-                raise Exception(f"Write failed for file {i} at {mount_path_2}")
+                raise Exception("Write failed for file %s at %s" % (i, mount_path_2))
 
         # Sync data
         client_node.exec_command(cmd="sync", sudo=True)
-        log.info(f"Completed writing {count} files to both mounts")
+        log.info("Completed writing %s files to both mounts", count)
 
         # Verify all objects written so far
         total_objects = end_offset
         log.info(
-            f"Reading and verifying ALL {total_objects} files (0-{total_objects-1}) "
-            f"after {step_desc}"
+            "Reading and verifying ALL %s files (0-%s) after %s",
+            total_objects,
+            total_objects - 1,
+            step_desc,
         )
         read_and_verify_objects(
             client_node,
@@ -763,5 +824,5 @@ def write_and_verify_objects(
         )
 
     except Exception as e:
-        log.error(f"Failed during write and verify: {str(e)}")
+        log.error("Failed during write and verify: %s", str(e))
         raise
