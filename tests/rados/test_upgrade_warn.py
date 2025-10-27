@@ -17,6 +17,7 @@ from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.utils import get_node_by_id
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 from utility.utils import fetch_build_artifacts, fetch_build_version
@@ -38,10 +39,26 @@ def run(ceph_cluster, **kw):
     Args:
         ceph_cluster: Cluster object
         kw : the KW args for the test
-            verify_warning: Check if the health warnings during the upgrade is generated & removed post upgrade
-            verify_daemons: Check for daemon existence on cluster post upgrade
-            verify_max_avail: Check max_avail calculation on pools
-            check_for_inactive_pgs: Check for inactive PGs during upgrade
+            config: Test configuration dictionary with the following supported keys:
+                args: Dictionary containing upgrade parameters:
+                    rhcs-version: Target RHCS version (e.g., "7.1", "8.0")
+                    release: Target release (e.g., "z1", "z2", "rc")
+                    custom_image: Custom container image (optional)
+                    custom_repo: Custom repository URL (optional)
+                    daemon_types: Comma-separated daemon types to upgrade (e.g., "mon,mgr") (optional)
+                    hosts: Comma-separated node IDs (e.g., "node1,node2") - auto-converted to hostnames (optional)
+                    services: Comma-separated service names to upgrade (e.g., "mon,mgr") (optional)
+                base_cmd_args: Base command arguments (e.g., verbose: true)
+                timeout: Timeout for upgrade completion in seconds (default: 3600)
+                ibm_build: Boolean flag for IBM build (default: False)
+                verify_warning: Check if the health warnings during the upgrade is generated & removed post upgrade
+                verify_older_version_warn: Check if DAEMON_OLD_VERSION warning is generated
+                verify_daemons: Check for daemon existence on cluster post upgrade
+                verify_cluster_usage: Check if cluster usage is same before & after upgrade
+                verify_max_avail: Check max_avail calculation on pools
+                check_for_inactive_pgs: Check for inactive PGs during upgrade
+                verify_cluster_health: Verify cluster health post upgrade
+                enable_debug_level: Enable debug logging for mon and mgr daemons
 
     Returns:
         1 -> Fail, 0 -> Pass
@@ -91,7 +108,10 @@ def run(ceph_cluster, **kw):
 
     log.debug("Starting upgrade")
     try:
-        config.update({"args": {"image": "latest"}})
+        # Preserve existing args and add image parameter
+        if "args" not in config:
+            config["args"] = {}
+        config["args"]["image"] = "latest"
 
         # Support installation of the baseline cluster whose version is not available in
         # CDN. This is primarily used for an upgrade scenario. This support is currently
@@ -169,6 +189,34 @@ def run(ceph_cluster, **kw):
 
         ceph_version = rados_obj.run_ceph_command(cmd="ceph version")
         log.info(f"Current version on the cluster : {ceph_version}")
+
+        # Log selective upgrade parameters if provided
+        if args:
+            if args.get("daemon_types"):
+                log.info(
+                    f"Selective upgrade enabled - daemon types: {args['daemon_types']}"
+                )
+            if args.get("hosts"):
+                log.info(f"Selective upgrade enabled - target nodes: {args['hosts']}")
+            if args.get("services"):
+                log.info(f"Selective upgrade enabled - services: {args['services']}")
+
+        # Convert node IDs to hostnames if hosts parameter is provided
+        if args and args.get("hosts"):
+            node_ids = [node_id.strip() for node_id in args["hosts"].split(",")]
+            hostnames = []
+            for node_id in node_ids:
+                node_obj = get_node_by_id(ceph_cluster, node_id)
+                if node_obj:
+                    hostnames.append(node_obj.hostname)
+                    log.debug(
+                        f"Converted node ID '{node_id}' to hostname '{node_obj.hostname}'"
+                    )
+                else:
+                    log.warning(f"Could not find node with ID '{node_id}', skipping")
+            if hostnames:
+                config["args"]["hosts"] = ",".join(hostnames)
+                log.info(f"Converted node IDs to hostnames: {hostnames}")
 
         # Start Upgrade
         cluster_obj.start_upgrade(config)

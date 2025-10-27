@@ -1,5 +1,14 @@
 # Suite is to be used to verify the Fast EC features added in tentacle
 # to be run in regression conf: 4-node-ec-cluster-1-client.yaml
+#
+# Upgrade Options Example usage:
+#   args:
+#     rhcs-version: 8.0
+#     release: rc
+#     daemon_types: "mon,mgr"  # Upgrade only mon and mgr daemons
+#     hosts: "node1,node2"     # Upgrade daemons only on node1 and node2
+#     services: "mon"          # Upgrade only the mon service
+
 tests:
   - test:
       name: setup install pre-requisistes
@@ -22,6 +31,8 @@ tests:
                 verbose: true
               args:
                 mon-ip: node1
+                rhcs-version: 8.1
+                release: rc
 
   - test:
       name: Add host
@@ -173,6 +184,94 @@ tests:
                 - mon
                 - mon_osd_down_out_subtree_limit
                 - host
+
+  - test:
+      name: Upgrade to latest 9.x ceph version
+      desc: Upgrade Mgr daemons to latest version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        args:
+          daemon_types: "mgr"
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Upgrade to latest 9.x ceph version
+      desc: Upgrade Mon daemon on 1 host to latest version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        args:
+          daemon_types: "mon"
+          hosts: "node1"
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Upgrade to latest 9.x ceph version
+      desc: Upgrade Mon daemon on 1 host to latest version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        args:
+          daemon_types: "mon"
+          hosts: "node1"
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+
+  - test:
+      name: Upgrade to latest 9.x ceph version
+      desc: Upgrade Mon service to latest version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        args:
+          services: "mon"
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Upgrade to latest 9.x ceph version
+      desc: Upgrade OSD daemon on 1 host to latest version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        args:
+          daemon_types: "osd"
+          hosts: "node3,node4"
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Upgrade cluster to latest 9.x ceph version
+      desc: Upgrade complate cluster to latest version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
+        base_cmd_args:
+          verbose: true
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
 
   - test:
       name: EC pool LC
