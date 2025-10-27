@@ -493,14 +493,12 @@ def run(ceph_cluster, **kw):
             # Mount ceph nfs exports
             mnt_client = random.choice(nfs_client)
             mnt_client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
-            assert fs_util.wait_for_cmd_to_succeed(
-                mnt_client,
-                cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
+            rc = fs_util.cephfs_nfs_mount(
+                mnt_client, nfs_server_name, nfs_export_name, nfs_mounting_dir
             )
-            mnt_client.exec_command(
-                sudo=True,
-                cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
-            )
+            if not rc:
+                log.error("cephfs nfs export mount failed")
+                return 1
             out, rc = mnt_client.exec_command(cmd="mount")
             mount_output = out.split()
             log.info("Checking if nfs mount is is passed of failed:")

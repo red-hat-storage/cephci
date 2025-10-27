@@ -94,6 +94,7 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"ceph nfs export get {nfs_name} {nfs_export_name}"
         )
         output = json.loads(out)
+        log.debug("NFS Export Get: {}".format(output))
         mounting_dir = "".join(
             random.choice(string.ascii_lowercase + string.digits)
             for _ in list(range(10))
@@ -102,10 +103,20 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir_c1}")
         nfs_mounting_dir_c2 = f"/mnt/cephfs_nfs{mounting_dir}_1/"
         client2.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir_c2}")
-        command = f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export_name} {nfs_mounting_dir_c1}"
-        output, err = client1.exec_command(sudo=True, cmd=command, check_ec=False)
-        command = f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export_name} {nfs_mounting_dir_c2}"
-        output, err = client2.exec_command(sudo=True, cmd=command, check_ec=False)
+        rc = fs_util.cephfs_nfs_mount(
+            client1, nfs_server, nfs_export_name, nfs_mounting_dir_c1
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
+
+        rc = fs_util.cephfs_nfs_mount(
+            client2, nfs_server, nfs_export_name, nfs_mounting_dir_c2
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
+
         local_dir = f"/mnt/local_{mounting_dir}_1/"
         client1.exec_command(sudo=True, cmd=f"mkdir -p {local_dir}")
         remote_dir = f"/mnt/remote_{mounting_dir}_1/"

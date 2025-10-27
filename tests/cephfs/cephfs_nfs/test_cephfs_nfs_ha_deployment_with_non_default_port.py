@@ -121,7 +121,7 @@ def run(ceph_cluster, **kw):
             )
             nfs_mounting_dir = f"/mnt/cephfs_nfs{mounting_dir}_1/"
             client1.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
-            command = f"mount -t nfs -o port={non_default_port} {virtual_ip}:{nfs_export} {nfs_mounting_dir}"
+            command = f"mount -t nfs -o vers=4,port={non_default_port} {virtual_ip}:{nfs_export} {nfs_mounting_dir}"
             client1.exec_command(sudo=True, cmd=command, check_ec=False)
             mount_dir.append(nfs_mounting_dir)
         backend_server = fs_util_v1.get_active_nfs_server(
