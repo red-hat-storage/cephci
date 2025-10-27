@@ -143,9 +143,9 @@ tests:
         install_packages:
           - ceph-common
           - ceph-base
-          - ceph-test
-        copy_admin_keyring: true          # Copy admin keyring to node
-        caps:                             # authorize client capabilities
+#          - ceph-test  # Not packaged downstream, need test changes to install it via upstream repos
+        copy_admin_keyring: true
+        caps:
           mon: "allow *"
           osd: "allow *"
           mds: "allow *"
