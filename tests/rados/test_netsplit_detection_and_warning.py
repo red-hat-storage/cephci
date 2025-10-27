@@ -14,6 +14,7 @@ from collections import namedtuple
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from cli.utilities.operations import wait_for_cluster_health
@@ -63,12 +64,14 @@ def run(ceph_cluster, **kw):
     )
     separator = "-" * 40
     scenarios_to_run = config.get("scenarios_to_run", [])
+    mon_obj = MonitorWorkflows(node=cephadm)
     config = {
         "rados_obj": rados_obj,
         "pool_obj": pool_obj,
         "tiebreaker_mon_site_name": tiebreaker_mon_site_name,
         "stretch_bucket": stretch_bucket,
         "client_node": client_node,
+        "mon_obj": mon_obj,
     }
     try:
 
