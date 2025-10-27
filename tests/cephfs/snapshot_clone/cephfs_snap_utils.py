@@ -635,7 +635,7 @@ class SnapUtils(object):
         Returns : True on success
         """
         if daemon_type == "client" and kwargs.get("client_id"):
-            daemon_type += f"{daemon_type}.{kwargs['client_id']}"
+            daemon_type = f" {daemon_type}.{kwargs['client_id']}"
         cmd = f"ceph config {op_type} {daemon_type} client_respect_subvolume_snapshot_visibility "
         if op_type == "set":
             cmd += f" {kwargs['client_respect_snapshot_visibility']}"

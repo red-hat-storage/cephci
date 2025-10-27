@@ -245,7 +245,6 @@ class CephFSCommonUtils(FsUtils):
             )
             sv_list = setup_params["sv_list"]
             fs_name = setup_params["fs_name"]
-            group_name = setup_params["subvolumegroup"]["group_name"]
             for i in range(len(sv_list)):
                 subvol_name = sv_list[i]["subvol_name"]
                 fs_name = sv_list[i]["vol_name"]
@@ -275,7 +274,13 @@ class CephFSCommonUtils(FsUtils):
                     validate=True,
                     group_name=sv_list[i].get("group_name", None),
                 )
-            self.remove_subvolumegroup(client, fs_name, group_name, validate=True)
+            if setup_params.get("subvolumegroup"):
+                self.remove_subvolumegroup(
+                    client,
+                    fs_name,
+                    setup_params["subvolumegroup"]["group_name"],
+                    validate=True,
+                )
         except CommandFailed as ex:
             log.error("Cleanup failed with error : %s", ex)
             return 1
