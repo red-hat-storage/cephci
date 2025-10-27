@@ -40,7 +40,7 @@ class Export(Cli):
         # Step 1: Check if the subvolume group is present.If not, create subvolume group
         cmd = "ceph fs subvolumegroup ls cephfs"
         out = self.execute(sudo=True, cmd=cmd)
-        if "[]" in out[0]:
+        if "ganeshagroup" not in out[0]:
             cmd = "ceph fs subvolumegroup create cephfs ganeshagroup "
             self.execute(sudo=True, cmd=cmd)
             log.info("Subvolume group created successfully")
