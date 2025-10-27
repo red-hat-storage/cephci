@@ -175,7 +175,6 @@ tests:
             commands:
               - "sleep 120"
               - "radosgw-admin realm pull --rgw-realm india --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d --default"
-              - "radosgw-admin period pull --url http://{node_ip:ceph-pri#node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin zone create --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --endpoints http://{node_ip:node5}:80 --access-key 21e86bce636c3aa0 --secret cf764951f1fdde5d"
               - "radosgw-admin period update --rgw-realm india --commit"
               - "ceph config set client.rgw.{daemon_id:shared.sec} rgw_realm india"
