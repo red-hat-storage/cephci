@@ -30,7 +30,7 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                rhcs-version: 7.1
+                rhcs-version: 8.1
                 release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
