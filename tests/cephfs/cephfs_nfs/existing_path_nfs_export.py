@@ -127,12 +127,24 @@ def run(ceph_cluster, **kw):
         nfs_mounting_dir_2 = f"/mnt/cephfs_{mounting_dir}_2/"
         commands = [
             f"mkdir -p {nfs_mounting_dir_1}",
-            f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export_1} {nfs_mounting_dir_1}",
             f"mkdir -p {nfs_mounting_dir_2}",
-            f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export_2} {nfs_mounting_dir_2}",
         ]
         for command in commands:
             client1.exec_command(sudo=True, cmd=command, long_running=True)
+
+        rc = fs_util.cephfs_nfs_mount(
+            client1, nfs_server, nfs_export_1, nfs_mounting_dir_1
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
+
+        rc = fs_util.cephfs_nfs_mount(
+            client1, nfs_server, nfs_export_2, nfs_mounting_dir_2
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
 
         fs_util.run_ios(client1, nfs_mounting_dir_1)
         fs_util.run_ios(client1, nfs_mounting_dir_2)

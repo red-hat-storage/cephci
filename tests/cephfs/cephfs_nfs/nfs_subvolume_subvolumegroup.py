@@ -109,12 +109,16 @@ def run(ceph_cluster, **kw):
         ]
         for subvolume in subvolume_list:
             fs_util.create_subvolume(clients[0], **subvolume)
-        commands = [
-            f"mkdir -p {nfs_mounting_dir}",
-            f"mount -t nfs -o port=2049 {nfs_server}:{nfs_export_name} {nfs_mounting_dir}",
-        ]
-        for command in commands:
-            client1.exec_command(sudo=True, cmd=command)
+
+        client1.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
+
+        rc = fs_util.cephfs_nfs_mount(
+            client1, nfs_server, nfs_export_name, nfs_mounting_dir
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
+
         out, rc = client1.exec_command(sudo=True, cmd=f"ls {nfs_mounting_dir}/volumes/")
         if "subvolgroup_1" not in out:
             raise CommandFailed("Subvolume group 1 creation failed")

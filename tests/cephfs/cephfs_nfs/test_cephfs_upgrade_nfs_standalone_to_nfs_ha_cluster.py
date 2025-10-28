@@ -116,8 +116,12 @@ def run(ceph_cluster, **kw):
         nfs_mounting_dir = f"/mnt/cephfs_nfs{mounting_dir}_1/"
         client1.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
 
-        command = f"mount -t nfs -o port={port} {nfs_servers[0].node.hostname}:{nfs_export_name} {nfs_mounting_dir}"
-        client1.exec_command(sudo=True, cmd=command, check_ec=False)
+        rc = fs_util_v1.cephfs_nfs_mount(
+            client1, nfs_servers[0].node.hostname, nfs_export_name, nfs_mounting_dir
+        )
+        if not rc:
+            log.error("cephfs nfs export mount failed")
+            return 1
 
         dir_name = "smallfile_dir"
         client1.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}{dir_name}")
@@ -132,7 +136,7 @@ def run(ceph_cluster, **kw):
         client1.exec_command(
             sudo=True, cmd=f"umount -l {nfs_mounting_dir}", check_ec=False
         )
-        command = f"mount -t nfs -o port={port} {virtual_ip}:{nfs_export_name} {nfs_mounting_dir}"
+        command = f"mount -t nfs -o vers=4,port={port} {virtual_ip}:{nfs_export_name} {nfs_mounting_dir}"
         client1.exec_command(sudo=True, cmd=command, check_ec=False)
         log.info(
             f"Validate if the {dir_name} exists, delete the dir and rerun IOs on new mount path"

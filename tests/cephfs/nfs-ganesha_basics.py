@@ -77,10 +77,12 @@ def run(ceph_cluster, **kw):
 
             log.info("Mount ceph nfs exports")
             nfs_client[0].exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
-            assert wait_for_cmd_to_succeed(
-                nfs_client[0],
-                cmd=f"mount -t nfs -o port=2049 {nfs_server_name}:{nfs_export_name} {nfs_mounting_dir}",
+            rc = fs_util.cephfs_nfs_mount(
+                nfs_client[0], nfs_server_name, nfs_export_name, nfs_mounting_dir
             )
+            if not rc:
+                log.error("cephfs nfs export mount failed")
+                return 1
             out, rc = nfs_client[0].exec_command(cmd="mount")
             mount_output = out.split()
             log.info("Checking if nfs mount is passed of failed:")

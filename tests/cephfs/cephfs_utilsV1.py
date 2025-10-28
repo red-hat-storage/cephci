@@ -3227,7 +3227,7 @@ os.system('sudo systemctl start  network')
         :param nfs_mount_dir:
         """
         client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mount_dir}")
-        command = f"mount -t nfs -o port={kwargs.get('port', '2049')} {nfs_server}:{nfs_export} {nfs_mount_dir}"
+        command = f"mount -t nfs -o vers=4,port={kwargs.get('port', '2049')} {nfs_server}:{nfs_export} {nfs_mount_dir}"
         if kwargs.get("fstab"):
             try:
                 client.exec_command(sudo=True, cmd="ls -lrt /etc/fstab.backup")
@@ -3787,7 +3787,7 @@ os.system('sudo systemctl start  network')
         nfs_client.exec_command(sudo=True, cmd=f"mkdir -p {mount_path}")
         assert self.wait_for_cmd_to_succeed(
             nfs_client,
-            cmd=f"mount -t nfs -o port=2049 {nfs_server}:{export_name} {mount_path}",
+            cmd=f"mount -t nfs -o vers=4,port=2049 {nfs_server}:{export_name} {mount_path}",
         )
         out, rc = nfs_client.exec_command(cmd="mount")
         mount_output = out.split()
@@ -3828,7 +3828,10 @@ os.system('sudo systemctl start  network')
         :param port:
         """
         client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
-        command = f"mount -t nfs -o port={port},nfsvers={nfs_version} {virtual_ip}:{psuedo_path} {nfs_mounting_dir}"
+        command = (
+            f"mount -t nfs -o vers=4,port={port},nfsvers={nfs_version} "
+            f"{virtual_ip}:{psuedo_path} {nfs_mounting_dir}"
+        )
         client.exec_command(sudo=True, cmd=command, check_ec=False)
 
     def mount_ceph(self, mnt_type, mount_params):
