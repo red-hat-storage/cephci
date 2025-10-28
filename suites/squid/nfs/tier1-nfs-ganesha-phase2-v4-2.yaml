@@ -210,6 +210,7 @@ tests:
       desc: Perform read write without permissions on nfs share
       polarion-id: CEPH-83575941
       abort-on-fail: false
+      comments: might fail in IBM or RH builds due to BZ - 2402035
       config:
         nfs_version: 4.2
         clients: 3
@@ -266,6 +267,7 @@ tests:
       desc: Perform different mount versions on clients and validate the behavior
       polarion-id: CEPH-83577595
       abort-on-fail: true
+      comments: few tests might fail in IBM or RH builds due to BZ - 2402035
       config:
         clients: 3
         nfs_version: [4.2: 2, 3: 1]  # Out of the 3 clients, 2 will be mounted with v4.2 and other with v3

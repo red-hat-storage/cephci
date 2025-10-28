@@ -1227,11 +1227,11 @@ def nfs_log_parser(client, nfs_node, nfs_name, expect_list=None):
     nfs_name : Name of nfs cluster
     expect_list : List of strings to be parsed
     """
-    cmd = f"ceph orch ps | grep {nfs_name}"
-    out = list(client.exec_command(sudo=True, cmd=cmd))[0]
-    nfs_daemon_name = out.split()[0]
     results = {"expect": {}}
     if expect_list:
+        cmd = f"ceph orch ps | grep {nfs_name}"
+        out = list(client.exec_command(sudo=True, cmd=cmd))[0]
+        nfs_daemon_name = out.split()[0]
         for search_str in expect_list:
             cmd = f"cephadm logs --name {nfs_daemon_name} > nfs_log"
             nfs_node.exec_command(sudo=True, cmd=cmd)
