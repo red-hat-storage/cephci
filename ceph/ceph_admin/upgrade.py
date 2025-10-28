@@ -42,6 +42,9 @@ class UpgradeMixin:
                 args:
                     image: "latest"         # pick latest image from config
                     version: 16.0.0         # Not supported
+                    daemon_types: "mon,mgr" # Optional: comma-separated daemon types
+                    hosts: "host1,host2"    # Optional: comma-separated host names
+                    services: "mon,mgr"     # Optional: comma-separated service names
 
         """
         cmd = ["ceph", "orch"]
@@ -53,8 +56,20 @@ class UpgradeMixin:
         cmd.append("upgrade start")
 
         args = config.get("args")
-        if "image" in args:
+        if args and "image" in args:
             cmd.append(f"--image {self.config.get('container_image')}")
+
+        # Add optional daemon_types argument
+        if args and "daemon_types" in args:
+            cmd.append(f"--daemon_types {args['daemon_types']}")
+
+        # Add optional hosts argument
+        if args and "hosts" in args:
+            cmd.append(f"--hosts {args['hosts']}")
+
+        # Add optional services argument
+        if args and "services" in args:
+            cmd.append(f"--services {args['services']}")
 
         return self.shell(args=cmd)
 
