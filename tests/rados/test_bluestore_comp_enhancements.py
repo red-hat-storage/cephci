@@ -5,6 +5,8 @@ scenario-2: Enable bluestore_write_v2 and validate
 scenario-3: Disable bluestore_write_v2 and validate
 """
 
+from libcloud.utils.misc import get_secure_random_string
+
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonConfigMethods
@@ -99,9 +101,31 @@ def run(ceph_cluster, **kw):
             )
 
         if "scenario-4" in scenarios_to_run:
-            log.info("STARTED: Scenario 4: Disable bluestore_write_v2 and validate")
+            log.info(
+                "STARTING :: Scenario 4 -> Tests for partial overwrite with varying write_size"
+            )
+            compression_mode = COMPRESSION_MODES.FORCE
+            obj_alloc_hint = BLUESTORE_ALLOC_HINTS.COMPRESSIBLE
+
+            pool_id = get_secure_random_string(6)
+            pool_name = f"test-recompress-{pool_id}"
+
+            kwargs = {
+                "pool_name": pool_name,
+                "compression_mode": compression_mode,
+                "alloc_hint": obj_alloc_hint,
+            }
+            for write_size in [64000, 512000, 1024000]:
+                kwargs["write_size"] = write_size
+                bluestore_compression.partial_overwrite(**kwargs)
+            log.info(
+                "COMPLETED :: Scenario 4 -> Tests for partial overwrite with varying write_size"
+            )
+
+        if "scenario-5" in scenarios_to_run:
+            log.info("STARTED: Scenario 5: Disable bluestore_write_v2 and validate")
             bluestore_compression.toggle_bluestore_write_v2(toggle_value="false")
-            log.info("COMPELTED: Scenario 4: Disable bluestore_write_v2 and validate")
+            log.info("COMPELTED: Scenario 5: Disable bluestore_write_v2 and validate")
 
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
