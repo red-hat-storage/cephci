@@ -64,10 +64,8 @@ def run(ceph_cluster, **kw):
         for th in threads:
             th.join()
         return 0
-
     except Exception as e:
         log.error(f"Failed to setup nfs-ganesha cluster {e}")
-        cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export)
-        return 1
     finally:
+        log.info("Cleaning up the NFS cluster and unmounting the mounts")
         cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=servers)

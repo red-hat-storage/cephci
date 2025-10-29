@@ -121,7 +121,7 @@ def run(ceph_cluster, **kw):
             volume=fs_name, subvolume=subvolume_name, group=subvolume_group
         )
         log.info(f"Removed the subvolume {subvolume_name} from group {subvolume_group}")
-        nfs_log_parser(clients[0], nfs_name, nfs_node)
+        nfs_log_parser(client=clients[0], nfs_name=nfs_name, nfs_node=nfs_node)
         Ceph(clients[0]).nfs.cluster.delete(nfs_name)
         sleep(30)
         check_nfs_daemons_removed(clients[0])
