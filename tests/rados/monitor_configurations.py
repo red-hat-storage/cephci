@@ -313,9 +313,13 @@ class MonConfigMethods:
                     and kwargs.get("location_value") not in entry["mask"]
                 ):
                     continue
-                entry["value"] = str(entry["value"]).strip("\n").strip("0").strip()
-                kwargs["value"] = str(kwargs["value"]).strip("\n").strip("0").strip()
-                if not entry["value"].lower() == kwargs["value"].lower():
+                if isinstance(kwargs["value"], (str, bool)):
+                    entry["value"] = str(entry["value"]).strip().lower()
+                    kwargs["value"] = str(kwargs["value"]).strip().lower()
+                else:
+                    entry["value"] = float(str(entry["value"]).strip())
+                    kwargs["value"] = float(str(kwargs["value"]).strip())
+                if not entry["value"] == kwargs["value"]:
                     log.error(
                         f"Value for config: {entry['name']} does not match in the ceph config\n"
                         f"sent value : {kwargs['value']}, Set value : {entry['value']}"
