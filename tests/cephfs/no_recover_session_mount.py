@@ -145,9 +145,11 @@ def run(ceph_cluster, **kw):
         client2.exec_command(sudo=True, cmd=f"umount -f {mount_dir_2}")
         client2.exec_command(sudo=True, cmd=f"rm -rf {mount_dir_2}")
         ip, rc = client1.exec_command(
-            sudo=True, cmd="ifconfig eth0 | grep 'inet ' | awk '{{print $2}}'"
+            sudo=True,
+            cmd="ip route get 8.8.8.8 | awk '{print $7}'",
         )
         log.info("Unblocking the Cephfs client")
+        ip = ip.strip()
         if "4." in rhbuild:
             out, rc = client1.exec_command(
                 sudo=True, cmd=f"ceph osd blacklist ls | grep {ip}"

@@ -59,7 +59,12 @@ def run(ceph_cluster, **kw):
         log.info("Install ceph-base as we require while generating crush map")
         try:
             client1.exec_command(
-                sudo=True, cmd="yum install ceph-base -y --nogpgcheck", check_ec=False
+                sudo=True,
+                cmd=(
+                    "dnf install ceph-base -y --setopt=tsflags=noscripts "
+                    "--setopt=max_parallel_downloads=10 --nogpgcheck"
+                ),
+                check_ec=False,
             )
         except Exception as e:
             log.error(e)
@@ -194,15 +199,16 @@ def run(ceph_cluster, **kw):
         )
         df_utilization_root1_step_1 = json.loads(df_utilization_root1_step_1)
 
-        df_utilization_root2_step_1, rc = client1.exec_command(
-            sudo=True, cmd="ceph osd df root2 -f json"
-        )
-        df_utilization_root2_step_1 = json.loads(df_utilization_root2_step_1)
         log.info("Step 1 df values for root1 and root2")
         out, rc = client1.exec_command(sudo=True, cmd="ceph osd df root1")
         log.info(f"\n{out}")
         out, rc = client1.exec_command(sudo=True, cmd="ceph osd df root2")
         log.info(f"\n{out}")
+
+        log.debug("df_utilization_root1_step_1: {}".format(df_utilization_root1_step_1))
+        log.debug(
+            "df_utilization_root1_initial: {}".format(df_utilization_root1_initial)
+        )
 
         if (
             df_utilization_root1_initial["summary"]["total_kb_used"]
@@ -222,6 +228,10 @@ def run(ceph_cluster, **kw):
                 )
             )
 
+        df_utilization_root2_step_1, rc = client1.exec_command(
+            sudo=True, cmd="ceph osd df root2 -f json"
+        )
+        df_utilization_root2_step_1 = json.loads(df_utilization_root2_step_1)
         if (
             df_utilization_root2_initial["summary"]["total_kb_used"]
             >= df_utilization_root2_step_1["summary"]["total_kb_used"]

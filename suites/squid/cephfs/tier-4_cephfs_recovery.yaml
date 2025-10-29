@@ -12,14 +12,12 @@
 
 #=======================================================================================================================
 tests:
-  -
-    test:
+  - test:
       abort-on-fail: true
       desc: "Setup phase to deploy the required pre-requisites for running the tests."
       module: install_prereq.py
       name: "setup install pre-requisistes"
-  -
-    test:
+  - test:
       name: cluster deployment
       desc: Execute the cluster deployment workflow.
       module: test_cephadm.py
@@ -61,7 +59,7 @@ tests:
                 all-available-devices: true
           - config:
               command: shell
-              args:          # arguments to ceph orch
+              args: # arguments to ceph orch
                 - ceph
                 - fs
                 - volume
@@ -109,10 +107,10 @@ tests:
           - config:
               command: apply
               service: mds
-              base_cmd_args:          # arguments to ceph orch
+              base_cmd_args: # arguments to ceph orch
                 verbose: true
               pos_args:
-                - cephfs              # name of the filesystem
+                - cephfs # name of the filesystem
               args:
                 placement:
                   label: mds
@@ -127,8 +125,7 @@ tests:
               command: shell
       destroy-cluster: false
       abort-on-fail: true
-  -
-    test:
+  - test:
       abort-on-fail: true
       config:
         command: add
@@ -142,8 +139,7 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
-  -
-    test:
+  - test:
       abort-on-fail: true
       config:
         command: add
@@ -157,8 +153,7 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
-  -
-    test:
+  - test:
       abort-on-fail: true
       config:
         command: add
@@ -172,8 +167,7 @@ tests:
       destroy-cluster: false
       module: test_client.py
       name: "configure client"
-  -
-    test:
+  - test:
       abort-on-fail: true
       config:
         command: add
@@ -207,14 +201,13 @@ tests:
       desc: Verify Snapshot retention works even after service restarts
       abort-on-fail: false
       config:
-        test_name : snap_retention_service_restart
+        test_name: snap_retention_service_restart
   - test:
       name: Move data and meta_data pool to different root level bucket in OSD tree.
       module: cephfs_generic.test_data_migrate_bw_buckets.py
       polarion-id: CEPH-11264
       desc: Move data and meta_data pool to different root level bucket in OSD tree.
       abort-on-fail: false
-      comments: "Unable to install ceph-base"
   - test:
       abort-on-fail: false
       desc: "cephfs_journal_tool_journal_mode_functional"
