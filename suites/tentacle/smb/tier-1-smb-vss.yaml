@@ -137,6 +137,7 @@ tests:
         operations:
           - create_snapshot
           - list_snapshot
+          - delete_snapshot
 
   - test:
       name: Update file after creating snapshot and verify the content of the file in snapshot.
@@ -162,3 +163,4 @@ tests:
           - list_snapshot
           - update_file
           - verify_snapshot_content
+          - delete_snapshot
