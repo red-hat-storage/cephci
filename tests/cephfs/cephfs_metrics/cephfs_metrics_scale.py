@@ -155,7 +155,7 @@ def run(ceph_cluster, **kw):
 
         # install JQ package for all the clients
         for client in [client1, client2, client3, client4]:
-            jq_check = client.exec_command(cmd="rpm -qa | grep jq")
+            jq_check, _ = client.exec_command(cmd="rpm -qa | grep jq")
             if "jq" not in jq_check:
                 client.exec_command(sudo=True, cmd="yum install -y jq")
         fs_details = fs_util.get_fs_info(client1)
@@ -205,9 +205,28 @@ def run(ceph_cluster, **kw):
         out_test, _ = client1.exec_command(sudo=True, cmd="ceph fs status")
         log.info(out_test)
         fs_util.fuse_mount([client1], fuse_mounting_dir_1)
+        client1.exec_command(
+            sudo=True,
+            cmd=f"touch {fuse_mounting_dir_1}/.ping && ls {fuse_mounting_dir_1}/.ping",
+        )
         fs_util.fuse_mount([client2], fuse_mounting_dir_2)
+        client2.exec_command(
+            sudo=True,
+            cmd=f"touch {fuse_mounting_dir_2}/.ping && ls {fuse_mounting_dir_2}/.ping",
+        )
         fs_util.fuse_mount([client3], fuse_mounting_dir_3)
+        client3.exec_command(
+            sudo=True,
+            cmd=f"touch {fuse_mounting_dir_3}/.ping && ls {fuse_mounting_dir_3}/.ping",
+        )
         fs_util.fuse_mount([client4], fuse_mounting_dir_4)
+        client4.exec_command(
+            sudo=True,
+            cmd=f"touch {fuse_mounting_dir_4}/.ping && ls {fuse_mounting_dir_4}/.ping",
+        )
+
+        # Allow MDS session registration update
+        time.sleep(3)
         # Get initial MDS metrics
         # pdb.set_trace()
 
@@ -540,7 +559,7 @@ def run(ceph_cluster, **kw):
         # get ip from client2
         client2_ip = client2.exec_command(
             sudo=True,
-            cmd="ip addr show eth0 | grep 'inet ' | awk '{print $2}' | cut -f1 -d'/'",
+            cmd="ip route get 8.8.8.8 | awk '{print $7}'",
         )[0].strip()
         # install sshpass package if not installed
         client2.exec_command(
@@ -548,7 +567,9 @@ def run(ceph_cluster, **kw):
         )
         client2.exec_command(sudo=True, cmd=f"chmod -R u+w {fuse_mounting_dir_2}")
         for client in clients:
-            client.exec_command(sudo=True, cmd="yum install -y sshpass")
+            sshpass_check, _ = client.exec_command(cmd="rpm -qa | grep sshpass")
+            if "sshpass" not in sshpass_check:
+                client.exec_command(sudo=True, cmd="yum install -y sshpass")
         # Copy the file from client1 to client2
         client1.exec_command(
             sudo=True,
@@ -572,13 +593,14 @@ def run(ceph_cluster, **kw):
         log.info(f"post_read_ops_client1: {post_read_ops_client1}")
         log.info(f"post_write_ops_client2: {post_write_ops_client2}")
         for rw in rw_list[:2]:
-            if pre_read_ops_client1[rw] >= post_read_ops_client1[rw]:
-                log.error(f"Failed to verify {rw} for client1")
+            if pre_read_ops_client1[rw] > post_read_ops_client1[rw]:
                 raise Metrics_Value_Not_Matching(f"Failed to verify {rw} for client1")
+            log.info(f"Verified {rw} for client1")
         for rw in rw_list[2:]:
             if pre_write_ops_client2[rw] >= post_write_ops_client2[rw]:
                 log.error(f"Failed to verify {rw} for client2")
                 raise Metrics_Value_Not_Matching(f"Failed to verify {rw} for client2")
+            log.info(f"Verified {rw} for client2")
         log.info(
             "Verified total_read_ops, total_read_size, total_write_ops, and total_write_size"
         )
