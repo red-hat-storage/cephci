@@ -18,6 +18,10 @@ int main(int argc, char* argv[]) {
     int user_provided_alloc_hint = std::atoi(argv[4]);
     uint64_t write_size = std::strtoull(argv[3], nullptr, 10);
     uint64_t object_size = 4 * 1024 * 1024; // Expected object size for allocation hint
+    uint64_t offset = 0; // default if not passed
+    if (argc > 4) {
+        offset = std::strtoull(argv[4], nullptr, 10);
+    }
 
     if (pool_name.empty() || num_objects <= 0 || write_size == 0) {
         std::cerr << "Invalid input. Ensure pool name is not empty, num_objects > 0, and write_size > 0." << std::endl;
@@ -68,7 +72,8 @@ int main(int argc, char* argv[]) {
 
         librados::bufferlist bl;
         bl.append(data);
-        ret = ioctx.write_full(object_name, bl);
+
+        ret = ioctx.write(object_name, bl, bl.length(), offset);
         if (ret < 0) {
             std::cerr << "Failed to write object '" << object_name << "': " << ret << std::endl;
         } else {
