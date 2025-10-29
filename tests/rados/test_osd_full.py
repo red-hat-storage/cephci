@@ -7,6 +7,7 @@ import datetime
 import json
 import time
 
+from ceph.ceph import SocketTimeoutException
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -268,14 +269,19 @@ def run(ceph_cluster, **kw):
                     "max_objs": subseq_obj_full,
                     "check_ec": False,
                 }
-                if (
-                    rados_obj.bench_write(
-                        pool_name=pool_name, **osdfull_config, verify_stats=False
+                try:
+                    if (
+                        rados_obj.bench_write(
+                            pool_name=pool_name, **osdfull_config, verify_stats=False
+                        )
+                        is False
+                    ):
+                        err_msg = f"Error running rados bench using osdfull_config: {osdfull_config}"
+                        raise Exception(err_msg)
+                except SocketTimeoutException:
+                    log.warning(
+                        "rados bench socket Timeout because OSD(s) are full - Expected"
                     )
-                    is False
-                ):
-                    err_msg = f"Error running rados bench using osdfull_config: {osdfull_config}"
-                    raise Exception(err_msg)
 
                 assert rados_obj.verify_pool_stats(
                     pool_name=pool_name, exp_objs=total_objs
@@ -470,8 +476,16 @@ def run(ceph_cluster, **kw):
                     "b": f"{bench_obj_size_kb}KB",
                     "no-cleanup": True,
                     "max-objects": full_objs,
+                    "check_ec": False,
                 }
-                bench_obj.write(client=client_node, pool_name=pool_name, **full_config)
+                try:
+                    bench_obj.write(
+                        client=client_node, pool_name=pool_name, **full_config
+                    )
+                except SocketTimeoutException:
+                    log.warning(
+                        "rados bench socket Timeout because OSD(s) are full - Expected"
+                    )
 
                 assert rados_obj.verify_pool_stats(
                     pool_name=pool_name, exp_objs=full_objs
