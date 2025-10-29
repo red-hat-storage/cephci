@@ -53,7 +53,7 @@ tests:
       polarion-id: CEPH-83574066
       config:
         extra-pkgs:
-          - wget https://download.oracle.com/java/24/latest/jdk-24_linux-x64_bin.rpm
+          - jdk
         install_start_kafka: true
         script-name: test_bucket_notifications.py
         config-file-name: test_bucket_notification_kafka_broker_persistent_delete.yaml
