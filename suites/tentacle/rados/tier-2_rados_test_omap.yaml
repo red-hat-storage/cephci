@@ -113,6 +113,17 @@ tests:
       desc: Change config options to enable logging to file
 
   - test:
+      name: OMAP Operations Test Suite
+      desc: Comprehensive OMAP functionality and performance testing
+      module: test_rados_bench_omap.py
+      config:
+        pool_name: rados_omap_test_pool
+        pg_num: 32
+        num_objects: 500  # Number of objects to create (default: 500)
+        num_keys_per_object: 10000  # OMAP keys per object (default: 10000)
+      polarion-id: CEPH-83607854
+
+  - test:
       name: OMAP feature
       desc: Testing omap features
       module: test_scrub_omap.py
