@@ -71,12 +71,32 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83581753
+            serial: 1
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83581753
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
         operation: CEPH-83581753
       desc: set QoS for namespace in subsystem with invalid values and args
       destroy-cluster: false
@@ -89,17 +109,39 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83581945
+            serial: 1
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83581945
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
         operation: CEPH-83581945
       desc: set QoS for namespace in subsystem without mandatory values and args
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py
-      name: set QoS for namespace in subsystem without mandatory values and args.
+      name: >
+        set QoS for namespace in subsystem without
+        mandatory values and args.
       polarion-id: CEPH-83581945
 
   - test:
@@ -107,12 +149,32 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83581755
+            serial: 1
+            bdevs:
+              count: 2
+              size: 10G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83581755
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
         operation: CEPH-83581755
       desc: set QoS for multiple namespace in a single go.
       destroy-cluster: false

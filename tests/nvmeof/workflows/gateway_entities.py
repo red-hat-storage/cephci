@@ -113,8 +113,8 @@ def validate_hosts(gateway, expected_hosts, nqn):
         if expected_hosts != allow_any_host:
             raise ValueError("Open host access '*' not found in configured hosts")
     else:
-        host_list = json.loads(out)["hosts"] if out else []
-        configured_host_nqns = [host["host"] for host in host_list]
+        host_list = json.loads(out) if out else []
+        configured_host_nqns = [host["nqn"] for host in host_list["hosts"]]
         for expected_host in expected_hosts:
             if expected_host not in configured_host_nqns:
                 raise ValueError(
@@ -140,7 +140,10 @@ def configure_hosts(gateway, config: dict):
             gateway.host.add(
                 **{"args": {**sub_args, **{"host": repr(sub_cfg["allow_host"])}}}
             )
-            validate_hosts(gateway, True, nqn)
+            if sub_cfg["allow_host"] == "*":
+                validate_hosts(gateway, True, nqn)
+            else:
+                validate_hosts(gateway, [sub_cfg["allow_host"]], nqn)
         if sub_cfg.get("hosts"):
             hosts = sub_cfg["hosts"]
             if not isinstance(hosts, list):
