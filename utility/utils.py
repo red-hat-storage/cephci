@@ -1860,7 +1860,7 @@ def configure_kafka_cluster_with_security(ceph_cluster, cloud_type):
         log.info(f"installing kafka on node {rgw_node.ip_address}")
         rgw_node.exec_command(
             sudo=True,
-            cmd="yum install -y https://download.oracle.com/java/24/latest/jdk-24_linux-x64_bin.rpm",
+            cmd="yum install -y https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.rpm",
         )
         install_kafka(rgw_node, cloud_type)
         rgw_node.exec_command(

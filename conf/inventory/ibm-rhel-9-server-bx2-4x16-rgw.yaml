@@ -43,7 +43,7 @@ instance:
       - systemctl restart sshd
       - touch /ceph-qa-ready
       - mkdir -p /root/rgw_rpms
-      - curl -k -o /root/rgw_rpms/jdk.rpm https://download.oracle.com/java/24/latest/jdk-24_linux-x64_bin.rpm
+      - curl -k -o /root/rgw_rpms/jdk.rpm https://download.oracle.com/java/25/latest/jdk-25_linux-x64_bin.rpm
       - curl -k -o /root/rgw_rpms/oathtool.rpm https://dl.fedoraproject.org/pub/epel/9/Everything/x86_64/Packages/o/oathtool-2.6.12-1.el9.x86_64.rpm
 
 
