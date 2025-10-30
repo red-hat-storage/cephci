@@ -215,12 +215,17 @@ def execute_s3_tests(
         base_cmd = "cd s3-tests; S3TEST_CONF=config.yaml virtualenv/bin/nosetests -v"
         extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616,!encryption'"
         tests = "s3tests"
+        if build.split(".")[0] >= "8":
+            test_directory = "s3tests"
+        else:
+            test_directory = "s3tests_boto3"
+
         log.info(f"build :{build}")
         if not build.split(".")[0] >= "7":
             if execute_granular:
-                tests = f"s3tests_boto3/functional/{path}"
+                tests = f"{test_directory}/functional/{path}"
             else:
-                tests = "s3tests_boto3"
+                tests = {test_directory}
             extra_args = "-a '!fails_on_rgw,!fails_strict_rfc2616"
 
             if not encryption:
@@ -231,9 +236,9 @@ def execute_s3_tests(
         else:
             base_cmd = "cd s3-tests; S3TEST_CONF=config.yaml virtualenv/bin/tox"
             if execute_granular:
-                tests = f"s3tests_boto3/functional/{path}"
+                tests = f"{test_directory}/functional/{path}"
             else:
-                tests = "s3tests_boto3"
+                tests = {test_directory}
             extra_args = "-- -v -m 'not fails_on_rgw and not fails_strict_rfc2616"
 
             if not encryption:
