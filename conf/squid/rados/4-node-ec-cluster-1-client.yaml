@@ -8,6 +8,7 @@ globals:
             - _admin
             - installer
             - osd
+            - osd_lv
             - mon
             - mgr
             - rgw
@@ -19,6 +20,7 @@ globals:
             - rgw
             - mon
             - osd
+            - osd_raw
             - mds
             - _admin
           no-of-volumes: 6
@@ -29,11 +31,13 @@ globals:
             - mon
             - mgr
             - osd
+            - osd_encrypt_lv
           no-of-volumes: 6
           disk-size: 15
       node4:
           role:
             - osd
+            - osd_encrypt_raw
             - rgw
             - mds
             - node-exporter
