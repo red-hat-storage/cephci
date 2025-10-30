@@ -68,6 +68,7 @@ def initiators(ceph_cluster, gateway, config):
 
     results = []
     io_args = {"size": "100%"}
+
     if config.get("io_args"):
         io_args = config["io_args"]
     with parallel() as p:
@@ -76,6 +77,12 @@ def initiators(ceph_cluster, gateway, config):
             if io_args.get("test_name"):
                 test_name = f"{io_args['test_name']}-" f"{path.replace('/', '_')}"
                 _io_args.update({"test_name": test_name})
+            if config.get("output"):
+                _io_args.update(
+                    {
+                        "output": config["output"],
+                    }
+                )
             _io_args.update(
                 {
                     "device_name": path,
@@ -87,9 +94,12 @@ def initiators(ceph_cluster, gateway, config):
             _io_args = {**io_args, **_io_args}
             p.spawn(run_fio, **_io_args)
         for op in p:
-            if op != 0:
+            if "/tmp/" in str(op):
+                results.append(op)
+            elif op != 0:
                 raise RuntimeError(f"FIO failed with exit code : {op}")
-            results.append(op)
+            else:
+                results.append(op)
     return results
 
 

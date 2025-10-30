@@ -69,7 +69,15 @@ tests:
       abort-on-fail: false
       config:
         command: apply
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
         service: nvmeof
+        install: true
+        nvme_metadata_pool: rbd
         pos_args:
           - rbd                 # name of the pool
         gw_nodes: ["node5", "node6"]
@@ -87,6 +95,14 @@ tests:
           - node: node10
             nqn: connect-all
             listener_port: 4420
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83608266
+            serial: 1
+            bdevs:
+              count: 1
+              size: 5G
+            listener_port: 4420
+            allow_host: "*"
         operation: CEPH-83608266
       desc: restrict same GW node deployment into multiple GW groups.
       destroy-cluster: false
