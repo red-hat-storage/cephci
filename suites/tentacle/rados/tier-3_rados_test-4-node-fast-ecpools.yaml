@@ -154,6 +154,7 @@ tests:
         install_packages:
           - ceph-common
           - ceph-base
+          - ceph-fuse
 #          - ceph-test  # Not packaged downstream, need test changes to install it via upstream repos
         copy_admin_keyring: true
         caps:
@@ -186,7 +187,7 @@ tests:
                 - host
 
   - test:
-      name: Upgrade to latest 9.x ceph version
+      name: Upgrade mgr daemons
       desc: Upgrade Mgr daemons to latest version
       module: test_upgrade_warn.py
       polarion-id: CEPH-83574934
@@ -200,38 +201,16 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: Upgrade to latest 9.x ceph version
-      desc: Upgrade Mon daemon on 1 host to latest version
-      module: test_upgrade_warn.py
-      polarion-id: CEPH-83574934
-      config:
-        command: start
-        service: upgrade
-        args:
-          daemon_types: "mon"
-          hosts: "node1"
-        verify_cluster_health: true
-      destroy-cluster: false
+      name: FAST EC staggered upgrades all Mgr
+      module: test_fast_ec_config_params.py
+      polarion-id: CEPH-83620447
       abort-on-fail: true
+      config:
+        test_fast_ec_optimization_params_partial_upgrade: true
+      desc: Verification of EC enhancements Configs during staggered upgrades all Mgr only
 
   - test:
-      name: Upgrade to latest 9.x ceph version
-      desc: Upgrade Mon daemon on 1 host to latest version
-      module: test_upgrade_warn.py
-      polarion-id: CEPH-83574934
-      config:
-        command: start
-        service: upgrade
-        args:
-          daemon_types: "mon"
-          hosts: "node1"
-        verify_cluster_health: true
-      destroy-cluster: false
-      abort-on-fail: true
-
-
-  - test:
-      name: Upgrade to latest 9.x ceph version
+      name: Upgrade mon daemons
       desc: Upgrade Mon service to latest version
       module: test_upgrade_warn.py
       polarion-id: CEPH-83574934
@@ -239,14 +218,24 @@ tests:
         command: start
         service: upgrade
         args:
-          services: "mon"
+          daemon_types: "mon,crash"
         verify_cluster_health: true
       destroy-cluster: false
       abort-on-fail: true
 
   - test:
-      name: Upgrade to latest 9.x ceph version
-      desc: Upgrade OSD daemon on 1 host to latest version
+      name: FAST EC staggered upgrades all mon
+      module: test_fast_ec_config_params.py
+      polarion-id: CEPH-83620447
+      abort-on-fail: true
+      config:
+        test_fast_ec_optimization_params_partial_upgrade: true
+      desc: Verification of EC enhancements Configs during staggered upgrades all mon only
+
+
+  - test:
+      name: Upgrade few OSD daemons
+      desc: Upgrade OSD daemon on 2 hosts to latest version
       module: test_upgrade_warn.py
       polarion-id: CEPH-83574934
       config:
@@ -260,15 +249,45 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: Upgrade cluster to latest 9.x ceph version
-      desc: Upgrade complate cluster to latest version
+      name: FAST EC staggered upgrades few OSDs
+      module: test_fast_ec_config_params.py
+      polarion-id: CEPH-83620447
+      abort-on-fail: true
+      config:
+        test_fast_ec_optimization_params_partial_upgrade: true
+      desc: Verification of EC enhancements Configs during staggered upgrades few OSDs only
+
+  - test:
+      name: Upgrade all OSds
+      desc: Upgrade all OSD daemon to latest version
       module: test_upgrade_warn.py
       polarion-id: CEPH-83574934
       config:
         command: start
         service: upgrade
-        base_cmd_args:
-          verbose: true
+        args:
+          daemon_types: "osd"
+        verify_cluster_health: true
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: EC enhancements during staggered upgrades All OSDs
+      module: test_fast_ec_config_params.py
+      polarion-id: CEPH-83620447
+      abort-on-fail: true
+      config:
+        test_fast_ec_optimization_params_partial_upgrade: true
+      desc: Verification of EC enhancements Configs during staggered upgrades all OSDs
+
+  - test:
+      name: Upgrade cluster to latest 9.x ceph version
+      desc: Upgrade cluster to latest version
+      module: test_upgrade_warn.py
+      polarion-id: CEPH-83574934
+      config:
+        command: start
+        service: upgrade
         verify_cluster_health: true
       destroy-cluster: false
       abort-on-fail: true

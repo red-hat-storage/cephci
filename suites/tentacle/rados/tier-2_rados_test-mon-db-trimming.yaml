@@ -289,7 +289,7 @@ tests:
   - test:
       name: Rados hotfix OSD beacons
       module: test_mon_osd_mgr_resiliency.py
-      polarion-id: TBD
+      polarion-id: CEPH-83632176
       config:
         test_duration: 10
         heartbeat_interval: 30
