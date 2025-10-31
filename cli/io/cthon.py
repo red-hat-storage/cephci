@@ -2,6 +2,9 @@ from ceph.ceph import CommandFailed
 from cli import Cli
 from cli.utilities.packages import Package, SubscriptionManager
 from cli.utilities.utils import git_clone, make
+from utility.log import Log
+
+log = Log(__name__)
 
 
 class Cthon(Cli):
@@ -37,9 +40,12 @@ class Cthon(Cli):
     def add_cthon_repos(self):
         """Add cthon repos"""
         try:
-            SubscriptionManager(self.client).repos.enable(
-                "codeready-builder-for-rhel-$(rpm -E %rhel)-$(arch)-rpms"
-            )
+            if not self._is_subscription_registered():
+                log.info("Skipping adding cthon repos since system is not subscribed")
+            else:
+                SubscriptionManager(self.client).repos.enable(
+                    "codeready-builder-for-rhel-$(rpm -E %rhel)-$(arch)-rpms"
+                )
             return True
         except Exception as e:
             raise CommandFailed("Failed to add cthon repos \n error: {0}".format(e))
@@ -47,9 +53,12 @@ class Cthon(Cli):
     def remove_cthon_repos(self):
         """Remove cthon repos"""
         try:
-            SubscriptionManager(self.client).repos.disable(
-                "codeready-builder-for-rhel-$(rpm -E %rhel)-$(arch)-rpms"
-            )
+            if not self._is_subscription_registered():
+                log.info("Skipping removing cthon repos since system is not subscribed")
+            else:
+                SubscriptionManager(self.client).repos.disable(
+                    "codeready-builder-for-rhel-$(rpm -E %rhel)-$(arch)-rpms"
+                )
             return True
         except Exception as e:
             raise CommandFailed("Failed to remove cthon repos \n error: {0}".format(e))
@@ -99,3 +108,26 @@ class Cthon(Cli):
 
         except Exception as e:
             raise CommandFailed("Failed to cleanup cthon test \n error: {0}".format(e))
+
+    def _is_subscription_registered(self):
+        """Identify if the system is subscribed or not"""
+        try:
+            cmd = (
+                "subscription-manager status | grep 'Overall Status' | awk '{print $3}'"
+            )
+            out, _ = self.client.exec_command(sudo=True, cmd=cmd)
+            status = out.strip()
+            log.info("Subscription status output: {}".format(status))
+            # In RHEL-9, "Disabled" means registered
+            # In RHEL-10, "Registered" means registered
+            is_subscribed = status.lower() in ["registered", "disabled"]
+            log.info(
+                "System is {}".format(
+                    "subscribed" if is_subscribed else "not subscribed"
+                )
+            )
+            return is_subscribed
+        except Exception as e:
+            raise CommandFailed(
+                "Failed to identify subscription status \n error: {0}".format(e)
+            )
