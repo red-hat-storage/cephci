@@ -148,15 +148,7 @@ tests:
       module: test_inconsistency_osd_epoch.py
       polarion-id: CEPH-9947
       config:
-        verify_osd_omap_entries:
-          configurations:
-            pool_name: test_pool_4
-            pool_type: replicated
-          omap_config:
-            obj_start: 0
-            obj_end: 50
-            num_keys_obj: 100
-        delete_pool: true
+        pool_name: test_pool
 
   - test:
       name: Preempt scrub messages checks
