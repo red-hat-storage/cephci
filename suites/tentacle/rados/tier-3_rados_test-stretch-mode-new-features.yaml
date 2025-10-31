@@ -282,6 +282,19 @@ tests:
       desc: Performs tests related to reverting from stretch mode mon failure scenarios
 
   - test:
+      name: Revert stretch mode mon failure scenarios
+      module: test_stretch_revert.py
+      polarion-id: CEPH-83620057
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+        scenarios_to_run:
+          - scenario10
+          - scenario11
+      desc: Performs tests related to reverting from stretch mode mon failure scenarios
+
+  - test:
       name: Netsplit detection and warning
       module: test_netsplit_detection_and_warning.py
       polarion-id: CEPH-83620060

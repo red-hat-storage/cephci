@@ -98,7 +98,9 @@ class StretchMode:
             f"ceph mon enable_stretch_mode {tiebreaker_mon} stretch_rule datacenter"
         )
         if (
-            self.rados_obj.run_ceph_command(cmd=stretch_enable_cmd, print_output=True)
+            self.rados_obj.run_ceph_command(
+                cmd=stretch_enable_cmd, print_output=True, client_exec=True
+            )
             is None
         ):
             raise Exception("Failed to enable stretch mode")
