@@ -190,20 +190,24 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                       release: 7.1                  # if cdn, provide release
     """
     LOG.info("Upgrade Ceph cluster with NVMEoF Gateways")
+
     config = kwargs["config"]
+    ctm = config["manifest"]
+
     rbd_pool = config["rbd_pool"]
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
-    ibm_build = config.get("ibm_build", False)
+
+    ibm_build = True if ctm.product == "ibm" else False
+
     orch = Orch(cluster=ceph_cluster, **config)
     container_image = config.get("container_image")
+
     upgrade = config["upgrade"]
-    overrides = kwargs.get("test_data", {}).get("custom-config")
+    overrides = kwargs.get("test_data", {}).get("custom_config_dict")
 
     # Todo: Fix the CDN NVMe CLI image issue with framework support.
-    for key, value in dict(item.split("=") for item in overrides).items():
-        if key == "nvmeof_cli_image":
-            NVMeGWCLI.NVMEOF_CLI_IMAGE = value
-            break
+    NVMeGWCLI.NVMEOF_CLI_IMAGE = ctm.custom_images["nvmeof_cli_image"]
+
     io_tasks = []
     executor = ThreadPoolExecutor()
 

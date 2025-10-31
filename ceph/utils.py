@@ -609,11 +609,11 @@ def setup_repos(
     base_url,
     platform=None,
     installer_url=None,
-    repos=None,
+    repos=["MON", "OSD", "Tools"],
     cloud_type="openstack",
     ibm_build=False,
 ):
-    if base_url.endswith(".repo") or ibm_build:
+    if base_url.endswith(".repo"):
         cmd = f"yum-config-manager --add-repo {base_url}"
         ceph.exec_command(sudo=True, cmd=cmd)
 
@@ -625,11 +625,9 @@ def setup_repos(
             add_centos_epel_repo(ceph, platform)
 
     else:
-        if not repos:
-            repos = ["MON", "OSD", "Tools"]
         base_repo = generate_repo_file(base_url, repos, cloud_type)
         base_file = ceph.remote_file(
-            sudo=True, file_name="/etc/yum.repos.d/rh_ceph.repo", file_mode="w"
+            sudo=True, file_name="/etc/yum.repos.d/ceph_build.repo", file_mode="w"
         )
         base_file.write(base_repo)
         base_file.flush()

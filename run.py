@@ -28,6 +28,7 @@ from ceph.utils import (
     create_ibmc_ceph_nodes,
 )
 from cephci.cluster_info import get_ceph_var_logs
+from cephci.utils.build_info import CephTestManifest
 from cli.performance.memory_and_cpu_utils import (
     start_logging_processes,
     stop_logging_process,
@@ -42,7 +43,6 @@ from utility.utils import (  # ReportPortal,
     create_run_dir,
     create_unique_test_name,
     email_results,
-    fetch_build_artifacts,
     generate_unique_id,
     magna_url,
     setup_cluster_access,
@@ -55,7 +55,7 @@ doc = """
 A simple test suite wrapper that executes tests based on yaml test configuration
 
  Usage:
-  run.py --rhbuild BUILD
+  run.py (--rhbuild BUILD | --release ceph_release)
         (--platform <name>)
         (--suite <FILE>)...
         (--global-conf FILE | --cluster-conf FILE)
@@ -64,7 +64,6 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--inventory FILE]
         [--osp-cred <file>]
         [--rhs-ceph-repo <repo>]
-        [--ubuntu-repo <repo>]
         [--add-repo <repo>]
         [--kernel-repo <repo>]
         [--store | --reuse <file>]
@@ -93,6 +92,7 @@ A simple test suite wrapper that executes tests based on yaml test configuration
         [--skip-tc <items>]
         [--monitor-performance]
         [--disable-console-log]
+        [--product <community> | <redhat> | <ibm>]
   run.py --cleanup=name --osp-cred <file> [--cloud <str>]
         [--log-level <LEVEL>]
         [--custom-config <key>=<value>]...
@@ -111,15 +111,18 @@ Options:
   --osp-cred <file>                 openstack credentials as separate file
   --rhbuild <1.3.0>                 ceph downstream version
                                     eg: 1.3.0, 2.0, 2.1 etc
-  --build <latest>                  Type of build to be use for testing
-                                    eg: latest|tier-0|tier-1|tier-2|released|upstream
+                                    Depreciated in favor of --release
+  --release <ceph_version>          Ceph version. It can be download stream or
+                                    upstream distinct name.
+  --build <nightly>                 Type of build to be use for testing
+                                    eg: nightly|stable|released|zX
                                     [default: released]
   --upstream-build <upstream-build> eg: quincy|pacific
+                                    Depreciated in favor of --release
   --platform <rhel-8>               select platform version eg., rhel-8, rhel-7
   --rhs-ceph-repo <repo>            location of rhs-ceph repo
                                     Top level location of compose
   --add-repo <repo>                 Any additional repo's need to be enabled
-  --ubuntu-repo <repo>              http location of downstream ubuntu repo
   --kernel-repo <repo>              Zstream Kernel Repo location
   --store                           store the current vm state for reuse
   --reuse <file>                    use the stored vm state for rerun
@@ -159,6 +162,8 @@ Options:
                                     for every test and collects data to specified dir
   --disable-console-log             To stopping logging to console
                                     [default: false]
+  --product <product>               The edition of Ceph. Accepted values are
+                                    community, redhat and ibm
 """
 log = Log()
 test_names = []
@@ -391,7 +396,7 @@ def run(args):
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
     # Mandatory arguments
-    rhbuild = args["--rhbuild"]
+    rhbuild = args.get("--release") or args["--rhbuild"]
     suite_files = args["--suite"]
 
     glb_file = args.get("--global-conf")
@@ -435,13 +440,11 @@ def run(args):
 
     build = None
     base_url = None
-    ubuntu_repo = None
     docker_registry = None
     docker_image = None
     docker_tag = None
 
     ceph_name = None
-    compose_id = None
 
     if cleanup_name and not osp_cred:
         raise Exception("Need cloud credentials to perform cleanup.")
@@ -467,40 +470,48 @@ def run(args):
     if inventory_file is None and not reuse and cloud_type in ["openstack", "ibmc"]:
         raise Exception("Require system configuration information to provision.")
 
-    platform = args["--platform"]
-    build = args.get("--build")
+    # Required arguments to determine the test build details
+    product: str = args.get("--product", "redhat")
+    release: str = args.get("--release", rhbuild)
+    platform: str = args["--platform"]
+    build: str = args.get("--build", "released")
+    ctm: CephTestManifest = CephTestManifest(product, release, build, platform)
+
+    # Upstream
     upstream_build = args.get("--upstream-build", None)
+    if upstream_build:
+        ctm.release = upstream_build
 
     base_url = args.get("--rhs-ceph-repo")
-    ubuntu_repo = args.get("--ubuntu-repo")
     docker_registry = args.get("--docker-registry")
     docker_image = args.get("--docker-image")
     docker_tag = args.get("--docker-tag")
+
+    # Custom or override configurations
     kernel_repo = args.get("--kernel-repo")
     custom_config = args.get("--custom-config")
     custom_config_file = args.get("--custom-config-file")
+
+    # FixMe: We should be using product for differentiation.
     ibm_build = False
 
+    # Convert custom_config to a dict
+    custom_config_dict = {}
     if custom_config:
-        for _config in custom_config:
-            if "ibm-build=" in _config:
-                ibm_build = bool(_config.split("=")[1])
+        custom_config_dict = {
+            item.split("=")[0]: item.split("=")[1] for item in custom_config
+        }
+
+    if "ibm-build" in custom_config_dict.keys():
+        ibm_build = bool(custom_config_dict["ibm-build"])
+        if ibm_build:
+            ctm.product = "ibm"
 
     if not check_build_overrides(base_url, docker_registry, docker_image, docker_tag):
-        if build and build not in ["released"]:
-            base_url, docker_registry, docker_image, docker_tag = fetch_build_artifacts(
-                build, rhbuild, platform, upstream_build, ibm_build
-            )
-    elif build == "upstream":
-        if not upstream_build:
-            raise CephCIArgumentError(
-                "--upstream-build argument not provided Ex: tentacle"
-            )
-    else:
-        # TODO: By default, build=released, but Pipelines and environment
-        #       are not ready for this change. Need to revert this code changes
-        #       once we have right build value set across pipelines.
-        build = None
+        base_url = ctm.repository
+        docker_registry = ctm.ceph_image_dtr
+        docker_image = ctm.ceph_image_path
+        docker_tag = ctm.ceph_image_tag
 
     store = args.get("--store") or False
 
@@ -543,8 +554,7 @@ def run(args):
     log.info(f"RPM Compose source - {base_url}")
     log.info(f"Red Hat Ceph Image used - {docker_registry}/{docker_image}:{docker_tag}")
 
-    ceph_version = []
-    ceph_ansible_version = []
+    ceph_version = [ctm.ceph_version]
     distro = []
     clients = []
 
@@ -573,19 +583,15 @@ def run(args):
             )
             distro.append(image_name.replace(".iso", ""))
 
-        # get COMPOSE ID and ceph version
+        # Find the Ceph version
         if build not in ["released", "cvp", "upstream", None]:
-            compose_id = get_html_page(url=f"{base_url}/COMPOSE_ID")
-
+            # By default, we assume the base url is taken from CI_MESSAGE
             ver_url = f"{base_url}/compose/Tools/x86_64/os/Packages/"
-            if cloud_type.startswith("ibmc"):
-                ver_url = f"{base_url}/Tools/Packages/"
 
-            if platform.startswith("ubuntu"):
-                os_version = platform.split("-")[1]
-                ver_url = (
-                    f"{base_url}/Tools/dists/{os_version}/main/binary-amd64/Packages"
-                )
+            # Incase we are executing from other environments
+            # For now, only switch if type is IBMC
+            if cloud_type and cloud_type.startswith("ibmc"):
+                ver_url = f"{base_url}/Tools/Packages/"
 
             # Ceph Version
             ver_text = get_html_page(url=ver_url)
@@ -593,20 +599,12 @@ def run(args):
             if search_results:
                 ceph_version.append(search_results.group(1))
 
-            # Ceph Ansible Version
-            search_results = re.search(r"ceph-ansible-(.*?).rpm", ver_text)
-            if search_results:
-                ceph_ansible_version.append(search_results.group(1))
-
     distro = ", ".join(list(set(distro)))
-    if not ceph_version and build == "upstream":
+    if build == "upstream":
         ceph_version.append(upstream_build)
-    ceph_version = ", ".join(list(set(ceph_version)))
-    ceph_ansible_version = ", ".join(list(set(ceph_ansible_version)))
 
-    log.info(f"Compose id is: {compose_id}")
-    log.info(f"Testing Ceph Version: {ceph_version}")
-    log.info(f"Testing Ceph Ansible Version: {ceph_ansible_version}")
+    ceph_version = ", ".join(list(set(ceph_version)))
+    log.info("Testing Ceph Version: %s" % (ceph_version))
 
     service = None
     suite_name = "::".join(suite_files)
@@ -633,8 +631,9 @@ def run(args):
         details["rhbuild"] = rhbuild
         details["cloud-type"] = cloud_type
         details["ceph-version"] = ceph_version
-        details["ceph-ansible-version"] = ceph_ansible_version
-        details["compose-id"] = compose_id
+        details["platform"] = platform
+        details["product"] = product
+        details["release"] = release
         details["distro"] = distro
         details["suite-name"] = suite_name
         details["suite-file"] = suite_files
@@ -669,6 +668,7 @@ def run(args):
                 test = test.get("test")
                 tmp = fetch_test_details(test)
                 res.append(tmp)
+
             run_end_time = datetime.datetime.now()
             duration = divmod((run_end_time - run_start_time).total_seconds(), 60)
             total_time = {
@@ -692,6 +692,7 @@ def run(args):
                 "prefix": instances_name,
             }
             email_results(test_result=test_res)
+
             return 1
     else:
         ceph_store_nodes = open(reuse, "rb")
@@ -700,10 +701,12 @@ def run(args):
         for cluster_name, cluster in ceph_cluster_dict.items():
             for node in cluster:
                 node.reconnect()
+
     if store:
         ceph_clusters_file = f"rerun/{instances_name}-{run_id}"
         if not os.path.exists(os.path.dirname(ceph_clusters_file)):
             os.makedirs(os.path.dirname(ceph_clusters_file))
+
         store_cluster_state(ceph_cluster_dict, ceph_clusters_file)
 
     sys.path.append(os.path.abspath("tests"))
@@ -732,11 +735,15 @@ def run(args):
     tests = suite.get("tests")
     tcs = []
     jenkins_rc = 0
-    _rhcs_version = rhbuild[:3]
+    _rhcs_version = ctm.release
+
     # use ceph_test_data to pass around dynamic data between tests
     ceph_test_data = dict()
     ceph_test_data["custom-config"] = custom_config
     ceph_test_data["custom-config-file"] = custom_config_file
+
+    # Adding processed custom_config
+    ceph_test_data["custom_config_dict"] = deepcopy(custom_config_dict)
 
     # Initialize test return code
     rc = 0
@@ -789,6 +796,7 @@ def run(args):
                 config = test.get("clusters").get(cluster_name).get("config", {})
             else:
                 config = test.get("config", {})
+
             parallel = test.get("parallel", [])
 
             if not config.get("base_url"):
@@ -796,8 +804,6 @@ def run(args):
 
             config["rhbuild"] = f"{rhbuild}-{platform}"
             config["cloud-type"] = cloud_type
-            if "ubuntu_repo" in locals():
-                config["ubuntu_repo"] = ubuntu_repo
 
             if skip_setup is True:
                 config["skip_setup"] = True
@@ -825,19 +831,24 @@ def run(args):
                 docker_tag,
             )
 
-            if custom_config:
-                for _config in custom_config:
-                    if "ibm-build=" in _config:
-                        config["ibm_build"] = bool(_config.split("=")[1])
+            if custom_config_dict:
+                config["ibm_build"] = ibm_build
 
-                    if "enable-fips-mode=" in _config:
-                        config["enable_fips_mode"] = bool(_config.split("=")[1])
+                if "enable-fips-mode" in custom_config_dict:
+                    config["enable_fips_mode"] = custom_config_dict["enable-fips-mode"]
 
-                    if "enable-firewall=" in _config:
-                        config["enable_firewall"] = bool(_config.split("=")[1])
+                if "enable-firewall" in custom_config_dict:
+                    config["enable_firewall"] = custom_config_dict["enable-firewall"]
+
             config["ceph_docker_registry"] = docker_registry
             config["ceph_docker_image"] = docker_image
             config["ceph_docker_image_tag"] = docker_tag
+
+            # New manifest details
+            config["product"] = product
+            config["platform"] = platform
+            config["release"] = release
+            config["manifest"] = ctm
 
             if filestore:
                 config["filestore"] = filestore
@@ -865,7 +876,10 @@ def run(args):
                 logging_process, tracker = start_logging_processes(
                     ceph_cluster_dict[cluster_name], unique_test_name
                 )
+
             try:
+                # FixMe: I don't think we use `build` as part of test data
+                # configuration. This needs to investigated and fixed.
                 if "build" in config.keys():
                     _rhcs_version = config["build"]
 
@@ -1019,7 +1033,6 @@ def run(args):
         "jenkin-url": jenkin_job_url,
         "build": rhbuild,
         "ceph-version": ceph_version,
-        "ceph-ansible-version": ceph_ansible_version,
         "base_url": base_url,
         "suite-name": suite_name,
         "conf-file": glb_file,
@@ -1028,7 +1041,6 @@ def run(args):
         "container-registry": docker_registry,
         "container-image": docker_image,
         "container-tag": docker_tag,
-        "compose-id": compose_id,
         "log-dir": run_dir,
         "run-id": run_id,
         "cloud-type": cloud_type,
@@ -1049,9 +1061,11 @@ def run(args):
         "end": run_end_time.strftime("%d %B %Y , %I:%M:%S %p"),
         "total": f"{int(duration[0])} mins, {int(duration[1])} secs",
     }
+
     info = {"status": "Pass"}
     with open(f"{run_dir}/run_summary.json", "w", encoding="utf-8") as f:
         json.dump(run_summary, f, ensure_ascii=False, indent=4)
+
     test_res = {
         "result": tcs,
         "run_id": run_id,
@@ -1072,12 +1086,15 @@ def run(args):
         )
         for cluster in ceph_cluster_dict.keys():
             log.info(f"Installing Ceph-common on {cluster} nodes to gather Sos report")
+
             for node in ceph_cluster_dict[cluster].get_nodes():
                 setup_cluster_access(ceph_cluster_dict[cluster], node)
+
             installer = ceph_cluster_dict[cluster].get_nodes(role="installer")[0]
             sosreport.run(installer.ip_address, "cephuser", "cephuser", run_dir)
             # This can be Removed as sos report will have this details as well
             get_ceph_var_logs(ceph_cluster_dict[cluster], run_dir)
+
         log.info(f"Generated sosreports location : {url_base}/sosreports\n")
 
     return jenkins_rc
@@ -1110,12 +1127,13 @@ def collect_recipe(ceph_cluster):
     out, rc = installer_node[0].exec_command(
         sudo=True, cmd="podman --version | awk {'print $3'}", check_ec=False
     )
+
     output = out.rstrip()
     if output:
         log.info(f"Podman Version {output}")
         version_datails["PODMAN"] = output
 
-    out, rc = installer_node[0].exec_command(
+    out, _ = installer_node[0].exec_command(
         sudo=True, cmd="docker --version | awk {'print $3'}", check_ec=False
     )
     output = out.rstrip()
@@ -1124,7 +1142,7 @@ def collect_recipe(ceph_cluster):
         version_datails["DOCKER"] = output
 
     if client_node:
-        out, rc = client_node[0].exec_command(
+        out, _ = client_node[0].exec_command(
             sudo=True, cmd="ceph --version | awk '{print $3}'", check_ec=False
         )
         output = out.rstrip()
