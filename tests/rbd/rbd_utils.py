@@ -119,7 +119,7 @@ class Rbd:
         temp_str = "".join([random.choice(string.ascii_letters) for _ in range(length)])
         return temp_str
 
-    def initial_rbd_config(self, rbd, pool, image, **kw):
+    def initial_rbd_config(self, pool, image, **kw):
         """
         Calls create_pool function on the clusters,
         creates an image in the pool,
