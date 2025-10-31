@@ -1,4 +1,5 @@
 import os
+import re
 
 from cli.cephadm.ansible import Ansible
 from cli.cephadm.cephadm import CephAdm
@@ -140,10 +141,9 @@ def exec_cephadm_preflight(node, build_type, ibm_build=False, repo=None):
     # Set custom repository
     if repo and "s3.upshift.redhat.com" not in repo:
         if ibm_build and repo.endswith(".repo") and "public.dhe.ibm.com" in repo:
-            if "rhel9" in repo:
-                repo = repo.replace(repo.split("/")[-1], "rhel9/x86_64/")
-            elif "rhel8" in repo:
-                repo = repo.replace(repo.split("/")[-1], "rhel8/x86_64/")
+            match = re.search(r"(rhel\d+)", repo)
+            if match:
+                repo = repo.replace(repo.split("/")[-1], f"{match.group(1)}/x86_64/")
         extra_vars = {
             "ceph_origin": "custom",
             "gpgcheck": "no",
