@@ -150,3 +150,6 @@ reports:
     token: <fake-token>
     default_project: <fake-project>
     cert_path: <fake-certificate-path>
+
+# datacenter - support values are [redhat, tucson, eu-de]
+datacenter: redhat

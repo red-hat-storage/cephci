@@ -127,8 +127,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     # Avoid shallow reference conflicts. This is done for supporting installation of
     # RH Ceph versions unavailable in CDN.
     config = deepcopy(kwargs["config"])
-    config["overrides"] = kwargs.get("test_data", {}).get("custom-config")
-
+    config["overrides"] = kwargs.get("test_data", {}).get("custom_config_dict")
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
 
     try:
