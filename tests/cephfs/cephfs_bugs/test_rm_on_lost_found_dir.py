@@ -99,6 +99,7 @@ def run(ceph_cluster, **kw):
         )
         log.info("Fail File System")
         client1.exec_command(sudo=True, cmd=f"ceph fs fail {fs_name}")
+        fs_util.check_active_mds_count(client1, fs_name, 0)
         log.info("Reset sessions snaps and inodes")
         cmd_list = [
             f"cephfs-table-tool {fs_name}:0 reset session",
@@ -115,7 +116,7 @@ def run(ceph_cluster, **kw):
         log.info("Reset journal")
         client1.exec_command(
             sudo=True,
-            cmd=f"cephfs-journal-tool --rank={fs_name}:0 journal reset --force",
+            cmd=f"cephfs-journal-tool --rank={fs_name}:0 journal reset --force --yes-i-really-really-mean-it",
         )
 
         log.info("Initiate recovery tools on filesystem")

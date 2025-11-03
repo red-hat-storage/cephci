@@ -652,3 +652,26 @@ class CephFSCommonUtils(FsUtils):
                 time.sleep(retry_interval)  # Retry after the specified interval
 
         return 1
+
+    def is_subscription_registered(self, client):
+        """Identify if the system is subscribed or not"""
+        try:
+            cmd = (
+                "subscription-manager status | grep 'Overall Status' | awk '{print $3}'"
+            )
+            out, _ = client.exec_command(sudo=True, cmd=cmd)
+            status = out.strip()
+            log.info("Subscription status output: {}".format(status))
+            # In RHEL-9, "Disabled" means registered
+            # In RHEL-10, "Registered" means registered
+            is_subscribed = status.lower() in ["registered", "disabled"]
+            log.info(
+                "System is {}".format(
+                    "subscribed" if is_subscribed else "not subscribed"
+                )
+            )
+            return is_subscribed
+        except Exception as e:
+            raise CommandFailed(
+                "Failed to identify subscription status \n error: {0}".format(e)
+            )
