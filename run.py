@@ -417,11 +417,11 @@ def run(args):
     # Set log directory and get absolute path
     console_log_level = args.get("--log-level")
     log_directory = args.get("--log-dir")
-    disable_console_log = args.get("--disable-console-log", False)
+    disable_console_log = args.get("--disable-console-log") or False
     post_to_report_portal = args.get("--report-portal")
 
     # Get Perf and CPU mon param
-    enable_perf_mon = args.get("--monitor-performance", False)
+    enable_perf_mon = args.get("--monitor-performance") or False
 
     # jenkin job url
     jenkin_job_url = os.environ.get("BUILD_URL")
@@ -471,14 +471,14 @@ def run(args):
         raise Exception("Require system configuration information to provision.")
 
     # Required arguments to determine the test build details
-    product: str = args.get("--product", "redhat")
-    release: str = args.get("--release", rhbuild)
+    product: str = args.get("--product") or "redhat"
+    release: str = args.get("--release") or rhbuild
     platform: str = args["--platform"]
-    build: str = args.get("--build", "released")
+    build: str = args.get("--build") or "released"
     ctm: CephTestManifest = CephTestManifest(product, release, build, platform)
 
     # Upstream
-    upstream_build = args.get("--upstream-build", None)
+    upstream_build = args.get("--upstream-build")
     if upstream_build:
         ctm.release = upstream_build
 
