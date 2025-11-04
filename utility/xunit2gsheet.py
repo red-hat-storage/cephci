@@ -65,7 +65,6 @@ PREFERRED_PROPERTIES = [
     "conf-file",
     "container-registry",
     "container-image",
-    "compose-id",
     "instance-name",
 ]
 

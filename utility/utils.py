@@ -1078,7 +1078,7 @@ def email_results(test_result):
     run_status = get_run_status(results_list)
     msg["Subject"] = "[{run_status}]  Suite:{suite}  Build:{compose}  ID:{id}".format(
         suite=results_list[0]["suite-name"],
-        compose=results_list[0]["compose-id"],
+        compose=results_list[0]["ceph-version"],
         run_status=run_status,
         id=run_id,
     )
@@ -1090,7 +1090,7 @@ def email_results(test_result):
 
     props_content = f"""
     run_status=\"{run_status}\"
-    compose=\"{results_list[0]['compose-id']}\"
+    compose=\"{results_list[0]['ceph-version']}\"
     suite=\"{results_list[0]['suite-name']}\"
     """
 
