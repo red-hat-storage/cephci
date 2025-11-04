@@ -26,7 +26,7 @@ from ceph.ceph import CommandFailed, SSHConnectionManager
 from ceph.parallel import parallel
 from ceph.utils import check_ceph_healthly
 from cli.cephadm.cephadm import CephAdm
-from mita.v2 import get_openstack_driver
+from compute.openstack import get_openstack_driver
 from tests.cephfs.exceptions import ValueMismatchError
 from utility.log import Log
 from utility.retry import retry
