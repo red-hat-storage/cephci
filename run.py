@@ -474,7 +474,18 @@ def run(args):
     product: str = args.get("--product") or "redhat"
     release: str = args.get("--release") or rhbuild
     platform: str = args["--platform"]
-    build: str = args.get("--build") or "released"
+    build: str = args.get("--build")
+
+    # Setting to released by default is not right as there is case wherein it
+    # would be unavailable. Hence switching accordingly to released or nightly.
+    if build == "released":
+        try:
+            tmp_ctm = CephTestManifest(product, release, "released", platform)
+            _ = tmp_ctm.build_info
+        except RuntimeError:
+            build = "nightly"
+
+    # Now handle the manifest. At this point we are allowing failures
     ctm: CephTestManifest = CephTestManifest(product, release, build, platform)
 
     # Upstream
