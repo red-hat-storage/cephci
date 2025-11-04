@@ -1,9 +1,0 @@
----
-tests:
-  - test:
-      name: no recover session mount
-      module: no_recover_session_mount.py
-      polarion-id: CEPH-11260
-      desc: test no recover session mount by blocking the client node
-      abort-on-fail: false
-

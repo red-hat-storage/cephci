@@ -1,8 +1,0 @@
-# The purpose of this file implements the requirements of OCS integration.
----
-tests:
-  - test:
-      abort-on-fail: true
-      desc: Gather system details
-      module: gather_cluster_info.py
-      name: Retreive cluster details for OCS
