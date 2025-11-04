@@ -476,6 +476,38 @@ def run(args):
     platform: str = args["--platform"]
     build: str = args.get("--build")
 
+    # Upstream
+    upstream_build = args.get("--upstream-build")
+    if upstream_build:
+        product = "community"
+        release = upstream_build
+        build = "nightly"
+
+    # FixMe: We should be using product for differentiation.
+    ibm_build = False
+
+    # Custom or override configurations
+    kernel_repo = args.get("--kernel-repo")
+    custom_config = args.get("--custom-config")
+    custom_config_file = args.get("--custom-config-file")
+
+    # Convert custom_config to a dict
+    custom_config_dict = {}
+    if custom_config:
+        custom_config_dict = {
+            item.split("=")[0]: item.split("=")[1] for item in custom_config
+        }
+
+    if "ibm-build" in custom_config_dict.keys():
+        ibm_build = bool(custom_config_dict["ibm-build"])
+        if ibm_build:
+            if upstream_build:
+                msg = "The following are not compatible --upstream-build and"
+                msg += " --custom-config ibm-build=True. Please rectify."
+                raise RuntimeError(msg)
+
+            product = "ibm"
+
     # Setting to released by default is not right as there is case wherein it
     # would be unavailable. Hence switching accordingly to released or nightly.
     if build == "released":
@@ -488,37 +520,13 @@ def run(args):
     # Now handle the manifest. At this point we are allowing failures
     ctm: CephTestManifest = CephTestManifest(product, release, build, platform)
 
-    # Upstream
-    upstream_build = args.get("--upstream-build")
-    if upstream_build:
-        ctm.release = upstream_build
-
     base_url = args.get("--rhs-ceph-repo")
     docker_registry = args.get("--docker-registry")
     docker_image = args.get("--docker-image")
     docker_tag = args.get("--docker-tag")
 
-    # Custom or override configurations
-    kernel_repo = args.get("--kernel-repo")
-    custom_config = args.get("--custom-config")
-    custom_config_file = args.get("--custom-config-file")
-
-    # FixMe: We should be using product for differentiation.
-    ibm_build = False
-
-    # Convert custom_config to a dict
-    custom_config_dict = {}
-    if custom_config:
-        custom_config_dict = {
-            item.split("=")[0]: item.split("=")[1] for item in custom_config
-        }
-
-    if "ibm-build" in custom_config_dict.keys():
-        ibm_build = bool(custom_config_dict["ibm-build"])
-        if ibm_build:
-            ctm.product = "ibm"
-
     if not check_build_overrides(base_url, docker_registry, docker_image, docker_tag):
+        # In case the overrides are not valid, we are switching them to other inputs.
         base_url = ctm.repository
         docker_registry = ctm.ceph_image_dtr
         docker_image = ctm.ceph_image_path
@@ -856,10 +864,10 @@ def run(args):
             config["ceph_docker_image_tag"] = docker_tag
 
             # New manifest details
-            config["product"] = product
-            config["platform"] = platform
-            config["release"] = release
             config["manifest"] = ctm
+            config["product"] = ctm.product
+            config["platform"] = ctm.platform
+            config["release"] = ctm.release
 
             if filestore:
                 config["filestore"] = filestore
