@@ -325,3 +325,13 @@ tests:
       config:
         script-name: test_swift_basic_ops.py
         config-file-name: test_swift_at_root.yaml
+
+  - test:
+      name: Test No crash with empty copy source
+      desc: Test No crash with empty copy source
+      polarion-id: CEPH-83622325
+      module: sanity_rgw.py
+      comments: known issue - Bug 2412237 targetted to 7.1z9
+      config:
+        script-name: ../aws/test_tail_deletion_during_copy_object.py
+        config-file-name: ../../aws/configs/test_crash_with_empty_copy_source.yaml
