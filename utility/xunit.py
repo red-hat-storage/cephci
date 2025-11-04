@@ -82,14 +82,10 @@ def create_xunit_results(suite_name, test_cases, test_run_metadata):
     run_id = test_run_metadata["run-id"]
     xml_file = f"{run_dir}/xunit.xml"
     ceph_version = test_run_metadata["ceph-version"]
-    ansible_version = test_run_metadata["ceph-ansible-version"]
     distribution = test_run_metadata["distro"]
     build = test_run_metadata["build"]
     test_run_id = f"RHCS-{build}-{_file}-{run_id}".replace(".", "-")
-    test_group_id = (
-        f"ceph-build: {ceph_version} "
-        f"ansible-build: {ansible_version} OS distro: {distribution}"
-    )
+    test_group_id = f"ceph-build: {ceph_version} " f"OS distro: {distribution}"
     log.info(f"Creating xUnit {_file} for test run-id {test_run_id}")
 
     suite = TestSuite(_file)
