@@ -1081,11 +1081,11 @@ class HighAvailability:
                 continue
 
             for device in devices_json:
-                if rhel_version == "9.5":
+                if float(rhel_version) == float("9.5"):
                     key = device["NameSpace"]
                     value = int(device["SerialNumber"])
                     serial_to_namespace[key].add(value)
-                elif rhel_version == "9.6":
+                elif float(rhel_version) >= float("9.6"):
                     for subsys in device.get("Subsystems", []):
                         for controller in subsys.get("Controllers", []):
                             if controller.get("ModelNumber") == "Ceph bdev Controller":
@@ -1169,7 +1169,7 @@ class HighAvailability:
                             for device in devices_json
                             for subsys in device.get("Subsystems", [])
                         )
-                        if rhel_version == "9.6"
+                        if float(rhel_version) >= float("9.6")
                         else not devices_json
                     )
                     if not devices_json_empty:  # Check if Devices is not empty
@@ -1190,7 +1190,7 @@ class HighAvailability:
                             for device in devices_json
                             for subsys in device.get("Subsystems", [])
                         )
-                        if rhel_version == "9.6"
+                        if float(rhel_version) >= float("9.6")
                         else not devices_json
                     )
                     if devices_json_empty:
@@ -1203,10 +1203,10 @@ class HighAvailability:
                     else:
                         # Log Namespace and SerialNumber from each device
                         for device in devices_json:
-                            if rhel_version == "9.5":
+                            if float(rhel_version) == float("9.5"):
                                 namespace = device.get("NameSpace", None)
                                 serial_number = device.get("SerialNumber", None)
-                            elif rhel_version == "9.6":
+                            elif float(rhel_version) >= float("9.6"):
                                 for subsys in device.get("Subsystems", []):
                                     for controller in subsys.get("Controllers", []):
                                         if (

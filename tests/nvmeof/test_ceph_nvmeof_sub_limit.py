@@ -57,9 +57,9 @@ def run_io(ceph_cluster, node, config, io):
     LOG.debug(targets)
 
     rhel_version = initiator.distro_version()
-    if rhel_version == "9.5":
+    if float(rhel_version) == float("9.5"):
         paths = [target["DevicePath"] for target in targets]
-    elif rhel_version == "9.6":
+    elif float(rhel_version) >= float("9.6"):
         paths = [
             f"/dev/{ns['NameSpace']}"
             for device in targets

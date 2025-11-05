@@ -107,14 +107,14 @@ class NVMeCLI(Cli):
             LOG.debug("No NVMe devices found.")
             return []
 
-        if rhel_version == "9.5":
+        if float(rhel_version) == float("9.5"):
             return [
                 dev["DevicePath"]
                 for dev in devs
                 if dev["ModelNumber"].startswith("Ceph bdev Controller")
             ]
 
-        elif rhel_version == "9.6":
+        elif float(rhel_version) >= float("9.6"):
             if nsid_device_pair:
                 namespace_list = []
                 for dev in devs:

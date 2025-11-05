@@ -102,14 +102,14 @@ class NVMeCLI(Cli):
         out, _ = self.list(**json_kwargs)
         devs = json.loads(out)["Devices"]
 
-        if rhel_version == "9.5":
+        if float(rhel_version) == float("9.5"):
             return [
                 dev
                 for dev in devs
                 if dev["ModelNumber"].startswith("Ceph bdev Controller")
             ]
 
-        elif rhel_version == "9.6":
+        elif float(rhel_version) >= float("9.6"):
             devices = []
             for dev in devs:
                 for subsys in dev.get("Subsystems", []):
