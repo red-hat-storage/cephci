@@ -73,6 +73,7 @@ tests:
       desc: notify put,copy,delete events with kafka_broker and SSL security
       module: sanity_rgw.py
       polarion-id: CEPH-83575471
+      comments: known issue - Bug 2360425 targetted to 9.0
       config:
         run-on-rgw: true
         extra-pkgs:
