@@ -83,6 +83,10 @@ tests:
                   spec:
                     ssl: true
                     generate_cert: true
+          - config:
+              args:
+                - "ceph config set client.rgw.rgw.ssl rgw_verify_ssl False"
+              command: shell
       desc: bootstrap and deployment services with label placements.
       polarion-id: CEPH-83573777
       destroy-cluster: false
@@ -103,6 +107,18 @@ tests:
       module: test_client.py
       name: Configure client
       polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        role: rgw
+        sudo: True
+        commands:
+          - "update-ca-trust"
+      desc: update-ca-trust on rgw node
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: update-ca-trust on rgw node
 
   - test:
       name: Manual Resharding tests pre upgrade
