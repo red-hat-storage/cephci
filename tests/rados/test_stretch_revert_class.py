@@ -98,7 +98,9 @@ class StretchMode:
             f"ceph mon enable_stretch_mode {tiebreaker_mon} stretch_rule datacenter"
         )
         if (
-            self.rados_obj.run_ceph_command(cmd=stretch_enable_cmd, print_output=True)
+            self.rados_obj.run_ceph_command(
+                cmd=stretch_enable_cmd, print_output=True, client_exec=True
+            )
             is None
         ):
             raise Exception("Failed to enable stretch mode")
@@ -164,10 +166,10 @@ class StretchMode:
         ]
         while len(dc_buckets) > 2:
             dc_buckets.pop()
-        dc_2 = dc_buckets.pop()
-        dc_2_name = dc_2["name"]
         dc_1 = dc_buckets.pop()
         dc_1_name = dc_1["name"]
+        dc_2 = dc_buckets.pop()
+        dc_2_name = dc_2["name"]
         all_hosts = get_stretch_site_hosts(
             rados_obj=self.rados_obj,
             tiebreaker_mon_site_name=self.tiebreaker_mon_site_name,
@@ -177,8 +179,12 @@ class StretchMode:
         self.tiebreaker_hosts = all_hosts.tiebreaker_hosts
         self.site_1_name = dc_1_name
         self.site_2_name = dc_2_name
-        log.debug(f"Hosts present in Datacenter : {dc_1_name} : {self.site_1_hosts}")
-        log.debug(f"Hosts present in Datacenter : {dc_2_name} : {self.site_2_hosts}")
+        log.debug(
+            f"Hosts present in Datacenter : {self.site_1_name} : {self.site_1_hosts}"
+        )
+        log.debug(
+            f"Hosts present in Datacenter : {self.site_2_name} : {self.site_2_hosts}"
+        )
         log.debug(
             f"Hosts present in Datacenter : {self.tiebreaker_mon_site_name} : { self.tiebreaker_hosts}"
         )
