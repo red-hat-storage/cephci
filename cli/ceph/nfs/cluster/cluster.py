@@ -28,11 +28,11 @@ class Cluster(Cli):
         nfs_server = " ".join(nfs_server)
         if active_standby and ha:
             nfs_server = "1 " + nfs_server
-        cmd = f"{self.base_cmd} create {name} '{nfs_server}' "
+        cmd = "{0} create {1} '{2}'".format(self.base_cmd, name, nfs_server)
         if ha:
-            cmd += f" --ingress --virtual-ip {vip} "
+            cmd += " --ingress --virtual-ip {0}".format(vip)
 
-        cmd += build_cmd_from_args(kwargs)
+        cmd = "".join(cmd + build_cmd_from_args(**kwargs))
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
@@ -44,7 +44,7 @@ class Cluster(Cli):
         Args:
             name (str): Name of the cluster
         """
-        cmd = f"{self.base_cmd} delete {name}"
+        cmd = "{0} delete {1}".format(self.base_cmd, name)
         out = self.execute(sudo=True, cmd=cmd)
         if isinstance(out, tuple):
             return out[0].strip()
@@ -73,7 +73,7 @@ class Cluster(Cli):
         Args:
             name (str): Name of the cluster
         """
-        cmd = f"{self.base_cmd} info {name} --format json"
+        cmd = "{0} info {1} --format json".format(self.base_cmd, name)
         out = self.execute(sudo=True, cmd=cmd)
 
         # Extract stdout if tuple (output, err)

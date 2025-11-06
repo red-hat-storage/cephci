@@ -372,7 +372,7 @@ def gklm_setup():
         gklm_ip=gklm_ip,
         gklm_node_username=gklm_node_user,
         gklm_node_password=gklm_node_password,
-        gklm_hostname=gklm_hostname,
+        gkml_servering_cert_name=gklm_hostname,
         exe_node=exe_node,
         gklm_rest_client=gklm_rest_client,
     )
