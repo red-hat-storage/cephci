@@ -275,7 +275,7 @@ class BootstrapMixin:
             if isinstance(custom_image, str):
                 cmd += f" --image {custom_image}"
             else:
-                cmd += f" --image {manifest_obj.ceph_image}"
+                cmd += f" --image {self.config['container_image']}"
 
         cmd += " bootstrap"
 

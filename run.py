@@ -515,6 +515,7 @@ def run(args):
             tmp_ctm = CephTestManifest(product, release, "released", platform)
             _ = tmp_ctm.build_info
         except RuntimeError:
+            log.debug("Switching to nightly as released section is unavailable.")
             build = "nightly"
 
     # Now handle the manifest. At this point we are allowing failures
