@@ -29,6 +29,7 @@ from collections import namedtuple
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
 from cli.utilities.operations import wait_for_osd_daemon_state
@@ -77,6 +78,7 @@ def run(ceph_cluster, **kw):
     stretch_bucket = config.get("stretch_bucket", "datacenter")
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
     add_network_delay = config.get("add_network_delay", False)
+    mon_obj = MonitorWorkflows(node=cephadm)
     scenarios_to_run = config.get(
         "scenarios_to_run",
         [
@@ -438,6 +440,9 @@ def run(ceph_cluster, **kw):
         log.info(
             f"Proceeding to Add hosts after successful OSD Host removal: {dc_1_hosts_to_remove + dc_2_hosts_to_remove}"
         )
+
+        rados_obj.set_unmanaged_flag(service_type="mon", service_name="mon")
+
         for hostname in dc_1_hosts_to_remove + dc_2_hosts_to_remove:
             test_host = test_hosts_map[hostname]
 
@@ -471,6 +476,7 @@ def run(ceph_cluster, **kw):
 
         log.info("Setting crush location for each monitor for next scenario")
         for hostname in dc_1_hosts_to_remove + dc_2_hosts_to_remove:
+            ceph_node_obj = test_hosts_map[hostname]
             if "mon" not in rados_obj.get_host_label(host_name=hostname):
                 continue
 
@@ -479,20 +485,23 @@ def run(ceph_cluster, **kw):
             else:
                 crush_bucket_val = dc_2_name
 
-            cmd = (
-                f"ceph mon set_location {hostname} {stretch_bucket}={crush_bucket_val}"
-            )
-            if rados_obj.run_ceph_command(cmd=cmd) is None:
-                log_msg = (
-                    f"Failed to set mon location of {hostname} to {crush_bucket_val}"
+            if (
+                mon_obj.add_mon_service(
+                    host=ceph_node_obj,
+                    location_type=stretch_bucket,
+                    location_name=crush_bucket_val,
                 )
-                log.error(log_msg)
-                raise Exception(log_msg)
+                is False
+            ):
+                log.error(f"Could not set mon location for host {hostname}")
+                raise Exception(f"Could not set mon location for host {hostname}")
 
             log_info_msg = (
                 f"Successfully set mon location of {hostname} to {crush_bucket_val}"
             )
             log.info(log_info_msg)
+
+        rados_obj.set_managed_flag(service_type="mon", service_name="mon")
 
         log.info(
             """Performing following checks on the cluster after OSD removal
