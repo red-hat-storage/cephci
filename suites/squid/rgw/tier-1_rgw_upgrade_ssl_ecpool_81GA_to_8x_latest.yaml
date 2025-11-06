@@ -105,6 +105,44 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
+      abort-on-fail: true
+      config:
+        commands:
+          - "ceph config set client.rgw.rgw.ssl rgw_verify_ssl False"
+          - "ceph_version=$(ceph version | cut -d ' ' -f 3 | cut -d '-' -f 1); if [ \"$ceph_version\" = \"19.2.0\" ]; then ceph orch cert-store get cert cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; else ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; fi"
+          - "sudo yum install -y sshpass"
+          - "sleep 20"
+          - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:node7}:/etc/pki/ca-trust/source/anchors/"
+          - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:node8}:/etc/pki/ca-trust/source/anchors/"
+      name: copy-crt to rgw and client node
+      desc: Copying crt to rgw and client node
+      polarion-id: CEPH-83575227
+      module: exec.py
+
+  - test:
+      abort-on-fail: true
+      config:
+        role: rgw
+        sudo: True
+        commands:
+          - "update-ca-trust"
+      desc: update-ca-trust on rgw node
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: update-ca-trust on rgw node
+  - test:
+      abort-on-fail: true
+      config:
+        role: client
+        sudo: True
+        commands:
+          - "update-ca-trust"
+      desc: update-ca-trust on client node
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: update-ca-trust on client node
+
+  - test:
       name: Manual Resharding tests pre upgrade
       desc: Resharding test - manual
       polarion-id: CEPH-83571740
