@@ -96,58 +96,41 @@ class NVMeCLI(Cli):
             Dict: Dict of SPDK drives if `nsid_device_pair` is None else empty list.
             list: If `nsid_device_pair` is passed, list of dicts each containing "Namespace" and "NSID".
         """
-        # check if rhel version is 8 or 9
-        out, _ = self.execute(sudo=True, cmd="cat /etc/os-release | grep VERSION_ID")
-        rhel_version = out.split("=")[1].strip().strip('"')
         json_kwargs = {"output-format": "json"}
         out, _ = self.list(**json_kwargs)
+        LOG.debug(json.dumps(out, indent=4))
         devs = json.loads(out)["Devices"]
 
         if not devs:
             LOG.debug("No NVMe devices found.")
             return []
 
-        if rhel_version == "9.5":
-            return [
-                dev["DevicePath"]
-                for dev in devs
-                if dev["ModelNumber"].startswith("Ceph bdev Controller")
-            ]
-
-        elif rhel_version == "9.6":
-            if nsid_device_pair:
-                namespace_list = []
-                for dev in devs:
-                    for subsys in dev.get("Subsystems", []):
-                        # Check if at least one controller in this subsystem is a Ceph bdev Controller
-                        has_ceph_bdev = any(
-                            ctrl.get("ModelNumber") == "Ceph bdev Controller"
-                            for ctrl in subsys.get("Controllers", [])
-                        )
-                        if has_ceph_bdev:
-                            for ns in subsys.get("Namespaces", []):
-                                pair = {
-                                    "Namespace": f"/dev/{ns['NameSpace']}",
-                                    "NSID": ns.get("NSID"),
-                                }
-                                namespace_list.append(pair)
-                return namespace_list
-
-            devices = []
-            for dev in devs:
-                for subsys in dev.get("Subsystems", []):
-                    # Check if at least one controller in this subsystem is a Ceph bdev Controller
-                    has_ceph_bdev = any(
-                        ctrl.get("ModelNumber") == "Ceph bdev Controller"
+        ceph_model = "Ceph bdev Controller"
+        devices, namespace_list = [], []
+        for dev in devs:
+            subsystems = dev.get("Subsystems", [])
+            if subsystems:
+                # --- New-style layout ---
+                for subsys in subsystems:
+                    if any(
+                        ctrl.get("ModelNumber") == ceph_model
                         for ctrl in subsys.get("Controllers", [])
-                    )
-                    if has_ceph_bdev:
+                    ):
                         for ns in subsys.get("Namespaces", []):
-                            devices.append(f"/dev/{ns['NameSpace']}")
+                            ns_path = f"/dev/{ns['NameSpace']}"
+                            devices.append(ns_path)
+                            namespace_list.append(
+                                {"Namespace": ns_path, "NSID": ns.get("NSID")}
+                            )
+            elif dev.get("ModelNumber", "").startswith(ceph_model):
+                # --- Old-style layout ---
+                ns_path = dev.get("DevicePath")
+                devices.append(ns_path)
+                namespace_list.append(
+                    {"Namespace": ns_path, "NSID": dev.get("NameSpace")}
+                )
 
-            return devices
-
-        return []
+        return namespace_list if nsid_device_pair else devices
 
     def disconnect(self, **kwargs):
         """Disconnect controller connected to the subsystem.
