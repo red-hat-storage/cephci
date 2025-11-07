@@ -99,8 +99,11 @@ class CephTestManifest:
         return self.build_info["version"]
 
     @property
-    def repository(self) -> str:
-        return self.build_info["repositories"][self.datacenter][self.platform]
+    def repository(self) -> Optional[str]:
+        try:
+            return self.build_info["repositories"][self.datacenter][self.platform]
+        except KeyError:
+            return None
 
     @property
     def repo_id(self) -> Optional[str]:
