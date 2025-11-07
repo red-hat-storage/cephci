@@ -172,6 +172,14 @@ tests:
         default_min_alloc_size: 4096
 
   - test:
+      name: MGR ops tracker verification
+      desc: Test and verify logging of various operations related to MGR daemon
+      module: test_core_ops_tracker.py
+      polarion-id: CEPH-83590613
+      config:
+        test_mgr_ops_tracker: true
+
+  - test:
       name: Ceph MSGRV2 paramter check in 9.x
       desc: MSGRV2 parameter check in 9.x
       polarion-id: CEPH-83574890
