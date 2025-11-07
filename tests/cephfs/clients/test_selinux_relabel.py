@@ -269,7 +269,8 @@ def run(ceph_cluster, **kw):
             "nfs_t": "nfs_share",
             "samba_share_t": "samba_share",
             "tmp_t": "tmp",
-            "httpd_t": "httpd_process",
+            # "httpd_t": "httpd_process",  # Commented out after discussion:
+            # requires httpd service to be running
             "device_t": "device",
         }
 
