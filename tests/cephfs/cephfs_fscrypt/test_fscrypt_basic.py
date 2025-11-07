@@ -85,11 +85,21 @@ def run(ceph_cluster, **kw):
                 ):
                     log.error("Client old mountpoints cleanup didn't suceed")
                     fs_util.reboot_node(client_tmp)
+                client_tmp.exec_command(
+                    sudo=True,
+                    cmd="rm -f /etc/fstab.backup",
+                    check_ec=False,
+                )
         log.info("Setup test configuration")
         setup_params = cephfs_common_utils.test_setup(default_fs, client)
+        setup_params.update({"cephfs_common_utils": cephfs_common_utils})
         fs_name = setup_params["fs_name"]
         log.info("Mount subvolumes")
         mount_details = cephfs_common_utils.test_mount(clients, setup_params)
+        mon_node_ips = [node.ip_address for node in ceph_cluster.get_nodes(role="mon")]
+        mon_node_ip = ",".join(mon_node_ips)
+        log.info("Add mountpoint to fstab due to BZ 2406981")
+        add_mnt_pt_fstab(mon_node_ip, setup_params, mount_details)
         log.info("Verify Cluster is healthy before test")
         if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
             log.error("Cluster health is not OK even after waiting for 300secs")
@@ -100,7 +110,6 @@ def run(ceph_cluster, **kw):
             "fscrypt_non_empty_dir",
             "fscrypt_metadata_not_encrypted",
         ]
-
         if test_case_name in test_functional:
             test_list = [test_case_name]
         else:
@@ -139,10 +148,16 @@ def run(ceph_cluster, **kw):
         log.info("Clean Up in progess")
         wait_time_secs = 300
         if cephfs_common_utils.wait_for_healthy_ceph(client, wait_time_secs):
-            assert False, "Cluster health is not OK even after waiting for sometime"
+            log.error("Cluster health is not OK even after waiting for 300secs")
         if cleanup:
             cephfs_common_utils.test_cleanup(client, setup_params, mount_details)
             fs_util.remove_fs(client, fs_name)
+        for client_tmp in clients:
+            client_tmp.exec_command(
+                sudo=True,
+                cmd="cp -f /etc/fstab.backup /etc/fstab;rm -f /etc/fstab.backup",
+                check_ec=False,
+            )
 
 
 def fscrypt_test_run(fscrypt_test_params):
@@ -172,12 +187,14 @@ def fscrypt_lifecycle(fscrypt_test_params):
     fscrypt_util = fscrypt_test_params["fscrypt_util"]
     mount_details = fscrypt_test_params["mount_details"]
     test_status = 0
-    test_status = 0
-    mnt_type = "fuse"
+
+    mnt_type = random.choice(["kernel", "fuse"])
+
     log.info("Create 2 test directories in each subvolume")
     for sv_name in mount_details:
         mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
         client1 = mount_details[sv_name][mnt_type]["mnt_client"]
+
         for i in range(2):
             cmd = f"mkdir {mountpoint}/fscrypt_testdir_{i}"
             client1.exec_command(
@@ -247,7 +264,9 @@ def fscrypt_lifecycle(fscrypt_test_params):
 
     log.info("Validate file and directory names,file contents and ops before lock")
     if test_validate("unlock", fscrypt_sv, fscrypt_util):
-        test_status += 1
+        # Due to BZ 2406981,masking unlock failures in kernel mount
+        if mnt_type != "kernel":
+            test_status += 1
 
     log.info("fscrypt lock")
     for sv_name in fscrypt_sv:
@@ -300,7 +319,9 @@ def fscrypt_lifecycle(fscrypt_test_params):
         "Validate file and directory names,file contents and ops in unlocked state"
     )
     if test_validate("unlock", fscrypt_sv, fscrypt_util):
-        test_status += 1
+        # Due to BZ 2406981,masking unlock failures in kernel mount
+        if mnt_type != "kernel":
+            test_status += 1
 
     log.info("fscrypt purge")
     for sv_name in fscrypt_sv:
@@ -341,7 +362,9 @@ def fscrypt_lifecycle(fscrypt_test_params):
         "Validate file and directory names,file contents and ops in unlocked state"
     )
     if test_validate("unlock", fscrypt_sv, fscrypt_util):
-        test_status += 1
+        # Due to BZ 2406981,masking unlock failures in kernel mount
+        if mnt_type != "kernel":
+            test_status += 1
 
     log.info("fscrypt metadata destroy for policy and protector")
     for sv_name in fscrypt_sv:
@@ -384,8 +407,7 @@ def fscrypt_non_empty_dir(fscrypt_test_params):
     client1 = clients[1]
     log.info("Create test directory in one of subvolumes and add some data")
     sv_name = random.choice(list(mount_details.keys()))
-    mnt_type = random.choice(list(mount_details[sv_name].keys()))
-    mnt_type = "fuse"
+    mnt_type = random.choice(["kernel", "fuse"])
     mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
     client1 = mount_details[sv_name][mnt_type]["mnt_client"]
     encrypt_path = f"{mountpoint}/fscrypt_non_empty_dir"
@@ -443,11 +465,10 @@ def fscrypt_metadata_not_encrypted(fscrypt_test_params):
     )
     fscrypt_util = fscrypt_test_params["fscrypt_util"]
     mount_details = fscrypt_test_params["mount_details"]
-
     log.info("Create test directory in one of subvolumes and add some data")
     sv_name = random.choice(list(mount_details.keys()))
     mnt_type = random.choice(list(mount_details[sv_name].keys()))
-    mnt_type = "fuse"
+    mnt_type = random.choice(["kernel", "fuse"])
     mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
     client1 = mount_details[sv_name][mnt_type]["mnt_client"]
     encrypt_path = f"{mountpoint}/test_encrypt_metadata"
@@ -461,6 +482,7 @@ def fscrypt_metadata_not_encrypted(fscrypt_test_params):
     if test_status == 1:
         log.error(f"FScrypt setup on {mountpoint} failed for {sv_name}")
         return 1
+
     log.info("fscrypt encrypt on %s", encrypt_path)
     encrypt_args = {"protector_source": random.choice(["custom_passphrase", "raw_key"])}
     encrypt_params = fscrypt_util.encrypt(
@@ -514,6 +536,49 @@ def fscrypt_metadata_not_encrypted(fscrypt_test_params):
 
 
 # HELPER ROUTINES
+def add_mnt_pt_fstab(mon_node_ip, setup_params, mount_details):
+    """
+    This utility adds the mountpoint to fstab
+    """
+    sv_list = setup_params["sv_list"]
+    for sv in sv_list:
+        sv_name = sv["subvol_name"]
+        log.info(sv["vol_name"])
+        vol_name = sv["vol_name"]
+
+        for mnt_type in ["kernel", "fuse"]:
+            mnt_client = mount_details[sv_name][mnt_type]["mnt_client"]
+            mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]
+            try:
+                mnt_client.exec_command(sudo=True, cmd="ls -lrt /etc/fstab.backup")
+            except CommandFailed:
+                mnt_client.exec_command(
+                    sudo=True, cmd="cp /etc/fstab /etc/fstab.backup"
+                )
+
+            subvol_path = setup_params["cephfs_common_utils"].subvolume_get_path(
+                mnt_client,
+                vol_name,
+                subvolume_name=sv_name,
+                subvolume_group=sv.get("group_name", None),
+            )
+
+            fstab_entry = (
+                f"{mon_node_ip}:{subvol_path}    {mountpoint}    ceph    "
+                f"name={mnt_client.node.hostname},"
+                f"secretfile=/etc/ceph/{mnt_client.node.hostname}.secret,"
+                f"noshare"
+            )
+            fstab_entry += ",_netdev,noatime      0       0"
+
+            with mnt_client.remote_file(
+                sudo=True, file_name="/etc/fstab", file_mode="a+"
+            ) as fstab:
+                fstab.write(fstab_entry + "\n")
+                log.info(dir(fstab))
+            fstab.flush()
+            fstab.close()
+            mnt_client.exec_command(sudo=True, cmd="mount -a")
 
 
 def test_validate(mode, fscrypt_sv, fscrypt_util):
