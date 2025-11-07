@@ -298,3 +298,12 @@ tests:
         m: 2
         crush-failure-domain: host
         is_ecpool: True
+  - test:
+      name: Validation of pool-level noscrub and nodeep-scrub settings.
+      desc: Verification of pool scrub settings and ensures user-initiated scrubs still run.
+      module: test_scrub_flag_pool_level.py
+      polarion-id: CEPH-83621444
+      config:
+        pool_names:
+          - active_pool
+          - inactive_pool
