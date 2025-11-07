@@ -5619,3 +5619,28 @@ EOF"""
         cmd_balancer_status = "ceph balancer status"
         cmd_outPut = self.run_ceph_command(cmd_balancer_status)
         return cmd_outPut["active"]
+
+    def get_scrub_stamps(self, pool_name):
+        """
+        Method is used to collect the scrub and deep-scrub stamps
+        Args:
+            pool_name: pool name
+        Return:
+            pg_scrub_details: A dictionary with the PG_ID as key, last_scrub_stamp and  last_deep_scrub_stamp values
+        """
+
+        pg_scrub_details = {}
+        cmd_pg_by_pool = f"ceph pg ls-by-pool {pool_name}"
+        pgid_details = self.run_ceph_command(cmd=cmd_pg_by_pool)
+        if not pgid_details["pg_stats"]:
+            return None
+        for pg in pgid_details["pg_stats"]:
+            pg_id = pg["pgid"]
+            last_scrub_stamp = pg["last_scrub_stamp"]
+            last_deep_scrub_stamp = pg["last_deep_scrub_stamp"]
+
+            pg_scrub_details[pg_id] = {
+                "last_scrub_stamp": last_scrub_stamp,
+                "last_deep_scrub_stamp": last_deep_scrub_stamp,
+            }
+        return pg_scrub_details
