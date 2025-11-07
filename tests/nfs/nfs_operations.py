@@ -265,7 +265,7 @@ def setup_custom_nfs_cluster_multi_export_client(
         ha=ha,
         vip=vip,
         active_standby=active_standby,
-        **{"in-file": kwargs.get("in-file", None)},
+        **({"in-file": kwargs["in-file"]} if "in-file" in kwargs else {}),
     )
     sleep(3)
 
