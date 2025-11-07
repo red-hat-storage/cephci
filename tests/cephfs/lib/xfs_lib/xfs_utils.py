@@ -20,6 +20,7 @@ import json
 import os
 
 from tests.cephfs.cephfs_utilsV1 import FsUtils
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from utility.log import Log
 
 log = Log(__name__)
@@ -41,7 +42,11 @@ class XfsTestSetup:
         self.client = client
         self.repo = "https://git.ceph.com/xfstests-dev.git"
         self.fs_util = FsUtils(ceph_cluster)
+        self.cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         self.mon_node_ips = self.fs_util.get_mon_node_ips()
+        self.subscription_status = self.cephfs_common_utils.is_subscription_registered(
+            client
+        )
 
     def setup_environment(self):
         """
@@ -54,23 +59,24 @@ class XfsTestSetup:
         )
         log.debug("RHEL version: %s", rhel_version)
 
+        subscription_cmd = None
         if 'VERSION_ID="8' in rhel_version:
             epel_cmd = "dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-8.noarch.rpm"
         elif 'VERSION_ID="9' in rhel_version:
             epel_cmd = "dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-9.noarch.rpm"
-            self.client.exec_command(
-                sudo=True,
-                cmd="subscription-manager repos --enable codeready-builder-for-rhel-9-$(arch)-rpms",
-            )
+            subscription_cmd = "subscription-manager repos --enable codeready-builder-for-rhel-9-$(arch)-rpms"
         elif 'VERSION_ID="10' in rhel_version:
             epel_cmd = "dnf install -y https://dl.fedoraproject.org/pub/epel/epel-release-latest-10.noarch.rpm"
-            self.client.exec_command(
-                sudo=True,
-                cmd="subscription-manager repos --enable codeready-builder-for-rhel-10-$(arch)-rpms",
-            )
+            subscription_cmd = "subscription-manager repos --enable codeready-builder-for-rhel-10-$(arch)-rpms"
         else:
             log.error("Unsupported RHEL version")
             return 1
+
+        if self.subscription_status and subscription_cmd:
+            log.info("Enabling CodeReady Builder repo...")
+            self.client.exec_command(sudo=True, cmd=subscription_cmd)
+        else:
+            log.info("Skipping enabling CodeReady Builder repo (system not subscribed)")
 
         log.info("Installing EPEL release...")
         self.client.exec_command(sudo=True, cmd=epel_cmd)

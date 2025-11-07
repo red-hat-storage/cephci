@@ -14,7 +14,7 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def check_clean_pgs(client, timeout=300):
+def check_clean_pgs(client, timeout=600):
     """
     Verify all pgs are active+clean
     :param client: client node
@@ -91,6 +91,7 @@ def run(ceph_cluster, **kw):
         fs_details = fs_util.get_fs_info(clients[0], fs_name)
         if not fs_details:
             fs_util.create_fs(clients[0], fs_name)
+            fs_util.wait_for_mds_process(clients[0], fs_name)
         fs_pool_details = fs_util.get_fs_info(clients[0], fs_name)
         mon_node_ip = fs_util.get_mon_node_ips()
         mon_node_ip = ",".join(mon_node_ip)
@@ -125,13 +126,17 @@ def run(ceph_cluster, **kw):
         ]
         for command in commands:
             clients[0].exec_command(sudo=True, cmd=command, timeout=3600)
+
+        time.sleep(5)
         data_pool_pg_num, rc = clients[0].exec_command(
             sudo=True, cmd=f"ceph osd pool get {data_pool} pg_num | awk '{{print $2}}'"
         )
+        log.debug("data_pool_pg_num : {}".format(data_pool_pg_num))
         metadata_pool_pg_num, rc = clients[0].exec_command(
             sudo=True,
             cmd=f"ceph osd pool get {metadata_pool} pg_num | awk '{{print $2}}'",
         )
+        log.debug("metadata_pool_pg_num : {}".format(metadata_pool_pg_num))
         for num in range(1, 7):
             log.info("Creating Directories")
             out, rc = clients[0].exec_command(

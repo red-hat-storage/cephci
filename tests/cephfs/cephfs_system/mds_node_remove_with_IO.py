@@ -28,7 +28,7 @@ or stand-by MDS node and remove it from cluster using Ansible or manual way.
 """
 
 
-@retry(CommandFailed, tries=4, delay=60)
+@retry(CommandFailed, tries=6, delay=60)
 def check_nodes(admin, target_node, check_node_cmd, should_exist=False):
     out2, _ = admin.installer.exec_command(sudo=True, cmd=check_node_cmd)
     log.info(str(out2).strip())
@@ -83,7 +83,7 @@ def run(ceph_cluster, **kw):
         hosts = " ".join(host_list)
         client1.exec_command(
             sudo=True,
-            cmd=f"ceph orch apply mds {default_fs} --placement='3 {hosts}'",
+            cmd=f"ceph orch apply mds {default_fs} --placement='{len(host_list)} {hosts}'",
         )
         fs_util.kernel_mount(
             [clients[0]],

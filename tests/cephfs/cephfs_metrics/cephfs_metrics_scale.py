@@ -567,7 +567,9 @@ def run(ceph_cluster, **kw):
         )
         client2.exec_command(sudo=True, cmd=f"chmod -R u+w {fuse_mounting_dir_2}")
         for client in clients:
-            sshpass_check, _ = client.exec_command(cmd="rpm -qa | grep sshpass")
+            sshpass_check, _ = client.exec_command(
+                cmd="rpm -qa | grep sshpass", check_ec=False
+            )
             if "sshpass" not in sshpass_check:
                 client.exec_command(sudo=True, cmd="yum install -y sshpass")
         # Copy the file from client1 to client2
