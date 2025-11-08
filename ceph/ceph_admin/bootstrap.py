@@ -235,10 +235,14 @@ class BootstrapMixin:
 
         if build_type == "upstream" or manifest_obj.product == "community":
             self.setup_upstream_repository()
-        elif build_type == "released" or custom_repo.lower() == "cdn":
+        elif build_type == "cdn" or custom_repo.lower() == "cdn":
             custom_image = False
-            self.set_cdn_tool_repo(_ceph_version, manifest_obj)
             self.cluster.use_cdn = True
+            self.set_cdn_tool_repo(_ceph_version, manifest_obj)
+        elif build_type == "released" and base_url == manifest_obj.repository:
+            custom_image = False
+            self.cluster.use_cdn = True
+            self.set_cdn_tool_repo()
         elif custom_repo:
             self.set_tool_repo(repo=custom_repo)
         else:
@@ -260,6 +264,8 @@ class BootstrapMixin:
                 extra_vars=ansible_run.get("extra-vars"),
                 extra_args=ansible_run.get("extra-args"),
             )
+        elif base_url != manifest_obj.repository:
+            self.install()
         else:
             _os_major = manifest_obj.platform.split("-")[-1]
             _ceph_version = manifest_obj.ceph_version
