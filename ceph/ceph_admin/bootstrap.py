@@ -366,24 +366,27 @@ class BootstrapMixin:
         # if they are already not present in the default path
         copy_ceph_configuration_files(self, args)
 
-        # We are forcing custom images by default other than released and CDN
-        if build_type != "released" and custom_repo.lower() != "cdn":
-            # We are dependant on the manifest to do the right thing
-            images_dict: dict[str, str] = deepcopy(manifest_obj.custom_images)
+        # We are forcing custom images by default
+        images_dict: dict[str, str] = deepcopy(manifest_obj.custom_images)
 
-            # Honor CLI passed arguments as it has the highest precendence
-            if not _ceph_version and self.config["overrides"]:
-                for key, value in self.config["overrides"].items():
-                    if not key.endswith("_image"):
-                        continue
+        # Ignore if CDN is provided
+        if build_type == "released" or custom_repo.lower() == "cdn":
+            images_dict = {}
 
-                    images_dict[key] = value
+        # Honor CLI passed arguments as it has the highest precendence
+        if not _ceph_version and self.config["overrides"]:
+            images_dict = dict()
+            for key, value in self.config["overrides"].items():
+                if not key.endswith("_image"):
+                    continue
 
-            for image, value in images_dict.items():
-                _image = image.removesuffix("_image")
-                cmd = "cephadm shell -- ceph config set mgr"
-                cmd += f" mgr/cephadm/container_image_{_image} {value}"
-                self.installer.exec_command(sudo=True, cmd=cmd)
+                images_dict[key] = value
+
+        for image, value in images_dict.items():
+            _image = image.removesuffix("_image")
+            cmd = "cephadm shell -- ceph config set mgr"
+            cmd += f" mgr/cephadm/container_image_{_image} {value}"
+            self.installer.exec_command(sudo=True, cmd=cmd)
 
         # Set public and cluster networks if provided.
         # https://docs.ceph.com/en/latest/rados/configuration/network-config-ref/
