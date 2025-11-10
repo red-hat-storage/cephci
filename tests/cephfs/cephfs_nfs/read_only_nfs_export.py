@@ -86,7 +86,7 @@ def run(ceph_cluster, **kw):
             )
 
         retry_mount = retry(CommandFailed, tries=3, delay=60)(fs_util.cephfs_nfs_mount)
-        rc = retry_mount(client1, nfs_server, nfs_export_1, nfs_export_1)
+        rc = retry_mount(client1, nfs_server, nfs_export_1, nfs_mounting_dir_1)
         if not rc:
             log.error("cephfs nfs export mount failed")
             return 1
@@ -116,6 +116,7 @@ def run(ceph_cluster, **kw):
             return 1
         commands = [
             f"dd if=/dev/urandom of={nfs_mounting_dir_2}/file bs=1M count=1000",
+            f"ls -l {nfs_mounting_dir_1}",
             f"dd if={nfs_mounting_dir_1}/file of=~/copy_file bs=1M count=1000",
             f"diff {nfs_mounting_dir_2}/file ~/copy_file",
         ]
@@ -124,8 +125,8 @@ def run(ceph_cluster, **kw):
         log.info("Test completed successfully")
         return 0
     except Exception as e:
-        log.info(e)
-        log.info(traceback.format_exc())
+        log.error(e)
+        log.error(traceback.format_exc())
         return 1
     finally:
         log.info("Cleaning up")
