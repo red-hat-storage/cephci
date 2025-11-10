@@ -143,7 +143,7 @@ class CephTestManifest:
             - cephcsi
             - nvmeof-cli
         """
-        remove_list = ["cephcsi", "nvmeof_cli", "crimson"]
+        remove_list = ["cephcsi", "nvmeof-cli", "crimson"]
         rst = {}
         _images = deepcopy(self.images)
 
