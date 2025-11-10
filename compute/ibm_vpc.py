@@ -5,7 +5,8 @@ import socket
 from copy import deepcopy
 from datetime import datetime, timedelta
 from time import sleep
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
+from urllib.parse import parse_qs, urlparse
 
 from ibm_cloud_networking_services import DnsSvcsV1
 from ibm_cloud_networking_services.dns_svcs_v1 import (
@@ -15,7 +16,7 @@ from ibm_cloud_networking_services.dns_svcs_v1 import (
 from ibm_cloud_sdk_core.api_exception import ApiException
 from ibm_cloud_sdk_core.authenticators import IAMAuthenticator
 from ibm_vpc import VpcV1  # noqa
-from requests.exceptions import ReadTimeout
+from requests.exceptions import ConnectionError, ReadTimeout, RequestException
 
 from utility.log import Log
 from utility.retry import retry
@@ -29,6 +30,161 @@ from .exceptions import (
 )
 
 LOG = Log(__name__)
+
+# Tuple of exceptions that should trigger retry for DNS operations
+DNS_RETRY_EXCEPTIONS = (ApiException, ConnectionError, ReadTimeout, RequestException)
+
+
+class ResourceRecordIterator:
+    """Iterator for paginated DNS resource records."""
+
+    def __init__(
+        self,
+        fetch_page_func,
+        dns_svc_id: str,
+        dns_zone_id: str,
+        limit: int = 50,
+    ):
+        """
+        Initialize the iterator.
+
+        Args:
+            fetch_page_func: Function to fetch a page of records (with retry logic).
+            dns_svc_id: GUID of the DNS Service.
+            dns_zone_id: DNS Zone ID.
+            limit: Number of records per page.
+        """
+        self._fetch_page_func = fetch_page_func
+        self.dns_svc_id = dns_svc_id
+        self.dns_zone_id = dns_zone_id
+        self.limit = limit
+        self.offset = None
+        self.records_yielded = 0
+        self.current_page_records = []
+        self.current_index = 0
+        self._has_more = True
+
+    def __iter__(self):
+        """Return the iterator object itself."""
+        return self
+
+    def __next__(self) -> Dict:
+        """Return the next resource record."""
+        # If we have records in the current page, return the next one
+        if self.current_index < len(self.current_page_records):
+            record = self.current_page_records[self.current_index]
+            self.current_index += 1
+            self.records_yielded += 1
+            return record
+
+        # If no more pages, stop iteration
+        if not self._has_more:
+            raise StopIteration
+
+        # Fetch next page
+        self._fetch_next_page()
+
+        # Return the first record from the new page
+        if self.current_page_records:
+            record = self.current_page_records[0]
+            self.current_index = 1
+            self.records_yielded += 1
+            return record
+
+        # No more records
+        raise StopIteration
+
+    def _extract_offset_from_href(self, href: str) -> Optional[int]:
+        """
+        Extract offset from next href using proper URL parsing.
+
+        Args:
+            href: URL string from 'next' field.
+
+        Returns:
+            Offset value or None if not found/invalid.
+        """
+        try:
+            parsed = urlparse(href)
+            query_params = parse_qs(parsed.query)
+
+            # Try offset first, then start
+            if "offset" in query_params:
+                offset_str = query_params["offset"][0]
+            elif "start" in query_params:
+                offset_str = query_params["start"][0]
+            else:
+                return None
+
+            offset = int(offset_str)
+            # Validate offset is non-negative
+            if offset < 0:
+                LOG.warning(f"Invalid negative offset in href: {href}")
+                return None
+            return offset
+
+        except (ValueError, TypeError, KeyError, IndexError) as e:
+            LOG.warning(f"Could not parse offset from href {href}: {e}")
+            return None
+
+    def _fetch_next_page(self) -> None:
+        """Fetch the next page of resource records."""
+        try:
+            result = self._fetch_page_func(
+                dns_svc_id=self.dns_svc_id,
+                dns_zone_id=self.dns_zone_id,
+                limit=self.limit,
+                offset=self.offset,
+            )
+            records = result.get("resource_records", [])
+
+            # Clear previous page data
+            self.current_page_records = []
+            self.current_index = 0
+
+            if not records:
+                # Even if no records, check if there's a next link
+                # (API might return empty page but indicate more pages exist)
+                next_info = result.get("next")
+                if next_info:
+                    offset = self._extract_offset_from_href(next_info["href"])
+                    if offset is not None:
+                        self.offset = offset
+                        self._has_more = True
+                        return
+                self._has_more = False
+                return
+
+            self.current_page_records = records
+
+            # Check if pagination continues
+            next_info = result.get("next")
+            if not next_info:
+                self._has_more = False
+                return
+
+            # Extract offset from next href using proper URL parsing
+            offset = self._extract_offset_from_href(next_info["href"])
+            if offset is not None:
+                self.offset = offset
+            else:
+                # Fallback: if no offset/start found, use total count
+                total_count = result.get("total_count", 0)
+                if self.records_yielded >= total_count:
+                    self._has_more = False
+                else:
+                    # Use records_yielded as fallback, but log warning
+                    LOG.warning(
+                        f"Could not extract offset from href, using records_yielded={self.records_yielded}"
+                    )
+                    self.offset = self.records_yielded
+
+        except DNS_RETRY_EXCEPTIONS as e:
+            LOG.error(f"Error listing resource records after retries: {e}")
+            # Clear state on error to prevent returning stale data
+            self._has_more = False
+            self.current_page_records = []
+            self.current_index = 0
 
 
 def get_ibm_service(access_key: str, service_url: str):
@@ -441,54 +597,11 @@ class CephVMNodeIBM:
             self.node = response.get_result()
 
             # DNS record creation phase
-            LOG.debug(f"Adding DNS records for {node_name}")
-            dns_zone = self.dns_service.list_dnszones(dns_svc_id)
-            dns_zone_id = get_dns_zone_id(zone_name, dns_zone.get_result())
-
-            resource = self.dns_service.list_resource_records(
-                instance_id=dns_svc_id,
-                dnszone_id=dns_zone_id,
-            )
-            records_a = [
-                i for i in resource.get_result()["resource_records"] if i["type"] == "A"
-            ]
-            records_ip = [
-                i
-                for i in records_a
-                if i["rdata"]["ip"]
-                == self.node["primary_network_interface"]["primary_ip"]["address"]
-            ]
-            if records_ip:
-                self.dns_service.update_resource_record(
-                    instance_id=dns_svc_id,
-                    dnszone_id=dns_zone_id,
-                    record_id=records_ip[0]["id"],
-                    name=self.node["name"],
-                    rdata=records_ip[0]["rdata"],
-                )
-
-            a_record = ResourceRecordInputRdataRdataARecord(
-                self.node["primary_network_interface"]["primary_ip"]["address"]
-            )
-            self.dns_service.create_resource_record(
-                instance_id=dns_svc_id,
-                dnszone_id=dns_zone_id,
-                type="A",
-                ttl=900,
-                name=self.node["name"],
-                rdata=a_record,
-            )
-
-            ptr_record = ResourceRecordInputRdataRdataPtrRecord(
-                f"{self.node['name']}.{zone_name}"
-            )
-            self.dns_service.create_resource_record(
-                instance_id=dns_svc_id,
-                dnszone_id=dns_zone_id,
-                type="PTR",
-                ttl=900,
-                name=self.node["primary_network_interface"]["primary_ip"]["address"],
-                rdata=ptr_record,
+            self._create_or_update_dns_records(
+                zone_name=zone_name,
+                dns_svc_id=dns_svc_id,
+                node_name=self.node["name"],
+                node_ip=self.node["primary_network_interface"]["primary_ip"]["address"],
             )
 
         except NodeError:
@@ -638,6 +751,209 @@ class CephVMNodeIBM:
 
         raise NodeError(f"{node_details['name']} is in {node_details['status']} state.")
 
+    @retry(DNS_RETRY_EXCEPTIONS, tries=3, delay=5)
+    def _list_resource_records_page(
+        self,
+        dns_svc_id: str,
+        dns_zone_id: str,
+        limit: int,
+        offset: Optional[int] = None,
+    ) -> Dict:
+        """
+        List a single page of resource records with retry support.
+
+        Args:
+            dns_svc_id (str):         GUID of the DNS Service.
+            dns_zone_id (str):        DNS Zone ID.
+            limit (int):              Number of records per page.
+            offset (int, optional):    Pagination offset from 'next' href.
+
+        Returns:
+            Dict: Response result containing resource records.
+
+        Raises:
+            ApiException: If the API call fails after retries.
+            ConnectionError: If connection fails after retries.
+            ReadTimeout: If request times out after retries.
+            RequestException: If request fails after retries.
+        """
+        kwargs = {
+            "instance_id": dns_svc_id,
+            "dnszone_id": dns_zone_id,
+            "limit": limit,
+        }
+        if offset is not None:
+            kwargs["offset"] = offset
+
+        resp = self.dns_service.list_resource_records(**kwargs)
+        return resp.get_result()
+
+    def _list_resource_records_with_pagination(
+        self, dns_svc_id: str, dns_zone_id: str, limit: int = 50
+    ) -> Iterator[Dict]:
+        """
+        Return an iterator for all resource records with pagination support.
+
+        Args:
+            dns_svc_id (str):   GUID of the DNS Service.
+            dns_zone_id (str):  DNS Zone ID.
+            limit (int):        Number of records per page (default: 50).
+
+        Returns:
+            Iterator[Dict]: Iterator that yields individual resource record dictionaries.
+        """
+        return ResourceRecordIterator(
+            fetch_page_func=self._list_resource_records_page,
+            dns_svc_id=dns_svc_id,
+            dns_zone_id=dns_zone_id,
+            limit=limit,
+        )
+
+    @retry(DNS_RETRY_EXCEPTIONS, tries=3, delay=5)
+    def _create_resource_record(
+        self,
+        dns_svc_id: str,
+        dns_zone_id: str,
+        record_type: str,
+        name: str,
+        rdata: Any,
+        ttl: int = 900,
+    ) -> None:
+        """
+        Create a DNS resource record with retry support.
+
+        Args:
+            dns_svc_id (str):   GUID of the DNS Service.
+            dns_zone_id (str):  DNS Zone ID.
+            record_type (str):  Type of record (A, PTR, etc.).
+            name (str):         Record name.
+            rdata (Any):        Record data.
+            ttl (int):          Time to live (default: 900).
+
+        Raises:
+            ApiException: If the API call fails after retries.
+            ConnectionError: If connection fails after retries.
+            ReadTimeout: If request times out after retries.
+            RequestException: If request fails after retries.
+        """
+        self.dns_service.create_resource_record(
+            instance_id=dns_svc_id,
+            dnszone_id=dns_zone_id,
+            type=record_type,
+            ttl=ttl,
+            name=name,
+            rdata=rdata,
+        )
+
+    @retry(DNS_RETRY_EXCEPTIONS, tries=3, delay=5)
+    def _update_resource_record(
+        self,
+        dns_svc_id: str,
+        dns_zone_id: str,
+        record_id: str,
+        name: str,
+        rdata: Any,
+    ) -> None:
+        """
+        Update a DNS resource record with retry support.
+
+        Args:
+            dns_svc_id (str):   GUID of the DNS Service.
+            dns_zone_id (str):  DNS Zone ID.
+            record_id (str):    ID of the record to update.
+            name (str):         Record name.
+            rdata (Any):        Record data.
+
+        Raises:
+            ApiException: If the API call fails after retries.
+            ConnectionError: If connection fails after retries.
+            ReadTimeout: If request times out after retries.
+            RequestException: If request fails after retries.
+        """
+        self.dns_service.update_resource_record(
+            instance_id=dns_svc_id,
+            dnszone_id=dns_zone_id,
+            record_id=record_id,
+            name=name,
+            rdata=rdata,
+        )
+
+    def _create_or_update_dns_records(
+        self,
+        zone_name: str,
+        dns_svc_id: str,
+        node_name: str,
+        node_ip: str,
+    ) -> None:
+        """
+        Create or update DNS records (A and PTR) for the node.
+
+        Args:
+            zone_name (str):    DNS Zone name.
+            dns_svc_id (str):   GUID of the DNS Service.
+            node_name (str):    Name of the node.
+            node_ip (str):      IP address of the node.
+
+        Raises:
+            ApiException: If DNS operations fail after retries.
+        """
+        LOG.debug(f"Adding DNS records for {node_name}")
+        dns_zone = self.dns_service.list_dnszones(dns_svc_id)
+        dns_zone_id = get_dns_zone_id(zone_name, dns_zone.get_result())
+
+        # List resource records with pagination and filter in one pass
+        records_ip = []
+        records_ptr = []
+
+        for record in self._list_resource_records_with_pagination(
+            dns_svc_id=dns_svc_id, dns_zone_id=dns_zone_id, limit=50
+        ):
+            # Collect A records matching the IP address
+            if record["type"] == "A" and record["rdata"]["ip"] == node_ip:
+                records_ip.append(record)
+            # Collect PTR records for this IP
+            elif record["type"] == "PTR" and record["name"] == node_ip:
+                records_ptr.append(record)
+
+        # Update existing A record if found, otherwise create new one
+        if records_ip:
+            self._update_resource_record(
+                dns_svc_id=dns_svc_id,
+                dns_zone_id=dns_zone_id,
+                record_id=records_ip[0]["id"],
+                name=node_name,
+                rdata=records_ip[0]["rdata"],
+            )
+        else:
+            # Create new A record
+            a_record = ResourceRecordInputRdataRdataARecord(node_ip)
+            self._create_resource_record(
+                dns_svc_id=dns_svc_id,
+                dns_zone_id=dns_zone_id,
+                record_type="A",
+                name=node_name,
+                rdata=a_record,
+            )
+
+        # Create or update PTR record
+        ptr_record = ResourceRecordInputRdataRdataPtrRecord(f"{node_name}.{zone_name}")
+        if records_ptr:
+            self._update_resource_record(
+                dns_svc_id=dns_svc_id,
+                dns_zone_id=dns_zone_id,
+                record_id=records_ptr[0]["id"],
+                name=node_ip,
+                rdata=ptr_record,
+            )
+        else:
+            self._create_resource_record(
+                dns_svc_id=dns_svc_id,
+                dns_zone_id=dns_zone_id,
+                record_type="PTR",
+                name=node_ip,
+                rdata=ptr_record,
+            )
+
     @retry(ConnectionError, tries=3, delay=60)
     def remove_dns_records(self, zone_name, dns_svc_id):
         """
@@ -654,14 +970,10 @@ class CephVMNodeIBM:
         zone_id = get_dns_zone_id(zone_name, zones.get_result())
         zone_instance_id = get_dns_zone_instance_id(zone_name, zones.get_result())
 
-        resp = self.dns_service.list_resource_records(
-            instance_id=zone_instance_id, dnszone_id=zone_id
-        )
-        records = resp.get_result()
-
-        # ToDo: There is a maximum of 200 records that can be retrieved at a time.
-        #       Support pagination is required.
-        for record in records["resource_records"]:
+        # Use pagination to list all resource records (iterator pattern)
+        for record in self._list_resource_records_with_pagination(
+            dns_svc_id=zone_instance_id, dns_zone_id=zone_id, limit=50
+        ):
             if record["type"] == "A" and self.node.get("name") in record["name"]:
                 if record.get("linked_ptr_record"):
                     LOG.info(
