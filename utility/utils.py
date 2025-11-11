@@ -2278,6 +2278,8 @@ def run_fio(**fio_args):
             fio_file = f"{fio_args['output_dir']}/{fio_file}"
         cmd_args.update({"output-format": output_fmt, "output": fio_file})
 
+    if fio_args.get("output"):
+        cmd_args.update({"output": True})
     # Execute FIO
     exec_args = {
         "cmd": f"fio {config_dict_to_string(cmd_args)}",
