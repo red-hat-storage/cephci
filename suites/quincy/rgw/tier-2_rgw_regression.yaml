@@ -724,7 +724,7 @@ tests:
   #     config:
   #       script-name: test_bucket_policy_ops.py
   #       config-file-name: test_public_access_block_acl.yaml
-  #     comments: known issue - Bug 2344639 targetted to 9.0
+  #     comments: known issue - Bug 2413969 targeted to 8.1z5
   - test:
       name: test public access block - IgnorePublicAcls
       desc: test public access block - IgnorePublicAcls
