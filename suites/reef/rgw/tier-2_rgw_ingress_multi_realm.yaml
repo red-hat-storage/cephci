@@ -166,7 +166,8 @@ tests:
                     virtual_ip: 10.0.195.174/24 # floating ip1 in rhos-01
                     frontend_port: 443
                     monitor_port: 1967
-                    ssl_cert: create-cert
+                    ssl: true
+                    certificate_source: cephadm-signed
 
   - test:
       name: Deploy RGW Ingress daemon
