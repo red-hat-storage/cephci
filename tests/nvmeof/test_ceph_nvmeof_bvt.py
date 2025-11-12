@@ -150,39 +150,48 @@ def teardown(ceph_cluster, rbd_obj, nvmegwcli, config):
         rbd_obj: RBD object
         config: test config
     """
-    # Delete the multiple Initiators across multiple gateways
-    if "initiators" in config["cleanup"]:
-        for initiator_cfg in config["initiators"]:
-            disconnect_initiator(
-                ceph_cluster, initiator_cfg["node"], initiator_cfg["subnqn"]
-            )
+    try:
+        # Delete the multiple Initiators across multiple gateways
+        if "initiators" in config["cleanup"]:
+            for initiator_cfg in config["initiators"]:
+                disconnect_initiator(
+                    ceph_cluster, initiator_cfg["node"], initiator_cfg["subnqn"]
+                )
 
-    if "disconnect_all" in config["cleanup"]:
-        nodes = config.get("disconnect_all")
-        if not nodes:
-            nodes = [i["node"] for i in config["initiators"]]
+        if "disconnect_all" in config["cleanup"]:
+            nodes = config.get("disconnect_all")
+            if not nodes:
+                nodes = [i["node"] for i in config["initiators"]]
 
-        disconnect_all_initiator(ceph_cluster, nodes)
+            disconnect_all_initiator(ceph_cluster, nodes)
 
-    # Delete the multiple subsystems across multiple gateways
-    if "subsystems" in config["cleanup"]:
-        config_sub_node = config["subsystems"]
-        if not isinstance(config_sub_node, list):
-            config_sub_node = [config_sub_node]
-        for sub_cfg in config_sub_node:
-            node = config["gw_node"] if "node" not in sub_cfg else sub_cfg["node"]
-            LOG.info("Deleting subsystem %s on gateway %s", sub_cfg["nqn"], node)
-            nvmegwcli.subsystem.delete(
-                **{"args": {"subsystem": sub_cfg["nqn"], "force": True}}
-            )
+        # Delete the multiple subsystems across multiple gateways
+        if "subsystems" in config["cleanup"]:
+            if not nvmegwcli:
+                raise Exception(
+                    "NVMe Gateway CLI instance not found to delete subsystems"
+                )
+            config_sub_node = config["subsystems"]
+            if not isinstance(config_sub_node, list):
+                config_sub_node = [config_sub_node]
+            for sub_cfg in config_sub_node:
+                node = config["gw_node"] if "node" not in sub_cfg else sub_cfg["node"]
+                LOG.info("Deleting subsystem %s on gateway %s", sub_cfg["nqn"], node)
+                nvmegwcli.subsystem.delete(
+                    **{"args": {"subsystem": sub_cfg["nqn"], "force": True}}
+                )
 
-    # Delete the gateway
-    if "gateway" in config["cleanup"]:
-        delete_nvme_service(ceph_cluster, config)
+        # Delete the gateway
+        if "gateway" in config["cleanup"]:
+            delete_nvme_service(ceph_cluster, config)
 
-    # Delete the pool
-    if "pool" in config["cleanup"]:
-        rbd_obj.clean_up(pools=[config["rbd_pool"]])
+        # Delete the pool
+        if "pool" in config["cleanup"]:
+            rbd_obj.clean_up(pools=[config["rbd_pool"]])
+    except Exception as e:
+        LOG.error(f"Teardown failed with error: {e}")
+        return 1
+    return 0
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
@@ -237,6 +246,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         nvmegwcli,
                         subsys_args,
                     )
+
         if config.get("initiators"):
             with parallel() as p:
                 for initiator in config["initiators"]:
@@ -246,6 +256,8 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         LOG.error(err)
     finally:
         if config.get("cleanup"):
-            teardown(ceph_cluster, rbd_obj, nvmegwcli, config)
+            rc = teardown(ceph_cluster, rbd_obj, nvmegwcli, config)
+            if rc != 0:
+                return rc
 
     return 1
