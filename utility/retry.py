@@ -1,4 +1,5 @@
 import time
+import traceback
 from functools import wraps
 
 from utility.log import Log
@@ -25,7 +26,44 @@ def retry(exception_to_check, tries=4, delay=3, backoff=2):
                 try:
                     return f(*args, **kwargs)
                 except exception_to_check as e:
-                    logger.warning("%s, Retrying in %d seconds..." % (str(e), mdelay))
+                    # Get exception type name safely
+                    try:
+                        exception_name = type(e).__name__
+                    except Exception:
+                        exception_name = "UnknownException"
+
+                    # Get function name (including class if it's a method)
+                    try:
+                        func_name = f.__name__
+                        if args and hasattr(args[0], "__class__"):
+                            class_name = args[0].__class__.__name__
+                            caller_info = f"{class_name}.{func_name}"
+                        else:
+                            caller_info = func_name
+                    except Exception:
+                        caller_info = "unknown_function"
+
+                    # Log warning with caller and exception name
+                    logger.warning(
+                        f"{caller_info} raised {exception_name}, "
+                        f"Retrying in {mdelay} seconds... "
+                        f"(Attempt {tries - mtries + 1}/{tries})"
+                    )
+
+                    # Log full exception details at debug level
+                    try:
+                        logger.debug(
+                            f"Full exception details for {caller_info}:\n"
+                            f"Exception: {exception_name}\n"
+                            f"Message: {str(e)}\n"
+                            f"Traceback:\n{traceback.format_exc()}"
+                        )
+                    except Exception:
+                        # Fallback if traceback formatting fails
+                        logger.debug(
+                            f"Exception in {caller_info}: {exception_name} - {str(e)}"
+                        )
+
                     time.sleep(mdelay)
                     mtries -= 1
                     mdelay *= backoff
