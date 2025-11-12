@@ -211,12 +211,29 @@ def get_dns_service(
     """
     Return the authenticated connection from the given endpoint.
     Args:
-        accessKey    The access key(API key) of the user.
+        access_key (str): The access key(API key) of the user.
+        service_url (str): DNS Services endpoint URL.
     """
     authenticator = IAMAuthenticator(access_key)
 
     dnssvc = DnsSvcsV1(authenticator=authenticator)
     dnssvc.set_service_url(service_url=service_url)
+
+    # Configure HTTP settings
+    # Note: Cloudflare rate limiting happens at the edge based on IP and request frequency,
+    # not headers. The retry decorator with exponential backoff is the primary solution
+    # for handling rate limits. Only set timeout - let SDK handle headers to avoid conflicts.
+    dnssvc.set_default_headers(
+        {
+            "User-Agent": "ibmcloud-dns-sdk/1.0 (safe-fetch-script)",
+            "Accept": "application/json",
+        }
+    )
+
+    http_config = {
+        "timeout": 130,  # Increase timeout to 130s for long-running operations
+    }
+    dnssvc.set_http_config(http_config)
 
     return dnssvc
 
@@ -406,7 +423,6 @@ class CephVMNodeIBM:
         subnet_details = self.service.get_subnet(
             self.node["primary_network_interface"]["subnet"]["id"]
         )
-
         return subnet_details.get_result()["ipv4_cidr_block"]
 
     @property
@@ -597,7 +613,7 @@ class CephVMNodeIBM:
             self.node = response.get_result()
 
             # DNS record creation phase
-            self._create_or_update_dns_records(
+            self._add_dns_records(
                 zone_name=zone_name,
                 dns_svc_id=dns_svc_id,
                 node_name=self.node["name"],
@@ -751,16 +767,18 @@ class CephVMNodeIBM:
 
         raise NodeError(f"{node_details['name']} is in {node_details['status']} state.")
 
-    @retry(DNS_RETRY_EXCEPTIONS, tries=3, delay=5)
+    @retry(DNS_RETRY_EXCEPTIONS, tries=5, delay=60, backoff=3)
     def _list_resource_records_page(
         self,
         dns_svc_id: str,
         dns_zone_id: str,
         limit: int,
         offset: Optional[int] = None,
+        name: Optional[str] = None,
+        type: Optional[str] = None,
     ) -> Dict:
         """
-        List a single page of resource records with retry support.
+        List a single page of resource records with retry support and rate limit handling.
 
         Args:
             dns_svc_id (str):         GUID of the DNS Service.
@@ -784,6 +802,10 @@ class CephVMNodeIBM:
         }
         if offset is not None:
             kwargs["offset"] = offset
+        if name is not None:
+            kwargs["name"] = name
+        if type is not None:
+            kwargs["type"] = type
 
         resp = self.dns_service.list_resource_records(**kwargs)
         return resp.get_result()
@@ -809,7 +831,7 @@ class CephVMNodeIBM:
             limit=limit,
         )
 
-    @retry(DNS_RETRY_EXCEPTIONS, tries=3, delay=5)
+    @retry(DNS_RETRY_EXCEPTIONS, tries=5, delay=60, backoff=3)
     def _create_resource_record(
         self,
         dns_svc_id: str,
@@ -820,7 +842,7 @@ class CephVMNodeIBM:
         ttl: int = 900,
     ) -> None:
         """
-        Create a DNS resource record with retry support.
+        Create a DNS resource record with retry support and rate limit handling.
 
         Args:
             dns_svc_id (str):   GUID of the DNS Service.
@@ -845,7 +867,7 @@ class CephVMNodeIBM:
             rdata=rdata,
         )
 
-    @retry(DNS_RETRY_EXCEPTIONS, tries=3, delay=5)
+    @retry(DNS_RETRY_EXCEPTIONS, tries=5, delay=60, backoff=3)
     def _update_resource_record(
         self,
         dns_svc_id: str,
@@ -855,13 +877,13 @@ class CephVMNodeIBM:
         rdata: Any,
     ) -> None:
         """
-        Update a DNS resource record with retry support.
+        Update a DNS resource record with retry support and rate limit handling.
 
         Args:
             dns_svc_id (str):   GUID of the DNS Service.
             dns_zone_id (str):  DNS Zone ID.
             record_id (str):    ID of the record to update.
-            name (str):         Record name.
+            name (str):         Record name (not used in update, kept for API compatibility).
             rdata (Any):        Record data.
 
         Raises:
@@ -870,15 +892,43 @@ class CephVMNodeIBM:
             ReadTimeout: If request times out after retries.
             RequestException: If request fails after retries.
         """
+        # Note: name is not included in update - API rejects it as forbidden property.
+        # Record is identified by record_id, and name cannot be changed during update.
         self.dns_service.update_resource_record(
             instance_id=dns_svc_id,
             dnszone_id=dns_zone_id,
             record_id=record_id,
-            name=name,
             rdata=rdata,
         )
 
-    def _create_or_update_dns_records(
+    @retry(DNS_RETRY_EXCEPTIONS, tries=5, delay=60, backoff=3)
+    def _delete_resource_record(
+        self,
+        dns_svc_id: str,
+        dns_zone_id: str,
+        record_id: str,
+    ) -> None:
+        """
+        Delete a DNS resource record with retry support and rate limit handling.
+
+        Args:
+            dns_svc_id (str):   GUID of the DNS Service.
+            dns_zone_id (str):  DNS Zone ID.
+            record_id (str):    ID of the record to delete.
+
+        Raises:
+            ApiException: If the API call fails after retries.
+            ConnectionError: If connection fails after retries.
+            ReadTimeout: If request times out after retries.
+            RequestException: If request fails after retries.
+        """
+        self.dns_service.delete_resource_record(
+            instance_id=dns_svc_id,
+            dnszone_id=dns_zone_id,
+            record_id=record_id,
+        )
+
+    def _add_dns_records(
         self,
         zone_name: str,
         dns_svc_id: str,
@@ -886,75 +936,122 @@ class CephVMNodeIBM:
         node_ip: str,
     ) -> None:
         """
-        Create or update DNS records (A and PTR) for the node.
+        Recreate DNS records (A and PTR) for the node.
+
+        Finds existing A and PTR records, deletes them if found, then creates new records
+        with the new IP and domain.
 
         Args:
             zone_name (str):    DNS Zone name.
             dns_svc_id (str):   GUID of the DNS Service.
-            node_name (str):    Name of the node.
+            node_name (str):    Name of the node (FQDN without zone).
             node_ip (str):      IP address of the node.
 
         Raises:
             ApiException: If DNS operations fail after retries.
         """
-        LOG.debug(f"Adding DNS records for {node_name}")
+        LOG.debug(f"Creating DNS records for {node_name} with IP {node_ip}")
         dns_zone = self.dns_service.list_dnszones(dns_svc_id)
         dns_zone_id = get_dns_zone_id(zone_name, dns_zone.get_result())
 
-        # List resource records with pagination and filter in one pass
-        records_ip = []
-        records_ptr = []
+        # Step 1: Fetch PTR record by IP address (one record at a time)
+        ptr_result = self._list_resource_records_page(
+            dns_svc_id=dns_svc_id,
+            dns_zone_id=dns_zone_id,
+            limit=1,
+            name=node_ip,
+            type="PTR",
+        )
+        existing_ptr_record = None
+        if ptr_result.get("resource_records"):
+            existing_ptr_record = ptr_result["resource_records"][0]
+            LOG.debug(f"Found existing PTR record: {existing_ptr_record.get('id')}")
 
-        for record in self._list_resource_records_with_pagination(
-            dns_svc_id=dns_svc_id, dns_zone_id=dns_zone_id, limit=50
-        ):
-            # Collect A records matching the IP address
-            if record["type"] == "A" and record["rdata"]["ip"] == node_ip:
-                records_ip.append(record)
-            # Collect PTR records for this IP
-            elif record["type"] == "PTR" and record["name"] == node_ip:
-                records_ptr.append(record)
+        # Step 2: Use PTR record data to find A record
+        existing_a_record = None
+        if existing_ptr_record:
+            # Extract hostname from PTR record's ptrdname (FQDN)
+            ptrdname = existing_ptr_record.get("rdata", {}).get("ptrdname")
+            if ptrdname:
+                # Remove zone suffix to get hostname (A record name is relative to zone)
+                # e.g., "node1.zone.com" with zone "zone.com" -> "node1"
+                if ptrdname.endswith(f".{zone_name}"):
+                    a_record_name = ptrdname[: -(len(zone_name) + 1)]
+                else:
+                    # Fallback: extract first part if zone doesn't match
+                    a_record_name = ptrdname.split(".")[0]
 
-        # Update existing A record if found, otherwise create new one
-        if records_ip:
-            self._update_resource_record(
+                # Fetch A record using the hostname from PTR record
+                a_result = self._list_resource_records_page(
+                    dns_svc_id=dns_svc_id,
+                    dns_zone_id=dns_zone_id,
+                    limit=1,
+                    name=a_record_name,
+                    type="A",
+                )
+                if a_result.get("resource_records"):
+                    existing_a_record = a_result["resource_records"][0]
+                    LOG.debug(
+                        f"Found existing A record via PTR (name: {a_record_name}): "
+                        f"{existing_a_record.get('id')}"
+                    )
+
+        # Step 3: If A record not found via PTR, try direct lookup by node_name
+        if not existing_a_record:
+            a_result = self._list_resource_records_page(
                 dns_svc_id=dns_svc_id,
                 dns_zone_id=dns_zone_id,
-                record_id=records_ip[0]["id"],
+                limit=1,
                 name=node_name,
-                rdata=records_ip[0]["rdata"],
+                type="A",
             )
-        else:
-            # Create new A record
-            a_record = ResourceRecordInputRdataRdataARecord(node_ip)
-            self._create_resource_record(
+            if a_result.get("resource_records"):
+                existing_a_record = a_result["resource_records"][0]
+                LOG.debug(
+                    f"Found existing A record by name: {existing_a_record.get('id')}"
+                )
+
+        # Step 4: Delete existing records if found
+        if existing_a_record:
+            LOG.debug(f"Deleting existing A record {existing_a_record.get('id')}")
+            self._delete_resource_record(
                 dns_svc_id=dns_svc_id,
                 dns_zone_id=dns_zone_id,
-                record_type="A",
-                name=node_name,
-                rdata=a_record,
+                record_id=existing_a_record["id"],
             )
 
-        # Create or update PTR record
-        ptr_record = ResourceRecordInputRdataRdataPtrRecord(f"{node_name}.{zone_name}")
-        if records_ptr:
-            self._update_resource_record(
+        if existing_ptr_record:
+            LOG.debug(f"Deleting existing PTR record {existing_ptr_record.get('id')}")
+            self._delete_resource_record(
                 dns_svc_id=dns_svc_id,
                 dns_zone_id=dns_zone_id,
-                record_id=records_ptr[0]["id"],
-                name=node_ip,
-                rdata=ptr_record,
-            )
-        else:
-            self._create_resource_record(
-                dns_svc_id=dns_svc_id,
-                dns_zone_id=dns_zone_id,
-                record_type="PTR",
-                name=node_ip,
-                rdata=ptr_record,
+                record_id=existing_ptr_record["id"],
             )
 
-    @retry(ConnectionError, tries=3, delay=60)
+        # Step 5: Create new A record with new IP
+        LOG.info(f"Creating new A record {node_name} with IP {node_ip}")
+        a_record_data = ResourceRecordInputRdataRdataARecord(node_ip)
+        self._create_resource_record(
+            dns_svc_id=dns_svc_id,
+            dns_zone_id=dns_zone_id,
+            record_type="A",
+            name=node_name,
+            rdata=a_record_data,
+        )
+
+        # Step 6: Create new PTR record with new domain
+        ptr_domain = f"{node_name}.{zone_name}"
+        LOG.info(f"Creating new PTR record {node_ip} with domain {ptr_domain}")
+        ptr_record_data = ResourceRecordInputRdataRdataPtrRecord(ptr_domain)
+        self._create_resource_record(
+            dns_svc_id=dns_svc_id,
+            dns_zone_id=dns_zone_id,
+            record_type="PTR",
+            name=node_ip,
+            rdata=ptr_record_data,
+        )
+
+    @retry(ConnectionError, tries=3, delay=60, backoff=3)
     def remove_dns_records(self, zone_name, dns_svc_id):
         """
         Remove the DNS records associated this VSI.
