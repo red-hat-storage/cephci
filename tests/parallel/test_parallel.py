@@ -176,14 +176,20 @@ def execute(test, args, results, parallel_tcs):
         if rc == -1:
             tc["status"] = "Skipped"
 
-        parallel_tcs.append(tc)
     except KeyError as e:
         parallel_log.error(f"Missing required argument: {e}")
         raise
     except Exception as e:
         test_logger.error(f"Test {test_name} failed with error: {e}")
+        elapsed = datetime.datetime.now() - start
+        tc["duration"] = str(elapsed)
+        tc["status"] = "Failed"
+        tc["err_type"] = "exception"
+        tc["err_msg"] = str(e)
         results[test_name] = 1
     finally:
+        # Always append tc to results, even if test failed with exception
+        parallel_tcs.append(tc)
         # Reset root logger configuration to avoid conflicts
         for handler in logging.getLogger().handlers[:]:
             logging.getLogger().removeHandler(handler)
