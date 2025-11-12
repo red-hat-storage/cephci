@@ -81,6 +81,7 @@ tests:
       desc: Deploy samba with auth_mode 'Active Directory(AD)' using imperative style(CLI Commands)
       module: smb_deployment_imperative_method
       polarion-id: CEPH-83593844
+      comments: Test fails due to AD unavailable in IBMc
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
@@ -100,6 +101,7 @@ tests:
       desc: Deploy samba with auth_mode 'Active Directory(AD)' using declarative style(Spec File)
       module: smb_deployment_declarative_method.py
       polarion-id: CEPH-83593846
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -143,6 +145,7 @@ tests:
       desc: Deploy samba with auth_mode 'Active Directory(AD)' and perform basic AD operations
       module: smb_ad_dc.py
       polarion-id: CEPH-83594037
+      comments: Test fails due to AD unavailable in IBMc
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
@@ -162,6 +165,7 @@ tests:
       desc: (Imperative Style - Single Share) Verify Samba deployment using auth_mode=AD with clustering
       module: smb_deployment_imperative_method.py
       polarion-id: CEPH-83597235
+      comments: Test fails due to AD unavailable in IBMc
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
@@ -181,6 +185,7 @@ tests:
       desc: (Imperative Style - Multiple Share) Verify Samba deployment using auth_mode=AD with clustering
       module: smb_deployment_imperative_method.py
       polarion-id: CEPH-83597236
+      comments: Test fails due to AD unavailable in IBMc
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
@@ -200,6 +205,7 @@ tests:
       desc: (Declarative Style - Single Share) Verify Samba deployment using auth_mode=AD with clustering
       module: smb_deployment_declarative_method.py
       polarion-id: CEPH-83597239
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -235,6 +241,7 @@ tests:
       desc: (Declarative Style - Multiple Share) Verify Samba deployment using auth_mode=AD with clustering
       module: smb_deployment_declarative_method.py
       polarion-id: CEPH-83597240
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -278,6 +285,7 @@ tests:
       desc: Create files on windows client 1 and perform lookup from windows client 2
       module: smb_clients_operations.py
       polarion-id: CEPH-83593842
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -325,6 +333,7 @@ tests:
       desc: Create files on windows client 1 and perform file rename from windows client 2
       module: smb_clients_operations.py
       polarion-id: CEPH-83595370
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -375,6 +384,7 @@ tests:
       desc: Create files on windows client 1 and delete from window client 2
       module: smb_clients_operations.py
       polarion-id: CEPH-83595372
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -425,6 +435,7 @@ tests:
       desc: Verify that encryption is enabled for the deployed SMB services.
       module: smb_encryption.py
       polarion-id: CEPH-83614662
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -464,6 +475,7 @@ tests:
       desc: (Clustering - Public Address)Verify Samba deployment using auth_mode=AD
       module: smb_deployment_declarative_method.py
       polarion-id: CEPH-83597460
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -501,6 +513,7 @@ tests:
       desc: (Clustering - Public Address)Verify IOs from multiple windows clients
       module: smb_clients_operations.py
       polarion-id: CEPH-83597461
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -555,6 +568,7 @@ tests:
       desc: (Clustering - Failover-Maintenance Mode)Verify samba failover with parallel IOs
       module: smb_failover_file_ops.py
       polarion-id: CEPH-83597730
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -599,6 +613,7 @@ tests:
       desc: (Clustering - Failover-Restart Service)Verify samba failover with parallel IOs
       module: smb_failover_file_ops.py
       polarion-id: CEPH-83597731
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -643,6 +658,7 @@ tests:
       desc: (Clustering - Failover-Reboot)Verify samba failover with parallel IOs
       module: smb_failover_file_ops.py
       polarion-id: CEPH-83597732
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -687,6 +703,7 @@ tests:
       desc: (Clustering - Failover-Stop Service)Verify samba failover with parallel IOs
       module: smb_failover_file_ops.py
       polarion-id: CEPH-83597733
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -731,6 +748,7 @@ tests:
       desc: (Clustering - Failover-Kill Service)Verify samba failover with parallel IOs
       module: smb_failover_file_ops.py
       polarion-id: CEPH-83597734
+      comments: Test fails due to AD unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -768,4 +786,102 @@ tests:
               volume: cephfs
               subvolumegroup: smb
               subvolume: sv1
+              path: /
+
+  - test:
+      name: Deploy colocation samba services with custom port in active-directory
+      desc: Deploy colocation samba services with custom port in active-directory
+      module: smb_deployment_declarative_method.py
+      polarion-id: CEPH-83624577
+      comments: Test fails due to AD unavailable in IBMc
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: active-directory
+            domain_settings:
+              realm: samba.qe
+              join_sources:
+                - source_type: resource
+                  ref: join1-admin
+            custom_ports:
+              smb: 1111
+              smbmetrics: 2222
+              ctdb: 3333
+            custom_dns:
+              - 10.70.46.228
+            placement:
+              label: smb
+          - resource_type: ceph.smb.join.auth
+            auth_id: join1-admin
+            auth:
+              username: Administrator
+              password: Redhat@123
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv2
+              path: /
+
+  - test:
+      name: Deploy colocation samba services with custom IP in active-directory
+      desc: Deploy colocation samba services with custom IP in active-directory
+      module: smb_deployment_declarative_method.py
+      polarion-id: CEPH-83628046
+      comments: Test fails due to AD unavailable in IBMc
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: active-directory
+            domain_settings:
+              realm: samba.qe
+              join_sources:
+                - source_type: resource
+                  ref: join1-admin
+            custom_ports:
+              smb: 1111
+              smbmetrics: 2222
+              ctdb: 3333
+            bind_addrs:
+              - network: 10.0.64.0/22
+            custom_dns:
+              - 10.70.46.228
+            placement:
+              label: smb
+          - resource_type: ceph.smb.join.auth
+            auth_id: join1-admin
+            auth:
+              username: Administrator
+              password: Redhat@123
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share2
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv2
               path: /
