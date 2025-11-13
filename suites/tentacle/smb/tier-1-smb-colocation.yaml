@@ -124,6 +124,7 @@ tests:
       desc: Deploy colocation samba services with custom IP in standalone
       module: smb_deployment_declarative_method.py
       polarion-id: CEPH-83628748
+      comments: Test fails due to bind network unavailable for IBMc
       config:
         file_type: yaml
         file_mount: /tmp
