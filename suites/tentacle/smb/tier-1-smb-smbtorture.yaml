@@ -88,6 +88,7 @@ tests:
       desc: Run smbtorture test:smb2.rw
       module: smbtorture.py
       polarion-id: CEPH-83625919
+      comments: Test cases failed as the IBMC VM was unable to subscribe to the "codeready-builder-for-rhel-9-x86_64" repository.
       config:
         smb_service_deployment: True
         smb_service_cleanup: False

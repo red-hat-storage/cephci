@@ -265,8 +265,8 @@ tests:
           rwmixread: 50
           bs: 4k
           ioengine: libaio
-          iodepth: 10
-          size: 1G
+          iodepth: 1
+          size: 10M
           runtime: 60
           numjobs: 1
         aio_rate_limit_conf:
@@ -345,8 +345,8 @@ tests:
           rwmixread: 50
           bs: 4k
           ioengine: libaio
-          iodepth: 10
-          size: 1G
+          iodepth: 1
+          size: 10M
           runtime: 60
           numjobs: 1
         aio_rate_limit_conf:
@@ -429,8 +429,8 @@ tests:
           rwmixread: 50
           bs: 4k
           ioengine: libaio
-          iodepth: 10
-          size: 1G
+          iodepth: 1
+          size: 10M
           runtime: 60
           numjobs: 1
 
@@ -472,8 +472,8 @@ tests:
           rwmixread: 50
           bs: 4k
           ioengine: libaio
-          iodepth: 10
-          size: 1G
+          iodepth: 1
+          size: 10M
           runtime: 60
           numjobs: 1
 
@@ -508,8 +508,8 @@ tests:
           rwmixread: 50
           bs: 4k
           ioengine: libaio
-          iodepth: 10
-          size: 1G
+          iodepth: 1
+          size: 10M
           runtime: 60
           numjobs: 1
 
@@ -544,7 +544,7 @@ tests:
           rwmixread: 50
           bs: 4k
           ioengine: libaio
-          iodepth: 10
-          size: 1G
+          iodepth: 1
+          size: 10M
           runtime: 60
           numjobs: 1
