@@ -840,17 +840,19 @@ class CephVMNodeIBM:
         name: str,
         rdata: Any,
         ttl: int = 900,
+        node_context: Optional[str] = None,
     ) -> None:
         """
         Create a DNS resource record with retry support and rate limit handling.
 
         Args:
-            dns_svc_id (str):   GUID of the DNS Service.
-            dns_zone_id (str):  DNS Zone ID.
-            record_type (str):  Type of record (A, PTR, etc.).
-            name (str):         Record name.
-            rdata (Any):        Record data.
-            ttl (int):          Time to live (default: 900).
+            dns_svc_id (str):         GUID of the DNS Service.
+            dns_zone_id (str):        DNS Zone ID.
+            record_type (str):         Type of record (A, PTR, etc.).
+            name (str):                Record name.
+            rdata (Any):               Record data.
+            ttl (int):                 Time to live (default: 900).
+            node_context (str, optional): Node/VM context for error messages (e.g., "node_name/IP").
 
         Raises:
             ApiException: If the API call fails after retries.
@@ -858,14 +860,72 @@ class CephVMNodeIBM:
             ReadTimeout: If request times out after retries.
             RequestException: If request fails after retries.
         """
-        self.dns_service.create_resource_record(
-            instance_id=dns_svc_id,
-            dnszone_id=dns_zone_id,
-            type=record_type,
-            ttl=ttl,
-            name=name,
-            rdata=rdata,
+        context_info = f" (node: {node_context})" if node_context else ""
+        LOG.debug(
+            f"Creating {record_type} record '{name}'{context_info} "
+            f"(rdata: {rdata}, ttl: {ttl})"
         )
+        try:
+            self.dns_service.create_resource_record(
+                instance_id=dns_svc_id,
+                dnszone_id=dns_zone_id,
+                type=record_type,
+                ttl=ttl,
+                name=name,
+                rdata=rdata,
+            )
+        except ApiException as e:
+            # Handle cases where record might have been created but API call failed
+            # (e.g., bad gateway, timeout) - delete existing record before retry
+            if e.code == 409 or (e.code >= 500 and e.code < 600):
+                # Record might exist (409) or was created but we got server error (5xx)
+                try:
+                    result = self._list_resource_records_page(
+                        dns_svc_id=dns_svc_id,
+                        dns_zone_id=dns_zone_id,
+                        limit=1,
+                        name=name,
+                        type=record_type,
+                    )
+                    existing_records = result.get("resource_records", [])
+                    if existing_records:
+                        existing_record = existing_records[0]
+                        record_id = existing_record.get("id")
+                        LOG.debug(
+                            f"Found existing {record_type} record '{name}' (id: {record_id}) "
+                            f"after error {e.code}, deleting before retry"
+                        )
+                        self._delete_resource_record(
+                            dns_svc_id=dns_svc_id,
+                            dns_zone_id=dns_zone_id,
+                            record_id=record_id,
+                            node_context=node_context,
+                        )
+                        LOG.debug(
+                            f"Deleted existing {record_type} record '{name}', "
+                            f"will retry creation"
+                        )
+                except Exception as delete_error:
+                    # Log but don't fail - let retry mechanism handle it
+                    LOG.debug(
+                        f"Could not check/delete existing record after error {e.code}: "
+                        f"{delete_error}. Will retry creation"
+                    )
+
+            # Enhance error message with context for better debugging in parallel operations
+            context_msg = f" for node {node_context}" if node_context else ""
+            error_msg = (
+                f"Failed to create {record_type} record '{name}'{context_msg}: "
+                f"{e.message} (Status: {e.code})"
+            )
+            LOG.error(error_msg)
+            # Re-raise with enhanced context in the exception message
+            # Preserve original exception details while adding context
+            raise ApiException(
+                code=e.code,
+                message=error_msg,
+                http_response=e.http_response,
+            ) from e
 
     @retry(DNS_RETRY_EXCEPTIONS, tries=5, delay=60, backoff=3)
     def _update_resource_record(
@@ -907,14 +967,16 @@ class CephVMNodeIBM:
         dns_svc_id: str,
         dns_zone_id: str,
         record_id: str,
+        node_context: Optional[str] = None,
     ) -> None:
         """
         Delete a DNS resource record with retry support and rate limit handling.
 
         Args:
-            dns_svc_id (str):   GUID of the DNS Service.
-            dns_zone_id (str):  DNS Zone ID.
-            record_id (str):    ID of the record to delete.
+            dns_svc_id (str):         GUID of the DNS Service.
+            dns_zone_id (str):        DNS Zone ID.
+            record_id (str):          ID of the record to delete.
+            node_context (str, optional): Node/VM context for error messages (e.g., "node_name/IP").
 
         Raises:
             ApiException: If the API call fails after retries.
@@ -922,12 +984,31 @@ class CephVMNodeIBM:
             ReadTimeout: If request times out after retries.
             RequestException: If request fails after retries.
         """
-        self.dns_service.delete_resource_record(
-            instance_id=dns_svc_id,
-            dnszone_id=dns_zone_id,
-            record_id=record_id,
-        )
+        context_info = f" (node: {node_context})" if node_context else ""
+        LOG.debug(f"Deleting DNS record '{record_id}'{context_info}")
+        try:
+            self.dns_service.delete_resource_record(
+                instance_id=dns_svc_id,
+                dnszone_id=dns_zone_id,
+                record_id=record_id,
+            )
+        except ApiException as e:
+            # Enhance error message with context for better debugging in parallel operations
+            context_msg = f" for node {node_context}" if node_context else ""
+            error_msg = (
+                f"Failed to delete DNS record '{record_id}'{context_msg}: "
+                f"{e.message} (Status: {e.code})"
+            )
+            LOG.error(error_msg)
+            # Re-raise with enhanced context in the exception message
+            # Preserve original exception details while adding context
+            raise ApiException(
+                code=e.code,
+                message=error_msg,
+                http_response=e.http_response,
+            ) from e
 
+    @retry(DNS_RETRY_EXCEPTIONS, tries=5, delay=60, backoff=3)
     def _add_dns_records(
         self,
         zone_name: str,
@@ -939,7 +1020,7 @@ class CephVMNodeIBM:
         Recreate DNS records (A and PTR) for the node.
 
         Finds existing A and PTR records, deletes them if found, then creates new records
-        with the new IP and domain.
+        with the new IP and domain. The entire operation is retried if any step fails.
 
         Args:
             zone_name (str):    DNS Zone name.
@@ -949,6 +1030,9 @@ class CephVMNodeIBM:
 
         Raises:
             ApiException: If DNS operations fail after retries.
+            ConnectionError: If connection fails after retries.
+            ReadTimeout: If request times out after retries.
+            RequestException: If request fails after retries.
         """
         LOG.debug(f"Creating DNS records for {node_name} with IP {node_ip}")
         dns_zone = self.dns_service.list_dnszones(dns_svc_id)
@@ -1012,12 +1096,14 @@ class CephVMNodeIBM:
                 )
 
         # Step 4: Delete existing records if found
+        node_context = f"{node_name}/{node_ip}"
         if existing_a_record:
             LOG.debug(f"Deleting existing A record {existing_a_record.get('id')}")
             self._delete_resource_record(
                 dns_svc_id=dns_svc_id,
                 dns_zone_id=dns_zone_id,
                 record_id=existing_a_record["id"],
+                node_context=node_context,
             )
 
         if existing_ptr_record:
@@ -1026,6 +1112,7 @@ class CephVMNodeIBM:
                 dns_svc_id=dns_svc_id,
                 dns_zone_id=dns_zone_id,
                 record_id=existing_ptr_record["id"],
+                node_context=node_context,
             )
 
         # Step 5: Create new A record with new IP
@@ -1037,6 +1124,7 @@ class CephVMNodeIBM:
             record_type="A",
             name=node_name,
             rdata=a_record_data,
+            node_context=node_context,
         )
 
         # Step 6: Create new PTR record with new domain
@@ -1049,6 +1137,7 @@ class CephVMNodeIBM:
             record_type="PTR",
             name=node_ip,
             rdata=ptr_record_data,
+            node_context=node_context,
         )
 
     @retry(ConnectionError, tries=3, delay=60, backoff=3)
