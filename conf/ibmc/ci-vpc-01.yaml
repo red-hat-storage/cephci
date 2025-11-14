@@ -5,7 +5,7 @@ datacenters:
   - au-syd-1
   - au-syd-2
   - au-syd-3
-dns_zone_name: "qe.ceph.au.lab"
+dns_zone_name: "qe.ceph.lab"
 networks:
   au-syd-1: ci-sn-01
   au-syd-2: ci-sn-02
