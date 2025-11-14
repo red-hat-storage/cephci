@@ -72,12 +72,32 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83576084
+            serial: 1
+            bdevs:
+              count: 1
+              size: 1G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83576084
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
         operation: CEPH-83576084
       desc: Delete-recreate bdev in loop and rediscover namespace
       destroy-cluster: false
@@ -90,14 +110,36 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        install: true
+        nvme_metadata_pool: rbd
         gw_group: gw_group2
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
           pool: rbd
         initiator_node: node10
+        subsystems: # Configure subsystems with all sub-entities
+          - nqn: nqn.2016-06.io.spdk:ceph-83575814
+            serial: 1
+            bdevs:
+              count: 1
+              size: 10G
+            listener_port: 4420
+            allow_host: "*"
+        initiators: # Configure Initiators with all pre-req
+          - subnqn: nqn.2016-06.io.spdk:ceph-83575814
+            listener_port: 4420
+            node: node10
+        cleanup:
+          - subsystems
+          - initiators
+          - pool
+          - gateway
+          - disconnect_all
         operation: CEPH-83575814
-      desc: Perform cluster operations when  IO operations between NVMeOF target NVMe-OF initiator are in progress.
+      desc: >
+        Perform cluster operations when IO operations between NVMeOF
+        target NVMe-OF initiator are in progress.
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py
       name: Perform cluster operations when  IO operations are in progress.
