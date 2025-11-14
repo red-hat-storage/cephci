@@ -86,7 +86,9 @@ def run(ceph_cluster, **kw):
         setup_params = cephfs_common_utils.test_setup(default_fs, client)
         fs_name = setup_params["fs_name"]
         log.info("Mount subvolumes")
-        mount_details = cephfs_common_utils.test_mount(clients, setup_params)
+        mount_details = cephfs_common_utils.test_mount(
+            clients, setup_params, mnt_type_list=["kernel", "fuse"]
+        )
         log.info("Verify Cluster is healthy before test")
         if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
             log.error("Cluster health is not OK even after waiting for 300secs")
@@ -207,7 +209,9 @@ def fscrypt_enctag(fscrypt_test_params):
     sv_list_tmp.extend(sv_list)
     fscrypt_test_params["setup_params"].update({"sv_list": sv_list_tmp})
     setup_params["sv_list"] = sv_list
-    mnt_details = cephfs_common_utils.test_mount(clients, setup_params)
+    mnt_details = cephfs_common_utils.test_mount(
+        clients, setup_params, mnt_type_list=["kernel", "fuse"]
+    )
     mount_details.update(mnt_details)
     log.info("Run CRUD ops on enctag")
     if enc_tag_crud_ops(client, cephfs_common_utils, sv_list):

@@ -95,7 +95,9 @@ def run(ceph_cluster, **kw):
         setup_params.update({"cephfs_common_utils": cephfs_common_utils})
         fs_name = setup_params["fs_name"]
         log.info("Mount subvolumes")
-        mount_details = cephfs_common_utils.test_mount(clients, setup_params)
+        mount_details = cephfs_common_utils.test_mount(
+            clients, setup_params, mnt_type_list=["kernel", "fuse"]
+        )
         mon_node_ips = [node.ip_address for node in ceph_cluster.get_nodes(role="mon")]
         mon_node_ip = ",".join(mon_node_ips)
         log.info("Add mountpoint to fstab due to BZ 2406981")
@@ -189,7 +191,6 @@ def fscrypt_lifecycle(fscrypt_test_params):
     test_status = 0
 
     mnt_type = random.choice(["kernel", "fuse"])
-
     log.info("Create 2 test directories in each subvolume")
     for sv_name in mount_details:
         mountpoint = mount_details[sv_name][mnt_type]["mountpoint"]

@@ -85,7 +85,9 @@ def run(ceph_cluster, **kw):
         setup_params = cephfs_common_utils.test_setup(default_fs, client)
         fs_name = setup_params["fs_name"]
         log.info("Mount subvolumes")
-        mount_details = cephfs_common_utils.test_mount(clients, setup_params)
+        mount_details = cephfs_common_utils.test_mount(
+            clients, setup_params, mnt_type_list=["kernel", "fuse"]
+        )
         test_case_name = config.get("test_name", "all_tests")
         test_negative = [
             "fscrypt_filename_length",
