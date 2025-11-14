@@ -83,8 +83,9 @@ def run(ceph_cluster, **kw):
             "ceph osd pool set cephfs-data-ec allow_ec_overwrites true",
             "ceph fs new cephfs-ec cephfs-metadata cephfs-data-ec --force",
         ]
-        if fs_util.get_fs_info(clients[0], "cephfs_new"):
-            default_fs = "cephfs_new"
+        if fs_util.get_fs_info(clients[0], "cephfs"):
+            default_fs = "cephfs"
+        else:
             list_cmds.append("ceph fs volume create cephfs")
         for cmd in list_cmds:
             clients[0].exec_command(sudo=True, cmd=cmd)
@@ -345,12 +346,11 @@ def run(ceph_cluster, **kw):
             snap_params["fs_name"] = sv["vol_name"]
             snap_params["validate"] = True
             snap_params["client"] = clients[0]
-            # sched_list = ["2M", "1h", "7d", "4w"]
             ceph_version_1 = get_ceph_version_from_cluster(clients[0])
             sched_list = (
-                ["2m", "1h", "7d", "4w"]
+                ["2m", "10h", "7d", "4w"]
                 if LooseVersion(ceph_version_1) >= LooseVersion("17.2.6")
-                else ["2M", "1h", "7d", "4w"]
+                else ["2M", "10h", "7d", "4w"]
             )
             snap_params["retention"] = (
                 "5m5h5d4w"

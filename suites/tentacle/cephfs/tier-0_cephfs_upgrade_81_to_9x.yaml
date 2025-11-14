@@ -182,6 +182,12 @@ tests:
       name: "Validates NFS after upgrade"
       polarion-id: CEPH-83575098
   - test:
+      abort-on-fail: false
+      desc: Validates 9.0 features post upgrade
+      module: cephfs_upgrade.cephfs_post_upgrade_validation_ext.py
+      name: "Validates 9.0 features after upgrade"
+      polarion-id: CEPH-83621389
+  - test:
       name: cephfs_volume_management
       module: cephfs_volume_management.py
       polarion-id: CEPH-83573446
