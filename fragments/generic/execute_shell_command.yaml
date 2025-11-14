@@ -1,5 +1,0 @@
-tests:
-  - test:
-      name: execute cephadm shell command
-      module: test_bootstrap.py
-      args:

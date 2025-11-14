@@ -1,9 +1,0 @@
-# A test setup workflow that configures the system with the minimal required
-# packages. Ironically, this is not a test case but a workflow.
----
-tests:
-  - test:
-      abort-on-fail: true
-      desc: Install software pre-requisites for RHCS cluster deployment.
-      module: install_prereq.py
-      name: test setup install cluster prerequisites
