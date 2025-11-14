@@ -10,15 +10,21 @@
             "LIST_IMAGE": "/api/block/image"
         },
         "rgw": {
+            "LIST_DAEMONS": "/api/rgw/daemon",
+            "GET_DAEMON": "/api/rgw/daemon/{svc_id}",
             "LIST_BUCKET": "/api/rgw/bucket",
             "CREATE_BUCKET": "/api/rgw/bucket",
+            "GET_BUCKET": "/api/rgw/bucket/{bucket}",
+            "DELETE_BUCKET": "/api/rgw/bucket/{bucket}",
             "LIST_USER": "/api/rgw/user",
             "CREATE_USER": "/api/rgw/user",
             "DELETE_BUCKET_ENCRYPTION": "/api/rgw/bucket/deleteEncryption",
             "LIST_BUCKET_ENCRYPTION": "/api/rgw/bucket/getEncryption",
             "LIST_BUCKET_LIFECYCLE": "/api/rgw/bucket/lifecycle",
             "UPDATE_BUCKET_LIFECYCLE": "/api/rgw/bucket/lifecycle",
-            "LIST_BUCKET_RATELIMIT": "/api/rgw/bucket/ratelimit",
+            "LIST_BUCKET_RATELIMIT_GLOBAL": "/api/rgw/bucket/ratelimit",
+            "LIST_BUCKET_RATELIMIT": "/api/rgw/bucket/{uid}/ratelimit",
+            "UPDATE_BUCKET_RATELIMIT": "/api/rgw/bucket/{uid}/ratelimit",
             "LIST_BUCKET_ENCRYPTCONF": "/api/rgw/bucket/getEncryptionConfig",
             "UPDATE_BUCKET_ENCRYPTCONF": "/api/rgw/bucket/setEncryptionConfig"
         },
