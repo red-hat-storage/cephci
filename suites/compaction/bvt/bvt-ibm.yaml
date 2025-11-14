@@ -69,6 +69,7 @@ tests:
         node: node4
         install_packages:
           - ceph-common
+          - samba-client
         copy_admin_keyring: true
       desc: Configure the client system
       destroy-cluster: false
