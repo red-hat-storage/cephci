@@ -144,7 +144,9 @@ class CephFSCommonUtils(FsUtils):
         }
         return setup_params
 
-    def test_mount(self, clients, setup_params):
+    def test_mount(
+        self, clients, setup_params, mnt_type_list=["kernel", "fuse", "nfs"]
+    ):
         """
         This method is to run mount on test subvolumes
         Params:
@@ -164,7 +166,6 @@ class CephFSCommonUtils(FsUtils):
                 for _ in list(range(4))
             )
 
-            mnt_type_list = ["kernel", "fuse", "nfs"]
             mount_details = {}
             sv_list = setup_params["sv_list"]
             fs_name = setup_params["fs_name"]
