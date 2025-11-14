@@ -19,18 +19,18 @@ instance:
     yum_repos:
       appstream:
         name: AppStream
-        baseurl: http://nginx-vm-01.qe.ceph.eu.lab/repos/10/0/AppStream/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/10/0/AppStream/
         enabled: true
         gpgcheck: false
       baseos:
         name: BaseOS
-        baseurl: http://nginx-vm-01.qe.ceph.eu.lab/repos/10/0/BaseOS/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/10/0/BaseOS/
         gpgcheck: false
         enabled: true
 
       crb:
         name: codeready-builder
-        baseurl: http://nginx-vm-01.qe.ceph.eu.lab/repos/10/0/CRB/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/10/0/CRB/
         gpgcheck: false
         enabled: true
 
@@ -38,31 +38,31 @@ instance:
     write_files:
       - content: |
           [[registry]]
-          location = "nginx-vm-01.qe.ceph.eu.lab:5000"
+          location = "nginx-vm-01.qe.ceph.lab:5000"
           insecure = true
 
           [[registry]]
-          location = "nginx-vm-01.qe.ceph.eu.lab:5000/rh-stage"
+          location = "nginx-vm-01.qe.ceph.lab:5000/rh-stage"
           prefix = "registry-proxy.engineering.redhat.com"
           insecure = true
 
           [[registry]]
-          location = "nginx-vm-01.qe.ceph.eu.lab:5000/rh-stage"
+          location = "nginx-vm-01.qe.ceph.lab:5000/rh-stage"
           prefix = "quay.io"
           insecure = true
 
           [[registry]]
-          location = "nginx-vm-01.qe.ceph.eu.lab:5000/rh-prod"
+          location = "nginx-vm-01.qe.ceph.lab:5000/rh-prod"
           prefix = "registry.redhat.io"
           insecure = true
 
           [[registry]]
-          location = "nginx-vm-01.qe.ceph.eu.lab:5000/ibm-stage"
+          location = "nginx-vm-01.qe.ceph.lab:5000/ibm-stage"
           prefix = "cp.stg.icr.io"
           insecure = true
 
           [[registry]]
-          location = "nginx-vm-01.qe.ceph.eu.lab:5000/ibm-prod"
+          location = "nginx-vm-01.qe.ceph.lab:5000/ibm-prod"
           prefix = "cp.icr.io"
           insecure = true
         path: /etc/containers/registries.conf.d/nginx-vm-01.conf

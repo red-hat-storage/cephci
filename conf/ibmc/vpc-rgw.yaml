@@ -3,7 +3,7 @@ datacenters:
   - eu-de-1
   - eu-de-2
   - eu-de-3
-dns_zone_name: "qe.ceph.eu.lab"
+dns_zone_name: "qe.ceph.lab"
 networks:
   eu-de-1: sn-rgw-eu-de-1
   eu-de-2: sn-rgw-eu-de-2
