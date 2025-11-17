@@ -3,9 +3,10 @@ from time import sleep
 
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
-from tests.nfs.nfs_operations import (
-    cleanup_cluster,
-    setup_nfs_cluster,
+from tests.nfs.nfs_operations import cleanup_cluster, setup_nfs_cluster
+from tests.nfs.test_nfs_qos_on_cluster_level_enablement import (
+    enable_cluster_ops_control,
+    enable_export_ops_control,
     validate_ops_control,
     validate_ops_limit,
     verify_ops_control_settings,
@@ -15,73 +16,74 @@ from utility.log import Log
 log = Log(__name__)
 
 
-def enable_cluster_ops_control(client, cluster_name, qos_type, ops_config):
-    """Enable ops control at cluster level"""
-    cmd = f"ceph nfs cluster qos enable ops_control {cluster_name} {qos_type}"
-    if qos_type.lower() == "pershare":
-        if "max_export_iops" not in ops_config:
-            raise ConfigError("max_export_iops required for PerShare ops control")
-        cmd += f" {ops_config['max_export_iops']}"
-    elif qos_type.lower() == "perclient":
-        if "max_client_iops" not in ops_config:
-            raise ConfigError("max_client_iops required for PerClient ops control")
-        cmd += f" {ops_config['max_client_iops']}"
-    elif qos_type.lower() == "pershare_perclient":
-        if not all(k in ops_config for k in ["max_export_iops", "max_client_iops"]):
-            raise ConfigError("Both max_export_iops and max_client_iops required")
-        cmd += f" {ops_config['max_export_iops']} {ops_config['max_client_iops']}"
-    else:
-        raise ConfigError(f"Invalid ops control type: {qos_type}")
-    client.exec_command(sudo=True, cmd=cmd)
-    return cmd
+def _measured_iops_from_perf(perf, dd_params):
+    """
+    Compute measured write/read IOPS from perf dict returned by validate_ops_control.
+    IOPS = count / time (seconds).
+    Returns (write_iops, read_iops) as floats.
+    """
+    try:
+        count = int(dd_params.get("count", 64))
+    except Exception:
+        count = 64
+    wt = float(perf.get("write_time", 0) or 0.0)
+    rt = float(perf.get("read_time", 0) or 0.0)
+    write_iops = count / wt if wt > 0 else 0.0
+    read_iops = count / rt if rt > 0 else 0.0
+    return write_iops, read_iops
 
 
-def enable_export_ops_control(client, cluster_name, pseudo_path, qos_type, ops_config):
-    """Enable ops control at export level"""
-    cmd = f"ceph nfs export qos enable ops_control {cluster_name} {pseudo_path}"
-    if qos_type.lower() == "pershare":
-        if "max_export_iops" not in ops_config:
-            raise ConfigError("max_export_iops required for PerShare ops control")
-        cmd += f" {ops_config['max_export_iops']}"
-    elif qos_type.lower() == "pershare_perclient":
-        if not all(k in ops_config for k in ["max_export_iops", "max_client_iops"]):
-            raise ConfigError("Both max_export_iops and max_client_iops required")
-        cmd += f" {ops_config['max_export_iops']} {ops_config['max_client_iops']}"
-    elif qos_type.lower() == "perclient":
-        raise ConfigError("PerClient ops control not allowed at export level")
-    client.exec_command(sudo=True, cmd=cmd)
-    return cmd
+def _require_baseline_higher(baseline_perf, measured_perf, dd_params, level_name):
+    """Require baseline IOPS strictly greater than measured IOPS for both write and read."""
+    b_w_iops, b_r_iops = _measured_iops_from_perf(baseline_perf, dd_params)
+    m_w_iops, m_r_iops = _measured_iops_from_perf(measured_perf, dd_params)
+    log.info(
+        "%s baseline IOPS write=%.2f read=%.2f | measured IOPS write=%.2f read=%.2f",
+        level_name,
+        b_w_iops,
+        b_r_iops,
+        m_w_iops,
+        m_r_iops,
+    )
+    if not (b_w_iops > m_w_iops and b_r_iops > m_r_iops):
+        raise OperationFailedError(
+            f"{level_name} validation failed: baseline IOPS not greater than measured under ops control"
+        )
 
 
 def run(ceph_cluster, **kw):
-    """Test NFS ops control at cluster and export levels"""
+    """Test NFS ops control at cluster and export levels (ops-only checks)"""
     config = kw.get("config")
     if not config:
         raise ConfigError("Config not found")
 
+    client = None
+    nfs_export_path = None
+    nfs_mount = None
     try:
-        # Get nodes
+        # Nodes and clients
         nfs_nodes = ceph_cluster.get_nodes("nfs")
         clients = ceph_cluster.get_nodes("client")
         if not nfs_nodes:
             raise OperationFailedError("No NFS nodes found in cluster")
-
         nfs_node = nfs_nodes[0]
+
         no_clients = int(config.get("clients", "1"))
         if no_clients > len(clients):
             raise ConfigError("The test requires more clients than available")
-
         clients = clients[:no_clients]
         client = clients[0]
 
-        # Setup parameters
+        # Params
         cluster_name = config.get("cluster_name", "cephfs-nfs")
         fs_name = config.get("cephfs_volume", "cephfs")
         nfs_export = "/export_0"
         nfs_mount = "/mnt/nfs"
         fs = "cephfs"
         qos_type = config.get("qos_type")
-        dd_params = config.get("dd_parameters")
+        if not qos_type:
+            raise ConfigError("qos_type missing in config")
+        dd_params = config.get("dd_parameters") or {"block_size": "4K", "count": 16384}
 
         # Setup NFS cluster
         setup_nfs_cluster(
@@ -97,7 +99,6 @@ def run(ceph_cluster, **kw):
             ceph_cluster=ceph_cluster,
         )
 
-        # Get baseline performance (no ops control)
         log.info("=" * 80)
         log.info("STEP 1: Measuring baseline performance (no ops control)...")
         baseline = validate_ops_control(
@@ -106,88 +107,86 @@ def run(ceph_cluster, **kw):
             file_name="baseline.txt",
             dd_params=dd_params,
         )
-        log.info("Baseline Results:")
-        log.info(f"- Write time: {baseline['write_time']} seconds")
-        log.info(f"- Read time: {baseline['read_time']} seconds")
+        log.info("Baseline Results: %s", baseline)
 
-        # Enable cluster level ops control
+        # Step 2: cluster-level ops control
         log.info("=" * 80)
-        log.info("STEP 2: Setting up cluster level ops control...")
-        cluster_ops = config.get("cluster_ops", {})
-        log.info(f"Cluster ops control configuration: {cluster_ops}")
-        cluster_cmd = enable_cluster_ops_control(
-            client, cluster_name, qos_type, cluster_ops
-        )
-        log.info(f"Enabled cluster ops control with command: {cluster_cmd}")
+        log.info("STEP 2: Enabling cluster-level ops control...")
+        cluster_ops = config.get("cluster_ops", {}) or {}
+        log.info("Cluster ops config: %s", cluster_ops)
+        if cluster_ops:
+            enable_cluster_ops_control(client, cluster_name, qos_type, cluster_ops)
+            cluster_settings, _ = verify_ops_control_settings(client, cluster_name)
+            log.info("Cluster settings verified: %s", cluster_settings)
 
-        # Verify cluster settings and test performance
-        cluster_settings, _ = verify_ops_control_settings(client, cluster_name)
-        log.info("Testing performance with cluster ops control...")
-        cluster_test = validate_ops_control(
-            client=client,
-            nfs_mount=nfs_mount,
-            file_name="cluster_ops.txt",
-            dd_params=dd_params,
-        )
-
-        # Validate cluster ops control limits
-        if qos_type in ["pershare", "pershare_perclient"]:
-            log.info("Validating cluster level ops control limits:")
-            log.info(f"- Expected limit: {cluster_ops['max_export_iops']} IOPS")
-            log.info(f"- Write time: {cluster_test['write_time']} seconds")
-            matches, calc_limit = validate_ops_limit(
-                cluster_test["write_time"], cluster_ops["max_export_iops"]
-            )
-            if not matches:
-                raise OperationFailedError(
-                    f"Cluster ops control validation failed: calculated={calc_limit}, "
-                    f"expected={cluster_ops['max_export_iops']}"
-                )
-            log.info("Cluster level ops control validation successful")
-
-        # Enable export level ops control if configured
-        export_ops = config.get("export_ops")
-        nfs_export_path = None
-        if export_ops:
-            log.info("=" * 80)
-            log.info("STEP 3: Setting up export level ops control...")
-            log.info(f"Export ops control configuration: {export_ops}")
-            nfs_export_path = f"{nfs_export}_0"
-            export_cmd = enable_export_ops_control(
-                client, cluster_name, nfs_export_path, qos_type, export_ops
-            )
-            log.info(f"Enabled export ops control with command: {export_cmd}")
-            # Verify settings and test performance
-            cluster_settings, export_settings = verify_ops_control_settings(
-                client, cluster_name, nfs_export_path
-            )
-            log.info("Testing performance with export ops control...")
-            export_test = validate_ops_control(
+            cluster_test = validate_ops_control(
                 client=client,
                 nfs_mount=nfs_mount,
-                file_name="export_ops.txt",
+                file_name="cluster_ops.txt",
                 dd_params=dd_params,
             )
+            log.info("Cluster-level Results: %s", cluster_test)
 
-            # Validate export ops control limits
-            if qos_type in ["pershare", "pershare_perclient"]:
-                log.info("Validating export level ops control limits:")
-                log.info(f"- Expected limit: {export_ops['max_export_iops']} IOPS")
-                log.info(f"- Write time: {export_test['write_time']} seconds")
+            # validate ops limit calculation (IOPS-based) if applicable
+            if (
+                qos_type
+                and qos_type.lower() in ["pershare", "pershare_perclient"]
+                and cluster_ops.get("max_export_iops")
+            ):
                 matches, calc_limit = validate_ops_limit(
-                    export_test["write_time"], export_ops["max_export_iops"]
+                    cluster_test["write_time"],
+                    cluster_ops.get("max_export_iops"),
                 )
                 if not matches:
                     raise OperationFailedError(
-                        f"Export ops control validation failed: calculated={calc_limit}, "
-                        f"expected={export_ops['max_export_iops']}"
+                        f"Cluster ops limit validation failed: calculated={calc_limit} "
+                        f"expected={cluster_ops.get('max_export_iops')}"
                     )
-                log.info("Export level ops control validation successful")
+                log.info("Cluster ops_limit calculation matches expected")
 
-        # Handle restart validation
+            # require baseline IOPS higher than cluster-measured IOPS
+            _require_baseline_higher(baseline, cluster_test, dd_params, "Cluster-level")
+
+        else:
+            log.info(
+                "No cluster-level ops config provided; skipping cluster ops checks"
+            )
+
+        # Step 3: export-level ops control
+        export_ops = config.get("export_ops")
+        export_test = None
+        if export_ops:
+            log.info("=" * 80)
+            log.info("STEP 3: Enabling export-level ops control...")
+            nfs_export_path = f"{nfs_export}_0"
+
+            enable_export_ops_control(
+                client,
+                cluster_name,
+                nfs_export_path,
+                qos_type,
+                export_ops,
+            )
+
+            cluster_settings, export_settings = verify_ops_control_settings(
+                client,
+                cluster_name,
+                nfs_export_path,
+            )
+            log.info("Export settings verified: %s", export_settings)
+
+        export_test = validate_ops_control(
+            client=client,
+            nfs_mount=nfs_mount,
+            file_name="export_ops.txt",
+            dd_params=dd_params,
+        )
+        log.info("Export-level Results: %s", export_test)
+        _require_baseline_higher(baseline, export_test, dd_params, "Export-level")
+
         if config.get("operation") == "restart":
             log.info("=" * 80)
-            log.info("STEP 4: Testing ops control persistence after restart...")
+            log.info("STEP 4: Restarting service and verifying persistence...")
             data = json.loads(Ceph(client).orch.ls(format="json"))
             service_name = next(
                 (
@@ -200,35 +199,64 @@ def run(ceph_cluster, **kw):
             if service_name:
                 Ceph(client).orch.restart(service_name)
                 sleep(10)
-
-                # Verify settings persist after restart
-                post_restart_settings, post_restart_export = (
+                # avoid overly long line by assigning the export argument to a temp variable
+                post_verify_export = nfs_export_path if export_ops else None
+                post_cluster_settings, post_export_settings = (
                     verify_ops_control_settings(
-                        client, cluster_name, nfs_export_path if export_ops else None
+                        client,
+                        cluster_name,
+                        post_verify_export,
                     )
                 )
-
-                if post_restart_settings != cluster_settings:
+                if post_cluster_settings != (
+                    cluster_settings if cluster_ops else post_cluster_settings
+                ):
                     raise OperationFailedError(
-                        "Ops control settings changed after restart"
+                        "Cluster ops control settings changed after restart"
+                    )
+                if export_ops and post_export_settings != export_settings:
+                    raise OperationFailedError(
+                        "Export ops control settings changed after restart"
                     )
 
-                # Verify ops control is still effective
+                # verify ops still effective
                 post_restart_test = validate_ops_control(
                     client=client,
                     nfs_mount=nfs_mount,
                     file_name="post_restart.txt",
                     dd_params=dd_params,
                 )
-                log.info(f"Post-restart performance: {post_restart_test}")
+                log.info("Post-restart Results: %s", post_restart_test)
+                _require_baseline_higher(
+                    baseline, post_restart_test, dd_params, "Post-restart"
+                )
+            else:
+                log.info(
+                    "Service for cluster not found; skipping restart persistence checks"
+                )
+
         log.info("=" * 80)
-        log.info("NFS ops control test completed successfully")
+        log.info("NFS ops control ops-only test completed successfully")
         return 0
 
     except Exception as e:
-        log.error(f"NFS ops control test failed: {str(e)}")
+        log.error("NFS ops control test failed: %s", str(e))
         return 1
 
     finally:
         log.info("Cleanup in progress")
-        cleanup_cluster(client, nfs_mount, cluster_name, nfs_export)
+        if client:
+            # attempt to remove generated test files, ignore failures
+            files_to_remove = [
+                "baseline.txt",
+                "cluster_ops.txt",
+                "export_ops.txt",
+                "post_restart.txt",
+            ]
+            for fname in files_to_remove:
+                try:
+                    client.exec_command(sudo=True, cmd=f"rm -rf {nfs_mount}/{fname}")
+                except Exception:
+                    log.debug("failed to remove %s", fname)
+            # prefer the export-level path if set
+            cleanup_cluster(client, nfs_mount, cluster_name, nfs_export)

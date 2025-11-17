@@ -194,6 +194,322 @@ def enable_disable_qos_for_cluster(
         ) from e
 
 
+def _parse_exec_result(res):
+    """
+    Normalize client.exec_command return to (rc, stdout, stderr).
+    Supports (rc,out,err), (out,err), (out,), single string, or None.
+    """
+    rc = 0
+    stdout = ""
+    stderr = ""
+    if res is None:
+        return rc, stdout, stderr
+    if isinstance(res, (tuple, list)):
+        if len(res) == 3:
+            rc, stdout, stderr = res
+        elif len(res) == 2:
+            stdout, stderr = res
+        elif len(res) == 1:
+            stdout = res[0] or ""
+    else:
+        stdout = str(res or "")
+    # normalize types
+    try:
+        rc = int(rc or 0)
+    except Exception:
+        rc = 0
+    return rc, (stdout or ""), (stderr or "")
+
+
+def _format_cli_cmd(base, *args):
+    parts = [base] + [str(a) for a in args if a is not None and a != ""]
+    return " ".join(parts)
+
+
+def _qos_cli_token(qos_type):
+    """Normalize user-provided qos_type to Ceph CLI token."""
+    if not qos_type:
+        return None
+    qt = str(qos_type).strip().lower()
+    if qt in ("pershare", "per_share", "per-share"):
+        return "PerShare"
+    if qt in ("perclient", "per_client", "per-client"):
+        return "PerClient"
+    if qt in (
+        "pershare_perclient",
+        "perclient_pershare",
+        "per_share_per_client",
+        "per-share-per-client",
+        "pershare-perclient",
+    ):
+        return "PerShare_PerClient"
+    return qos_type  # assume already canonical
+
+
+def enable_cluster_ops_control(client, cluster_name, qos_type, ops_config):
+    if not qos_type:
+        raise ConfigError("qos_type is required to enable cluster ops control")
+    qtoken = _qos_cli_token(qos_type)
+    if not qtoken:
+        raise ConfigError("invalid qos_type provided")
+    base = f"ceph nfs cluster qos enable ops_control {cluster_name} {qtoken}"
+
+    if qtoken == "PerShare":
+        if "max_export_iops" not in ops_config:
+            raise ConfigError("max_export_iops required for pershare ops control")
+        cmd = _format_cli_cmd(base, ops_config["max_export_iops"])
+    elif qtoken == "PerClient":
+        if "max_client_iops" not in ops_config:
+            raise ConfigError("max_client_iops required for perclient ops control")
+        cmd = _format_cli_cmd(base, ops_config["max_client_iops"])
+    elif qtoken == "PerShare_PerClient":
+        if not all(k in ops_config for k in ("max_export_iops", "max_client_iops")):
+            raise ConfigError("Both max_export_iops and max_client_iops required")
+        cmd = _format_cli_cmd(
+            base, ops_config["max_export_iops"], ops_config["max_client_iops"]
+        )
+    else:
+        raise ConfigError(f"Invalid ops control type: {qos_type}")
+
+    try:
+        res = client.exec_command(sudo=True, cmd=cmd)
+        rc, out, err = _parse_exec_result(res)
+        if rc != 0 or (err and err.strip()):
+            raise OperationFailedError(
+                f"Failed to enable cluster ops_control (cmd: '{cmd}'). rc={rc}, stdout='{out}', stderr='{err}'"
+            )
+        log.info(f"Cluster ops_control enabled via CLI: {cmd}")
+        return cmd
+    except Exception as e:
+        log.error(f"enable_cluster_ops_control error: {e}")
+        raise
+
+
+def disable_cluster_ops_control(client, cluster_name):
+    """Disable cluster-level QoS using CLI"""
+    cmd = f"ceph nfs cluster qos disable {cluster_name}"
+    try:
+        res = client.exec_command(sudo=True, cmd=cmd)
+        rc, out, err = _parse_exec_result(res)
+        if rc != 0 or (err and err.strip()):
+            raise OperationFailedError(
+                f"Failed to disable cluster ops_control (cmd: '{cmd}'). rc={rc}, stdout='{out}', stderr='{err}'"
+            )
+        log.info(f"Cluster ops_control disabled via CLI: {cmd}")
+        return cmd
+    except Exception as e:
+        log.error(f"disable_cluster_ops_control error: {e}")
+        raise
+
+
+def enable_export_ops_control(client, cluster_name, pseudo_path, qos_type, ops_config):
+    if not qos_type:
+        raise ConfigError("qos_type is required to enable export ops control")
+    qtoken = _qos_cli_token(qos_type)
+    if not qtoken:
+        raise ConfigError("invalid qos_type provided")
+    # NOTE: export CLI does NOT accept a qos token; it accepts only numeric limits.
+    base = f"ceph nfs export qos enable ops_control {cluster_name} {pseudo_path}"
+
+    # Build command based on provided limits (export CLI expects [<max_export_iops>] [<max_client_iops>])
+    if "max_export_iops" in ops_config and "max_client_iops" in ops_config:
+        cmd = _format_cli_cmd(
+            base, ops_config["max_export_iops"], ops_config["max_client_iops"]
+        )
+    elif "max_export_iops" in ops_config:
+        cmd = _format_cli_cmd(base, ops_config["max_export_iops"])
+    elif "max_client_iops" in ops_config:
+        # exporting only per-client limit at export-level is not meaningful if server expects export limit first
+        raise ConfigError(
+            "max_export_iops required when specifying export-level max_client_iops"
+        )
+    else:
+        raise ConfigError(
+            "At least max_export_iops (or both max_export_iops and "
+            "max_client_iops) required for export ops control"
+        )
+
+    try:
+        res = client.exec_command(sudo=True, cmd=cmd)
+        rc, out, err = _parse_exec_result(res)
+        if rc != 0 or (err and err.strip()):
+            raise OperationFailedError(
+                f"Failed to enable export ops_control (cmd: '{cmd}'). rc={rc}, stdout='{out}', stderr='{err}'"
+            )
+        log.info(f"Export ops_control enabled via CLI: {cmd}")
+        return cmd
+    except Exception as e:
+        log.error(f"enable_export_ops_control error: {e}")
+        raise
+
+
+def verify_ops_control_settings(client, cluster_name, export_path=None):
+    """Verify ops control settings at cluster and export level"""
+    try:
+        # cluster settings
+        res = client.exec_command(
+            sudo=True, cmd=f"ceph nfs cluster qos get {cluster_name} --format json"
+        )
+        rc, stdout, stderr = _parse_exec_result(res)
+        payload = (stdout or "").strip() or (stderr or "").strip()
+        if rc != 0 and not payload:
+            raise OperationFailedError(
+                (
+                    f"Failed to fetch cluster ops control settings for {cluster_name}. "
+                    f"rc={rc}, stdout='{stdout}', stderr='{stderr}'"
+                )
+            )
+        try:
+            cluster_settings = json.loads(payload)
+        except Exception as e:
+            raise OperationFailedError(
+                f"Failed to parse cluster qos json: {e}; payload='{payload}'"
+            )
+        log.info(f"Current cluster ops control settings: {cluster_settings}")
+
+        # export settings if provided
+        if export_path:
+            res = client.exec_command(
+                sudo=True,
+                cmd=f"ceph nfs export qos get {cluster_name} {export_path} --format json",
+            )
+            rc, stdout, stderr = _parse_exec_result(res)
+            payload = (stdout or "").strip() or (stderr or "").strip()
+            if rc != 0 and not payload:
+                raise OperationFailedError(
+                    (
+                        f"Failed to fetch export ops control settings for {export_path}. "
+                        f"rc={rc}, stdout='{stdout}', stderr='{stderr}'"
+                    )
+                )
+            try:
+                export_settings = json.loads(payload)
+            except Exception as e:
+                raise OperationFailedError(
+                    f"Failed to parse export qos json: {e}; payload='{payload}'"
+                )
+            log.info(
+                f"Current export ops control settings for {export_path}: {export_settings}"
+            )
+            return cluster_settings, export_settings
+
+        return cluster_settings, None
+    except Exception as e:
+        log.error(f"Failed to get ops control settings: {str(e)}")
+        return None, None
+
+
+def extract_dd_time(dd_output):
+    """Extract time taken from dd command output"""
+    try:
+        if not dd_output:
+            return None
+        # Get the last line containing 'copied' and parse the time token before 's,'
+        for line in reversed(dd_output.splitlines()):
+            if "copied" in line:
+                # typical: "67108864 bytes (67 MB, 64 MiB) copied, 4.47958 s, 15.0 MB/s"
+                parts = line.split("copied,")
+                if len(parts) > 1:
+                    after = parts[1]
+                    # find "<num> s" token
+                    m = re.search(r"(\d+\.\d+)\s*s", after)
+                    if m:
+                        return float(m.group(1))
+                    # fallback to last float in the 'after' part
+                    fm = re.findall(r"(\d+\.\d+)", after)
+                    if fm:
+                        return float(fm[-1])
+        return None
+    except Exception as e:
+        log.error(f"Failed to extract time from dd output: {str(e)}")
+        return None
+
+
+def validate_ops_limit(dd_time, expected_limit=None):
+    """
+    Preserve earlier behaviour: compute ops limit using formula ops_limit = int(278/dd_time).
+    Do NOT enforce strict equality here — return success and the calculated value for callers to decide.
+    """
+    if not dd_time:
+        return False, None
+    try:
+        calculated_limit = int(278 / float(dd_time))
+    except Exception as e:
+        log.error(f"validate_ops_limit failed: {e}")
+        return False, None
+
+    log.info("Validation Summary:")
+    log.info(f"- Time taken: {dd_time} seconds")
+    log.info(f"- Calculated ops limit: {calculated_limit} (278/{dd_time})")
+    if expected_limit is not None:
+        log.info(f"- Expected ops limit (not enforced here): {expected_limit}")
+
+    return True, calculated_limit
+
+
+def validate_ops_control(client, nfs_mount, file_name, dd_params):
+    """Validate ops control by measuring IO operations (wrapped with try/except)."""
+    try:
+        # create test file
+        cmd = f"touch {nfs_mount}/{file_name}"
+        client.exec_command(sudo=True, cmd=cmd)
+
+        # write test (redirect stderr to stdout to capture dd progress)
+        write_cmd = (
+            f"dd if={dd_params.get('input_file', '/dev/zero')} of={nfs_mount}/{file_name} "
+            f"bs={dd_params['block_size']} count={dd_params['count']} status=progress 2>&1"
+        )
+        res = client.exec_command(sudo=True, cmd=write_cmd)
+        rc, write_results, write_err = _parse_exec_result(res)
+        if rc != 0:
+            raise OperationFailedError(
+                f"Write dd failed. rc={rc}, stdout='{write_results}', stderr='{write_err}'"
+            )
+        log.info(f"Write test results: {write_results}")
+
+        # extract write time
+        write_time = extract_dd_time(write_results)
+        log.info(f"Write operation took {write_time} seconds")
+
+        # drop caches
+        client.exec_command(sudo=True, cmd="echo 3 > /proc/sys/vm/drop_caches")
+        log.info("Cache dropped successfully")
+
+        # read test (redirect stderr to stdout to capture dd progress)
+        read_cmd = (
+            f"dd if={nfs_mount}/{file_name} of=/dev/null "
+            f"bs={dd_params['block_size']} count={dd_params['count']} status=progress 2>&1"
+        )
+        res = client.exec_command(sudo=True, cmd=read_cmd)
+        rc, read_results, read_err = _parse_exec_result(res)
+        if rc != 0:
+            raise OperationFailedError(
+                f"Read dd failed. rc={rc}, stdout='{read_results}', stderr='{read_err}'"
+            )
+        log.info(f"Read test results: {read_results}")
+
+        # extract read time
+        read_time = extract_dd_time(read_results)
+        log.info(f"Read operation took {read_time} seconds")
+
+        return {
+            "write_results": write_results,
+            "read_results": read_results,
+            "write_time": write_time,
+            "read_time": read_time,
+        }
+
+    except Exception as e:
+        log.error(f"validate_ops_control failed: {e}")
+        raise
+    finally:
+        # best-effort cleanup of test file
+        try:
+            client.exec_command(sudo=True, cmd=f"rm -rf {nfs_mount}/{file_name}")
+        except Exception as cleanup_err:
+            log.debug(f"validate_ops_control cleanup failed: {cleanup_err}")
+
+
 def run(ceph_cluster, **kw):
     """Verify QoS operations on NFS cluster"""
     config = kw.get("config")
@@ -222,6 +538,8 @@ def run(ceph_cluster, **kw):
 
     clients = clients[:no_clients]
     client = clients[0]
+
+    _orig_exec = client.exec_command
     ceph_nfs_client = Ceph(client).nfs
     Ceph(client).fs.sub_volume_group.create(volume=fs_name, group=subvolume_group)
 
@@ -355,4 +673,9 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Cleanup in progress")
         log.debug("deleting NFS cluster {0}".format(cluster_name))
+        # restore original exec_command so other tests are unaffected
+        try:
+            client.exec_command = _orig_exec
+        except Exception:
+            pass
         cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)

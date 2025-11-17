@@ -346,6 +346,7 @@ tests:
           max_client_combined_bw: 10MB
         operation: restart
         qos_type: PerShare_PerClient
+
   - test:
       name: NFS QoS ops control test - cluster level
       module: test_nfs_qos_ops_control.py
