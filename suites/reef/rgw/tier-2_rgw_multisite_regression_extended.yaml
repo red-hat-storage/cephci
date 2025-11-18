@@ -300,6 +300,17 @@ tests:
       name: create non-tenanted user
 
   - test:
+      clusters:
+        ceph-pri:
+          config:
+            config-file-name: ../../aws//multisite_configs/test_delete_sync_with_version_suspended.yaml
+            script-name: ../aws/test_delete_version_id_null.py
+      desc: Test delete sync with version suspended bucket
+      polarion-id: CEPH-83576431
+      module: sanity_rgw_multisite.py
+      name: Test delete sync with version suspended bucket
+
+  - test:
       name: Combination zonegroup and bucket level group policy with symmetrical flow
       desc: Test Combination zonegroup and bucket level group policy with symmetrical flow
       polarion-id: CEPH-83575138
