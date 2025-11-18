@@ -7,7 +7,10 @@ from ceph.utils import get_nodes_by_ids
 from tests.cephadm import test_nvmeof
 from tests.nvmeof.workflows.constants import DEFAULT_NVME_METADATA_POOL, DEFAULT_PORT
 from tests.nvmeof.workflows.nvme_gateway import create_gateway
-from tests.nvmeof.workflows.nvme_utils import nvme_gw_cli_version_adapter
+from tests.nvmeof.workflows.nvme_utils import (
+    nvme_gw_cli_version_adapter,
+    setup_firewalld,
+)
 from utility.utils import get_ceph_version_from_cluster
 
 
@@ -173,6 +176,8 @@ class NVMeService:
         """
         Deploy NVMe gateways using orchestrator, then fetch and update daemon and service names for each gateway node.
         """
+        # Open up firewall ports if running.
+        setup_firewalld(self.gw_nodes)
         deploy_config = self._create_spec_deployment_config()
         if deploy_config:
             test_nvmeof.run(self.ceph_cluster, **deploy_config)
