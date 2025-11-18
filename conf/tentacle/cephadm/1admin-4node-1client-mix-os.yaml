@@ -1,14 +1,13 @@
-
 # CephAdm tier-1 test configuration
-# Admin node in RHEL 9 and other host in RHEL 8
+# Admin node in RHEL 10 and other host in RHEL 9
 # Deployment for all the ceph daemons , with 3 MONS, 2 MDS, 1 MGR, 3 OSD and 2 RGW service daemon(s)
 globals:
   - ceph-cluster:
       name: ceph
       node1:
         image-name:
-          openstack: RHEL-9.6.0-x86_64-ga-latest
-          ibmc: rhel-96-server-amd64-kvm
+          openstack: RHEL-10.0-x86_64-ga-latest
+          ibmc: rhel-100-server-amd64-kvm
         role:
           - _admin
           - installer
@@ -25,8 +24,8 @@ globals:
         disk-size: 15
       node2:
         image-name:
-          openstack: RHEL-8.10.0-x86_64-ga-latest
-          ibmc: rhel-810-server-amd64-kvm
+          openstack: RHEL-9.6.0-x86_64-ga-latest
+          ibmc: rhel-96-server-amd64-kvm
         role:
           - osd
           - mon
@@ -38,8 +37,8 @@ globals:
         disk-size: 15
       node3:
         image-name:
-          openstack: RHEL-8.10.0-x86_64-ga-latest
-          ibmc: rhel-810-server-amd64-kvm
+          openstack: RHEL-9.6.0-x86_64-ga-latest
+          ibmc: rhel-96-server-amd64-kvm
         role:
           - mon
           - mgr
@@ -50,14 +49,14 @@ globals:
         disk-size: 15
       node4:
         image-name:
-          openstack: RHEL-8.10.0-x86_64-ga-latest
-          ibmc: rhel-810-server-amd64-kvm
+          openstack: RHEL-9.6.0-x86_64-ga-latest
+          ibmc: rhel-96-server-amd64-kvm
         role:
           - mds
           - rgw
       node5:
         image-name:
-          openstack: RHEL-8.10.0-x86_64-ga-latest
-          ibmc: rhel-810-server-amd64-kvm
+          openstack: RHEL-9.6.0-x86_64-ga-latest
+          ibmc: rhel-96-server-amd64-kvm
         role:
           - client

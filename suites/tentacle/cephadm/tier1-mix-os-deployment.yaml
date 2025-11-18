@@ -1,5 +1,5 @@
 #=========================================================================================================
-# Test-Suite: Quincy cluster deployment with admian node in RHEL 9 and other host on RHEL 8
+# Test-Suite: Quincy cluster deployment with admian node in RHEL 10 and other host on RHEL 9
 #
 # Conf: conf/tentacle/cephadm/1admin-4node-1client-mix-os.yaml
 # Setup: 3 MONS, 3 MGR, 1 MDS, 3 OSD and 2 RGW service daemon(s)
@@ -10,7 +10,7 @@
 #   Node5 - Client
 #
 # Test Steps:
-#   1. Deploy cluster using cephadm with admin node on rhel 9 and other hosts in rhel 8 with all services.
+#   1. Deploy cluster using cephadm with admin node on rhel 10 and other hosts in rhel 9 with all services.
 #   2. Configure Client
 #   3. Run object, block and filesystem basic operations parallelly.
 #==========================================================================================================
@@ -22,8 +22,8 @@ tests:
       name: setup pre-requisites
 
   - test:
-      name: Deploy rhcs 6.x cluster with admin node on rhel 9 and other hosts in rhel 8
-      desc: Deploy cluster using cephadm with admin node on rhel 9 and other hosts in rhel 8 with all services.
+      name: Deploy Ceph 9.x cluster with admin node on rhel 10 and other hosts in rhel 9
+      desc: Deploy cluster using cephadm with admin node on rhel 10 and other hosts in rhel 9 with all services.
       polarion-id: CEPH-83575549
       module: test_cephadm.py
       config:
