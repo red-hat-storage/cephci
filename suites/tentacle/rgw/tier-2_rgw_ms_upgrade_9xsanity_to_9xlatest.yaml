@@ -26,7 +26,7 @@ tests:
                   service: cephadm
                   args:
                     rhcs-version: 9.0
-                    release: sanity
+                    release: stable
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
@@ -73,7 +73,7 @@ tests:
                   service: cephadm
                   args:
                     rhcs-version: 9.0
-                    release: sanity
+                    release: stable
                     registry-url: registry.redhat.io
                     mon-ip: node1
                     orphan-initial-daemons: true
