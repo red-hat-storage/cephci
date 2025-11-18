@@ -177,7 +177,8 @@ def execute_setup(cluster: Ceph, config: dict) -> None:
 
     branch = config.get("branch", "ceph-quincy")
     clone_s3_tests(node=client_node, branch=branch)
-    install_s3test_requirements(client_node, branch, os_ver=build[-1])
+    os_ver = build.split("-")[-1]
+    install_s3test_requirements(client_node, branch, os_ver=os_ver)
 
     if not all([host, port]):
         host = rgw_node.shortname
@@ -292,7 +293,7 @@ def install_s3test_requirements(
     Raises:
         CommandFailed:  Whenever a command returns a non-zero value part of the method.
     """
-    if branch in ["ceph-nautilus", "ceph-luminous"] or os_ver == "9":
+    if branch in ["ceph-nautilus", "ceph-luminous"] or int(os_ver) >= 9:
         return _s3tests_req_install(node, os_ver)
 
     _s3tests_req_bootstrap(node)
@@ -564,7 +565,7 @@ def _s3test_req_py3(node: CephNode) -> None:
 
 def _s3tests_req_install(node: CephNode, os_ver: str) -> None:
     """Install S3 prerequisites via pip."""
-    if os_ver == "9":
+    if int(os_ver) >= 9:
         return _s3test_req_py3(node)
 
     packages = [
