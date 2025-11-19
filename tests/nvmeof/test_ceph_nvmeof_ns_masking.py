@@ -388,7 +388,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
             initiator = Initiator(initiator_node)
             initiator.disconnect_all()
             hostnqn, _ = initiator_node.exec_command(
-                cmd="cat /etc/nvme/hostnqn",
+                cmd="nvme show-hostnqn",
                 sudo=True,
             )
             hostnqn = hostnqn.strip()
