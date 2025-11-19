@@ -371,15 +371,14 @@ def get_tools_repo(repo, ibm_build=False):
         repo (str): Ceph tools repo URL
         ibm_build (bool): IBM build tag
     """
+    repo = repo.rstrip("/")
     if ibm_build:
-        repo = repo.rstrip("/")
         return f"{repo}/Tools"
 
     elif repo.endswith("repo"):
         return repo
 
-    else:
-        return f"{repo}/compose/Tools/x86_64/os"
+    return f"{repo}/Tools"
 
 
 def add_centos_epel_repo(nodes, platform):
