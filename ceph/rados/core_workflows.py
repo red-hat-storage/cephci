@@ -1715,14 +1715,14 @@ class RadosOrchestrator:
             log.error("Exception hit while listing the EC Crush rule used: %s", err)
         return True
 
-    def change_osd_state(self, action: str, target: int, timeout: int = 180) -> bool:
+    def change_osd_state(self, action: str, target: int, timeout: int = 300) -> bool:
         """
         Changes the state of the OSD daemons wrt the action provided
         Args:
             action: operation to be performed on the service, i.e.
             start, stop, restart, disable, enable
             target: ID osd the target OSD
-            timeout: timeout in seconds, (default = 60s)
+            timeout: timeout in seconds, (default = 300s)
         Returns: Pass -> True, Fail -> False
         """
         cluster_fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
@@ -1788,25 +1788,71 @@ class RadosOrchestrator:
             log.error(log_error_msg)
             return False
 
+        # Wait for OSD to reach desired state with retry logic
+        retry_count = 0
+        retry_interval = 20  # seconds between retries
+        desired_state_reached = False
+
+        log.info(
+            f"Waiting for OSD.{target} to reach desired state for action: {action}"
+        )
+        log.info(
+            f"Will retry every {retry_interval} seconds with timeout of {timeout} seconds"
+        )
+
         while datetime.datetime.now() <= timeout_time:
+            retry_count += 1
             osd_status, status_desc = self.get_daemon_status(
                 daemon_type="osd", daemon_id=target
             )
-            log.info(f"osd_status: {osd_status}, status_desc: {status_desc}")
+            log.info(
+                f"Retry {retry_count} - "
+                f"OSD.{target} status: {osd_status}, description: {status_desc}"
+            )
+
+            # Check if OSD reached desired state based on action
             if (osd_status == 0 or status_desc == "stopped") and action == "stop":
+                log.info(f"OSD.{target} successfully reached stopped state")
+                desired_state_reached = True
                 break
             elif (osd_status == 1 or status_desc == "running") and (
                 action == "start" or action == "restart"
             ):
+                log.info(f"OSD.{target} successfully reached running state")
+                desired_state_reached = True
                 break
-            time.sleep(20)
 
-        if action == "stop" and osd_status != 0:
-            log.error(f"Failed to stop the OSD.{target} service on {host.hostname}")
-            pass_status = False
-        if (action == "start" or action == "restart") and osd_status != 1:
-            log.error(f"Failed to start the OSD.{target} service on {host.hostname}")
-            pass_status = False
+            # Check if we've exceeded timeout
+            if datetime.datetime.now() > timeout_time:
+                log.warning(
+                    f"Timeout exceeded while waiting for OSD.{target} to reach desired state"
+                )
+                break
+
+            log.debug(
+                f"OSD.{target} not in desired state yet, waiting {retry_interval} seconds before retry"
+            )
+            time.sleep(retry_interval)
+
+        # Verify final state and set pass_status
+        if not desired_state_reached:
+            if action == "stop" and osd_status != 0:
+                log.error(
+                    f"Failed to stop the OSD.{target} service on {host.hostname} "
+                    f"after {retry_count} retries over {timeout} seconds"
+                )
+                pass_status = False
+            if (action == "start" or action == "restart") and osd_status != 1:
+                log.error(
+                    f"Failed to start the OSD.{target} service on {host.hostname} "
+                    f"after {retry_count} retries over {timeout} seconds"
+                )
+                pass_status = False
+        else:
+            log.info(
+                f"OSD.{target} reached desired state after {retry_count} retry attempts "
+                f"in {(datetime.datetime.now() - start_time).total_seconds():.2f} seconds"
+            )
         if not pass_status:
             log.error(
                 f"Collecting the journalctl logs for OSD.{target} service on {host.hostname} for the failure"

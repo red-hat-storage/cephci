@@ -185,4 +185,22 @@ tests:
           pool_name: re_pool_bench
           pg_num: 128
           pgp_num: 128
-      desc: Perform OSD compaction with & without failures
+        ceph_client_omap_tests:
+          run_rbd_stress: true
+          run_cephfs_stress: true
+          rbd_config:
+            pool_name: rbd_stress
+            num_pools: 3
+            images_per_pool: 3
+            snaps_per_image: 5
+            parallel_jobs: 3
+            duration: 10
+          cephfs_config:
+            fs_name: cephfs
+            num_subvols: 3
+            files_per_subvol: 5
+            snaps_per_subvol: 5
+            parallel_jobs: 3
+            volume_group: cfsstress
+            duration: 10
+      desc: Perform OSD compaction with & without failures, client stress tests, and OSD restart validation

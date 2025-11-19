@@ -305,7 +305,8 @@ def run_cephfs_snapshot_stress(
         rados_obj.client.exec_command(cmd=cmd, sudo=True)
 
         def create_sv(sv):
-            cmd_subvol = f"ceph fs subvolume create {fs_name} {sv} 256M --group_name {volume_group}"
+            # Size in bytes: 256M = 256 * 1024 * 1024 = 268435456
+            cmd_subvol = f"ceph fs subvolume create {fs_name} {sv} --size 268435456 --group_name {volume_group}"
             rados_obj.client.exec_command(cmd=cmd_subvol, sudo=True)
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=parallel_jobs) as ex:
