@@ -5,6 +5,9 @@ scenario-2: Enable bluestore_write_v2 and validate
 scenario-3: Disable bluestore_write_v2 and validate
 """
 
+import random
+import string
+
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonConfigMethods
@@ -42,15 +45,19 @@ def run(ceph_cluster, **kw):
             "scenario-5",
             "scenario-6",
             "scenario-7",
-            "scenario-8",
-            "scenario-9",
         ],
     )
+    recompression_min_gain_to_test = config.get("recompression_min_gain_to_test", [1.2])
+    object_sizes_to_test = config.get("object_sizes_to_test", [92000])
+    min_alloc_size_to_test = config.get("min_alloc_size_to_test", [4096])
+    min_alloc_size_variations = config.get("min_alloc_size_variations", [10, -10])
+    pool_level_compression = config.get("pool_level_compression", True)
     compression_config = {
         "rados_obj": rados_obj,
         "mon_obj": mon_obj,
         "cephadm": cephadm,
         "client_node": client_node,
+        "ceph_cluster": ceph_cluster,
     }
     bluestore_compression = BluestoreDataCompression(**compression_config)
     try:
@@ -89,6 +96,7 @@ def run(ceph_cluster, **kw):
                         "pool_name": pool_name,
                         "compression_mode": compression_mode,
                         "alloc_hint": obj_alloc_hint,
+                        "pool_level_compression": pool_level_compression,
                     }
                     bluestore_compression.validate_compression_modes(**kwargs)
 
@@ -99,9 +107,54 @@ def run(ceph_cluster, **kw):
             )
 
         if "scenario-4" in scenarios_to_run:
-            log.info("STARTED: Scenario 4: Disable bluestore_write_v2 and validate")
+            log.info(
+                "STARTING :: Scenario 4 -> Tests for partial overwrite with varying write_size"
+            )
+            compression_mode = COMPRESSION_MODES.FORCE
+            obj_alloc_hint = BLUESTORE_ALLOC_HINTS.COMPRESSIBLE
+
+            for recompression_min_gain in recompression_min_gain_to_test:
+                for object_size in object_sizes_to_test:
+                    pool_id = "".join(
+                        random.choices(string.ascii_letters + string.digits, k=6)
+                    )
+                    pool_name = f"test-recompress-{pool_id}"
+
+                    kwargs = {
+                        "pool_name": pool_name,
+                        "compression_mode": compression_mode,
+                        "alloc_hint": obj_alloc_hint,
+                        "recompression_min_gain": recompression_min_gain,
+                        "write_size": object_size,
+                        "pool_level_compression": pool_level_compression,
+                    }
+                    bluestore_compression.partial_overwrite(**kwargs)
+            log.info(
+                "COMPLETED :: Scenario 4 -> Tests for partial overwrite with varying write_size"
+            )
+
+        if "scenario-5" in scenarios_to_run:
+            for min_alloc_size in min_alloc_size_to_test:
+                pool_id = "".join(
+                    random.choices(string.ascii_letters + string.digits, k=6)
+                )
+                pool_name = f"test-recompress-{pool_id}-{min_alloc_size}"
+                compression_mode = COMPRESSION_MODES.FORCE
+
+                kwargs = {
+                    "pool_name": pool_name,
+                    "compression_mode": compression_mode,
+                    "min_alloc_size": min_alloc_size,
+                    "min_alloc_size_variations": min_alloc_size_variations,
+                    "pool_level_compression": pool_level_compression,
+                }
+
+                bluestore_compression.min_alloc_size_test(**kwargs)
+
+        if "scenario-6" in scenarios_to_run:
+            log.info("STARTED: Scenario 6: Disable bluestore_write_v2 and validate")
             bluestore_compression.toggle_bluestore_write_v2(toggle_value="false")
-            log.info("COMPELTED: Scenario 4: Disable bluestore_write_v2 and validate")
+            log.info("COMPELTED: Scenario 6: Disable bluestore_write_v2 and validate")
 
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
@@ -113,7 +166,6 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
-
         # delete all rados pools
         rados_obj.rados_pool_cleanup()
         # log cluster health
