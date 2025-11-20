@@ -2,7 +2,7 @@ from cli.exceptions import OperationFailedError
 from cli.utilities.containers import Container
 
 
-def get_inventory_list(node, output_format):
+def get_inventory_list(node, ceph_image, output_format):
     # Note: This cmd uses rhceph-5-rhel8:latest, the requirement is just to ensure whether
     # the ceph inventory is able to list the details and any container image is sufficient
     cmd = f"--cluster ceph inventory --format={output_format}"
@@ -21,7 +21,7 @@ def get_inventory_list(node, output_format):
         cmds=cmd,
         entry_point="ceph-volume",
         volume=volumes,
-        image="registry.redhat.io/rhceph/rhceph-5-rhel8:latest",
+        image=ceph_image,
         long_running=False,
     )
     return out
@@ -33,16 +33,17 @@ def run(ceph_cluster, **kw):
     list with KeyError: 'ceph.cluster_name' in json format
     but not in plain format
     """
+    config = kw.get("config")
 
     installer = ceph_cluster.get_nodes(role="installer")[0]
 
     # Non bootstrap osd Node
     non_bs_node = list(set(ceph_cluster.get_nodes(role="osd")) - {installer})[0]
-
+    ceph_image = config.get("ceph_image")
     # Verify whether format as plain is returning an error
     for node in (installer, non_bs_node):
         # Get the version using podman command
-        out = get_inventory_list(node, output_format="plain")
+        out = get_inventory_list(node, ceph_image, output_format="plain")
         if not out:
             raise OperationFailedError(
                 "Not able to list the ceph inventory even without json format"
@@ -50,7 +51,7 @@ def run(ceph_cluster, **kw):
 
     # Try to execute the command in both the nodes and make sure no error is seen BZ: #1977888
     for node in (installer, non_bs_node):
-        out = get_inventory_list(node, output_format="json")
+        out = get_inventory_list(node, ceph_image, output_format="json")
         if "KeyError: 'ceph.cluster_name'" in out:
             raise OperationFailedError(
                 "Not able to list the ceph inventory with json format"
