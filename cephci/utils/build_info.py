@@ -135,6 +135,10 @@ class CephTestManifest:
         return _image_without_dtr.split(":")[0]
 
     @property
+    def nvme_cli_image(self) -> str:
+        return self.images.get("nvmeof_cli_image", "")
+
+    @property
     def custom_images(self) -> dict[str, str]:
         """Custom images to be configured with the cluster.
 
@@ -143,7 +147,11 @@ class CephTestManifest:
             - cephcsi
             - nvmeof-cli
         """
-        remove_list = ["cephcsi", "nvmeof-cli", "crimson"]
+        remove_list = [
+            "cephcsi",
+            "nvmeof-cli",
+            "crimson",
+        ]
         rst = {}
         _images = deepcopy(self.images)
 

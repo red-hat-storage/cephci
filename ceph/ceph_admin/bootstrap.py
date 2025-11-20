@@ -382,8 +382,12 @@ class BootstrapMixin:
 
                 images_dict[key] = value
 
+        ignore_images = ["cephcsi", "nvmeof_cli", "crimson"]
+        check_ignored_images = lambda image: image in ignore_images
         for image, value in images_dict.items():
             _image = image.removesuffix("_image")
+            if check_ignored_images(_image):
+                continue
             cmd = "cephadm shell -- ceph config set mgr"
             cmd += f" mgr/cephadm/container_image_{_image} {value}"
             self.installer.exec_command(sudo=True, cmd=cmd)
