@@ -128,6 +128,33 @@ tests:
       module: cephfs_upgrade.metadata_version_validation.py
       name: "Metadata collection before upgrade"
       polarion-id: CEPH-83575313
+  -
+    test:
+      abort-on-fail: false
+      desc: "Enable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-enable-logs
+      config:
+        ENABLE_LOGS : 1
+        daemon_list : ['mds','client','osd','mgr','mon']
+        daemon_dbg_level : {'mds':10,'client':10,'osd':5,'mgr':5,'mon':5}
+  - test:
+      abort-on-fail: false
+      desc: "Set size limit for log rotation"
+      name: size limit for log rotation
+      module: cephfs_logs_util.py
+      config:
+        LOG_ROTATE_SIZE : 1
+        log_size : '200M'
+  -
+    test:
+      abort-on-fail: false
+      desc: "Setup Crash configuration"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-setup
+      config:
+        crash_setup : 1
+        daemon_list : ['mds','osd','mgr','mon']
 
   - test:
       name: Upgrade along with IOs
@@ -169,6 +196,24 @@ tests:
             polarion-id: CEPH-83575628
       desc: Running upgrade, mds Failure and i/o's parallelly
       abort-on-fail: true
+  -
+    test:
+      abort-on-fail: false
+      desc: "Check for Crash"
+      module: cephfs_crash_util.py
+      name: cephfs-crash-check
+      config:
+        crash_check : 1
+        daemon_list : ['mds','osd','mgr','mon']
+  -
+    test:
+      abort-on-fail: false
+      desc: "Disable ceph debug logs"
+      module: cephfs_logs_util.py
+      name: cephfs-disable-logs
+      config:
+        DISABLE_LOGS : 1
+        daemon_list : ['mds','client','osd','mgr','mon']
   - test:
       abort-on-fail: false
       desc: Validates the data after upgrade

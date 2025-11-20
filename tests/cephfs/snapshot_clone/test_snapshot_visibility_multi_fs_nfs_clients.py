@@ -264,6 +264,10 @@ def setup_test_obj(obj_name, obj_type, **kwargs):
             log.info(nfs_server)
             if nfs_server_tmp.node.hostname != kwargs["nfs_server"]:
                 nfs_server1 = nfs_server_tmp.node.hostname
+                out, _ = clients[0].exec_command(
+                    sudo=True, cmd="ceph nfs cluster ls;ceph orch ls"
+                )
+                log.info(out)
                 clients[0].exec_command(
                     sudo=True, cmd=f"ceph nfs cluster create {obj_name} {nfs_server1}"
                 )
