@@ -918,6 +918,17 @@ def run(args):
                             run_config=run_config,
                             tc=tc,
                         )
+
+                        # Convert duration string to timedelta object for updating xunit
+                        for ptc in parallel_tcs:
+                            val = ptc.get("duration", "00:00:00")
+                            if isinstance(val, str):
+                                hrs, mins, secs = val.split(":")
+                                ptc["duration"] = datetime.timedelta(
+                                    hours=int(hrs),
+                                    minutes=int(mins),
+                                    seconds=float(secs),
+                                )
                         tcs.extend(parallel_tcs)
                     else:
                         rc = test_mod.run(
