@@ -13,8 +13,10 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.test_bluestore_comp_enhancements_class import (
     BLUESTORE_ALLOC_HINTS,
+    COMPRESSION_ALGORITHMS,
     COMPRESSION_MODES,
     BluestoreDataCompression,
+    IOTools,
 )
 from utility.log import Log
 
@@ -152,9 +154,286 @@ def run(ceph_cluster, **kw):
                 bluestore_compression.min_alloc_size_test(**kwargs)
 
         if "scenario-6" in scenarios_to_run:
-            log.info("STARTED: Scenario 6: Disable bluestore_write_v2 and validate")
+            """
+            Test blob sizes by writing IO to a compressed pool and validating
+            that the blob sizes match the configured minimum blob size.
+            Steps:
+            1) Create pool
+            2) Set OSD config for bluestore_compression_min_blob_size
+            3) Enable compression on the pool
+            4) Create RBD image
+            5) Write IO to the pool
+            6) Validate blob sizes match the configured blob size
+            7) Cleanup OSD config and delete pool
+            """
+
+            pool_suffix = "".join(
+                random.choices(string.ascii_letters + string.digits, k=6)
+            )
+            pool_name = f"rados-{pool_suffix}"
+            compression_mode = COMPRESSION_MODES.FORCE
+            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
+            blob_sizes = [8192, 65536, 131072]
+            compression_obj = BluestoreDataCompression(
+                rados_obj=rados_obj,
+                cephadm=cephadm,
+                mon_obj=mon_obj,
+                client_node=client_node,
+                ceph_cluster=ceph_cluster,
+            )
+            rbd_img: str = "rbd_img" + "".join(
+                random.choices(string.ascii_letters + string.digits, k=6)
+            )
+            object_size = 100000
+
+            for blob_size in blob_sizes:
+                log.info(
+                    "Starting blob size test: %s, mode: %s, algo: %s"
+                    % (blob_size, compression_mode, compression_algorithm)
+                )
+
+                # Step 1: Create pool
+                compression_obj.create_pool_wrapper(pool_name=pool_name)
+                acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
+                primary_osd_id = acting_pg_set[0]
+
+                compression_obj.set_unset_osd_config_and_redeploy(
+                    osd_id=primary_osd_id,
+                    param="bluestore_compression_min_blob_size",
+                    value=blob_size,
+                    set=True,
+                    without_redeploy=True,
+                )
+
+                # Step 2: Enable compression
+                compression_obj.enable_compression(
+                    compression_mode=compression_mode,
+                    compression_algorithm=compression_algorithm,
+                    pool_level_compression=pool_level_compression,
+                    pool_name=pool_name,
+                )
+
+                # Create RBD image
+                cmd = "rbd create %s --size 10G --pool %s" % (rbd_img, pool_name)
+                try:
+                    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                    log.info("Created RBD image: %s" % rbd_img)
+                except Exception as e:
+                    raise Exception("Failed to create RBD image: %s" % e)
+
+                # Step 3: Write IO
+                chk_log_msg = compression_obj.write_io_and_fetch_log_lines(
+                    write_utility_type=IOTools.FIO,
+                    primary_osd_id=primary_osd_id,
+                    pool_name=pool_name,
+                    object_size=int(object_size),
+                    blob_size=int(object_size),
+                    rbd_img=rbd_img,
+                    patterns=["target_blob_size"],
+                )
+
+                # Step 4: Validate blob sizes
+                log.info("Validating blob size: expected %s" % blob_size)
+                max_compressed_blob_size = mon_obj.get_config(
+                    section=f"osd.{primary_osd_id}", param="bluestore_max_blob_size_hdd"
+                )
+                for log_line in chk_log_msg.split("\n"):
+                    if log_line == "":
+                        continue
+                    log.debug("Processing: %s" % log_line)
+                    try:
+                        # Extract the number after "target_blob_size " (e.g., "8192" from log line)
+                        size_in_dec = log_line.split("target_blob_size ")[1].split()[0]
+                    except (IndexError, ValueError) as e:
+                        log.warning(
+                            "Could not parse blob size from line: %s, error: %s"
+                            % (log_line, e)
+                        )
+                        continue
+
+                    if int(size_in_dec) != min(
+                        int(blob_size), int(max_compressed_blob_size)
+                    ):
+                        err_msg = "Blob size mismatch: actual=%s, expected=%s" % (
+                            size_in_dec,
+                            blob_size,
+                        )
+                        log.error(err_msg)
+                        raise AssertionError(err_msg)
+                    log.info("Blob size validated: %s" % size_in_dec)
+                log.info("Blob size validation passed for size %s" % blob_size)
+
+                # Step 5: Cleanup
+                compression_obj.set_unset_osd_config_and_redeploy(
+                    osd_id=primary_osd_id,
+                    param="bluestore_compression_min_blob_size",
+                    value=blob_size,
+                    set=False,
+                    without_redeploy=True,
+                )
+
+                if not rados_obj.delete_pool(pool=pool_name):
+                    raise Exception("Failed to delete pool %s" % pool_name)
+
+        if "scenario-7" in scenarios_to_run:
+            """
+            Test target_blob_size validation based on object allocation hints.
+            If allocation hint is sequential read + append only OR sequential read + immutable,
+            target_blob_size should be 65536, else 8192.
+            Steps:
+            1) Create pool
+            2) Enable compression on the pool
+            3) Create RBD image
+            4) Write IO with allocation hint
+            5) Validate target_blob_size matches expected blob size based on allocation hint
+            6) Cleanup pool
+            """
+            compression_mode = COMPRESSION_MODES.FORCE
+            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
+            compression_obj = BluestoreDataCompression(
+                rados_obj=rados_obj,
+                cephadm=cephadm,
+                mon_obj=mon_obj,
+                client_node=client_node,
+                ceph_cluster=ceph_cluster,
+            )
+            object_size = 100000
+
+            alloc_hints_to_test = [
+                {
+                    "hint": BLUESTORE_ALLOC_HINTS.SEQUENTIAL_READ
+                    | BLUESTORE_ALLOC_HINTS.APPEND_ONLY,
+                    "expected_blob_size": 65536,
+                    "description": "sequential read and append only",
+                },
+                {
+                    "hint": BLUESTORE_ALLOC_HINTS.SEQUENTIAL_READ
+                    | BLUESTORE_ALLOC_HINTS.IMMUTABLE,
+                    "expected_blob_size": 65536,
+                    "description": "sequential read and immutable",
+                },
+                {
+                    "hint": BLUESTORE_ALLOC_HINTS.NOHINT,
+                    "expected_blob_size": 8192,
+                    "description": "no hint",
+                },
+                {
+                    "hint": BLUESTORE_ALLOC_HINTS.COMPRESSIBLE,
+                    "expected_blob_size": 8192,
+                    "description": "compressible",
+                },
+            ]
+
+            for hint_config in alloc_hints_to_test:
+                alloc_hint = hint_config["hint"]
+                expected_blob_size = hint_config["expected_blob_size"]
+                description = hint_config["description"]
+
+                # Create unique pool name for each hint test
+                hint_pool_suffix = "".join(
+                    random.choices(string.ascii_letters + string.digits, k=6)
+                )
+                hint_pool_name = f"rados-{hint_pool_suffix}"
+                hint_rbd_img = "rbd_img" + "".join(
+                    random.choices(string.ascii_letters + string.digits, k=6)
+                )
+
+                log.info(
+                    "Starting allocation hint test: %s (hint=%s), expected blob size: %s, mode: %s, algo: %s"
+                    % (
+                        description,
+                        alloc_hint,
+                        expected_blob_size,
+                        compression_mode,
+                        compression_algorithm,
+                    )
+                )
+
+                # Step 1: Create pool
+                compression_obj.create_pool_wrapper(pool_name=hint_pool_name)
+                acting_pg_set = rados_obj.get_pg_acting_set(pool_name=hint_pool_name)
+                primary_osd_id = acting_pg_set[0]
+
+                # Step 2: Enable compression
+                compression_obj.enable_compression(
+                    compression_mode=compression_mode,
+                    compression_algorithm=compression_algorithm,
+                    pool_level_compression=pool_level_compression,
+                    pool_name=hint_pool_name,
+                )
+
+                # Create RBD image
+                cmd = "rbd create %s --size 10G --pool %s" % (
+                    hint_rbd_img,
+                    hint_pool_name,
+                )
+                try:
+                    rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                    log.info("Created RBD image: %s" % hint_rbd_img)
+                except Exception as e:
+                    raise Exception("Failed to create RBD image: %s" % e)
+
+                # Step 3: Write IO with allocation hint
+                chk_log_msg = compression_obj.write_io_and_fetch_log_lines(
+                    write_utility_type=IOTools.LIBRADOS,
+                    primary_osd_id=primary_osd_id,
+                    pool_name=hint_pool_name,
+                    object_size=int(object_size),
+                    blob_size=int(object_size),
+                    rbd_img=hint_rbd_img,
+                    patterns=["target_blob_size"],
+                    alloc_hint=alloc_hint,
+                )
+
+                # Step 4: Validate target_blob_size
+                blob_sizes_found = []
+                for log_line in chk_log_msg.split("\n"):
+                    if log_line == "":
+                        continue
+                    log.debug("Processing: %s" % log_line)
+                    try:
+                        # Extract the number after "target_blob_size " (e.g., "8192" from log line)
+                        size_in_dec = log_line.split("target_blob_size ")[1].split()[0]
+                        blob_sizes_found.append(size_in_dec)
+                        log.info("Found blob size: %s" % size_in_dec)
+                    except (IndexError, ValueError) as e:
+                        log.warning(
+                            "Could not parse blob size from line: %s, error: %s"
+                            % (log_line, e)
+                        )
+                        continue
+
+                if not blob_sizes_found:
+                    err_msg = "No target_blob_size found in logs for hint %s (%s)" % (
+                        alloc_hint,
+                        description,
+                    )
+                    log.error(err_msg)
+                    raise AssertionError(err_msg)
+
+                # Validate that all found blob sizes match expected
+                for size_in_dec in blob_sizes_found:
+                    if int(size_in_dec) != int(expected_blob_size):
+                        err_msg = (
+                            "Blob size mismatch for int %s (%s): actual=%s, expected=%s"
+                            % (alloc_hint, description, size_in_dec, expected_blob_size)
+                        )
+                        log.error(err_msg)
+                        raise AssertionError(err_msg)
+
+                log.info(
+                    "Target blob size validation passed for hint %s (%s): %s"
+                    % (alloc_hint, description, expected_blob_size)
+                )
+
+                # Step 5: Cleanup pool
+                if not rados_obj.delete_pool(pool=hint_pool_name):
+                    raise Exception("Failed to delete pool %s" % hint_pool_name)
+
+        if "scenario-8" in scenarios_to_run:
+            log.info("STARTED: Scenario 8: Disable bluestore_write_v2 and validate")
             bluestore_compression.toggle_bluestore_write_v2(toggle_value="false")
-            log.info("COMPELTED: Scenario 6: Disable bluestore_write_v2 and validate")
+            log.info("COMPELTED: Scenario 8: Disable bluestore_write_v2 and validate")
 
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
