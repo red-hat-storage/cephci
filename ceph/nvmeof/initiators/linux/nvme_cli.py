@@ -217,7 +217,7 @@ class NVMeCLI(Cli):
         if not (device and nsid):
             raise ValueError("device and namespace-id must both be provided")
 
-        cmd = f"nvme resv-report {device} --namespace-id {nsid} -o json"
+        cmd = f"nvme resv-report {device} --namespace-id {nsid} -e 1 -o json"
         return self.execute(cmd=cmd, sudo=True)
 
     def release_reservation(self, **kwargs):
