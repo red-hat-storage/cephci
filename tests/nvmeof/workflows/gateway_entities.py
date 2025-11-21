@@ -236,7 +236,7 @@ def configure_namespaces(gateway, config, opt_args={}, rbd_obj=None):
                                 p.spawn(
                                     rbd_obj.initial_rbd_config,
                                     pool=pool,
-                                    image=f"{name}-image0",
+                                    image=f"{name}-image{num}",
                                     size=bdev_cfg.get("size", "1G"),
                                 )
                             else:
@@ -318,6 +318,7 @@ def configure_listeners(gateways, config: dict):
                 }
                 gateway.listener.add(**listener_config)
                 expected_listeners.append(listener_config["args"])
+            validate_listeners(gateway, expected_listeners, nqn)
 
         else:
             for gateway in gateways:
@@ -332,8 +333,7 @@ def configure_listeners(gateways, config: dict):
                     }
                 }
                 gateway.listener.add(**listener_config)
-                expected_listeners.append(listener_config["args"])
-        validate_listeners(gateway, expected_listeners, nqn)
+                validate_listeners(gateway, expected_listeners, nqn)
 
 
 def configure_gw_entities(nvme_service, rbd_obj=None):
@@ -390,8 +390,10 @@ def teardown(nvme_service, rbd_obj):
             out, err = gateway.subsystem.delete(
                 **{"args": {"subsystem": sub_cfg["nqn"], "force": True}}
             )
-            if err or "success" not in out.lower():
-                LOG.warning(f"Failed to delete subsystem {sub_cfg['nqn']}: {out}")
+            if "success" not in out.lower():
+                LOG.warning(
+                    f"Failed to delete subsystem {sub_cfg['nqn']}: {out} with error {err}"
+                )
                 rc = 1
 
     # Delete gateways

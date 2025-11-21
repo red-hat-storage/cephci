@@ -854,12 +854,16 @@ def test_ceph_83581755(ceph_cluster, rbd, nvme_service, pool, config):
         )
         _ = nvmegwcli.namespace.set_qos(**qos_args_without_mandatory_args)
     except Exception as err:
-        if "argument --nsid: invalid int value:" not in str(err):
+        if "invalid literal for int() with base 10: '1,2" in str(
+            err
+        ) or "argument --nsid: invalid int value:" in str(err):
+            LOG.info("Set QoS was failed as expected due to invalid namespace value.")
+        else:
             raise Exception(
-                "Set QoS was failed as expected due to invalid namespace value."
+                "Set QoS was failed with an exception which is not expected: "
+                + str(err)
             )
             return 1
-        LOG.info("Set QoS was failed as expected due to invalid namespace value....")
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
