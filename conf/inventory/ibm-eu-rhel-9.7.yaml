@@ -1,9 +1,9 @@
 ---
-version_id: 9.6
+version_id: 9.7
 id: rhel
 instance:
   create:
-    image-name: rhel-96-server-amd64-kvm
+    image-name: rhel-97-server-amd64-kvm
     private_key: ceph-qe-sa-svc
 
   setup: |
@@ -19,18 +19,18 @@ instance:
     yum_repos:
       appstream:
         name: AppStream
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/6/AppStream/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/7/AppStream/
         enabled: true
         gpgcheck: false
       baseos:
         name: BaseOS
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/6/BaseOS/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/7/BaseOS/
         gpcheck: false
         enabled: true
 
       crb:
         name: codeready-builder
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/6/CRB/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/7/CRB/
         gpcheck: false
         enabled: true
 
