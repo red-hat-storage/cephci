@@ -71,7 +71,7 @@ def add(cls, config: Dict) -> None:
             else:
                 rhcs_version = "default"
 
-            rhel_version = _node.distro_info["VERSION_ID"][0]
+            rhel_version = _node.distro_info["VERSION_ID"].split(".")[0]
             log.debug(
                 f"RHCS version : {rhcs_version} on host {_node.hostname}\n"
                 f"with RHEL major version as : {rhel_version}"
