@@ -720,3 +720,70 @@ def run(ceph_cluster, **kw):
             "ceph df MAX AVAIL stats verification upon OSDs removal completed successfully"
         )
         return 0
+
+    if config.get("verify_max_avail"):
+        desc = (
+            "\nThis test is to verify that ceph df MAX AVAIL is displayed correctly \n"
+            "for all the pools after creating objects in the pool \n"
+            "Script covers the following steps- \n"
+            "1. Creating a pool with given config \n"
+            "2. Create 'n' number of objects using rados put with specified size \n"
+            "3. Wait for objects to be reflected in ceph df stats \n"
+            "4. Verify MAX_AVAIL values across all pools are within expected variance \n"
+            "5. Clean up pool and verify cluster health \n"
+        )
+
+        log.info(desc)
+        df_config = config.get("verify_max_avail")
+        pool_name = df_config["pool_name"]
+        obj_nums = df_config["obj_nums"]
+        size = df_config["size"]
+        obj_name = df_config["obj_name"]
+
+        try:
+            # create pool with given config
+            if df_config["create_pool"]:
+                rados_obj.create_pool(pool_name=pool_name)
+
+            # create 'obj_num' number of objects
+            pool_obj.do_rados_put(
+                client=client,
+                pool=pool_name,
+                nobj=obj_nums,
+                size=size,
+                obj_name=obj_name,
+            )
+
+            time.sleep(100)  # blind sleep to let all the objs show up in ceph df
+
+            if not rados_obj.verify_max_avail():
+                log.error("MAX_AVAIL deviates on the cluster more than expected")
+                raise Exception("MAX_AVAIL deviates on the cluster more than expected")
+            log.info("MAX_AVAIL on the cluster are as per expectation")
+
+        except Exception as AE:
+            log.error(f"Failed with exception: {AE.__doc__}")
+            log.exception(AE)
+            # log cluster health
+            rados_obj.log_cluster_health()
+            return 1
+        finally:
+            log.info("\n ************* Executing finally block **********\n")
+            if df_config.get("delete_pool"):
+                rados_obj.delete_pool(pool=pool_name)
+            if not wait_for_clean_pg_sets(rados_obj, timeout=900):
+                log.error("Cluster could not reach active+clean state")
+                return 1
+            rados_obj.change_recovery_threads(config=config, action="rm")
+
+            # log cluster health
+            rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
+
+        log.info(
+            "ceph df MAX AVAIL stats verification upon OSDs removal completed successfully"
+        )
+        return 0

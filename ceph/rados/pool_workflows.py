@@ -165,7 +165,7 @@ class PoolFunctions:
         )
         return True
 
-    def prepare_static_data(self, node):
+    def prepare_static_data(self, node, size="4M"):
         """
         creates a 4MB obj, same obj will be put nobj times
         because in do_rados_get we have to verify checksum
@@ -178,7 +178,7 @@ class PoolFunctions:
             sfd = node.remote_file(file_name=tmp_file, file_mode="w+")
             sfd.write(DSTR * 4)
             sfd.flush()
-            cmd = f"truncate -s 4M {tmp_file}"
+            cmd = f"truncate -s {size} {tmp_file}"
             node.exec_command(cmd=cmd)
         except Exception as e:
             log.error(f"file creation failed with exception: {e}")
@@ -196,6 +196,7 @@ class PoolFunctions:
         nobj: int = 1,
         offset: int = 0,
         timeout: int = 600,
+        size: str = "4M",
     ):
         """
         write static data to one object or nobjs in an app pool
@@ -223,7 +224,7 @@ class PoolFunctions:
         Returns:
             0 -> pass, 1 -> fail
         """
-        infile = self.prepare_static_data(client)
+        infile = self.prepare_static_data(client, size)
         log.debug(f"Input file is {infile}")
 
         for i in range(nobj):
