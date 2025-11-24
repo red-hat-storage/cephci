@@ -18,6 +18,7 @@ from tests.rados.rados_test_util import wait_for_daemon_status
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_bluestore_data_compression import get_pool_stats
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -44,6 +45,13 @@ class COMPRESSION_MODES:
 class IOTools(Enum):
     FIO = "fio"
     LIBRADOS = "librados"
+
+
+class COMPRESSION_ALGORITHMS:
+    snappy = "snappy"
+    libz = "libz"
+    zstd = "zstd"
+    lz4 = "lz4"
 
 
 class BluestoreDataCompression:
@@ -606,6 +614,7 @@ class BluestoreDataCompression:
 
         return [init_time, end_time]
 
+    @retry(Exception, tries=3, delay=10, backoff=1)
     def write_io_and_fetch_log_lines(
         self,
         write_utility_type: IOTools,
@@ -802,7 +811,9 @@ class BluestoreDataCompression:
 
         return [pass_count, fail_count, failed_logs]
 
-    def set_unset_osd_config_and_redeploy(self, osd_id, param, value, set=True):
+    def set_unset_osd_config_and_redeploy(
+        self, osd_id, param, value, set=True, without_redeploy=False
+    ):
         if set:
             self.mon_obj.set_config(section=f"osd.{osd_id}", name=param, value=value)
         else:
@@ -812,39 +823,46 @@ class BluestoreDataCompression:
         test_host = self.rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
         log.info("Fetched host node for osd.%s -> %s" % (osd_id, test_host))
 
-        cmd = "ceph orch osd rm {} --force --zap".format(osd_id)
-        _, _, _, _ = self.client_node.exec_command(
-            cmd=cmd, print_output=True, verbose=True
-        )
-        log.info("Triggered orchestrator remove for osd.%s" % osd_id)
-
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
-        log.info("Waiting up to 600s for osd.%s removal to complete" % osd_id)
-        while end_time > datetime.datetime.now():
-            cmd = "ceph orch osd rm status"
-            try:
-                status = self.rados_obj.run_ceph_command(cmd=cmd)
-                for osd_id_ in status:
-                    if int(osd_id_["osd_id"]) == int(osd_id):
-                        log.info("OSDs removal in progress: " + str(osd_id_))
-                        time.sleep(10)
-                        continue
-                    else:
-                        break
-
-            except json.decoder.JSONDecodeError:
-                log.info("osd.%s removal completed" % osd_id)
-                break
-            except Exception as e:
-                log.error(
-                    "osd.%s removal status check failed with exception %s" % (osd_id, e)
-                )
-                raise e
-        else:
-            log.error(
-                "OSD.%s removal could not be completed within %d secs" % (osd_id, 600)
+        if without_redeploy:
+            log.info(
+                "without_redeploy flag passed, hence skipping redeploy osd step..."
             )
-            raise Exception()
+        else:
+            cmd = f"ceph orch osd rm {osd_id} --force --zap"
+            _, _, _, _ = self.client_node.exec_command(
+                cmd=cmd, print_output=True, verbose=True
+            )
+            log.info("Triggered orchestrator remove for osd.%s" % osd_id)
+
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
+            log.info("Waiting up to 600s for osd.%s removal to complete" % osd_id)
+            while end_time > datetime.datetime.now():
+                cmd = "ceph orch osd rm status"
+                try:
+                    status = self.rados_obj.run_ceph_command(cmd=cmd)
+                    for osd_id_ in status:
+                        if int(osd_id_["osd_id"]) == int(osd_id):
+                            log.info("OSDs removal in progress: " + str(osd_id_))
+                            time.sleep(10)
+                            continue
+                        else:
+                            break
+
+                except json.decoder.JSONDecodeError:
+                    log.info("osd.%s removal completed" % osd_id)
+                    break
+                except Exception as e:
+                    log.error(
+                        "osd.%s removal status check failed with exception %s"
+                        % (osd_id, e)
+                    )
+                    raise e
+            else:
+                log.error(
+                    "OSD.%s removal could not be completed within %d secs"
+                    % (osd_id, 600)
+                )
+                raise Exception()
 
         end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
         log.info("Waiting up to 600s for osd.%s to redeploy" % osd_id)
