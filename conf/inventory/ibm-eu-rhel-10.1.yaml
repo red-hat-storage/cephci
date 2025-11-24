@@ -1,9 +1,9 @@
 ---
-version_id: 9.6
+version_id: 10.1
 id: rhel
 instance:
   create:
-    image-name: rhel-96-server-amd64-kvm
+    image-name: rhel-101-server-amd64-kvm
     private_key: ceph-qe-sa-svc
 
   setup: |
@@ -19,19 +19,19 @@ instance:
     yum_repos:
       appstream:
         name: AppStream
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/6/AppStream/
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/10/1/AppStream/
         enabled: true
         gpgcheck: false
       baseos:
         name: BaseOS
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/6/BaseOS/
-        gpcheck: false
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/10/1/BaseOS/
+        gpgcheck: false
         enabled: true
 
       crb:
         name: codeready-builder
-        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/9/6/CRB/
-        gpcheck: false
+        baseurl: http://nginx-vm-01.qe.ceph.lab/repos/10/1/CRB/
+        gpgcheck: false
         enabled: true
 
     # write the mirror registry details

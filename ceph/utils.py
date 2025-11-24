@@ -364,7 +364,13 @@ def setup_vm_node_ibm(node, ceph_nodes, **params):
 
 
 def create_ceph_nodes(
-    cluster_conf, inventory, osp_cred, run_id, instances_name=None, enable_eus=False
+    cluster_conf,
+    inventory,
+    osp_cred,
+    run_id,
+    instances_name=None,
+    enable_eus=False,
+    custom_config=None,
 ):
     log.info("Creating osp instances")
     osp_glbs = osp_cred.get("globals")
@@ -376,6 +382,7 @@ def create_ceph_nodes(
         inventory_path = os.path.abspath(ceph_cluster.get("inventory"))
         with open(inventory_path, "r") as inventory_stream:
             inventory = yaml.safe_load(inventory_stream)
+
     node_count = 0
     params["cloud-data"] = inventory.get("instance").get("setup")
     params["username"] = os_cred["username"]
@@ -399,8 +406,18 @@ def create_ceph_nodes(
             )
 
         params["cluster-name"] = ceph_cluster.get("name")
-        params["vm-size"] = inventory.get("instance").get("create").get("vm-size")
         params["vm-network"] = inventory.get("instance").get("create").get("vm-network")
+
+        # Process the VM flavor. Highest precedence goes to custom-config
+        params["vm-size"] = inventory.get("instance").get("create").get("vm-size")
+        if custom_config:
+            _custom_dict = dict(
+                item.split("=")
+                for item in custom_config
+                if item.startswith("openstack")
+            )
+            if "openstack_vm_profile" in _custom_dict:
+                params["vm-size"] = _custom_dict["openstack_vm_profile"]
 
         if params.get("root-login") is False:
             params["root-login"] = False

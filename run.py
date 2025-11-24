@@ -204,6 +204,7 @@ def create_nodes(
 
             --custom-config ibmc_vpc=ci-vpc-01
             --custom-config ibmc_profile=bx2-2x8
+            --custom-config openstack_vm_profile=c1.standard.xl
 
         If these values are not provided then the defaults would be used.
         The defaults are the ones used in the example.
@@ -227,6 +228,7 @@ def create_nodes(
                 run_id,
                 instances_name,
                 enable_eus=enable_eus,
+                custom_config=custom_config,
             )
         elif cloud_type == "ibmc":
             ceph_vmnodes = create_ibmc_ceph_nodes(
