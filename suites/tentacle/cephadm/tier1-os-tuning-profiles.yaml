@@ -334,7 +334,7 @@ tests:
             hosts:
               - hostx
           settings:
-            fs.filex: 100000
+            fs.file-max: 100000
         result: "Please check 'ceph orch host ls' for available hosts"
   - test:
       name: no_profile_name
@@ -350,5 +350,5 @@ tests:
               - node1
               - node2
           settings:
-            fs.filex: 100000
+            fs.file-max: 100000
         result: "Failed to apply tuned profile"
