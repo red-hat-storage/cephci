@@ -194,20 +194,16 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
                 expected_visibility,
             )
             if validate_initiators:
+                validate_config = {
+                    "args": {
+                        "sub_num": sub_num,
+                        "nsid": num,
+                        "init_node": host,
+                    },
+                }
                 ha.validate_init_namespace_masking(
-                    command, init_nodes, expected_visibility, validate_config=None
+                    command, init_nodes, expected_visibility, validate_config
                 )
-                # TODO: Add validate_config for add_host after confirming the serial number in nvme list output
-                # validate_config = {
-                #     "args": {
-                #         "sub_num": sub_num,
-                #         "nsid": num,
-                #         "init_node": host,
-                #     },
-                # }
-                # ha.validate_init_namespace_masking(
-                #     command, init_nodes, expected_visibility, validate_config
-                # )
 
     execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=True)
 
@@ -291,19 +287,16 @@ def del_host(config, command, init_nodes, hostnqn_dict, ha):
             )
 
             if validate_initiators:
+                validate_config = {
+                    "args": {
+                        "sub_num": sub_num,
+                        "nsid": num,
+                        "init_node": host,
+                    },
+                }
                 ha.validate_init_namespace_masking(
-                    command, init_nodes, expected_visibility, validate_config=None
+                    command, init_nodes, expected_visibility, validate_config
                 )
-                # validate_config = {
-                #     "args": {
-                #         "sub_num": sub_num,
-                #         "nsid": num,
-                #         "init_node": host,
-                #     },
-                # }
-                # ha.validate_init_namespace_masking(
-                #     command, init_nodes, expected_visibility, validate_config
-                # )
 
     execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=True)
 

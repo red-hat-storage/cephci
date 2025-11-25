@@ -57,6 +57,8 @@ def configure_listeners(ha_obj, nodes, config, action="add"):
 def configure_subsystems(pool, ha, config):
     """Configure Ceph-NVMEoF Subsystems."""
     sub_args = {"subsystem": config["nqn"]}
+    if config.get("serial-number"):
+        sub_args["serial-number"] = config["serial-number"]
     ceph_cluster = config["ceph_cluster"]
 
     nvmegwcli = ha.gateways[0]

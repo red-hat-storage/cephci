@@ -88,6 +88,7 @@ tests:
         service: namespace
         subsystems:  # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
+            serial-number: 1
             listener_port: 4420
             listeners:
               - node4
@@ -95,6 +96,7 @@ tests:
               - node6
               - node7
           - nqn: nqn.2016-06.io.spdk:cnode2
+            serial-number: 2
             listener_port: 4420
             listeners:
               - node4
@@ -102,6 +104,7 @@ tests:
               - node6
               - node7
           - nqn: nqn.2016-06.io.spdk:cnode3
+            serial-number: 3
             listener_port: 4420
             listeners:
               - node4
@@ -109,6 +112,7 @@ tests:
               - node6
               - node7
           - nqn: nqn.2016-06.io.spdk:cnode4
+            serial-number: 4
             listener_port: 4420
             listeners:
               - node4
@@ -116,6 +120,7 @@ tests:
               - node6
               - node7
           - nqn: nqn.2016-06.io.spdk:cnode5
+            serial-number: 5
             listener_port: 4420
             listeners:
               - node4
