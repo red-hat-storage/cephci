@@ -5,7 +5,12 @@ from copy import deepcopy
 
 from ceph.ceph import Ceph
 from ceph.nvmeof.initiators.linux import Initiator
+from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
+from tests.nvmeof.test_ceph_nvmeof_high_availability import (
+    configure_subsystems,
+    deploy_nvme_service,
+)
 from tests.nvmeof.workflows.ha import HighAvailability
 from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
 from tests.rbd.rbd_utils import initial_rbd_config
@@ -45,7 +50,6 @@ def add_namespaces(config, command, init_nodes, hostnqn_dict, rbd_obj, ha):
     subsystems = config["args"].pop("subsystems")
     namespaces = config["args"].pop("namespaces")
     image_size = config["args"].pop("image_size")
-    group = config["args"].pop("group", None)
     pool = config["args"].pop("pool")
     no_auto_visible = config["args"].pop("no-auto-visible")
     validate_initiators = config["args"].pop("validate_ns_masking_initiators", None)
@@ -57,7 +61,7 @@ def add_namespaces(config, command, init_nodes, hostnqn_dict, rbd_obj, ha):
     rbd_images_subsys = []
 
     for sub_num in range(1, subsystems + 1):
-        subnqn = f"{subnqn_template.format(sub_num)}{f'.{group}' if group else ''}"
+        subnqn = f"{subnqn_template.format(sub_num)}"
         name = generate_unique_id(length=4)
         LOG.info(f"Subsystem {sub_num}/{subsystems}")
         for num in range(1, namespaces_sub + 1):
@@ -115,7 +119,6 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
     """Add host NQN to namespaces"""
     subsystems = config["args"].pop("subsystems")
     namespaces = config["args"].pop("namespaces")
-    group = config["args"].pop("group", None)
     validate_initiators = config["args"].pop("validate_ns_masking_initiators", None)
     LOG.info(hostnqn_dict)
     expected_visibility = False
@@ -130,7 +133,7 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
         for num in range(1, namespaces_sub + 1):
             LOG.info(f"Namespace {num}/{namespaces_sub}")
             config["args"].clear()
-            subnqn = f"{subnqn_template.format(sub_num)}{f'.{group}' if group else ''}"
+            subnqn = f"{subnqn_template.format(sub_num)}"
 
             # Determine the correct host for the current namespace
             for i, node in enumerate(
@@ -157,6 +160,7 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
                     "nsid": num,
                     "host": host_nqn,
                     "subsystem": subnqn,
+                    "force": "",
                 },
             }
 
@@ -201,14 +205,13 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
                     command, init_nodes, expected_visibility, validate_config
                 )
 
-    execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=False)
+    execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=True)
 
 
 def del_host(config, command, init_nodes, hostnqn_dict, ha):
     """Delete host NQN to namespaces"""
     subsystems = config["args"].pop("subsystems")
     namespaces = config["args"].pop("namespaces")
-    group = config["args"].pop("group", None)
     validate_initiators = config["args"].pop("validate_ns_masking_initiators", None)
     LOG.info(hostnqn_dict)
     namespaces_sub = int(namespaces / subsystems)
@@ -222,7 +225,7 @@ def del_host(config, command, init_nodes, hostnqn_dict, ha):
         for num in range(1, namespaces_sub + 1):
             LOG.info(f"Namespace {num}/{namespaces_sub}")
             config["args"].clear()
-            subnqn = f"{subnqn_template.format(sub_num)}{f'.{group}' if group else ''}"
+            subnqn = f"{subnqn_template.format(sub_num)}"
 
             # Determine the correct host for the current namespace
             for i, node in enumerate(hostnqn_dict.keys(), start=1):
@@ -302,7 +305,6 @@ def change_visibility(config, command, init_nodes, hostnqn_dict, ha):
     """Change visibility of namespaces."""
     subsystems = config["args"].pop("subsystems")
     namespaces = config["args"].pop("namespaces")
-    group = config["args"].pop("group", None)
     validate_initiators = config["args"].pop("validate_ns_masking_initiators", None)
     auto_visible = config["args"].pop("auto-visible")
     namespaces_sub = int(namespaces / subsystems)
@@ -313,7 +315,7 @@ def change_visibility(config, command, init_nodes, hostnqn_dict, ha):
     rbd_images_subsys = []
 
     for sub_num in range(1, subsystems + 1):
-        subnqn = f"{subnqn_template.format(sub_num)}{f'.{group}' if group else ''}"
+        subnqn = f"{subnqn_template.format(sub_num)}"
         LOG.info(f"Subsystem {sub_num}/{subsystems}")
         for num in range(1, namespaces_sub + 1):
             LOG.info(f"Namespace {num}/{namespaces_sub}")
@@ -380,13 +382,29 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
         init_nodes = config.get("initiators")
         hostnqn_dict = {}
         LOG.info(init_nodes)
-        ha = HighAvailability(ceph_cluster, config["nodes"], **config)
+        # Deploy nvmeof service
+        LOG.info("deploy nvme service")
+        deploy_nvme_service(ceph_cluster, config)
+        ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
         ha.initialize_gateways()
+
+        # Configure subsystems
+        LOG.info("Configure subsystems, listeners")
+        with parallel() as p:
+            for subsys_args in config["subsystems"]:
+                subsys_args["ceph_cluster"] = ceph_cluster
+                p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
 
         for node in init_nodes:
             initiator_node = get_node_by_id(ceph_cluster, node)
             initiator = Initiator(initiator_node)
             initiator.disconnect_all()
+            configure_cmds = [
+                "nvme gen-hostnqn > /etc/nvme/hostnqn",
+                "uuidgen > /etc/nvme/hostid",
+            ]
+            for cmd in configure_cmds:
+                initiator_node.exec_command(cmd=cmd, sudo=True)
             hostnqn, _ = initiator_node.exec_command(
                 cmd="cat /etc/nvme/hostnqn",
                 sudo=True,
