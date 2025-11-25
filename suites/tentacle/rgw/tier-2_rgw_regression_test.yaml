@@ -384,7 +384,6 @@ tests:
         script-name: test_bucket_request_payer.py
         config-file-name: test_bucket_request_payer.yaml
 
-  # v1 tests
   # ACLs tests
   - test:
       name: Basic ACLs Test
@@ -392,7 +391,7 @@ tests:
       polarion-id: CEPH-14239
       module: sanity_rgw.py
       config:
-        test-version: v1
+        test-version: v2
         run-on-rgw: true
         script-name: test_acls.py
         config-file-name: test_acls.yaml
@@ -403,7 +402,7 @@ tests:
       polarion-id: CEPH-14242
       module: sanity_rgw.py
       config:
-        test-version: v1
+        test-version: v2
         run-on-rgw: true
         script-name: test_acls_copy_obj.py
         config-file-name: test_acls_copy_obj.yaml
@@ -414,7 +413,7 @@ tests:
       polarion-id: CEPH-14260 # also applies to CEPH-10489
       module: sanity_rgw.py
       config:
-        test-version: v1
+        test-version: v2
         run-on-rgw: true
         script-name: test_acls_reset.py
         config-file-name: test_acls_reset.yaml
@@ -425,7 +424,7 @@ tests:
       polarion-id: CEPH-14240 # also applies to CEPH-14241, CEPH-10487, CEPH-10488
       module: sanity_rgw.py
       config:
-        test-version: v1
+        test-version: v2
         run-on-rgw: true
         script-name: test_acls_all_usrs.py
         config-file-name: test_acls_all_usrs.yaml
@@ -437,7 +436,7 @@ tests:
       polarion-id: CEPH-14266
       module: sanity_rgw.py
       config:
-        test-version: v1
+        test-version: v2
         run-on-rgw: true
         script-name: test_multipart_upload_cancel.py
         config-file-name: test_multipart_upload_cancel.yaml
