@@ -3,7 +3,8 @@ Module to test Erasure Code Partial Write and Read Optimization (Fast EC)
 
 This test verifies that EC pools with allow_ec_optimizations enabled properly
 utilize partial write optimization to reduce write amplification by skipping
-unnecessary shard updates, and validates EC partial read operations.
+unnecessary shard updates, and partial read optimization to reduce read
+amplification by reading only necessary shards and byte ranges.
 
 Test workflow:
 1. Create EC pool (k=2, m=2 configurable) with optimizations enabled
@@ -11,21 +12,27 @@ Test workflow:
 3. Create TWO RBD images with EC data pool:
    - Image 1: For direct device I/O (unmounted)
    - Image 2: For filesystem I/O (mounted)
-4. Identify target PGs/OSDs and enable debug logging
+4. Identify target PGs/OSDs and enable debug logging for write tests
 5. Run direct RADOS writes with partial overwrites at various offsets
 6. Workflow 1 - Direct device writes (Image 1, unmounted):
    - Block device writes (direct I/O): full stripe, single chunk, sub-chunk, overwrites
 7. Workflow 2 - Filesystem writes (Image 2, mounted):
    - Filesystem writes (buffered I/O): chunk-aligned, sub-chunk, overwrites
-8. Run various read I/O patterns with offsets:
+8. Parse OSD logs to verify partial WRITE patterns (written={...} with subset of shards)
+9. Verify partial WRITE optimization statistics
+10. Enable debug logging for read tests
+11. Run various read I/O patterns with offsets:
    - Full object reads from offset 0
    - Reads from stripe boundaries
    - Reads from chunk boundaries
    - Reads from arbitrary offsets (aligned and unaligned)
    - Single byte reads from EOF
-9. Parse OSD logs to verify partial write patterns
-10. Verify optimization statistics
-11. Cleanup resources
+12. Parse OSD logs to verify partial READ patterns:
+   - shard_want_to_read={...} with single shard reads
+   - extent-based reads with specific byte ranges
+   - Reduced read amplification
+13. Verify partial READ optimization statistics
+14. Cleanup resources
 """
 
 import re
@@ -270,15 +277,33 @@ def run(ceph_cluster, **kw):
 
         # Test 3: Read patterns with various offsets (rados get)
         log.info("Test 3: Read patterns with various offsets")
-        if not run_read_offset_tests(
+
+        # Run read tests with OSD identification and debug logging
+        read_test_results = run_read_offset_tests(
             rados_obj=rados_obj,
             pool_name=ec_pool_name,
             chunk_size=chunk_size,
             ec_k=ec_k,
-        ):
+            mon_config_obj=mon_config_obj,
+            cephadm=cephadm,
+        )
+
+        if not read_test_results or not read_test_results.get("success"):
             log.error("Read offset tests failed")
             return 1
-        time.sleep(2)
+
+        read_target_osds = read_test_results.get("target_osds", [])
+        read_start_time = read_test_results.get("start_time", "")
+        read_end_time = read_test_results.get("end_time", "")
+
+        if not read_target_osds:
+            log.error("Failed to identify primary OSD for read tests")
+            return 1
+
+        log.info(
+            "Read tests completed successfully. Will analyze primary OSD.%s",
+            read_target_osds[0],
+        )
 
         log.info("Waiting 10 seconds after tests (buffer for log completion)...")
         time.sleep(10)
@@ -297,9 +322,28 @@ def run(ceph_cluster, **kw):
             return 1
         log.info("Log analysis of OSD logs for partial write evidence Successful.")
 
-        log.info("Verification of optimization results")
+        log.info("Verification of partial write optimization results")
         if not verify_partial_write_optimization(results, ec_k=ec_k, ec_m=ec_m):
             log.error("Partial write optimization verification failed")
+            return 1
+
+        log.info("Analyze OSD logs for partial READ evidence")
+        # Parse logs for read optimization patterns from READ test OSDs
+        read_results = parse_ec_read_optimization_logs(
+            rados_obj=rados_obj,
+            target_osds=read_target_osds,
+            start_time=read_start_time,
+            end_time=read_end_time,
+        )
+
+        if not read_results:
+            log.error("Failed to parse OSD logs for read patterns")
+            return 1
+        log.info("Log analysis of OSD logs for partial read evidence Successful.")
+
+        log.info("Verification of partial READ optimization results")
+        if not verify_partial_read_optimization(read_results, ec_k=ec_k, ec_m=ec_m):
+            log.error("Partial read optimization verification failed")
             return 1
 
         if not rados_obj.run_pool_sanity_check():
@@ -922,7 +966,9 @@ def run_read_offset_tests(
     pool_name: str,
     chunk_size: int,
     ec_k: int,
-) -> bool:
+    mon_config_obj=None,
+    cephadm=None,
+) -> Dict[str, Any]:
     """
     Test EC partial reads with various offset patterns using rados get
 
@@ -933,15 +979,34 @@ def run_read_offset_tests(
     1. Read size correctness
     2. Data integrity (byte-by-byte comparison)
 
+    This function also:
+    - Identifies which PG/OSDs the read test object maps to
+    - Enables debug logging on the PRIMARY OSD only (where read optimization happens)
+    - Captures timestamps for log analysis
+    - Disables debug logging after tests
+
     Args:
         rados_obj: RadosOrchestrator object
         pool_name: EC pool name
         chunk_size: EC chunk size in bytes
         ec_k: Number of data chunks
+        mon_config_obj: MonConfigMethods object for debug logging (optional)
+        cephadm: CephAdmin object for timestamps (optional)
 
     Returns:
-        True on success, False on failure
+        Dictionary with keys:
+        - success: bool
+        - target_osds: List[int] (contains only primary OSD)
+        - start_time: str
+        - end_time: str
     """
+    result = {
+        "success": False,
+        "target_osds": [],
+        "start_time": "",
+        "end_time": "",
+    }
+
     try:
         log.info("EC Partial Read Tests - Testing offset-based reads")
 
@@ -974,6 +1039,52 @@ def run_read_offset_tests(
         cmd = f"rados -p {pool_name} put {obj_name} {test_data_file}"
         rados_obj.client.exec_command(cmd=cmd, sudo=True)
         log.debug("Created object '%s' in pool '%s'", obj_name, pool_name)
+
+        # Identify which OSDs this object maps to
+        log.info("Identifying target OSDs for read test object '%s'", obj_name)
+        osd_map_output = rados_obj.get_osd_map(pool=pool_name, obj=obj_name)
+        pg_id = osd_map_output.get("pgid")
+        acting_set = osd_map_output.get("acting", [])
+
+        if not acting_set:
+            log.error("Failed to identify acting set for read test object")
+            return result
+
+        primary_osd = acting_set[0]
+        read_target_osds = [primary_osd]  # Only check primary OSD for read optimization
+
+        log.info(
+            "Read test object '%s' maps to PG %s, Acting set: %s (Primary: OSD.%s)",
+            obj_name,
+            pg_id,
+            acting_set,
+            primary_osd,
+        )
+        log.info(
+            "Will analyze read optimization logs from PRIMARY OSD.%s only",
+            primary_osd,
+        )
+        result["target_osds"] = read_target_osds
+
+        # Enable debug logging
+        log.info(
+            "Enabling debug logging (debug_osd=20) on primary OSD: %s",
+            primary_osd,
+        )
+        for osd_id in read_target_osds:
+            mon_config_obj.set_config(
+                section=f"osd.{osd_id}",
+                name="debug_osd",
+                value="20/20",
+            )
+        time.sleep(5)
+
+        # Capture start time
+        start_time_out, _ = cephadm.shell(
+            args=["date", "-u", "'+%Y-%m-%dT%H:%M:%S.%3N+0000'"]
+        )
+        result["start_time"] = start_time_out.strip().strip("'")
+        log.info("Read test start time: %s", result["start_time"])
 
         # Define test patterns - covers key EC read scenarios
         test_cases = [
@@ -1033,8 +1144,8 @@ def run_read_offset_tests(
 
                 # Validation 1: Check size
                 check_cmd = f"wc -c < {outfile}"
-                result, _ = rados_obj.client.exec_command(cmd=check_cmd, sudo=True)
-                actual_size = int(result.strip())
+                size_output, _ = rados_obj.client.exec_command(cmd=check_cmd, sudo=True)
+                actual_size = int(size_output.strip())
                 expected_size = test["expected_length"]
 
                 if actual_size != expected_size:
@@ -1063,11 +1174,11 @@ def run_read_offset_tests(
                      start                                           EOF
                     """
                     cmd = f"cmp -n {actual_size} -i {test['offset']}:0 {test_data_file} {outfile}"
-                    result, _ = rados_obj.client.exec_command(
+                    cmp_output, _ = rados_obj.client.exec_command(
                         cmd=cmd, sudo=True, check_ec=False
                     )
 
-                    if result.strip() == "":
+                    if cmp_output.strip() == "":
                         log.debug(" Data integrity verified")
                     else:
                         log.error(" Data mismatch: content doesn't match original")
@@ -1090,6 +1201,22 @@ def run_read_offset_tests(
                 log.error("  FAIL: %s - %s", test["name"], e)
                 failed += 1
 
+        # Capture end time
+        end_time_out, _ = cephadm.shell(
+            args=["date", "-u", "'+%Y-%m-%dT%H:%M:%S.%3N+0000'"]
+        )
+        result["end_time"] = end_time_out.strip().strip("'")
+        log.info("Read test end time: %s", result["end_time"])
+
+        # Disable debug logging
+        if result["target_osds"]:
+            log.info(
+                "Disabling debug logging on primary OSD: %s", result["target_osds"][0]
+            )
+            for osd_id in result["target_osds"]:
+                mon_config_obj.remove_config(section=f"osd.{osd_id}", name="debug_osd")
+        time.sleep(2)
+
         # Cleanup test object and files
         log.debug("Cleaning up test data")
         rados_obj.client.exec_command(
@@ -1106,15 +1233,21 @@ def run_read_offset_tests(
 
         if failed == 0:
             log.info("All EC read offset tests PASSED")
-            return True
+            result["success"] = True
+            return result
         else:
             log.error(" %s/%s test(s) FAILED", failed, len(test_cases))
-            return False
+            result["success"] = False
+            return result
 
     except Exception as e:
         log.error("EC read offset tests failed with exception: %s", e)
         log.exception(e)
-        return False
+        # Clean up debug logging on exception
+        if mon_config_obj and result.get("target_osds"):
+            for osd_id in result["target_osds"]:
+                mon_config_obj.remove_config(section=f"osd.{osd_id}", name="debug_osd")
+        return result
 
 
 def parse_ec_optimization_logs(
@@ -1202,6 +1335,7 @@ def parse_ec_optimization_logs(
             written_patterns = defaultdict(int)
             shard_version_count = 0
             partial_write_count = 0
+            matched_write_lines = []  # Collect all matched lines
 
             # Count total log lines captured
             log_lines_list = log_content.splitlines() if log_content else []
@@ -1213,6 +1347,7 @@ def parse_ec_optimization_logs(
                 # Look for written={...} patterns
                 written_match = re.search(r"written=\{([0-9,]*)\}", line)
                 if written_match:
+                    matched_write_lines.append(line)  # Collect matched line
                     written_set = written_match.group(1)
                     if written_set:  # Non-empty
                         # Normalize the pattern
@@ -1238,6 +1373,12 @@ def parse_ec_optimization_logs(
 
             # Cleanup temp files
             host_obj.exec_command(cmd=f"rm -f {temp_log}", sudo=True, check_ec=False)
+
+            # Print all matched write lines
+            if matched_write_lines:
+                log.debug("Matched WRITE lines in OSD.%s logs:", osd_id)
+                for matched_line in matched_write_lines:
+                    log.debug("  %s", matched_line)
 
             # Log summary
             log.info("OSD.%s Analysis Results:", osd_id)
@@ -1318,4 +1459,263 @@ def verify_partial_write_optimization(
         return False
     else:
         log.error("No EC write patterns found in logs")
+        return False
+
+
+def parse_ec_read_optimization_logs(
+    rados_obj,
+    target_osds: List[int],
+    start_time: str,
+    end_time: str,
+) -> Dict[int, Dict[str, Any]]:
+    """
+    Parse OSD logs to extract EC read optimization evidence
+
+    Looks for patterns indicating partial reads:
+    - shard_want_to_read={...} - which shards were requested
+    - shard_reads={...} - actual shard read operations
+    - to_read=[offset,length,flags] - read request details
+    - extents=[[...]] - byte ranges read from shards
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        target_osds: List of OSD IDs to analyze
+        start_time: Start time for log analysis
+        end_time: End time for log analysis
+
+    Returns:
+        Dictionary with OSD read statistics
+    """
+    results = {}
+
+    fsid = rados_obj.run_ceph_command(cmd="ceph fsid")["fsid"]
+    for osd_id in target_osds:
+        try:
+            log.info("Analyzing READ logs for OSD.%s", osd_id)
+
+            # Find which node hosts this OSD
+            cmd = f"ceph osd find {osd_id}"
+            osd_info = rados_obj.run_ceph_command(cmd=cmd)
+            osd_host = osd_info.get("host")
+            host_obj = rados_obj.get_host_object(hostname=osd_host)
+            log_path = f"/var/log/ceph/{fsid}/ceph-osd.{osd_id}.log"
+            temp_log = f"/tmp/osd_{osd_id}_ec_read_test.log"
+
+            # Extract date portion for filtering
+            start_date = start_time.split("T")[0]
+            end_date = end_time.split("T")[0]
+
+            log.debug(
+                "Extracting READ log entries for OSD.%s in time range %s to %s",
+                osd_id,
+                start_time,
+                end_time,
+            )
+            time_filter_cmd = f"grep -E '{start_date}|{end_date}' {log_path}"
+            cmd = (
+                f"{time_filter_cmd} | "
+                f"awk -v start='{start_time}' -v end='{end_time}' "
+                f"'$1 >= start && $1 <= end' "
+                f"> {temp_log} 2>/dev/null || true"
+            )
+            host_obj.exec_command(cmd=cmd, sudo=True, check_ec=False)
+
+            try:
+                count_filtered, _ = host_obj.exec_command(
+                    cmd=f"wc -l {temp_log}", sudo=True, check_ec=False
+                )
+                lines_captured = int(count_filtered.strip().split()[0])
+                log.info(
+                    "Captured %s total log lines in time range for OSD.%s",
+                    lines_captured,
+                    osd_id,
+                )
+            except Exception as e:
+                log.warning("Could not count filtered lines: %s", e)
+                lines_captured = 0
+
+            log.debug("Proceeding to Read and parse READ log")
+            log_content, _ = host_obj.exec_command(
+                cmd=f"sudo cat {temp_log}", sudo=True, check_ec=False
+            )
+
+            # Check if we captured any logs
+            if not log_content or len(log_content.strip()) == 0 or lines_captured == 0:
+                log.error(
+                    "No log entries found for OSD.%s in time range %s to %s",
+                    osd_id,
+                    start_time,
+                    end_time,
+                )
+                continue
+
+            # Parse for EC read optimization patterns
+            shard_want_to_read_patterns = defaultdict(int)
+            partial_read_count = 0
+            full_read_count = 0
+            extent_based_reads = 0
+            read_op_count = 0
+            matched_read_lines = []  # Collect all matched lines
+
+            # Count total log lines captured
+            log_lines_list = log_content.splitlines() if log_content else []
+            log_lines_captured = len(log_lines_list)
+
+            log.debug(
+                "Parsing %s lines for READ patterns on OSD.%s",
+                log_lines_captured,
+                osd_id,
+            )
+
+            for line in log_lines_list:
+                # Look for ReadOp or start_read_op to count total read operations
+                if "start_read_op" in line or "ReadOp(tid=" in line:
+                    read_op_count += 1
+
+                # Look for shard_want_to_read patterns (indicates which shards are requested)
+                # Example: shard_want_to_read={0:[0~4194304]}
+                shard_want_match = re.search(r"shard_want_to_read=\{([^}]*)\}", line)
+                if shard_want_match:
+                    matched_read_lines.append(line)  # Collect matched line
+                    shard_want_str = shard_want_match.group(1)
+                    if shard_want_str:  # Non-empty
+                        # Count number of shards in the pattern
+                        # Format: 0:[0~4194304],1:[0~4194304] or just 0:[0~4194304]
+                        num_shards = len(re.findall(r"\d+:\[", shard_want_str))
+                        shard_want_to_read_patterns[num_shards] += 1
+
+                        if num_shards == 1:
+                            partial_read_count += 1
+                        else:
+                            full_read_count += 1
+
+                # Look for extent-based reads in shard_reads
+                # Example: shard_reads={0:shard_read_t(extents=[[0~4194304]], subchunk=--, pg_shard=12(0))}
+                if "extents=[[" in line:
+                    extent_based_reads += 1
+
+            results[osd_id] = {
+                "shard_want_to_read_patterns": dict(shard_want_to_read_patterns),
+                "partial_read_count": partial_read_count,  # Reading from single shard
+                "full_read_count": full_read_count,  # Reading from multiple shards
+                "extent_based_reads": extent_based_reads,
+                "total_read_ops": read_op_count,
+                "log_lines_captured": log_lines_captured,
+            }
+
+            # Cleanup temp files
+            host_obj.exec_command(cmd=f"rm -f {temp_log}", sudo=True, check_ec=False)
+
+            # Print all matched read lines
+            if matched_read_lines:
+                log.debug("Matched READ lines in OSD.%s logs:", osd_id)
+                for matched_line in matched_read_lines:
+                    log.debug("  %s", matched_line)
+
+            # Log summary
+            log.info("OSD.%s READ Analysis Results:", osd_id)
+            log.info("  Log lines captured: %s", log_lines_captured)
+            log.info("  Total read operations: %s", read_op_count)
+            log.info("  Partial reads (single shard): %s", partial_read_count)
+            log.info("  Full reads (multiple shards): %s", full_read_count)
+            log.info("  Extent-based reads: %s", extent_based_reads)
+
+            if shard_want_to_read_patterns:
+                log.debug("  Shard read patterns breakdown:")
+                for num_shards, count in sorted(shard_want_to_read_patterns.items()):
+                    log.debug("    %s shard(s) read: %s occurrences", num_shards, count)
+
+        except Exception as e:
+            log.error("Failed to parse READ logs for OSD.%s: %s", osd_id, e)
+            continue
+
+    return results
+
+
+def verify_partial_read_optimization(
+    results: Dict[int, Dict[str, Any]], ec_k: int, ec_m: int
+) -> bool:
+    """
+    Verify that partial read optimization is working
+
+    With EC read optimization enabled:
+    - Partial reads should request data from fewer shards (ideally 1 shard for aligned reads)
+    - Should see extent-based reads with specific byte ranges
+    - Should NOT always read from all k data shards for small reads
+
+    Without optimization:
+    - Reads would request full chunks from multiple shards
+    - More read amplification
+
+    Args:
+        results: Dictionary of OSD read analysis results
+        ec_k: Number of data chunks
+        ec_m: Number of parity chunks
+
+    Returns:
+        True if optimization is verified, False otherwise
+    """
+    if not results:
+        log.error("No OSD read log data to verify")
+        return False
+
+    total_shards = ec_k + ec_m
+    log.info(
+        "READ Verification: EC k=%s, m=%s, total_shards=%s", ec_k, ec_m, total_shards
+    )
+
+    # Collect statistics across all OSDs
+    total_partial_reads = 0
+    total_full_reads = 0
+    total_extent_reads = 0
+    total_read_ops = 0
+
+    for osd_id, stats in results.items():
+        total_partial_reads += stats.get("partial_read_count", 0)
+        total_full_reads += stats.get("full_read_count", 0)
+        total_extent_reads += stats.get("extent_based_reads", 0)
+        total_read_ops += stats.get("total_read_ops", 0)
+
+    log.info("READ Verification Results:")
+    log.info("  Total read operations: %s", total_read_ops)
+    log.info("  Partial reads (single shard): %s", total_partial_reads)
+    log.info("  Full reads (multiple shards): %s", total_full_reads)
+    log.info("  Extent-based reads: %s", total_extent_reads)
+
+    # Calculate optimization ratio
+    if total_partial_reads + total_full_reads > 0:
+        optimization_ratio = (
+            total_partial_reads / (total_partial_reads + total_full_reads) * 100
+        )
+        log.info("  Optimization ratio: %.2f%% (partial/total)", optimization_ratio)
+
+    # Verification criteria
+    verification_passed = False
+    reasons = []
+
+    if total_partial_reads > 0:
+        verification_passed = True
+        reasons.append(
+            f"Found {total_partial_reads} partial read operations (single shard reads)"
+        )
+
+    if total_extent_reads > 0:
+        verification_passed = True
+        reasons.append(
+            f"Found {total_extent_reads} extent-based reads with specific byte ranges"
+        )
+
+    if verification_passed:
+        log.info("EC PARTIAL READ OPTIMIZATION VERIFIED - TEST PASSED")
+        for reason in reasons:
+            log.info("  %s", reason)
+        return True
+    else:
+        if total_full_reads > 0:
+            log.error(
+                "Only full shard reads detected (%s) - Partial read optimization NOT working",
+                total_full_reads,
+            )
+        else:
+            log.error("No EC read patterns found in logs - Cannot verify optimization")
         return False
