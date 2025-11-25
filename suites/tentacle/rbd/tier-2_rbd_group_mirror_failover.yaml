@@ -220,7 +220,6 @@ tests:
               io-threads: 16
 
   - test:
-      abort-on-fail: true
       desc: >
         Verify group info and group snapshot status on
         secondary during force promote
