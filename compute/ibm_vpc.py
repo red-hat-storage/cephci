@@ -687,6 +687,10 @@ class CephVMNodeIBM:
                     self.node["name"], node_id
                 )
             )
+            self.service = get_ibm_service(
+                access_key=self._os_cred_ibm["accesskey"],
+                service_url=self._os_cred_ibm["service_url"],
+            )
             self.service.create_instance_action(node_id, type="stop")
             if wait:
                 try:
@@ -714,6 +718,10 @@ class CephVMNodeIBM:
             node_id = self.node["id"]
             LOG.info(
                 "Powering on IBM node: {} (ID: {})".format(self.node["name"], node_id)
+            )
+            self.service = get_ibm_service(
+                access_key=self._os_cred_ibm["accesskey"],
+                service_url=self._os_cred_ibm["service_url"],
             )
             self.service.create_instance_action(node_id, type="start")
             self._wait_until_vm_state(node_id, target_state="running")
