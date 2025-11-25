@@ -144,7 +144,6 @@ tests:
       name: deploy rbd-mirror daemon
 
   - test:
-      abort-on-fail: true
       desc: Verify Consistency group mirroring across two clusters
       name: Test Consistency Group Mirroring
       module: test_group_mirror.py
@@ -181,7 +180,6 @@ tests:
                 io_type: randrw
 
   - test:
-      abort-on-fail: true
       desc: Verify Addition and removal of Images to Consistency group
       name: Test Addition and removal in Consistency Group Mirroring
       module: test_add_remove_group_mirror.py
@@ -217,7 +215,6 @@ tests:
                 io_type: randrw
 
   - test:
-      abort-on-fail: true
       desc: Verify Group Renaming while mirroring in progress
       name: Test Group Renaming while mirroring in progress
       module: test_group_mirror.py
@@ -254,44 +251,6 @@ tests:
                 io_type: randrw
 
   - test:
-      abort-on-fail: true
-      desc: >
-        Verify failover failback during orderly and
-        non-orderly shutdown
-      name: Verify failover failback during orderly and non-orderly shutdown
-      module: test_rbd_group_mirror_failover.py
-      polarion-id: CEPH-83613277
-      clusters:
-        ceph-rbd1:
-          config:
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            fio:
-              size: 1G
-              ODF_CONFIG:
-                num_jobs: 4
-                iodepth: 32
-                rwmixread: 70
-                direct: 1
-                invalidate: 1
-                io_type: randrw
-
-  - test:
-      abort-on-fail: true
       desc: >
         Verify group mirroring with zero size Image
       name: Verify group mirroring with zero size Image
@@ -318,7 +277,6 @@ tests:
               mirror_level: group
 
   - test:
-      abort-on-fail: true
       desc: Verify negative test cases Consistency group
       name: Test negative test cases Consistency Group Mirroring
       module: test_group_mirror_neg_case.py
@@ -345,269 +303,13 @@ tests:
               mirror_level: group
 
   - test:
-      abort-on-fail: true
       desc: >
-        Verify group level consistency after primary site
-        disaster during data syncing
+        Verify other snapshot schedules for group mirroring
       name: >
-        Verify group level data consistency
-        on secondary after primary site disaster
-      module: test_rbd_group_mirror_consistency.py
-      polarion-id: CEPH-83613291
-      clusters:
-        ceph-rbd1:
-          config:
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 100M
-              mode: image
-              mirror_level: group
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 100M
-              mode: image
-              mirror_level: group
-            operation: CEPH-83613291
-            io_small:
-              io-type: write
-              io-size_init: 20M
-              io_size: 40M
-              io-threads: 16
-            io_large:
-              io-type: write
-              io-size_init: 1G
-              io_size: 9G
-              io-threads: 16
-
-  - test:
-      abort-on-fail: true
-      desc: verify snapshot schedules when client is blocklisted
-      name: >
-        Add or remove group mirror snapshot schedule when
-        client is blocklisted
+        Test snapshot schedule at image and namespace level when
+        group snapshot scheduling is enabled
       module: test_rbd_group_mirror_misc.py
-      polarion-id: CEPH-83613275
-      clusters:
-        ceph-rbd1:
-          config:
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            operation: CEPH-83613275
-            fio:
-              size: 1G
-              ODF_CONFIG:
-                num_jobs: 4
-                iodepth: 32
-                rwmixread: 70
-                direct: 1
-                invalidate: 1
-                io_type: randrw
-
-  - test:
-      abort-on-fail: true
-      desc: Verify Toggle enable and disable for group mirroring
-      name: Test Toggle enable and disable for group mirroring
-      module: test_group_mirror.py
-      polarion-id: CEPH-83613271
-      clusters:
-        ceph-rbd1:
-          config:
-            operation: CEPH-83613271
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            fio:
-              size: 1G
-              runtime: 60
-              ODF_CONFIG:
-                num_jobs: 4
-                iodepth: 32
-                rwmixread: 70
-                direct: 1
-                invalidate: 1
-                io_type: randrw
-
-  - test:
-      abort-on-fail: true
-      desc: verify unsupported operations on group mirror
-      name: >
-        Image, pool level promote, demote when group
-        mirroring is enabled, disabled
-      module: test_rbd_group_mirror_misc.py
-      polarion-id: CEPH-83614239
-      clusters:
-        ceph-rbd1:
-          config:
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            operation: CEPH-83614239
-
-  - test:
-      abort-on-fail: true
-      desc: >
-        Verify Adding removing listing mirror group snapshot
-        schedule when group mirroring is disabled
-      name: >
-        Test Adding removing listing mirror group snapshot
-        schedule when group mirroring is disabled
-      module: test_group_mirror_neg_case.py
-      polarion-id: CEPH-83620497
-      clusters:
-        ceph-rbd1:
-          config:
-            operation: CEPH-83620497
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 1
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 1
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-
-  - test:
-      abort-on-fail: true
-      desc: Verify data is consistent for both manual and scheduled snapshots
-      name: >
-        Verify mirror group snapshot schedule & manual mirror
-        group snapshot for consistency
-      module: test_rbd_group_mirror_consistency.py
-      polarion-id: CEPH-83610861
-      clusters:
-        ceph-rbd1:
-          config:
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              do_not_create_image: true
-              size: 4G
-              mode: image
-              mirror_level: group
-            snap_schedule_interval: 1m
-            operation: CEPH-83610861
-            fio:
-              size: 1G
-              runtime: 60
-              ODF_CONFIG:
-                num_jobs: 4
-                iodepth: 32
-                rwmixread: 70
-                direct: 1
-                invalidate: 1
-                io_type: randrw
-
-  - test:
-      abort-on-fail: true
-      desc: >
-        Verify group info and group snapshot status on
-        secondary during force promote
-      name: >
-        Test group info and group snapshot status on
-        secondary during force promote
-      module: test_group_info_while_force_promote.py
-      polarion-id: CEPH-83620649
-      clusters:
-        ceph-rbd1:
-          config:
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 1
-              do_not_create_image: true
-              size: 25G
-              mode: image
-              mirror_level: group
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 1
-              do_not_create_image: true
-              size: 25G
-              mode: image
-              mirror_level: group
-            fio:
-              size: 20G
-              ODF_CONFIG:
-                num_jobs: 4
-                iodepth: 32
-                rwmixread: 70
-                direct: 1
-                invalidate: 1
-                io_type: randrw
-
-  - test:
-      abort-on-fail: true
-      desc: >
-        Verify multi-group two-way mirroring
-      name: >
-        Verify multiple mirrored groups with multiple images,
-        some primary on cluster1 and some on cluster2
-      module: test_rbd_group_multi_two_way_mirror.py
-      polarion-id: CEPH-83613276
+      polarion-id: CEPH-83614240
       clusters:
         ceph-rbd1:
           config:
@@ -627,44 +329,4 @@ tests:
               do_not_create_image: true
               size: 1G
               mode: image
-            fio:
-              size: 500M
-              runtime: 30
-              ODF_CONFIG:
-                num_jobs: 4
-                iodepth: 32
-                rwmixread: 70
-                direct: 1
-                invalidate: 1
-                io_type: randrw
-
-  - test:
-      abort-on-fail: true
-      desc: >
-        Toggle on demote/promote after split brain+resync and disabling
-        group mirroring leads to secondary group
-      name: >
-        Toggle on demote promote after split brain resync and
-        disabling group mirroring leads to secondary group failure
-      module: test_rbd_group_mirror_misc.py
-      polarion-id: CEPH-83620584
-      clusters:
-        ceph-rbd1:
-          config:
-            rep_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              mirror_level: group
-              do_not_create_image: true
-              size: 1G
-              mode: image
-            ec_pool_config:
-              rbd_mirror_group: true
-              num_pools: 1
-              num_images: 2
-              mirror_level: group
-              do_not_create_image: true
-              size: 1G
-              mode: image
-            operation: CEPH-83620584
+            operation: CEPH-83614240
