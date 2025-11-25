@@ -303,7 +303,6 @@ tests:
               mirror_level: group
 
   - test:
-      abort-on-fail: true
       desc: >
         Verify other snapshot schedules for group mirroring
       name: >
