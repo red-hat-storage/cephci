@@ -771,6 +771,291 @@ def run(ceph_cluster, **kw):
 
             log.info("Scenario-10 completed successfully")
 
+        if "scenario-11" in scenarios_to_run:
+            """
+            Test compression validation when primary OSD host is restarted after IO.
+            Steps:
+            1) Create pool, store primary, secondary and tertiary OSD IDs
+            2) Enable compression
+            3) Write IO to the pool
+            4) Validate primary, secondary, tertiary OSDs are compressed
+            5) Restart Primary OSD host
+            6) Post restart validate primary OSD is still compressed
+            7) Delete pool
+            """
+            compression_mode = COMPRESSION_MODES.FORCE
+            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
+            compression_obj = BluestoreDataCompression(
+                rados_obj=rados_obj,
+                cephadm=cephadm,
+                mon_obj=mon_obj,
+                client_node=client_node,
+                ceph_cluster=ceph_cluster,
+            )
+            object_size = 100000
+            objectstore_obj = objectstoreToolWorkflows(node=cephadm)
+
+            # Create unique pool name
+            pool_suffix = "".join(
+                random.choices(string.ascii_letters + string.digits, k=6)
+            )
+            pool_name = f"rados-{pool_suffix}"
+            rbd_img = "rbd_img" + "".join(
+                random.choices(string.ascii_letters + string.digits, k=6)
+            )
+
+            log.info(
+                "Starting scenario-11: Compression validation with primary OSD host "
+                "restart after IO, mode: %s, algo: %s"
+                % (compression_mode, compression_algorithm)
+            )
+
+            # Step 1: Create pool
+            compression_obj.create_pool_wrapper(pool_name=pool_name)
+            acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
+            primary_osd_id = acting_pg_set[0]
+            secondary_osd_id = acting_pg_set[1] if len(acting_pg_set) > 1 else None
+            tertiary_osd_id = acting_pg_set[2] if len(acting_pg_set) > 2 else None
+
+            log.info(
+                "PG acting set: primary=%s, secondary=%s, tertiary=%s"
+                % (primary_osd_id, secondary_osd_id, tertiary_osd_id)
+            )
+
+            if secondary_osd_id is None or tertiary_osd_id is None:
+                raise Exception(
+                    "No secondary or tertiary OSD found in acting set. "
+                    "Test requires at least 3 OSDs in acting set."
+                )
+
+            # Get primary OSD host
+            primary_osd_host = rados_obj.fetch_host_node(
+                daemon_type="osd", daemon_id=str(primary_osd_id)
+            )
+            if primary_osd_host is None:
+                raise Exception(
+                    "Failed to fetch host node for primary OSD %s" % primary_osd_id
+                )
+            primary_osd_hostname = getattr(primary_osd_host, "hostname", None)
+            if primary_osd_hostname is None:
+                raise Exception(
+                    "Host node for primary OSD %s does not have hostname attribute"
+                    % primary_osd_id
+                )
+            log.info(
+                "Primary OSD %s is on host %s" % (primary_osd_id, primary_osd_hostname)
+            )
+
+            # Step 2: Enable compression
+            log.info("Step 2: Enabling compression on pool %s" % pool_name)
+            compression_obj.enable_compression(
+                compression_mode=compression_mode,
+                compression_algorithm=compression_algorithm,
+                pool_level_compression=pool_level_compression,
+                pool_name=pool_name,
+            )
+
+            # Create RBD image
+            cmd = "rbd create %s --size 10G --pool %s" % (rbd_img, pool_name)
+            try:
+                rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                log.info("Created RBD image: %s" % rbd_img)
+            except Exception as e:
+                raise Exception("Failed to create RBD image: %s" % e)
+
+            # Step 3: Write IO to the pool
+            log.info("Step 3: Writing IO to pool %s" % pool_name)
+            compression_obj.write_io_and_fetch_log_lines(
+                write_utility_type=IOTools.FIO,
+                primary_osd_id=str(primary_osd_id),
+                pool_name=pool_name,
+                object_size=int(object_size),
+                blob_size=int(object_size),
+                rbd_img=rbd_img,
+                patterns=[],
+            )
+            time.sleep(10)
+
+            # Step 4: Validate primary, secondary, tertiary is compressed
+            log.info(
+                "Step 4: Validating compression on primary, secondary, and tertiary OSDs..."
+            )
+
+            blobs_primary = compression_obj.validate_blobs_are_compressed(
+                osd_id=primary_osd_id,
+                objectstore_obj=objectstore_obj,
+                pool_name=pool_name,
+            )
+            if blobs_primary is False:
+                raise Exception("Blobs on primary OSD are not compressed")
+
+            blobs_secondary = compression_obj.validate_blobs_are_compressed(
+                osd_id=secondary_osd_id,
+                objectstore_obj=objectstore_obj,
+                pool_name=pool_name,
+            )
+            if blobs_secondary is False:
+                raise Exception("Blobs on secondary OSD are not compressed")
+
+            blobs_tertiary = compression_obj.validate_blobs_are_compressed(
+                osd_id=tertiary_osd_id,
+                objectstore_obj=objectstore_obj,
+                pool_name=pool_name,
+            )
+            if blobs_tertiary is False:
+                raise Exception("Blobs on tertiary OSD are not compressed")
+
+            log.info(
+                "All OSDs (primary, secondary, tertiary) are compressed successfully"
+            )
+
+            # Step 5: Restart Primary OSD host
+            log.info("Step 5: Restarting primary OSD host %s" % primary_osd_hostname)
+            target_node = find_vm_node_by_hostname(ceph_cluster, primary_osd_hostname)
+            if target_node is None:
+                raise Exception(
+                    "Failed to find VM node for hostname %s" % primary_osd_hostname
+                )
+
+            # stop the host and wait for PGs to reach active + clean
+            target_node.shutdown(wait=True)
+            log.info("Host %s shutdown successfully" % primary_osd_hostname)
+
+            # start the host and wait for PGs to reach active + clean
+            target_node.power_on()
+            log.info("Host %s powered on successfully" % primary_osd_hostname)
+
+            log.info("Waiting for cluster to stabilize and recovery after host restart")
+            wait_for_clean_pg_sets(rados_obj=rados_obj)
+
+            # Ensure the PG acting set is the same as before the restart
+            acting_pg_set_post_osd_restart = rados_obj.get_pg_acting_set(
+                pool_name=pool_name
+            )
+            acting_pg_set_pre_osd_restart = acting_pg_set
+
+            if (
+                acting_pg_set_post_osd_restart.sort()
+                != acting_pg_set_pre_osd_restart.sort()
+            ):
+                raise Exception("PG acting set changed after OSD restart")
+
+            # Step 6: Post restart validate primary OSD is still compressed
+            log.info(
+                "Step 6: Validating primary OSD %s is still compressed after host restart"
+                % primary_osd_id
+            )
+            is_primary_compressed = compression_obj.validate_blobs_are_compressed(
+                osd_id=primary_osd_id,
+                objectstore_obj=objectstore_obj,
+                pool_name=pool_name,
+            )
+            if not is_primary_compressed:
+                raise Exception(
+                    "Blobs on primary OSD are not compressed after host restart"
+                )
+
+            log.info("Primary OSD is still compressed after host restart")
+
+            # Step 7: Delete pool
+            log.info("Step 7: Deleting pool %s" % pool_name)
+            if not rados_obj.delete_pool(pool=pool_name):
+                raise Exception("Failed to delete pool %s" % pool_name)
+
+            log.info("Scenario-11 completed successfully")
+
+        if "scenario-12" in scenarios_to_run:
+            """
+            Test data integrity by writing data, retrieving data, and verifying checksum.
+            Steps:
+            1) Create pool
+            2) Enable compression
+            3) Write data to the pool and store md5 checksum using fio
+            4) Read data from the pool and verify md5 checksum using fio
+                If checksum does not match, exit code of FIO command will be 1
+            5) Cleanup pool
+            """
+            compression_mode = COMPRESSION_MODES.FORCE
+            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
+            compression_obj = BluestoreDataCompression(
+                rados_obj=rados_obj,
+                cephadm=cephadm,
+                mon_obj=mon_obj,
+                client_node=client_node,
+                ceph_cluster=ceph_cluster,
+            )
+            rbd_img = "rbd_img" + "".join(
+                random.choices(string.ascii_letters + string.digits, k=6)
+            )
+            object_size = "16MB"
+
+            # Create unique pool name
+            pool_suffix = "".join(
+                random.choices(string.ascii_letters + string.digits, k=6)
+            )
+            pool_name = f"rados-{pool_suffix}"
+
+            log.info(
+                "Starting scenario-12: Write data, retrieve data, and verify checksum, "
+                "mode: %s, algo: %s" % (compression_mode, compression_algorithm)
+            )
+
+            # Step 1: Create pool
+            log.info("Step 1: Creating pool %s" % pool_name)
+            compression_obj.create_pool_wrapper(pool_name=pool_name)
+
+            # Step 2: Enable compression
+            log.info("Step 2: Enabling compression on pool %s" % pool_name)
+            compression_obj.enable_compression(
+                compression_mode=compression_mode,
+                compression_algorithm=compression_algorithm,
+                pool_level_compression=pool_level_compression,
+                pool_name=pool_name,
+            )
+
+            # Create RBD image
+            cmd = "rbd create %s --size 10G --pool %s" % (rbd_img, pool_name)
+            try:
+                rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                log.info("Created RBD image: %s" % rbd_img)
+            except Exception as e:
+                raise Exception("Failed to create RBD image: %s" % e)
+
+            log.info("Step 3:  Write data to the pool and store md5 checksum using fio")
+            cmd_write: str = f"""fio --ioengine=rbd --direct=1 --name=test-verify --iodepth=1 \
+--bs=4M --rw=write --numjobs=1 --size={object_size} --pool={pool_name} --rbdname={rbd_img} \
+--zero_buffers=0 --refill_buffers=1 --buffer_compress_percentage=70 --verify=md5 --do_verify=0 \
+--verify_dump=1
+    """
+            _, _, exit_code, _ = compression_obj.client_node.exec_command(
+                cmd=cmd_write, sudo=True, pretty_print=True, verbose=True
+            )
+            if exit_code != 0:
+                raise Exception("Failed to write data to the pool")
+
+            log.info(
+                "Step 4:  read data from the pool and verify md5 checksum are identical using fio"
+            )
+            cmd_read: str = f"""fio --ioengine=rbd --direct=1 --name=test-verify --iodepth=1 \
+--bs=4M --rw=read --numjobs=1 --size={object_size} --pool={pool_name} --rbdname={rbd_img} \
+--zero_buffers=0 --refill_buffers=1 --buffer_compress_percentage=70 --verify=md5 --do_verify=1 \
+--verify_fatal=1 --verify_state_load=1
+    """
+            _, _, exit_code, _ = compression_obj.client_node.exec_command(
+                cmd=cmd_read, sudo=True, pretty_print=True, verbose=True
+            )
+            if exit_code != 0:
+                raise Exception(
+                    "Checksum of data written to compressed pool and read from compressed pool does not match"
+                )
+
+            # Cleanup pool
+            log.info("Step 5: Cleaning up pool %s" % pool_name)
+            if not rados_obj.delete_pool(pool=pool_name):
+                raise Exception("Failed to delete pool %s" % pool_name)
+
+            log.info("Scenario-12 completed successfully")
+
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
         log.exception(e)

@@ -316,6 +316,24 @@ tests:
           scenarios_to_run:
             - scenario-10
 
+  - test:
+        name: Bluestore compression validation post OSD restart
+        module: test_bluestore_comp_enhancements.py
+        desc: Positive workflows for bluestore data compression enhancements
+        polarion-id: CEPH-83620071
+        config:
+          scenarios_to_run:
+            - scenario-11
+
+  - test:
+        name: Bluestore compression data integrity test
+        module: test_bluestore_comp_enhancements.py
+        desc: Positive workflows for bluestore data compression enhancements
+        polarion-id: CEPH-83620071
+        config:
+          scenarios_to_run:
+            - scenario-12
+
  # scenario-8 disables bluestore_write_v2
   - test:
         name: Bluestore disable bluestore_write_v2 and validate
