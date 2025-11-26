@@ -84,21 +84,13 @@ tests:
               args:
                 - ceph osd pool application enable rbd rbd
           - config:
-              command: shell
-              args:
-                - ceph osd pool create nvmeof_pool
-          - config:
-              command: shell
-              args:
-                - ceph osd pool application enable nvmeof_pool nvmeof_pool
-          - config:
               command: apply
               service: nvmeof
               args:
                 placement:
                   label: nvmeof-gw
               pos_args:
-                - nvmeof_pool
+                - rbd
                 - group1
       desc: NVMeoF Gateway deployment using cephadm
       destroy-cluster: false
@@ -162,11 +154,11 @@ tests:
         rbd_pool: rbd
         nvme_metadata_pool: rbd
         install: true
-        gw_group: gw_group1
+        gw_group: group1
         do_not_create_image: true
         rep-pool-only: true
         rep_pool_config:
-          pool: rbd_pool
+          pool: rbd
         cleanup:
           - subsystems
           - disconnect_all
@@ -207,8 +199,8 @@ tests:
           - unregister_args:
               rrega: 1
         initiators: # Configure Initiators with all pre-req
-          - node10
-          - node11
+          - node8
+          - node9
       desc: >
             verifies the read and write operations from two clients
             for the various reservation types
