@@ -2,8 +2,11 @@ import json
 
 from cli import Cli
 from cli.utilities.utils import build_cmd_from_args
+from utility.log import Log
 
 from .qos import Qos
+
+log = Log(__name__)
 
 
 class Cluster(Cli):
@@ -13,7 +16,14 @@ class Cluster(Cli):
         self.qos = Qos(nodes, self.base_cmd)
 
     def create(
-        self, name, nfs_server, ha=False, vip=None, active_standby=False, **kwargs
+        self,
+        name,
+        nfs_server,
+        ha=False,
+        vip=None,
+        active_standby=False,
+        nfs_nodes_obj=None,
+        **kwargs,
     ):
         """
         Perform create operation for nfs cluster
@@ -25,6 +35,9 @@ class Cluster(Cli):
             active_standby (bool): Flag to check if active standby is required
         """
         nfs_server = nfs_server if type(nfs_server) in (list, tuple) else [nfs_server]
+        if nfs_nodes_obj:
+            for node_obj in nfs_nodes_obj:
+                self.validate_rpcbind_running(node_obj)
         nfs_server = " ".join(nfs_server)
         if active_standby and ha:
             nfs_server = "1 " + nfs_server
@@ -85,3 +98,34 @@ class Cluster(Cli):
             return json.loads(out)
         except json.JSONDecodeError:
             raise ValueError("Failed to parse JSON output")
+
+    def validate_rpcbind_running(self, nfs_node):
+        """
+        Check if the rpcbind service is running on RHEL 10.1 OS
+        """
+        try:
+            # Check the OS version
+            out, _ = nfs_node.exec_command(sudo=True, cmd="cat /etc/redhat-release")
+            os_ver = out.strip()
+
+            if "Red Hat Enterprise Linux release 10.1" not in os_ver:
+                log.debug(f"OS is not RHEL 10.1 (found: {os_ver})")
+                return
+
+            log.info("OS is RHEL 10.1, check rpcbind service status")
+
+            # Check rpcbind service status
+            out, err = nfs_node.exec_command(
+                sudo=True, cmd="systemctl is-active rpcbind", check_ec=False
+            )
+
+            status = out.strip() if out else "inactive"
+
+            if status != "active":
+                log.info("rpcbind service is not running, start the service")
+                nfs_node.exec_command(sudo=True, cmd="systemctl enable --now rpcbind")
+            else:
+                log.info("rpcbind already running")
+
+        except Exception as e:
+            log.error(f"Failed to check/start rpcbind: {e}")
