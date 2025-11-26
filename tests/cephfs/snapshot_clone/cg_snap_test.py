@@ -271,8 +271,10 @@ def run(ceph_cluster, **kw):
                 nfs_server = nfs_servers[0].node.hostname
                 nfs_name = "cephfs-nfs"
                 client1 = clients[0]
-                client1.exec_command(
-                    sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
+                fs_util_v1.create_nfs(
+                    client1,
+                    nfs_cluster_name=nfs_name,
+                    nfs_server_name=nfs_server,
                 )
                 if wait_for_process(
                     client=client1, process_name=nfs_name, ispresent=True

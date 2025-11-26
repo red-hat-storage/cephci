@@ -117,8 +117,10 @@ def run(ceph_cluster, **kw):
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
         clients[0].exec_command(sudo=True, cmd="ceph mgr module enable nfs")
-        clients[0].exec_command(
-            sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
+        fs_util_v1.create_nfs(
+            clients[0],
+            nfs_cluster_name=nfs_name,
+            nfs_server_name=nfs_server,
         )
         if wait_for_process(client=clients[0], process_name=nfs_name, ispresent=True):
             log.info("ceph nfs cluster created successfully")

@@ -104,8 +104,10 @@ class CephFSCommonUtils(FsUtils):
         nfs_server = nfs_servers[0].node.hostname
         out, _ = client.exec_command(sudo=True, cmd="ceph nfs cluster ls")
         if nfs_name not in out:
-            client.exec_command(
-                sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
+            self.create_nfs(
+                client,
+                nfs_cluster_name=nfs_name,
+                nfs_server_name=nfs_server,
             )
         if wait_for_process(client=client, process_name=nfs_name, ispresent=True):
             log.info("ceph nfs cluster created successfully")

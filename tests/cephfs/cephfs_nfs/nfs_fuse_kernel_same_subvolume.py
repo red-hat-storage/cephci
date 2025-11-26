@@ -62,8 +62,10 @@ def run(ceph_cluster, **kw):
 
         if not fs_details:
             fs_util.create_fs(client1, fs_name)
-        client1.exec_command(
-            sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs_server}"
+        fs_util.create_nfs(
+            client1,
+            nfs_cluster_name=nfs_name,
+            nfs_server_name=nfs_server,
         )
         if wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             log.info("ceph nfs cluster created successfully")

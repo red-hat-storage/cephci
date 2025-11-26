@@ -23,6 +23,7 @@ class Cluster(Cli):
         vip=None,
         active_standby=False,
         nfs_nodes_obj=None,
+        check_ec=True,
         **kwargs,
     ):
         """
@@ -46,7 +47,10 @@ class Cluster(Cli):
             cmd += " --ingress --virtual-ip {0}".format(vip)
 
         cmd = "".join(cmd + build_cmd_from_args(**kwargs))
-        out = self.execute(sudo=True, cmd=cmd)
+        try:
+            out = self.execute(sudo=True, cmd=cmd, check_ec=check_ec)
+        except Exception as e:
+            raise RuntimeError(f"Failed to create NFS cluster: {e}")
         if isinstance(out, tuple):
             return out[0].strip()
         return out

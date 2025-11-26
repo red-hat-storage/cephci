@@ -74,8 +74,10 @@ def run(ceph_cluster, **kw):
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
         )
 
-        out, rc = client1.exec_command(
-            sudo=True, cmd=f"ceph nfs cluster create {nfs_name} {nfs1},{nfs2}"
+        fs_util.create_nfs(
+            client1,
+            nfs_cluster_name=nfs_name,
+            nfs_server_name=[nfs1, nfs2],
         )
         if not wait_for_process(client=client1, process_name=nfs_name, ispresent=True):
             raise CommandFailed("Cluster has not been created")

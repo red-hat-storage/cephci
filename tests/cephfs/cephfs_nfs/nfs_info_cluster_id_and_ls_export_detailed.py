@@ -74,8 +74,10 @@ def run(ceph_cluster, **kw):
         )
 
         passed = []
-        client1.exec_command(
-            sudo=True, cmd=f'ceph nfs cluster create {cluster_id} "{nfs_target_node}"'
+        fs_util.create_nfs(
+            client1,
+            nfs_cluster_name=cluster_id,
+            nfs_server_name=nfs_target_node,
         )
         cmd_nfs_export = (
             f"ceph nfs export create cephfs {cluster_id} {bind} {fs_name} --path={path}"

@@ -31,7 +31,7 @@ def run(ceph_cluster, **kw):
     """
     try:
         global fs_system_utils, snap_util, cephfs_common_utils, fs_io, nfs_name, nfs_server, sv_test_params, clients
-        global nfs_servers
+        global nfs_servers, fs_util
         test_data = kw.get("test_data")
         fs_util = FsUtilsv1(ceph_cluster, test_data=test_data)
         cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
@@ -268,8 +268,10 @@ def setup_test_obj(obj_name, obj_type, **kwargs):
                     sudo=True, cmd="ceph nfs cluster ls;ceph orch ls"
                 )
                 log.info(out)
-                clients[0].exec_command(
-                    sudo=True, cmd=f"ceph nfs cluster create {obj_name} {nfs_server1}"
+                fs_util.create_nfs(
+                    clients[0],
+                    nfs_cluster_name=obj_name,
+                    nfs_server_name=nfs_server1,
                 )
                 if wait_for_process(
                     client=clients[0], process_name=obj_name, ispresent=True

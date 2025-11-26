@@ -88,13 +88,18 @@ spec:
             )
         )
 
-        client1.exec_command(
-            sudo=True,
-            cmd=f'ceph nfs cluster create {nfs_name} "2 {nfs_servers[0].node.hostname} '
-            f'{nfs_servers[1].node.hostname} {nfs_servers[2].node.hostname}" '
-            f"--ingress --virtual-ip {virtual_ip}/{subnet}",
+        fs_util_v1.create_nfs(
+            client1,
+            nfs_cluster_name=nfs_name,
+            nfs_server_name=[
+                "2",
+                nfs_servers[0].node.hostname,
+                nfs_servers[1].node.hostname,
+                nfs_servers[2].node.hostname,
+            ],
+            ha=True,
+            vip=f"{virtual_ip}/{subnet}",
         )
-
         filename = "nfs_ha_keepalive.yaml"
         nfs_file = clients[0].remote_file(
             sudo=True,

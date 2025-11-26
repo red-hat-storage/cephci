@@ -67,9 +67,10 @@ def run(ceph_cluster, **kw):
         cluster_name = f"nfs_{rand}"
         # create a nfs cluster with 2 hosts
         log.info(f"Deplying nfs cluster with {candidate_1} {candidate_2}")
-        client1.exec_command(
-            sudo=True,
-            cmd=f'ceph nfs cluster create {cluster_name} "{candidate_1} {candidate_2}"',
+        fs_util.create_nfs(
+            client1,
+            nfs_cluster_name=cluster_name,
+            nfs_server_name=[candidate_1, candidate_2],
         )
         verify_host_nfs(client1, [candidate_1, candidate_2], cluster_name)
         # reduce host to 1

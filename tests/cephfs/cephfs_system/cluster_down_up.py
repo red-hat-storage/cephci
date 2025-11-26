@@ -95,9 +95,13 @@ def run(ceph_cluster, **kw):
             nfs_server = nfs_servers[0].node.hostname
             # Create ceph nfs cluster
             nfs_client[0].exec_command(sudo=True, cmd="ceph mgr module enable nfs")
-            out, rc = nfs_client[0].exec_command(
-                sudo=True,
-                cmd=f"ceph nfs cluster create {nfs_name} {nfs_servers[0].node.hostname},{nfs_servers[1].node.hostname}",
+            fs_util.create_nfs(
+                nfs_client[0],
+                nfs_cluster_name=nfs_name,
+                nfs_server_name=[
+                    nfs_servers[0].node.hostname,
+                    nfs_servers[1].node.hostname,
+                ],
             )
             # Verify ceph nfs cluster is created
             if wait_for_process(
