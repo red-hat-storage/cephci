@@ -18,9 +18,9 @@ from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.utils import get_node_by_id
+from cephci.utils.build_info import CephTestManifest
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
-from utility.utils import fetch_build_artifacts, fetch_build_version
 
 log = Log(__name__)
 
@@ -50,7 +50,6 @@ def run(ceph_cluster, **kw):
                     services: Comma-separated service names to upgrade (e.g., "mon,mgr") (optional)
                 base_cmd_args: Base command arguments (e.g., verbose: true)
                 timeout: Timeout for upgrade completion in seconds (default: 3600)
-                ibm_build: Boolean flag for IBM build (default: False)
                 verify_warning: Check if the health warnings during the upgrade is generated & removed post upgrade
                 verify_older_version_warn: Check if DAEMON_OLD_VERSION warning is generated
                 verify_daemons: Check for daemon existence on cluster post upgrade
@@ -69,7 +68,6 @@ def run(ceph_cluster, **kw):
     timeout = config.get("timeout", 3600)
     rhbuild = config.get("rhbuild")
     cephadm_obj = CephAdmin(cluster=ceph_cluster, **config)
-    cluster_obj = Orch(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm_obj)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     verify_warning = config.get("verify_warning", False)
@@ -118,9 +116,9 @@ def run(ceph_cluster, **kw):
         # available only for RH network.
         _rhcs_version = args.get("rhcs-version", None)
         _rhcs_release = args.get("release", None)
+        _platform = args.get("platform", config["platform"])
         _custom_image = args.get("custom_image", None)
         _custom_repo = args.get("custom_repo", None)
-        _ibm_build = config.get("ibm_build", False)
         _rpm_version = None
         if _rhcs_release and _rhcs_version:
             curr_ver, _ = cephadm_obj.shell(args=["ceph version | awk '{print $3}'"])
@@ -128,10 +126,18 @@ def run(ceph_cluster, **kw):
                 "Upgrading the cluster from ceph version %s to %s-%s "
                 % (curr_ver, _rhcs_version, _rhcs_release)
             )
-            _platform = "-".join(rhbuild.split("-")[1:])
-            _base_url, _registry, _image_name, _image_tag = fetch_build_artifacts(
-                _rhcs_release, _rhcs_version, _platform, ibm_build=_ibm_build
+            product: str = args.get("--product", "redhat")
+            ctm: CephTestManifest = CephTestManifest(
+                product=product,
+                release=_rhcs_version,
+                build_type=_rhcs_release,
+                platform=_platform,
             )
+            _base_url = ctm.repository
+            _registry = ctm.ceph_image_dtr
+            _image_name = ctm.ceph_image_path
+            _image_tag = ctm.ceph_image_tag
+            _ver = ctm.ceph_version
 
             # The cluster object is configured so that the values are persistent till
             # an upgrade occurs. This enables us to execute the test in the right
@@ -146,9 +152,6 @@ def run(ceph_cluster, **kw):
             config["args"]["rhcs-version"] = _rhcs_version
             config["args"]["release"] = _rhcs_release
             config["args"]["image"] = config["container_image"]
-            _ver = fetch_build_version(
-                rhbuild=_rhcs_version, version=_rhcs_release, ibm_build=_ibm_build
-            )
             os_ver = rhbuild.split("-")[-1]
             _rpm_version = f"2:{_ver}.el{os_ver}cp"
         elif _custom_image and _custom_repo:

@@ -24,6 +24,7 @@ tests:
               args:
                 rhcs-version: 8.0
                 release: rc
+                platform: rhel-9
                 mon-ip: mero001
                 allow-fqdn-hostname: true
                 yes-i-know: true
