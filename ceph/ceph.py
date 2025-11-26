@@ -955,6 +955,9 @@ class Ceph(object):
             base_url = base_url.rstrip("/")
             if cloud_type == "openstack":
                 repo_to_use = f"{base_url}/compose/{repo}/x86_64/os/"
+            elif cloud_type == "ibmc":
+                if not base_url.endswith(".repo"):
+                    repo_to_use = f"{base_url}/Tools"
             else:
                 # The expecatation in other datacenters is Tools suffix is
                 # added by default. This is done for support of earlier
