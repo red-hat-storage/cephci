@@ -18,9 +18,11 @@ from ceph.rbd.workflows.cluster_operations import operation, osd_remove_and_add_
 from ceph.utils import get_node_by_id
 from cli.utilities.utils import reboot_node
 from tests.cephadm import test_orch
-from tests.nvmeof.test_ceph_nvmeof_gateway import initiators
 from tests.nvmeof.workflows.gateway_entities import configure_gw_entities, teardown
-from tests.nvmeof.workflows.initiator import NVMeInitiator
+from tests.nvmeof.workflows.initiator import (
+    NVMeInitiator,
+    prepare_initiator_and_run_fio,
+)
 from tests.nvmeof.workflows.nvme_service import NVMeService
 from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
 from tests.rbd.rbd_utils import initial_rbd_config
@@ -60,7 +62,12 @@ def test_ceph_83575812(ceph_cluster, rbd, nvme_service, pool, config):
         if config.get("initiators"):
             with parallel() as p:
                 for initiator in config["initiators"]:
-                    p.spawn(initiators, ceph_cluster, nvmegwcli, initiator)
+                    p.spawn(
+                        prepare_initiator_and_run_fio,
+                        ceph_cluster,
+                        nvmegwcli,
+                        initiator,
+                    )
                     sleep(20)
                     out, err = rbd.remove_image(
                         pool, rbd_image_name, **{"all": True, "check_ec": False}
@@ -100,7 +107,7 @@ def test_ceph_83575467(ceph_cluster, rbd, nvme_service, pool, config):
 
         sub_args = {"base_cmd_args": {"format": "json"}}
         for initiator in config["initiators"]:
-            initiators(ceph_cluster, nvmegwcli, initiator)
+            prepare_initiator_and_run_fio(ceph_cluster, nvmegwcli, initiator)
         gw_info_bkp = list_subsystems(**sub_args)
         gw_info_bkp = json.loads(gw_info_bkp.strip())["subsystems"]
 
@@ -153,7 +160,7 @@ def test_ceph_83575813(ceph_cluster, rbd, nvme_service, pool, config):
         # Run IOS on nvme namespaces
         initiator.disconnect_all()
         for i in config["initiators"]:
-            initiators(ceph_cluster, nvmegwcli, i)
+            prepare_initiator_and_run_fio(ceph_cluster, nvmegwcli, i)
 
         def check(_node, _size):
             out, _ = _node.exec_command(sudo=True, cmd="lsblk -bJ")
@@ -209,7 +216,7 @@ def test_ceph_83575813(ceph_cluster, rbd, nvme_service, pool, config):
             check(client, img["provisioned_size"])
         initiator.disconnect_all()
         for i in config["initiators"]:
-            initiators(ceph_cluster, nvmegwcli, i)
+            prepare_initiator_and_run_fio(ceph_cluster, nvmegwcli, i)
         LOG.info("Validation of CEPH-83575813 is successful.")
 
     except Exception as err:
@@ -232,10 +239,10 @@ def test_ceph_83575455(ceph_cluster, rbd, nvme_service, pool, config):
 
         # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
         for i in config["initiators"]:
-            initiators(ceph_cluster, nvmegwcli, i)
+            prepare_initiator_and_run_fio(ceph_cluster, nvmegwcli, i)
 
         targets = initiator.list_devices()
 
@@ -623,7 +630,9 @@ def test_ceph_83575814(ceph_cluster, rbd, nvme_service, pool, config):
         mon_host = ceph_cluster.get_nodes(role="mon")[0]
         with parallel() as p:
             for initiator in config["initiators"]:
-                p.spawn(initiators, ceph_cluster, nvmegwcli, initiator)
+                p.spawn(
+                    prepare_initiator_and_run_fio, ceph_cluster, nvmegwcli, initiator
+                )
 
             LOG.info("Removing mon service from the cluster")
             p.spawn(operation, mon_obj, "remove_mon_service", host=mon_host.hostname)

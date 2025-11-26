@@ -12,8 +12,9 @@ import yaml
 from ceph.ceph import Ceph
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
-from tests.nvmeof.test_ceph_nvmeof_gateway import disconnect_initiator, initiators
+from tests.nvmeof.test_ceph_nvmeof_gateway import disconnect_initiator
 from tests.nvmeof.workflows.gateway_entities import configure_gw_entities, teardown
+from tests.nvmeof.workflows.initiator import prepare_initiator_and_run_fio
 from tests.nvmeof.workflows.nvme_service import NVMeService
 from tests.rbd.rbd_utils import initial_rbd_config
 from utility.io.fio_profiles import IO_Profiles
@@ -509,7 +510,9 @@ def nvmeof(ceph_cluster, **args):
                     # apply overrides
                     initiator_cfg["io_args"].update(args.get("io_overrides", {}))
 
-                    i = initiators(ceph_cluster, nvmegwcli, initiator_cfg)
+                    i = prepare_initiator_and_run_fio(
+                        ceph_cluster, nvmegwcli, initiator_cfg
+                    )
                     parse_fio_output(
                         get_node_by_id(ceph_cluster, args["initiator_node"]), i[0]
                     )
