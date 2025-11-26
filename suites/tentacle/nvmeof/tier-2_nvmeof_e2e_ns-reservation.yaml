@@ -154,7 +154,7 @@ tests:
       polarion-id: CEPH-83626134
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node:
           - node5
