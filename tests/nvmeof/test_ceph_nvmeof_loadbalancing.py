@@ -179,6 +179,7 @@ def test_ceph_83608838(ceph_cluster, config):
     LOG.info("deploy nvme service")
     deploy_nvme_service(ceph_cluster, config)
     ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
+    ha.initialize_gateways()
 
     # Configure subsystems
     LOG.info("Configure subsystems")
@@ -217,7 +218,7 @@ def test_ceph_83608838(ceph_cluster, config):
             **{"args": {**img_args}, "base_cmd_args": {"format": "json"}}
         )
         # Get the nsids related each load-balancing-group
-        parsed_data = json.loads(namespace_list[1])
+        parsed_data = json.loads(namespace_list[0])
         grouped_nsids = dict()
         for ns in parsed_data["namespaces"]:
             group = ns["load_balancing_group"]

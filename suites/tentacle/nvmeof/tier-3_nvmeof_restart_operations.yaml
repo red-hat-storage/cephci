@@ -68,7 +68,7 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node6
         rbd_pool: rbd
@@ -107,7 +107,7 @@ tests:
 
   # Reboot GW node
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_node: node6
         rbd_pool: rbd

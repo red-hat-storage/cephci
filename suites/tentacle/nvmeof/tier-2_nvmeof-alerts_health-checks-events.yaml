@@ -67,7 +67,7 @@ tests:
       polarion-id: CEPH-83573758
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_nodes:
           - node6
@@ -96,7 +96,7 @@ tests:
       polarion-id: CEPH-83610948
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         rbd_pool: rbd
         test_case: CEPH-83610950
@@ -121,7 +121,7 @@ tests:
       polarion-id: CEPH-83610950
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         rbd_pool: rbd
         test_case: CEPH-83611097
@@ -141,7 +141,7 @@ tests:
       polarion-id: CEPH-83611097
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_nodes:
           - node6
@@ -162,7 +162,7 @@ tests:
       polarion-id: CEPH-83611098
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_nodes:
           - node4
@@ -184,7 +184,7 @@ tests:
       polarion-id: CEPH-83611099
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_nodes:
           - node5
@@ -223,7 +223,7 @@ tests:
       polarion-id: CEPH-83611306
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_nodes:
           - node5
@@ -254,7 +254,7 @@ tests:
       polarion-id: CEPH-83616917
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_nodes:
           - node2
@@ -281,7 +281,7 @@ tests:
       polarion-id: CEPH-83617544
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_nodes:
           - node5
@@ -309,7 +309,7 @@ tests:
       polarion-id: CEPH-83616916
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         rbd_pool: rbd
         time_to_fire: 60
@@ -341,7 +341,7 @@ tests:
       polarion-id: CEPH-83617404
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_nodes:
           - node5
@@ -363,7 +363,7 @@ tests:
       polarion-id: CEPH-83617622
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_nodes:
           - node5
@@ -394,7 +394,7 @@ tests:
       polarion-id: CEPH-83617545
 
   - test:
-      abort-on-fail: true
+      abort-on-fail: false
       config:
         gw_nodes:
           - node6
