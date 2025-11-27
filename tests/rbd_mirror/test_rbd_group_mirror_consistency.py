@@ -133,7 +133,7 @@ def test_mirror_group_consistency(
                     image_large_name = pool_spec + "image_" + random_string(len=4)
                     # Create large size images
                     rbd_primary.create(
-                        **{"image-spec": image_large_name, "size": "10G"}
+                        **{"image-spec": image_large_name, "size": "11G"}
                     )
                     image_spec_large.append(image_large_name)
                     if add_image_to_group_and_verify(
@@ -176,28 +176,84 @@ def test_mirror_group_consistency(
                 )
             log.info("md5sums on site B after first sync: %s", md5sum_first_sync_site_b)
 
-            bench_kw = {}
             io_small_cfg = kw.get("config", {}).get("io_small", {})
-            bench_kw.update(
-                {
-                    "io-type": io_small_cfg.get("io-type", "write"),
-                    "io-total": io_small_cfg.get("io-size_init", "20M"),
-                    "io-threads": io_small_cfg.get("io-threads", "16"),
+            file_random_small1 = "/mnt/mnt_" + random_string(len=5) + "/file1"
+            file_random_small2 = "/mnt/mnt_" + random_string(len=5) + "/file2"
+            io_config = {
+                "size": io_small_cfg.get("io-size_init", "20M"),
+                "do_not_create_image": True,
+                "config": {
+                    "size": io_small_cfg.get("io-size_init", "20M"),
+                    "file_path": [
+                        file_random_small1,
+                        file_random_small2,
+                    ],
+                    "get_time_taken": True,
+                    "operations": {
+                        "fs": "ext4",
+                        "io": False,
+                        "mount": True,
+                        "map": True,
+                        "nounmap": True,
+                    },
+                    "cmd_timeout": 2400,
+                },
+            }
+            image_spec_copy = deepcopy(image_spec_small)
+            io_config["rbd_obj"] = rbd_primary
+            io_config["client"] = client_primary
+            io_config["config"]["image_spec"] = image_spec_copy
+            (io, err) = krbd_io_handler(**io_config)
+            if err:
+                raise Exception(
+                    "Map, mount and run IOs failed for " + str(image_spec_small)
+                )
+            else:
+                log.info("Map, mount and IOs successful for " + str(image_spec_small))
+
+            for dev_name in [file_random_small1, file_random_small2]:
+                io_args = {
+                    "client_node": client_primary,
+                    "filename": dev_name,
+                    "size": io_small_cfg.get("io-size_init", "20M"),
+                    "num_jobs": io_small_cfg.get("num_jobs", "1"),
+                    "iodepth": io_small_cfg.get("iodepth", "16"),
+                    "io_type": io_small_cfg.get("io-type", "write"),
+                    "run_time": 30,
+                    "cmd_timeout": 2400,
                 }
-            )
-
-            for image_spec in image_spec_small:
-                bench_kw.update({"image-spec": image_spec})
-                out, err = rbd_primary.bench(**bench_kw)
-
+                run_fio(**io_args)
             io_large_cfg = kw.get("config", {}).get("io_large", {})
-            bench_kw.update({"io-total": io_large_cfg.get("io-size_init", "1G")})
+            file_random_large1 = "/mnt/mnt_" + random_string(len=5) + "/file3"
+            file_random_large2 = "/mnt/mnt_" + random_string(len=5) + "/file4"
+            io_config.update({"size": io_large_cfg.get("io-size_init", "1G")})
+            io_config["config"].update({"size": io_large_cfg.get("io-size_init", "1G")})
+            io_config["config"].update(
+                {"file_path": [file_random_large1, file_random_large2]}
+            )
+            image_spec_copy = deepcopy(image_spec_large)
+            io_config["config"]["image_spec"] = image_spec_copy
+            (io, err) = krbd_io_handler(**io_config)
+            if err:
+                raise Exception(
+                    "Map, mount and run IOs failed for " + str(image_spec_large)
+                )
+            else:
+                log.info("Map, mount and IOs successful for " + str(image_spec_large))
 
-            for image_spec in image_spec_large:
-                bench_kw.update({"image-spec": image_spec})
-                out, err = rbd_primary.bench(**bench_kw)
-                if err:
-                    raise Exception("Failed to write IO to the image %s", image_spec)
+            for dev_name in [file_random_large1, file_random_large2]:
+                io_args = {
+                    "client_node": client_primary,
+                    "filename": dev_name,
+                    "size": io_large_cfg.get("io-size_init", "1G"),
+                    "num_jobs": io_large_cfg.get("num_jobs", "1"),
+                    "iodepth": io_large_cfg.get("iodepth", "16"),
+                    "io_type": io_large_cfg.get("io-type", "write"),
+                    "run_time": 30,
+                    "cmd_timeout": 2400,
+                }
+                run_fio(**io_args)
+            time.sleep(120)
 
             # Create first manual mirror group snapshot
             out, err = rbd_primary.mirror.group.snapshot.add(
@@ -226,20 +282,32 @@ def test_mirror_group_consistency(
                 "md5sums on site B after second sync: %s", md5sum_second_sync_site_b
             )
 
-            bench_kw.update({"io-total": io_small_cfg.get("io-size", "40M")})
+            for dev_name in [file_random_small1, file_random_small2]:
+                io_args = {
+                    "client_node": client_primary,
+                    "filename": dev_name,
+                    "size": io_small_cfg.get("io-size", "40M"),
+                    "num_jobs": io_small_cfg.get("num_jobs", "1"),
+                    "iodepth": io_small_cfg.get("iodepth", "16"),
+                    "io_type": io_small_cfg.get("io-type", "write"),
+                    "run_time": 30,
+                    "cmd_timeout": 2400,
+                }
+                run_fio(**io_args)
+            for dev_name in [file_random_large1, file_random_large2]:
+                io_args = {
+                    "client_node": client_primary,
+                    "filename": dev_name,
+                    "size": io_large_cfg.get("io-size", "9G"),
+                    "num_jobs": io_large_cfg.get("num_jobs", "1"),
+                    "iodepth": io_large_cfg.get("iodepth", "16"),
+                    "io_type": io_large_cfg.get("io-type", "write"),
+                    "run_time": 30,
+                    "cmd_timeout": 2400,
+                }
+                run_fio(**io_args)
 
-            for image_spec in image_spec_small:
-                bench_kw.update({"image-spec": image_spec})
-                out, err = rbd_primary.bench(**bench_kw)
-
-            bench_kw.update({"io-total": io_large_cfg.get("io-size", "9G")})
-
-            for image_spec in image_spec_large:
-                bench_kw.update({"image-spec": image_spec})
-                out, err = rbd_primary.bench(**bench_kw)
-                if err:
-                    raise Exception("Failed to write IO to the image %s", image_spec)
-
+            time.sleep(120)
             md5sum_second_write_site_a = []
             for image in image_spec_all:
                 md5sum_second_write_site_a.append(
@@ -344,11 +412,11 @@ def test_mirror_group_consistency(
             # md5sum_after_force_promote_site_b should be compared with md5sum_second_sync_site_b.
             # the below line should look something like :
             # if md5sum_after_force_promote_site_b != md5sum_second_sync_site_b:
-            if md5sum_after_force_promote_site_b != md5sum_first_sync_site_b:
+            if md5sum_after_force_promote_site_b != md5sum_second_write_site_a:
                 raise Exception(
                     "md5sums after force promote are not consistent with previous snapshot \n"
                     f"site-B: {md5sum_after_force_promote_site_b} \n"
-                    f"site-B: {md5sum_first_sync_site_b}"
+                    f"site-B: {md5sum_second_write_site_a}"
                 )
             log.info(
                 "Successfully verified that site-B data rollsback to a previous consistent "
