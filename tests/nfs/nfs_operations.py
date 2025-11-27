@@ -59,6 +59,8 @@ def setup_nfs_cluster(
     Ceph(clients[0]).mgr.module.enable(module="nfs", force=True)
     sleep(3)
 
+    nfs_nodes = ceph_cluster.get_nodes("nfs")
+
     # Step 2: Create an NFS cluster
     Ceph(clients[0]).nfs.cluster.create(
         name=nfs_name,
@@ -66,6 +68,7 @@ def setup_nfs_cluster(
         ha=ha,
         vip=vip,
         active_standby=active_standby,
+        nfs_nodes_obj=nfs_nodes,
     )
     sleep(3)
 
@@ -91,9 +94,6 @@ def setup_nfs_cluster(
 
     # Step 4: Perform nfs mount
     # If there are multiple nfs servers provided, only one is required for mounting
-
-    nfs_nodes = ceph_cluster.get_nodes("nfs")
-
     # Check if the mount version v3 is included in the list of versions and
     # if the mount version is v3, make necessary changes
     if 3 in mount_versions.keys():
