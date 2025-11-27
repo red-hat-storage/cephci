@@ -74,11 +74,17 @@ def run(ceph_cluster, **kw):
         client1.exec_command(sudo=True, cmd="ceph mgr module enable nfs")
 
         log.info("Create NFS Cluster with Ingress")
-        client1.exec_command(
-            sudo=True,
-            cmd=f'ceph nfs cluster create {nfs_name} "2 {nfs_servers[0].node.hostname} '
-            f'{nfs_servers[1].node.hostname} {nfs_servers[2].node.hostname}" '
-            f"--ingress --virtual-ip {virtual_ip}/{subnet}",
+        fs_util_v1.create_nfs(
+            client1,
+            nfs_cluster_name=nfs_name,
+            nfs_server_name=[
+                "2",
+                nfs_servers[0].node.hostname,
+                nfs_servers[1].node.hostname,
+                nfs_servers[2].node.hostname,
+            ],
+            ha=True,
+            vip=f"{virtual_ip}/{subnet}",
         )
         log.info("validate the services have started on nfs")
         fs_util_v1.validate_services(client1, f"nfs.{nfs_name}")

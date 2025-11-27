@@ -597,7 +597,7 @@ def run(ceph_cluster, **kwargs) -> int:
 
         nfs_name = "cephfs-nfs"
         try:
-            cmd_output, cmd_return_code = fs_util.create_nfs(
+            cmd_output = fs_util.create_nfs(
                 client, nfs_name, validate=True, placement=f"1 {nfs_server}"
             )
             log.info(

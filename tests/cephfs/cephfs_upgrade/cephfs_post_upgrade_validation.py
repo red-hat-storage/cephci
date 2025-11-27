@@ -122,8 +122,10 @@ def nfs_test(nfs_req_params):
     log.info("Create new nfs cluster, new exports and run IO")
 
     new_nfs_name = f"{nfs_name}_new"
-    out, rc = nfs_client.exec_command(
-        sudo=True, cmd=f"ceph nfs cluster create {new_nfs_name} {nfs_server_name_1}"
+    fs_util.create_nfs(
+        nfs_client,
+        nfs_cluster_name=new_nfs_name,
+        nfs_server_name=nfs_server_name_1,
     )
     log.info("Verify ceph nfs cluster is created")
     if wait_for_process(client=nfs_client, process_name=nfs_name, ispresent=True):

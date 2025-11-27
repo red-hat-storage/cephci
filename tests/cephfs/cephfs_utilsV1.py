@@ -25,6 +25,7 @@ import paramiko
 from ceph.ceph import CommandFailed, SSHConnectionManager
 from ceph.parallel import parallel
 from ceph.utils import check_ceph_healthly
+from cli.ceph.ceph import Ceph
 from cli.cephadm.cephadm import CephAdm
 from compute.openstack import get_openstack_driver
 from tests.cephfs.exceptions import ValueMismatchError
@@ -1200,20 +1201,30 @@ class FsUtils(object):
         Returns:
             tuple: A tuple containing the Ceph command output and command return code.
         """
-        nfs_cmd = f"ceph nfs cluster create {nfs_cluster_name}"
-        if kwargs.get("nfs_server_name"):
-            nfs_cmd += f" {kwargs.get('nfs_server_name')}"
-        if kwargs.get("placement"):
-            nfs_cmd += f" --placement '{kwargs.get('placement')}'"
-        nfs_port = kwargs.get("port")
-        if nfs_port:
-            nfs_cmd += f" --port {nfs_port}"
-        # BYOK / KMIP support
+        extra_args = {}
+        nfs_server = kwargs.get("nfs_server_name")
+
+        if not nfs_server and kwargs.get("placement"):
+            placement = kwargs["placement"].strip().split()
+            nfs_server = placement
+
+        # Port
+        if kwargs.get("port"):
+            extra_args["port"] = kwargs["port"]
+
+        # BYOK / KMIP
         if kwargs.get("byok_enabled", False):
-            yaml_path = kwargs.get("kmip_yaml_path", "/root/nfs_kmip.yaml")
-            nfs_cmd += f" -i {yaml_path}"
-        cmd_out, cmd_rc = client.exec_command(
-            sudo=True, cmd=nfs_cmd, check_ec=kwargs.get("check_ec", True)
+            extra_args["in-file"] = kwargs.get("kmip_yaml_path", "/root/nfs_kmip.yaml")
+
+        nfs_nodes = self.ceph_cluster.get_nodes("nfs")
+
+        # Execute via new API
+        cmd_out = Ceph(client).nfs.cluster.create(
+            name=nfs_cluster_name,
+            nfs_server=nfs_server,
+            check_ec=kwargs.get("check_ec", True),
+            nfs_nodes_obj=nfs_nodes,
+            **extra_args,
         )
 
         if validate:
@@ -1234,7 +1245,7 @@ class FsUtils(object):
                     f"Creation of NFS cluster: {nfs_cluster_name} failed"
                 )
 
-        return cmd_out, cmd_rc
+        return cmd_out
 
     @function_execution_time
     @retry(CommandFailed, tries=5, delay=60)

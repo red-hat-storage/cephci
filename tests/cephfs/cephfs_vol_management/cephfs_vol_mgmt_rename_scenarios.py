@@ -1023,8 +1023,10 @@ def run(ceph_cluster, **kw):
         # fs_util.prepare_clients(clients, build)
         nfs_servers = ceph_cluster.get_ceph_objects("nfs")
         nfs_server = nfs_servers[0].node.hostname
-        client1.exec_command(
-            sudo=True, cmd="ceph nfs cluster create %s %s" % (nfs_name, nfs_server)
+        fs_util.create_nfs(
+            client1,
+            nfs_cluster_name=nfs_name,
+            nfs_server_name=nfs_server,
         )
         install_tools(client1)
         mount_subvolumes(ceph_cluster)
