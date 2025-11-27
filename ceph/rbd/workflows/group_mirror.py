@@ -410,6 +410,34 @@ def get_snap_state_by_snap_id(rbd, snapshot_id, **status_spec):
     return snapshot_state
 
 
+def get_mirror_group_snap_copied_status(rbd, snapshot_id, **status_spec):
+    """
+    This function will return snapshot_state('Complete':True or 'Complete':False) for a given snapshot id
+    Args:
+        rbd: rbd object
+        snapshot_id: Snapshot job id
+        status_spec: pool, namespace and group details
+    Returns:
+        Snapshot state (str), when successful
+        raise Exception, if fails
+    """
+    out, err = rbd.group.snap.list(**status_spec)
+    if err:
+        raise Exception(
+            "Error while fetching snapshot list for group  %s, %s",
+            status_spec["group"],
+            err,
+        )
+    snapshot_list = json.loads(out)
+    log.info(f"Snapshot list: {snapshot_list}")
+    for snap in snapshot_list:
+        log.info(f"Checking snapshot: {snap}")
+        if snap["namespace"]["type"] == "mirror" and snap["id"] == snapshot_id:
+            snapshot_state = snap["namespace"]["complete"]
+            break
+    return snapshot_state
+
+
 def get_mirror_group_snap_id(rbd, **status_spec):
     """
     This will get first mirror group snapshot id from group snap list CLI

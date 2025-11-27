@@ -213,11 +213,15 @@ tests:
               io-size_init: 20M
               io_size: 40M
               io-threads: 16
+              num_jobs: 1
+              iodepth: 16
             io_large:
               io-type: write
               io-size_init: 1G
               io_size: 9G
               io-threads: 16
+              num_jobs: 1
+              iodepth: 16
 
   - test:
       desc: >
