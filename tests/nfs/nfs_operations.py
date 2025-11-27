@@ -47,11 +47,15 @@ def setup_nfs_cluster(
     global ceph_cluster_obj
     global setup_start_time
     ceph_cluster_obj = ceph_cluster
-    setup_start_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    setup_start_time = datetime.strptime(setup_start_time, "%Y-%m-%d %H:%M:%S")
+    installer_node = ceph_cluster.get_nodes("installer")[0]
+    log.info("Logged into installer Node...")
+
+    setup_start_time, err = installer_node.exec_command(
+        sudo=True, cmd="date +'%Y-%m-%d %H:%M:%S'"
+    )
+    setup_start_time = setup_start_time.strip()
 
     # Step 1: Enable nfs
-    installer_node = ceph_cluster.get_nodes("installer")[0]
     version_info = installer_node.exec_command(
         sudo=True, cmd="cephadm shell -- rpm -qa | grep nfs"
     )
@@ -174,21 +178,11 @@ def cleanup_cluster(clients, nfs_mount, nfs_name, nfs_export, nfs_nodes=None):
                 )
     nfs_log_parser(client=clients[0], nfs_node=nfs_nodes, nfs_name=nfs_name)
 
-    # Wait until the rm operation is complete
-    timeout, interval = 600, 10
     for client in clients:
         # Clear the nfs_mount, at times rm operation can fail
         # as the dir is not empty, this being an expected behaviour,
         # the solution is to repeat the rm operation.
-        for w in WaitUntil(timeout=timeout, interval=interval):
-            try:
-                client.exec_command(
-                    sudo=True, cmd=f"rm -rf {nfs_mount}/*", long_running=True
-                )
-                break
-            except Exception as e:
-                log.warning(f"rm operation failed, repeating!. Error {e}")
-        if w.expired:
+        if not mount_cleanup_retry(client, nfs_mount):
             raise NfsCleanupFailed(
                 "Failed to cleanup nfs mount dir even after multiple iterations. Timed out!"
             )
@@ -427,8 +421,6 @@ def cleanup_custom_nfs_cluster_multi_export_client(
                 )
 
     nfs_log_parser(client=clients[0], nfs_node=nfs_nodes, nfs_name=nfs_name)
-    # Wait until the rm operation is complete
-    timeout, interval = 600, 10
 
     client_export_mount_dict = exports_mounts_perclient(
         clients, nfs_export, nfs_mount, export_num
@@ -448,18 +440,11 @@ def cleanup_custom_nfs_cluster_multi_export_client(
             # Clear the nfs_mount, at times rm operation can fail
             # as the dir is not empty, this being an expected behaviour,
             # the solution is to repeat the rm operation.
-            for w in WaitUntil(timeout=timeout, interval=interval):
-                try:
-                    client.exec_command(
-                        sudo=True, cmd=f"rm -rf {mount_name}/*", long_running=True
-                    )
-                    break
-                except Exception as e:
-                    log.warning(f"rm operation failed, repeating!. Error {e}")
-            if w.expired:
+            if not mount_cleanup_retry(client, mount_name):
                 raise NfsCleanupFailed(
                     "Failed to cleanup nfs mount dir even after multiple iterations. Timed out!"
                 )
+
             log.info("Unmounting nfs-ganesha mount on client:")
             sleep(3)
             if Unmount(client).unmount(mount_name):
@@ -861,6 +846,14 @@ def mount_retry(client, mount_name, version, port, nfs_server, export_name):
         export=export_name,
     ):
         raise OperationFailedError("Failed to mount nfs on %s" % {export_name.hostname})
+    return True
+
+
+@retry(OperationFailedError, tries=5, delay=10, backoff=2)
+def mount_cleanup_retry(client, mount_name):
+    _, err = client.exec_command(sudo=True, cmd=f"rm -rf {mount_name}/*", timeout=120)
+    if err:
+        raise OperationFailedError("Failed to clenaup the mount directory")
     return True
 
 
