@@ -25,6 +25,7 @@ tests:
               args:
                 rhcs-version: 7.1
                 release: z1     # deploying old build to verify obj snap deletion
+                platform: rhel-9
                 mon-ip: node1
                 orphan-initial-daemons: true
                 registry-url: registry.redhat.io
@@ -167,6 +168,7 @@ tests:
         args:
           rhcs-version: 7.1
           release: z2
+          platform: rhel-9
       abort-on-fail: false
 
   - test:
@@ -193,6 +195,7 @@ tests:
         args:
           rhcs-version: 8.0
           release: rc
+          platform: rhel-9
       abort-on-fail: true
 
   - test:

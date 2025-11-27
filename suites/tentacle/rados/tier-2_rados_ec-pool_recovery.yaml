@@ -29,6 +29,7 @@ tests:
               args:
                 rhcs-version: 7.1
                 release: rc
+                platform: rhel-9
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
                 registry-url: registry.redhat.io

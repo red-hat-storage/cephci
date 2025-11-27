@@ -21,6 +21,7 @@ tests:
           mon-ip: node1
           rhcs-version: 8.0
           release: rc
+          platform: rhel-9
           ssh-user: cephuser
           apply-spec:
             - service_type: host

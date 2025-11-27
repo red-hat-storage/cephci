@@ -25,6 +25,7 @@ tests:
         args:
           rhcs-version: 7.1
           release: rc
+          platform: rhel-9
           mon-ip: node1
           orphan-initial-daemons: true
           registry-url: registry.redhat.io
@@ -220,6 +221,7 @@ tests:
         args:
           rhcs-version: 8.0
           release: rc
+          platform: rhel-9
       abort-on-fail: false
 
   # "cephfs basic operations" and "nfs-ganesha_with_cephfs"

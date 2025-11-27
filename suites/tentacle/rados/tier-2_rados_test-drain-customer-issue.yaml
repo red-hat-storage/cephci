@@ -29,6 +29,7 @@ tests:
               args:
                 rhcs-version: 7.1
                 release: z0
+                platform: rhel-9
                 mon-ip: node1
                 orphan-initial-daemons: true
                 skip-monitoring-stack: true
