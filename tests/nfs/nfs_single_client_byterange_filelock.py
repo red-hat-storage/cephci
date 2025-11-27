@@ -58,13 +58,13 @@ def run(ceph_cluster, **kw):
         result = run_single_byte_range_test(clients[0], mount_path)
 
         if not result["success"]:
-            raise Exception(f"Lock test failed: {result['error']}")
+            raise Exception("Lock test failed: %s" % result["error"])
 
         log.info("Byte-range lock test PASSED.")
         rc = 0
 
     except (CommandFailed, Exception) as e:
-        log.error(f"Test failed: {e}")
+        log.error("Test failed: %s" % e)
 
     finally:
         log.info("Cleaning up exports and NFS cluster...")
@@ -81,19 +81,19 @@ def run_single_byte_range_test(client, mount_path):
     script_src = "tests/nfs/scripts_tools/single_client_byte_range.py"
     script_dst = "/root/single_client_byte_range.py"
 
-    client.exec_command(cmd=f"mkdir -p {mount_path}", sudo=True)
+    client.exec_command(cmd="mkdir -p %s" % mount_path, sudo=True)
 
     log.info("Uploading byte-range lock test script to client...")
     client.upload_file(sudo=True, src=script_src, dst=script_dst)
-    client.exec_command(sudo=True, cmd=f"chmod +x {script_dst}")
+    client.exec_command(sudo=True, cmd="chmod +x %s" % script_dst)
 
     log.info("Executing byte-range lock script...")
 
-    cmd = f"python3 {script_dst} {mount_path}"
+    cmd = "python3 %s %s" % (script_dst, mount_path)
     out, err = client.exec_command(sudo=True, cmd=cmd, check_ec=False, timeout=300)
 
-    log.debug(f"Script STDOUT:\n{out}")
-    log.debug(f"Script STDERR:\n{err}")
+    log.debug("Script STDOUT:\n%s" % out)
+    log.debug("Script STDERR:\n%s" % err)
 
     # Detect success/failure based on script's output
     if "Lock acquired successfully" in out:

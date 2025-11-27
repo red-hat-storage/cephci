@@ -1,4 +1,3 @@
-
 from nfs_operations import cleanup_cluster, enable_v3_locking, setup_nfs_cluster
 
 from ceph.ceph import CommandFailed
@@ -21,10 +20,7 @@ def run(ceph_cluster, **kw):
 
     port = config.get("port", "2049")
     version = config.get("nfs_version", "4.2")
-    log.info(f"NFS version: {version}")
     required_clients = int(config.get("clients", "2"))
-    log.info(f"NFS clients: {required_clients}")
-    log.info(f"length of clients: {len(clients)}")
 
     if required_clients > len(clients):
         raise ConfigError("Requested more clients than available")
@@ -61,13 +57,13 @@ def run(ceph_cluster, **kw):
         result = run_multi_client_byte_range_test(clients, mount_path)
 
         if not result["success"]:
-            raise Exception(f"Lock test failed: {result['error']}")
+            raise Exception("Lock test failed: %s" % result["error"])
 
         log.info("Byte-range lock test with multiple clients PASSED.")
         rc = 0
 
     except (CommandFailed, Exception) as e:
-        log.error(f"Test failed: {e}")
+        log.error("Test failed: %s" % e)
 
     finally:
         log.info("Cleaning up exports and NFS cluster...")
@@ -86,15 +82,17 @@ def run_multi_client_byte_range_test(clients, mount_path):
 
     # Upload script to all clients
     for c in clients:
-        log.info(f"Uploading multi-client byte-range script to {c.hostname}...")
+        log.info("Uploading multi-client byte-range script to %s..." % c.hostname)
         c.upload_file(sudo=True, src=script_src, dst=script_dst)
         c.exec_command(sudo=True, cmd=f"chmod +x {script_dst}")
 
     LOCK_START = 10
     LOCK_LEN = 100
-    cmd = f"python3 {script_dst} {mount_path} {LOCK_START} {LOCK_LEN}"
+    cmd = "python3 %s %s %s %s" % (script_dst, mount_path, LOCK_START, LOCK_LEN)
 
-    log.info(f"Starting multi-client byte-range lock test on {len(clients)} clients...")
+    log.info(
+        "Starting multi-client byte-range lock test on %s clients..." % len(clients)
+    )
 
     all_outputs = []
 
@@ -109,11 +107,14 @@ def run_multi_client_byte_range_test(clients, mount_path):
     for idx, (out, err) in enumerate(all_outputs):
         out = out.decode() if isinstance(out, bytes) else out
         decoded_outs.append(out)
-        log.debug(f"[Client {idx+1} Output]\n{out}")
+        log.debug("[Client %s Output]\n%s" % (idx + 1, out))
 
     for i, out in enumerate(decoded_outs):
         if "Lock acquired" not in out:
-            return {"success": False, "error": f"Client {i+1} never acquired lock."}
+            return {
+                "success": False,
+                "error": "Client %s never acquired lock." % (i + 1),
+            }
 
     waited_clients = [
         i
@@ -129,6 +130,7 @@ def run_multi_client_byte_range_test(clients, mount_path):
 
     return {
         "success": True,
-        "response": f"All {len(clients)} clients successfully acquired lock sequentially.",
+        "response": "All %s clients successfully acquired lock sequentially."
+        % len(clients),
         "error": None,
     }

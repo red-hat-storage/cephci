@@ -47,8 +47,8 @@ def run(ceph_cluster, **kw):
 
     nfstest_repo = "git://git.linux-nfs.org/projects/mora/nfstest.git"
     nfstest_dir = "/root/nfstest"
-    nfstest_lock = f"{nfstest_dir}/test/nfstest_lock"
-    log_file = f"{nfstest_dir}/nfstest.log"
+    nfstest_lock = "%s/test/nfstest_lock" % nfstest_dir
+    log_file = "%s/nfstest.log" % nfstest_dir
 
     try:
         log.info("=== NFS Cluster Setup ===")
@@ -83,19 +83,33 @@ def run(ceph_cluster, **kw):
         )
 
         client.exec_command(
-            cmd=f"if [ -d {nfstest_dir} ]; then rm -rf {nfstest_dir}; fi", sudo=True
+            cmd="if [ -d %s ]; then rm -rf %s; fi" % (nfstest_dir, nfstest_dir),
+            sudo=True,
         )
-        client.exec_command(cmd=f"git clone {nfstest_repo} {nfstest_dir}", sudo=True)
-        client.exec_command(cmd=f"export PYTHONPATH={nfstest_dir}/nfstest", sudo=True)
-        client.exec_command(cmd=f"ls {nfstest_lock}", sudo=True)
+        client.exec_command(
+            cmd="git clone %s %s" % (nfstest_repo, nfstest_dir), sudo=True
+        )
+        client.exec_command(cmd="export PYTHONPATH=%s/nfstest" % nfstest_dir, sudo=True)
+        client.exec_command(cmd="ls %s" % nfstest_lock, sudo=True)
 
         test_cmd = (
-            f"cd {nfstest_dir} && "
-            f"export PYTHONPATH={nfstest_dir}:{nfstest_dir}/nfstest:{nfstest_dir}/lib && "
-            f"{nfstest_lock} --server {nfs_server_name} "
-            f"--export {nfs_lock_export} "
-            f"--nfsversion {version} "
-            f"> {log_file} 2>&1"
+            "cd %s && "
+            "export PYTHONPATH=%s:%s/nfstest:%s/lib && "
+            "%s --server %s "
+            "--export %s "
+            "--nfsversion %s "
+            "> %s 2>&1"
+            % (
+                nfstest_dir,
+                nfstest_dir,
+                nfstest_dir,
+                nfstest_dir,
+                nfstest_lock,
+                nfs_server_name,
+                nfs_lock_export,
+                version,
+                log_file,
+            )
         )
         client.exec_command(cmd=test_cmd, sudo=True, timeout=2400)
 
@@ -109,9 +123,11 @@ def run(ceph_cluster, **kw):
         return 0
 
     except CommandFailed as e:
-        log.error(f"NFSTEST command failed: {e}")
+        log.error("NFSTEST command failed: %s" % e)
+        return 1
     except Exception as e:
-        log.error(f"Unexpected failure: {e}")
+        log.error("Unexpected failure: %s" % e)
+        return 1
     finally:
         log.info("Clean up: unmount exports & cleanup")
         Ceph(clients[0]).nfs.export.delete(nfs_name, nfs_lock_export)
@@ -142,15 +158,15 @@ def setup_passwordless_ssh(from_client, to_client):
     )
 
     from_client.exec_command(
-        cmd=f"ssh-keyscan -H {ip} >> /root/.ssh/known_hosts",
+        cmd="ssh-keyscan -H %s >> /root/.ssh/known_hosts" % ip,
         sudo=True,
     )
 
 
 def validate_nfstest_log(client, log_path="nfstest.log"):
-    log.info(f"Validating NFSTEST log file: {log_path}")
+    log.info("Validating NFSTEST log file: %s" % log_path)
 
-    out, _ = client.exec_command(cmd=f"cat {log_path}", sudo=True)
+    out, _ = client.exec_command(cmd="cat %s" % log_path, sudo=True)
     summary_regex = r"(\d+)\s+tests\s+\((\d+)\s+passed,\s+(\d+)\s+failed\)"
     match = re.search(summary_regex, out)
     if not match:
@@ -161,7 +177,10 @@ def validate_nfstest_log(client, log_path="nfstest.log"):
     passed = int(match.group(2))
     failed = int(match.group(3))
 
-    log.info(f"NFSTEST Summary: {total_tests} tests ({passed} passed, {failed} failed)")
+    log.info(
+        "NFSTEST Summary: %s tests (%s passed, %s failed)"
+        % (total_tests, passed, failed)
+    )
     if failed > 0:
         log.error("NFSTEST detected failures — failing test case!")
         return 1
