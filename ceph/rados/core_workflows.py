@@ -2578,6 +2578,7 @@ class RadosOrchestrator:
             log.info(
                 f"The MAX_AVAIL on the pool {pool} is as expected: {pool_max_avail}"
             )
+            _ = self.run_ceph_command(cmd="ceph df detail", print_output=True)
         return check_pass
 
     def get_osd_stat(self):

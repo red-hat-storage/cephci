@@ -314,3 +314,165 @@ tests:
         delete_pool: true
         regular_cluster_with_mon_location: true
       desc: Netsplit detection and warning regular cluster with crush location
+
+# id 111
+# type replicated
+# step take DC2
+# step chooseleaf firstn 2 type host
+# step emit
+# step take DC1
+# step chooseleaf firstn 2 type host
+# step emit
+  - test:
+      name: Verify Max avail
+      desc: MAX_AVAIL value
+      module: test_cephdf.py
+      polarion-id: CEPH-10312
+      config:
+        verify_max_avail:
+          create_pool: true
+          pool_name: test-max-avail
+          obj_nums: 1
+          delete_pool: false
+          size: 4M
+          obj_name: "obj0"
+      abort-on-fail: true
+
+  - test:
+      name: Verify MAX_AVAIL variance when OSDs are removed
+      desc: MAX_AVAIL value update correctly when OSDs are removed
+      module: test_cephdf.py
+      polarion-id: CEPH-83604474
+      abort-on-fail: true
+      config:
+        cephdf_max_avail_osd_rm: true
+        size: 64M
+
+  - test:
+      name: Verify Max avail 6GB
+      desc: MAX_AVAIL value
+      module: test_cephdf.py
+      polarion-id: CEPH-10312
+      abort-on-fail: true
+      config:
+        verify_max_avail:
+          create_pool: false
+          pool_name: test-max-avail
+          delete_pool: false
+          obj_nums: 100
+          size: 64MB
+          obj_name: "obj1"
+
+  - test:
+      name: Verify Max avail 12GB
+      desc: MAX_AVAIL value
+      module: test_cephdf.py
+      polarion-id: CEPH-10312
+      abort-on-fail: true
+      config:
+        verify_max_avail:
+          create_pool: false
+          pool_name: test-max-avail
+          delete_pool: false
+          obj_nums: 100
+          size: 64MB
+          obj_name: "obj2"
+
+  - test:
+      name: Revert stretch mode scenarios
+      module: test_stretch_revert.py
+      polarion-id: CEPH-83620057
+      abort-on-fail: true
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        scenarios_to_run:
+          - scenario12
+      desc: Performs tests related to reverting from stretch mode
+
+# id 1
+# type replicated
+# step take default
+# step choose firstn 0 type datacenter
+# step chooseleaf firstn 2 type host
+# step emit
+  - test:
+      name: Deploy stretch Cluster with no affinity
+      module: test_stretch_deployment_with_placement.py
+      polarion-id: CEPH-83573621
+      config:
+        no_affinity: true
+        stretch_rule_name: stretchrule2
+        tiebreaker_mon_site_name: tiebreaker
+        negative_scenarios: False
+      comments: Pre-deployment -ve scenarios commented due to bug - 2293147
+      desc: Enables connectivity mode and deploys cluster with Stretch rule with tiebreaker node
+      abort-on-fail: true
+
+
+  - test:
+      name: Verify Max avail
+      desc: MAX_AVAIL value
+      module: test_cephdf.py
+      polarion-id: CEPH-10312
+      config:
+        verify_max_avail:
+          create_pool: false
+          pool_name: test-max-avail
+          obj_nums: 1
+          delete_pool: false
+          size: 4M
+          obj_name: "obj3"
+      abort-on-fail: true
+
+  - test:
+      name: Verify MAX_AVAIL variance when OSDs are removed
+      desc: MAX_AVAIL value update correctly when OSDs are removed
+      module: test_cephdf.py
+      polarion-id: CEPH-83604474
+      abort-on-fail: true
+      config:
+        cephdf_max_avail_osd_rm: true
+        size: 64M
+
+  - test:
+      name: Verify Max avail 18GB
+      desc: MAX_AVAIL value
+      module: test_cephdf.py
+      polarion-id: CEPH-10312
+      abort-on-fail: true
+      config:
+        verify_max_avail:
+          create_pool: false
+          pool_name: test-max-avail
+          delete_pool: false
+          obj_nums: 100
+          size: 64MB
+          obj_name: "obj4"
+
+  - test:
+      name: Verify Max avail 24GB
+      desc: MAX_AVAIL value
+      module: test_cephdf.py
+      polarion-id: CEPH-10312
+      abort-on-fail: true
+      config:
+        verify_max_avail:
+          create_pool: false
+          pool_name: test-max-avail
+          delete_pool: false
+          obj_nums: 100
+          size: 64MB
+          obj_name: "obj5"
+
+  - test:
+      name: Revert stretch mode scenarios
+      module: test_stretch_revert.py
+      polarion-id: CEPH-83620057
+      abort-on-fail: true
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        scenarios_to_run:
+          - scenario12
+      desc: Performs tests related to reverting from stretch mode

@@ -13,6 +13,7 @@ includes:
 9. Revert to regular cluster when all mons from DC1 is down
 10. Revert stretch mode during 1 MON host in DC1 and 1 MON host in DC2 is down
 11. Revert stretch mode during tiebreaker MON host is down
+12. Revert stretch mode and do not reenable stretch mode
 """
 
 import time
@@ -59,6 +60,7 @@ def run(ceph_cluster, **kw):
         9. Revert to regular cluster when all mons from DC1 is down
         10. Revert stretch mode during 1 MON host in DC1 and 1 MON host in DC2 is down
         11. Revert stretch mode during tiebreaker MON host is down
+        12. Revert stretch mode and do not reenable stretch mode
     """
 
     log.info(run.__doc__)
@@ -176,6 +178,11 @@ def run(ceph_cluster, **kw):
         if "scenario11" in scenarios_to_run:
             log.info(test_seprator)
             revert_stretch_mode_scenarios.scenario11(default_crush_rule, ceph_cluster)
+            log.info(test_seprator)
+
+        if "scenario12" in scenarios_to_run:
+            log.info(test_seprator)
+            revert_stretch_mode_scenarios.scenario12(default_crush_rule, ceph_cluster)
             log.info(test_seprator)
 
     except Exception as e:
@@ -984,3 +991,44 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
         if not stretch_enabled_checks(self.rados_obj):
             log.error("The cluster has not cleared the stretch mode checks. Exiting...")
             raise Exception("Stretch mode checks failed")
+
+    def scenario12(
+        self,
+        crush_rule: dict,
+    ):
+        """
+        Scenario 12:- Revert stretch mode from healthy stretch cluster to default crush rules
+        and do not re-enable stretch mode
+        Steps:-
+        1) Check stretch mode is enabled
+        2) Revert from healthy stretch mode
+        3) Validate all pools are reverted to default rules
+        4) Validate stretch mode related configs are reset in OSD map
+        5) Validate stretch mode related configs are reset in MON map
+        6) Validate PGs reach active+clean
+        """
+
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            raise Exception(
+                "PG did not reach active+clean before start of site down scenario"
+            )
+
+        if not stretch_enabled_checks(self.rados_obj):
+            log.error(
+                "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+            )
+            raise Exception("Test pre-execution checks failed")
+
+        self.revert_stretch_mode()
+
+        self.expected_pool_properties["crush_rule"] = crush_rule["id"]
+        self.validate_pool_configurations_post_revert(self.expected_pool_properties)
+
+        self.validate_osd_configurations_post_revert(self.expected_osd_map_values)
+
+        self.validate_mon_configurations_post_revert(self.expected_mon_map_values)
+
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            raise Exception(
+                "PGs did not reach active+clean post revert from stretch mode"
+            )
