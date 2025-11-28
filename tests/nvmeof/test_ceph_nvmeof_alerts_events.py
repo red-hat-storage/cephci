@@ -132,7 +132,7 @@ class PrometheusAlerts:
 
         Note: inetrval is the key here to calculate the alerting window
         """
-        return timeout + interval
+        return timeout + (2 * interval)
 
     def monitor_alert(
         self, alert_name, state="firing", msg="", timeout=60, interval=10
