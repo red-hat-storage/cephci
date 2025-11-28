@@ -14,6 +14,11 @@ includes:
 10. Revert stretch mode during 1 MON host in DC1 and 1 MON host in DC2 is down
 11. Revert stretch mode during tiebreaker MON host is down
 12. Revert stretch mode and do not reenable stretch mode
+13. Negative: Revert stretch mode when cluster is in recovery
+14. Negative: Execute disable_stretch_mode when not in stretch mode
+15. Negative: Incorrect command usage for disabling stretch mode commands
+16. Negative: Disable stretch mode without --yes-i-really-mean-it
+17. Negative: Revert stretch mode by passing non-existing crush rule
 """
 
 import time
@@ -61,6 +66,11 @@ def run(ceph_cluster, **kw):
         10. Revert stretch mode during 1 MON host in DC1 and 1 MON host in DC2 is down
         11. Revert stretch mode during tiebreaker MON host is down
         12. Revert stretch mode and do not reenable stretch mode
+        13. Negative: Revert stretch mode when cluster is in recovery
+        14. Negative: Execute disable_stretch_mode when not in stretch mode
+        15. Negative: Incorrect command usage for disabling stretch mode commands
+        16. Negative: Disable stretch mode without --yes-i-really-mean-it
+        17. Negative: Revert stretch mode by passing non-existing crush rule
     """
 
     log.info(run.__doc__)
@@ -92,6 +102,12 @@ def run(ceph_cluster, **kw):
             "scenario9",
             "scenario10",
             "scenario11",
+            "scenario12",
+            "scenario13",
+            "scenario14",
+            "scenario15",
+            "scenario16",
+            "scenario17",
         ],
     )
     config = {
@@ -183,6 +199,31 @@ def run(ceph_cluster, **kw):
         if "scenario12" in scenarios_to_run:
             log.info(test_seprator)
             revert_stretch_mode_scenarios.scenario12(default_crush_rule, ceph_cluster)
+            log.info(test_seprator)
+
+        if "scenario13" in scenarios_to_run:
+            log.info(test_seprator)
+            revert_stretch_mode_scenarios.scenario13()
+            log.info(test_seprator)
+
+        if "scenario14" in scenarios_to_run:
+            log.info(test_seprator)
+            revert_stretch_mode_scenarios.scenario14()
+            log.info(test_seprator)
+
+        if "scenario15" in scenarios_to_run:
+            log.info(test_seprator)
+            revert_stretch_mode_scenarios.scenario15()
+            log.info(test_seprator)
+
+        if "scenario16" in scenarios_to_run:
+            log.info(test_seprator)
+            revert_stretch_mode_scenarios.scenario16()
+            log.info(test_seprator)
+
+        if "scenario17" in scenarios_to_run:
+            log.info(test_seprator)
+            revert_stretch_mode_scenarios.scenario17()
             log.info(test_seprator)
 
     except Exception as e:
@@ -1032,3 +1073,365 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
             raise Exception(
                 "PGs did not reach active+clean post revert from stretch mode"
             )
+
+    def scenario13(self):
+        """
+        Scenario 13:- Negative test: Revert stretch mode when cluster is in recovery
+        Steps:-
+            1) Check stretch mode is enabled
+            2) Create a pool and write IO
+            3) Trigger recovery by stopping an OSD
+            4) Verify cluster is in recovery state
+            5) Attempt to revert stretch mode (should fail)
+            6) Verify error message
+            7) Unset recovery flags and wait for recovery to complete
+            8) Re-enter stretch mode for next scenario
+        """
+        log.info(self.scenario12.__doc__)
+        log.info(
+            "Step 1 -> Wait for clean PGs before starting scenario and Check stretch mode is enabled"
+        )
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            raise Exception(
+                "PG did not reach active+clean before start of recovery scenario"
+            )
+        if not stretch_enabled_checks(self.rados_obj):
+            log.error(
+                "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+            )
+            raise Exception("Test pre-execution checks failed")
+
+        log.info("Step 2 -> Create a pool and write IO")
+        pool_name = "rados_" + generate_unique_id(3)
+        self.create_pool_and_write_io(pool_name, client_node=self.client_node)
+
+        log.info("Step 3 -> Make stretch cluster enter degraded stretch mode state")
+        simulate_netsplit_between_hosts(
+            self.rados_obj, self.site_1_hosts, self.site_2_hosts
+        )
+        simulate_netsplit_between_hosts(
+            self.rados_obj, self.site_2_hosts, self.site_1_hosts
+        )
+
+        self.wait_till_stretch_mode_status_reaches(status="degraded")
+
+        log.info("Step 4 -> Make stretch cluster enter recovering stretch mode state")
+        flush_ip_table_rules_on_all_hosts(self.rados_obj, self.site_1_hosts)
+        flush_ip_table_rules_on_all_hosts(self.rados_obj, self.site_2_hosts)
+
+        self.wait_till_stretch_mode_status_reaches(status="recovering")
+
+        log.info("Step 5 -> Attempt to revert stretch mode (should fail)")
+        cmd = "ceph mon disable_stretch_mode --yes-i-really-mean-it"
+        try:
+            self.client_node.exec_command(cmd=cmd, pretty_print=True, check_ec=True)
+            log.error(
+                "Expected revert_stretch_mode to fail when cluster is in recovery, but it succeeded"
+            )
+            raise Exception(
+                "Negative test failed: revert_stretch_mode should have failed during recovery"
+            )
+        except Exception as e:
+            log.info("Step 6 -> Verify error message:{}".format(str(e)))
+            """
+            Error message:
+                Error EBUSY: stretch mode is currently recovering and cannot be disabled
+            """
+            if "recovering" in str(e):
+                log.info("Correctly received error about recovery state. err msg is :")
+                log.info(str(e))
+            else:
+                raise Exception(e)
+
+        self.rados_obj.delete_pool(pool=pool_name)
+
+        log.info("Step 7 -> Verify stretch mode is still enabled")
+        stretch_details = self.rados_obj.get_stretch_mode_dump()
+        if not stretch_details["stretch_mode_enabled"]:
+            log.error("Stretch mode was disabled by incorrect commands")
+            raise Exception(
+                "Stretch mode should still be enabled after incorrect commands"
+            )
+        log.info("Stretch mode is still enabled as expected")
+
+    def scenario14(self):
+        """
+        Scenario 14:- Negative test: Execute disable_stretch_mode when not in stretch mode
+        Steps:-
+            1) Check stretch mode is enabled
+            2) Disable stretch mode
+            3) Verify stretch mode is disabled
+            4) Attempt to disable stretch mode again (should fail)
+            5) Verify error message
+            6) Re-enter stretch mode for next scenario
+        """
+        log.info(self.scenario13.__doc__)
+        log.info(
+            "Step 1 -> Wait for clean PGs before starting scenario and Check stretch mode is enabled"
+        )
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            raise Exception(
+                "PG did not reach active+clean before start of negative scenario"
+            )
+        if not stretch_enabled_checks(self.rados_obj):
+            log.error(
+                "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+            )
+            raise Exception("Test pre-execution checks failed")
+
+        log.info("Step 2 -> Disable stretch mode")
+        self.revert_stretch_mode()
+
+        log.info("Step 3 -> Verify stretch mode is disabled")
+        stretch_details = self.rados_obj.get_stretch_mode_dump()
+        if stretch_details["stretch_mode_enabled"] == 1:
+            log.error("Stretch mode is still enabled after disable command")
+            raise Exception("Stretch mode disable verification failed")
+        log.info("Stretch mode is successfully disabled")
+
+        log.info(
+            "Step 4 -> Attempt to disable stretch mode when not in stretch mode (should fail)"
+        )
+        cmd = "ceph mon disable_stretch_mode --yes-i-really-mean-it"
+        try:
+            self.client_node.exec_command(cmd=cmd, pretty_print=True, check_ec=True)
+            log.error(
+                "Expected revert_stretch_mode to fail when not in stretch mode, but it succeeded"
+            )
+            raise Exception(
+                "Negative test failed: revert_stretch_mode should have failed when not in stretch mode"
+            )
+        except Exception as e:
+            log.info(f"Step 5 -> Verify error message: {str(e)}")
+            """
+            Error message:
+                Error EINVAL: stretch mode is already disabled
+            """
+            if "stretch mode is already disabled" in str(e):
+                log.info(
+                    "Correctly received error about stretch mode not being enabled \n err msg is :{}".format(
+                        str(e)
+                    )
+                )
+            else:
+                raise Exception(e)
+
+        log.info("Step 6 -> Re-enter stretch mode for next scenario")
+        self.enable_stretch_mode(self.tiebreaker_mon)
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            raise Exception(
+                "PGs did not reach active+clean post re-enabling stretch mode"
+            )
+
+        if not stretch_enabled_checks(self.rados_obj):
+            log.error(
+                "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+            )
+            raise Exception("Test pre-execution checks failed")
+
+    def scenario15(self):
+        """
+        Scenario 15:- Negative test: Incorrect command usage for disabling stretch mode commands
+        Steps:-
+            1) Check stretch mode is enabled
+            2) Attempt to use incorrect command syntax (should fail)
+            3) Verify error message
+            4) Verify stretch mode is still enabled
+        """
+        log.info(self.scenario14.__doc__)
+        log.info(
+            "Step 1 -> Wait for clean PGs before starting scenario and Check stretch mode is enabled"
+        )
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            raise Exception(
+                "PG did not reach active+clean before start of negative scenario"
+            )
+        if not stretch_enabled_checks(self.rados_obj):
+            log.error(
+                "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+            )
+            raise Exception("Test pre-execution checks failed")
+
+        log.info("Step 2 -> Attempt to use incorrect command syntax (should fail)")
+        incorrect_commands = [
+            "ceph mon disable_stretch_mode --invalid-flag",
+            "ceph mon disable_stretch_mode --yes-i-really-mean-it invalid_rule_name extra_arg",
+        ]
+
+        for cmd in incorrect_commands:
+            log.info(f"Testing incorrect command: {cmd}")
+            try:
+                self.client_node.exec_command(cmd=cmd, pretty_print=True, check_ec=True)
+                log.error(f"Expected command '{cmd}' to fail, but it succeeded")
+                raise Exception(
+                    "Negative test failed: incorrect command should have failed: {}".format(
+                        cmd
+                    )
+                )
+            except Exception as e:
+                log.info(f"Step 3 -> Verify error message for '{cmd}': {str(e)}")
+                """
+                Error message 1:
+                    Invalid command: Unexpected argument '--invalid-flag'
+                    mon disable_stretch_mode [<crush_rule>] [--yes-i-really-mean-it] :  disable stretch mode,
+                     reverting to normal peering rules
+                    Error EINVAL: invalid command
+
+                Error message 2:
+                    extra_arg not valid:  extra_arg not one of 'true', 'false'
+                    Invalid command: unused arguments: ['extra_arg']
+                    mon disable_stretch_mode [<crush_rule>] [--yes-i-really-mean-it] :  disable stretch mode,
+                     reverting to normal peering rules
+                    Error EINVAL: invalid command
+                """
+                if (
+                    "invalid command" in str(e)
+                    or "unused arguments" in str(e)
+                    or "extra_arg not valid" in str(e)
+                ):
+                    log.info(
+                        "Correctly received error for incorrect command syntax \n {}".format(
+                            str(e)
+                        )
+                    )
+                else:
+                    raise Exception(e)
+
+        log.info("Step 4 -> Verify stretch mode is still enabled")
+        stretch_details = self.rados_obj.get_stretch_mode_dump()
+        if not stretch_details["stretch_mode_enabled"]:
+            log.error("Stretch mode was disabled by incorrect commands")
+            raise Exception(
+                "Stretch mode should still be enabled after incorrect commands"
+            )
+        log.info("Stretch mode is still enabled as expected")
+
+    def scenario16(self):
+        """
+        Scenario 16:- Negative test: Disable stretch mode without --yes-i-really-mean-it
+        Steps:-
+            1) Check stretch mode is enabled
+            2) Attempt to disable stretch mode without --yes-i-really-mean-it flag (should fail)
+            3) Verify error message
+            4) Verify stretch mode is still enabled
+        """
+        log.info(self.scenario15.__doc__)
+        log.info(
+            "Step 1 -> Wait for clean PGs before starting scenario and Check stretch mode is enabled"
+        )
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            raise Exception(
+                "PG did not reach active+clean before start of negative scenario"
+            )
+        if not stretch_enabled_checks(self.rados_obj):
+            log.error(
+                "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+            )
+            raise Exception("Test pre-execution checks failed")
+
+        log.info(
+            "Step 2 -> Attempt to disable stretch mode without "
+            "--yes-i-really-mean-it flag (should fail)"
+        )
+        cmd = "ceph mon disable_stretch_mode"
+        try:
+            self.client_node.exec_command(cmd=cmd, pretty_print=True, check_ec=True)
+            log.error(
+                f"Expected command '{cmd}' to fail without "
+                "--yes-i-really-mean-it, but it succeeded"
+            )
+            raise Exception(
+                "Negative test failed: disable_stretch_mode should have failed "
+                "without confirmation flag"
+            )
+        except Exception as e:
+            log.info(f"Step 3 -> Verify error message: {str(e)}")
+            """
+            Error message:
+                Error EPERM:  This command will disable stretch mode,
+                 which means all your pools will be reverted
+                back to the default size, min_size and crush_rule. Pass --yes-i-really-mean-it to proceed.
+            """
+            if "yes-i-really-mean-it" in str(e):
+                log.info(
+                    "Correctly received error about missing confirmation flag. \n {}".format(
+                        str(e)
+                    )
+                )
+            else:
+                raise Exception(e)
+
+        log.info("Step 4 -> Verify stretch mode is still enabled")
+        stretch_details = self.rados_obj.get_stretch_mode_dump()
+        if not stretch_details["stretch_mode_enabled"]:
+            log.error("Stretch mode was disabled without confirmation flag")
+            raise Exception(
+                "Stretch mode should still be enabled without confirmation flag"
+            )
+        log.info("Stretch mode is still enabled as expected")
+
+    def scenario17(self):
+        """
+        Scenario 17:- Negative test: Revert stretch mode by passing non-existing crush rule
+        Steps:-
+            1) Check stretch mode is enabled
+            2) Attempt to revert stretch mode with non-existing crush rule (should fail)
+            3) Verify error message
+            4) Verify stretch mode is still enabled
+        """
+        log.info(self.scenario16.__doc__)
+        log.info(
+            "Step 1 -> Wait for clean PGs before starting scenario and Check stretch mode is enabled"
+        )
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            raise Exception(
+                "PG did not reach active+clean before start of negative scenario"
+            )
+        if not stretch_enabled_checks(self.rados_obj):
+            log.error(
+                "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+            )
+            raise Exception("Test pre-execution checks failed")
+
+        log.info(
+            "Step 2 -> Attempt to revert stretch mode with non-existing "
+            "crush rule (should fail)"
+        )
+        non_existing_rule = "non_existing_rule_" + generate_unique_id(5)
+        cmd = (
+            f"ceph mon disable_stretch_mode {non_existing_rule} "
+            "--yes-i-really-mean-it"
+        )
+        try:
+            self.client_node.exec_command(cmd=cmd, pretty_print=True, check_ec=True)
+            log.error(
+                f"Expected command '{cmd}' to fail with non-existing rule, "
+                "but it succeeded"
+            )
+            raise Exception(
+                f"Negative test failed: disable_stretch_mode should have failed "
+                f"with non-existing rule: {non_existing_rule}"
+            )
+        except Exception as e:
+            log.info(f"Step 3 -> Verify error message: {str(e)}")
+            """
+            Error message:
+                Error EINVAL: unrecognized crush rule non_existing_rule_ME48G
+            """
+            if "unrecognized crush rule" in str(e):
+                log.info(
+                    "Correctly received error about non-existing crush rule. \n {}".format(
+                        str(e)
+                    )
+                )
+            else:
+                raise Exception(e)
+
+        log.info("Step 4 -> Verify stretch mode is still enabled")
+        stretch_details = self.rados_obj.get_stretch_mode_dump()
+        if not stretch_details["stretch_mode_enabled"]:
+            log.error("Stretch mode was disabled with non-existing rule")
+            raise Exception(
+                "Stretch mode should still be enabled with non-existing rule"
+            )
+        log.info("Stretch mode is still enabled as expected")
