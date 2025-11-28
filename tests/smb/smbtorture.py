@@ -53,6 +53,7 @@ def run_smbtorture_tc(
             "smb2.create",
             "smb2.timestamps",
             "smb2.charset",
+            "smb2.credits",
         ]:
             return "Fail"
     return "Pass"
