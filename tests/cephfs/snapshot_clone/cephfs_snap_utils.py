@@ -38,6 +38,18 @@ class SnapUtils(object):
         self.clients = ceph_cluster.get_ceph_objects("client")
         self.cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
 
+    def get_snapshot(self, client, sv_obj):
+        """
+        This method gets a snapshot for given subvolume test object
+        """
+        listsnapshot_cmd = f"ceph fs subvolume snapshot ls {sv_obj['vol_name']} {sv_obj['subvol_name']}"
+        if sv_obj.get("group_name"):
+            listsnapshot_cmd += f" --group_name {sv_obj.get('group_name')}"
+        out, _ = client.exec_command(sudo=True, cmd=f"{listsnapshot_cmd} --format json")
+        snapshot_ls = json.loads(out)
+        snap_list = [i["name"] for i in snapshot_ls]
+        return random.choice(snap_list)
+
     def enable_snap_schedule(self, client):
         """
         Enables Snapshot schedule on Ceph

@@ -156,3 +156,9 @@ tests:
       polarion-id: CEPH-83621386
       desc: Toggle snapshot visibility functional test
       abort-on-fail: false
+  - test:
+      name: Toggle snapshot visibility interop test
+      module: snapshot_clone.test_snapshot_visibility_interop.py
+      polarion-id: CEPH-83621388
+      desc: Toggle snapshot visibility interop test
+      abort-on-fail: false
