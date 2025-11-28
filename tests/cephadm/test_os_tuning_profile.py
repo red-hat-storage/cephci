@@ -83,23 +83,51 @@ def run(ceph_cluster, **kw):
     mount = "/tmp"
     if config.get("command") in ("apply", "re-apply"):
         nodes = config.get("specs", {}).get("placement", {}).get("hosts")
+
+        # Determine if this is a negative test based on expected result
+        expected_result = config.get("result", "")
+        is_negative_test = any(
+            error_msg in expected_result
+            for error_msg in [
+                "Failed to apply tuned profile",
+                "Please check 'ceph orch host ls' for available hosts",
+            ]
+        )
+
         if "hostx" in nodes:
             hosts = ["NoHost1", "NoHost2"]
         else:
             hosts = [ceph_cluster.get_nodes()[int(node[-1])].hostname for node in nodes]
         config["specs"]["placement"]["hosts"] = hosts
+
         spec_file = generate_tuned_profile_spec(installler_node, config.get("specs"))
+
         try:
             result = CephAdm(
                 installler_node, mount=mount
             ).ceph.orch.tuned_profile.apply(spec_file, True)
-            if config.get("result") not in result:
-                raise OsTuningProfileError("Fail to apply tuned profile")
-        except CommandFailed as err:
-            if config.get("result") not in str(err):
+
+            # For negative tests, if command succeeded, it should have failed
+            if is_negative_test:
                 raise OsTuningProfileError(
-                    "apply command did not fail with the expected error"
+                    f"Expected command to fail with '{expected_result}' but it succeeded with: {result}"
                 )
+
+            # For positive tests, check if expected result is in output
+            if expected_result not in result:
+                raise OsTuningProfileError("Fail to apply tuned profile")
+
+        except CommandFailed as err:
+            # For negative tests, check if expected error is in the error message
+            if is_negative_test:
+                if expected_result not in str(err):
+                    raise OsTuningProfileError(
+                        f"Command failed as expected, but with wrong error. "
+                        f"Expected: '{expected_result}', Got: '{str(err)}'"
+                    )
+            else:
+                # For positive tests, any CommandFailed is unexpected
+                raise OsTuningProfileError(f"Command unexpectedly failed: {str(err)}")
 
     if config.get("action") == "verify":
         hosts = [
