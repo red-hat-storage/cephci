@@ -1,5 +1,5 @@
 tests:
-# Set up the cluster
+# # Set up the cluster
   - test:
       abort-on-fail: true
       module: install_prereq.py
@@ -401,6 +401,8 @@ tests:
               count: 1
               size: 5G
             listener_port: 4420
+            hosts:
+              node: node10
         initiators: # Configure Initiators with all pre-req
           - subnqn: nqn.2016-06.io.spdk:ceph-83575455
             listener_port: 4420

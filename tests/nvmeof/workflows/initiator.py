@@ -3,6 +3,7 @@ import json
 from ceph.ceph import CommandFailed
 from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
+from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.exceptions import NoDevicesFound
 from utility.log import Log
 from utility.retry import retry
@@ -396,3 +397,117 @@ def validate_initiator(clients, gateway, namespaces_gw, failed_gw=None):
     LOG.info(
         f"All namespaces are optimized for all initiators for gateway {gateway.node.ip_address}"
     )
+
+
+def prepare_initiator(ceph_cluster, gateway, config):
+    """Run IOs from NVMe Initiators.
+
+    - Discover NVMe targets
+    - Connect to subsystem
+    - List targets and Run FIO on target devices.
+
+    Args:
+        ceph_cluster: Ceph cluster
+        gateway: Ceph-NVMeoF Gateway.
+        config: Initiator config
+
+    Example::
+        config:
+            subnqn: nqn.2016-06.io.spdk:cnode2
+            listener_port: 5002
+            node: node7
+    """
+    client = get_node_by_id(ceph_cluster, config["node"])
+    initiator = NVMeInitiator(client)
+    cmd_args = {
+        "transport": "tcp",
+        "traddr": gateway.node.ip_address,
+    }
+    json_format = {"output-format": "json"}
+
+    # Discover the subsystems
+    discovery_port = {"trsvcid": 8009}
+    _disc_cmd = {**cmd_args, **discovery_port, **json_format}
+    sub_nqns, _ = initiator.discover(**_disc_cmd)
+    LOG.debug(sub_nqns)
+    for nqn in json.loads(sub_nqns)["records"]:
+        if nqn["trsvcid"] == str(config["listener_port"]):
+            cmd_args["nqn"] = nqn["subnqn"]
+            break
+    else:
+        raise Exception(f"Subsystem not found -- {cmd_args}")
+
+    # Connect to the subsystem
+    conn_port = {"trsvcid": config["listener_port"]}
+    _conn_cmd = {**cmd_args, **conn_port}
+    LOG.debug(initiator.connect(**_conn_cmd))
+
+    # List NVMe targets
+    initiator.list_devices()
+
+
+def run_fio_on_initiator(ceph_cluster, config):
+    """Run IOs from NVMe Initiators."""
+    results = []
+    io_args = {"size": "100%"}
+    client = get_node_by_id(ceph_cluster, config["node"])
+    initiator = NVMeInitiator(client)
+    paths = initiator.list_devices()
+    with parallel() as p:
+        for path in paths:
+            _io_args = {}
+            if io_args.get("test_name"):
+                test_name = f"{io_args['test_name']}-" f"{path.replace('/', '_')}"
+                _io_args.update({"test_name": test_name})
+            if config.get("output"):
+                _io_args.update(
+                    {
+                        "output": config["output"],
+                    }
+                )
+            import pdb
+
+            pdb.set_trace()
+            if config.get("io_args", {}).get("output_dir"):
+                test_name = (
+                    f"{config['io_args']['test_name']}-" f"{path.replace('/', '_')}"
+                )
+                _io_args.update(
+                    {
+                        "test_name": test_name,
+                        "output_format": "json",
+                        "output_dir": config["io_args"]["output_dir"],
+                    }
+                )
+            _io_args.update(
+                {
+                    "device_name": path,
+                    "client_node": client,
+                    "long_running": True,
+                    "cmd_timeout": "notimeout",
+                }
+            )
+            _io_args = {**io_args, **_io_args}
+            p.spawn(run_fio, **_io_args)
+        for op in p:
+            if "/tmp/" in str(op):
+                results.append(op)
+            elif op != 0:
+                raise RuntimeError(f"FIO failed with exit code : {op}")
+            else:
+                results.append(op)
+    return results
+
+
+def prepare_initiator_and_run_fio(ceph_cluster, gateway, config):
+    """Prepare Initiator and Run IOs.
+
+    - Discover NVMe targets
+    - Connect to subsystem
+    - List targets and Run FIO on target devices.
+    - Run IOs from NVMe Initiators.
+
+    """
+    prepare_initiator(ceph_cluster, gateway, config)
+    res = run_fio_on_initiator(ceph_cluster, config)
+    return res
