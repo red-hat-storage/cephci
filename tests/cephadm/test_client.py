@@ -6,6 +6,7 @@ from typing import Dict
 from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.utils import get_node_by_id
+from cephci.utils.build_info import CephTestManifest
 from utility import utils
 from utility.log import Log
 
@@ -61,11 +62,26 @@ def add(cls, config: Dict) -> None:
         def setup(host):
             name = list(host.keys()).pop()
             _build = list(host.values()).pop()
+            rhcs_version = _build.get("release")
+            _manifest_section = _build.get("tag")
             _node = get_node_by_id(cls.cluster, name)
-            if _build.get("release"):
-                rhcs_version = _build["release"]
-                if not isinstance(rhcs_version, str):
-                    rhcs_version = str(rhcs_version)
+            _rpm_version = None
+            if rhcs_version:
+                rhcs_version = str(rhcs_version)
+                if _manifest_section:
+                    _manifest_section = str(_manifest_section)
+                    _platform = _build.get("platform", config["platform"])
+                    _product = config.get("product", "redhat")
+                    manifest_obj = CephTestManifest(
+                        product=_product,
+                        release=rhcs_version,
+                        build_type=_manifest_section,
+                        platform=_platform,
+                    )
+                    _os_major = manifest_obj.platform.split("-")[-1]
+                    _ceph_version = manifest_obj.ceph_version
+                    _rpm_version = f"2:{_ceph_version}.el{_os_major}cp"
+
             elif use_cdn:
                 rhcs_version = default_version
             else:
@@ -127,7 +143,7 @@ def add(cls, config: Dict) -> None:
                     enabled_repos.append(repo)
             log.debug(f"Enabled repos on the system are : {enabled_repos}")
 
-            if rhcs_version != "default":
+            if rhcs_version != "default" and not _manifest_section:
                 try:
                     # Disabling all the repos and enabling the ones we need to install the ceph client
                     for cmd in disable_all:
@@ -180,6 +196,8 @@ def add(cls, config: Dict) -> None:
             # Install ceph-common
             if config.get("install_packages"):
                 for pkg in config.get("install_packages"):
+                    if _rpm_version:
+                        pkg = f"{pkg}-{_rpm_version}"
                     _node.exec_command(
                         cmd=f"yum install -y --nogpgcheck {pkg}", sudo=True
                     )
