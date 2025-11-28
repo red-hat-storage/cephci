@@ -314,3 +314,19 @@ tests:
         delete_pool: true
         regular_cluster_with_mon_location: true
       desc: Netsplit detection and warning regular cluster with crush location
+
+  - test:
+      name: Revert stretch mode negative scenarios
+      module: test_stretch_revert.py
+      polarion-id: CEPH-83620059
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+        scenarios_to_run:
+          - scenario12
+          - scenario13
+          - scenario14
+          - scenario15
+          - scenario16
+      desc: Performs tests related to reverting from stretch mode
