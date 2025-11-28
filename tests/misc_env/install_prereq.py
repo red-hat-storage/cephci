@@ -4,7 +4,7 @@ import re
 import time
 
 from ceph.parallel import parallel
-from ceph.utils import config_ntp, is_client, update_ca_cert
+from ceph.utils import config_ntp, enable_coredump, is_client, update_ca_cert
 from ceph.waiter import WaitUntil
 from cli.exceptions import ConfigError
 from cli.utilities.packages import Package
@@ -278,6 +278,9 @@ def install_prereq(
         if get_service_state(ceph, "firewalld").strip() != "active":
             raise ConfigError("Firewall not active")
         log.info("Firewall is active")
+
+    # Enable coredump collection
+    enable_coredump(ceph)
 
 
 def setup_addition_repo(ceph, repo):
