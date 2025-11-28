@@ -281,10 +281,47 @@ tests:
             - -4000
 
   - test:
-        name: Bluestore data recompression
+        name: Bluestore target blob size variation test
         module: test_bluestore_comp_enhancements.py
         desc: Positive workflows for bluestore data compression enhancements
         polarion-id: CEPH-83620071
         config:
           scenarios_to_run:
             - scenario-6
+
+  - test:
+        name: Bluestore blob size tests
+        module: test_bluestore_comp_enhancements.py
+        desc: Positive workflows for bluestore data compression enhancements
+        polarion-id: CEPH-83620071
+        config:
+          scenarios_to_run:
+            - scenario-7
+
+  - test:
+        name: Bluestore OSD down during IO scenaario
+        module: test_bluestore_comp_enhancements.py
+        desc: Positive workflows for bluestore data compression enhancements
+        polarion-id: CEPH-83620071
+        config:
+          scenarios_to_run:
+            - scenario-9
+
+  - test:
+        name: Bluestore OSD host down during IO scenario
+        module: test_bluestore_comp_enhancements.py
+        desc: Positive workflows for bluestore data compression enhancements
+        polarion-id: CEPH-83620071
+        config:
+          scenarios_to_run:
+            - scenario-10
+
+ # scenario-8 disables bluestore_write_v2
+  - test:
+        name: Bluestore disable bluestore_write_v2 and validate
+        module: test_bluestore_comp_enhancements.py
+        desc: Positive workflows for bluestore data compression enhancements
+        polarion-id: CEPH-83620071
+        config:
+          scenarios_to_run:
+            - scenario-8
