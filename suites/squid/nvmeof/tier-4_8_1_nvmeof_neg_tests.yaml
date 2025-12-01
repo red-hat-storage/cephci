@@ -76,6 +76,7 @@ tests:
           - gateway
           - disconnect_all
         service: nvmeof
+        gw_group: 'gw_group1'
         install: true
         nvme_metadata_pool: rbd
         pos_args:
@@ -104,8 +105,8 @@ tests:
             listener_port: 4420
             allow_host: "*"
         operation: CEPH-83608266
-      desc: restrict same GW node deployment into multiple GW groups.
+      desc: restrict same GW node deployment into multiple GW groups
       destroy-cluster: false
       module: test_ceph_nvmeof_neg_tests.py
-      name: restrict same GW node deployment into multiple GW groups.
+      name: restrict same GW node deployment into multiple GW groups
       polarion-id: CEPH-83608266
