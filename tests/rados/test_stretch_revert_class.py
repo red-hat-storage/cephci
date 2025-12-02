@@ -117,7 +117,7 @@ class StretchMode:
             raise Exception(err_msg)
         if (
             self.pool_obj.do_rados_put(
-                client=client_node, pool=pool_name, nobj=200, timeout=100
+                client=client_node, pool=pool_name, nobj=400, timeout=100
             )
             == 1
         ):
@@ -282,6 +282,53 @@ class StretchMode:
             )
             log.error(err_msg)
             raise Exception(err_msg)
+
+    @retry(Exception, tries=4, delay=600, backoff=1)
+    def wait_till_stretch_mode_status_reaches(self, status="healthy"):
+        """
+        Method to check if stretch mode is recovering stretch mode or not.
+        Args:
+            status: (type: str) Status of the stretch mode to wait for. Valid values are "recovering", "healthy",
+            "degraded". Default value is "healthy".
+        Retuns:
+            None
+        Raises Exception:
+            When stretch mode is not in the expected status after the retry limit is reached
+        """
+        stretch_details = self.rados_obj.get_stretch_mode_dump()
+        if status == "recovering":
+            if stretch_details["recovering_stretch_mode"] == 0:
+                err_msg = (
+                    f"Stretch Cluster is not marked as recovering : {stretch_details}"
+                    f"Waiting for stretch mode to be recovering state"
+                )
+                log.error(err_msg)
+                raise Exception(err_msg)
+            else:
+                log.info(f"Stretch Cluster is marked as recovering : {stretch_details}")
+        elif status == "healthy":
+            if (
+                stretch_details["recovering_stretch_mode"] == 1
+                or stretch_details["degraded_stretch_mode"] == 1
+            ):
+                err_msg = (
+                    f"Stretch Cluster is still not in healthy state : {stretch_details}"
+                    f"Waiting for stretch mode to be health state"
+                )
+                log.error(err_msg)
+                raise Exception(err_msg)
+            else:
+                log.info(f"Stretch Cluster is healthy: {stretch_details}")
+        elif status == "degraded":
+            if stretch_details["degraded_stretch_mode"] == 0:
+                err_msg = (
+                    f"Stretch Cluster is not marked as degraded : {stretch_details}"
+                    f"Waiting for stretch mode to be degraded state"
+                )
+                log.error(err_msg)
+                raise Exception(err_msg)
+            else:
+                log.info(f"Stretch Cluster is marked as degraded : {stretch_details}")
 
     def segregate_mon_hosts_based_on_stretch_bucket(self, mon_obj: MonitorWorkflows):
         for host in self.site_1_hosts + self.site_2_hosts + self.tiebreaker_hosts:
