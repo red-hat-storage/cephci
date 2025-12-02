@@ -402,7 +402,7 @@ tests:
               size: 5G
             listener_port: 4420
         initiators: # Configure Initiators with all pre-req
-          - subnqn: nqn.2016-06.io.spdk:ceph-83575455
+          - nqn: nqn.2016-06.io.spdk:ceph-83575455
             listener_port: 4420
             node: node10
         cleanup:
