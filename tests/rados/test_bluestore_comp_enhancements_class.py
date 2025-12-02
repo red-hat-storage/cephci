@@ -17,9 +17,9 @@ from ceph.rados.rados_scrub import RadosScrubber
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.rados_test_util import wait_for_daemon_status
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
-from tests.rados.test_bluestore_data_compression import get_pool_stats
 from utility.log import Log
 from utility.retry import retry
+from utility.utils import generate_unique_id
 
 log = Log(__name__)
 
@@ -93,6 +93,7 @@ class BluestoreDataCompression:
         mon_obj: MonConfigMethods,
         client_node: CephNode,
         ceph_cluster,
+        pool_type: str = "replicated",
     ):
         self.rados_obj = rados_obj
         self.cephadm = cephadm
@@ -105,6 +106,7 @@ class BluestoreDataCompression:
         self.MAX_BLOB_SIZE_SSD = 65536
         self.MIN_BLOB_SIZE_HDD = 8192
         self.MAX_BLOB_SIZE_HDD = 65536
+        self.pool_type = pool_type
 
     def validate_osd_compression_value(self, osd_id, parameter, default_value):
         parameter_dict = self.mon_obj.daemon_config_get(
@@ -485,7 +487,7 @@ class BluestoreDataCompression:
         log_info_msg = f"---4. Validate compression mode on pool {pool_name}---"
         log.info(log_info_msg)
 
-        pool_stats = get_pool_stats(rados_obj=self.rados_obj, pool_name=pool_name)
+        pool_stats = self.get_pool_stats(pool_name=pool_name)
         log.info(json.dumps(pool_stats))
         compress_under_bytes = pool_stats["compress_under_bytes"]
 
@@ -911,34 +913,25 @@ class BluestoreDataCompression:
             AssertionError: If pool creation fails.
             Exception: If the pool's pg_num does not reach 1 within 600 seconds.
         """
-        assert self.rados_obj.create_pool(
-            pool_name=pool_name, pg_num=1, disable_pg_autoscale=True, app_name="rbd"
-        )
+        if self.pool_type == "replicated":
+            assert self.rados_obj.create_pool(
+                pool_name=pool_name, disable_pg_autoscale=True, app_name="rbd", pg_num_max=1
+            )
+        else:
+            config = {
+                "create": True,
+                "profile_name": "ec42_rados" + generate_unique_id(3),
+                "pool_name": pool_name,
+                "k": 4,
+                "m": 2,
+                "crush-failure-domain": "osd",
+                "pg_num_max": 1,
+            }
+            assert self.rados_obj.create_erasure_pool(**config)
 
         pg_num_on_pool = int(
             self.rados_obj.get_pool_property(pool=pool_name, props="pg_num")["pg_num"]
         )
-        log.debug("PG num on pool : %s", pg_num_on_pool)
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
-        while end_time > datetime.datetime.now():
-            cmd = f"ceph osd pool set {pool_name} pg_num 1; ceph osd pool set {pool_name} pgp_num 1"
-            self.rados_obj.run_ceph_command(
-                cmd=cmd, client_exec=True, print_output=True
-            )
-            pg_num_on_pool = int(
-                self.rados_obj.get_pool_property(pool=pool_name, props="pg_num")[
-                    "pg_num"
-                ]
-            )
-            log.debug("PG num on pool : %s", pg_num_on_pool)
-            if pg_num_on_pool == 1:
-                log.debug("PG num on pool %s reached 1", pg_num_on_pool)
-                break
-            log.debug("Sleeping for 10 seconds")
-            time.sleep(10)
-        else:
-            raise Exception("Pool PG num did not reach 1")
-        log.info("Pool pg num is 1")
 
     def partial_overwrite(self, **kwargs):
         """
@@ -1433,3 +1426,26 @@ class BluestoreDataCompression:
             if not (int(blob["blob"]["compressed_length"]) > 0):
                 return False
         return True
+
+    def get_pool_stats(self, pool_name: str):
+        """
+        Retrieves the default value of the Bluestore compression required ratio for a given pool.
+
+        Args:
+            rados_obj (object): RadosOrchestrator object
+            mon_obj (object): MonConfigMethods object
+            pool_name (str): The name of the pool for which the compression ratio is required.
+
+        Returns:
+            str: bluestore_compression_required_ratio
+        """
+        try:
+            pool_stats = self.rados_obj.run_ceph_command(cmd="ceph df detail")["pools"]
+            pool_stats_after_compression = [
+                detail for detail in pool_stats if detail["name"] == pool_name
+            ][0]["stats"]
+            return pool_stats_after_compression
+        except KeyError as e:
+            err_msg = f"No stats about the pools requested found on the cluster {e}"
+            log.error(err_msg)
+            raise Exception(err_msg)
