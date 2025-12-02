@@ -289,3 +289,33 @@ tests:
       config:
         nfs_version: 4.2
         clients: 1
+
+  - test:
+      name: Running nfstest lock suite
+      module: nfs_run_nfslocktest_suite.py
+      desc: Running nfstest lock suite
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 1
+
+  - test:
+      name: Running single client byte lock test
+      module: nfs_single_client_byterange_filelock.py
+      desc: Running single client byte lock test
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 1
+
+  - test:
+      name: Running multi client byte lock test
+      module: nfs_multi_client_byterange_filelock.py
+      desc: Running multi client byte lock test
+      polarion-id: CEPH-83577561
+      abort-on-fail: false
+      config:
+        nfs_version: 3
+        clients: 4
