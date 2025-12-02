@@ -12,6 +12,7 @@ from typing import List
 from ceph.ceph import CephNode
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
 from ceph.rados.rados_scrub import RadosScrubber
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.rados_test_util import wait_for_daemon_status
@@ -1367,3 +1368,68 @@ class BluestoreDataCompression:
                 f"\nlogs -> {primary_osd_metadata} \n {separator}"
             )
             log.info(info_msg)
+
+    def fetch_blobs_from_osd(
+        self, osd_id: str, objectstore_obj: objectstoreToolWorkflows, pool_name: str
+    ):
+        """
+        Fetch blobs from the specified OSD for the given pool.
+
+        Queries bluestore collections for the pool, finds rbd_data objects,
+        and returns the object dump containing blob information.
+        """
+        pool_id = self.rados_obj.get_pool_id(pool_name)
+        log.info("Pool %s has id %s" % (pool_name, pool_id))
+        time.sleep(5)
+
+        cmd = f"ceph tell osd.{osd_id} bluestore collections | grep ^{pool_id}"
+        collections = self.client_node.exec_command(cmd=cmd, print_output=True)[0]
+        object_name = None
+
+        for collection in collections.split("\n"):
+            if collection == "":
+                continue
+            cmd = f"ceph tell osd.{osd_id} bluestore list {collection}"
+            out = self.client_node.exec_command(cmd=cmd, print_output=True)
+            out = str(out[0])
+            log.info(
+                "Blustore list output for osd.%s (truncated): %s" % (osd_id, out[:200])
+            )
+
+            for object in out.split("\n"):
+                if "rbd_data" in object:
+                    object_name = object
+                    break
+
+        if object_name is None:
+            raise Exception("Object not found in OSD")
+        log.info("Found bluestore object: %s" % object_name)
+
+        object_name = object_name.split(":head#")[0].split(":::")[1]
+        obj_json = objectstore_obj.list_objects(
+            osd_id=int(osd_id), obj_name=object_name
+        ).strip()
+        if not obj_json:
+            log.error(f"Object {object_name} could not be listed in OSD {osd_id}")
+            return 1
+        log.info(obj_json)
+        out = objectstore_obj.fetch_object_dump(osd_id=int(osd_id), obj=obj_json)
+        return out
+
+    def validate_blobs_are_compressed(
+        self, osd_id: str, objectstore_obj: objectstoreToolWorkflows, pool_name: str
+    ):
+        """
+        Validate that blobs are compressed by checking compressed_length > 0.
+        """
+        blobs_json = self.fetch_blobs_from_osd(
+            osd_id=osd_id, objectstore_obj=objectstore_obj, pool_name=pool_name
+        )
+        blobs_json = json.loads(blobs_json)
+        log.info(
+            "Blobs JSON on OSD.%s: %s" % (osd_id, json.dumps(blobs_json, indent=4))
+        )
+        for blob in blobs_json["onode"]["extents"][:-1]:
+            if not (int(blob["blob"]["compressed_length"]) > 0):
+                return False
+        return True

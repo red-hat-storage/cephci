@@ -7,10 +7,14 @@ scenario-3: Disable bluestore_write_v2 and validate
 
 import random
 import string
+import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
+from ceph.utils import find_vm_node_by_hostname
 from tests.rados.monitor_configurations import MonConfigMethods
+from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_bluestore_comp_enhancements_class import (
     BLUESTORE_ALLOC_HINTS,
     COMPRESSION_ALGORITHMS,
@@ -434,6 +438,338 @@ def run(ceph_cluster, **kw):
             log.info("STARTED: Scenario 8: Disable bluestore_write_v2 and validate")
             bluestore_compression.toggle_bluestore_write_v2(toggle_value="false")
             log.info("COMPELTED: Scenario 8: Disable bluestore_write_v2 and validate")
+
+        if "scenario-9" in scenarios_to_run:
+            """
+            Test compression validation when primary OSD is down.
+            Steps:
+            1) Create Pool
+            2) Enable compression
+            3) Shutdown primary osd
+            4) Write IO to the pools
+            5) Read the collections from the secondary and tertiary OSD and check if they are compressed
+            6) Restart the primary OSD
+            7) Check all the objects in primary OSD
+            8) They should be compressed
+            9) Clean up the pool
+            """
+            # initializations
+            compression_mode = COMPRESSION_MODES.FORCE
+            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
+            compression_obj = BluestoreDataCompression(
+                rados_obj=rados_obj,
+                cephadm=cephadm,
+                mon_obj=mon_obj,
+                client_node=client_node,
+                ceph_cluster=ceph_cluster,
+            )
+            object_size = 100000
+            objectstore_obj = objectstoreToolWorkflows(node=cephadm)
+
+            # Create unique pool name and rbd image name
+            pool_suffix = "".join(
+                random.choices(string.ascii_letters + string.digits, k=6)
+            )
+            pool_name = f"rados-{pool_suffix}"
+            rbd_img = "rbd_img" + "".join(
+                random.choices(string.ascii_letters + string.digits, k=6)
+            )
+
+            log.info(
+                "Starting scenario-9: Compression validation with primary OSD down, mode: %s, algo: %s"
+                % (compression_mode, compression_algorithm)
+            )
+
+            # Step 1: Create pool
+            log.info("Step 1: Creating pool %s" % pool_name)
+            compression_obj.create_pool_wrapper(pool_name=pool_name)
+            acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
+            primary_osd_id = acting_pg_set[0]
+            secondary_osd_id = acting_pg_set[1] if len(acting_pg_set) > 1 else None
+            tertiary_osd_id = acting_pg_set[2] if len(acting_pg_set) > 2 else None
+
+            log.info(
+                "PG acting set: primary=%s, secondary=%s, tertiary=%s"
+                % (primary_osd_id, secondary_osd_id, tertiary_osd_id)
+            )
+            if secondary_osd_id is None or tertiary_osd_id is None:
+                raise Exception(
+                    "No secondary or tertiary OSD found in acting set. "
+                    "Test requires at least 2 OSDs in acting set."
+                )
+
+            # Step 2: Enable compression
+            log.info("Step 2: Enabling compression on pool %s" % pool_name)
+            compression_obj.enable_compression(
+                compression_mode=compression_mode,
+                compression_algorithm=compression_algorithm,
+                pool_level_compression=pool_level_compression,
+                pool_name=pool_name,
+            )
+
+            # Create RBD image
+            cmd = "rbd create %s --size 10G --pool %s" % (rbd_img, pool_name)
+            try:
+                rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                log.info("Created RBD image: %s" % rbd_img)
+            except Exception as e:
+                raise Exception("Failed to create RBD image: %s" % e)
+
+            # Step 3: Shutdown primary OSD
+            log.info("Step 3: Shutting down primary OSD %s" % primary_osd_id)
+            if not rados_obj.change_osd_state(action="stop", target=primary_osd_id):
+                raise Exception("Failed to stop primary OSD %s" % primary_osd_id)
+
+            # Wait for PGs to reach active + clean
+            log.info("Waiting for cluster to stabilize after OSD shutdown")
+            wait_for_clean_pg_sets(rados_obj=rados_obj, timeout=12000)
+
+            # Step 4: Write IO to the pool
+            log.info("Step 4: Writing IO to pool %s" % pool_name)
+            compression_obj.write_io_and_fetch_log_lines(
+                write_utility_type=IOTools.FIO,
+                primary_osd_id=str(secondary_osd_id),
+                pool_name=pool_name,
+                object_size=int(object_size),
+                blob_size=int(object_size),
+                rbd_img=rbd_img,
+                patterns=[],
+            )
+            time.sleep(10)
+
+            # Step 5: Read blobs from secondary OSD and check if they are compressed.
+            log.info("Step 5: Checking compression on secondary and tertiary OSDs")
+            blobs_secondary = compression_obj.validate_blobs_are_compressed(
+                osd_id=secondary_osd_id,
+                objectstore_obj=objectstore_obj,
+                pool_name=pool_name,
+            )
+            if blobs_secondary is False:
+                raise Exception("Blobs on secondary OSD are not compressed")
+
+            # Read blobs from tertiary OSD and check if they are compressed.
+            blobs_tertiary = compression_obj.validate_blobs_are_compressed(
+                osd_id=tertiary_osd_id,
+                objectstore_obj=objectstore_obj,
+                pool_name=pool_name,
+            )
+            if blobs_tertiary is False:
+                raise Exception("Blobs on tertiary OSD are not compressed")
+
+            # Step 6: Restart the primary OSD
+            log.info("Step 6: Restarting primary OSD %s" % primary_osd_id)
+            if not rados_obj.change_osd_state(action="start", target=primary_osd_id):
+                raise Exception("Failed to start primary OSD %s" % primary_osd_id)
+
+            # Wait for cluster to stabilize and recovery
+            log.info("Waiting for cluster to stabilize and recovery after OSD restart")
+            wait_for_clean_pg_sets(rados_obj=rados_obj, timeout=12000)
+
+            acting_pg_set_post_osd_restart = rados_obj.get_pg_acting_set(
+                pool_name=pool_name
+            )
+            acting_pg_set_pre_osd_restart = acting_pg_set
+
+            if (
+                acting_pg_set_post_osd_restart.sort()
+                != acting_pg_set_pre_osd_restart.sort()
+            ):
+                raise Exception("PG acting set changed after OSD restart")
+
+            # Step 7: Check the blobs of the object in primary osd are compressed
+            log.info("Step 7: Checking objects in primary OSD %s" % primary_osd_id)
+            is_primary_compressed = compression_obj.validate_blobs_are_compressed(
+                osd_id=primary_osd_id,
+                objectstore_obj=objectstore_obj,
+                pool_name=pool_name,
+            )
+            if not is_primary_compressed:
+                raise Exception(
+                    "Blobs on primary OSD which was down during IO are not compressed"
+                )
+
+            # Step 8: Clean up the pool
+            log.info("Step 8: Cleaning up pool %s" % pool_name)
+            if not rados_obj.delete_pool(pool=pool_name):
+                raise Exception("Failed to delete pool %s" % pool_name)
+
+            log.info("Scenario-9 completed successfully")
+
+        if "scenario-10" in scenarios_to_run:
+            """
+            Test compression validation when primary OSD host is down.
+            Steps:
+            1) Create pool
+            2) Fetch primary OSD, secondary, tertiary OSD
+            3) Shutdown OSD host of primary OSD
+            4) Enable compression
+            5) Write IO to the pool
+            6) Check the secondary_osd and tertiary_osd for compression
+            7) Restart primary OSD host
+            8) Validate that the object written to pool is stored compressed in primary OSD
+            9) Cleanup
+            """
+            # Initializations
+            compression_mode = COMPRESSION_MODES.FORCE
+            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
+            compression_obj = BluestoreDataCompression(
+                rados_obj=rados_obj,
+                cephadm=cephadm,
+                mon_obj=mon_obj,
+                client_node=client_node,
+                ceph_cluster=ceph_cluster,
+            )
+            object_size = 100000
+            objectstore_obj = objectstoreToolWorkflows(node=cephadm)
+
+            # Create unique pool name and rbd image name
+            pool_suffix = "".join(
+                random.choices(string.ascii_letters + string.digits, k=6)
+            )
+            pool_name = f"rados-{pool_suffix}"
+            rbd_img = "rbd_img" + "".join(
+                random.choices(string.ascii_letters + string.digits, k=6)
+            )
+
+            log.info(
+                "Starting scenario-10: Compression validation with primary OSD host down, mode: %s, algo: %s"
+                % (compression_mode, compression_algorithm)
+            )
+
+            # Step 1: Create pool
+            compression_obj.create_pool_wrapper(pool_name=pool_name)
+            acting_pg_set = rados_obj.get_pg_acting_set(pool_name=pool_name)
+            primary_osd_id = acting_pg_set[0]
+            secondary_osd_id = acting_pg_set[1] if len(acting_pg_set) > 1 else None
+            tertiary_osd_id = acting_pg_set[2] if len(acting_pg_set) > 2 else None
+
+            if secondary_osd_id is None or tertiary_osd_id is None:
+                raise Exception(
+                    "No secondary or tertiary OSD found in acting set. "
+                    "Test requires at least 3 OSDs in acting set."
+                )
+
+            # Step 2: Get primary OSD host
+            primary_osd_host = rados_obj.fetch_host_node(
+                daemon_type="osd", daemon_id=str(primary_osd_id)
+            )
+            if primary_osd_host is None:
+                raise Exception(
+                    "Failed to fetch host node for primary OSD %s" % primary_osd_id
+                )
+            primary_osd_hostname = getattr(primary_osd_host, "hostname", None)
+            if primary_osd_hostname is None:
+                raise Exception(
+                    "Host node for primary OSD %s does not have hostname attribute"
+                    % primary_osd_id
+                )
+            log.info(
+                "Primary OSD %s is on host %s" % (primary_osd_id, primary_osd_hostname)
+            )
+
+            # Step 3: Shutdown OSD host of primary OSD
+            log.info(
+                "Step 3: Shutting down OSD host %s (primary OSD %s)"
+                % (primary_osd_hostname, primary_osd_id)
+            )
+            target_node = find_vm_node_by_hostname(ceph_cluster, primary_osd_hostname)
+            if target_node is None:
+                raise Exception(
+                    "Failed to find VM node for hostname %s" % primary_osd_hostname
+                )
+            log.info("Shutting down host %s" % primary_osd_hostname)
+            target_node.shutdown(wait=True)
+            log.info("Host %s shutdown successfully" % primary_osd_hostname)
+
+            # Step 4: Enable compression
+            log.info("Step 4: Enabling compression on pool %s" % pool_name)
+            compression_obj.enable_compression(
+                compression_mode=compression_mode,
+                compression_algorithm=compression_algorithm,
+                pool_level_compression=pool_level_compression,
+                pool_name=pool_name,
+            )
+
+            # Create RBD image
+            cmd = "rbd create %s --size 10G --pool %s" % (rbd_img, pool_name)
+            try:
+                rados_obj.client.exec_command(cmd=cmd, sudo=True)
+                log.info("Created RBD image: %s" % rbd_img)
+            except Exception as e:
+                raise Exception("Failed to create RBD image: %s" % e)
+
+            # Step 5: Write IO to the pool
+            log.info("Step 5: Writing IO to pool %s" % pool_name)
+            compression_obj.write_io_and_fetch_log_lines(
+                write_utility_type=IOTools.FIO,
+                primary_osd_id=str(secondary_osd_id),
+                pool_name=pool_name,
+                object_size=int(object_size),
+                blob_size=int(object_size),
+                rbd_img=rbd_img,
+                patterns=[],
+            )
+            time.sleep(10)
+
+            # Step 6: Check the secondary_osd and tertiary_osd for compression
+            log.info("Checking compression on secondary and tertiary OSDs...")
+            blobs_secondary = compression_obj.validate_blobs_are_compressed(
+                osd_id=secondary_osd_id,
+                objectstore_obj=objectstore_obj,
+                pool_name=pool_name,
+            )
+            if blobs_secondary is False:
+                raise Exception("Blobs on secondary OSD are not compressed")
+
+            blobs_tertiary = compression_obj.validate_blobs_are_compressed(
+                osd_id=tertiary_osd_id,
+                objectstore_obj=objectstore_obj,
+                pool_name=pool_name,
+            )
+            if blobs_tertiary is False:
+                raise Exception("Blobs on tertiary OSD are not compressed")
+
+            # Step 7: Restart primary OSD host
+            log.info("Step 7: Restarting primary OSD host %s" % primary_osd_hostname)
+            target_node.power_on()
+            log.info("Host %s powered on successfully" % primary_osd_hostname)
+
+            # Wait for PGs to reach active + clean
+            log.info("Waiting for cluster to stabilize and recovery after host restart")
+            wait_for_clean_pg_sets(rados_obj=rados_obj)
+
+            acting_pg_set_post_osd_restart = rados_obj.get_pg_acting_set(
+                pool_name=pool_name
+            )
+            acting_pg_set_pre_osd_restart = acting_pg_set
+
+            if (
+                acting_pg_set_post_osd_restart.sort()
+                != acting_pg_set_pre_osd_restart.sort()
+            ):
+                raise Exception("PG acting set changed after OSD restart")
+
+            # Step 8: Validate that the object written to pool is stored compressed in primary OSD
+            log.info(
+                "Step 8: Checking objects in primary OSD %s for compression"
+                % primary_osd_id
+            )
+            is_primary_compressed = compression_obj.validate_blobs_are_compressed(
+                osd_id=primary_osd_id,
+                objectstore_obj=objectstore_obj,
+                pool_name=pool_name,
+            )
+            if not is_primary_compressed:
+                raise Exception(
+                    "Blobs on primary OSD which was down during IO are not compressed"
+                )
+
+            # Step 9: Cleanup
+            log.info("Step 9: Cleaning up pool %s" % pool_name)
+            if not rados_obj.delete_pool(pool=pool_name):
+                raise Exception("Failed to delete pool %s" % pool_name)
+
+            log.info("Scenario-10 completed successfully")
 
     except Exception as e:
         log.error(f"Failed with exception: {e.__doc__}")
