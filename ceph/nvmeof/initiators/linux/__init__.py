@@ -10,7 +10,7 @@ class Initiator(NVMeCLI):
         self.configure()
 
     def initiator_nqn(self):
-        out, _ = self.node.exec_command(cmd="nvme show-hostnqn")
+        out, _ = self.node.exec_command(cmd="nvme show-hostnqn", sudo=True)
         return out.strip()
 
     def distro_version(self):

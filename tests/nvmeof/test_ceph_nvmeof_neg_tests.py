@@ -233,9 +233,6 @@ def test_ceph_83575813(ceph_cluster, rbd, nvme_service, pool, config):
 
 def test_ceph_83575455(ceph_cluster, rbd, nvme_service, pool, config):
     """CEPH-83575455: Validate Host access failures"""
-    client = get_node_by_id(ceph_cluster, config["initiator_node"])
-    initiator = NVMeInitiator(client)
-    initiator_nqn = initiator.initiator_nqn()
     try:
         # Deploy NVMe Service
         if config.get("install"):
@@ -245,12 +242,25 @@ def test_ceph_83575455(ceph_cluster, rbd, nvme_service, pool, config):
         nvme_service.init_gateways()
         nvmegwcli = nvme_service.gateways[0]
 
-        # Configure Subsystem, listeners, host, namespaces
+        # Configure Subsystem, listeners, namespaces
         if config.get("subsystems"):
             configure_gw_entities(nvme_service, rbd_obj=rbd)
 
-        for i in config["initiators"]:
-            initiators(ceph_cluster, nvmegwcli, i)
+        # Configure hosts
+        client = get_node_by_id(ceph_cluster, config["initiator_node"])
+        initiator = NVMeInitiator(client)
+        initiator_nqn = initiator.initiator_nqn()
+        host_args = {
+            "args": {
+                "subsystem": config["initiators"][0]["nqn"],
+                "host": initiator_nqn,
+            }
+        }
+        nvmegwcli.host.add(**host_args)
+
+        # Connect the initiator to the subsystem
+        initiators = config.get("initiators")
+        initiator.connect_targets(nvmegwcli, initiators[0])
 
         targets = initiator.list_devices()
 
@@ -267,12 +277,6 @@ def test_ceph_83575455(ceph_cluster, rbd, nvme_service, pool, config):
         # Create a file to check IO failure on mount point
         LOG.info("Remove client host access to the namespaces")
         try:
-            host_args = {
-                "args": {
-                    "subsystem": config["initiators"][0]["subnqn"],
-                    "host": initiator_nqn,
-                }
-            }
             nvmegwcli.host.delete(**host_args)
         except Exception as host_del_err:
             if (
