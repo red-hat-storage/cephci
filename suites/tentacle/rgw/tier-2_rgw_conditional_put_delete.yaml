@@ -1,0 +1,184 @@
+# suite to excute conditional put and conditional delete scenarios
+tests:
+
+  # Cluster deployment stage
+
+  - test:
+      abort-on-fail: true
+      desc: Install software pre-requisites for cluster deployment.
+      module: install_prereq.py
+      name: setup pre-requisites
+
+  - test:
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              args:
+                registry-url: registry.redhat.io
+                mon-ip: node1
+                initial-dashboard-password: admin@123
+                dashboard-password-noupdate: true
+                orphan-initial-daemons: true
+                skip-monitoring-stack: true
+          - config:
+              command: add_hosts
+              service: host
+              args:
+                attach_ip_address: true
+                labels: apply-all-labels
+          - config:
+              command: apply
+              service: osd
+              args:
+                all-available-devices: true
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+                  nodes:
+                    - node4
+                    - node3
+                    - node5
+      desc: bootstrap with registry-url option and deployment services.
+      destroy-cluster: false
+      polarion-id: CEPH-83573713
+      module: test_cephadm.py
+      name: RHCS deploy cluster using cephadm
+
+  - test:
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node6
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        git_clone: true
+        git_node_role: rgw
+      desc: Configure the RGW client system
+      polarion-id: CEPH-83573758
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
+
+  - test:
+      abort-on-fail: true
+      config:
+        haproxy_clients:
+          - node6
+        rgw_endpoints:
+          - node3:80
+          - node4:80
+          - node5:80
+      desc: "Configure HAproxy"
+      module: haproxy.py
+      name: "Configure HAproxy"
+
+  # Testing stage
+  - test:
+      name: Test Conditional put with if match etag
+      desc: Test Conditional put with if match etag
+      polarion-id: CEPH-83632219
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_put_if_match.yaml
+
+  - test:
+      name: Test Conditional put with if match etag with version bucket
+      desc: Test Conditional put with if match etag with version bucket
+      polarion-id: CEPH-83632219
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_put_if_match_ver.yaml
+
+  - test:
+      name: Test Conditional put with if none match
+      desc: Test Conditional put with if none match
+      polarion-id: CEPH-83632219
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_put_if_none_match.yaml
+
+  - test:
+      name: Test Conditional put with if none match etag with version bucket
+      desc: Test Conditional put with if none match etag with version bucket
+      polarion-id: CEPH-83632219
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_put_if_none_match_ver.yaml
+
+  - test:
+      name: Test Conditional delete with all correct conditions
+      desc: Test Conditional delete with all correct conditions
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_delete_all_correct.yaml
+
+  - test:
+      name: Test Conditional delete with correct etag and incorrect size
+      desc: Test Conditional delete with correct etag and incorrect size
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_delete_correct_etag_and_incorrcet_size.yaml.yaml
+
+  - test:
+      name: Test Conditional delete with correct size and incorrect lmt
+      desc: Test Conditional delete with correct size and incorrect lmt
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_delete_correct_size_and_incorrcet_lmt.yaml
+
+  - test:
+      name: Test Conditional delete with correct etag
+      desc: Test Conditional delete with correct etag
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_delete_etag.yaml
+
+  - test:
+      name: Test Conditional delete with incorrect etag and correct lmt
+      desc: Test Conditional delete with incorrect etag and correct lmt
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_delete_incorrect_etag_and_correct_lmt.yaml
+
+  - test:
+      name: Test Conditional delete with correct lmt
+      desc: Test Conditional delete with correct lmt
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_delete_lmt.yaml
+
+  - test:
+      name: Test Conditional delete with correct size
+      desc: Test Conditional delete with correct size
+      polarion-id: CEPH-83632220
+      module: sanity_rgw.py
+      config:
+        script-name: ../aws/test_conditional_delete.py
+        config-file-name: ../../aws/configs/test_cond_delete_size.yaml
