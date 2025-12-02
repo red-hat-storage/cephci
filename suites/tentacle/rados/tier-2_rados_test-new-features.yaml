@@ -299,6 +299,30 @@ tests:
         case_to_run:
           - case10
   - test:
+      name: Track availability- Inconsistent object check
+      desc: Verification of track availability tests on inconsistent object pool
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case11
+  - test:
+      name: Track availability- Generating inactive PG
+      desc: Verification of track availability tests by generating inactive PG
+      module: test_track_availibility_status.py
+      polarion-id: CEPH-83620501
+      config:
+        replicated_pool:
+          create: true
+          pool_name: track_data_pool
+          pg_num_max: 1
+        case_to_run:
+          - case12
+  - test:
       name: Track availability- Reboot OSD node check
       desc: Verification of track availability tests by rebooting the osd node
       module: test_track_availibility_status.py
@@ -309,5 +333,5 @@ tests:
           pool_name: track_data_pool
           pg_num_max: 1
         case_to_run:
-          - case11
+          - case13
 

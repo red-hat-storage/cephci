@@ -5,7 +5,9 @@ This module is to verify the -
 3. To clear the status by using the clear_availability_score command
 """
 
+import ast
 import datetime
+import json
 import math
 import random
 import time
@@ -14,6 +16,7 @@ import traceback
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
+from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
@@ -36,7 +39,8 @@ def run(ceph_cluster, **kw) -> int:
     8.Verification of the enable_availability_tracking parameter functionality
     9.Verification of the MTBF,MTTR and score after the MON operations
     10.Verification of the clear_availability_score command
-    11.Verification of the MTBF,MTTR and score after rebooting the primary osd node
+    11.Verification of the MTBF,MTTR and score after creating inconsistent objects
+    12.Verification of the MTBF,MTTR and score after rebooting the primary osd node
     """
     log.info(run.__doc__)
     config = kw["config"]
@@ -49,9 +53,12 @@ def run(ceph_cluster, **kw) -> int:
     replicated_config = config.get("replicated_pool")
     pool_name = replicated_config["pool_name"]
     mon_workflow_obj = MonitorWorkflows(node=cephadm)
+    objectstore_obj = objectstoreToolWorkflows(node=cephadm, nostart=True)
 
     try:
-
+        mon_obj.set_config(
+            section="mon", name="enable_availability_tracking", value="true"
+        )
         if "case1" in config.get("case_to_run"):
             log.info(
                 "==== Case 1: Verification of the Mean Time Between Failures (MTBF),Mean Time To Recover(MTTR) and "
@@ -88,10 +95,6 @@ def run(ceph_cluster, **kw) -> int:
                 log.error("Case 1: Verification of the score value failed ")
                 return 1
             log.info("==== Case 1: Verification of the score value completed ====")
-
-            if rados_object.delete_pool(pool=pool_name) is False:
-                raise Exception(f"Deleting pool {pool_name} failed")
-
             log.info(
                 "==== Case 1: Verification of the Mean Time Between Failures (MTBF),Mean Time To Recover(MTTR) and "
                 "score value  completed===="
@@ -277,7 +280,7 @@ def run(ceph_cluster, **kw) -> int:
             timeout = datetime.timedelta(minutes=15)
             while datetime.datetime.now() - start_time < timeout:
                 pg_state = rados_object.get_pg_state(pg_id=pg_id)
-                if "recovering" in pg_state:
+                if "recovering" in pg_state or "backfilling" in pg_state:
                     log.info("Recovery in started")
                     recovery_found = True
                     break
@@ -297,9 +300,6 @@ def run(ceph_cluster, **kw) -> int:
                 msg_error = f"Case3:The track availability tests are failed on {pool_name} during recovery"
                 log.error(msg_error)
                 return 1
-            if rados_object.delete_pool(pool=pool_name) is False:
-                raise Exception(f"Deleting pool {pool_name} failed")
-
             log.info(
                 "=== Case 3: Verification of track availability tests completed during recovery state==="
             )
@@ -351,8 +351,7 @@ def run(ceph_cluster, **kw) -> int:
                 msg_error = f" The track availability tests are failed on {pool_name} during backfill"
                 log.error(msg_error)
                 return 1
-            if rados_object.delete_pool(pool=pool_name) is False:
-                raise Exception(f"Deleting pool {pool_name} failed")
+
             log.info(
                 "=== Case 4: Verification of track availability tests completed during backfill state==="
             )
@@ -403,8 +402,6 @@ def run(ceph_cluster, **kw) -> int:
                 )
                 log.error(msg_error)
                 return 1
-            if rados_object.delete_pool(pool=pool_name) is False:
-                raise Exception(f"Deleting pool {pool_name} failed")
             log.info(
                 "=== Case 5: Verification of track availability tests after performing the scrub operations state "
                 "are completed==="
@@ -451,8 +448,7 @@ def run(ceph_cluster, **kw) -> int:
                 msg_error = f"  Case 6: The track availability tests are failed on {pool_name} during pg merge"
                 log.error(msg_error)
                 return 1
-            if rados_object.delete_pool(pool=pool_name) is False:
-                raise Exception(f"Deleting pool {pool_name} failed")
+
             log.info(
                 "=== Case 6: Verification of track availability tests completed by pg merge==="
             )
@@ -473,7 +469,7 @@ def run(ceph_cluster, **kw) -> int:
                 cmd_enable = "ceph balancer on"
                 rados_object.run_ceph_command(cmd_enable)
                 if not rados_object.get_balancer_status():
-                    log.error("Case8: The ceph balancer is false")
+                    log.error("Case7: The ceph balancer is false")
                     return 1
             log.info("Case 7: The ceph balancer is enabled")
             rados_object.reweight_crush_items()
@@ -482,8 +478,7 @@ def run(ceph_cluster, **kw) -> int:
                 msg_error = f"Case 7: The track availability tests are failed on {pool_name} during balancer activity"
                 log.error(msg_error)
                 return 1
-            if rados_object.delete_pool(pool=pool_name) is False:
-                raise Exception(f"Deleting pool {pool_name} failed")
+
             log.info(
                 "=== Case 7: Verification of track availability tests by enabling balancer activity completed ==="
             )
@@ -491,6 +486,7 @@ def run(ceph_cluster, **kw) -> int:
             log.info(
                 "=== Case 8: Verification enable_availability_tracking parameter  ==="
             )
+            mon_obj.remove_config(section="mon", name="enable_availability_tracking")
             assert create_data_pool(mon_obj, rados_object, replicated_config, pool_name)
             method_should_succeed(
                 wait_for_clean_pg_sets, rados_object, test_pool=pool_name, timeout=1800
@@ -498,17 +494,13 @@ def run(ceph_cluster, **kw) -> int:
             availability_value = mon_obj.get_config(
                 section="mon", param="enable_availability_tracking"
             )
-            if availability_value == "false":
-                log.info(
-                    "Case 8:The enable_availability_tracking is false by default it is true"
+
+            if availability_value == "true":
+                log.error(
+                    "Case 8:The enable_availability_tracking is true by default it is false"
                 )
                 return 1
-            log.info("Case 8:The enable_availability_tracking default value is true")
-
-            log.info("Case 8:setting the enable_availability_tracking to false")
-            mon_obj.set_config(
-                section="mon", name="enable_availability_tracking", value="false"
-            )
+            log.info("Case 8:The enable_availability_tracking default value is false")
 
             success, out_put = get_pool_availability_status(client)
             if success:
@@ -524,13 +516,13 @@ def run(ceph_cluster, **kw) -> int:
             if availability_msg not in str(out_put):
                 msg_error = (
                     f"Case 8:The {availability_msg} is not displayed in the output  when the "
-                    f"enable_availability_tracking parameter is set to false"
+                    f"enable_availability_tracking parameter is false"
                 )
                 log.error(msg_error)
                 return 1
             msg_info = (
                 f"Case 8:The {availability_msg} is displayed in the output  when the enable_availability_tracking "
-                f"parameter is set to false"
+                f"parameter is false"
             )
             log.info(msg_info)
             mon_obj.set_config(
@@ -541,8 +533,7 @@ def run(ceph_cluster, **kw) -> int:
                 msg_error = f"  Case 8: The track availability tests are failed on {pool_name} during balancer activity"
                 log.error(msg_error)
                 return 1
-            if rados_object.delete_pool(pool=pool_name) is False:
-                raise Exception(f"Deleting pool {pool_name} failed")
+
             log.info(
                 "=== Case 8: Verification enable_availability_tracking parameter completed  ==="
             )
@@ -591,8 +582,7 @@ def run(ceph_cluster, **kw) -> int:
                 )
                 log.error(msg_error)
                 return 1
-            if rados_object.delete_pool(pool=pool_name) is False:
-                raise Exception(f"Deleting pool {pool_name} failed")
+
             log.info(
                 "=== Case 9: Verification of track availability tests by performing the mon operations are completed "
                 "==="
@@ -624,14 +614,188 @@ def run(ceph_cluster, **kw) -> int:
                 return 1
             msg_info = f"Case 10: The clear_availability_status command clear the {pool_name} pool data"
             log.info(msg_info)
-            if rados_object.delete_pool(pool=pool_name) is False:
-                raise Exception(f"Deleting pool {pool_name} failed")
+
             log.info(
                 "=== Case 10: Verification clear-availability-status command on pool completed  ==="
             )
         if "case11" in config.get("case_to_run"):
             log.info(
-                "===Case 11: Verification of track availability tests by rebooting the osd node  ===="
+                "=== Case 11: Verification of track availability tests by removing object in a OSD ==="
+            )
+            osd_object_map = {}
+            assert create_data_pool(mon_obj, rados_object, replicated_config, pool_name)
+            method_should_succeed(
+                wait_for_clean_pg_sets, rados_object, test_pool=pool_name, timeout=1800
+            )
+
+            if not test_all_values(client, pool_name):
+                msg_error = (
+                    f"Case 11: The track availability tests are failed on {pool_name}"
+                )
+                log.error(msg_error)
+                return 1
+            before_score = get_score(client, pool_name)
+            if before_score is None:
+                log.error("Case 11: Not able to retrieve the score")
+                return 1
+
+            log.info("Case 11: Getting objects from pool using rados ls command")
+            cmd_rados_ls = f"rados -p {pool_name} ls | shuf -n 5"
+            try:
+
+                out_put, err = client.exec_command(cmd=cmd_rados_ls)
+                object_list = out_put.strip().split("\n")
+                log.info("Case 11: The Objects in test_pool are - %s", object_list)
+            except Exception as e:
+                log.error(f"Case 11: Failed to list objects from test_pool: {e}")
+                return 1
+
+            for object_name in object_list:
+                primary_osd = rados_object.get_osd_map(pool=pool_name, obj=object_name)[
+                    "acting_primary"
+                ]
+                osd_object_map.setdefault(primary_osd, []).append(object_name)
+            for osd_id, objects_list in osd_object_map.items():
+                for obj_name in objects_list:
+                    obj_str = objectstore_obj.list_objects(
+                        osd_id=osd_id, obj_name=obj_name
+                    )
+                    obj_pg_id = ast.literal_eval(obj_str)[0]
+                    json_data = json.dumps(ast.literal_eval(obj_str)[1])
+
+                    objectstore_obj.remove_omap(
+                        osd_id=osd_id,
+                        pgid=obj_pg_id,
+                        obj=json_data,
+                        key=f"key-{obj_name}",
+                    )
+                    objectstore_obj.remove_object(
+                        osd_id=osd_id, pgid=obj_pg_id, obj=json_data
+                    )
+                    msg_obj_remove_omap = f"The {obj_name} object is removed"
+                    log.info(msg_obj_remove_omap)
+                if not rados_object.change_osd_state(
+                    action="start", target=int(osd_id)
+                ):
+                    msg_osd_start = f"Could not start OSD.{osd_id}"
+                    log.error(msg_osd_start)
+                    raise Exception("OSD not started")
+            rados_object.run_scrub()
+            is_inconsistent_exists = False
+            end_time = datetime.datetime.now() + datetime.timedelta(seconds=300)
+            while end_time > datetime.datetime.now():
+                if rados_object.check_health_warning(warning="PG_DAMAGED"):
+                    log.info("Case 11: Inconsistent objects are generated")
+                    is_inconsistent_exists = True
+                    break
+                log.info("Inconsistent objects not generated")
+            if not is_inconsistent_exists:
+                log.error(
+                    "The inconsistent object not exists and executing the further tests"
+                )
+                return 1
+            log.info(
+                "Case 11: Perform the tests after generating the inconsistent objects"
+            )
+            if not test_all_values(client, pool_name):
+                msg_error = (
+                    f"Case 11: The track availability tests are failed on {pool_name}"
+                )
+                log.error(msg_error)
+                return 1
+            after_score = get_score(client, pool_name)
+            if after_score is None:
+                log.error("Case 11: Not able to retrieve the score")
+                return 1
+            if not math.isclose(before_score, after_score):
+                log.error(
+                    "The score before starting test is - %s and after completing the tests is -%s are not same",
+                    before_score,
+                    after_score,
+                )
+                return 1
+            log.info(
+                "The score before starting test is - %s and after completing the tests is -%s are same",
+                before_score,
+                after_score,
+            )
+            log.info(
+                "=== Case 11:Verification of track availability tests by removing object in a OSD completed ==="
+            )
+        if "case12" in config.get("case_to_run"):
+            log.info(
+                "===Case 12: Verification of track availability tests by making PG inactive ===="
+            )
+            assert create_data_pool(mon_obj, rados_object, replicated_config, pool_name)
+            method_should_succeed(
+                wait_for_clean_pg_sets, rados_object, test_pool=pool_name, timeout=1800
+            )
+
+            if not test_all_values(client, pool_name):
+                msg_error = (
+                    f"Case 12: The track availability tests are failed on {pool_name}"
+                )
+                log.error(msg_error)
+                return 1
+            before_score = get_score(client, pool_name)
+            if before_score is None:
+                log.error("Case 12: Not able to retrieve the score")
+                return 1
+            acting_pg_set = rados_object.get_pg_acting_set(pool_name=pool_name)
+            msg_info = (
+                f"Case 12: The acting set of the {pool_name} is - {acting_pg_set}"
+            )
+            log.info(msg_info)
+            for osd_id in acting_pg_set:
+                log.info("Case 12:Stopping the %s osd in the acting pg set", osd_id)
+                if not rados_object.change_osd_state(action="stop", target=osd_id):
+                    log.error(f"Unable to stop the OSD : {osd_id}")
+                    raise Exception("Execution error")
+            log.info("All OSD are stopped in the acting PG set")
+            time.sleep(10)
+            if not test_all_values(client, pool_name):
+                msg_error = (
+                    f"Case 12: The track availability tests are failed on {pool_name}"
+                )
+                log.error(msg_error)
+                return 1
+            after_score = get_score(client, pool_name)
+            if after_score is None:
+                log.error("Case 12: Not able to retrieve the score")
+                return 1
+            for osd_id in acting_pg_set:
+                log.info("Case 12:Stopping the %s osd in the acting pg set", osd_id)
+                if not rados_object.change_osd_state(action="start", target=osd_id):
+                    log.error(f"Unable to start the OSD : {osd_id}")
+                    raise Exception("Execution error")
+            log.info("All OSD are started in the acting PG set")
+            if math.isclose(before_score, after_score):
+                log.error(
+                    "The score before starting test is - %s and after completing the tests is: %s are same",
+                    before_score,
+                    after_score,
+                )
+                return 1
+            if before_score < after_score:
+                log.error(
+                    "The score before starting test is - %s  which is greater than after test score: %s",
+                    before_score,
+                    after_score,
+                )
+                return 1
+            log.info(
+                "The score before starting test is - %s and after completing the tests is -%s are not same and "
+                "before score is greater than after test score",
+                before_score,
+                after_score,
+            )
+            log.info(
+                "=== Case 12: Verification of track availability tests by making PG inactive completed ==="
+            )
+
+        if "case13" in config.get("case_to_run"):
+            log.info(
+                "===Case 13: Verification of track availability tests by rebooting the osd node  ===="
             )
             assert create_data_pool(mon_obj, rados_object, replicated_config, pool_name)
             method_should_succeed(
@@ -639,32 +803,32 @@ def run(ceph_cluster, **kw) -> int:
             )
             acting_pg_set = rados_object.get_pg_acting_set(pool_name=pool_name)
             msg_info = (
-                f"Case 11: The acting set of the {pool_name} is - {acting_pg_set}"
+                f"Case 13: The acting set of the {pool_name} is - {acting_pg_set}"
             )
             log.info(msg_info)
             osd_host = rados_object.fetch_host_node(
                 daemon_type="osd", daemon_id=acting_pg_set[0]
             )
-            log.info("Case 11: Rebooting the primary osd node")
+            log.info("Case 13: Rebooting the primary osd node")
             osd_host.exec_command(sudo=True, cmd="reboot", long_running=True)
             time.sleep(10)
             # Waiting for recovery to post OSD host reboot
             method_should_succeed(wait_for_clean_pg_sets, rados_object)
             log.info(
-                f"Case 11: PG's are active + clean post reboot of host {osd_host.hostname}"
+                "Case 13: PG's are active + clean post reboot of host %s",
+                osd_host.hostname,
             )
 
             if not test_all_values(client, pool_name):
                 msg_error = (
-                    f"Case 11: The track availability tests are failed on {pool_name} after performing the scrub "
+                    f"Case 13: The track availability tests are failed on {pool_name} after performing the scrub "
                     f"operation"
                 )
                 log.error(msg_error)
                 return 1
-            if rados_object.delete_pool(pool=pool_name) is False:
-                raise Exception(f"Deleting pool {pool_name} failed")
+
             log.info(
-                "===Case 11: Verification of track availability tests by rebooting the osd node completed  ===="
+                "===Case 13: Verification of track availability tests by rebooting the osd node completed  ===="
             )
 
     except Exception as e:
@@ -676,9 +840,7 @@ def run(ceph_cluster, **kw) -> int:
             "\n \n ************** Execution of finally block begins here *************** \n \n"
         )
         rados_object.delete_pool(pool=pool_name)
-        mon_obj.set_config(
-            section="mon", name="enable_availability_tracking", value="true"
-        )
+        mon_obj.remove_config(section="mon", name="enable_availability_tracking")
     return 0
 
 
@@ -724,7 +886,7 @@ def get_pool_availability_status(client):
     cmd = "ceph osd pool availability-status"
 
     try:
-        cmd_out_put = client.exec_command(cmd=cmd)
+        cmd_out_put = client.exec_command(cmd=cmd, pretty_print=True)
     except Exception as err:
         return (False, err)
 
@@ -781,7 +943,7 @@ def test_MTBF_value(client, pool_name):
     success, track_available_data = get_pool_availability_status(client)
     if not success:
         log.error("Failed to retrieve the pool available data")
-        return 1
+        return False
     pool_data = track_available_data[pool_name]
     log.info(
         " Formula - Mean Time Between Failures (MTBF) = Total uptime of pool/No of Failures"
@@ -835,7 +997,7 @@ def test_MTTR_value(client, pool_name):
     success, track_available_data = get_pool_availability_status(client)
     if not success:
         log.error("Failed to retrieve the pool available data")
-        return 1
+        return False
     pool_data = track_available_data[pool_name]
     log.info(
         " Formula - Mean Time To Recover(MTTR) = Total downtime of pool/No of Failures"
@@ -891,7 +1053,7 @@ def test_score_value(client, pool_name):
     success, track_available_data = get_pool_availability_status(client)
     if not success:
         log.error("Failed to retrieve the pool available data")
-        return 1
+        return False
     pool_data = track_available_data[pool_name]
     MTBF = time_to_seconds(pool_data[3])
     MTTR = time_to_seconds(pool_data[4])
@@ -971,3 +1133,24 @@ def cleanup_pools(rados_object, pool_names):
     log.info("Deleting the created pools")
     for tmp_pool_name in pool_names:
         method_should_succeed(rados_object.delete_pool, tmp_pool_name)
+
+
+def get_score(client, pool_name):
+    """
+    Method is used to get the score of the pool
+    Args:
+        client: clinet object
+        pool_name: pool name
+
+    Returns: None-> if the not able to get the score
+             score -> Score value
+
+    """
+
+    success, track_available_data = get_pool_availability_status(client)
+    if not success:
+        log.error("Failed to retrieve the pool available data")
+        return None
+    pool_data = track_available_data[pool_name]
+    score = round(float(pool_data[5]), 3)
+    return score
