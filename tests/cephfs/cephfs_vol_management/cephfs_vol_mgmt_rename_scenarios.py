@@ -1004,14 +1004,24 @@ def run(ceph_cluster, **kw):
         cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
         clients = ceph_cluster.get_ceph_objects("client")
         client1 = clients[0]
-        log.info("Cleanup stale mounts, required for fscrypt test")
-        for client_tmp in clients:
-            for mnt_prefix in ["/mnt/cephfs_", "/mnt/fuse", "/mnt/kernel", "/mnt/nfs"]:
-                if cephfs_common_utils.client_mount_cleanup(
-                    client_tmp, mount_path_prefix=mnt_prefix
-                ):
-                    log.error("Client mount cleanup didn't suceed")
-                    fs_util.reboot_node(client_tmp)
+        fscrypt_test = False
+        ceph_version = get_ceph_version_from_cluster(client1)
+        if LooseVersion(ceph_version) >= LooseVersion("19.2.1"):
+            fscrypt_test = True
+        if fscrypt_test:
+            log.info("Cleanup stale mounts, required for fscrypt test")
+            for client_tmp in clients:
+                for mnt_prefix in [
+                    "/mnt/cephfs_",
+                    "/mnt/fuse",
+                    "/mnt/kernel",
+                    "/mnt/nfs",
+                ]:
+                    if cephfs_common_utils.client_mount_cleanup(
+                        client_tmp, mount_path_prefix=mnt_prefix
+                    ):
+                        log.error("Client mount cleanup didn't suceed")
+                        fs_util.reboot_node(client_tmp)
         if not fs_util.get_fs_info(client1):
             fs_util.create_fs(client1, "cephfs_1")
         fs_util.auth_list([client1])
@@ -1028,10 +1038,11 @@ def run(ceph_cluster, **kw):
         )
         install_tools(client1)
         mount_subvolumes(ceph_cluster)
-        fscrypt_test = True
-        if add_fscrypt_config(client1, ceph_cluster):
-            log.error("FScrypt config create failed")
-            fscrypt_test = False
+        if fscrypt_test:
+            fscrypt_status = True
+            if add_fscrypt_config(client1, ceph_cluster):
+                log.error("FScrypt config create failed")
+                fscrypt_status = False
         with parallel() as p:
             for i in range(len(io_list)):
                 p.spawn(fs_util.run_ios(client1, f"{io_list[i]}/", ["dd"]))
@@ -1045,16 +1056,17 @@ def run(ceph_cluster, **kw):
         workflow3(ceph_cluster)
         workflow4(ceph_cluster)
         if fscrypt_test:
-            mnt_pt = fscrypt_params["mountpoint"]
-            encrypt_path = fscrypt_params["encrypt_path"]
-            encrypt_params = fscrypt_params["encrypt_params"]
-            if fscrypt_util.validate_fscrypt_with_lock_unlock(
-                client1, mnt_pt, encrypt_path, encrypt_params
-            ):
-                log.error(
-                    "FAIL:FScrypt config validation after Vol rename scenarios Failed"
-                )
-                return 1
+            if fscrypt_status:
+                mnt_pt = fscrypt_params["mountpoint"]
+                encrypt_path = fscrypt_params["encrypt_path"]
+                encrypt_params = fscrypt_params["encrypt_params"]
+                if fscrypt_util.validate_fscrypt_with_lock_unlock(
+                    client1, mnt_pt, encrypt_path, encrypt_params
+                ):
+                    log.error(
+                        "FAIL:FScrypt config validation after Vol rename scenarios Failed"
+                    )
+                    return 1
         return 0
     except Exception as e:
         log.error(e)
