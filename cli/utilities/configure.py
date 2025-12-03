@@ -9,8 +9,11 @@ from cli.ops.cephadm_ansible import (
     exec_cephadm_preflight,
 )
 from cli.utilities.packages import Package, Repos
+from utility.log import Log
 
 from .configs import get_registry_details
+
+log = Log(__name__)
 
 ETC_HOSTS = "/etc/hosts"
 
@@ -372,13 +375,18 @@ def get_tools_repo(repo, ibm_build=False):
         ibm_build (bool): IBM build tag
     """
     repo = repo.rstrip("/")
+    log.info(f"get_tools_repo(): repo={repo}, ibm_build={ibm_build}")
+
+    if repo.endswith(".repo"):
+        return repo
+
+    if "repo.qe.ceph.lab" in repo:
+        return f"{repo}/Tools"
+
     if ibm_build:
         return f"{repo}/Tools"
 
-    elif repo.endswith("repo"):
-        return repo
-
-    return f"{repo}/Tools"
+    return f"{repo}/compose/Tools/x86_64/os"
 
 
 def add_centos_epel_repo(nodes, platform):
