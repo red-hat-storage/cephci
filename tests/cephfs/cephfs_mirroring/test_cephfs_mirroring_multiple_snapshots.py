@@ -3,12 +3,15 @@ import string
 import time
 import traceback
 
+from looseversion import LooseVersion
+
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_mirroring.cephfs_mirroring_utils import CephfsMirroringUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.lib.fscrypt_utils import FscryptUtils
 from utility.log import Log
+from utility.utils import get_ceph_version_from_cluster
 
 log = Log(__name__)
 
@@ -77,14 +80,24 @@ def run(ceph_cluster, **kw):
         fs_util_ceph2.prepare_clients(target_clients, build)
         fs_util_ceph1.auth_list(source_clients)
         fs_util_ceph2.auth_list(target_clients)
-        log.info("Cleanup stale mounts for fscrypt test")
-        for client_tmp in source_clients:
-            for mnt_prefix in ["/mnt/cephfs_", "/mnt/fuse", "/mnt/kernel", "/mnt/nfs"]:
-                if cephfs_common_utils.client_mount_cleanup(
-                    client_tmp, mount_path_prefix=mnt_prefix
-                ):
-                    log.error("Client mount cleanup didn't suceed")
-                    fs_util_ceph1.reboot_node(client_tmp)
+        fscrypt_test = False
+        ceph_version = get_ceph_version_from_cluster(source_clients[0])
+        if LooseVersion(ceph_version) >= LooseVersion("19.2.1"):
+            fscrypt_test = True
+        if fscrypt_test:
+            log.info("Cleanup stale mounts for fscrypt test")
+            for client_tmp in source_clients:
+                for mnt_prefix in [
+                    "/mnt/cephfs_",
+                    "/mnt/fuse",
+                    "/mnt/kernel",
+                    "/mnt/nfs",
+                ]:
+                    if cephfs_common_utils.client_mount_cleanup(
+                        client_tmp, mount_path_prefix=mnt_prefix
+                    ):
+                        log.error("Client mount cleanup didn't suceed")
+                        fs_util_ceph1.reboot_node(client_tmp)
         source_fs = "cephfs_nw_1" if not erasure else "cephfs_nw_1-ec"
         target_fs = "cephfs_rem_1" if not erasure else "cephfs_rem_1-ec"
         fs_details_source = fs_util_ceph1.get_fs_info(source_clients[0], source_fs)
@@ -179,10 +192,11 @@ def run(ceph_cluster, **kw):
             fuse_mounting_dir_1,
             extra_params=f" --client_fs {source_fs}",
         )
-        log.info("Add FScrypt Dataset on source subvolume")
-        fscrypt_setup_fail = 0
-        if fscrypt_setup(source_clients[0], fuse_mounting_dir_1):
-            fscrypt_setup_fail = 1
+        if fscrypt_test:
+            log.info("Add FScrypt Dataset on source subvolume")
+            fscrypt_setup_fail = 0
+            if fscrypt_setup(source_clients[0], fuse_mounting_dir_1):
+                fscrypt_setup_fail = 1
         log.info("Add subvolumes for mirroring to remote location")
         fs_mirroring_utils.add_path_for_mirroring(
             source_clients[0], source_fs, subvol1_path
@@ -378,18 +392,21 @@ def run(ceph_cluster, **kw):
         log.info(
             f"{snap1} was synced with out any errors even when {snap1} was recreated on source cluster."
         )
-        log.info("Verify FScrypt encryption on source subvolume after Mirroring ops")
-        mnt_client = source_clients[0]
-        mnt_pt = fuse_mounting_dir_1
-        if fscrypt_setup_fail == 1:
-            log.error(
-                "Fscrypt Setup on fuse mountpoint had failed before mirroring ops"
+        if fscrypt_test:
+            log.info(
+                "Verify FScrypt encryption on source subvolume after Mirroring ops"
             )
-            return 1
-        if fscrypt_util.validate_fscrypt_with_lock_unlock(
-            mnt_client, mnt_pt, encrypt_path, encrypt_params
-        ):
-            return 1
+            mnt_client = source_clients[0]
+            mnt_pt = fuse_mounting_dir_1
+            if fscrypt_setup_fail == 1:
+                log.error(
+                    "Fscrypt Setup on fuse mountpoint had failed before mirroring ops"
+                )
+                return 1
+            if fscrypt_util.validate_fscrypt_with_lock_unlock(
+                mnt_client, mnt_pt, encrypt_path, encrypt_params
+            ):
+                return 1
         return 0
     except Exception as e:
         log.error(e)
