@@ -7,12 +7,17 @@ This module tests the behavior of erasure-coded pools with various configuration
 - Enabling/disabling allow_ec_optimizations at pool level
 - Compression with EC pools
 - Read/write operations with different EC optimization states
+- Space savings verification for objects smaller than stripe_unit (zero-padding prevention)
 """
 
+import json
+import random
+import re
 import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 
@@ -31,8 +36,11 @@ def run(ceph_cluster, **kw):
         kw: Test configuration parameters
 
     Supported test scenarios:
-        - test_fast_ec_optimization_params: Comprehensive verification of EC pool optimization parameters
-          with default configurations, runtime changes, and RBD data operations
+        - test_fast_ec_optimization_params: Comprehensive verification of EC pool optimization
+          parameters with default configurations, runtime changes, and RBD data operations
+        - test_fast_ec_space_gain: Verifies space savings when EC optimizations prevent
+          zero-padding for objects smaller than stripe_unit. Compares pool-level bytes_used
+          and shard-level sizes using ceph-objectstore-tool.
 
     Test Requirements:
         - Ceph version 9.0 or above (squid+)
@@ -46,6 +54,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
+    cot_obj = objectstoreToolWorkflows(node=cephadm)
     client_node = ceph_cluster.get_nodes(role="client")[0]
 
     if config.get("test_fast_ec_optimization_params"):
@@ -935,6 +944,646 @@ def run(ceph_cluster, **kw):
         )
         return 0
 
+    if config.get("test_fast_ec_space_gain"):
+        """
+        Test: Fast EC Space Gain Verification
+
+        Verifies that EC optimizations prevent zero-padding for objects smaller than
+        the stripe_unit, resulting in significant space savings at both pool and shard levels.
+
+        Test Steps:
+        1. Disable global EC optimizations flag
+        2. Create EC pool WITHOUT optimizations (test_ec_pool_without_optimizations)
+        3. Create EC pool WITH optimizations enabled (test_ec_pool_with_optimizations)
+        4. Write 100 identical 4KB objects to both pools using 'rados put'
+        5. Wait for stats to stabilize and trigger deep-scrub
+        6. Compare pool-level space usage (bytes_used from 'ceph df detail')
+        7. Verify shard-level sizes using:
+           - rados stat: Confirms logical object size (4KB) is same for both pools
+           - ceph-objectstore-tool: Confirms actual shard size differs (16KB vs 4KB)
+
+        EC Configuration (k=2, m=2, stripe_unit=16KB):
+        - stripe_unit = 16KB (chunk size per data shard)
+        - stripe_width = k * stripe_unit = 32KB
+        - full stripe = (k + m) * stripe_unit = 64KB
+
+        Expected Results:
+        - Without optimizations: 4KB object padded to stripe_unit → shard = 16KB
+        - With optimizations: 4KB object stored as-is → shard = 4KB
+        - Pool-level space savings: ~80% (4x reduction)
+        - Shard-level size ratio: 4x (16KB vs 4KB)
+
+        Failure Conditions:
+        - Pool with optimizations doesn't use less bytes than pool without
+        - Space savings < 50% threshold
+        - rados stat object size != 4096 bytes
+        - ceph-objectstore-tool shard size: pool1 <= pool2
+        """
+        pool_name_1 = "test_ec_pool_without_optimizations"
+        pool_name_2 = "test_ec_pool_with_optimizations"
+        stripe_unit = (
+            "16384"  # 16KB chunk size per data shard (recommended for Fast EC pools)
+        )
+        test_failed = False
+
+        try:
+            # Step 1: Disable global optimizations to create pool without EC optimizations
+            log.info("Step 1: Disabling global EC optimizations")
+            mon_obj.set_config(
+                section="global",
+                name="osd_pool_default_flag_ec_optimizations",
+                value="false",
+            )
+            log.info(
+                "Set osd_pool_default_flag_ec_optimizations to false at global level"
+            )
+            time.sleep(2)
+
+            # Step 2: Create first EC pool (WITHOUT optimizations) with 16K stripe_unit
+            log.info(
+                "Step 2: Creating EC pool WITHOUT optimizations: %s (stripe_unit=%s)",
+                pool_name_1,
+                stripe_unit,
+            )
+            create_ec_pool_with_optimization_flag(
+                rados_obj=rados_obj,
+                pool_name=pool_name_1,
+                stripe_unit=stripe_unit,
+                allow_ec_optimizations=False,
+            )
+
+            # Step 3: Create second EC pool with 16K stripe_unit and enable optimizations
+            log.info(
+                "Step 3: Creating EC pool WITH optimizations: %s (stripe_unit=%s)",
+                pool_name_2,
+                stripe_unit,
+            )
+            create_ec_pool_with_optimization_flag(
+                rados_obj=rados_obj,
+                pool_name=pool_name_2,
+                stripe_unit=stripe_unit,
+                allow_ec_optimizations=True,
+            )
+
+            # Step 4: Write objects smaller than stripe width (16KB) to both pools
+            # Writing 4KB objects to demonstrate zero-padding difference
+            # Note: We use 'rados put' instead of 'rados bench' because rados bench
+            # rounds up object sizes to stripe_width for EC pools.
+            # Without optimizations: 4KB padded to 16KB stripe_unit = 4x storage overhead
+            # With optimizations: 4KB stored as-is = normal 2x EC overhead
+            log.info(
+                "Step 4: Writing objects (4KB each, smaller than 16KB stripe width) to both pools"
+            )
+            num_objects = 100
+            object_size_bytes = 4096  # 4KB objects, smaller than 16KB stripe_unit
+
+            # Create a temporary 4KB file for rados put
+            temp_file = "/tmp/test_4k_object.bin"
+            log.info(
+                "Creating temporary %d byte file: %s", object_size_bytes, temp_file
+            )
+            client_node.exec_command(
+                cmd=f"dd if=/dev/urandom of={temp_file} bs={object_size_bytes} count=1",
+                sudo=True,
+            )
+
+            # Write objects to pool_name_1 (WITHOUT optimizations)
+            log.info(
+                "Writing %d objects of size %d bytes to pool %s (WITHOUT optimizations) using rados put",
+                num_objects,
+                object_size_bytes,
+                pool_name_1,
+            )
+            for i in range(num_objects):
+                obj_name = f"test_object_{i:04d}"
+                out, err = client_node.exec_command(
+                    cmd=f"rados -p {pool_name_1} put {obj_name} {temp_file}",
+                    sudo=True,
+                    check_ec=False,
+                )
+            log.info("Completed writing %d objects to %s", num_objects, pool_name_1)
+
+            # Write objects to pool_name_2 (WITH optimizations)
+            log.info(
+                "Writing %d objects of size %d bytes to pool %s (WITH optimizations) using rados put",
+                num_objects,
+                object_size_bytes,
+                pool_name_2,
+            )
+            for i in range(num_objects):
+                obj_name = f"test_object_{i:04d}"
+                out, err = client_node.exec_command(
+                    cmd=f"rados -p {pool_name_2} put {obj_name} {temp_file}",
+                    sudo=True,
+                    check_ec=False,
+                )
+            log.info("Completed writing %d objects to %s", num_objects, pool_name_2)
+
+            # Step 5: Wait for stats to be updated
+            log.info(
+                "Step 5: Initiating scrubs/deep-scrubs and sleeping for pool stats to be updated..."
+            )
+            rados_obj.run_scrub(pool=pool_name_2)
+            rados_obj.run_deep_scrub(pool=pool_name_2)
+            rados_obj.run_scrub(pool=pool_name_1)
+            rados_obj.run_deep_scrub(pool=pool_name_1)
+            time.sleep(120)
+
+            # Step 6: Get pool stats and compare space usage
+            log.info("Step 6: Comparing space usage between pools")
+
+            pool1_stats = rados_obj.get_cephdf_stats(pool_name=pool_name_1, detail=True)
+            pool2_stats = rados_obj.get_cephdf_stats(pool_name=pool_name_2, detail=True)
+
+            if not pool1_stats or not pool2_stats:
+                log.error("Could not retrieve stats for pools")
+                raise Exception("Failed to get pool stats for comparison")
+
+            # Log full stats for debugging
+            log.info("Pool 1 full stats: %s", pool1_stats.get("stats", {}))
+            log.info("Pool 2 full stats: %s", pool2_stats.get("stats", {}))
+
+            # Extract all relevant fields from ceph df detail
+            # STORED = logical object size (what user wrote)
+            # USED (bytes_used) = actual bytes on OSDs after EC encoding
+            pools_info = {
+                pool_name_1: {
+                    "stats": pool1_stats.get("stats", {}),
+                    "description": "WITHOUT optimizations - zeros appended",
+                },
+                pool_name_2: {
+                    "stats": pool2_stats.get("stats", {}),
+                    "description": "WITH optimizations - zeros NOT appended",
+                },
+            }
+
+            # Extract stats for each pool
+            for pool_name, pool_info in pools_info.items():
+                stats = pool_info["stats"]
+                pool_info["stored"] = stats.get("stored", 0)
+                pool_info["stored_data"] = stats.get("stored_data", 0)
+                pool_info["bytes_used"] = stats.get("bytes_used", 0)
+                pool_info["data_bytes_used"] = stats.get("data_bytes_used", 0)
+                pool_info["objects"] = stats.get("objects", 0)
+
+            log.info("=" * 80)
+            log.info("SPACE USAGE COMPARISON RESULTS")
+            log.info("=" * 80)
+
+            # Log stats for each pool
+            for pool_name, pool_info in pools_info.items():
+                log.info("Pool %s (%s):", pool_name, pool_info["description"])
+                log.info("  - Objects: %s", pool_info["objects"])
+                log.info("  - STORED (logical): %s bytes", pool_info["stored"])
+                log.info("  - STORED DATA: %s bytes", pool_info["stored_data"])
+                log.info("  - USED (actual on OSDs): %s bytes", pool_info["bytes_used"])
+                log.info("  - DATA USED: %s bytes", pool_info["data_bytes_used"])
+                log.info(
+                    "  - Average USED bytes per object: %.2f",
+                    (
+                        pool_info["bytes_used"] / pool_info["objects"]
+                        if pool_info["objects"] > 0
+                        else 0
+                    ),
+                )
+                log.info("")
+
+            # Get values for comparison - access by pool name directly
+            pool1_bytes_used = pools_info[pool_name_1]["bytes_used"]
+            pool2_bytes_used = pools_info[pool_name_2]["bytes_used"]
+            pool1_stored = pools_info[pool_name_1]["stored"]
+            pool2_stored = pools_info[pool_name_2]["stored"]
+
+            # Calculate space savings based on USED (actual OSD bytes)
+            if pool1_bytes_used > 0 and pool2_bytes_used > 0:
+                space_saved = pool1_bytes_used - pool2_bytes_used
+                space_saved_percent = (space_saved / pool1_bytes_used) * 100
+
+                log.info("SPACE SAVINGS ANALYSIS:")
+                log.info(
+                    "  - STORED (logical) is same: Pool1=%s, Pool2=%s",
+                    pool1_stored,
+                    pool2_stored,
+                )
+                log.info("  - USED bytes saved: %s bytes", space_saved)
+                log.info("  - Percentage saved: %.2f%%", space_saved_percent)
+                log.info("=" * 80)
+
+                # note that this is not a officially provided formula, it is a guess based on the behavior of the code
+                # And we just take into account the object size, not omap or metadata size associated with the object
+                # Calculate expected space savings dynamically based on stripe_unit and object_size
+                # Formula: expected_savings = (stripe_unit - object_size) / stripe_unit * 100
+                # Without optimizations: object padded to stripe_unit (16KB)
+                # With optimizations: object stored as-is (4KB)
+                #
+                # Example calculation:
+                #   stripe_unit = 16KB (16384 bytes)
+                #   object_size = 4KB (4096 bytes)
+                #   expected_savings = (16384 - 4096) / 16384 * 100 = 75%
+                #   savings_tolerance = 0.25 (25% leeway)
+                #   min_savings_threshold = 75 * (1 - 0.25) = 75 * 0.75 = 56.25%
+                #
+                # Test passes if space_saved_percent >= min_savings_threshold (56.25%)
+                stripe_unit_int = int(stripe_unit)
+                expected_savings = (
+                    (stripe_unit_int - object_size_bytes) / stripe_unit_int
+                ) * 100
+                savings_tolerance = 0.25  # 25% leeway
+                min_savings_threshold = expected_savings * (1 - savings_tolerance)
+
+                log.info("Expected space savings calculation:")
+                log.info("  - stripe_unit: %d bytes", stripe_unit_int)
+                log.info("  - object_size: %d bytes", object_size_bytes)
+                log.info("  - Expected savings: %.2f%%", expected_savings)
+                log.info(
+                    "  - Minimum threshold (with %.0f%% leeway): %.2f%%",
+                    savings_tolerance * 100,
+                    min_savings_threshold,
+                )
+
+                if space_saved_percent < min_savings_threshold:
+                    log.error(
+                        "Space savings verification FAILED: %.2f%% (threshold: %.2f%%)",
+                        space_saved_percent,
+                        min_savings_threshold,
+                    )
+                    log.error(
+                        "Pool1 (without optimizations) USED: %s bytes",
+                        pool1_bytes_used,
+                    )
+                    log.error(
+                        "Pool2 (with optimizations) USED: %s bytes",
+                        pool2_bytes_used,
+                    )
+                    raise Exception(
+                        f"Space savings verification failed: {space_saved_percent:.2f}% "
+                        f"is below minimum threshold of {min_savings_threshold}%"
+                    )
+
+                log.info(
+                    "SUCCESS: Pool with EC optimizations uses %s less bytes (%.2f%% savings)",
+                    space_saved,
+                    space_saved_percent,
+                )
+                log.info(
+                    "This confirms that zeros are NOT appended to objects smaller than "
+                    "stripe width when EC optimizations are enabled"
+                )
+            else:
+                log.error(
+                    "Pool stats show zero bytes_used - pool1: %s, pool2: %s",
+                    pool1_bytes_used,
+                    pool2_bytes_used,
+                )
+                raise Exception("Invalid pool stats - bytes_used is zero")
+
+            # Step 7: Verify shard sizes using ceph-objectstore-tool
+            # This provides direct evidence of zero-padding at the OSD shard level
+            log.info("=" * 80)
+            log.info("Step 7: Verifying shard sizes using ceph-objectstore-tool")
+            log.info("=" * 80)
+
+            shard_sizes = {}
+
+            for pool_name in [pool_name_1, pool_name_2]:
+                log.info("Checking shard size for pool: %s", pool_name)
+
+                # Get list of objects in the pool using run_ceph_command (returns JSON)
+                obj_list = rados_obj.run_ceph_command(cmd=f"rados -p {pool_name} ls")
+                objects = [obj["name"] for obj in obj_list] if obj_list else []
+
+                if not objects:
+                    log.warning("No objects found in pool %s", pool_name)
+                    continue
+
+                # Select a random object for verification
+                test_obj = random.choice(objects)
+                log.info("Selected object for verification: %s", test_obj)
+                log.info("Total objects in pool %s: %d", pool_name, len(objects))
+
+                # Step 7a: Use rados stat to check object size
+                try:
+                    stat_out, _ = client_node.exec_command(
+                        cmd=f"rados -p {pool_name} stat {test_obj}", sudo=True
+                    )
+                    log.debug("rados stat output for %s in %s:", test_obj, pool_name)
+                    log.debug("  %s", stat_out.strip())
+                    # Parse rados stat output: "pool_name/obj_name mtime timestamp, size N"
+                    rados_stat_match = re.search(r"size\s+(\d+)", stat_out)
+                    if rados_stat_match:
+                        rados_obj_size = int(rados_stat_match.group(1))
+                        log.info("  - rados stat object size: %d bytes", rados_obj_size)
+                        if pool_name not in shard_sizes:
+                            shard_sizes[pool_name] = {}
+                        shard_sizes[pool_name]["rados_stat_size"] = rados_obj_size
+                except Exception as stat_err:
+                    log.warning(
+                        "Could not run rados stat for %s: %s", test_obj, stat_err
+                    )
+
+                try:
+                    # Get the object's location using get_osd_map()
+                    log.info(
+                        "Getting OSD map for object %s in pool %s", test_obj, pool_name
+                    )
+                    osd_map = rados_obj.get_osd_map(pool=pool_name, obj=test_obj)
+                    log.info("OSD map result: %s", osd_map)
+
+                    if not osd_map:
+                        log.error("Could not get OSD map for object %s", test_obj)
+                        continue
+
+                    pgid = osd_map.get("pgid")
+                    acting_osds = osd_map.get("acting", [])
+
+                    log.info("OSD map: pgid=%s, acting OSDs=%s", pgid, acting_osds)
+
+                    if not pgid or not acting_osds:
+                        log.error("Missing pgid or acting OSDs for object %s", test_obj)
+                        continue
+
+                    # Use the FIRST DATA shard to check for zero-padding
+                    # For EC k=2, m=2: acting_osds = [data0, data1, parity0, parity1]
+                    # With EC optimizations, small objects may only have data on shard 0
+                    # (other shards might be empty or have "No data available")
+                    # So we check shard 0 for consistent comparison between both pools
+                    shard_index = 0  # First data shard
+                    osd_id = acting_osds[shard_index]
+                    log.info(
+                        "Using OSD %d (shard %d - first data shard) for ceph-objectstore-tool operations",
+                        osd_id,
+                        shard_index,
+                    )
+
+                    # List objects in the PG to get the full object ID
+                    log.info("Listing objects in PG %s on OSD %d", pgid, osd_id)
+                    obj_list_output = cot_obj.list_objects(osd_id=osd_id, pgid=pgid)
+                    # Print all objects present on the OSD and PG
+                    if obj_list_output:
+                        obj_lines = obj_list_output.strip().split("\n")
+                        log.info(
+                            "Objects in PG %s on OSD %d (total: %d):",
+                            pgid,
+                            osd_id,
+                            len(obj_lines),
+                        )
+                        for obj_line in obj_lines:
+                            log.info("  %s", obj_line)
+                    else:
+                        log.warning("No objects found in PG %s on OSD %d", pgid, osd_id)
+
+                    # Find the test object in the list and extract pgid with shard
+                    obj_id = None
+                    pgid_with_shard = None
+                    for line in obj_list_output.strip().split("\n"):
+                        if test_obj in line:
+                            obj_id = line.strip()
+                            # Extract pgid with shard from object listing
+                            # Format: ["157.15s0",{"oid":"..."}]
+                            pgid_shard_match = re.search(
+                                r'\["(\d+\.[a-f0-9]+s\d+)"', line
+                            )
+                            if pgid_shard_match:
+                                pgid_with_shard = pgid_shard_match.group(1)
+                            break
+
+                    if not obj_id:
+                        log.error(
+                            "Object %s not found in cot list for PG %s", test_obj, pgid
+                        )
+                        continue
+
+                    log.info(
+                        "Found object: %s (pgid_with_shard: %s)",
+                        test_obj,
+                        pgid_with_shard,
+                    )
+
+                    # Get object dump using ceph-objectstore-tool (returns JSON)
+                    obj_dump = cot_obj.fetch_object_dump(osd_id=osd_id, obj=obj_id)
+                    log.debug("Object dump for %s:\n%s", test_obj, obj_dump)
+
+                    # Parse JSON and extract stat.size (actual shard size on disk)
+                    obj_data = json.loads(obj_dump)
+                    shard_size = obj_data.get("stat", {}).get("size")
+
+                    if shard_size is not None:
+                        log.info(
+                            "Pool %s, object %s - stat.size (shard size on disk): %d bytes",
+                            pool_name,
+                            test_obj,
+                            shard_size,
+                        )
+                        if pool_name not in shard_sizes:
+                            shard_sizes[pool_name] = {}
+                        shard_sizes[pool_name]["cot_stat_size"] = shard_size
+                    else:
+                        log.error("stat.size not found in object dump for %s", test_obj)
+
+                except Exception as e:
+                    log.error("Failed to get shard info for pool %s: %s", pool_name, e)
+                    log.exception("Full exception traceback:")
+                    continue
+
+            # Explicitly fail if no objects/shard data found for either pool
+            missing_objects_in_pools = [
+                p for p in [pool_name_1, pool_name_2] if p not in shard_sizes
+            ]
+            if missing_objects_in_pools:
+                log.error(
+                    "No objects found or shard data unavailable for pools: %s",
+                    missing_objects_in_pools,
+                )
+                raise Exception(
+                    f"Test failed: No objects found or unable to get shard data for pools: {missing_objects_in_pools}"
+                )
+
+            # Compare shard sizes - verify the zero-padding difference
+            log.info("=" * 80)
+            log.info("SHARD/OBJECT SIZE COMPARISON RESULTS")
+            log.info("=" * 80)
+
+            # Verify rados stat results - logical object size should be same for both pools
+            if pool_name_1 in shard_sizes and pool_name_2 in shard_sizes:
+                pool1_rados = shard_sizes.get(pool_name_1, {}).get("rados_stat_size")
+                pool2_rados = shard_sizes.get(pool_name_2, {}).get("rados_stat_size")
+
+                if pool1_rados and pool2_rados:
+                    log.info("RADOS STAT (logical object size):")
+                    log.info(
+                        "  Pool %s (WITHOUT optimizations): %s bytes",
+                        pool_name_1,
+                        pool1_rados,
+                    )
+                    log.info(
+                        "  Pool %s (WITH optimizations): %s bytes",
+                        pool_name_2,
+                        pool2_rados,
+                    )
+                    # Verify object size matches expected (4KB = 4096 bytes)
+                    if (
+                        pool1_rados != object_size_bytes
+                        or pool2_rados != object_size_bytes
+                    ):
+                        log.error(
+                            "rados stat object size mismatch! Expected %d, got pool1=%d, pool2=%d",
+                            object_size_bytes,
+                            pool1_rados,
+                            pool2_rados,
+                        )
+                        raise Exception(
+                            f"rados stat verification failed: expected {object_size_bytes} bytes"
+                        )
+                    log.info(
+                        "  SUCCESS: Both pools show correct logical object size (%d bytes)",
+                        object_size_bytes,
+                    )
+                else:
+                    log.error("Could not get rados stat sizes for both pools")
+                    raise Exception("rados stat verification failed: missing data")
+            else:
+                log.error("shard_sizes missing data for one or both pools")
+                raise Exception("Shard size verification failed: missing pool data")
+
+            # Verify ceph-objectstore-tool results - shard sizes should differ
+            pool1_shard = shard_sizes.get(pool_name_1, {}).get("cot_stat_size")
+            pool2_shard = shard_sizes.get(pool_name_2, {}).get("cot_stat_size")
+
+            if pool1_shard and pool2_shard:
+                log.info("")
+                log.info("CEPH-OBJECTSTORE-TOOL (first data shard stat.size):")
+                log.info(
+                    "  Pool %s (WITHOUT optimizations): %s bytes",
+                    pool_name_1,
+                    pool1_shard,
+                )
+                log.info(
+                    "  Pool %s (WITH optimizations): %s bytes",
+                    pool_name_2,
+                    pool2_shard,
+                )
+
+                # Pre-compute expected shard sizes and ratio based on stripe_unit and object_size
+                # Without optimizations: object is padded to stripe_unit
+                # With optimizations: object is stored as-is (no padding)
+                expected_pool1_shard = int(stripe_unit)  # 16KB (padded to stripe_unit)
+                expected_pool2_shard = object_size_bytes  # 4KB (no padding)
+                expected_ratio = expected_pool1_shard / expected_pool2_shard  # 4.0x
+
+                log.info("  Expected shard sizes:")
+                log.info(
+                    "    - Pool1 (padded to stripe_unit): %d bytes",
+                    expected_pool1_shard,
+                )
+                log.info("    - Pool2 (no padding): %d bytes", expected_pool2_shard)
+                log.info("    - Expected ratio: %.2fx", expected_ratio)
+
+                actual_ratio = pool1_shard / pool2_shard
+                log.info("  Actual shard sizes:")
+                log.info("    - Pool1: %d bytes", pool1_shard)
+                log.info("    - Pool2: %d bytes", pool2_shard)
+                log.info("    - Actual ratio: %.2fx", actual_ratio)
+
+                # Verify actual ratio is close to expected (within 25% tolerance)
+                ratio_tolerance = 0.25
+                if (
+                    abs(actual_ratio - expected_ratio) / expected_ratio
+                    <= ratio_tolerance
+                ):
+                    log.info(
+                        "  SUCCESS: Shard ratio %.2fx matches expected %.2fx!",
+                        actual_ratio,
+                        expected_ratio,
+                    )
+                    shard_ratio = actual_ratio
+                else:
+                    log.error(
+                        "Shard ratio mismatch: actual=%.2fx, expected=%.2fx (tolerance=%.0f%%)",
+                        actual_ratio,
+                        expected_ratio,
+                        ratio_tolerance * 100,
+                    )
+                    raise Exception(
+                        f"ceph-objectstore-tool verification failed: "
+                        f"shard ratio {actual_ratio:.2f}x doesn't match expected {expected_ratio:.2f}x"
+                    )
+            else:
+                log.error(
+                    "Could not get ceph-objectstore-tool shard sizes: pool1=%s, pool2=%s",
+                    pool1_shard,
+                    pool2_shard,
+                )
+                raise Exception(
+                    "ceph-objectstore-tool verification failed: missing shard data"
+                )
+
+            log.info("=" * 80)
+            log.info("ALL VERIFICATIONS PASSED!")
+            log.info("  - Pool-level space savings: %.2f%%", space_saved_percent)
+            log.info("  - Shard-level size ratio: %.2fx", shard_ratio)
+            log.info("=" * 80)
+
+            # Run pool sanity check
+            if not rados_obj.run_pool_sanity_check():
+                log.error("Pool sanity checks failed on cluster")
+                return 1
+
+        except Exception as e:
+            log.error("Failed with exception: %s", e.__doc__)
+            log.exception(e)
+            rados_obj.log_cluster_health()
+            test_failed = True
+        finally:
+            log.info(
+                "\n \n ************** In Finally block for fast EC space gain test *************** \n \n"
+            )
+
+            # Clean up temporary file
+            try:
+                temp_file = "/tmp/test_4k_object.bin"
+                client_node.exec_command(cmd=f"rm -f {temp_file}", sudo=True)
+                log.info("Cleaned up temporary file: %s", temp_file)
+            except Exception as e:
+                log.warning("Failed to clean up temporary file: %s", e)
+
+            # Reset osd_pool_default_flag_ec_optimizations to true
+            try:
+                mon_obj.remove_config(
+                    section="global", name="osd_pool_default_flag_ec_optimizations"
+                )
+                log.info(
+                    "Reset osd_pool_default_flag_ec_optimizations to default (true)"
+                )
+            except Exception as e:
+                log.warning(
+                    "Failed to reset osd_pool_default_flag_ec_optimizations: %s", e
+                )
+
+            # Delete pools individually
+            for pool_to_delete in [pool_name_1, pool_name_2]:
+                try:
+                    log.info("Deleting pool: %s", pool_to_delete)
+                    if rados_obj.delete_pool(pool=pool_to_delete):
+                        log.info("Successfully deleted pool: %s", pool_to_delete)
+                    else:
+                        log.warning("Failed to delete pool: %s", pool_to_delete)
+                except Exception as e:
+                    log.warning("Error deleting pool %s: %s", pool_to_delete, e)
+
+            # Log cluster health
+            rados_obj.log_cluster_health()
+
+            # Check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                test_failed = True
+
+        if test_failed:
+            return 1
+
+        log.info("Verification of Fast EC space gain completed successfully")
+        return 0
+
 
 def run_common_case_setup(rados_obj, version_info, upgrade_case):
     """
@@ -1005,6 +1654,148 @@ def verify_ec_optimizations_status(pool_result, expected_value, case_desc):
         raise Exception(
             f"{case_desc}: EC optimizations mismatch - Expected: {expected_value}, Got: {actual}"
         )
+
+
+def print_ec_pool_profile_details(rados_obj, pool_name):
+    """
+    Print detailed EC pool and erasure code profile information
+
+    Fetches and logs pool attributes and associated EC profile settings
+    in a structured format for debugging and verification.
+
+    Args:
+        rados_obj: RadosOrchestrator instance for executing ceph commands
+        pool_name: Name of the EC pool to inspect
+
+    Returns:
+        dict: Dictionary containing 'pool' and 'profile' details
+    """
+    result = {"pool": None, "profile": None}
+
+    try:
+        # Get pool details using 'ceph osd pool get <pool> all'
+        pool_details = rados_obj.run_ceph_command(
+            cmd=f"ceph osd pool get {pool_name} all"
+        )
+        result["pool"] = pool_details
+
+        log.info("=" * 60)
+        log.info("=== EC Pool Details: %s ===", pool_name)
+        log.info("=" * 60)
+
+        # Print pool attributes
+        log.info("Pool Attributes:")
+        log.info("  - pool: %s", pool_details.get("pool"))
+        log.info("  - pool_id: %s", pool_details.get("pool_id"))
+        log.info("  - size (k+m): %s", pool_details.get("size"))
+        log.info("  - min_size: %s", pool_details.get("min_size"))
+        log.info("  - pg_num: %s", pool_details.get("pg_num"))
+        log.info("  - pgp_num: %s", pool_details.get("pgp_num"))
+        log.info("  - crush_rule: %s", pool_details.get("crush_rule"))
+        log.info(
+            "  - erasure_code_profile: %s", pool_details.get("erasure_code_profile")
+        )
+        log.info("  - allow_ec_overwrites: %s", pool_details.get("allow_ec_overwrites"))
+        log.info(
+            "  - allow_ec_optimizations: %s", pool_details.get("allow_ec_optimizations")
+        )
+        log.info("  - pg_autoscale_mode: %s", pool_details.get("pg_autoscale_mode"))
+
+        # Get EC profile details
+        ec_profile_name = pool_details.get("erasure_code_profile")
+        if ec_profile_name:
+            profile_details = rados_obj.run_ceph_command(
+                cmd=f"ceph osd erasure-code-profile get {ec_profile_name}"
+            )
+            result["profile"] = profile_details
+
+            log.info("-" * 60)
+            log.info("EC Profile Details (%s):", ec_profile_name)
+            log.info("  - k: %s", profile_details.get("k"))
+            log.info("  - m: %s", profile_details.get("m"))
+            log.info("  - plugin: %s", profile_details.get("plugin"))
+            log.info("  - stripe_unit: %s", profile_details.get("stripe_unit"))
+            log.info("  - technique: %s", profile_details.get("technique"))
+            log.info(
+                "  - crush-failure-domain: %s",
+                profile_details.get("crush-failure-domain"),
+            )
+            log.info(
+                "  - crush-device-class: %s", profile_details.get("crush-device-class")
+            )
+
+        log.info("=" * 60)
+
+    except Exception as e:
+        log.error("Failed to get EC pool/profile details for %s: %s", pool_name, str(e))
+
+    return result
+
+
+def create_ec_pool_with_optimization_flag(
+    rados_obj, pool_name, stripe_unit, allow_ec_optimizations
+):
+    """
+    Create an EC pool with specified stripe_unit and verify the allow_ec_optimizations flag.
+
+    This helper method:
+    1. Creates an erasure-coded pool with k=2, m=2 and specified stripe_unit
+    2. Optionally enables allow_ec_optimizations if requested
+    3. Prints pool and profile details
+    4. Verifies the allow_ec_optimizations flag matches the expected value
+
+    Args:
+        rados_obj: RadosOrchestrator instance for executing ceph commands
+        pool_name: Name of the EC pool to create
+        stripe_unit: Stripe unit size for the EC profile (e.g., "16384" for 16KB)
+        allow_ec_optimizations: Boolean - True to enable optimizations, False to keep disabled
+
+    Raises:
+        AssertionError: If pool creation fails
+        Exception: If allow_ec_optimizations verification fails
+    """
+    # Create the EC pool
+    assert rados_obj.create_erasure_pool(
+        pool_name=pool_name,
+        profile_name=f"ec_profile_{pool_name}",
+        k=2,
+        m=2,
+        stripe_unit=stripe_unit,
+        app_name="rados",
+    ), f"Failed to create EC pool {pool_name}"
+
+    # Enable EC optimizations if requested
+    if allow_ec_optimizations:
+        rados_obj.set_pool_property(
+            pool=pool_name, props="allow_ec_optimizations", value="true"
+        )
+        log.info("Enabled allow_ec_optimizations on pool %s", pool_name)
+        time.sleep(2)
+
+    # Print EC pool and profile details
+    print_ec_pool_profile_details(rados_obj, pool_name)
+
+    # Verify allow_ec_optimizations flag
+    ec_opt_value_dict = rados_obj.get_pool_property(
+        pool=pool_name, props="allow_ec_optimizations"
+    )
+    ec_opt_value = ec_opt_value_dict.get("allow_ec_optimizations")
+    log.info("Pool %s - allow_ec_optimizations: %s", pool_name, ec_opt_value)
+
+    if ec_opt_value is not allow_ec_optimizations:
+        log.error(
+            "allow_ec_optimizations is not %s for %s", allow_ec_optimizations, pool_name
+        )
+        raise Exception(
+            f"EC optimizations check failed for {pool_name}: "
+            f"expected {allow_ec_optimizations}, got {ec_opt_value}"
+        )
+
+    log.info(
+        "Successfully created EC pool %s with allow_ec_optimizations=%s",
+        pool_name,
+        allow_ec_optimizations,
+    )
 
 
 def print_case_summary(
