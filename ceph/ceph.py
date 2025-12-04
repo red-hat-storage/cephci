@@ -946,14 +946,21 @@ class Ceph(object):
         Args:
             base_url(str): rhel compose url
             repos(list): repos behind compose/ to process
-            cloud_type (str): The environment used for testing
+            cloud_type (str): The environment used for testing (DEPRECATED)
         Returns:
             str: repository file content
         """
         repo_file = ""
+        base_url = base_url.rstrip("/")
+        logger.debug(
+            "DEPRECATED: 'cloud_type' argument is unused and will be removed. Value supplied: %s",
+            cloud_type,
+        )
+
+        is_redhat_url = "redhat.com" in base_url
+
         for repo in repos:
-            base_url = base_url.rstrip("/")
-            if cloud_type == "openstack":
+            if is_redhat_url:
                 repo_to_use = f"{base_url}/compose/{repo}/x86_64/os/"
             else:
                 # The expecatation in other datacenters is Tools suffix is
