@@ -124,7 +124,7 @@ def run(ceph_cluster, **kw):
             f"/file$(printf %03d $n) bs=500k count=500; done",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=300)
             log.info("Sleep for 5 seconds to allow IOs to complete....")
             time.sleep(5)
         commands = [
@@ -142,7 +142,7 @@ def run(ceph_cluster, **kw):
             "target_group_name": "subvolume_group1",
         }
         fs_util.create_clone(client1, **clone_status_1)
-        fs_util.validate_clone_state(client1, clone_status_1, timeout=6000)
+        fs_util.validate_clone_state(client1, clone_status_1)
         clone_status_2 = {
             "vol_name": fs_name,
             "subvol_name": "subvolume2",
@@ -150,7 +150,7 @@ def run(ceph_cluster, **kw):
             "target_subvol_name": "clone2",
         }
         fs_util.create_clone(client1, **clone_status_2)
-        fs_util.validate_clone_state(client1, clone_status_2, timeout=6000)
+        fs_util.validate_clone_state(client1, clone_status_2)
         out, rc = client1.exec_command(
             sudo=True,
             cmd=f"ceph fs subvolume getpath {fs_name} clone1 --group_name subvolume_group1",

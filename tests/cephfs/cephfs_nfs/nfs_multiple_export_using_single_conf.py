@@ -182,7 +182,9 @@ def run(ceph_cluster, **kw):
         return 1
     finally:
         log.info("Cleaning Up")
-        client1.exec_command(sudo=True, cmd=f"rm -rf {nfs_mounting_dir}*")
+        client1.exec_command(
+            sudo=True, cmd=f"rm -rf {nfs_mounting_dir}*", check_ec=False
+        )
         log.info("Unmount NFS export")
         client1.exec_command(
             sudo=True, cmd=f"umount -l {nfs_mounting_dir}", check_ec=False

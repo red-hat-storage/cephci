@@ -162,6 +162,7 @@ tests:
       module: cephfs_fscrypt.test_fscrypt_basic.py
       name: "fscrypt_basic"
       polarion-id: CEPH-83607378
+      comments: "BZ-2406981"
   - test:
       abort-on-fail: false
       desc: "Verify fscrypt functional tests - fscrypt_enctag,fscrypt_datapath,fscrypt_xttrs,fscrypt_file_types"

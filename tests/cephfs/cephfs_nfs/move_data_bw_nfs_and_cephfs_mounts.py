@@ -164,10 +164,10 @@ def run(ceph_cluster, **kw):
         fusepath = f"{fuse_mounting_dir_1}{clients[0].node.hostname}dd_file_fuse"
         nfspath = f"{nfs_mounting_dir}{clients[0].node.hostname}dd_file_nfs"
         mv_bw_mounts = [
-            f"cp {kernelpath} {nfs_mounting_dir}_dd_file_kernel",
-            f"cp {fusepath} {nfs_mounting_dir}_dd_file_fuse",
-            f"cp {nfspath} {kernel_mounting_dir_1}_dd_file_nfs1",
-            f"cp {nfspath} {fuse_mounting_dir_1}_dd_file_nfs2",
+            f"rsync -av {kernelpath} {nfs_mounting_dir}_dd_file_kernel",
+            f"rsync -av {fusepath} {nfs_mounting_dir}_dd_file_fuse",
+            f"rsync -av {nfspath} {kernel_mounting_dir_1}_dd_file_nfs1",
+            f"rsync -av {nfspath} {fuse_mounting_dir_1}_dd_file_nfs2",
         ]
         for cmd in mv_bw_mounts:
             clients[0].exec_command(sudo=True, cmd=cmd)

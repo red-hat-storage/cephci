@@ -119,7 +119,7 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 10 --file-size 10 "
             f"--files 10050 --top {fuse_mount_dir}",
-            timeout=3600,
+            timeout=600,
         )
         time.sleep(10)
         log.info("Verify failing to advance oldest client message in ceph status")
@@ -150,7 +150,7 @@ def run(ceph_cluster, **kw):
             sudo=True,
             cmd=f"python3 /home/cephuser/smallfile/smallfile_cli.py --operation create --threads 20 --file-size 10 "
             f"--files 5000 --top {fuse_mount_dir}",
-            timeout=3600,
+            timeout=600,
         )
 
         time.sleep(10)

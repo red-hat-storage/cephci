@@ -1,5 +1,6 @@
 import secrets
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
@@ -121,7 +122,9 @@ def run(ceph_cluster, **kw):
             f"diff {nfs_mounting_dir_2}/file ~/copy_file",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=600)
+            log.info("Sleeping for 5 seconds between commands...")
+            time.sleep(5)
         log.info("Test completed successfully")
         return 0
     except Exception as e:
@@ -136,7 +139,7 @@ def run(ceph_cluster, **kw):
             f"umount {nfs_mounting_dir_2}",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=600)
         commands = [
             f"rm -rf {nfs_mounting_dir_2}/",
             "rm -f ~/copy_file",
@@ -144,6 +147,4 @@ def run(ceph_cluster, **kw):
             f"ceph nfs export delete {nfs_name} {nfs_export_2}",
         ]
         for command in commands:
-            client1.exec_command(
-                sudo=True, cmd=command, long_running=True, check_ec=False
-            )
+            client1.exec_command(sudo=True, cmd=command, timeout=600, check_ec=False)

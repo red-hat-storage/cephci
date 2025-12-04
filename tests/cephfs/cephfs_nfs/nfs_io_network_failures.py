@@ -1,6 +1,7 @@
 import json
 import secrets
 import string
+import time
 import traceback
 from json import JSONDecodeError
 
@@ -16,7 +17,7 @@ log = Log(__name__)
 
 def run_io_commands(client, io_commands):
     for command in io_commands:
-        client.exec_command(sudo=True, cmd=command, long_running=True)
+        client.exec_command(sudo=True, cmd=command, timeout=300)
 
 
 @retry(CommandFailed, tries=3, delay=60)
@@ -131,7 +132,9 @@ def run(ceph_cluster, **kw):
             ") bs=500k count=1000; done",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=300)
+            log.info("Sleeping for 5 seconds between commands...")
+            time.sleep(5)
         for nfs in nfs_nodes:
             with parallel() as p:
                 p.spawn(fs_util.network_disconnect, nfs)

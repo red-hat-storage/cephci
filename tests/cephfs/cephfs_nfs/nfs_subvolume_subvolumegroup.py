@@ -1,5 +1,6 @@
 import secrets
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
@@ -143,7 +144,9 @@ def run(ceph_cluster, **kw):
             f"--files 4000 --files-per-dir 20 --dirs-per-dir 4 --top {nfs_mounting_dir}/volumes/subvolgroup_2",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=900)
+            log.info("Sleeping for 5 seconds between commands...")
+            time.sleep(5)
         log.info("Test completed successfully")
         return 0
     except Exception as e:
@@ -158,7 +161,9 @@ def run(ceph_cluster, **kw):
             f"{nfs_mounting_dir}/volumes/subvolgroup_2/*",
         ]
         for command in cleanup_commands:
-            client1.exec_command(sudo=True, cmd=f"rm -rf {command}", long_running=True)
+            client1.exec_command(
+                sudo=True, cmd=f"rm -rf {command}", timeout=900, check_ec=False
+            )
         client1.exec_command(sudo=True, cmd=f"umount {nfs_mounting_dir}")
         client1.exec_command(
             sudo=True,

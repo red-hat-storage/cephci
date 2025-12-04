@@ -245,6 +245,7 @@ def setup_custom_nfs_cluster_multi_export_client(
 
     # Step 1: Enable nfs
     installer_node = ceph_cluster.get_nodes("installer")[0]
+    nfs_nodes = ceph_cluster.get_nodes("nfs")
     version_info = installer_node.exec_command(
         sudo=True, cmd="cephadm shell -- rpm -qa | grep nfs"
     )
@@ -259,6 +260,7 @@ def setup_custom_nfs_cluster_multi_export_client(
         ha=ha,
         vip=vip,
         active_standby=active_standby,
+        nfs_nodes_obj=nfs_nodes,
         **({"in-file": kwargs["in-file"]} if "in-file" in kwargs else {}),
     )
     sleep(3)
@@ -284,7 +286,7 @@ def setup_custom_nfs_cluster_multi_export_client(
                 nfs_name=nfs_name,
                 nfs_export=export_name,
                 fs=fs,
-                enctag=kwargs.get("enctag") if kwargs.get("enctag") else None,
+                **({"enctag": kwargs["enctag"]} if "enctag" in kwargs else {}),
             )
             all_exports = Ceph(clients[0]).nfs.export.ls(nfs_name)
             if export_name not in all_exports:

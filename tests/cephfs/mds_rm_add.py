@@ -44,7 +44,7 @@ def wait_for_cmd(client1, process_name, count, timeout=180, interval=5):
         out2, rc = client1.exec_command(
             sudo=True, cmd=f"ceph orch ps | grep {process_name} ", check_ec=False
         )
-        print(out2)
+        log.info(out2)
         output = out.rstrip()
         log.info(f"Current mds count = {output}")
         log.info(f"Expected mds count = {count}")
@@ -65,12 +65,14 @@ def mds_rm_add(fs_util, mdss, client, fs_name="cephfs"):
         initial_mds_count = str(len(mds_hosts))
         initial_mds_count.rstrip()
         count = str(int(initial_mds_count) - 1)
-        cmd = f"ceph orch  --verbose apply mds {fs_name} --placement='{mdss_hosts}'"
-        client.exec_command(sudo=True, cmd=cmd)
+        cmd = f"ceph orch apply mds {fs_name} --placement='{mdss_hosts}'"
+        out, _ = client.exec_command(sudo=True, cmd=cmd)
+        log.debug("After removing mds: " + str(out))
         wait_for_cmd(client, f"mds.{fs_name}", count)
         mdss_hosts = " ".join([str(elem) for elem in mds_hosts])
-        cmd = f"ceph orch  --verbose apply mds {fs_name} --placement='{mdss_hosts}'"
-        client.exec_command(sudo=True, cmd=cmd)
+        cmd = f"ceph orch apply mds {fs_name} --placement='{mdss_hosts}'"
+        out, _ = client.exec_command(sudo=True, cmd=cmd)
+        log.debug("After adding mds: " + str(out))
         wait_for_cmd(client, f"mds.{fs_name}", initial_mds_count)
         stop_flag = True
 
@@ -116,6 +118,7 @@ def run(ceph_cluster, get_fs_info=None, **kw):
 
         if not fs_details:
             fs_util.create_fs(client1, fs_name)
+            fs_util.wait_for_mds_process(client1, fs_name)
 
         mount_dir = "".join(
             secrets.choice(string.ascii_uppercase + string.digits) for i in range(5)
@@ -137,6 +140,7 @@ def run(ceph_cluster, get_fs_info=None, **kw):
             new_client_hostname="admin",
             extra_params=f" --client_fs {fs_name}",
         )
+        sleep(10)
         with parallel() as p:
             p.spawn(mds_rm_add, fs_util, mdss, client1, fs_name=fs_name)
             p.spawn(
@@ -144,12 +148,14 @@ def run(ceph_cluster, get_fs_info=None, **kw):
                 fs_util,
                 client1,
                 kernel_mount_dir + "/kernel_1",
+                timeout=0,
             )
             p.spawn(
                 start_io_time,
                 fs_util,
                 client1,
                 fuse_mount_dir + "/fuse_1",
+                timeout=0,
             )
         return 0
 

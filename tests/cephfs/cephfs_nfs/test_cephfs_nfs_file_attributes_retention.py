@@ -177,8 +177,10 @@ def run(ceph_cluster, **kw):
             sudo=True, cmd=f"umount -l {nfs_mounting_dir}", check_ec=False
         )
         log.info("Remove Paths")
-        client1.exec_command(sudo=True, cmd=f"rm -rf {local_fs_path}")
-        client1.exec_command(sudo=True, cmd=f"rm -rf {nfs_mounting_dir}")
+        client1.exec_command(sudo=True, cmd=f"rm -rf {local_fs_path}", check_ec=False)
+        client1.exec_command(
+            sudo=True, cmd=f"rm -rf {nfs_mounting_dir}", check_ec=False
+        )
         log.info("Removing the Export")
         client1.exec_command(
             sudo=True,

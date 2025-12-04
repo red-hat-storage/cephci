@@ -162,7 +162,7 @@ def run(ceph_cluster, **kw):
             f" 1000 --files-per-dir 10 --dirs-per-dir 2 --top {nfs_mounting_dir}/dir1",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=300)
         nfs_filename = "nfs_cluster.conf"
         nfs_cluster_conf = clients[0].remote_file(
             sudo=True,
@@ -214,7 +214,7 @@ def run(ceph_cluster, **kw):
             f"ceph nfs export delete {nfs_name} {nfs_export_name}",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command)
+            client1.exec_command(sudo=True, cmd=command, check_ec=False)
         client1.exec_command(
             sudo=True, cmd=f"rm -rf {nfs_mounting_dir}/", check_ec=False
         )
