@@ -358,7 +358,7 @@ def create_group_and_enable_mirroring(
     for image in images:
         if "namespace" in pool_config:
             pool_spec = pool + "/" + pool_config.get("namespace") + "/"
-            group_spec = f"{pool}/{pool_config.get("namespace")}/{group}"
+            group_spec = f"{pool}/{pool_config.get('namespace')}/{group}"
             group_config.update({"namespace": pool_config.get("namespace")})
         else:
             pool_spec = pool + "/"
