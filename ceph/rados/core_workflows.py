@@ -562,8 +562,7 @@ class RadosOrchestrator:
                 2. ec_profile_name -> name of EC profile if pool being created is an EC pool
                 3. min_size -> min replication size for pool to serve data
                 4. size -> min replication size for pool to write data
-                5. erasure_code_use_overwrites -> allows overrides in an erasure coded pool
-                6. allow_ec_overwrites -> This lets RBD and CephFS store their data in an erasure coded pool
+                5. erasure_code_use_overwrites -> This lets RBD and CephFS store their data in an ecpool
                 7. disable_pg_autoscale -> sets auto-scale mode off on the pool
                 8. crush_rule -> custom crush rule for the pool
                 9. pool_quota -> limit the maximum number of objects or the maximum number of bytes stored
@@ -1566,6 +1565,8 @@ class RadosOrchestrator:
                 15. negative_test -> pass true if performing -ve tests. min_compact_client won't be updated for pool
                 creation when this param is set to true. Required for MSR EC pool tests with min_compact_client
                 16. enable_fast_ec_features -> Pass true if the Fast EC features need to be enabled on the created pool
+                17. stripe_width -> Stripe width to be set on the pool (k * stripe_unit)
+                18. stripe_unit -> Chunk size per data shard (recommended: 16384 for Fast EC pools)
         Returns: True -> pass, False -> fail
         """
         failure_domain = kwargs.get("crush-failure-domain", "osd")
@@ -1590,6 +1591,8 @@ class RadosOrchestrator:
         create_ecpool = kwargs.get("create_ecpool", True)
         negative_test = kwargs.get("negative_test", False)
         yes_i_mean_it = kwargs.get("yes_i_mean_it", False)
+        stripe_width = kwargs.get("stripe_width", None)
+        stripe_unit = kwargs.get("stripe_unit", None)
         profile_name = kwargs.get("profile_name", f"ecp_{pool_name}")
         rule_name = f"rule_{pool_name}"
         enable_fast_ec_features = kwargs.get("enable_fast_ec_features", False)
@@ -1638,6 +1641,10 @@ class RadosOrchestrator:
             cmd = cmd + f" d={d}"
         if force:
             cmd = cmd + " --force"
+        if stripe_width:
+            cmd = cmd + f" stripe_width={stripe_width}"
+        if stripe_unit:
+            cmd = cmd + f" stripe_unit={stripe_unit}"
         if yes_i_mean_it:
             cmd = cmd + " --yes-i-really-mean-it "
 
