@@ -101,7 +101,7 @@ def run(ceph_cluster, **kw):
             f"ceph fs subvolume create {fs_name} {subvol_2} {subvol_grp}",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=60)
         subvol_1_path, rc = client1.exec_command(
             sudo=True, cmd=f"ceph fs subvolume getpath {fs_name} {subvol_1}"
         )

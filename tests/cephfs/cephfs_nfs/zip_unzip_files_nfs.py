@@ -1,6 +1,7 @@
 import json
 import secrets
 import string
+import time
 import traceback
 from json import JSONDecodeError
 
@@ -101,90 +102,39 @@ def run(ceph_cluster, **kw):
         if not rc:
             log.error("cephfs nfs export mount failed")
             return 1
-        client1.exec_command(sudo=True, cmd="yum install zip -y", long_running=True)
-        client1.exec_command(sudo=True, cmd=f"mkdir {nfs_mounting_dir}/dir1..10")
+        client1.exec_command(sudo=True, cmd="yum install zip -y", timeout=120)
+        client1.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}/dir{{1..10}}")
         fs_util.create_file_data(
-            client1, nfs_mounting_dir + "/files_dir1", 100, "file", "file_data"
+            client1, nfs_mounting_dir + "/dir1", 100, "file", "file_data"
         )
         fs_util.create_file_data(
             client1, nfs_mounting_dir + "/dir7", 100, "file", "random_data"
         )
-        commands = [
-            f"for n in {{1..100}}; do zip {nfs_mounting_dir}/dir2/file_$( printf %03d "
-            "$n"
-            " ).zip  {nfs_mounting_dir}/dir1/file_$( printf %03d "
-            "$n"
-            " )",
-            f"for n in {{1..100}}; do unzip {nfs_mounting_dir}/dir2/file_$( printf %03d "
-            "$n"
-            " ).zip -d {nfs_mounting_dir}/dir2/",
-            f"for n in {{1..100}}; do zip {nfs_mounting_dir}/dir3/file_$( printf %03d "
-            "$n"
-            " ).zip  {nfs_mounting_dir}/dir2/file_$( printf %03d "
-            "$n"
-            " )",
-            f"for n in {{1..100}}; do unzip {nfs_mounting_dir}/dir3/file_$( printf %03d "
-            "$n"
-            " ).zip -d {nfs_mounting_dir}/dir3/",
-            f"for n in {{1..100}}; do zip {nfs_mounting_dir}/dir4/file_$( printf %03d "
-            "$n"
-            " ).zip  {nfs_mounting_dir}/dir3/file_$( printf %03d "
-            "$n"
-            " )",
-            f"for n in {{1..100}}; do unzip {nfs_mounting_dir}/dir4/file_$( printf %03d "
-            "$n"
-            " ).zip -d {nfs_mounting_dir}/dir4/",
-            f"for n in {{1..100}}; do zip {nfs_mounting_dir}/dir5/file_$( printf %03d "
-            "$n"
-            " ).zip  {nfs_mounting_dir}/dir4/file_$( printf %03d "
-            "$n"
-            " )",
-            f"for n in {{1..100}}; do unzip {nfs_mounting_dir}/dir5/file_$( printf %03d "
-            "$n"
-            " ).zip -d {nfs_mounting_dir}/dir5/",
-            f"for n in {{1..100}}; do zip {nfs_mounting_dir}/dir6/file_$( printf %03d "
-            "$n"
-            " ).zip  {nfs_mounting_dir}/dir5/file_$( printf %03d "
-            "$n"
-            " )",
-            f"for n in {{1..100}}; do unzip {nfs_mounting_dir}/dir6/file_$( printf %03d "
-            "$n"
-            " ).zip -d {nfs_mounting_dir}/dir6/",
-            f"for n in {{1..100}}; do zip {nfs_mounting_dir}/dir7/file_$( printf %03d "
-            "$n"
-            " ).zip  {nfs_mounting_dir}/dir6/file_$( printf %03d "
-            "$n"
-            " )",
-            f"for n in {{1..100}}; do unzip {nfs_mounting_dir}/dir7/file_$( printf %03d "
-            "$n"
-            " ).zip -d {nfs_mounting_dir}/dir7/",
-            f"for n in {{1..100}}; do zip {nfs_mounting_dir}/dir8/file_$( printf %03d "
-            "$n"
-            " ).zip  {nfs_mounting_dir}/dir7/file_$( printf %03d "
-            "$n"
-            " )",
-            f"for n in {{1..100}}; do unzip {nfs_mounting_dir}/dir8/file_$( printf %03d "
-            "$n"
-            " ).zip -d {nfs_mounting_dir}/dir8/",
-            f"for n in {{1..100}}; do zip {nfs_mounting_dir}/dir9/file_$( printf %03d "
-            "$n"
-            " ).zip  {nfs_mounting_dir}/dir8/file_$( printf %03d "
-            "$n"
-            " )",
-            f"for n in {{1..100}}; do unzip {nfs_mounting_dir}/dir9/file_$( printf %03d "
-            "$n"
-            " ).zip -d {nfs_mounting_dir}/dir9/",
-            f"for n in {{1..100}}; do zip {nfs_mounting_dir}/dir10/file_$( printf %03d "
-            "$n"
-            " ).zip  {nfs_mounting_dir}/dir9/file_$( printf %03d "
-            "$n"
-            " )",
-            f"for n in {{1..100}}; do unzip {nfs_mounting_dir}/dir10/file_$( printf %03d "
-            "$n"
-            " ).zip -d {nfs_mounting_dir}/dir10/",
-        ]
+
+        commands = []
+
+        for i in range(2, 11):
+            prev_dir = f"{nfs_mounting_dir}/dir{i-1}"
+            curr_dir = f"{nfs_mounting_dir}/dir{i}"
+
+            # zip command - cd into prev_dir to avoid full absolute paths in zip
+            commands.append(
+                f"for n in {{0..99}}; do "
+                f"(cd {prev_dir} && zip {curr_dir}/file_$n.zip file_$n); "
+                f"done"
+            )
+
+            # unzip command - extract into current directory
+            commands.append(
+                f"for n in {{0..99}}; do "
+                f"unzip -o {curr_dir}/file_$n.zip -d {curr_dir}/; "
+                f"done"
+            )
+
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=300)
+            log.info("Sleeping for 5 seconds between commands...")
+            time.sleep(5)
         return 0
     except Exception as e:
         log.info(e)

@@ -128,7 +128,7 @@ def run(ceph_cluster, **kw):
             f"/file$(printf %03d $n) bs=500k count=500; done",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=300)
             log.info("Sleeping for 5 seconds between commands...")
             time.sleep(5)
         rc = fs_util.cephfs_nfs_mount(

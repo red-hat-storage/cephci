@@ -1,6 +1,7 @@
 import random
 import secrets
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
@@ -132,7 +133,7 @@ def run(ceph_cluster, **kw):
             f"mkdir -p {nfs_mounting_dir_2}",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command)
 
         rc = fs_util.cephfs_nfs_mount(
             client1, nfs_server, nfs_export_1, nfs_mounting_dir_1
@@ -171,4 +172,6 @@ def run(ceph_cluster, **kw):
             f"ceph nfs cluster rm {nfs_name}",
         ]
         for command in commands:
-            client1.exec_command(sudo=True, cmd=command, long_running=True)
+            client1.exec_command(sudo=True, cmd=command, timeout=600, check_ec=False)
+            log.info("Sleeping for 3 seconds between commands...")
+            time.sleep(3)
