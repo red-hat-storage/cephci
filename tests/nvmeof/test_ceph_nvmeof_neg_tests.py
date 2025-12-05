@@ -975,7 +975,6 @@ def test_ceph_83608266(
                 configure_hosts(
                     nvme_service.gateways[0],
                     nvme_service.config,
-                    ceph_cluster=ceph_cluster,
                 )
 
             for _ in range(2):
