@@ -1424,6 +1424,13 @@ def enable_coredump(node):
         None
     """
     log.info("Enabling coredump collection on %s" % node.hostname)
+    log.debug("Ensure /etc/systemd/system.conf file exists or create it")
+    _, _, rc, _ = node.exec_command(
+        sudo=True, cmd="test -e /etc/systemd/system.conf", verbose=True
+    )
+    if rc:
+        log.debug("File /etc/systemd/system.conf does not exist, creating..")
+        node.exec_command(sudo=True, cmd="touch /etc/systemd/system.conf")
     sys_cmds = [
         "echo 'fs.suid_dumpable = 2' >> /etc/sysctl.conf",
         "sysctl -p",
