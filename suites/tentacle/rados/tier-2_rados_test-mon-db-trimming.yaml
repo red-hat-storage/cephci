@@ -294,3 +294,16 @@ tests:
         test_duration: 10
         heartbeat_interval: 30
       desc: Rados hotfix OSD beacons adhere to heartbeat interval
+
+  - test:
+      name: MON compaction workflow tests
+      module: test_mon_compaction.py
+      polarion-id: CEPH-83604848
+      config:
+        mon_compaction_config:
+          pool_name: test_mon_compaction
+          num_temp_pools: 10
+          num_objects: 100
+          create_omaps: true
+          osd_restart_cycles: 2
+      desc: Verification of MON database compaction with various methods
