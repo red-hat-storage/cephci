@@ -556,7 +556,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         LOG.info("Initiating IO before scale down")
                         for initiator in ha.clients:
                             io_tasks_scale_down.append(
-                                executor.submit(initiator.start_fio)
+                                executor.submit(initiator.start_fio("20%"))
                             )
                         time.sleep(20)  # time sleep for IO to Kick-in
 
@@ -590,7 +590,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                         executor = thread_pool_executor(num_devices, initiators)
                         for initiator in ha.clients:
                             io_tasks_scale_up.append(
-                                executor.submit(initiator.start_fio)
+                                executor.submit(initiator.start_fio("20%"))
                             )
                         time.sleep(20)  # time sleep for IO to Kick-in
 
@@ -652,7 +652,7 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
                             executor = thread_pool_executor(num_devices, initiators)
                             for initiator in ha.clients:
                                 io_tasks_new_namespaces.append(
-                                    executor.submit(initiator.start_fio)
+                                    executor.submit(initiator.start_fio("20%"))
                                 )
                             time.sleep(20)
 
