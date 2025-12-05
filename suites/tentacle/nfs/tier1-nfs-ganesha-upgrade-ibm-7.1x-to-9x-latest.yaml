@@ -1,13 +1,13 @@
 ##############################################################################################
 # Tier-Level: 1
-# Test-Suite: tier1-nfs-ganesha-upgrade-ibm-8x-to-9x-latest.yaml
-# Scenario: Upgrade IBM 8.x(GA) cluster to IBM 9(Latest) with NFS-Ganesha in RHEL9
+# Test-Suite: tier1-nfs-ganesha-upgrade-ibm-7x-to-9x-latest.yaml
+# Scenario: Upgrade IBM 7.1(GA) cluster to IBM 9(Latest) with NFS-Ganesha in RHEL9
 #
-# Cluster Configuration: Conf: conf/squid/nfs/1admin-3client-7node.yaml
+# Cluster Configuration: Conf: conf/tentacle/nfs/1admin-3client-7node.yaml
 #
 # Test Steps:
-# - Deploy IBM 8.x(GA) cluster in RHEL 9
-# - Deploy IBM 8.x client
+# - Deploy IBM 7.1(GA) cluster in RHEL 9
+# - Deploy IBM 7.1 client
 # - Upgrade cluster along with NFS-Ganesha IOs parllel
 ################################################################################################
 tests:
@@ -18,8 +18,8 @@ tests:
       abort-on-fail: true
 
   - test:
-      name: Bootstrap IBM 8.x(GA) cluster and deploy services with label placements.
-      desc: Bootstrap IBM 8.x(GA) cluster and deploy services with label placements.
+      name: Bootstrap IBM 7.1(GA) cluster and deploy services with label placements.
+      desc: Bootstrap IBM 7.1(GA) cluster and deploy services with label placements.
       polarion-id: CEPH-83573777
       module: test_cephadm.py
       config:
@@ -29,7 +29,7 @@ tests:
               command: bootstrap
               service: cephadm
               args:
-                rhcs-version: 8.0
+                rhcs-version: 7.1
                 release: rc
                 mon-ip: node1
                 orphan-initial-daemons: true
@@ -190,7 +190,6 @@ tests:
         file_count: 50
         dd_command_size_in_M: 10
         operation: before_upgrade
-
 
   - test:
       name: Upgrade along with IOs for nfs
