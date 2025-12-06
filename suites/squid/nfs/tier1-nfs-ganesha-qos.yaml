@@ -346,6 +346,54 @@ tests:
           max_client_combined_bw: 10MB
         operation: restart
         qos_type: PerShare_PerClient
+
+  - test:
+      name: NFS QoS ops control test - cluster level
+      module: test_nfs_qos_ops_control.py
+      desc: Verify QoS ops control at cluster level
+      polarion-id:
+      abort-on-fail: false
+      config:
+          cephfs_volume: cephfs
+          cluster_name: cephfs-nfs
+          nfs_version: 4.2
+          port: "2049"
+          qos_type: PerShare_PerClient
+          operation: restart
+          cluster_ops:
+              max_export_iops: 60
+              max_client_iops: 60
+          dd_parameters:
+              block_size: "1M"
+              count: 64
+              input_file: "/dev/random"
+              iterations: 3
+
+  - test:
+      name: NFS QoS ops control test - export level
+      module: test_nfs_qos_ops_control.py
+      desc: Verify QoS ops control at export level overrides cluster level
+      polarion-id:
+      abort-on-fail: false
+      config:
+          cephfs_volume: cephfs
+          cluster_name: cephfs-nfs
+          nfs_version: 4.2
+          port: "2049"
+          qos_type: PerShare_PerClient
+          operation: restart
+          cluster_ops:
+              max_export_iops: 60
+              max_client_iops: 60
+          export_ops:
+              max_export_iops: 40
+              max_client_iops: 40
+          dd_parameters:
+              block_size: "2M"
+              count: 32
+              input_file: "/dev/zero"
+              iterations: 3
+
   - test:
       name: deploy nfs ganesha with qos per share using spec file
       desc: Deploy nfs ganesha with qos per share using spec file and verify
