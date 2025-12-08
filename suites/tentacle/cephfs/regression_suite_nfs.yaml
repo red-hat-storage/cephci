@@ -327,6 +327,12 @@ tests:
       name: "nfs_multiple_export_using_single_conf"
       polarion-id: "CEPH-83575082"
   - test:
+      abort-on-fail: false
+      desc: "test cephfs nfs byok functionality"
+      module: cephfs_nfs.test_cephfs_nfs_byok_functional.py
+      name: "cephfs_nfs_byok"
+      polarion-id: "CEPH-83625558"
+  - test:
       abort-on-fail: true
       desc: "Setup phase to deploy the required pre-requisites for running the tests."
       module: cephfs_clean_up.py
