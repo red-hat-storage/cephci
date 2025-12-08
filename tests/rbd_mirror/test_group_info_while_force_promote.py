@@ -43,6 +43,7 @@ from ceph.rbd.utils import getdict, random_string
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.group_mirror import (
     enable_group_mirroring_and_verify_state,
+    get_mirror_group_snap_copied_status,
     get_mirror_group_snap_id,
     get_snap_state_by_snap_id,
     wait_for_idle,
@@ -207,7 +208,7 @@ def test_group_info_during_force_promote(
                 p.spawn(
                     check_group_snap_list,
                     snapshot_id,
-                    verify_state="incomplete",
+                    verify_state="not copied",
                     rbd_secondary=rbd_secondary,
                     **status_spec,
                 )
@@ -224,8 +225,15 @@ def test_group_info_during_force_promote(
             # Check group snap list on site-b, the snapshot should be marked complete
             snapshot_id = get_mirror_group_snap_id(rbd_secondary, **status_spec)
             check_group_snap_list(
-                snapshot_id, "complete", rbd_secondary=rbd_secondary, **status_spec
+                snapshot_id, "copied", rbd_secondary=rbd_secondary, **status_spec
             )
+            snap_state = get_snap_state_by_snap_id(
+                rbd_secondary, snapshot_id, **status_spec
+            )
+            if snap_state != "created":
+                raise Exception(
+                    "Snapshot state did not turn created even after snapshot data sync complete/copied"
+                )
 
             # Check group info, 'primary' field should be marked true
             check_group_info(
@@ -244,14 +252,25 @@ def force_promote_secondary(group_spec, rbd_secondary):
 
 
 def check_group_snap_list(snapshot_id, verify_state, rbd_secondary, **status_spec):
-    snap_state = get_snap_state_by_snap_id(rbd_secondary, snapshot_id, **status_spec)
-    if snap_state != verify_state:
+    if verify_state == "copied":
+        verify_state = True
+    elif verify_state == "not copied":
+        verify_state = False
+    snap_copied_status = get_mirror_group_snap_copied_status(
+        rbd_secondary,
+        snapshot_id,
+        **status_spec,
+    )
+    if snap_copied_status != verify_state:
         raise Exception(
             "Snap state should not turn "
             + verify_state
             + " before force promote completion"
         )
-    log.info("Successfully verified snapshot state to be " + verify_state)
+    log.info(
+        "Successfully snapshot created and data sync completed status to be "
+        + str(verify_state)
+    )
 
 
 def check_group_info(expected_primary_field, rbd_secondary, **group_config):
