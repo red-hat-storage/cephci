@@ -74,8 +74,6 @@ def run(ceph_cluster, **kw):
         )
 
         log.info("=== Install & run nfstest ===")
-        setup_passwordless_ssh(clients[0], clients[1])
-        setup_passwordless_ssh(clients[1], clients[0])
         client = clients[0]  # run suite from client0
         client.exec_command(
             cmd="dnf install -y git python3 python3-devel tcpdump wireshark firewalld",
