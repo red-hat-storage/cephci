@@ -386,7 +386,7 @@ def verify_group_snapshot_ls(rbd, group_spec, interval, **status_spec):
 
 def get_snap_state_by_snap_id(rbd, snapshot_id, **status_spec):
     """
-    This function will return snapshot_state(complete/incomplete) for a given snapshot id
+    This function will return snapshot_state(creating/created) for a given snapshot id
     Args:
         rbd: rbd object
         snapshot_id: Snapshot job id
