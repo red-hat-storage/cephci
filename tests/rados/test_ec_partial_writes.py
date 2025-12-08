@@ -14,25 +14,41 @@ Test workflow:
    - Image 2: For filesystem I/O (mounted)
 4. Identify target PGs/OSDs and enable debug logging for write tests
 5. Run direct RADOS writes with partial overwrites at various offsets
-6. Workflow 1 - Direct device writes (Image 1, unmounted):
+6. Run object TRUNCATE tests with various boundary conditions:
+   - Truncate to exact stripe boundary (N * K * chunk_size) - KEY BUG SCENARIO
+   - Truncate to chunk boundaries
+   - Truncate to non-aligned sizes
+   - Truncate after partial overwrites
+   - Sequential truncates on same object
+   - Truncate to zero
+   - Data integrity verification after truncate
+7. Run object APPEND tests with various boundary conditions:
+   - Append to reach exact stripe boundary (N * K * chunk_size)
+   - Append crossing stripe boundary
+   - Sequential appends on same object
+   - Append after truncate (shard version interaction)
+   - Append after partial overwrite
+   - Small appends (sub-chunk size)
+   - Data integrity verification after append
+8. Workflow 1 - Direct device writes (Image 1, unmounted):
    - Block device writes (direct I/O): full stripe, single chunk, sub-chunk, overwrites
-7. Workflow 2 - Filesystem writes (Image 2, mounted):
+9. Workflow 2 - Filesystem writes (Image 2, mounted):
    - Filesystem writes (buffered I/O): chunk-aligned, sub-chunk, overwrites
-8. Parse OSD logs to verify partial WRITE patterns (written={...} with subset of shards)
-9. Verify partial WRITE optimization statistics
-10. Enable debug logging for read tests
-11. Run various read I/O patterns with offsets:
-   - Full object reads from offset 0
-   - Reads from stripe boundaries
-   - Reads from chunk boundaries
-   - Reads from arbitrary offsets (aligned and unaligned)
-   - Single byte reads from EOF
-12. Parse OSD logs to verify partial READ patterns:
-   - shard_want_to_read={...} with single shard reads
-   - extent-based reads with specific byte ranges
-   - Reduced read amplification
-13. Verify partial READ optimization statistics
-14. Cleanup resources
+10. Parse OSD logs to verify partial WRITE patterns (written={...} with subset of shards)
+11. Verify partial WRITE optimization statistics
+12. Enable debug logging for read tests
+13. Run various read I/O patterns with offsets:
+    - Full object reads from offset 0
+    - Reads from stripe boundaries
+    - Reads from chunk boundaries
+    - Reads from arbitrary offsets (aligned and unaligned)
+    - Single byte reads from EOF
+14. Parse OSD logs to verify partial READ patterns:
+    - shard_want_to_read={...} with single shard reads
+    - extent-based reads with specific byte ranges
+    - Reduced read amplification
+15. Verify partial READ optimization statistics
+16. Cleanup resources
 """
 
 import re
@@ -72,6 +88,8 @@ def run(ceph_cluster, **kw):
     plugin = config.get("plugin", "isa")
     technique = config.get("technique", "reed_sol_van")
     chunk_size = config.get("chunk_size", 16384)  # 16K
+    # For k+m > 4, use OSD failure domain; otherwise use host (default)
+    crush_failure_domain = config.get("crush_failure_domain", None)
     profile_name = config.get("profile_name", f"ec_k{ec_k}_m{ec_m}_profile")
     ec_pool_name = config.get("ec_pool_name", f"ec_k{ec_k}_m{ec_m}_data_pool")
     metadata_pool_name = config.get(
@@ -100,16 +118,21 @@ def run(ceph_cluster, **kw):
             return 1
 
         log.info("Create EC pool with Fast EC optimizations")
-        if not rados_obj.create_erasure_pool(
-            pool_name=ec_pool_name,
-            profile_name=profile_name,
-            k=ec_k,
-            m=ec_m,
-            plugin=plugin,
-            technique=technique,
-            enable_fast_ec_features=True,
-            app_name="rbd",
-        ):
+        ec_pool_params = {
+            "pool_name": ec_pool_name,
+            "profile_name": profile_name,
+            "k": ec_k,
+            "m": ec_m,
+            "plugin": plugin,
+            "technique": technique,
+            "enable_fast_ec_features": True,
+            "app_name": "rbd",
+        }
+        # Add crush failure domain if specified (required for k+m > 4)
+        if crush_failure_domain:
+            ec_pool_params["crush-failure-domain"] = crush_failure_domain
+
+        if not rados_obj.create_erasure_pool(**ec_pool_params):
             log.error("Failed to create EC data pool with Fast EC optimizations")
             return 1
 
@@ -188,6 +211,43 @@ def run(ceph_cluster, **kw):
             planned_objects=planned_objects,
         ):
             log.error("Direct RADOS writes failed")
+            return 1
+        time.sleep(2)
+
+        # Test 0.5: EC Object Truncation Tests
+        # DISABLED: Truncate tests are blocked by the following bugs:
+        # - BZ#2419667: Fast EC OSD key-not-found exception on truncate
+        #   https://bugzilla.redhat.com/show_bug.cgi?id=2419667
+        #   Issue: Truncate to N * K * chunk_size causes key-not-found exception
+        # - BZ#2419827: [Fast EC] OSDs crashed in ECTransaction::WritePlanObj
+        #   https://bugzilla.redhat.com/show_bug.cgi?id=2419827
+        #   Issue: OSDs crash and are unable to boot up after truncate operations
+        # TODO: Uncomment once the above bugs are fixed:
+        # log.info("Test 0.5: EC Object Truncation tests with boundary conditions")
+        # if not run_truncate_tests(
+        #     rados_obj=rados_obj,
+        #     pool_name=ec_pool_name,
+        #     chunk_size=chunk_size,
+        #     ec_k=ec_k,
+        #     ec_m=ec_m,
+        # ):
+        #     log.error("EC Truncation tests failed")
+        #     return 1
+        # time.sleep(2)
+        log.info(
+            "Test 0.5: EC Object Truncation tests SKIPPED - blocked by BZ#2419667, BZ#2419827"
+        )
+
+        # Test 0.6: EC Object Append Tests
+        log.info("Test 0.6: EC Object Append tests with boundary conditions")
+        if not run_append_tests(
+            rados_obj=rados_obj,
+            pool_name=ec_pool_name,
+            chunk_size=chunk_size,
+            ec_k=ec_k,
+            ec_m=ec_m,
+        ):
+            log.error("EC Append tests failed")
             return 1
         time.sleep(2)
 
@@ -552,6 +612,1504 @@ def run_direct_rados_writes(
     except Exception as e:
         log.error("Direct RADOS writes failed: %s", e)
         return False
+
+
+def run_truncate_tests(
+    rados_obj,
+    pool_name: str,
+    chunk_size: int,
+    ec_k: int,
+    ec_m: int,
+) -> bool:
+    """
+    Test EC object truncation with various boundary conditions.
+
+    Test covers:
+    1. Truncate to exact stripe boundaries (N * K * chunk_size)
+    2. Truncate to chunk boundaries (N * chunk_size)
+    3. Truncate to non-aligned sizes
+    4. Truncate after partial overwrites
+    5. Sequential truncates on same object
+    6. Truncate to zero (complete truncation)
+    7. Data integrity verification after truncate
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pool_name: EC pool name
+        chunk_size: EC chunk size in bytes
+        ec_k: Number of data chunks
+        ec_m: Number of parity chunks
+
+    Returns:
+        True on success, False on failure
+    """
+    try:
+        stripe_width = ec_k * chunk_size
+        log.info("=" * 70)
+        log.info("EC TRUNCATE TESTS - Testing object truncation edge cases")
+        log.info("=" * 70)
+        log.info(
+            "EC config: k=%s, m=%s, chunk_size=%sKB, stripe_width=%sKB",
+            ec_k,
+            ec_m,
+            chunk_size // 1024,
+            stripe_width // 1024,
+        )
+        log.info(
+            "BUG SCENARIO: Truncate to N * K * chunk_size = N * %s bytes",
+            stripe_width,
+        )
+
+        passed = 0
+        failed = 0
+        test_results = []
+
+        # =====================================================================
+        # TEST GROUP 1: Truncate to exact stripe boundaries
+        # This is the critical test - truncating to N * K * chunk_size
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 1: Truncate to exact stripe boundaries")
+        log.info("-" * 50)
+
+        stripe_boundary_tests = [
+            {
+                "name": "Truncate 1.5 stripes -> 1 stripe",
+                "initial_size": int(stripe_width * 1.5),
+                "truncate_to": stripe_width,
+                "desc": "12KB -> 8KB for k=2,chunk=4K (N=1 * K * chunk)",
+            },
+            {
+                "name": "Truncate 3 stripes -> 2 stripes",
+                "initial_size": stripe_width * 3,
+                "truncate_to": stripe_width * 2,
+                "desc": "Truncate to N=2 stripe boundary",
+            },
+            {
+                "name": "Truncate 2.5 stripes -> 1 stripe",
+                "initial_size": int(stripe_width * 2.5),
+                "truncate_to": stripe_width,
+                "desc": "Larger reduction to N=1 stripe boundary",
+            },
+            {
+                "name": "Truncate 4 stripes -> 3 stripes",
+                "initial_size": stripe_width * 4,
+                "truncate_to": stripe_width * 3,
+                "desc": "Truncate to N=3 stripe boundary",
+            },
+            {
+                "name": "Truncate 1.25 stripes -> 1 stripe",
+                "initial_size": int(stripe_width * 1.25),
+                "truncate_to": stripe_width,
+                "desc": "Small reduction to N=1 stripe boundary",
+            },
+        ]
+
+        for test in stripe_boundary_tests:
+            result = _run_single_truncate_test(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                test_name=test["name"],
+                initial_size=test["initial_size"],
+                truncate_to=test["truncate_to"],
+                description=test["desc"],
+                verify_data=True,
+            )
+            test_results.append(result)
+            if result["passed"]:
+                passed += 1
+            else:
+                failed += 1
+
+        # =====================================================================
+        # TEST GROUP 2: Truncate to chunk boundaries
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 2: Truncate to chunk boundaries")
+        log.info("-" * 50)
+
+        chunk_boundary_tests = [
+            {
+                "name": "Truncate 2.5 chunks -> 2 chunks",
+                "initial_size": int(chunk_size * 2.5),
+                "truncate_to": chunk_size * 2,
+                "desc": "Truncate to 2 chunk boundary",
+            },
+            {
+                "name": "Truncate 3 chunks -> 1 chunk",
+                "initial_size": chunk_size * 3,
+                "truncate_to": chunk_size,
+                "desc": "Truncate to 1 chunk boundary",
+            },
+            {
+                "name": "Truncate 1.5 chunks -> 1 chunk",
+                "initial_size": int(chunk_size * 1.5),
+                "truncate_to": chunk_size,
+                "desc": "Sub-stripe truncation",
+            },
+            {
+                "name": "Truncate 4 chunks -> 3 chunks",
+                "initial_size": chunk_size * 4,
+                "truncate_to": chunk_size * 3,
+                "desc": "Truncate crossing stripe boundary",
+            },
+        ]
+
+        for test in chunk_boundary_tests:
+            result = _run_single_truncate_test(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                test_name=test["name"],
+                initial_size=test["initial_size"],
+                truncate_to=test["truncate_to"],
+                description=test["desc"],
+                verify_data=True,
+            )
+            test_results.append(result)
+            if result["passed"]:
+                passed += 1
+            else:
+                failed += 1
+
+        # =====================================================================
+        # TEST GROUP 3: Truncate to non-aligned sizes
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 3: Truncate to non-aligned sizes")
+        log.info("-" * 50)
+
+        non_aligned_tests = [
+            {
+                "name": "Truncate to mid-chunk (unaligned)",
+                "initial_size": stripe_width * 2,
+                "truncate_to": chunk_size + (chunk_size // 2),
+                "desc": "Truncate to 1.5 chunks (unaligned)",
+            },
+            {
+                "name": "Truncate to arbitrary offset",
+                "initial_size": stripe_width * 2,
+                "truncate_to": chunk_size + 1000,
+                "desc": "Truncate to chunk + 1000 bytes",
+            },
+            {
+                "name": "Truncate to 1 byte less than stripe",
+                "initial_size": stripe_width * 2,
+                "truncate_to": stripe_width - 1,
+                "desc": "Just under stripe boundary",
+            },
+            {
+                "name": "Truncate to 1 byte more than stripe",
+                "initial_size": stripe_width * 2,
+                "truncate_to": stripe_width + 1,
+                "desc": "Just over stripe boundary",
+            },
+            {
+                "name": "Truncate to small size (512 bytes)",
+                "initial_size": stripe_width * 2,
+                "truncate_to": 512,
+                "desc": "Truncate to sub-block size",
+            },
+        ]
+
+        for test in non_aligned_tests:
+            result = _run_single_truncate_test(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                test_name=test["name"],
+                initial_size=test["initial_size"],
+                truncate_to=test["truncate_to"],
+                description=test["desc"],
+                verify_data=True,
+            )
+            test_results.append(result)
+            if result["passed"]:
+                passed += 1
+            else:
+                failed += 1
+
+        # =====================================================================
+        # TEST GROUP 4: Truncate to zero (complete truncation)
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 4: Truncate to zero")
+        log.info("-" * 50)
+
+        zero_truncate_tests = [
+            {
+                "name": "Truncate stripe-sized object to zero",
+                "initial_size": stripe_width,
+                "truncate_to": 0,
+                "desc": "Complete truncation of 1-stripe object",
+            },
+            {
+                "name": "Truncate multi-stripe object to zero",
+                "initial_size": stripe_width * 3,
+                "truncate_to": 0,
+                "desc": "Complete truncation of 3-stripe object",
+            },
+            {
+                "name": "Truncate chunk-sized object to zero",
+                "initial_size": chunk_size,
+                "truncate_to": 0,
+                "desc": "Complete truncation of single chunk",
+            },
+        ]
+
+        for test in zero_truncate_tests:
+            result = _run_single_truncate_test(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                test_name=test["name"],
+                initial_size=test["initial_size"],
+                truncate_to=test["truncate_to"],
+                description=test["desc"],
+                verify_data=False,  # Can't verify data for zero-size
+            )
+            test_results.append(result)
+            if result["passed"]:
+                passed += 1
+            else:
+                failed += 1
+
+        # =====================================================================
+        # TEST GROUP 5: Sequential truncates on same object
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 5: Sequential truncates on same object")
+        log.info("-" * 50)
+
+        result = _run_sequential_truncate_test(
+            rados_obj=rados_obj,
+            pool_name=pool_name,
+            stripe_width=stripe_width,
+        )
+        test_results.append(result)
+        if result["passed"]:
+            passed += 1
+        else:
+            failed += 1
+
+        # =====================================================================
+        # TEST GROUP 6: Truncate after partial overwrite + Sequential truncates on same object
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 6: Truncate after partial overwrite")
+        log.info("-" * 50)
+
+        result = _run_truncate_after_partial_write_test(
+            rados_obj=rados_obj,
+            pool_name=pool_name,
+            chunk_size=chunk_size,
+            stripe_width=stripe_width,
+        )
+        test_results.append(result)
+        if result["passed"]:
+            passed += 1
+        else:
+            failed += 1
+
+        # =====================================================================
+        # SUMMARY
+        # =====================================================================
+        log.info("=" * 70)
+        log.info("EC TRUNCATE TESTS SUMMARY")
+        log.info("=" * 70)
+        log.info(
+            "Total tests: %s | Passed: %s | Failed: %s",
+            len(test_results),
+            passed,
+            failed,
+        )
+
+        # Log failed tests
+        failed_tests = [t for t in test_results if not t["passed"]]
+        if failed_tests:
+            log.error("FAILED TESTS:")
+            for ft in failed_tests:
+                log.error("  - %s: %s", ft["name"], ft.get("error", "Unknown error"))
+
+        if failed > 0:
+            log.error(
+                "EC TRUNCATE TESTS FAILED: %s/%s tests failed",
+                failed,
+                len(test_results),
+            )
+            return False
+
+        log.info("EC TRUNCATE TESTS PASSED: All %s tests passed", len(test_results))
+        return True
+
+    except Exception as e:
+        log.error("EC truncate tests failed with exception: %s", e)
+        log.exception(e)
+        return False
+
+
+def _run_single_truncate_test(
+    rados_obj,
+    pool_name: str,
+    test_name: str,
+    initial_size: int,
+    truncate_to: int,
+    description: str,
+    verify_data: bool = True,
+) -> Dict[str, Any]:
+    """
+    Run a single truncate test case.
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pool_name: EC pool name
+        test_name: Name of the test
+        initial_size: Initial object size in bytes
+        truncate_to: Size to truncate to in bytes
+        description: Test description
+        verify_data: Whether to verify data integrity after truncate
+
+    Returns:
+        Dictionary with test results: {"name", "passed", "error"}
+    """
+    result = {"name": test_name, "passed": False, "error": None}
+    obj_name = f"truncate_test_{int(time.time() * 1000)}"
+    data_file = f"/tmp/{obj_name}_data.bin"
+    read_file = f"/tmp/{obj_name}_read.bin"
+
+    try:
+        log.info("Test: %s", test_name)
+        log.info("  Description: %s", description)
+        log.info(
+            "  Initial size: %s bytes, Truncate to: %s bytes", initial_size, truncate_to
+        )
+
+        # Step 1: Create test data file
+        cmd = f"dd if=/dev/urandom of={data_file} bs={initial_size} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+        # Step 2: Upload object to pool
+        cmd = f"rados -p {pool_name} put {obj_name} {data_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.debug("  Created object %s with %s bytes", obj_name, initial_size)
+
+        # Step 3: print initial object size
+        initial_stat = rados_obj.get_object_stat(pool_name=pool_name, obj_name=obj_name)
+        log.debug(
+            "  Initial stat: %s",
+            initial_stat.get("raw_output") if initial_stat else "N/A",
+        )
+
+        # Step 4: Perform truncate
+        log.info(
+            "  Executing: rados -p %s truncate %s %s", pool_name, obj_name, truncate_to
+        )
+        try:
+            cmd = f"rados -p {pool_name} truncate {obj_name} {truncate_to}"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+            log.info("  Truncate command succeeded")
+        except Exception as truncate_err:
+            error_str = str(truncate_err)
+            log.error("  Truncate failed with: %s", truncate_err)
+            result["error"] = f"Truncate failed: {error_str}"
+            return result
+
+        # Step 5: Verify truncated object size
+        size_check = validate_object_size(
+            rados_obj=rados_obj,
+            pool_name=pool_name,
+            obj_name=obj_name,
+            expected_size=truncate_to,
+            operation="truncate",
+        )
+        if not size_check["success"]:
+            result["error"] = size_check["error"]
+            return result
+
+        # Step 6: Verify data integrity (for non-zero truncates)
+        if verify_data and truncate_to > 0:
+            # Read truncated object
+            cmd = f"rados -p {pool_name} get {obj_name} {read_file}"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+            # Compare first truncate_to bytes of original with read data
+            cmd = f"cmp -n {truncate_to} {data_file} {read_file}"
+            cmp_output, _ = rados_obj.client.exec_command(
+                cmd=cmd, sudo=True, check_ec=False
+            )
+
+            if cmp_output.strip() == "":
+                log.info("  Data integrity verified: first %s bytes match", truncate_to)
+            else:
+                log.error("  Data integrity FAILED: content mismatch")
+                result["error"] = "Data integrity verification failed"
+                return result
+
+        result["passed"] = True
+        log.info("  PASSED: %s", test_name)
+
+    except Exception as e:
+        log.error("  FAILED: %s - %s", test_name, e)
+        result["error"] = str(e)
+
+    finally:
+        # Cleanup
+        try:
+            rados_obj.client.exec_command(
+                cmd=f"rm -f {data_file} {read_file}", sudo=True, check_ec=False
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+def _run_sequential_truncate_test(
+    rados_obj,
+    pool_name: str,
+    stripe_width: int,
+) -> Dict[str, Any]:
+    """
+    Test sequential truncates on the same object.
+
+    Creates object and performs multiple truncates:
+    4 stripes -> 3 stripes -> 2 stripes -> 1 stripe -> 0
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pool_name: EC pool name
+        stripe_width: Stripe width (k * chunk_size)
+
+    Returns:
+        Dictionary with test results
+    """
+    result = {"name": "Sequential truncates", "passed": False, "error": None}
+    obj_name = f"seq_truncate_test_{int(time.time() * 1000)}"
+    data_file = f"/tmp/{obj_name}_data.bin"
+
+    try:
+        log.info("Test: Sequential truncates on same object")
+        initial_size = stripe_width * 4
+        log.info("  Initial size: %s bytes (4 stripes)", initial_size)
+
+        # Create initial object
+        cmd = f"dd if=/dev/urandom of={data_file} bs={initial_size} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        cmd = f"rados -p {pool_name} put {obj_name} {data_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+        # Sequential truncates to stripe boundaries
+        truncate_sequence = [
+            stripe_width * 3,  # 3 stripes
+            stripe_width * 2,  # 2 stripes
+            stripe_width * 1,  # 1 stripe
+            0,  # zero
+        ]
+
+        for i, truncate_to in enumerate(truncate_sequence, 1):
+            log.info(
+                "  Step %s: Truncate to %s bytes (%s stripe(s))",
+                i,
+                truncate_to,
+                truncate_to // stripe_width if stripe_width else 0,
+            )
+
+            cmd = f"rados -p {pool_name} truncate {obj_name} {truncate_to}"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+            log.info("    Truncate succeeded")
+
+            # Verify size after truncate
+            size_check = validate_object_size(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                obj_name=obj_name,
+                expected_size=truncate_to,
+                operation="truncate",
+                step_info=f"Step {i}",
+            )
+            if not size_check["success"]:
+                result["error"] = size_check["error"]
+                return result
+
+        result["passed"] = True
+        log.info("  PASSED: Sequential truncates")
+
+    except Exception as e:
+        log.error("  FAILED: Sequential truncates - %s", e)
+        result["error"] = str(e)
+
+    finally:
+        # Cleanup
+        try:
+            rados_obj.client.exec_command(
+                cmd=f"rm -f {data_file}", sudo=True, check_ec=False
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+def _run_truncate_after_partial_write_test(
+    rados_obj,
+    pool_name: str,
+    chunk_size: int,
+    stripe_width: int,
+) -> Dict[str, Any]:
+    """
+    Test truncate after partial overwrite operations.
+
+    This tests the interaction between partial writes (which may leave
+    shards with different versions) and truncation.
+
+    Workflow:
+    1. Create 3-stripe object
+    2. Partial overwrite at offset chunk_size (single chunk)
+    3. Truncate to 1 stripe boundary
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pool_name: EC pool name
+        chunk_size: EC chunk size
+        stripe_width: Stripe width (k * chunk_size)
+
+    Returns:
+        Dictionary with test results
+    """
+    result = {"name": "Truncate after partial write", "passed": False, "error": None}
+    obj_name = f"partial_trunc_test_{int(time.time() * 1000)}"
+    data_file = f"/tmp/{obj_name}_data.bin"
+    partial_file = f"/tmp/{obj_name}_partial.bin"
+
+    try:
+        log.info("Test: Truncate after partial overwrite")
+        initial_size = stripe_width * 3
+        log.info("  Initial size: %s bytes (3 stripes)", initial_size)
+
+        # Step 1: Create initial object
+        cmd = f"dd if=/dev/urandom of={data_file} bs={initial_size} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        cmd = f"rados -p {pool_name} put {obj_name} {data_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Created base object")
+
+        # Step 2: Partial overwrite at chunk boundary
+        partial_size = chunk_size
+        partial_offset = chunk_size
+        cmd = f"dd if=/dev/urandom of={partial_file} bs={partial_size} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        cmd = f"rados -p {pool_name} put {obj_name} {partial_file} --offset {partial_offset}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info(
+            "  Performed partial overwrite: %s bytes at offset %s",
+            partial_size,
+            partial_offset,
+        )
+
+        # Step 3: Sequential truncates to various boundaries after partial write
+        truncate_sequence = [
+            (stripe_width * 2, "2 stripes"),
+            (stripe_width + chunk_size, "1 stripe + 1 chunk"),
+            (stripe_width, "1 stripe"),
+            (chunk_size, "1 chunk"),
+        ]
+
+        for i, (truncate_to, desc) in enumerate(truncate_sequence, 1):
+            log.info("  Step %s: Truncating to %s bytes (%s)", i, truncate_to, desc)
+            cmd = f"rados -p {pool_name} truncate {obj_name} {truncate_to}"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+            log.info("    Truncate succeeded")
+
+            # Verify size after truncate
+            size_check = validate_object_size(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                obj_name=obj_name,
+                expected_size=truncate_to,
+                operation="truncate after partial write",
+                step_info=f"Step {i}",
+            )
+            if not size_check["success"]:
+                result["error"] = size_check["error"]
+                return result
+
+        # Step 4: Verify we can still read the object
+        read_file = f"/tmp/{obj_name}_read.bin"
+        cmd = f"rados -p {pool_name} get {obj_name} {read_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Successfully read truncated object")
+
+        result["passed"] = True
+        log.info("  PASSED: Truncate after partial write")
+
+    except Exception as e:
+        log.error("  FAILED: Truncate after partial write - %s", e)
+        result["error"] = str(e)
+
+    finally:
+        # Cleanup
+        try:
+            rados_obj.client.exec_command(
+                cmd=f"rm -f {data_file} {partial_file} /tmp/{obj_name}_read.bin",
+                sudo=True,
+                check_ec=False,
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+def run_append_tests(
+    rados_obj,
+    pool_name: str,
+    chunk_size: int,
+    ec_k: int,
+    ec_m: int,
+) -> bool:
+    """
+    Test EC object append operations with various boundary conditions.
+
+    Append operations extend an object by adding data to the end, which
+    can trigger different EC shard handling than overwrites. This is
+    particularly important for Fast EC where shard versions and partial
+    updates need to be handled correctly.
+
+    Test covers:
+    1. Append to reach exact stripe boundary (N * K * chunk_size)
+    2. Append crossing stripe boundary
+    3. Multiple sequential appends
+    4. Append after truncate (interaction with shard versions)
+    5. Small appends (sub-chunk size)
+    6. Append to reach chunk boundary
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pool_name: EC pool name
+        chunk_size: EC chunk size in bytes
+        ec_k: Number of data chunks
+        ec_m: Number of parity chunks
+
+    Returns:
+        True on success, False on failure
+    """
+    try:
+        stripe_width = ec_k * chunk_size
+        log.info("=" * 70)
+        log.info("EC APPEND TESTS - Testing object append operations")
+        log.info("=" * 70)
+        log.info(
+            "EC config: k=%s, m=%s, chunk_size=%sKB, stripe_width=%sKB",
+            ec_k,
+            ec_m,
+            chunk_size // 1024,
+            stripe_width // 1024,
+        )
+
+        passed = 0
+        failed = 0
+        test_results = []
+
+        # =====================================================================
+        # TEST GROUP 1: Append to reach exact stripe boundary
+        # Similar to truncate bug - final size = N * K * chunk_size
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 1: Append to reach exact stripe boundary")
+        log.info("-" * 50)
+
+        stripe_boundary_append_tests = [
+            {
+                "name": "Append to reach 1 stripe",
+                "initial_size": int(stripe_width * 0.5),
+                "append_size": int(stripe_width * 0.5),
+                "desc": "Half stripe + half stripe = 1 stripe boundary",
+            },
+            {
+                "name": "Append to reach 2 stripes",
+                "initial_size": int(stripe_width * 1.5),
+                "append_size": int(stripe_width * 0.5),
+                "desc": "1.5 stripes + 0.5 stripe = 2 stripe boundary",
+            },
+            {
+                "name": "Append small to reach stripe boundary",
+                "initial_size": stripe_width - 1024,
+                "append_size": 1024,
+                "desc": "Just under stripe + 1KB = exact stripe boundary",
+            },
+            {
+                "name": "Append chunk to reach 2 stripes",
+                "initial_size": stripe_width * 2 - chunk_size,
+                "append_size": chunk_size,
+                "desc": "(2 stripes - 1 chunk) + 1 chunk = 2 stripes",
+            },
+        ]
+
+        for test in stripe_boundary_append_tests:
+            result = _run_single_append_test(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                test_name=test["name"],
+                initial_size=test["initial_size"],
+                append_size=test["append_size"],
+                description=test["desc"],
+                verify_data=True,
+            )
+            test_results.append(result)
+            if result["passed"]:
+                passed += 1
+            else:
+                failed += 1
+
+        # =====================================================================
+        # TEST GROUP 2: Append crossing stripe boundary
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 2: Append crossing stripe boundary")
+        log.info("-" * 50)
+
+        cross_stripe_append_tests = [
+            {
+                "name": "Append crossing from stripe 1 to 2",
+                "initial_size": stripe_width - (chunk_size // 2),
+                "append_size": chunk_size,
+                "desc": "Start near end of stripe 1, cross into stripe 2",
+            },
+            {
+                "name": "Large append crossing multiple stripes",
+                "initial_size": chunk_size,
+                "append_size": stripe_width * 2,
+                "desc": "1 chunk + 2 stripes = crosses 2 stripe boundaries",
+            },
+            {
+                "name": "Append crossing at unaligned position",
+                "initial_size": stripe_width + 500,
+                "append_size": stripe_width,
+                "desc": "Unaligned start + full stripe append",
+            },
+        ]
+
+        for test in cross_stripe_append_tests:
+            result = _run_single_append_test(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                test_name=test["name"],
+                initial_size=test["initial_size"],
+                append_size=test["append_size"],
+                description=test["desc"],
+                verify_data=True,
+            )
+            test_results.append(result)
+            if result["passed"]:
+                passed += 1
+            else:
+                failed += 1
+
+        # =====================================================================
+        # TEST GROUP 3: Append to reach chunk boundary
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 3: Append to reach chunk boundary")
+        log.info("-" * 50)
+
+        chunk_boundary_append_tests = [
+            {
+                "name": "Append to reach 1 chunk",
+                "initial_size": chunk_size // 2,
+                "append_size": chunk_size // 2,
+                "desc": "Half chunk + half chunk = 1 chunk",
+            },
+            {
+                "name": "Append to reach 2 chunks",
+                "initial_size": chunk_size + (chunk_size // 2),
+                "append_size": chunk_size // 2,
+                "desc": "1.5 chunks + 0.5 chunk = 2 chunks",
+            },
+            {
+                "name": "Append 1 byte to reach chunk boundary",
+                "initial_size": chunk_size - 1,
+                "append_size": 1,
+                "desc": "chunk_size - 1 + 1 byte = exact chunk",
+            },
+        ]
+
+        for test in chunk_boundary_append_tests:
+            result = _run_single_append_test(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                test_name=test["name"],
+                initial_size=test["initial_size"],
+                append_size=test["append_size"],
+                description=test["desc"],
+                verify_data=True,
+            )
+            test_results.append(result)
+            if result["passed"]:
+                passed += 1
+            else:
+                failed += 1
+
+        # =====================================================================
+        # TEST GROUP 4: Small appends (sub-chunk)
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 4: Small appends (sub-chunk size)")
+        log.info("-" * 50)
+
+        small_append_tests = [
+            {
+                "name": "Append 512 bytes",
+                "initial_size": stripe_width,
+                "append_size": 512,
+                "desc": "Sub-block append",
+            },
+            {
+                "name": "Append 4KB",
+                "initial_size": stripe_width,
+                "append_size": 4096,
+                "desc": "4KB append (common block size)",
+            },
+            {
+                "name": "Append 1 byte",
+                "initial_size": stripe_width,
+                "append_size": 1,
+                "desc": "Single byte append",
+            },
+        ]
+
+        for test in small_append_tests:
+            result = _run_single_append_test(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                test_name=test["name"],
+                initial_size=test["initial_size"],
+                append_size=test["append_size"],
+                description=test["desc"],
+                verify_data=True,
+            )
+            test_results.append(result)
+            if result["passed"]:
+                passed += 1
+            else:
+                failed += 1
+
+        # =====================================================================
+        # TEST GROUP 5: Sequential appends
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 5: Sequential appends on same object")
+        log.info("-" * 50)
+
+        result = _run_sequential_append_test(
+            rados_obj=rados_obj,
+            pool_name=pool_name,
+            chunk_size=chunk_size,
+            stripe_width=stripe_width,
+        )
+        test_results.append(result)
+        if result["passed"]:
+            passed += 1
+        else:
+            failed += 1
+
+        # =====================================================================
+        # TEST GROUP 6: Append after truncate
+        # =====================================================================
+        # TODO: Uncomment this test when issues with truncate are fixed
+        #       BZ#2419667: Fast EC OSD key-not-found exception on truncate
+        #       https://bugzilla.redhat.com/show_bug.cgi?id=2419667
+        #       Issue: Truncate to N * K * chunk_size causes key-not-found exception
+        #       BZ#2419827: [Fast EC] OSDs crashed in ECTransaction::WritePlanObj
+        #       https://bugzilla.redhat.com/show_bug.cgi?id=2419827
+        #       Issue: OSDs crash and are unable to boot up after truncate operations
+        # log.info("-" * 50)
+        # log.info("TEST GROUP 6: Append after truncate (shard version interaction)")
+        # log.info("-" * 50)
+
+        # result = _run_append_after_truncate_test(
+        #     rados_obj=rados_obj,
+        #     pool_name=pool_name,
+        #     chunk_size=chunk_size,
+        #     stripe_width=stripe_width,
+        # )
+        # test_results.append(result)
+        # if result["passed"]:
+        #     passed += 1
+        # else:
+        #     failed += 1
+
+        # =====================================================================
+        # TEST GROUP 7: Append after partial overwrite
+        # =====================================================================
+        log.info("-" * 50)
+        log.info("TEST GROUP 7: Append after partial overwrite")
+        log.info("-" * 50)
+
+        result = _run_append_after_overwrite_test(
+            rados_obj=rados_obj,
+            pool_name=pool_name,
+            chunk_size=chunk_size,
+            stripe_width=stripe_width,
+        )
+        test_results.append(result)
+        if result["passed"]:
+            passed += 1
+        else:
+            failed += 1
+
+        # =====================================================================
+        # SUMMARY
+        # =====================================================================
+        log.info("=" * 70)
+        log.info("EC APPEND TESTS SUMMARY")
+        log.info("=" * 70)
+        log.info(
+            "Total tests: %s | Passed: %s | Failed: %s",
+            len(test_results),
+            passed,
+            failed,
+        )
+
+        # Log failed tests
+        failed_tests = [t for t in test_results if not t["passed"]]
+        if failed_tests:
+            log.error("FAILED TESTS:")
+            for ft in failed_tests:
+                log.error("  - %s: %s", ft["name"], ft.get("error", "Unknown error"))
+
+        if failed > 0:
+            log.error(
+                "EC APPEND TESTS FAILED: %s/%s tests failed", failed, len(test_results)
+            )
+            return False
+
+        log.info("EC APPEND TESTS PASSED: All %s tests passed", len(test_results))
+        return True
+
+    except Exception as e:
+        log.error("EC append tests failed with exception: %s", e)
+        log.exception(e)
+        return False
+
+
+def _run_single_append_test(
+    rados_obj,
+    pool_name: str,
+    test_name: str,
+    initial_size: int,
+    append_size: int,
+    description: str,
+    verify_data: bool = True,
+) -> Dict[str, Any]:
+    """
+    Run a single append test case.
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pool_name: EC pool name
+        test_name: Name of the test
+        initial_size: Initial object size in bytes
+        append_size: Size of data to append in bytes
+        description: Test description
+        verify_data: Whether to verify data integrity after append
+
+    Returns:
+        Dictionary with test results: {"name", "passed", "error"}
+    """
+    result = {"name": test_name, "passed": False, "error": None}
+    obj_name = f"append_test_{int(time.time() * 1000)}"
+    initial_file = f"/tmp/{obj_name}_initial.bin"
+    append_file = f"/tmp/{obj_name}_append.bin"
+    read_file = f"/tmp/{obj_name}_read.bin"
+    combined_file = f"/tmp/{obj_name}_combined.bin"
+
+    try:
+        log.info("Test: %s", test_name)
+        log.info("  Description: %s", description)
+        log.info(
+            "  Initial size: %s bytes, Append size: %s bytes, Final size: %s bytes",
+            initial_size,
+            append_size,
+            initial_size + append_size,
+        )
+
+        # Step 1: Create initial data file
+        cmd = f"dd if=/dev/urandom of={initial_file} bs={initial_size} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+        # Step 2: Create append data file
+        cmd = (
+            f"dd if=/dev/urandom of={append_file} bs={append_size} count=1 2>/dev/null"
+        )
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+        # Step 3: Create combined reference file for verification
+        if verify_data:
+            cmd = f"cat {initial_file} {append_file} > {combined_file}"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+        # Step 4: Upload initial object to pool
+        cmd = f"rados -p {pool_name} put {obj_name} {initial_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.debug("  Created initial object %s with %s bytes", obj_name, initial_size)
+
+        # Step 5: Perform append - THIS IS THE CRITICAL OPERATION
+        log.info(
+            "  Executing: rados -p %s append %s %s", pool_name, obj_name, append_file
+        )
+        cmd = f"rados -p {pool_name} append {obj_name} {append_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Append command succeeded")
+
+        # Step 6: Verify final object size
+        expected_size = initial_size + append_size
+        size_check = validate_object_size(
+            rados_obj=rados_obj,
+            pool_name=pool_name,
+            obj_name=obj_name,
+            expected_size=expected_size,
+            operation="append",
+        )
+        if not size_check["success"]:
+            result["error"] = size_check["error"]
+            return result
+
+        # Step 7: Verify data integrity
+        if verify_data:
+            cmd = f"rados -p {pool_name} get {obj_name} {read_file}"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+            # Compare with combined reference
+            cmd = f"cmp {combined_file} {read_file}"
+            cmp_output, _ = rados_obj.client.exec_command(
+                cmd=cmd, sudo=True, check_ec=False
+            )
+
+            if cmp_output.strip() == "":
+                log.info("  Data integrity verified: content matches")
+            else:
+                log.error("  Data integrity FAILED: content mismatch")
+                result["error"] = "Data integrity verification failed"
+                return result
+
+        result["passed"] = True
+        log.info("  PASSED: %s", test_name)
+
+    except Exception as e:
+        log.error("  FAILED: %s - %s", test_name, e)
+        result["error"] = str(e)
+
+    finally:
+        # Cleanup
+        try:
+            rados_obj.client.exec_command(
+                cmd=f"rm -f {initial_file} {append_file} {read_file} {combined_file}",
+                sudo=True,
+                check_ec=False,
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+def _run_sequential_append_test(
+    rados_obj,
+    pool_name: str,
+    chunk_size: int,
+    stripe_width: int,
+) -> Dict[str, Any]:
+    """
+    Test sequential appends on the same object.
+
+    Creates object and performs multiple appends:
+    Initial (chunk/2) -> +chunk/2 -> +chunk -> +chunk -> +stripe
+    Tests cumulative growth through various boundaries.
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pool_name: EC pool name
+        chunk_size: EC chunk size
+        stripe_width: Stripe width (k * chunk_size)
+
+    Returns:
+        Dictionary with test results
+    """
+    result = {"name": "Sequential appends", "passed": False, "error": None}
+    obj_name = f"seq_append_test_{int(time.time() * 1000)}"
+    data_file = f"/tmp/{obj_name}_data.bin"
+
+    try:
+        log.info("Test: Sequential appends on same object")
+
+        # Initial object size
+        initial_size = chunk_size // 2
+        log.info("  Initial size: %s bytes (half chunk)", initial_size)
+
+        # Create and upload initial object
+        cmd = f"dd if=/dev/urandom of={data_file} bs={initial_size} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        cmd = f"rados -p {pool_name} put {obj_name} {data_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+        current_size = initial_size
+
+        # Sequential appends with different sizes
+        append_sequence = [
+            (chunk_size // 2, "reach 1 chunk boundary"),
+            (chunk_size, "reach 2 chunk boundary"),
+            (chunk_size, "reach 1 stripe boundary (3 chunks for k=2)"),
+            (stripe_width, "reach 2 stripe boundary"),
+        ]
+
+        for i, (append_size, desc) in enumerate(append_sequence, 1):
+            # Create append data
+            append_file = f"/tmp/{obj_name}_append_{i}.bin"
+            cmd = f"dd if=/dev/urandom of={append_file} bs={append_size} count=1 2>/dev/null"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+
+            log.info(
+                "  Step %s: Append %s bytes (%s) - current: %s -> new: %s",
+                i,
+                append_size,
+                desc,
+                current_size,
+                current_size + append_size,
+            )
+
+            cmd = f"rados -p {pool_name} append {obj_name} {append_file}"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True)
+            current_size += append_size
+            log.info("    Append succeeded, new size: %s bytes", current_size)
+
+            # Verify size after each append
+            size_check = validate_object_size(
+                rados_obj=rados_obj,
+                pool_name=pool_name,
+                obj_name=obj_name,
+                expected_size=current_size,
+                operation="append",
+                step_info=f"Step {i}",
+            )
+            if not size_check["success"]:
+                result["error"] = size_check["error"]
+                return result
+
+            # Cleanup temp append file
+            rados_obj.client.exec_command(
+                cmd=f"rm -f {append_file}", sudo=True, check_ec=False
+            )
+
+        result["passed"] = True
+        log.info("  PASSED: Sequential appends")
+
+    except Exception as e:
+        log.error("  FAILED: Sequential appends - %s", e)
+        result["error"] = str(e)
+
+    finally:
+        # Cleanup
+        try:
+            rados_obj.client.exec_command(
+                cmd=f"rm -f {data_file} /tmp/{obj_name}_append_*.bin",
+                sudo=True,
+                check_ec=False,
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+def _run_append_after_truncate_test(
+    rados_obj,
+    pool_name: str,
+    chunk_size: int,
+    stripe_width: int,
+) -> Dict[str, Any]:
+    """
+    Test append after truncate operations.
+
+    This tests the interaction between truncation (which may affect shard
+    versions) and subsequent append operations.
+
+    Workflow:
+    1. Create 2-stripe object
+    2. Truncate to 1 stripe
+    3. Append to reach 1.5 stripes
+    4. Append to reach 2 stripes (exact boundary)
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pool_name: EC pool name
+        chunk_size: EC chunk size
+        stripe_width: Stripe width (k * chunk_size)
+
+    Returns:
+        Dictionary with test results
+    """
+    result = {"name": "Append after truncate", "passed": False, "error": None}
+    obj_name = f"append_trunc_test_{int(time.time() * 1000)}"
+    data_file = f"/tmp/{obj_name}_data.bin"
+    append_file = f"/tmp/{obj_name}_append.bin"
+
+    try:
+        log.info("Test: Append after truncate")
+        initial_size = stripe_width * 2
+        log.info("  Initial size: %s bytes (2 stripes)", initial_size)
+
+        # Step 1: Create initial object
+        cmd = f"dd if=/dev/urandom of={data_file} bs={initial_size} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        cmd = f"rados -p {pool_name} put {obj_name} {data_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Created base object (2 stripes)")
+
+        # Step 2: Truncate to 1 stripe
+        truncate_to = stripe_width
+        log.info("  Truncating to %s bytes (1 stripe)", truncate_to)
+        cmd = f"rados -p {pool_name} truncate {obj_name} {truncate_to}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Truncate succeeded")
+
+        # Step 3: Append to reach 1.5 stripes
+        append_size_1 = stripe_width // 2
+        cmd = f"dd if=/dev/urandom of={append_file} bs={append_size_1} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Appending %s bytes (to reach 1.5 stripes)", append_size_1)
+
+        cmd = f"rados -p {pool_name} append {obj_name} {append_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  First append after truncate succeeded")
+
+        # Step 4: Append to reach exactly 2 stripes (boundary)
+        append_size_2 = stripe_width // 2
+        cmd = f"dd if=/dev/urandom of={append_file} bs={append_size_2} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Appending %s bytes (to reach 2 stripe boundary)", append_size_2)
+
+        cmd = f"rados -p {pool_name} append {obj_name} {append_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Second append succeeded (reached 2 stripe boundary)")
+
+        # Verify final size
+        expected_final = stripe_width + append_size_1 + append_size_2
+        size_check = validate_object_size(
+            rados_obj=rados_obj,
+            pool_name=pool_name,
+            obj_name=obj_name,
+            expected_size=expected_final,
+            operation="append after truncate",
+        )
+        if not size_check["success"]:
+            result["error"] = size_check["error"]
+            return result
+
+        result["passed"] = True
+        log.info("  PASSED: Append after truncate")
+
+    except Exception as e:
+        log.error("  FAILED: Append after truncate - %s", e)
+        result["error"] = str(e)
+
+    finally:
+        # Cleanup
+        try:
+            rados_obj.client.exec_command(
+                cmd=f"rm -f {data_file} {append_file}",
+                sudo=True,
+                check_ec=False,
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+def _run_append_after_overwrite_test(
+    rados_obj,
+    pool_name: str,
+    chunk_size: int,
+    stripe_width: int,
+) -> Dict[str, Any]:
+    """
+    Test append after partial overwrite operations.
+
+    This tests the interaction between partial writes (which may leave
+    shards with different versions via PWLC) and subsequent append operations.
+
+    Workflow:
+    1. Create 2-stripe object
+    2. Partial overwrite at chunk boundary (updates subset of shards)
+    3. Append to reach 3 stripes (exact boundary)
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pool_name: EC pool name
+        chunk_size: EC chunk size
+        stripe_width: Stripe width (k * chunk_size)
+
+    Returns:
+        Dictionary with test results
+    """
+    result = {"name": "Append after partial overwrite", "passed": False, "error": None}
+    obj_name = f"append_ow_test_{int(time.time() * 1000)}"
+    data_file = f"/tmp/{obj_name}_data.bin"
+    partial_file = f"/tmp/{obj_name}_partial.bin"
+    append_file = f"/tmp/{obj_name}_append.bin"
+
+    try:
+        log.info("Test: Append after partial overwrite")
+        initial_size = stripe_width * 2
+        log.info("  Initial size: %s bytes (2 stripes)", initial_size)
+
+        # Step 1: Create initial object
+        cmd = f"dd if=/dev/urandom of={data_file} bs={initial_size} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        cmd = f"rados -p {pool_name} put {obj_name} {data_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Created base object")
+
+        # Step 2: Partial overwrite at chunk boundary
+        partial_size = chunk_size
+        partial_offset = chunk_size
+        cmd = f"dd if=/dev/urandom of={partial_file} bs={partial_size} count=1 2>/dev/null"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        cmd = f"rados -p {pool_name} put {obj_name} {partial_file} --offset {partial_offset}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info(
+            "  Performed partial overwrite: %s bytes at offset %s",
+            partial_size,
+            partial_offset,
+        )
+
+        # Step 3: Append to reach 3 stripe boundary
+        append_size = stripe_width
+        cmd = (
+            f"dd if=/dev/urandom of={append_file} bs={append_size} count=1 2>/dev/null"
+        )
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Appending %s bytes (to reach 3 stripe boundary)", append_size)
+
+        cmd = f"rados -p {pool_name} append {obj_name} {append_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Append after partial overwrite succeeded")
+
+        # Verify final size
+        expected_final = initial_size + append_size
+        size_check = validate_object_size(
+            rados_obj=rados_obj,
+            pool_name=pool_name,
+            obj_name=obj_name,
+            expected_size=expected_final,
+            operation="append after overwrite",
+        )
+        if not size_check["success"]:
+            result["error"] = size_check["error"]
+            return result
+
+        # Verify we can read the object
+        read_file = f"/tmp/{obj_name}_read.bin"
+        cmd = f"rados -p {pool_name} get {obj_name} {read_file}"
+        rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        log.info("  Successfully read object after partial overwrite + append")
+
+        result["passed"] = True
+        log.info("  PASSED: Append after partial overwrite")
+
+    except Exception as e:
+        log.error("  FAILED: Append after partial overwrite - %s", e)
+        result["error"] = str(e)
+
+    finally:
+        # Cleanup
+        try:
+            rados_obj.client.exec_command(
+                cmd=f"rm -f {data_file} {partial_file} {append_file} /tmp/{obj_name}_read.bin",
+                sudo=True,
+                check_ec=False,
+            )
+        except Exception:
+            pass
+
+    return result
+
+
+def validate_object_size(
+    rados_obj,
+    pool_name: str,
+    obj_name: str,
+    expected_size: int,
+    operation: str = "operation",
+    step_info: str = None,
+) -> Dict[str, Any]:
+    """
+    Validate object size matches expected value using rados stat.
+
+    This helper function fetches object stats and validates the size
+    against the expected value, providing consistent error handling
+    and logging across all truncate/append tests.
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pool_name: Name of the pool containing the object
+        obj_name: Name of the object to validate
+        expected_size: Expected object size in bytes
+        operation: Description of the operation (for logging), e.g., "truncate", "append"
+        step_info: Optional step information for sequential operations, e.g., "step 1"
+
+    Returns:
+        Dictionary containing:
+        - success (bool): True if size matches expected, False otherwise
+        - actual_size (int or None): Actual object size, None if stat failed
+        - error (str or None): Error message if validation failed, None on success
+        - raw_output (str or None): Raw stat output for debugging
+    """
+    prefix = f"  {step_info}: " if step_info else "  "
+
+    result = {
+        "success": False,
+        "actual_size": None,
+        "error": None,
+        "raw_output": None,
+    }
+
+    try:
+        stat = rados_obj.get_object_stat(pool_name=pool_name, obj_name=obj_name)
+
+        if not stat:
+            error_msg = f"Failed to get object stat for {obj_name} in pool {pool_name}"
+            log.error(f"{prefix}{error_msg}")
+            result["error"] = error_msg
+            return result
+
+        result["raw_output"] = stat.get("raw_output")
+        result["actual_size"] = stat.get("size")
+
+        if result["actual_size"] is None:
+            error_msg = f"Could not parse size from stat output after {operation}"
+            log.error(f"{prefix}{error_msg}")
+            result["error"] = error_msg
+            return result
+
+        if result["actual_size"] != expected_size:
+            error_msg = (
+                f"Size mismatch after {operation}: "
+                f"expected {expected_size} bytes, got {result['actual_size']} bytes"
+            )
+            log.error(f"{prefix}{error_msg}")
+            result["error"] = error_msg
+            return result
+
+        # Success
+        log.info(
+            f"{prefix}Size verified after {operation}: {result['actual_size']} bytes"
+        )
+        result["success"] = True
+        return result
+
+    except Exception as e:
+        error_msg = f"Exception while validating object size: {e}"
+        log.error(f"{prefix}{error_msg}")
+        result["error"] = error_msg
+        return result
 
 
 def run_device_writes(

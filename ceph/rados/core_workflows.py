@@ -3424,6 +3424,89 @@ EOF"""
                 obj_list.append(omap_obj["name"])
         return obj_list
 
+    def get_object_stat(self, pool_name: str, obj_name: str) -> dict:
+        """
+        Get object statistics using rados stat command.
+
+        Executes 'rados -p <pool> stat <object>' and parses the output to extract
+        object name, size, and modification time.
+
+        Output format examples:
+        - "ec_pool/test_obj mtime 2024-01-15T10:30:45.123456+0000, size 8192"
+
+        Args:
+            pool_name: Name of the pool containing the object
+            obj_name: Name of the object to stat
+
+        Returns:
+            Dictionary containing:
+            - name (str): Object name
+            - size (int): Object size in bytes
+            - pool (str): Pool name
+            - mtime (str): Modification time string (if available)
+            - raw_output (str): Raw stat output for debugging
+
+            Returns None if stat command fails or object doesn't exist.
+
+        Examples::
+            stat = rados_obj.get_object_stat(pool_name="mypool", obj_name="myobj")
+            if stat:
+                print(f"Object size: {stat['size']} bytes")
+        """
+        try:
+            cmd = f"rados -p {pool_name} stat {obj_name}"
+            stat_output, _ = self.client.exec_command(cmd=cmd, sudo=True)
+            stat_output = stat_output.strip()
+
+            if not stat_output:
+                log.warning(
+                    f"Empty stat output for object {obj_name} in pool {pool_name}"
+                )
+                return None
+
+            result = {
+                "name": obj_name,
+                "pool": pool_name,
+                "size": None,
+                "mtime": None,
+                "raw_output": stat_output,
+            }
+
+            # Parse size using regex
+            # Matches: "size 8192" or "size 0" at end of string or before whitespace
+            size_match = re.search(r"size\s+(\d+)", stat_output)
+            if size_match:
+                result["size"] = int(size_match.group(1))
+            else:
+                log.warning(f"Could not parse size from stat output: {stat_output}")
+
+            # Parse mtime using regex
+            # Matches: "mtime 2024-01-15T10:30:45.123456+0000" or similar timestamp formats
+            mtime_match = re.search(
+                r"mtime\s+(\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2}[.\d+\-\w]*)",
+                stat_output,
+            )
+            if mtime_match:
+                result["mtime"] = mtime_match.group(1)
+
+            # Parse object name from output (format: "pool/obj_name mtime...")
+            # This handles cases where object name might differ from input
+            name_match = re.search(rf"^{re.escape(pool_name)}/([^\s]+)", stat_output)
+            if name_match:
+                result["name"] = name_match.group(1)
+
+            log.debug(
+                f"Object stat: pool={result['pool']}, name={result['name']}, "
+                f"size={result['size']}, mtime={result['mtime']}"
+            )
+            return result
+
+        except Exception as e:
+            log.error(
+                f"Failed to get stat for object {obj_name} in pool {pool_name}: {e}"
+            )
+            return None
+
     def get_inconsistent_pg_list(self, pool_name):
         """
         Method returns the inconsistent pg list

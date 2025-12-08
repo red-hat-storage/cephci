@@ -179,141 +179,213 @@ tests:
                 - mon_osd_down_out_subtree_limit
                 - host
 
-  # Test 1: ISA Plugin - 4KB chunk size (Stripe width = 8KB)
+  # ==========================================================================
+  # ISA Plugin Tests (Default plugin from Tentacle onwards)
+  # ==========================================================================
+
+  # Test 1: ISA Plugin - k=2, m=2, 4KB chunk size (Stripe width = 8KB)
   - test:
-      name: EC Partial Write Optimization - ISA 4KB chunks
+      name: EC Partial Write Optimization - ISA k2m2 4KB chunks
       module: test_ec_partial_writes.py
       polarion-id: CEPH-83620446
       config:
-        ec_pool_name: test_ec_isa_4k
-        metadata_pool_name: test_ec_meta_isa_4k
-        image_name: test_ec_image_isa_4k
+        ec_pool_name: test_ec_isa_k2m2_4k
+        metadata_pool_name: test_ec_meta_isa_k2m2_4k
+        image_name: test_ec_image_isa_k2m2_4k
         image_size: 1G
         ec_k: 2
         ec_m: 2
         plugin: isa
         technique: reed_sol_van
         chunk_size: 4096  # 4KB chunks, stripe width = 8KB
-      desc: Test EC optimization with ISA plugin, 4KB chunks.
+      desc: Test EC optimization with ISA plugin, k=2 m=2, 4KB chunks.
 
-  # Test 2: ISA Plugin - 16KB chunk size (Stripe width = 32KB)
+  # Test 2: ISA Plugin - k=2, m=2, 16KB chunk size (Stripe width = 32KB)
   - test:
-      name: EC Partial Write Optimization - ISA 16KB chunks
+      name: EC Partial Write Optimization - ISA k2m2 16KB chunks
       module: test_ec_partial_writes.py
       polarion-id: CEPH-83620446
       config:
-        ec_pool_name: test_ec_isa_16k
-        metadata_pool_name: test_ec_meta_isa_16k
-        image_name: test_ec_image_isa_16k
+        ec_pool_name: test_ec_isa_k2m2_16k
+        metadata_pool_name: test_ec_meta_isa_k2m2_16k
+        image_name: test_ec_image_isa_k2m2_16k
         image_size: 2G
         ec_k: 2
         ec_m: 2
         plugin: isa
         technique: reed_sol_van
         chunk_size: 16384  # 16KB chunks, stripe width = 32KB
-      desc: Test EC optimization with ISA plugin, 16KB chunks.
+      desc: Test EC optimization with ISA plugin, k=2 m=2, 16KB chunks.
 
-  # Test 3: ISA Plugin - 64KB chunk size (Stripe width = 128KB)
+  # Test 3: ISA Plugin - k=4, m=2, 16KB chunk size (Stripe width = 64KB)
+  # Note: k+m=6 > 4, using OSD failure domain
   - test:
-      name: EC Partial Write Optimization - ISA 64KB chunks
+      name: EC Partial Write Optimization - ISA k4m2 16KB chunks
       module: test_ec_partial_writes.py
       polarion-id: CEPH-83620446
       config:
-        ec_pool_name: test_ec_isa_64k
-        metadata_pool_name: test_ec_meta_isa_64k
-        image_name: test_ec_image_isa_64k
+        ec_pool_name: test_ec_isa_k4m2_16k
+        metadata_pool_name: test_ec_meta_isa_k4m2_16k
+        image_name: test_ec_image_isa_k4m2_16k
         image_size: 2G
-        ec_k: 2
+        ec_k: 4
         ec_m: 2
         plugin: isa
         technique: reed_sol_van
-        chunk_size: 65536  # 64KB chunks, stripe width = 128KB
-      desc: Test EC optimization with ISA plugin, 64KB chunks.
+        chunk_size: 16384  # 16KB chunks, stripe width = 64KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with ISA plugin, k=4 m=2 (OSD domain), 16KB chunks.
 
-  # Test 4: ISA Plugin - 128KB chunk size (Stripe width = 256KB)
+  # Test 4: ISA Plugin - k=4, m=3, 64KB chunk size (Stripe width = 256KB)
+  # Note: k+m=7 > 4, using OSD failure domain
   - test:
-      name: EC Partial Write Optimization - ISA 128KB chunks
+      name: EC Partial Write Optimization - ISA k4m3 64KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k4m3_64k
+        metadata_pool_name: test_ec_meta_isa_k4m3_64k
+        image_name: test_ec_image_isa_k4m3_64k
+        image_size: 2G
+        ec_k: 4
+        ec_m: 3
+        plugin: isa
+        technique: reed_sol_van
+        chunk_size: 65536  # 64KB chunks, stripe width = 256KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with ISA plugin, k=4 m=3 (OSD domain), 64KB chunks.
+
+  # Test 5: ISA Plugin - k=5, m=2, 64KB chunk size (Stripe width = 320KB)
+  # Note: k+m=7 > 4, using OSD failure domain
+  - test:
+      name: EC Partial Write Optimization - ISA k5m2 64KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k5m2_64k
+        metadata_pool_name: test_ec_meta_isa_k5m2_64k
+        image_name: test_ec_image_isa_k5m2_64k
+        image_size: 2G
+        ec_k: 5
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        chunk_size: 65536  # 64KB chunks, stripe width = 320KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with ISA plugin, k=5 m=2 (OSD domain), 64KB chunks.
+
+  # Test 6: ISA Plugin - k=6, m=2, 128KB chunk size (Stripe width = 768KB)
+  # Note: k+m=8 > 4, using OSD failure domain
+  - test:
+      name: EC Partial Write Optimization - ISA k6m2 128KB chunks
       module: test_ec_partial_writes.py
       polarion-id: CEPH-83590734
       config:
-        ec_pool_name: test_ec_isa_128k
-        metadata_pool_name: test_ec_meta_isa_128k
-        image_name: test_ec_image_isa_128k
+        ec_pool_name: test_ec_isa_k6m2_128k
+        metadata_pool_name: test_ec_meta_isa_k6m2_128k
+        image_name: test_ec_image_isa_k6m2_128k
         image_size: 2G
-        ec_k: 2
+        ec_k: 6
         ec_m: 2
         plugin: isa
         technique: reed_sol_van
-        chunk_size: 131072  # 128KB chunks, stripe width = 256KB
-      desc: Test EC optimization with ISA plugin, 128KB chunks.
+        chunk_size: 131072  # 128KB chunks, stripe width = 768KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with ISA plugin, k=6 m=2 (OSD domain), 128KB chunks.
 
-  # Test 5: Jerasure Plugin - 4KB chunk size (Stripe width = 8KB)
+  # Test 7: ISA Plugin - k=2, m=1, 4KB chunk size (Stripe width = 8KB)
+  # Note: This matches the exact bug scenario from BZ#2419667 (2+1 EC, 4KB chunks)
   - test:
-      name: EC Partial Write Optimization - Jerasure 4KB chunks
+      name: EC Partial Write Optimization - ISA k2m1 4KB chunks (Bug scenario)
       module: test_ec_partial_writes.py
       polarion-id: CEPH-83620446
       config:
-        ec_pool_name: test_ec_jerasure_4k
-        metadata_pool_name: test_ec_meta_jerasure_4k
-        image_name: test_ec_image_jerasure_4k
+        ec_pool_name: test_ec_isa_k2m1_4k
+        metadata_pool_name: test_ec_meta_isa_k2m1_4k
+        image_name: test_ec_image_isa_k2m1_4k
         image_size: 1G
         ec_k: 2
-        ec_m: 2
-        plugin: jerasure
+        ec_m: 1
+        plugin: isa
         technique: reed_sol_van
         chunk_size: 4096  # 4KB chunks, stripe width = 8KB
-      desc: Test EC optimization with Jerasure plugin, 4KB chunks.
+      desc: Test EC optimization with ISA plugin, k=2 m=1 (bug scenario), 4KB chunks.
 
-  # Test 6: Jerasure Plugin - 16KB chunk size (Stripe width = 32KB)
+  # Test 8: ISA Plugin - k=3, m=2, 16KB chunk size (Stripe width = 48KB)
+  # Note: k+m=5 > 4, using OSD failure domain
   - test:
-      name: EC Partial Write Optimization - Jerasure 16KB chunks
+      name: EC Partial Write Optimization - ISA k3m2 16KB chunks
       module: test_ec_partial_writes.py
       polarion-id: CEPH-83620446
       config:
-        ec_pool_name: test_ec_jerasure_16k
-        metadata_pool_name: test_ec_meta_jerasure_16k
-        image_name: test_ec_image_jerasure_16k
+        ec_pool_name: test_ec_isa_k3m2_16k
+        metadata_pool_name: test_ec_meta_isa_k3m2_16k
+        image_name: test_ec_image_isa_k3m2_16k
+        image_size: 2G
+        ec_k: 3
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        chunk_size: 16384  # 16KB chunks, stripe width = 48KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with ISA plugin, k=3 m=2 (OSD domain), 16KB chunks.
+
+  # Test 9: ISA Plugin - k=2, m=2, 64KB chunk size (Stripe width = 128KB)
+  - test:
+      name: EC Partial Write Optimization - ISA k2m2 64KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_isa_k2m2_64k
+        metadata_pool_name: test_ec_meta_isa_k2m2_64k
+        image_name: test_ec_image_isa_k2m2_64k
+        image_size: 2G
+        ec_k: 2
+        ec_m: 2
+        plugin: isa
+        technique: reed_sol_van
+        chunk_size: 65536  # 64KB chunks, stripe width = 128KB
+      desc: Test EC optimization with ISA plugin, k=2 m=2, 64KB chunks.
+
+  # ==========================================================================
+  # Jerasure Plugin Tests (Basic coverage)
+  # ==========================================================================
+
+  # Test 10: Jerasure Plugin - k=2, m=2, 16KB chunk size (Stripe width = 32KB)
+  - test:
+      name: EC Partial Write Optimization - Jerasure k2m2 16KB chunks
+      module: test_ec_partial_writes.py
+      polarion-id: CEPH-83620446
+      config:
+        ec_pool_name: test_ec_jerasure_k2m2_16k
+        metadata_pool_name: test_ec_meta_jerasure_k2m2_16k
+        image_name: test_ec_image_jerasure_k2m2_16k
         image_size: 2G
         ec_k: 2
         ec_m: 2
         plugin: jerasure
         technique: reed_sol_van
         chunk_size: 16384  # 16KB chunks, stripe width = 32KB
-      desc: Test EC optimization with Jerasure plugin, 16KB chunks.
+      desc: Test EC optimization with Jerasure plugin, k=2 m=2, 16KB chunks.
 
-  # Test 7: Jerasure Plugin - 64KB chunk size (Stripe width = 128KB)
+  # Test 11: Jerasure Plugin - k=4, m=2, 64KB chunk size (Stripe width = 256KB)
+  # Note: k+m=6 > 4, using OSD failure domain
   - test:
-      name: EC Partial Write Optimization - Jerasure 64KB chunks
-      module: test_ec_partial_writes.py
-      polarion-id: CEPH-83620446
-      config:
-        ec_pool_name: test_ec_jerasure_64k
-        metadata_pool_name: test_ec_meta_jerasure_64k
-        image_name: test_ec_image_jerasure_64k
-        image_size: 2G
-        ec_k: 2
-        ec_m: 2
-        plugin: jerasure
-        technique: reed_sol_van
-        chunk_size: 65536  # 64KB chunks, stripe width = 128KB
-      desc: Test EC optimization with Jerasure plugin, 64KB chunks.
-
-  # Test 8: Jerasure Plugin - 128KB chunk size (Stripe width = 256KB)
-  - test:
-      name: EC Partial Write Optimization - Jerasure 128KB chunks
+      name: EC Partial Write Optimization - Jerasure k4m2 64KB chunks
       module: test_ec_partial_writes.py
       polarion-id: CEPH-83590734
       config:
-        ec_pool_name: test_ec_jerasure_128k
-        metadata_pool_name: test_ec_meta_jerasure_128k
-        image_name: test_ec_image_jerasure_128k
+        ec_pool_name: test_ec_jerasure_k4m2_64k
+        metadata_pool_name: test_ec_meta_jerasure_k4m2_64k
+        image_name: test_ec_image_jerasure_k4m2_64k
         image_size: 2G
-        ec_k: 2
+        ec_k: 4
         ec_m: 2
         plugin: jerasure
         technique: reed_sol_van
-        chunk_size: 131072  # 128KB chunks, stripe width = 256KB
-      desc: Test EC optimization with Jerasure plugin, 128KB chunks.
+        chunk_size: 65536  # 64KB chunks, stripe width = 256KB
+        crush_failure_domain: osd
+      desc: Test EC optimization with Jerasure plugin, k=4 m=2 (OSD domain), 64KB chunks.
 
   - test:
       name: ceph-bluestore-tool utility
