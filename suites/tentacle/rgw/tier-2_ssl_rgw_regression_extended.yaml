@@ -112,6 +112,47 @@ tests:
         copy_admin_keyring: true
       desc: Configure the RGW client system
       polarion-id: CEPH-83573758
+
+  - test:
+      abort-on-fail: true
+      config:
+        commands:
+          - "ceph_version=$(ceph version | cut -d ' ' -f 3 | cut -d '-' -f 1); if [ \"$ceph_version\" = \"19.2.0\" ]; then ceph orch cert-store get cert cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; else ceph orch certmgr cert get cephadm_root_ca_cert > /home/cephuser/cephadm-root-ca.crt; fi"
+          - "sudo yum install -y sshpass"
+          - "sleep 20"
+          - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:node3}:/etc/pki/ca-trust/source/anchors/"
+          - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:node4}:/etc/pki/ca-trust/source/anchors/"
+          - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:node5}:/etc/pki/ca-trust/source/anchors/"
+          - "sshpass -p 'passwd' scp /home/cephuser/cephadm-root-ca.crt root@{node_ip:node6}:/etc/pki/ca-trust/source/anchors/"
+      desc: copying cephadm_root_ca_cert to rgw and client nodes ca_trust_path
+      module: exec.py
+      name: copying cephadm_root_ca_cert
+      polarion-id: CEPH-10362
+
+  - test:
+      abort-on-fail: true
+      config:
+        role: rgw
+        sudo: True
+        commands:
+          - "update-ca-trust"
+      desc: update-ca-trust on rgw nodes
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: update-ca-trust on rgw nodes
+
+  - test:
+      abort-on-fail: true
+      config:
+        role: client
+        sudo: True
+        commands:
+          - "update-ca-trust"
+      desc: update-ca-trust on client nodes
+      polarion-id: CEPH-83575227
+      module: exec.py
+      name: update-ca-trust on client nodes
+
   - test:
       name: Test NFS cluster and export create
       desc: Test NFS cluster and export create
