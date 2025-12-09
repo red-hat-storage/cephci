@@ -15,7 +15,7 @@ Test workflow:
 4. Identify target PGs/OSDs and enable debug logging for write tests
 5. Run direct RADOS writes with partial overwrites at various offsets
 6. Run object TRUNCATE tests with various boundary conditions:
-   - Truncate to exact stripe boundary (N * K * chunk_size) - KEY BUG SCENARIO
+   - Truncate to exact stripe boundary (N * K * stripe_unit)
    - Truncate to chunk boundaries
    - Truncate to non-aligned sizes
    - Truncate after partial overwrites
@@ -23,7 +23,7 @@ Test workflow:
    - Truncate to zero
    - Data integrity verification after truncate
 7. Run object APPEND tests with various boundary conditions:
-   - Append to reach exact stripe boundary (N * K * chunk_size)
+   - Append to reach exact stripe boundary (N * K * stripe_unit)
    - Append crossing stripe boundary
    - Sequential appends on same object
    - Append after truncate (shard version interaction)
@@ -87,7 +87,8 @@ def run(ceph_cluster, **kw):
     ec_m = config.get("ec_m", 2)
     plugin = config.get("plugin", "isa")
     technique = config.get("technique", "reed_sol_van")
-    chunk_size = config.get("chunk_size", 16384)  # 16K
+    # stripe_unit: chunk size per data shard (default 16KB, recommended for Fast EC)
+    stripe_unit = config.get("stripe_unit", 16384)
     # For k+m > 4, use OSD failure domain; otherwise use host (default)
     crush_failure_domain = config.get("crush_failure_domain", None)
     profile_name = config.get("profile_name", f"ec_k{ec_k}_m{ec_m}_profile")
@@ -117,7 +118,39 @@ def run(ceph_cluster, **kw):
             log.error("Failed to enable file logging")
             return 1
 
-        log.info("Create EC pool with Fast EC optimizations")
+        # Calculate derived EC values
+        stripe_width = ec_k * stripe_unit  # Total data bytes per stripe
+        full_stripe = (ec_k + ec_m) * stripe_unit  # Total bytes including parity
+
+        # Print EC Configuration Banner
+        log.info("=" * 70)
+        log.info("EC POOL CONFIGURATION PASSED FROM CONFIG FILE")
+        log.info("=" * 70)
+        log.info("  Pool Name       : %s", ec_pool_name)
+        log.info("  Profile Name    : %s", profile_name)
+        log.info("  Plugin          : %s", plugin)
+        log.info("  Technique       : %s", technique)
+        log.info("  k (data shards) : %s", ec_k)
+        log.info("  m (parity shards): %s", ec_m)
+        log.info(
+            "  stripe_unit     : %s bytes (%sKB) - chunk size per data shard",
+            stripe_unit,
+            stripe_unit // 1024,
+        )
+        log.info(
+            "  stripe_width    : %s bytes (%sKB) - k * stripe_unit",
+            stripe_width,
+            stripe_width // 1024,
+        )
+        log.info(
+            "  full_stripe     : %s bytes (%sKB) - (k+m) * stripe_unit",
+            full_stripe,
+            full_stripe // 1024,
+        )
+        log.info("  Fast EC         : Enabled (allow_ec_optimizations)")
+        log.info("=" * 70)
+
+        log.info("Creating EC pool with Fast EC optimizations...")
         ec_pool_params = {
             "pool_name": ec_pool_name,
             "profile_name": profile_name,
@@ -125,23 +158,118 @@ def run(ceph_cluster, **kw):
             "m": ec_m,
             "plugin": plugin,
             "technique": technique,
+            "stripe_unit": stripe_unit,
             "enable_fast_ec_features": True,
             "app_name": "rbd",
         }
         # Add crush failure domain if specified (required for k+m > 4)
         if crush_failure_domain:
             ec_pool_params["crush-failure-domain"] = crush_failure_domain
+            log.info("  CRUSH failure domain: %s", crush_failure_domain)
 
         if not rados_obj.create_erasure_pool(**ec_pool_params):
             log.error("Failed to create EC data pool with Fast EC optimizations")
             return 1
 
+        log.info("EC pool created successfully: %s", ec_pool_name)
+
+        # Verify EC profile configuration matches expected values
+        log.info("Verifying EC profile configuration...")
+        ec_profile_details = rados_obj.get_ec_profile_detail(profile=profile_name)
+        if not ec_profile_details:
+            log.error("Failed to retrieve EC profile details for %s", profile_name)
+            return 1
+
+        # Verify stripe_unit from EC profile
+        profile_stripe_unit = int(ec_profile_details.get("stripe_unit", 0))
+        profile_k = int(ec_profile_details.get("k", 0))
+        profile_m = int(ec_profile_details.get("m", 0))
+        profile_plugin = ec_profile_details.get("plugin", "")
+
+        log.info("-" * 70)
+        log.info("EC PROFILE VERIFICATION (from cluster)")
+        log.info("-" * 70)
+        log.info("  Profile Name    : %s", profile_name)
+        log.info("  k               : %s (expected: %s)", profile_k, ec_k)
+        log.info("  m               : %s (expected: %s)", profile_m, ec_m)
+        log.info("  plugin          : %s (expected: %s)", profile_plugin, plugin)
         log.info(
-            "Created EC pool: %s (k=%s, m=%s, chunk=%s)",
-            ec_pool_name,
-            ec_k,
-            ec_m,
-            chunk_size,
+            "  stripe_unit     : %s bytes (%sKB) (expected: %s bytes)",
+            profile_stripe_unit,
+            profile_stripe_unit // 1024,
+            stripe_unit,
+        )
+        log.info(
+            "  stripe_width    : %sKB (k * stripe_unit = %s * %sKB)",
+            (profile_k * profile_stripe_unit) // 1024,
+            profile_k,
+            profile_stripe_unit // 1024,
+        )
+        log.info("-" * 70)
+
+        # Fail if stripe_unit doesn't match
+        if profile_stripe_unit != stripe_unit:
+            log.error(
+                "EC profile stripe_unit mismatch! Expected: %s bytes, Got: %s bytes",
+                stripe_unit,
+                profile_stripe_unit,
+            )
+            return 1
+        log.info(
+            "EC profile verification passed - stripe_unit correctly set to %sKB",
+            stripe_unit // 1024,
+        )
+
+        # Verify pool details from cluster
+        log.info("Verifying EC pool details...")
+        pool_details = rados_obj.get_pool_details(pool=ec_pool_name)
+        if not pool_details:
+            log.error("Failed to retrieve pool details for %s", ec_pool_name)
+            return 1
+
+        # Extract pool attributes
+        pool_size = pool_details.get("size", 0)  # k + m
+        pool_min_size = pool_details.get("min_size", 0)
+        pool_ec_profile = pool_details.get("erasure_code_profile", "")
+        pool_stripe_width = pool_details.get("stripe_width", 0)
+        pool_type = pool_details.get("type", "")
+        pool_ec_overwrites = pool_details.get("flags_names", "")
+
+        # Expected values
+        expected_size = ec_k + ec_m
+        expected_stripe_width = ec_k * stripe_unit
+
+        log.info("-" * 70)
+        log.info("EC POOL VERIFICATION (from cluster)")
+        log.info("-" * 70)
+        log.info("  Pool Name       : %s", ec_pool_name)
+        log.info("  Pool Type       : %s", pool_type)
+        log.info("  EC Profile      : %s (expected: %s)", pool_ec_profile, profile_name)
+        log.info("  Size (k+m)      : %s (expected: %s)", pool_size, expected_size)
+        log.info("  Min Size        : %s", pool_min_size)
+        log.info(
+            "  stripe_width    : %s bytes (%sKB) (expected: %s bytes / %sKB)",
+            pool_stripe_width,
+            pool_stripe_width // 1024 if pool_stripe_width else 0,
+            expected_stripe_width,
+            expected_stripe_width // 1024,
+        )
+        log.info("  Flags           : %s", pool_ec_overwrites)
+        log.info("-" * 70)
+
+        # Verify stripe_width matches expected
+        if pool_stripe_width != expected_stripe_width:
+            log.error(
+                "Pool stripe_width mismatch! Expected: %s bytes (%sKB), Got: %s bytes (%sKB)",
+                expected_stripe_width,
+                expected_stripe_width // 1024,
+                pool_stripe_width,
+                pool_stripe_width // 1024 if pool_stripe_width else 0,
+            )
+            return 1
+        log.info(
+            "EC pool verification passed - stripe_width correctly set to %sKB",
+            pool_stripe_width // 1024,
         )
 
         log.debug("Create replicated metadata pool for Metadata purposes")
@@ -193,20 +321,12 @@ def run(ceph_cluster, **kw):
         start_time = start_time.strip().strip("'")
         log.info("Test start time : %s", start_time)
 
-        stripe_width = ec_k * chunk_size  # e.g., 2 * 16KB = 32KB
-        chunk_kb = chunk_size // 1024
-        stripe_kb = stripe_width // 1024
-        half_chunk_kb = chunk_kb // 2
-
-        log.info("EC Configuration: k=%s, m=%s, chunk_size=%sKB", ec_k, ec_m, chunk_kb)
-        log.info("Calculated stripe width: %sKB (%s x %sKB)", stripe_kb, ec_k, chunk_kb)
-
         # Test 0: Direct RADOS writes to EC pool
         log.info("Test 0: Direct RADOS writes to EC pool with pre-planned object names")
         if not run_direct_rados_writes(
             rados_obj=rados_obj,
             pool_name=ec_pool_name,
-            chunk_size=chunk_size,
+            stripe_unit=stripe_unit,
             stripe_width=stripe_width,
             planned_objects=planned_objects,
         ):
@@ -218,7 +338,7 @@ def run(ceph_cluster, **kw):
         # DISABLED: Truncate tests are blocked by the following bugs:
         # - BZ#2419667: Fast EC OSD key-not-found exception on truncate
         #   https://bugzilla.redhat.com/show_bug.cgi?id=2419667
-        #   Issue: Truncate to N * K * chunk_size causes key-not-found exception
+        #   Issue: Truncate to N * K * stripe_unit causes key-not-found exception
         # - BZ#2419827: [Fast EC] OSDs crashed in ECTransaction::WritePlanObj
         #   https://bugzilla.redhat.com/show_bug.cgi?id=2419827
         #   Issue: OSDs crash and are unable to boot up after truncate operations
@@ -227,7 +347,7 @@ def run(ceph_cluster, **kw):
         # if not run_truncate_tests(
         #     rados_obj=rados_obj,
         #     pool_name=ec_pool_name,
-        #     chunk_size=chunk_size,
+        #     stripe_unit=stripe_unit,
         #     ec_k=ec_k,
         #     ec_m=ec_m,
         # ):
@@ -243,7 +363,7 @@ def run(ceph_cluster, **kw):
         if not run_append_tests(
             rados_obj=rados_obj,
             pool_name=ec_pool_name,
-            chunk_size=chunk_size,
+            stripe_unit=stripe_unit,
             ec_k=ec_k,
             ec_m=ec_m,
         ):
@@ -307,7 +427,7 @@ def run(ceph_cluster, **kw):
         if not run_device_writes(
             rados_obj=rados_obj,
             device_path=device_path_device,
-            chunk_size=chunk_size,
+            stripe_unit=stripe_unit,
             stripe_width=stripe_width,
         ):
             log.error("Device write tests failed")
@@ -319,7 +439,7 @@ def run(ceph_cluster, **kw):
         if not run_filesystem_writes(
             rados_obj=rados_obj,
             mount_path=mount_path,
-            chunk_size=chunk_size,
+            stripe_unit=stripe_unit,
         ):
             log.error("Filesystem write tests failed")
             return 1
@@ -342,7 +462,7 @@ def run(ceph_cluster, **kw):
         read_test_results = run_read_offset_tests(
             rados_obj=rados_obj,
             pool_name=ec_pool_name,
-            chunk_size=chunk_size,
+            stripe_unit=stripe_unit,
             ec_k=ec_k,
             mon_config_obj=mon_config_obj,
             cephadm=cephadm,
@@ -473,7 +593,7 @@ def run(ceph_cluster, **kw):
 def run_direct_rados_writes(
     rados_obj,
     pool_name: str,
-    chunk_size: int,
+    stripe_unit: int,
     stripe_width: int,
     planned_objects: List[str],
 ) -> bool:
@@ -483,8 +603,8 @@ def run_direct_rados_writes(
     Args:
         rados_obj: RadosOrchestrator object
         pool_name: EC pool name
-        chunk_size: EC chunk size in bytes
-        stripe_width: Stripe width (k * chunk_size) in bytes
+        stripe_unit: EC stripe_unit in bytes (chunk size per data shard)
+        stripe_width: Stripe width (k * stripe_unit) in bytes
         planned_objects: List of object names mapped to land on target OSDs
 
     Returns:
@@ -510,37 +630,37 @@ def run_direct_rados_writes(
         # Define partial overwrite patterns at different offsets
         overwrite_patterns = [
             {
-                "size": chunk_size,
+                "size": stripe_unit,
                 "offset": 0,
                 "desc": "single chunk at start (offset 0)",
             },
             {
-                "size": chunk_size // 2,
-                "offset": chunk_size,
+                "size": stripe_unit // 2,
+                "offset": stripe_unit,
                 "desc": "sub-chunk at chunk boundary",
             },
             {"size": 4096, "offset": stripe_width, "desc": "4KB at stripe boundary"},
             {
                 "size": 8192,
-                "offset": stripe_width + chunk_size // 2,
+                "offset": stripe_width + stripe_unit // 2,
                 "desc": "8KB mid-stripe",
             },
             {
-                "size": chunk_size,
+                "size": stripe_unit,
                 "offset": stripe_width * 2,
                 "desc": "chunk at 2nd stripe",
             },
             {
-                "size": chunk_size + (chunk_size // 2),
+                "size": stripe_unit + (stripe_unit // 2),
                 "offset": 512,
                 "desc": "1.5 chunks unaligned",
             },
             {
                 "size": stripe_width,
-                "offset": chunk_size,
+                "offset": stripe_unit,
                 "desc": "full stripe at chunk offset",
             },
-            {"size": chunk_size * 2, "offset": 1024, "desc": "2 chunks at 1KB offset"},
+            {"size": stripe_unit * 2, "offset": 1024, "desc": "2 chunks at 1KB offset"},
         ]
 
         total_operations = len(planned_objects) * (1 + len(overwrite_patterns))
@@ -617,7 +737,7 @@ def run_direct_rados_writes(
 def run_truncate_tests(
     rados_obj,
     pool_name: str,
-    chunk_size: int,
+    stripe_unit: int,
     ec_k: int,
     ec_m: int,
 ) -> bool:
@@ -625,8 +745,8 @@ def run_truncate_tests(
     Test EC object truncation with various boundary conditions.
 
     Test covers:
-    1. Truncate to exact stripe boundaries (N * K * chunk_size)
-    2. Truncate to chunk boundaries (N * chunk_size)
+    1. Truncate to exact stripe boundaries (N * K * stripe_unit)
+    2. Truncate to chunk boundaries (N * stripe_unit)
     3. Truncate to non-aligned sizes
     4. Truncate after partial overwrites
     5. Sequential truncates on same object
@@ -636,7 +756,7 @@ def run_truncate_tests(
     Args:
         rados_obj: RadosOrchestrator object
         pool_name: EC pool name
-        chunk_size: EC chunk size in bytes
+        stripe_unit: EC chunk size in bytes
         ec_k: Number of data chunks
         ec_m: Number of parity chunks
 
@@ -644,19 +764,19 @@ def run_truncate_tests(
         True on success, False on failure
     """
     try:
-        stripe_width = ec_k * chunk_size
+        stripe_width = ec_k * stripe_unit
         log.info("=" * 70)
         log.info("EC TRUNCATE TESTS - Testing object truncation edge cases")
         log.info("=" * 70)
         log.info(
-            "EC config: k=%s, m=%s, chunk_size=%sKB, stripe_width=%sKB",
+            "EC config: k=%s, m=%s, stripe_unit=%sKB, stripe_width=%sKB",
             ec_k,
             ec_m,
-            chunk_size // 1024,
+            stripe_unit // 1024,
             stripe_width // 1024,
         )
         log.info(
-            "BUG SCENARIO: Truncate to N * K * chunk_size = N * %s bytes",
+            "BUG SCENARIO: Truncate to N * K * stripe_unit = N * %s bytes",
             stripe_width,
         )
 
@@ -666,7 +786,7 @@ def run_truncate_tests(
 
         # =====================================================================
         # TEST GROUP 1: Truncate to exact stripe boundaries
-        # This is the critical test - truncating to N * K * chunk_size
+        # This is the critical test - truncating to N * K * stripe_unit
         # =====================================================================
         log.info("-" * 50)
         log.info("TEST GROUP 1: Truncate to exact stripe boundaries")
@@ -731,26 +851,26 @@ def run_truncate_tests(
         chunk_boundary_tests = [
             {
                 "name": "Truncate 2.5 chunks -> 2 chunks",
-                "initial_size": int(chunk_size * 2.5),
-                "truncate_to": chunk_size * 2,
+                "initial_size": int(stripe_unit * 2.5),
+                "truncate_to": stripe_unit * 2,
                 "desc": "Truncate to 2 chunk boundary",
             },
             {
                 "name": "Truncate 3 chunks -> 1 chunk",
-                "initial_size": chunk_size * 3,
-                "truncate_to": chunk_size,
+                "initial_size": stripe_unit * 3,
+                "truncate_to": stripe_unit,
                 "desc": "Truncate to 1 chunk boundary",
             },
             {
                 "name": "Truncate 1.5 chunks -> 1 chunk",
-                "initial_size": int(chunk_size * 1.5),
-                "truncate_to": chunk_size,
+                "initial_size": int(stripe_unit * 1.5),
+                "truncate_to": stripe_unit,
                 "desc": "Sub-stripe truncation",
             },
             {
                 "name": "Truncate 4 chunks -> 3 chunks",
-                "initial_size": chunk_size * 4,
-                "truncate_to": chunk_size * 3,
+                "initial_size": stripe_unit * 4,
+                "truncate_to": stripe_unit * 3,
                 "desc": "Truncate crossing stripe boundary",
             },
         ]
@@ -782,13 +902,13 @@ def run_truncate_tests(
             {
                 "name": "Truncate to mid-chunk (unaligned)",
                 "initial_size": stripe_width * 2,
-                "truncate_to": chunk_size + (chunk_size // 2),
+                "truncate_to": stripe_unit + (stripe_unit // 2),
                 "desc": "Truncate to 1.5 chunks (unaligned)",
             },
             {
                 "name": "Truncate to arbitrary offset",
                 "initial_size": stripe_width * 2,
-                "truncate_to": chunk_size + 1000,
+                "truncate_to": stripe_unit + 1000,
                 "desc": "Truncate to chunk + 1000 bytes",
             },
             {
@@ -849,7 +969,7 @@ def run_truncate_tests(
             },
             {
                 "name": "Truncate chunk-sized object to zero",
-                "initial_size": chunk_size,
+                "initial_size": stripe_unit,
                 "truncate_to": 0,
                 "desc": "Complete truncation of single chunk",
             },
@@ -899,7 +1019,7 @@ def run_truncate_tests(
         result = _run_truncate_after_partial_write_test(
             rados_obj=rados_obj,
             pool_name=pool_name,
-            chunk_size=chunk_size,
+            stripe_unit=stripe_unit,
             stripe_width=stripe_width,
         )
         test_results.append(result)
@@ -1075,7 +1195,7 @@ def _run_sequential_truncate_test(
     Args:
         rados_obj: RadosOrchestrator object
         pool_name: EC pool name
-        stripe_width: Stripe width (k * chunk_size)
+        stripe_width: Stripe width (k * stripe_unit)
 
     Returns:
         Dictionary with test results
@@ -1150,7 +1270,7 @@ def _run_sequential_truncate_test(
 def _run_truncate_after_partial_write_test(
     rados_obj,
     pool_name: str,
-    chunk_size: int,
+    stripe_unit: int,
     stripe_width: int,
 ) -> Dict[str, Any]:
     """
@@ -1161,14 +1281,14 @@ def _run_truncate_after_partial_write_test(
 
     Workflow:
     1. Create 3-stripe object
-    2. Partial overwrite at offset chunk_size (single chunk)
+    2. Partial overwrite at offset stripe_unit (single chunk)
     3. Truncate to 1 stripe boundary
 
     Args:
         rados_obj: RadosOrchestrator object
         pool_name: EC pool name
-        chunk_size: EC chunk size
-        stripe_width: Stripe width (k * chunk_size)
+        stripe_unit: EC chunk size
+        stripe_width: Stripe width (k * stripe_unit)
 
     Returns:
         Dictionary with test results
@@ -1191,8 +1311,8 @@ def _run_truncate_after_partial_write_test(
         log.info("  Created base object")
 
         # Step 2: Partial overwrite at chunk boundary
-        partial_size = chunk_size
-        partial_offset = chunk_size
+        partial_size = stripe_unit
+        partial_offset = stripe_unit
         cmd = f"dd if=/dev/urandom of={partial_file} bs={partial_size} count=1 2>/dev/null"
         rados_obj.client.exec_command(cmd=cmd, sudo=True)
         cmd = f"rados -p {pool_name} put {obj_name} {partial_file} --offset {partial_offset}"
@@ -1206,9 +1326,9 @@ def _run_truncate_after_partial_write_test(
         # Step 3: Sequential truncates to various boundaries after partial write
         truncate_sequence = [
             (stripe_width * 2, "2 stripes"),
-            (stripe_width + chunk_size, "1 stripe + 1 chunk"),
+            (stripe_width + stripe_unit, "1 stripe + 1 chunk"),
             (stripe_width, "1 stripe"),
-            (chunk_size, "1 chunk"),
+            (stripe_unit, "1 chunk"),
         ]
 
         for i, (truncate_to, desc) in enumerate(truncate_sequence, 1):
@@ -1260,7 +1380,7 @@ def _run_truncate_after_partial_write_test(
 def run_append_tests(
     rados_obj,
     pool_name: str,
-    chunk_size: int,
+    stripe_unit: int,
     ec_k: int,
     ec_m: int,
 ) -> bool:
@@ -1273,7 +1393,7 @@ def run_append_tests(
     updates need to be handled correctly.
 
     Test covers:
-    1. Append to reach exact stripe boundary (N * K * chunk_size)
+    1. Append to reach exact stripe boundary (N * K * stripe_unit)
     2. Append crossing stripe boundary
     3. Multiple sequential appends
     4. Append after truncate (interaction with shard versions)
@@ -1283,7 +1403,7 @@ def run_append_tests(
     Args:
         rados_obj: RadosOrchestrator object
         pool_name: EC pool name
-        chunk_size: EC chunk size in bytes
+        stripe_unit: EC chunk size in bytes
         ec_k: Number of data chunks
         ec_m: Number of parity chunks
 
@@ -1291,15 +1411,15 @@ def run_append_tests(
         True on success, False on failure
     """
     try:
-        stripe_width = ec_k * chunk_size
+        stripe_width = ec_k * stripe_unit
         log.info("=" * 70)
         log.info("EC APPEND TESTS - Testing object append operations")
         log.info("=" * 70)
         log.info(
-            "EC config: k=%s, m=%s, chunk_size=%sKB, stripe_width=%sKB",
+            "EC config: k=%s, m=%s, stripe_unit=%sKB, stripe_width=%sKB",
             ec_k,
             ec_m,
-            chunk_size // 1024,
+            stripe_unit // 1024,
             stripe_width // 1024,
         )
 
@@ -1309,7 +1429,7 @@ def run_append_tests(
 
         # =====================================================================
         # TEST GROUP 1: Append to reach exact stripe boundary
-        # Similar to truncate bug - final size = N * K * chunk_size
+        # Similar to truncate bug - final size = N * K * stripe_unit
         # =====================================================================
         log.info("-" * 50)
         log.info("TEST GROUP 1: Append to reach exact stripe boundary")
@@ -1336,8 +1456,8 @@ def run_append_tests(
             },
             {
                 "name": "Append chunk to reach 2 stripes",
-                "initial_size": stripe_width * 2 - chunk_size,
-                "append_size": chunk_size,
+                "initial_size": stripe_width * 2 - stripe_unit,
+                "append_size": stripe_unit,
                 "desc": "(2 stripes - 1 chunk) + 1 chunk = 2 stripes",
             },
         ]
@@ -1368,13 +1488,13 @@ def run_append_tests(
         cross_stripe_append_tests = [
             {
                 "name": "Append crossing from stripe 1 to 2",
-                "initial_size": stripe_width - (chunk_size // 2),
-                "append_size": chunk_size,
+                "initial_size": stripe_width - (stripe_unit // 2),
+                "append_size": stripe_unit,
                 "desc": "Start near end of stripe 1, cross into stripe 2",
             },
             {
                 "name": "Large append crossing multiple stripes",
-                "initial_size": chunk_size,
+                "initial_size": stripe_unit,
                 "append_size": stripe_width * 2,
                 "desc": "1 chunk + 2 stripes = crosses 2 stripe boundaries",
             },
@@ -1412,21 +1532,21 @@ def run_append_tests(
         chunk_boundary_append_tests = [
             {
                 "name": "Append to reach 1 chunk",
-                "initial_size": chunk_size // 2,
-                "append_size": chunk_size // 2,
+                "initial_size": stripe_unit // 2,
+                "append_size": stripe_unit // 2,
                 "desc": "Half chunk + half chunk = 1 chunk",
             },
             {
                 "name": "Append to reach 2 chunks",
-                "initial_size": chunk_size + (chunk_size // 2),
-                "append_size": chunk_size // 2,
+                "initial_size": stripe_unit + (stripe_unit // 2),
+                "append_size": stripe_unit // 2,
                 "desc": "1.5 chunks + 0.5 chunk = 2 chunks",
             },
             {
                 "name": "Append 1 byte to reach chunk boundary",
-                "initial_size": chunk_size - 1,
+                "initial_size": stripe_unit - 1,
                 "append_size": 1,
-                "desc": "chunk_size - 1 + 1 byte = exact chunk",
+                "desc": "stripe_unit - 1 + 1 byte = exact chunk",
             },
         ]
 
@@ -1500,7 +1620,7 @@ def run_append_tests(
         result = _run_sequential_append_test(
             rados_obj=rados_obj,
             pool_name=pool_name,
-            chunk_size=chunk_size,
+            stripe_unit=stripe_unit,
             stripe_width=stripe_width,
         )
         test_results.append(result)
@@ -1515,7 +1635,7 @@ def run_append_tests(
         # TODO: Uncomment this test when issues with truncate are fixed
         #       BZ#2419667: Fast EC OSD key-not-found exception on truncate
         #       https://bugzilla.redhat.com/show_bug.cgi?id=2419667
-        #       Issue: Truncate to N * K * chunk_size causes key-not-found exception
+        #       Issue: Truncate to N * K * stripe_unit causes key-not-found exception
         #       BZ#2419827: [Fast EC] OSDs crashed in ECTransaction::WritePlanObj
         #       https://bugzilla.redhat.com/show_bug.cgi?id=2419827
         #       Issue: OSDs crash and are unable to boot up after truncate operations
@@ -1526,7 +1646,7 @@ def run_append_tests(
         # result = _run_append_after_truncate_test(
         #     rados_obj=rados_obj,
         #     pool_name=pool_name,
-        #     chunk_size=chunk_size,
+        #     stripe_unit=stripe_unit,
         #     stripe_width=stripe_width,
         # )
         # test_results.append(result)
@@ -1545,7 +1665,7 @@ def run_append_tests(
         result = _run_append_after_overwrite_test(
             rados_obj=rados_obj,
             pool_name=pool_name,
-            chunk_size=chunk_size,
+            stripe_unit=stripe_unit,
             stripe_width=stripe_width,
         )
         test_results.append(result)
@@ -1713,7 +1833,7 @@ def _run_single_append_test(
 def _run_sequential_append_test(
     rados_obj,
     pool_name: str,
-    chunk_size: int,
+    stripe_unit: int,
     stripe_width: int,
 ) -> Dict[str, Any]:
     """
@@ -1726,8 +1846,8 @@ def _run_sequential_append_test(
     Args:
         rados_obj: RadosOrchestrator object
         pool_name: EC pool name
-        chunk_size: EC chunk size
-        stripe_width: Stripe width (k * chunk_size)
+        stripe_unit: EC chunk size
+        stripe_width: Stripe width (k * stripe_unit)
 
     Returns:
         Dictionary with test results
@@ -1740,7 +1860,7 @@ def _run_sequential_append_test(
         log.info("Test: Sequential appends on same object")
 
         # Initial object size
-        initial_size = chunk_size // 2
+        initial_size = stripe_unit // 2
         log.info("  Initial size: %s bytes (half chunk)", initial_size)
 
         # Create and upload initial object
@@ -1752,11 +1872,12 @@ def _run_sequential_append_test(
         current_size = initial_size
 
         # Sequential appends with different sizes
+        # Note: For k=2, 1 stripe = 2 chunks = stripe_width = 2 * stripe_unit
         append_sequence = [
-            (chunk_size // 2, "reach 1 chunk boundary"),
-            (chunk_size, "reach 2 chunk boundary"),
-            (chunk_size, "reach 1 stripe boundary (3 chunks for k=2)"),
-            (stripe_width, "reach 2 stripe boundary"),
+            (stripe_unit // 2, "reach 1 chunk boundary"),
+            (stripe_unit, "reach 1 stripe boundary (2 chunks for k=2)"),
+            (stripe_unit, "cross stripe boundary (3 chunks = 1.5 stripes for k=2)"),
+            (stripe_width, "reach complete stripes"),
         ]
 
         for i, (append_size, desc) in enumerate(append_sequence, 1):
@@ -1821,7 +1942,7 @@ def _run_sequential_append_test(
 def _run_append_after_truncate_test(
     rados_obj,
     pool_name: str,
-    chunk_size: int,
+    stripe_unit: int,
     stripe_width: int,
 ) -> Dict[str, Any]:
     """
@@ -1839,8 +1960,8 @@ def _run_append_after_truncate_test(
     Args:
         rados_obj: RadosOrchestrator object
         pool_name: EC pool name
-        chunk_size: EC chunk size
-        stripe_width: Stripe width (k * chunk_size)
+        stripe_unit: EC chunk size
+        stripe_width: Stripe width (k * stripe_unit)
 
     Returns:
         Dictionary with test results
@@ -1926,7 +2047,7 @@ def _run_append_after_truncate_test(
 def _run_append_after_overwrite_test(
     rados_obj,
     pool_name: str,
-    chunk_size: int,
+    stripe_unit: int,
     stripe_width: int,
 ) -> Dict[str, Any]:
     """
@@ -1943,8 +2064,8 @@ def _run_append_after_overwrite_test(
     Args:
         rados_obj: RadosOrchestrator object
         pool_name: EC pool name
-        chunk_size: EC chunk size
-        stripe_width: Stripe width (k * chunk_size)
+        stripe_unit: EC chunk size
+        stripe_width: Stripe width (k * stripe_unit)
 
     Returns:
         Dictionary with test results
@@ -1968,8 +2089,8 @@ def _run_append_after_overwrite_test(
         log.info("  Created base object")
 
         # Step 2: Partial overwrite at chunk boundary
-        partial_size = chunk_size
-        partial_offset = chunk_size
+        partial_size = stripe_unit
+        partial_offset = stripe_unit
         cmd = f"dd if=/dev/urandom of={partial_file} bs={partial_size} count=1 2>/dev/null"
         rados_obj.client.exec_command(cmd=cmd, sudo=True)
         cmd = f"rados -p {pool_name} put {obj_name} {partial_file} --offset {partial_offset}"
@@ -2115,7 +2236,7 @@ def validate_object_size(
 def run_device_writes(
     rados_obj,
     device_path: str,
-    chunk_size: int,
+    stripe_unit: int,
     stripe_width: int,
 ) -> bool:
     """
@@ -2124,17 +2245,17 @@ def run_device_writes(
     Args:
         rados_obj: RadosOrchestrator object
         device_path: RBD block device path (e.g., /dev/rbd0) - UNMOUNTED
-        chunk_size: EC chunk size in bytes
-        stripe_width: EC stripe width (k * chunk_size) in bytes
+        stripe_unit: EC stripe_unit in bytes (chunk size per data shard)
+        stripe_width: EC stripe width (k * stripe_unit) in bytes
 
     Returns:
         True on success, False on failure
     """
     try:
-        chunk_kb = chunk_size // 1024
+        stripe_unit_kb = stripe_unit // 1024
         stripe_kb = stripe_width // 1024
-        half_chunk_kb = chunk_kb // 2
-        cross_chunk_kb = chunk_kb + half_chunk_kb
+        half_stripe_unit_kb = stripe_unit_kb // 2
+        cross_stripe_unit_kb = stripe_unit_kb + half_stripe_unit_kb
 
         # Define device write test patterns
         device_patterns = [
@@ -2145,40 +2266,40 @@ def run_device_writes(
                 "desc": f"Full stripe writes ({stripe_kb}KB)",
             },
             {
-                "block_size": f"{chunk_kb}K",
+                "block_size": f"{stripe_unit_kb}K",
                 "count": 200,
                 "seek": None,
-                "desc": f"Single chunk writes ({chunk_kb}KB)",
+                "desc": f"Single chunk writes ({stripe_unit_kb}KB)",
             },
             {
-                "block_size": f"{half_chunk_kb}K",
+                "block_size": f"{half_stripe_unit_kb}K",
                 "count": 500,
                 "seek": None,
-                "desc": f"Sub-chunk writes ({half_chunk_kb}KB)",
+                "desc": f"Sub-chunk writes ({half_stripe_unit_kb}KB)",
             },
             {
-                "block_size": f"{cross_chunk_kb}K",
+                "block_size": f"{cross_stripe_unit_kb}K",
                 "count": 100,
                 "seek": None,
-                "desc": f"Cross-chunk writes ({cross_chunk_kb}KB)",
+                "desc": f"Cross-chunk writes ({cross_stripe_unit_kb}KB)",
             },
             {
-                "block_size": f"{chunk_kb}K",
+                "block_size": f"{stripe_unit_kb}K",
                 "count": 100,
                 "seek": 0,
-                "desc": f"Overwrite at offset 0 ({chunk_kb}KB)",
+                "desc": f"Overwrite at offset 0 ({stripe_unit_kb}KB)",
             },
             {
-                "block_size": f"{half_chunk_kb}K",
+                "block_size": f"{half_stripe_unit_kb}K",
                 "count": 50,
                 "seek": 100,
-                "desc": f"Overwrite at offset 100 ({half_chunk_kb}KB)",
+                "desc": f"Overwrite at offset 100 ({half_stripe_unit_kb}KB)",
             },
             {
-                "block_size": f"{chunk_kb}K",
+                "block_size": f"{stripe_unit_kb}K",
                 "count": 50,
                 "seek": 200,
-                "desc": f"Overwrite at offset 200 ({chunk_kb}KB)",
+                "desc": f"Overwrite at offset 200 ({stripe_unit_kb}KB)",
             },
         ]
 
@@ -2224,7 +2345,7 @@ def run_device_writes(
 def run_filesystem_writes(
     rados_obj,
     mount_path: str,
-    chunk_size: int,
+    stripe_unit: int,
 ) -> bool:
     """
     Run filesystem write tests (mounted device)
@@ -2235,50 +2356,50 @@ def run_filesystem_writes(
     Args:
         rados_obj: RadosOrchestrator object
         mount_path: Mounted filesystem path (e.g., /tmp/ec_test_mount/)
-        chunk_size: EC chunk size in bytes
+        stripe_unit: EC stripe_unit in bytes (chunk size per data shard)
 
     Returns:
         True on success, False on failure
     """
     try:
-        chunk_kb = chunk_size // 1024
-        half_chunk_kb = chunk_kb // 2
+        stripe_unit_kb = stripe_unit // 1024
+        half_stripe_unit_kb = stripe_unit_kb // 2
 
         # Define all RBD write test patterns
         write_patterns = [
             # Filesystem writes (buffered I/O) - Initial writes
             {
                 "target": "mount",
-                "block_size": f"{chunk_kb}K",
+                "block_size": f"{stripe_unit_kb}K",
                 "count": 200,
                 "seek": None,
                 "test_name": "Filesystem: Chunk Writes",
-                "desc": f"Filesystem: Chunk-aligned writes ({chunk_kb}KB)",
+                "desc": f"Filesystem: Chunk-aligned writes ({stripe_unit_kb}KB)",
             },
             {
                 "target": "mount",
-                "block_size": f"{half_chunk_kb}K",
+                "block_size": f"{half_stripe_unit_kb}K",
                 "count": 300,
                 "seek": None,
                 "test_name": "Filesystem: Sub-chunk Writes",
-                "desc": f"Filesystem: Sub-chunk writes ({half_chunk_kb}KB)",
+                "desc": f"Filesystem: Sub-chunk writes ({half_stripe_unit_kb}KB)",
             },
             # Filesystem overwrites (testing buffered overwrites)
             {
                 "target": "mount",
-                "block_size": f"{chunk_kb}K",
+                "block_size": f"{stripe_unit_kb}K",
                 "count": 50,
                 "seek": 0,
                 "test_name": "Filesystem: Overwrite at offset 0",
-                "desc": f"Filesystem: Overwrite at offset 0 ({chunk_kb}KB)",
+                "desc": f"Filesystem: Overwrite at offset 0 ({stripe_unit_kb}KB)",
             },
             {
                 "target": "mount",
-                "block_size": f"{half_chunk_kb}K",
+                "block_size": f"{half_stripe_unit_kb}K",
                 "count": 50,
                 "seek": 100,
                 "test_name": "Filesystem: Overwrite at offset 100",
-                "desc": f"Filesystem: Overwrite at block 100 ({half_chunk_kb}KB)",
+                "desc": f"Filesystem: Overwrite at block 100 ({half_stripe_unit_kb}KB)",
             },
         ]
 
@@ -2522,7 +2643,7 @@ def identify_target_pgs(
 def run_read_offset_tests(
     rados_obj,
     pool_name: str,
-    chunk_size: int,
+    stripe_unit: int,
     ec_k: int,
     mon_config_obj=None,
     cephadm=None,
@@ -2546,7 +2667,7 @@ def run_read_offset_tests(
     Args:
         rados_obj: RadosOrchestrator object
         pool_name: EC pool name
-        chunk_size: EC chunk size in bytes
+        stripe_unit: EC stripe_unit in bytes (chunk size per data shard)
         ec_k: Number of data chunks
         mon_config_obj: MonConfigMethods object for debug logging (optional)
         cephadm: CephAdmin object for timestamps (optional)
@@ -2569,13 +2690,13 @@ def run_read_offset_tests(
         log.info("EC Partial Read Tests - Testing offset-based reads")
 
         # Calculate stripe width
-        stripe_width = ec_k * chunk_size
+        stripe_width = ec_k * stripe_unit
         test_data_size = 2 * stripe_width  # 2 stripes
 
         log.info(
-            "EC config: k=%s, chunk=%sKB, stripe=%sKB",
+            "EC config: k=%s, stripe_unit=%sKB, stripe_width=%sKB",
             ec_k,
-            chunk_size // 1024,
+            stripe_unit // 1024,
             stripe_width // 1024,
         )
 
@@ -2658,12 +2779,12 @@ def run_read_offset_tests(
             },
             {
                 "name": "Chunk boundary",
-                "offset": chunk_size,
+                "offset": stripe_unit,
                 "desc": "Read from chunk alignment",
             },
             {
                 "name": "Mid-chunk",
-                "offset": chunk_size // 2,
+                "offset": stripe_unit // 2,
                 "desc": "Read from mid-chunk (unaligned)",
             },
             {
@@ -2775,11 +2896,8 @@ def run_read_offset_tests(
                 mon_config_obj.remove_config(section=f"osd.{osd_id}", name="debug_osd")
         time.sleep(2)
 
-        # Cleanup test object and files
-        log.debug("Cleaning up test data")
-        rados_obj.client.exec_command(
-            cmd=f"rados -p {pool_name} rm {obj_name}", sudo=True, check_ec=False
-        )
+        # Cleanup temp files only (keep test object in pool until final cleanup)
+        log.debug("Cleaning up temp files")
         rados_obj.client.exec_command(
             cmd=f"rm -f {test_data_file}", sudo=True, check_ec=False
         )
