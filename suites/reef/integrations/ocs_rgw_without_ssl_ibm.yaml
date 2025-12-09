@@ -94,7 +94,7 @@ tests:
             label: rgw
             nodes:
               - node2
-      desc: "Deploying RGW endpoint."
+      desc: "Deploying RGW endpoint without SSL."
       destroy-cluster: false
       module: test_rgw.py
       name: "Test rgw ssl endpoint using spec"
