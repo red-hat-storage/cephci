@@ -1,3 +1,4 @@
+import json
 from concurrent.futures import ThreadPoolExecutor
 from time import sleep
 
@@ -118,7 +119,15 @@ def create_export_and_mount_for_existing_nfs_cluster(
                             nfs_export=export_name,
                             fs=_fs,
                         )
-                    all_exports = Ceph(clients[0]).nfs.export.ls(nfs_name)
+                    if type(nfs_name) is list:
+                        all_exports = []
+                        for nfs in nfs_name:
+                            exports = json.loads(Ceph(clients[0]).nfs.export.ls(nfs))
+                            all_exports.extend(exports)
+                    else:
+                        all_exports = json.loads(
+                            Ceph(clients[0]).nfs.export.ls(nfs_name)
+                        )
                     if export_name not in all_exports:
                         raise OperationFailedError(
                             f"Export {export_name} not found in the list of exports {all_exports}"

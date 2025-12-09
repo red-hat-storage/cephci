@@ -178,7 +178,7 @@ tests:
       module: byok.test_byok_single_multi_restart.py
       desc: BYOK single-cluster with FUSE encryption validation
       polarion-id: CEPH-83625072
-      abort-on-fail: true
+      comments: might fail due to BZ https://bugzilla.redhat.com/show_bug.cgi?id=2420435
       config:
         nfs_version: 4.2
         total_export_num: 4
@@ -187,14 +187,7 @@ tests:
         nfs_mount: /mnt/nfs_byok
         nfs_export: /export_byok
         nfs_instance_name: nfs_byok
-   - test:
-      name: Test Encryption with the incorrect key and kmip certs (single cluster)
-      module: byok.test_byok_neg_incorrect_key_cert.py
-      desc: BYOK Negative test Incorrect key kmip certs
-      polarion-id: CEPH-83628801
-      abort-on-fail: true
-      config:
-        nfs_version: 4.2
+
    - test:
       name: byok multicluster with io and restart - parallel module
       module: test_parallel.py
@@ -205,7 +198,6 @@ tests:
             module: byok.test_byok_single_multi_restart.py
             desc: Test multiple clusters with IO
             polarion-id: CEPH-83627655
-            abort-on-fail: true
             config:
               nfs_version: 4.2
               total_export_num: 4
@@ -238,7 +230,6 @@ tests:
       module: byok.test_byok_single_multi_restart.py
       desc: Confirm nfs receives SIGHUP and reloads after KMIP certs in existing NFS service spec update
       polarion-id: CEPH-83628800
-      abort-on-fail: true
       config:
         nfs_version: 4.2
         total_export_num: 4
@@ -248,3 +239,11 @@ tests:
         nfs_export: /export_byok
         nfs_instance_name: nfs_byok
         check_sighup: true
+
+   - test:
+      name: Test Encryption with the incorrect key and kmip certs (single cluster)
+      module: byok.test_byok_neg_incorrect_key_cert.py
+      desc: BYOK Negative test Incorrect key kmip certs
+      polarion-id: CEPH-83628801
+      config:
+        nfs_version: 4.2
