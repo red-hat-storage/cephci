@@ -1,12 +1,3 @@
-#===============================================================================
-# Conf:  conf/squid/smoke/1admin-4node-1client-bvt.yaml
-# Smoke test cases for
-#   - Bootstrap
-#   - Host management
-#   - Ceph role Service deployment,
-#   - Configure client for RGW and RBD systems
-#===============================================================================
-
 tests:
   - test:
       abort-on-fail: true
@@ -29,6 +20,18 @@ tests:
               args:
                 attach_ip_address: true
                 labels: apply-all-labels
+          - config:
+              args:
+                placement:
+                  label: mgr
+              command: apply
+              service: mgr
+          - config:
+              args:
+                placement:
+                  label: mon
+              command: apply
+              service: mon
           - config:
               command: apply
               service: osd
@@ -75,16 +78,16 @@ tests:
       config:
         command: add
         id: client.1
-        node: node4
+        node: node7
         install_packages:
           - ceph-common
         copy_admin_keyring: true
-      desc: Configure the RGW,RBD client system
+      desc: Configure the client system
       destroy-cluster: false
       module: test_client.py
       name: configure client
 
-#   Testing stage
+  # Testing stage
   - test:
       name: Executes RGW, RBD and FS operations
       desc: Run object, block and filesystem basic operations parallelly.
