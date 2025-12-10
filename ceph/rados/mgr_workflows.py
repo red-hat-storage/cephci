@@ -329,18 +329,24 @@ class MgrWorkflows:
         mgr_nodes = "  ".join(mgr_node_list)
         cmd = f'ceph orch apply mgr "{mgr_nodes}"'
         self.client.exec_command(sudo=True, cmd=cmd)
-        time.sleep(120)
-        mgr_count = 0
-        for node in mgr_node_list:
-            if self.rados_obj.check_daemon_exists_on_host(host=node, daemon_type="mgr"):
-                log.info(f"Mgr {node} is up and running in the cluster.")
-                log.info(f" In the {node} mgr is up and running")
-                mgr_count = mgr_count + 1
+        endtime = datetime.datetime.now() + datetime.timedelta(seconds=180)
+        while datetime.datetime.now() < endtime:
+            for node in mgr_node_list:
+                if self.rados_obj.check_daemon_exists_on_host(
+                    host=node, daemon_type="mgr"
+                ):
+                    log.info(f"Mgr {node} is up and running in the cluster.")
+                    log.info(f" In the {node} mgr is up and running")
+                    mgr_node_list.pop()
 
-        if mgr_count != len(mgr_node_list):
-            log.info(f" The {mgr_node_list} are not up and running")
-            return False
-        return True
+            if not mgr_node_list:
+                return True
+            log.info(
+                "The MGRs (%s) are not up and running. Sleeping for 20 secs"
+                % mgr_node_list
+            )
+            time.sleep(20)
+        return False
 
     def mgr_scale_up_down_byLabel(self, mgr_node_list):
         """
@@ -355,7 +361,6 @@ class MgrWorkflows:
         current_mgr_daemons = self.rados_obj.get_daemon_list_fromCluster(
             daemon_type="mgr"
         )
-        # req_mgr_list = [item.split(".")[0] for item in mgr_node_list]
 
         log.info(f"The current mgr_daemons list is-{current_mgr_daemons}")
         log.info(f"The requested mgr list is -{mgr_node_list}")
@@ -368,7 +373,7 @@ class MgrWorkflows:
         if len(mgr_to_remove) == 0 and len(new_mgrs_to_add) == 0:
             log.info("The current mgr and requested mgr list is same")
             return True
-        # case2: The list contain new mgr but the cout is same
+        # case2: The list contain new mgr but the count is same
         if len(current_mgr_daemons) == len(mgr_node_list) and len(new_mgrs_to_add) != 0:
             log.info(
                 f"The current mgr daemon count is same as the requested mgr list."
