@@ -110,10 +110,6 @@ def add_namespaces(config, command, init_nodes, hostnqn_dict, rbd_obj, ha):
     if validate_initiators:
         ha.validate_init_namespace_masking(command, init_nodes, expected_visibility)
 
-    negative = not expected_visibility
-    execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=negative)
-    return executor, io_tasks
-
 
 def add_host(config, command, init_nodes, hostnqn_dict, ha):
     """Add host NQN to namespaces"""
@@ -205,7 +201,7 @@ def add_host(config, command, init_nodes, hostnqn_dict, ha):
                     command, init_nodes, expected_visibility, validate_config
                 )
 
-    execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=True)
+    execute_io_ns_masking(ha, init_nodes, rbd_images_subsys, negative=False)
 
 
 def del_host(config, command, init_nodes, hostnqn_dict, ha):

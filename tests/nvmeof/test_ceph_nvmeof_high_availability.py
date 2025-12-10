@@ -87,6 +87,7 @@ def configure_subsystems(pool, ha, config):
     lb_groups = configure_listeners(ha, listeners, config)
 
     # Add Host access
+    sub_args.pop("serial-number", None)
     if config.get("allow_host"):
         nvmegwcli.host.add(
             **{"args": {**sub_args, **{"host": repr(config["allow_host"])}}}
