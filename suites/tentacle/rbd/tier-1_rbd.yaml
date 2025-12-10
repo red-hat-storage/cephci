@@ -115,6 +115,7 @@ tests:
       desc: "Executing upstream RBD CLI Groups scenarios"
       module: test_rbd.py
       name: 1_rbd_cli_groups
+      comments: 1_rbd_cli_groups - BZ 2417224
       polarion-id: CEPH-83574239
   -
     test:
