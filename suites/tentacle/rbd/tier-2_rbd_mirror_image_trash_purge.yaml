@@ -17,7 +17,9 @@
 tests:
   - test:
       name: setup install pre-requisistes
-      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      desc: >
+        Setup phase to deploy the required pre-requisites
+        for running the tests.
       module: install_prereq.py
       abort-on-fail: true
 
@@ -98,28 +100,28 @@ tests:
       name: deploy cluster
 
   - test:
-        abort-on-fail: true
-        clusters:
-          ceph-rbd1:
-            config:
-              command: add
-              id: client.1
-              node: node2
-              install_packages:
-                - ceph-common
-              copy_admin_keyring: true
-          ceph-rbd2:
-            config:
-                command: add
-                id: client.1
-                node: node2
-                install_packages:
-                    - ceph-common
-                copy_admin_keyring: true
-        desc: Configure the client system 1
-        destroy-cluster: false
-        module: test_client.py
-        name: configure client
+      abort-on-fail: true
+      clusters:
+        ceph-rbd1:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+        ceph-rbd2:
+          config:
+            command: add
+            id: client.1
+            node: node2
+            install_packages:
+              - ceph-common
+            copy_admin_keyring: true
+      desc: Configure the client system 1
+      destroy-cluster: false
+      module: test_client.py
+      name: configure client
 
   - test:
       abort-on-fail: true
@@ -172,13 +174,19 @@ tests:
       clusters:
         ceph-rbd1:
           config:
-            imagesize: 2G
-            io-total: 200M
+            rep_pool_config:
+              imagesize: 2G
+              io_total: 200M
+            ec_pool_config:
+              imagesize: 2G
+              io_total: 200M
       polarion-id: CEPH-9501
       desc: Verify that image deleted at primary site updated at secondary
 
   - test:
-      name: test mirror on image having snap and clone after restoring from trash
+      name: >
+        test mirror on image having snap and clone
+        after restoring from trash
       module: test_mirror_move_primary_trash_restore.py
       clusters:
         ceph-rbd1:
@@ -210,7 +218,9 @@ tests:
             io-total: 200M
             repeat_count: 10
       polarion-id: CEPH-10470
-      desc: verify that image removal from secondary after disabling journaling feature
+      desc: >
+       verify that image removal from secondary after
+       disabling journaling feature
 
   - test:
       name: Attempt moving secondary image to trash

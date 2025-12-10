@@ -1,3 +1,5 @@
+import time
+
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
 from utility.log import Log
 
@@ -16,6 +18,7 @@ def test_image_delete_from_primary(rbd_mirror, pool_type, **kw):
         mirror1.benchwrite(imagespec=imagespec, io=config[pool_type].get("io_total"))
 
         mirror1.delete_image(imagespec)
+        time.sleep(60)
         if mirror2.image_exists(imagespec):
             return 0
 
