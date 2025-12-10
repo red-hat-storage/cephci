@@ -19,7 +19,7 @@ tests:
           verbose: true
         args:
           mon-ip: node1
-          rhcs-version: 8.0
+          rhcs-version: 8.1
           release: rc
           platform: rhel-9
           ssh-user: cephuser

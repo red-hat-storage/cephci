@@ -8,7 +8,7 @@ cephadm-ansible playbook.
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.mgr_workflows import MgrWorkflows
-from cli.utilities.configure import SSH_ID_RSA_PUB, SSH_KEYGEN, SSHPASS
+from cli.utilities.configure import SSH_ID_RSA_PUB, SSH_KEYGEN
 from cli.utilities.packages import Package
 from cli.utilities.utils import get_ip_from_node
 from tests.rados.monitor_configurations import MonConfigMethods
@@ -84,11 +84,13 @@ def run(ceph_cluster, **kw):
             f"Proceeding with copying public ssh key of {installer_node.node.ceph_nodename} to {host_obj.hostname}"
         )
 
-        _, err, rc, _ = installer_node.exec_command(
-            cmd="{} {}".format(
-                SSHPASS.format(host_obj.root_passwd),
-                SSH_COPYID.format(SSH_ID_RSA_PUB, "root", host_obj.hostname),
-            ),
+        # capture public ssh key
+        pub_key, _ = installer_node.exec_command(cmd=f"cat {SSH_ID_RSA_PUB}", sudo=True)
+        log.debug("Public SSH Key for root: \n%s" % pub_key)
+
+        # place ssh key on chosen host
+        _, err, rc, _ = host_obj.exec_command(
+            cmd=f"echo '\n\n{pub_key}' >> ~/.ssh/authorized_keys",
             sudo=True,
             verbose=True,
         )
