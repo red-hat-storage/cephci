@@ -451,7 +451,7 @@ tests:
       desc: CEPH-83624617 - Test E2E read only namespace operations
       destroy-cluster: false
       module: test_ceph_nvmeof_readonly_ns.py
-      name: Test E2E nvmeof namespace resize
+      name: Test E2E nvmeof namespace readonly operations
       polarion-id: CEPH-83624617
 
   - test:
@@ -489,4 +489,5 @@ tests:
       destroy-cluster: false
       module: test_ceph_nvmeof_ns_resize.py
       name: Test E2E nvmeof namespace resize
+      comments: product bug 2420434
       polarion-id: CEPH-83627178
