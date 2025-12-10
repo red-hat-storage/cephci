@@ -5,7 +5,7 @@ Test module that verifies the Upgrade of Ceph Storage via the cephadm CLI.
 
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.rados_bench import RadosBench
-from ceph.utils import is_legacy_container_present
+from ceph.utils import is_legacy_container_present, remove_repos
 from cephci.utils.build_info import CephTestManifest
 from utility.log import Log
 
@@ -100,9 +100,8 @@ def run(ceph_cluster, **kwargs) -> int:
             executor.run(config=config["benchmark"])
 
         # Remove existing repos
-        rm_repo_cmd = "find /etc/yum.repos.d/ -type f ! -name hashicorp.repo ! -name redhat.repo -delete"
         for node in ceph_cluster.get_nodes():
-            node.exec_command(sudo=True, cmd=rm_repo_cmd)
+            remove_repos(ceph_node=node)
 
         # Set repo to newer RPMs
         orch.set_tool_repo()
