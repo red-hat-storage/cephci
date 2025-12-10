@@ -81,7 +81,6 @@ tests:
       desc: Deploy samba with auth_mode 'Active Directory(AD)' using imperative style(CLI Commands)
       module: smb_deployment_imperative_method
       polarion-id: CEPH-83593844
-      comments: Test fails due to AD unavailable in IBMc
       config:
         cephfs_volume: cephfs
         smb_subvolume_group: smb
@@ -90,7 +89,7 @@ tests:
         smb_cluster_id: smb1
         auth_mode: active-directory
         domain_realm: samba.qe
-        custom_dns: "10.70.46.228"
+        custom_dns: "10.243.96.96"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
         smb_shares: [share1, share2]
@@ -114,7 +113,7 @@ tests:
                 - source_type: resource
                   ref: join1-admin
             custom_dns:
-              - 10.70.46.228
+              - 10.243.96.96
             placement:
               label: smb
           - resource_type: ceph.smb.join.auth
@@ -152,7 +151,7 @@ tests:
         smb_cluster_id: smb1
         auth_mode: active-directory
         domain_realm: samba.qe
-        custom_dns: "10.70.46.228"
+        custom_dns: "10.243.96.96"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
         smb_shares: [share1, share2]
@@ -171,7 +170,7 @@ tests:
         smb_cluster_id: smb1
         auth_mode: active-directory
         domain_realm: samba.qe
-        custom_dns: "10.70.46.228"
+        custom_dns: "10.243.96.96"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
         smb_shares: [share1]
@@ -190,7 +189,7 @@ tests:
         smb_cluster_id: smb1
         auth_mode: active-directory
         domain_realm: samba.qe
-        custom_dns: "10.70.46.228"
+        custom_dns: "10.243.96.96"
         smb_user_name: Administrator
         smb_user_password: Redhat@123
         smb_shares: [share1,share2]
@@ -214,7 +213,7 @@ tests:
                 - source_type: resource
                   ref: join1-admin
             custom_dns:
-              - 10.70.46.228
+              - 10.243.96.96
             placement:
               label: smb
           - resource_type: ceph.smb.join.auth
@@ -249,7 +248,7 @@ tests:
                 - source_type: resource
                   ref: join1-admin
             custom_dns:
-              - 10.70.46.228
+              - 10.243.96.96
             placement:
               label: smb
           - resource_type: ceph.smb.join.auth
@@ -478,7 +477,7 @@ tests:
                 - source_type: resource
                   ref: join1-admin
             custom_dns:
-              - 10.70.46.228
+              - 10.243.96.96
             placement:
               label: smb
             public_addrs:
@@ -793,7 +792,7 @@ tests:
               smbmetrics: 2222
               ctdb: 3333
             custom_dns:
-              - 10.70.46.228
+              - 10.243.96.96
             placement:
               label: smb
           - resource_type: ceph.smb.join.auth
@@ -823,6 +822,7 @@ tests:
       desc: Deploy colocation samba services with custom IP in active-directory
       module: smb_deployment_declarative_method.py
       polarion-id: CEPH-83628046
+      comments: Test fails due to bind_addrs is unavailable in IBMc
       config:
         file_type: yaml
         file_mount: /tmp
@@ -842,7 +842,7 @@ tests:
             bind_addrs:
               - network: 10.0.64.0/22
             custom_dns:
-              - 10.70.46.228
+              - 10.243.96.96
             placement:
               label: smb
           - resource_type: ceph.smb.join.auth
