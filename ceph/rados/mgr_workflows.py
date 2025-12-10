@@ -137,7 +137,6 @@ class MgrWorkflows:
         cmd = f'ceph orch apply mgr "{no_mgrs} {new_mgr_list}" '
         try:
             self.client.exec_command(sudo=True, cmd=cmd)
-            time.sleep(120)
         except Exception as err:
             log.debug(f"Hit issue during command execution : {err}")
 
