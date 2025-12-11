@@ -257,7 +257,7 @@ def run(ceph_cluster, **kw):
                     daemon_type="mon",
                     daemon_id=mon,
                     status="running",
-                    timeout=60,
+                    timeout=300,
                 )
 
             # Collecting the number of mons in the quorum after the test

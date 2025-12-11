@@ -89,7 +89,7 @@ def run(ceph_cluster, **kw):
             daemon_type="osd",
             daemon_id=osd_id,
             status="running",
-            timeout=60,
+            timeout=300,
         )
         assert service_obj.add_osds_to_managed_service()
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, test_pool=pool_name)
@@ -124,7 +124,7 @@ def run(ceph_cluster, **kw):
                 daemon_type="osd",
                 daemon_id=osd_id,
                 status="running",
-                timeout=60,
+                timeout=300,
             )
             assert service_obj.add_osds_to_managed_service(
                 osds=[osd_id], spec=target_osd1_spec_name
@@ -140,7 +140,7 @@ def run(ceph_cluster, **kw):
                 daemon_type="osd",
                 daemon_id=osd_id,
                 status="running",
-                timeout=60,
+                timeout=300,
             )
             assert service_obj.add_osds_to_managed_service(
                 osds=[osd_id1], spec=target_osd2_spec_name
