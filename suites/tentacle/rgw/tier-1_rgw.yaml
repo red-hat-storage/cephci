@@ -73,6 +73,7 @@ tests:
         node: node6
         install_packages:
           - ceph-common
+          - git
         copy_admin_keyring: true
         git_clone: true
         git_node_role: rgw
