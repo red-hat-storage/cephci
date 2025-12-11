@@ -310,3 +310,28 @@ def configure_osd_flag(ceph_cluster, action, flag):
     if f"{flag} is {action}" in err:
         return True
     return False
+
+
+def get_cluster_timestamp(node) -> str:
+    """
+    Get the current UTC timestamp from the cluster in ISO 8601 format.
+
+    This function returns a timestamp in the exact format required for
+    log analysis methods like scan_daemon_logs_for_crashes() and
+    parse_ec_optimization_logs(). Using cluster time (not local time)
+    ensures consistency when analyzing daemon logs.
+
+    Format: YYYY-MM-DDTHH:MM:SS.mmm+0000
+    Example: 2024-12-11T10:30:45.123+0000
+
+    Args:
+        node: CephAdmin object
+
+    Returns:
+        str: UTC timestamp in ISO 8601 format with milliseconds
+    """
+    cmd = "date -u '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
+    out, _ = node.shell([cmd])
+    timestamp = out.strip().strip("'")
+    log.debug(f"Collected cluster timestamp: {timestamp}")
+    return timestamp
