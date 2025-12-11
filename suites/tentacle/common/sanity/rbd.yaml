@@ -17,6 +17,7 @@ tests:
       desc: "Executing upstream RBD CLI Groups scenarios"
       polarion-id: CEPH-83574239
       module: test_rbd.py
+      comments: 1_rbd_cli_groups - BZ 2417224
       config:
         script: rbd_groups.sh
         script_path: qa/workunits/rbd
