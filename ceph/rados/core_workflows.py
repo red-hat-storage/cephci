@@ -5441,13 +5441,17 @@ EOF"""
         for service in ceph_orch_ls:
             current_service_type = service["service_type"]
             current_service_size = service["status"]["size"]
+            current_service_running = service["status"]["running"]
+            current_service_count = int(current_service_size) + int(
+                current_service_running
+            )
             current_service_name = service["service_name"]
             log_debug_msg = (
                 f"\nservice name -> {current_service_name}" f"\nservice -> {service}"
             )
             log.debug(log_debug_msg)
-            if (service_type is None and current_service_size == 0) or (
-                current_service_type == service_type and current_service_size == 0
+            if (service_type is None and current_service_count == 0) or (
+                current_service_type == service_type and current_service_count == 0
             ):
                 if self.remove_orch_service(service_name=current_service_name):
                     removed_services.append(current_service_name)
@@ -5495,28 +5499,33 @@ EOF"""
         cmd = f"ceph orch rm {service_name}"
         if force:
             cmd += " --force"
-        out, _ = self.client.exec_command(cmd=cmd)
 
-        if "Removed service" not in out:
-            log_err_msg = (
-                f"ceph orch rm {service_name} command execution did"
-                f" not yield expected message. \n"
-                f"Expected message: Removed service {service_name}\n"
-                f"Current message: {out}"
-            )
-            log.error(log_err_msg)
-        time.sleep(5)
-        if service_name in self.run_ceph_command("ceph orch ls", client_exec=True):
+        end_time = datetime.datetime.now() + datetime.timedelta(seconds=180)
+        while end_time > datetime.datetime.now():
+            out, _ = self.client.exec_command(cmd=cmd)
+
+            if "Removed service" not in out:
+                log_err_msg = (
+                    f"ceph orch rm {service_name} command execution did"
+                    f" not yield expected message. \n"
+                    f"Expected message: Removed service {service_name}\n"
+                    f"Current message: {out}"
+                )
+                log.error(log_err_msg)
+            time.sleep(5)
+            if service_name not in self.list_orch_services():
+                log_info_msg = f"Removed service {service_name} successfully"
+                log.info(log_info_msg)
+                return True
             log_err_msg = (
                 f"Service {service_name} removal failed."
                 f" Service is listed in `ceph orch ls` output"
             )
             log.error(log_err_msg)
+            log.info("Retrying after 15 secs")
+            time.sleep(15)
+        else:
             return False
-
-        log_info_msg = f"Removed service {service_name} successfully"
-        log.info(log_info_msg)
-        return True
 
     def lookup_log_message(
         self, init_time, end_time, daemon_type, daemon_id, search_string
