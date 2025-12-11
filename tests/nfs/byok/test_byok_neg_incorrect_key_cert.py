@@ -8,7 +8,6 @@ from tests.nfs.byok.byok_tools import (
     clean_up_gklm,
     create_nfs_instance_for_byok,
     get_enctag,
-    get_gklm_ca_certificate,
     load_gklm_config,
     nfs_byok_test_setup,
     setup_gklm_infrastructure,
@@ -323,18 +322,15 @@ def gklm_setup():
     gklm_ip = byok_setup_params["gklm_ip"]
     gklm_user = byok_setup_params["gklm_user"]
     gklm_password = byok_setup_params["gklm_password"]
-    gklm_node_user = byok_setup_params["gklm_node_user"]
-    gklm_node_password = byok_setup_params["gklm_node_password"]
+
     gklm_hostname = byok_setup_params["gklm_hostname"]
     gklm_client_name = byok_setup_params["gklm_client_name"]
     gklm_cert_alias = byok_setup_params["gklm_cert_alias"]
     nfs_nodes = byok_setup_params["nfs_nodes"]
     nfs_node = nfs_nodes[0]
-    exe_node = setup_gklm_infrastructure(
+    setup_gklm_infrastructure(
         nfs_nodes=nfs_nodes,
         gklm_ip=gklm_ip,
-        gklm_node_username=gklm_node_user,
-        gklm_node_password=gklm_node_password,
         gklm_hostname=gklm_hostname,
     )
     gklm_rest_client = GklmClient(
@@ -368,13 +364,8 @@ def gklm_setup():
     # ------------------- Prerequisites and Certificate Export -------------------
     # Ensure SSH access, hostname resolution, and certificate availability
     log.info("Setting up SSH and CA certificate prerequisites on NFS and GKLM nodes")
-    ca_cert = get_gklm_ca_certificate(
-        gklm_ip=gklm_ip,
-        gklm_node_username=gklm_node_user,
-        gklm_node_password=gklm_node_password,
-        gkml_servering_cert_name=gklm_hostname,
-        exe_node=exe_node,
-        gklm_rest_client=gklm_rest_client,
+    ca_cert = gklm_rest_client.certificates.get_system_certificate(
+        cert_name=gklm_hostname
     )
     log.info("CA certificate successfully retrieved \n %s", ca_cert)
     return enctag, rsa_key, cert, ca_cert, gklm_rest_client

@@ -2,9 +2,13 @@ import os
 from typing import Any, Dict, List, Optional
 
 import requests
+import urllib3
 
 from utility.gklm_client.auth import GklmAuth
 from utility.utils import generate_self_signed_certificate
+
+# Suppress the InsecureRequestWarning
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 
 class GklmCertificate:
@@ -12,6 +16,56 @@ class GklmCertificate:
         self.auth = auth
         self.base_url = auth.base_url
         self.verify = auth.verify
+
+    def get_system_certificate(self, cert_name: str) -> str:
+        """
+        Export CA certificate from GKLM server.
+
+        Args:
+            cert_name: Name of the certificate to export
+                      (e.g., 'ceph-nfs-gklm-server-e7y1nk-node1-installer')
+
+        Returns:
+            Certificate content as string (PEM format)
+
+        Raises:
+            RuntimeError: If the HTTP request fails with an error status
+        """
+        endpoint = "/system/certificates/export/{}".format(cert_name)
+        url = "{}{}".format(self.base_url, endpoint)
+
+        headers = self.auth._headers()
+        headers["Accept"] = "application/octet-stream"
+
+        try:
+            resp = requests.get(url, headers=headers, verify=self.verify)
+
+            if resp.status_code == 200:
+                # Convert bytes to string and normalize line endings
+                cert_content = resp.content.decode("utf-8")
+                # Remove carriage returns and normalize newlines
+                cert_content = cert_content.replace("\r\n", "\n").replace("\r", "")
+                return cert_content
+
+            else:
+                content_type = resp.headers.get("Content-Type", "")
+                if "application/json" in content_type:
+                    err = resp.json().get("message", resp.text)
+                else:
+                    err = resp.text or "HTTP {}".format(resp.status_code)
+
+                raise RuntimeError(
+                    "Export CA certificate '{}' failed ({}): {}".format(
+                        cert_name, resp.status_code, err
+                    )
+                )
+
+        except requests.exceptions.RequestException as e:
+            raise RuntimeError(
+                "An error occurred while exporting CA certificate '{}': {}".format(
+                    cert_name, str(e)
+                )
+            )
 
     def get_certificates(self, subject: dict, create_files=False) -> tuple:
         key, cert, ca = generate_self_signed_certificate(subject=subject)
