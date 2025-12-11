@@ -252,16 +252,13 @@ def wait_for_daemon_status(
 
         sleep_duration_in_seconds = 10
         log_info_msg = (
-            f"\n Current status of {daemon_type}.{daemon_id} is {curr_status}"
+            f"\n Current status of {daemon_type}.{daemon_id} is {curr_status}."
+            f"\n Expected status of {daemon_type}.{daemon_id} is {status}"
+            f"\n Retrying after {sleep_duration_in_seconds} seconds."
         )
-        f"\n Expected status of {daemon_type}.{daemon_id} is {status}"
-        f"\n Retrying after {sleep_duration_in_seconds} seconds."
         log.info(log_info_msg)
         time.sleep(sleep_duration_in_seconds)
     else:
-        log_error_msg = (
-            f"\n Status of {daemon_type}.{daemon_id} is not changed to {status}"
-        )
-        f"\n after {timeout} seconds."
+        log_error_msg = f"\n Status of {daemon_type}.{daemon_id} is not changed to {status} after {timeout} seconds."
         log.error(log_error_msg)
         return False

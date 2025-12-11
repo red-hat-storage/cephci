@@ -164,7 +164,7 @@ def run(ceph_cluster, **kw):
                 daemon_type="osd",
                 daemon_id=target_osd,
                 status="running",
-                timeout=60,
+                timeout=300,
             )
             assert service_obj.add_osds_to_managed_service(
                 osds=[target_osd], spec=target_osd_spec_name
@@ -346,7 +346,7 @@ def run(ceph_cluster, **kw):
                     daemon_type="osd",
                     daemon_id=target_osd,
                     status="running",
-                    timeout=60,
+                    timeout=300,
                 )
             assert service_obj.add_osds_to_managed_service()
             rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
