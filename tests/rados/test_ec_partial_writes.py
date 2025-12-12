@@ -335,28 +335,17 @@ def run(ceph_cluster, **kw):
         time.sleep(2)
 
         # Test 0.5: EC Object Truncation Tests
-        # DISABLED: Truncate tests are blocked by the following bugs:
-        # - BZ#2419667: Fast EC OSD key-not-found exception on truncate
-        #   https://bugzilla.redhat.com/show_bug.cgi?id=2419667
-        #   Issue: Truncate to N * K * stripe_unit causes key-not-found exception
-        # - BZ#2419827: [Fast EC] OSDs crashed in ECTransaction::WritePlanObj
-        #   https://bugzilla.redhat.com/show_bug.cgi?id=2419827
-        #   Issue: OSDs crash and are unable to boot up after truncate operations
-        # TODO: Uncomment once the above bugs are fixed:
-        # log.info("Test 0.5: EC Object Truncation tests with boundary conditions")
-        # if not run_truncate_tests(
-        #     rados_obj=rados_obj,
-        #     pool_name=ec_pool_name,
-        #     stripe_unit=stripe_unit,
-        #     ec_k=ec_k,
-        #     ec_m=ec_m,
-        # ):
-        #     log.error("EC Truncation tests failed")
-        #     return 1
-        # time.sleep(2)
-        log.info(
-            "Test 0.5: EC Object Truncation tests SKIPPED - blocked by BZ#2419667, BZ#2419827"
-        )
+        log.info("Test 0.5: EC Object Truncation tests with boundary conditions")
+        if not run_truncate_tests(
+            rados_obj=rados_obj,
+            pool_name=ec_pool_name,
+            stripe_unit=stripe_unit,
+            ec_k=ec_k,
+            ec_m=ec_m,
+        ):
+            log.error("EC Truncation tests failed")
+            return 1
+        time.sleep(2)
 
         # Test 0.6: EC Object Append Tests
         log.info("Test 0.6: EC Object Append tests with boundary conditions")
@@ -1632,28 +1621,21 @@ def run_append_tests(
         # =====================================================================
         # TEST GROUP 6: Append after truncate
         # =====================================================================
-        # TODO: Uncomment this test when issues with truncate are fixed
-        #       BZ#2419667: Fast EC OSD key-not-found exception on truncate
-        #       https://bugzilla.redhat.com/show_bug.cgi?id=2419667
-        #       Issue: Truncate to N * K * stripe_unit causes key-not-found exception
-        #       BZ#2419827: [Fast EC] OSDs crashed in ECTransaction::WritePlanObj
-        #       https://bugzilla.redhat.com/show_bug.cgi?id=2419827
-        #       Issue: OSDs crash and are unable to boot up after truncate operations
-        # log.info("-" * 50)
-        # log.info("TEST GROUP 6: Append after truncate (shard version interaction)")
-        # log.info("-" * 50)
+        log.info("-" * 50)
+        log.info("TEST GROUP 6: Append after truncate (shard version interaction)")
+        log.info("-" * 50)
 
-        # result = _run_append_after_truncate_test(
-        #     rados_obj=rados_obj,
-        #     pool_name=pool_name,
-        #     stripe_unit=stripe_unit,
-        #     stripe_width=stripe_width,
-        # )
-        # test_results.append(result)
-        # if result["passed"]:
-        #     passed += 1
-        # else:
-        #     failed += 1
+        result = _run_append_after_truncate_test(
+            rados_obj=rados_obj,
+            pool_name=pool_name,
+            stripe_unit=stripe_unit,
+            stripe_width=stripe_width,
+        )
+        test_results.append(result)
+        if result["passed"]:
+            passed += 1
+        else:
+            failed += 1
 
         # =====================================================================
         # TEST GROUP 7: Append after partial overwrite
