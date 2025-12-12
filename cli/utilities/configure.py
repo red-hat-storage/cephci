@@ -330,12 +330,20 @@ def setup_installer_node(
             "Ceph tools repo is required for installing CephAdm"
         )
 
+    # Setup ssh keys
+    setup_ssh_keys(installer, nodes)
+
     # Install license for IBM builds
     if ibm_build:
         setup_ibm_licence(nodes, build_type)
 
-    # Setup ssh keys
-    setup_ssh_keys(installer, nodes)
+        # Accept IBM license to skip installation interruption
+        for node in nodes:
+            node.exec_command(
+                cmd="sudo mkdir -p /usr/share/ibm-storage-ceph-license && "
+                "sudo touch /usr/share/ibm-storage-ceph-license/accept",
+                sudo=True,
+            )
 
     # Check for ansible preflight
     if not ansible_preflight:
@@ -343,12 +351,6 @@ def setup_installer_node(
         install_cephadm(installer, build_type)
 
         return True
-
-    # Install cephadm ansible preflight
-    install_cephadm_ansible(installer, ceph_version, platform, tools_repo, build_type)
-
-    # Configure cephadm ansible inventory hosts
-    configure_cephadm_ansible_inventory(nodes)
 
     installer.exec_command(
         sudo=True,
@@ -358,6 +360,12 @@ def setup_installer_node(
             "chown -R cephuser:cephuser /home/cephuser/ansible"
         ),
     )
+
+    # Install cephadm ansible preflight
+    install_cephadm_ansible(installer, ceph_version, platform, tools_repo, build_type)
+
+    # Configure cephadm ansible inventory hosts
+    configure_cephadm_ansible_inventory(nodes)
 
     # Execute cephadm ansible preflight playbook
     exec_cephadm_preflight(installer, build_type, ibm_build, tools_repo)
