@@ -8,6 +8,7 @@ from tests.nvmeof.workflows.constants import (
     DEFAULT_LISTENER_PORT,
     DEFAULT_NVME_METADATA_POOL,
 )
+from tests.nvmeof.workflows.initiator import NVMeInitiator
 from utility.log import Log
 from utility.utils import generate_unique_id
 
@@ -122,7 +123,7 @@ def validate_hosts(gateway, expected_hosts, nqn):
                 )
 
 
-def configure_hosts(gateway, config: dict):
+def configure_hosts(gateway, config: dict, ceph_cluster=None):
     """
     Configure hosts for this specific gateway.
     This is called per gateway since each gateway needs its own hosts.
@@ -151,13 +152,12 @@ def configure_hosts(gateway, config: dict):
 
             for host in hosts:
                 node_id = host.get("node") if isinstance(host, dict) else host
-                initiator_node = get_node_by_id(gateway.ceph_cluster, node_id)
-                initiator = Initiator(initiator_node)
-                gateway.host.add(
-                    **{"args": {"subsystem": nqn, "host": initiator.nqn()}}
-                )
+                initiator_node = get_node_by_id(ceph_cluster, node_id)
+                initiator = NVMeInitiator(initiator_node)
+                initiator_nqn = initiator.initiator_nqn()
+                gateway.host.add(**{"args": {"subsystem": nqn, "host": initiator_nqn}})
 
-            validate_hosts(gateway, hosts, nqn)
+            validate_hosts(gateway, [initiator_nqn], nqn)
 
 
 def validate_namespaces(gateway, expected_namespaces, nqn):
@@ -336,7 +336,7 @@ def configure_listeners(gateways, config: dict):
                 validate_listeners(gateway, expected_listeners, nqn)
 
 
-def configure_gw_entities(nvme_service, rbd_obj=None):
+def configure_gw_entities(nvme_service, rbd_obj=None, cluster=None):
     """
     Configure gateway entities for the NVMe service.
     This includes:
@@ -353,7 +353,9 @@ def configure_gw_entities(nvme_service, rbd_obj=None):
     if subsystem_config:
         configure_subsystems(nvme_service)
         configure_listeners(nvme_service.gateways, nvme_service.config)
-        configure_hosts(nvme_service.gateways[0], nvme_service.config)
+        configure_hosts(
+            nvme_service.gateways[0], nvme_service.config, ceph_cluster=cluster
+        )
         configure_namespaces(
             nvme_service.gateways[0], nvme_service.config, rbd_obj=rbd_obj
         )

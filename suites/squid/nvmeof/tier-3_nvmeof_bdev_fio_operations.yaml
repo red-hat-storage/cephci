@@ -127,7 +127,7 @@ tests:
             listener_port: 4420
             allow_host: "*"
         initiators: # Configure Initiators with all pre-req
-          - subnqn: nqn.2016-06.io.spdk:ceph-83575814
+          - nqn: nqn.2016-06.io.spdk:ceph-83575814
             listener_port: 4420
             node: node10
         cleanup:
