@@ -19,6 +19,7 @@ from libcloud.compute.types import Provider
 from cli.utilities.configure import add_centos_epel_repo
 from compute.baremetal import CephBaremetalNode
 from compute.ibm_vpc import CephVMNodeIBM, get_ibm_service
+from compute.ibm_one_cloud import IbmOneCloud
 from compute.openstack import CephVMNodeV2, NetworkOpFailure, NodeError, VolumeOpFailure
 from utility.log import Log
 from utility.retry import retry
@@ -32,7 +33,7 @@ RETRY_EXCEPTIONS = (NodeError, VolumeOpFailure, NetworkOpFailure)
 DEFAULT_OSBS_SERVER = "http://file.corp.redhat.com/~kdreyer/osbs/"
 
 
-def cleanup_ibmc_ceph_nodes(ibm_cred, pattern, custom_config=None):
+def cleanup_ibmc_ceph_nodes (ibm_cred, pattern, custom_config=None):
     """
     Clean up the DNS records, instance and volumes that matches the given pattern.
 
@@ -90,7 +91,7 @@ def cleanup_ibmc_ceph_nodes(ibm_cred, pattern, custom_config=None):
     log.info(f"Done cleaning up nodes with pattern {pattern}")
 
 
-def create_baremetal_ceph_nodes(cluster_conf):
+def create_baremetal_ceph_nodes (cluster_conf):
     """
     Creates the nodes with cluster details provided
 
@@ -128,16 +129,17 @@ def create_baremetal_ceph_nodes(cluster_conf):
     return ceph_nodes
 
 
-def setup_vm_node_baremetal(node, ceph_nodes, **params):
+def setup_vm_node_baremetal (node, ceph_nodes, **params):
     """
     Create the VM node using details provided.
     """
+    print(">>>>>>>>>>>>>>>>>>>")
     vm = CephBaremetalNode(**params)
     vm.role = params["role"]
     ceph_nodes[node] = vm
 
 
-def process_ibmc_custom_config(custom_config):
+def process_ibmc_custom_config (custom_config):
     """Process the custom config for IBM target VPC.
 
     Users can provide a specific VPC for deployment. This information is
@@ -189,13 +191,13 @@ def process_ibmc_custom_config(custom_config):
     return platform_dict
 
 
-def create_ibmc_ceph_nodes(
-    cluster_conf,
-    inventory,
-    ibm_creds,
-    run_id,
-    instances_name=None,
-    custom_config=None,
+def create_ibmc_ceph_nodes (
+        cluster_conf,
+        inventory,
+        ibm_creds,
+        run_id,
+        instances_name=None,
+        custom_config=None,
 ):
     """
     creates instances in IBM cloud
@@ -231,7 +233,7 @@ def create_ibmc_ceph_nodes(
     params["zone_name"] = platform["dns_zone_name"] or ibm_cred["zone_name"]
     params["vpc_name"] = platform["vpc_name"] or ibm_cred["vpc_name"]
     params["zone_id_model_name"] = (
-        platform["datacenters"] or ibm_cred["zone_id_model_name"]
+            platform["datacenters"] or ibm_cred["zone_id_model_name"]
     )
     params["resource_group_id"] = ibm_cred["resource_group_id"]
     params["dns_svc_id"] = ibm_cred["dns_svc_id"]
@@ -313,7 +315,7 @@ def create_ibmc_ceph_nodes(
 
 
 @retry(RETRY_EXCEPTIONS, tries=3, delay=10)
-def setup_vm_node_ibm(node, ceph_nodes, **params):
+def setup_vm_node_ibm (node, ceph_nodes, **params):
     """
     Create the VM node using IBM API calls.
 
@@ -363,8 +365,8 @@ def setup_vm_node_ibm(node, ceph_nodes, **params):
         raise
 
 
-def create_ceph_nodes(
-    cluster_conf, inventory, osp_cred, run_id, instances_name=None, enable_eus=False
+def create_ceph_nodes (
+        cluster_conf, inventory, osp_cred, run_id, instances_name=None, enable_eus=False
 ):
     log.info("Creating osp instances")
     osp_glbs = osp_cred.get("globals")
@@ -456,7 +458,7 @@ def create_ceph_nodes(
 
 
 @retry(RETRY_EXCEPTIONS, tries=3, delay=10)
-def setup_vm_node(node, ceph_nodes, **params):
+def setup_vm_node (node, ceph_nodes, **params):
     """
     Create the VM node using OpenStack API calls.
 
@@ -506,7 +508,7 @@ def setup_vm_node(node, ceph_nodes, **params):
         raise
 
 
-def get_openstack_driver(yaml):
+def get_openstack_driver (yaml):
     OpenStack = get_driver(Provider.OPENSTACK)
     glbs = yaml.get("globals")
     os_cred = glbs.get("openstack-credentials")
@@ -531,7 +533,7 @@ def get_openstack_driver(yaml):
     return driver
 
 
-def cleanup_ceph_nodes(osp_cred, pattern=None, timeout=300):
+def cleanup_ceph_nodes (osp_cred, pattern=None, timeout=300):
     log.info("Destroying existing osp instances..")
     user = os.getlogin()
     name = pattern if pattern else "-{user}-".format(user=user)
@@ -573,7 +575,7 @@ def cleanup_ceph_nodes(osp_cred, pattern=None, timeout=300):
     log.info("Done cleaning up nodes")
 
 
-def volume_cleanup(volume, osp_cred):
+def volume_cleanup (volume, osp_cred):
     log.info("Removing volume %s", volume.name)
     errors = {}
     driver = get_openstack_driver(osp_cred)
@@ -599,19 +601,19 @@ def volume_cleanup(volume, osp_cred):
                     return 1
 
 
-def keep_alive(ceph_nodes):
+def keep_alive (ceph_nodes):
     for node in ceph_nodes:
         node.exec_command(cmd="uptime", check_ec=False)
 
 
-def setup_repos(
-    ceph,
-    base_url,
-    platform=None,
-    installer_url=None,
-    repos=["MON", "OSD", "Tools"],
-    cloud_type="openstack",
-    ibm_build=False,
+def setup_repos (
+        ceph,
+        base_url,
+        platform=None,
+        installer_url=None,
+        repos=["MON", "OSD", "Tools"],
+        cloud_type="openstack",
+        ibm_build=False,
 ):
     if base_url.endswith(".repo"):
         cmd = f"yum-config-manager --add-repo {base_url}"
@@ -643,8 +645,8 @@ def setup_repos(
         inst_file.flush()
 
 
-def check_ceph_healthly(
-    ceph_mon, num_osds, num_mons, build, mon_container=None, timeout=300
+def check_ceph_healthly (
+        ceph_mon, num_osds, num_mons, build, mon_container=None, timeout=300
 ):
     """
     Function to check ceph is in healthy state
@@ -725,23 +727,23 @@ def check_ceph_healthly(
     return 0
 
 
-def generate_repo_file(base_url, repos, cloud_type="openstack"):
+def generate_repo_file (base_url, repos, cloud_type="openstack"):
     return Ceph.generate_repository_file(base_url, repos, cloud_type)
 
 
-def get_iso_file_url(base_url):
+def get_iso_file_url (base_url):
     return Ceph.get_iso_file_url(base_url)
 
 
-def create_ceph_conf(
-    fsid,
-    mon_hosts,
-    pg_num="128",
-    pgp_num="128",
-    size="2",
-    auth="cephx",
-    pnetwork="172.16.0.0/12",
-    jsize="1024",
+def create_ceph_conf (
+        fsid,
+        mon_hosts,
+        pg_num="128",
+        pgp_num="128",
+        size="2",
+        auth="cephx",
+        pnetwork="172.16.0.0/12",
+        jsize="1024",
 ):
     fsid = "fsid = " + fsid + "\n"
     mon_init_memb = "mon initial members = "
@@ -760,29 +762,29 @@ def create_ceph_conf(
     mon_host = mon_host[:-1] + "\n"
     conf = "[global]\n"
     conf = (
-        conf
-        + fsid
-        + mon_init_memb
-        + mon_host
-        + public_network
-        + auth
-        + size
-        + jsize
-        + pgnum
-        + pgpnum
+            conf
+            + fsid
+            + mon_init_memb
+            + mon_host
+            + public_network
+            + auth
+            + size
+            + jsize
+            + pgnum
+            + pgpnum
     )
     return conf
 
 
-def setup_deb_repos(node, ubuntu_repo):
+def setup_deb_repos (node, ubuntu_repo):
     node.exec_command(cmd="sudo rm -f /etc/apt/sources.list.d/*")
     repos = ["MON", "OSD", "Tools"]
     for repo in repos:
         cmd = (
-            "sudo echo deb "
-            + ubuntu_repo
-            + "/{0}".format(repo)
-            + " $(lsb_release -sc) main"
+                "sudo echo deb "
+                + ubuntu_repo
+                + "/{0}".format(repo)
+                + " $(lsb_release -sc) main"
         )
         node.exec_command(cmd=cmd + " > " + "/tmp/{0}.list".format(repo))
         node.exec_command(
@@ -803,7 +805,7 @@ def setup_deb_repos(node, ubuntu_repo):
     node.exec_command(cmd="sudo apt-get update")
 
 
-def setup_deb_cdn_repo(node, build=None):
+def setup_deb_cdn_repo (node, build=None):
     user = "redhat"
     passwd = "OgYZNpkj6jZAIF20XFZW0gnnwYBjYcmt7PeY76bLHec9"
     num = build.split(".")[0]
@@ -821,7 +823,7 @@ def setup_deb_cdn_repo(node, build=None):
     node.exec_command(sudo=True, cmd="apt-get update")
 
 
-def update_ca_cert(node, cert_url, out_file, timeout=120, check_ec=True):
+def update_ca_cert (node, cert_url, out_file, timeout=120, check_ec=True):
     """
     Update CA cert in the nodes.
       by default options picked for RHEL platforms
@@ -850,7 +852,7 @@ def update_ca_cert(node, cert_url, out_file, timeout=120, check_ec=True):
         )
 
 
-def search_ethernet_interface(ceph_node, ceph_node_list):
+def search_ethernet_interface (ceph_node, ceph_node_list):
     """
     Search interface on the given node node which allows every node in the cluster accesible by it's shortname.
 
@@ -861,7 +863,7 @@ def search_ethernet_interface(ceph_node, ceph_node_list):
     return ceph_node.search_ethernet_interface(ceph_node_list)
 
 
-def config_ntp(ceph_node, cloud_type="openstack"):
+def config_ntp (ceph_node, cloud_type="openstack"):
     """
     Configure NTP/Chronyc service based on the OS platform
 
@@ -912,7 +914,7 @@ def config_ntp(ceph_node, cloud_type="openstack"):
     return True
 
 
-def get_ceph_versions(ceph_nodes, containerized=False):
+def get_ceph_versions (ceph_nodes, containerized=False):
     """
     Log and return the ceph or ceph-ansible versions for each node in the cluster.
 
@@ -994,7 +996,7 @@ def get_ceph_versions(ceph_nodes, containerized=False):
     return versions_dict
 
 
-def hard_reboot(gyaml, name=None):
+def hard_reboot (gyaml, name=None):
     user = os.getlogin()
     if name is None:
         name = "ceph-" + user
@@ -1007,7 +1009,7 @@ def hard_reboot(gyaml, name=None):
     return 0
 
 
-def node_power_failure(gyaml, sleep_time=300, name=None):
+def node_power_failure (gyaml, sleep_time=300, name=None):
     user = os.getlogin()
     if name is None:
         name = "ceph-" + user
@@ -1031,7 +1033,7 @@ def node_power_failure(gyaml, sleep_time=300, name=None):
     return 0
 
 
-def get_root_permissions(node, path):
+def get_root_permissions (node, path):
     """
     Transfer ownership of root to current user for the path given. Recursive.
     Args:
@@ -1041,7 +1043,7 @@ def get_root_permissions(node, path):
     node.obtain_root_permissions(path)
 
 
-def get_public_network(nodes):
+def get_public_network (nodes):
     """Get the configured public network subnet from nodes in the cluster.
 
     Args:
@@ -1057,7 +1059,7 @@ def get_public_network(nodes):
     return ",".join(subnets)
 
 
-def get_disk_info(node):
+def get_disk_info (node):
     """
     Get node disk(s) info
 
@@ -1094,7 +1096,7 @@ def get_disk_info(node):
     return disks
 
 
-def get_node_by_id(cluster, node_name):
+def get_node_by_id (cluster, node_name):
     """
     Fetch node using provided node substring::
 
@@ -1133,7 +1135,7 @@ def get_node_by_id(cluster, node_name):
                 return node
 
 
-def get_nodes_by_ids(cluster, node_names):
+def get_nodes_by_ids (cluster, node_names):
     """
     Fetch nodes using provided substring of nodes
 
@@ -1158,7 +1160,7 @@ def get_nodes_by_ids(cluster, node_names):
     return nodes
 
 
-def fetch_image_builds(version):
+def fetch_image_builds (version):
     """
     Fetch ceph container image builds
 
@@ -1187,7 +1189,7 @@ def fetch_image_builds(version):
         raise AssertionError(f"Ceph Image builds not found : {DEFAULT_OSBS_SERVER}")
 
 
-def fetch_build(version, custom_build):
+def fetch_build (version, custom_build):
     """
     Fetch build details based on the custom build
     Args:
@@ -1205,7 +1207,7 @@ def fetch_build(version, custom_build):
     """
     builds = fetch_image_builds(version)
 
-    def get_build_details(build):
+    def get_build_details (build):
         build = requests.get(f"{DEFAULT_OSBS_SERVER}{build.name}", verify=False).json()
         return build.get("compose_url"), build.get("repository")
 
@@ -1220,7 +1222,7 @@ def fetch_build(version, custom_build):
         raise NotImplementedError
 
 
-def translate_to_ip(clusters, cluster_name: str, string: str) -> str:
+def translate_to_ip (clusters, cluster_name: str, string: str) -> str:
     """
     Return the string after replacing node_ip: <node> pattern with IP address of <node>.
 
@@ -1250,7 +1252,7 @@ def translate_to_ip(clusters, cluster_name: str, string: str) -> str:
     return replaced_string
 
 
-def set_container_info(ceph_cluster, config, use_cdn, containerized):
+def set_container_info (ceph_cluster, config, use_cdn, containerized):
     """
     Set container information in ansible configuration
     Args:
@@ -1276,7 +1278,7 @@ def set_container_info(ceph_cluster, config, use_cdn, containerized):
     return ansi_config
 
 
-def is_legacy_container_present(ceph_cluster):
+def is_legacy_container_present (ceph_cluster):
     """
     Verifies if any legacy containers are present in any of the nodes in the cluster
     Args:
@@ -1297,7 +1299,7 @@ def is_legacy_container_present(ceph_cluster):
     return False
 
 
-def systemctl(node, op, unit):
+def systemctl (node, op, unit):
     """Execute systemctl command operation(op) on specific service unit.
 
     Args:
@@ -1315,7 +1317,7 @@ def systemctl(node, op, unit):
     return out, err
 
 
-def host_shutdown(gyaml, name) -> bool:
+def host_shutdown (gyaml, name) -> bool:
     """
     Method to shut down the openstack instance
     Args:
@@ -1343,7 +1345,7 @@ def host_shutdown(gyaml, name) -> bool:
     return False
 
 
-def host_restart(gyaml, name) -> bool:
+def host_restart (gyaml, name) -> bool:
     """
     Method to restart the openstack instance
     Args:
@@ -1371,7 +1373,7 @@ def host_restart(gyaml, name) -> bool:
     return False
 
 
-def find_vm_node_by_hostname(ceph_cluster, target_hostname):
+def find_vm_node_by_hostname (ceph_cluster, target_hostname):
     """
     Find and return the vm_node object based on the target hostname.
     Args:
@@ -1390,8 +1392,163 @@ def find_vm_node_by_hostname(ceph_cluster, target_hostname):
     )
 
 
-def is_client(ceph_node):
+def is_client (ceph_node):
     """
     Return True if client node else False
     """
     return len(ceph_node.role.role_list) == 1 and "client" in ceph_node.role.role_list
+
+
+def create_one_cloud_ceph_nodes(cluster_conf,
+        inventory,
+        ibm_creds,
+        run_id,
+        instances_name=None,
+        custom_config=None,
+):
+    """
+    creates instances in IBM cloud
+
+    Args:
+         cluster_conf     configuration of cluster
+         inventory        Instance configuration file
+         ibm_creds        global configuration file(ibm)
+         run_id           unique id for the run
+         instances_name   Name of the instance
+         custom_config    CLI options passed to execution.
+    """
+    log.info("Creating IBM instances")
+    ibm_glbs = ibm_creds.get("globals")
+    ibm_cred = ibm_glbs.get("one-cloud-credentials")
+    ceph_cluster = cluster_conf.get("ceph-cluster")
+    platform = process_ibmc_custom_config(custom_config)
+
+    # Finalized variables
+    params = dict()
+    ceph_nodes = dict()
+
+    if ceph_cluster.get("inventory"):
+        inventory_path = os.path.abspath(ceph_cluster.get("inventory"))
+        with open(inventory_path, "r") as inventory_stream:
+            inventory = yaml.safe_load(inventory_stream)
+
+    node_count = 0
+
+    params["cloud-data"] = inventory.get("instance").get("setup")
+    params["notes"] = "Test VM created using automation"
+    params["resources"] = inventory.get("instance").get("resources")
+    params["project_id"] = inventory.get("instance").get("project_id")
+    params["site"] = inventory.get("instance").get("site")
+    params["groupid"] = inventory.get("instance").get("groupid")
+    params["vlan"] = inventory.get("instance").get("vlan")
+
+    if inventory.get("instance").get("create"):
+        if ceph_cluster.get("image-name"):
+            params["image_id"] = ceph_cluster.get("image-name")
+        else:
+            params["image_id"] = (
+                inventory.get("instance").get("create").get("image-name")
+            )
+
+        params["cluster-name"] = ceph_cluster.get("name")
+
+        if params.get("root-login") is False:
+            params["root-login"] = False
+        else:
+            params["root-login"] = True
+
+        with parallel() as p:
+            for node in range(1, 100):
+                node = "node" + str(node)
+                if not ceph_cluster.get(node):
+                    break
+
+                node_dict = ceph_cluster.get(node)
+                node_params = params.copy()
+                node_params["role"] = RolesContainer(node_dict.get("role"))
+                node_params["id"] = node_dict.get("id") or node
+                node_params["location"] = node_dict.get("location")
+                node_params["node-name"] = generate_node_name(
+                    node_params.get("cluster-name", "ceph"),
+                    instances_name,
+                    run_id,
+                    node,
+                    node_params["role"],
+                )
+
+                if node_dict.get("no-of-volumes"):
+                    node_params["no-of-volumes"] = node_dict.get("no-of-volumes")
+                    node_params["size-of-disks"] = node_dict.get("disk-size")
+                    # osd-scenario option is not mandatory and,
+                    # can be used only for specific OSD_SCENARIO
+                    node_params["osd-scenario"] = node_dict.get("osd-scenario")
+
+                if node_dict.get("image-name"):
+                    node_params["image-name"] = node_dict["image-name"]["ibmc"]
+
+                if node_dict.get("cloud-data"):
+                    node_params["cloud-data"] = node_dict.get("cloud-data")
+
+                # Throttling the spawning of VSI's to avoid hammering of provisioner
+                sleep(node_count * 5)
+                node_count += 1
+
+                p.spawn(setup_vm_node_ibm_one_cloud, node, ceph_nodes, **node_params)
+
+    if len(ceph_nodes) != node_count:
+        log.error(
+            f"Mismatch error in number of VMs creation. "
+            f"Initiated: {node_count}  \tSpawned: {len(ceph_nodes)}"
+        )
+        raise NodeError("Required number of nodes not created")
+
+    log.info("Done creating nodes")
+    return ceph_nodes
+
+@retry(RETRY_EXCEPTIONS, tries=3, delay=10)
+def setup_vm_node_ibm_one_cloud (node, ceph_nodes, **params):
+    """
+    Create the VM node using IBM API calls.
+
+    The retry decorator will trigger a rerun when a soft error is encountered. The VM
+    node is removed in exception scope before throwing raising the exception again.
+    """
+    vm = None
+    try:
+        vm = IbmOneCloud(
+            token=None,
+        )
+
+        vm.create(
+            node_name=params["node-name"],
+            image_name=params["image-name"],
+            network_name=params["network_name"],
+            private_key=params["private_key"],
+            vpc_name=params["vpc_name"],
+            profile=params["profile"],
+            group_access=params["group_access"],
+            zone_name=params["zone_name"],
+            zone_id_model_name=params["zone_id_model_name"],
+            resource_group_id=params["resource_group_id"],
+            dns_svc_id=params["dns_svc_id"],
+            size_of_disks=params.get("size-of-disks", 0),
+            no_of_volumes=params.get("no-of-volumes", 0),
+            userdata=params.get("cloud-data", ""),
+        )
+
+        vm.role = params["role"]
+        vm.root_login = params["root-login"]
+        vm.osd_scenario = params.get("osd-scenario")
+        vm.location = params.get("location")
+        vm.id = params.get("id")
+        ceph_nodes[node] = vm
+    except RETRY_EXCEPTIONS as retry_except:
+        log.warning(retry_except, exc_info=True)
+        if vm is not None:
+            vm.delete(params["zone_name"])
+
+        raise
+    except BaseException as be:  # noqa
+        log.error(be, exc_info=True)
+        raise
+

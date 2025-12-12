@@ -26,6 +26,7 @@ from ceph.utils import (
     create_baremetal_ceph_nodes,
     create_ceph_nodes,
     create_ibmc_ceph_nodes,
+    create_one_cloud_ceph_nodes
 )
 from cephci.cluster_info import get_ceph_var_logs
 from cephci.utils.build_info import CephTestManifest
@@ -234,6 +235,10 @@ def create_nodes(
             )
         elif "baremetal" in cloud_type:
             ceph_vmnodes = create_baremetal_ceph_nodes(cluster)
+        elif "one-cloud" in cloud_type:
+            ceph_vmnodes = create_one_cloud_ceph_nodes(
+                cluster, inventory, osp_cred, run_id, instances_name, custom_config
+            )
         else:
             log.error(f"Unknown cloud type: {cloud_type}")
             raise AssertionError("Unsupported test environment.")
