@@ -58,14 +58,16 @@ def run(ceph_cluster, **kw):
     min_alloc_size_to_test = config.get("min_alloc_size_to_test", [4096])
     min_alloc_size_variations = config.get("min_alloc_size_variations", [10, -10])
     pool_level_compression = config.get("pool_level_compression", True)
-    compression_config = {
-        "rados_obj": rados_obj,
-        "mon_obj": mon_obj,
-        "cephadm": cephadm,
-        "client_node": client_node,
-        "ceph_cluster": ceph_cluster,
-    }
-    bluestore_compression = BluestoreDataCompression(**compression_config)
+    pool_type = config.get("pool_type", "replicated")
+    bluestore_compression = BluestoreDataCompression(
+        rados_obj=rados_obj,
+        cephadm=cephadm,
+        mon_obj=mon_obj,
+        client_node=client_node,
+        ceph_cluster=ceph_cluster,
+        pool_type=pool_type,
+    )
+    compression_algorithm = config.get("compression_algorithm", "snappy")
     try:
 
         log.info(
@@ -103,6 +105,7 @@ def run(ceph_cluster, **kw):
                         "compression_mode": compression_mode,
                         "alloc_hint": obj_alloc_hint,
                         "pool_level_compression": pool_level_compression,
+                        "compression_algorithm": compression_algorithm,
                     }
                     bluestore_compression.validate_compression_modes(**kwargs)
 
@@ -124,7 +127,7 @@ def run(ceph_cluster, **kw):
                     pool_id = "".join(
                         random.choices(string.ascii_letters + string.digits, k=6)
                     )
-                    pool_name = f"test-recompress-{pool_id}"
+                    pool_name = f"rados-comp-{pool_id}"
 
                     kwargs = {
                         "pool_name": pool_name,
@@ -133,6 +136,7 @@ def run(ceph_cluster, **kw):
                         "recompression_min_gain": recompression_min_gain,
                         "write_size": object_size,
                         "pool_level_compression": pool_level_compression,
+                        "compression_algorithm": compression_algorithm,
                     }
                     bluestore_compression.partial_overwrite(**kwargs)
             log.info(
@@ -144,7 +148,7 @@ def run(ceph_cluster, **kw):
                 pool_id = "".join(
                     random.choices(string.ascii_letters + string.digits, k=6)
                 )
-                pool_name = f"test-recompress-{pool_id}-{min_alloc_size}"
+                pool_name = f"rados-comp-{pool_id}-{min_alloc_size}"
                 compression_mode = COMPRESSION_MODES.FORCE
 
                 kwargs = {
@@ -153,6 +157,7 @@ def run(ceph_cluster, **kw):
                     "min_alloc_size": min_alloc_size,
                     "min_alloc_size_variations": min_alloc_size_variations,
                     "pool_level_compression": pool_level_compression,
+                    "compression_algorithm": compression_algorithm,
                 }
 
                 bluestore_compression.min_alloc_size_test(**kwargs)
@@ -176,7 +181,6 @@ def run(ceph_cluster, **kw):
             )
             pool_name = f"rados-{pool_suffix}"
             compression_mode = COMPRESSION_MODES.FORCE
-            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
             blob_sizes = [8192, 65536, 131072]
             compression_obj = BluestoreDataCompression(
                 rados_obj=rados_obj,
@@ -293,7 +297,6 @@ def run(ceph_cluster, **kw):
             6) Cleanup pool
             """
             compression_mode = COMPRESSION_MODES.FORCE
-            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
             compression_obj = BluestoreDataCompression(
                 rados_obj=rados_obj,
                 cephadm=cephadm,
@@ -455,7 +458,6 @@ def run(ceph_cluster, **kw):
             """
             # initializations
             compression_mode = COMPRESSION_MODES.FORCE
-            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
             compression_obj = BluestoreDataCompression(
                 rados_obj=rados_obj,
                 cephadm=cephadm,
@@ -611,7 +613,6 @@ def run(ceph_cluster, **kw):
             """
             # Initializations
             compression_mode = COMPRESSION_MODES.FORCE
-            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
             compression_obj = BluestoreDataCompression(
                 rados_obj=rados_obj,
                 cephadm=cephadm,
@@ -784,7 +785,6 @@ def run(ceph_cluster, **kw):
             7) Delete pool
             """
             compression_mode = COMPRESSION_MODES.FORCE
-            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
             compression_obj = BluestoreDataCompression(
                 rados_obj=rados_obj,
                 cephadm=cephadm,
@@ -976,7 +976,6 @@ def run(ceph_cluster, **kw):
             5) Cleanup pool
             """
             compression_mode = COMPRESSION_MODES.FORCE
-            compression_algorithm = COMPRESSION_ALGORITHMS.snappy
             compression_obj = BluestoreDataCompression(
                 rados_obj=rados_obj,
                 cephadm=cephadm,
