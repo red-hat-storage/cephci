@@ -97,6 +97,7 @@ tests:
               timeout: 300
             desc: test to create "M" no of buckets and "N" no of objects
             module: sanity_rgw.py
+            comments: BZ2406710 - Intermittent issue (targeted to 9.1)
             name: Test M buckets with N objects
             polarion-id: CEPH-9789
         - test:
