@@ -7,7 +7,7 @@ import datetime
 import json
 import time
 
-from ceph.ceph import SocketTimeoutException
+from ceph.ceph import SocketTimeoutException, TimeoutException
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
@@ -278,7 +278,7 @@ def run(ceph_cluster, **kw):
                     ):
                         err_msg = f"Error running rados bench using osdfull_config: {osdfull_config}"
                         raise Exception(err_msg)
-                except SocketTimeoutException:
+                except (SocketTimeoutException, TimeoutException):
                     log.warning(
                         "rados bench socket Timeout because OSD(s) are full - Expected"
                     )
@@ -482,7 +482,7 @@ def run(ceph_cluster, **kw):
                     bench_obj.write(
                         client=client_node, pool_name=pool_name, **full_config
                     )
-                except SocketTimeoutException:
+                except (SocketTimeoutException, TimeoutException):
                     log.warning(
                         "rados bench socket Timeout because OSD(s) are full - Expected"
                     )
