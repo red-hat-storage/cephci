@@ -1267,11 +1267,26 @@ class RadosOrchestrator:
             return True
 
         cluster_osds = self.get_osd_list(status="UP")
-        for osd_id in cluster_osds:
-            init_frag_scores = {osd_id: self.get_fragmentation_score(osd_id=osd_id)}
 
-        for osd_id, score in init_frag_scores.items():
-            log.debug("Initial fragmentation score on OSD %s: %s", osd_id, score)
+        if not cluster_osds:
+            log.error("No UP OSDs found in cluster")
+            return False
+
+        # Collect initial fragmentation scores in parallel
+        init_frag_scores = {}
+
+        def get_frag_score(osd_id):
+            return osd_id, self.get_fragmentation_score(osd_id=osd_id)
+
+        with cf.ThreadPoolExecutor(max_workers=min(10, len(cluster_osds))) as executor:
+            futures = {
+                executor.submit(get_frag_score, osd_id): osd_id
+                for osd_id in cluster_osds
+            }
+            for future in cf.as_completed(futures):
+                osd_id, score = future.result()
+                init_frag_scores[osd_id] = score
+                log.debug("Initial fragmentation score on OSD %s: %s", osd_id, score)
 
         if pool:
             if not self.get_pool_details(pool=pool):
@@ -1335,27 +1350,36 @@ class RadosOrchestrator:
                         log.error("Object creation failed.")
                         return False
 
-                for osd_id in cluster_osds:
-                    if osd_id in fragmented_osds:
-                        continue
-                    frag_score = self.get_fragmentation_score(osd_id=osd_id)
-                    log.debug(
-                        "OSD %s fragmentation after iteration %d: %.2f",
-                        osd_id,
-                        iteration,
-                        frag_score,
-                    )
-                    if frag_score >= required_fragmentation:
-                        fragmented_osds.add(osd_id)
-                        if len(fragmented_osds) >= pool_size:
-                            log.info(
-                                "Fragmentation target : %s reached for %s OSDs. List of OSDs : %s",
-                                frag_score * 100,
-                                pool_size,
-                                fragmented_osds,
-                            )
-                            time.sleep(120)
-                            return True
+            # Check fragmentation scores in parallel for OSDs not yet fragmented
+            # (moved outside object creation executor context)
+            osds_to_check = [osd for osd in cluster_osds if osd not in fragmented_osds]
+            if osds_to_check:
+                with cf.ThreadPoolExecutor(
+                    max_workers=min(10, len(osds_to_check))
+                ) as frag_executor:
+                    frag_futures = {
+                        frag_executor.submit(get_frag_score, osd_id): osd_id
+                        for osd_id in osds_to_check
+                    }
+                    for future in cf.as_completed(frag_futures):
+                        osd_id, frag_score = future.result()
+                        log.debug(
+                            "OSD %s fragmentation after iteration %d: %.2f",
+                            osd_id,
+                            iteration,
+                            frag_score,
+                        )
+                        if frag_score >= required_fragmentation:
+                            fragmented_osds.add(osd_id)
+                            if len(fragmented_osds) >= pool_size:
+                                log.info(
+                                    "Fragmentation target : %s reached for %s OSDs. List of OSDs : %s",
+                                    frag_score * 100,
+                                    pool_size,
+                                    fragmented_osds,
+                                )
+                                time.sleep(120)
+                                return True
             total_written = obj_end - obj_start
             log.info(
                 "Iteration %d complete. Total objects written in this step: %d",
@@ -2970,31 +2994,76 @@ EOF"""
             log.error(err)
             return False
 
-    def check_inactive_pgs_on_pool(self, pool_name: str = None) -> bool:
+    def check_inactive_pgs_on_pool(
+        self, pool_name: str = None, max_workers: int = 10
+    ) -> bool:
         """
         Method to check if the provided pool has any PGs in inactive state.
-        If no pool name is provided, then checks on the entire cluster
+        If no pool name is provided, then checks on the entire cluster.
+
+        Uses parallel execution to speed up PG state checks when pool_name is provided.
 
         Args:
             pool_name: Name of the pool, on which inactive PGs should be checked
+            max_workers: Number of parallel threads for PG state checks (default: 10)
 
-        Returns: True-> Pass,  false -> Fail
+        Returns: True-> Pass (no inactive PGs),  False -> Fail (inactive PGs found)
         """
         if pool_name:
             log.debug("Checking for inactive PGs on pool : %s", pool_name)
             pool_pgids = self.get_pgid(pool_name=pool_name)
-            for pgid in pool_pgids:
-                # Checking the PG state. There Should not be inactive state
+
+            if not pool_pgids:
+                log.warning("No PGs found for pool: %s", pool_name)
+                return True
+
+            log.debug(
+                "Checking %d PGs in parallel with %d workers",
+                len(pool_pgids),
+                max_workers,
+            )
+
+            def check_single_pg(pgid):
+                """Check if a single PG is in inactive/unknown state."""
                 pg_state = self.get_pg_state(pg_id=pgid)
                 if pg_state:
                     if any("unknown" in key for key in pg_state.split("+")):
-                        log.error("PG: %s in inactive state)", pgid)
-                        return False
+                        return pgid, True, pg_state  # pgid, is_inactive, state
+                    return pgid, False, pg_state
                 else:
                     log.error("PG : %s not present on cluster", pgid)
-                    continue
+                    return pgid, None, None  # PG not found
+
+            inactive_pgs = []
+            with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                future_to_pgid = {
+                    executor.submit(check_single_pg, pgid): pgid for pgid in pool_pgids
+                }
+
+                for future in cf.as_completed(future_to_pgid):
+                    pgid = future_to_pgid[future]
+                    try:
+                        result_pgid, is_inactive, pg_state = future.result()
+                        if is_inactive:
+                            log.error(
+                                "PG: %s in inactive state (%s)", result_pgid, pg_state
+                            )
+                            inactive_pgs.append(result_pgid)
+                    except Exception as exc:
+                        log.error("PG %s check generated exception: %s", pgid, exc)
+
+            if inactive_pgs:
+                log.error(
+                    "Found %d inactive PGs on pool %s: %s",
+                    len(inactive_pgs),
+                    pool_name,
+                    inactive_pgs[:10],  # Log first 10 to avoid huge logs
+                )
+                return False
+
             log.info(
-                "Completed checking for inactive PGs on Pool : %s. No inactive PGs found",
+                "Completed checking %d PGs on Pool %s. No inactive PGs found",
+                len(pool_pgids),
                 pool_name,
             )
             return True
@@ -3008,8 +3077,8 @@ EOF"""
                     if any("unknown" in key for key in entry["state"].split("+")):
                         log.error("PG in unknown state found: %s", entry["state"])
                         return False
-                    log.info(" PG States: %s ", status_report["num_pg_by_state"])
-                    return True
+                log.info(" PG States: %s ", status_report["num_pg_by_state"])
+                return True
             except Exception as e:
                 log.error("Error occurred while fetching status report: %s", e)
                 return False
@@ -3057,27 +3126,43 @@ EOF"""
         log.info(f"The OSD {osd_list} heap profile is in {action} state")
         return 0, osd_list
 
-    def get_heap_dump(self, osd_list):
+    def get_heap_dump(self, osd_list, max_workers: int = 10) -> dict:
         """
-        Returns the heap dump of the all OSDs in the osd_list
+        Returns the heap dump of the all OSDs in the osd_list.
+        Uses parallel execution for faster collection from multiple OSDs.
+
         Usage: ceph tell osd.<osd.ID> heap dump
         Example:
              get_heap_dump(osd_list)
              where osd_list is the list of OSD ids like[1,2,4]
         Args:
             osd_list: The list with the osd IDs
+            max_workers: Number of parallel threads (default: 10)
         Return :
             A dictionary output with the key as OSD id and values are the
-            heap dump of the OSD.
+            heap dump of the OSD. Returns empty dict if osd_list is empty.
         """
         if not osd_list:
-            log.error("OSD list is empty")
-            return 1
-        heap_dump = {}
-        for osd_id in osd_list:
+            log.warning("OSD list is empty, returning empty heap dump")
+            return {}
+
+        def get_single_heap_dump(osd_id):
             cmd = f"ceph tell osd.{osd_id} heap dump"
             out, err = self.node.shell([cmd])
-            heap_dump[osd_id] = out.strip()
+            return osd_id, out.strip()
+
+        heap_dump = {}
+        with cf.ThreadPoolExecutor(
+            max_workers=min(max_workers, len(osd_list))
+        ) as executor:
+            futures = {
+                executor.submit(get_single_heap_dump, osd_id): osd_id
+                for osd_id in osd_list
+            }
+            for future in cf.as_completed(futures):
+                osd_id, dump = future.result()
+                heap_dump[osd_id] = dump
+
         return heap_dump
 
     def list_orch_services(self, service_type=None, export=None) -> list:

@@ -70,9 +70,7 @@ def run(ceph_cluster, **kw):
             pool.get("create_pool", {}).get("enable_fast_ec_features", False)
             for pool in config.get("create_pools", [])
         )
-        warning_ignore_list = (
-            ["OSD_SCRUB_ERRORS", "PG_DAMAGED"] if fast_ec_enabled else []
-        )
+        warning_ignore_list = []
 
         init_pg_count = rados_obj.get_pool_property(
             pool=pool["pool_name"], props="pg_num"
