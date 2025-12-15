@@ -3,12 +3,14 @@ import random
 import string
 import time
 import traceback
+from threading import Thread
 
 from looseversion import LooseVersion
 
 from ceph.ceph import CommandFailed
 from tests.cephfs.cephfs_utilsV1 import FsUtils
 from tests.cephfs.cephfs_volume_management import wait_for_process
+from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.cephfs.snapshot_clone.cephfs_snap_utils import SnapUtils
 from utility.log import Log
 from utility.retry import retry
@@ -42,6 +44,8 @@ def run(ceph_cluster, **kw):
         test_data = kw.get("test_data")
         build = config.get("build", config.get("rhbuild"))
         clients = ceph_cluster.get_ceph_objects("client")
+        cephfs_common_utils = CephFSCommonUtils(ceph_cluster)
+        active_mds_cnt = config.get("max_mds", 5)
         log.info("checking Pre-requisites")
         if len(clients) < 2:
             log.info(
@@ -89,6 +93,26 @@ def run(ceph_cluster, **kw):
             list_cmds.append("ceph fs volume create cephfs")
         for cmd in list_cmds:
             clients[0].exec_command(sudo=True, cmd=cmd)
+        # Create multi-MDS config
+        nodes = ceph_cluster.get_nodes()
+        log.info(len(nodes))
+        mds_nodes = nodes[2:6]
+        log.info(len(mds_nodes))
+        mds_cnt = active_mds_cnt * 2
+        cmd = f'ceph orch apply mds {default_fs} --placement="{mds_cnt}'
+        for mds_nodes_iter in mds_nodes:
+            cmd += f" {mds_nodes_iter.hostname}"
+        cmd += '"'
+        log.info("Adding %s MDS to cluster", mds_cnt)
+        out, rc = clients[0].exec_command(sudo=True, cmd=cmd)
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            return 1
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"ceph fs set {default_fs} max_mds {active_mds_cnt}",
+        )
+        if cephfs_common_utils.wait_for_healthy_ceph(clients[0], 300):
+            return 1
         upgrade_config = None
         vol_list = [default_fs, "cephfs-ec"]
         ceph_config["CephFS"] = {}
@@ -385,31 +409,45 @@ def run(ceph_cluster, **kw):
 
         log.info("Set Dir pinning")
         dir_name = "upgrade_pin_dir"
-        for sv in subvol_snap_clone:
+        io_tools = ["dd", "smallfile", "crefi"]
+        io_args = {"run_time": 15}
+        mds_ranks = list(range(active_mds_cnt))
+        for sv in subvolume_list:
+            if len(mds_ranks) == 0:
+                mds_ranks = list(range(active_mds_cnt))
+            mds_rank = mds_ranks.pop()
+            mnt_client = None
             mnt_client = ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
                 sv["subvol_name"]
             ]["mnt_client"]
-            client_tmp = [i for i in clients if i.node.hostname == mnt_client][0]
+            mnt_pt = ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
+                sv["subvol_name"]
+            ]["mnt_pt"]
+            # client_tmp = [i for i in clients if i.node.hostname == mnt_client][0]
+            client_tmp = None
+            for i in clients:
+                if i.node.hostname == mnt_client:
+                    client_tmp = i
             client_tmp.exec_command(
-                cmd="sudo mkdir -p %s%s_{1..4}"
-                % (mnt_list[sv["subvol_name"]], dir_name)
+                cmd="sudo mkdir -p %s%s_{1..4}" % (mnt_pt, dir_name)
             )
-            mounting_dir = mnt_list[sv["subvol_name"]]
-            log.info(f"mounting_dir:{mounting_dir}")
             for num in range(1, 4):
                 client_tmp.exec_command(
                     sudo=True,
                     cmd="setfattr -n ceph.dir.pin -v %s %s%s_%d"
-                    % (0, mounting_dir, dir_name, num),
+                    % (mds_rank, mnt_pt, dir_name, num),
                 )
             pin_dir_list = [f"{dir_name}_{i}" for i in range(1, 4)]
             pin_params = {"pinned_dir_list": pin_dir_list, "pin_rank": 0}
             ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
                 sv["subvol_name"]
             ].update(pin_params)
-
         log.info("Set Client and subvolume authorize")
-        client_name = "test_auth"
+        rand_str = "".join(
+            random.choice(string.ascii_lowercase + string.digits)
+            for _ in list(range(2))
+        )
+        client_name = f"test_auth_{rand_str}"
         subvol = subvol_snap_clone[0]
         subvol_path, rc = clients[0].exec_command(
             sudo=True,
@@ -474,31 +512,44 @@ def run(ceph_cluster, **kw):
                 log.info("ceph nfs cluster created successfully")
             else:
                 raise CommandFailed("Failed to create nfs cluster")
+
             # Create cephfs nfs export
+            @retry(CommandFailed, tries=10, delay=5)
+            def nfs_export_create_mount():
+                try:
+                    nfs_client[0].exec_command(
+                        sudo=True,
+                        cmd=f"ceph nfs export create cephfs {nfs_name} "
+                        f"{nfs_export_name} {fs_name} path={path}",
+                    )
 
-            nfs_client[0].exec_command(
-                sudo=True,
-                cmd=f"ceph nfs export create cephfs {nfs_name} "
-                f"{nfs_export_name} {fs_name} path={path}",
-            )
+                    # Verify ceph nfs export is created
+                    out, rc = nfs_client[0].exec_command(
+                        sudo=True, cmd=f"ceph nfs export ls {nfs_name}"
+                    )
+                    if nfs_export_name in out:
+                        log.info("ceph nfs export created successfully")
+                    else:
+                        raise CommandFailed("Failed to create nfs export")
+                    # Mount ceph nfs exports
+                    mnt_client = random.choice(nfs_client)
+                    mnt_client.exec_command(
+                        sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}"
+                    )
+                    fs_util.cephfs_nfs_mount(
+                        mnt_client, nfs_server_name, nfs_export_name, nfs_mounting_dir
+                    )
+                    return mnt_client
+                except CommandFailed as e:
+                    if "Failed to create nfs export" not in e:
+                        log.error("cephfs nfs export mount failed")
+                        nfs_client[0].exec_command(
+                            sudo=True,
+                            cmd=f"ceph nfs export rm {nfs_name} {nfs_export_name}",
+                        )
+                        raise e
 
-            # Verify ceph nfs export is created
-            out, rc = nfs_client[0].exec_command(
-                sudo=True, cmd=f"ceph nfs export ls {nfs_name}"
-            )
-            if nfs_export_name in out:
-                log.info("ceph nfs export created successfully")
-            else:
-                raise CommandFailed("Failed to create nfs export")
-            # Mount ceph nfs exports
-            mnt_client = random.choice(nfs_client)
-            mnt_client.exec_command(sudo=True, cmd=f"mkdir -p {nfs_mounting_dir}")
-            rc = fs_util.cephfs_nfs_mount(
-                mnt_client, nfs_server_name, nfs_export_name, nfs_mounting_dir
-            )
-            if not rc:
-                log.error("cephfs nfs export mount failed")
-                return 1
+            mnt_client = nfs_export_create_mount()
             out, rc = mnt_client.exec_command(cmd="mount")
             mount_output = out.split()
             log.info("Checking if nfs mount is is passed of failed:")
@@ -554,9 +605,25 @@ def run(ceph_cluster, **kw):
                                 mnt_client = ceph_config["CephFS"][vol_name][svg][sv][
                                     "mnt_client"
                                 ]
-            client_tmp = [i for i in clients if i.node.hostname == mnt_client][0]
+            client_tmp = [j for j in clients if j.node.hostname == mnt_client][0]
             fs_util.run_ios(client_tmp, i)
-
+        for sv in subvolume_list:
+            mnt_client = ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
+                sv["subvol_name"]
+            ]["mnt_client"]
+            mnt_pt = ceph_config["CephFS"][sv["vol_name"]][sv["group_name"]][
+                sv["subvol_name"]
+            ]["mnt_pt"]
+            client_tmp = None
+            client_tmp = [i for i in clients if i.node.hostname == mnt_client][0]
+            for num in range(1, 4):
+                io_path = f"{mnt_pt}{dir_name}_{num}"
+                p = Thread(
+                    target=fs_util.run_ios_V1,
+                    args=(client_tmp, io_path, io_tools),
+                    kwargs=io_args,
+                )
+                p.start()
         return 0
 
     except Exception as e:
