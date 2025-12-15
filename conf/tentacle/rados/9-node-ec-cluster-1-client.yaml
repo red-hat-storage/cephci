@@ -83,3 +83,11 @@ globals:
           - crash
         no-of-volumes: 3
         disk-size: 15
+
+      node10:
+        role:
+          - osd-bak
+          - node-exporter
+          - crash
+        no-of-volumes: 3
+        disk-size: 15
