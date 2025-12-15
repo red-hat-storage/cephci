@@ -5875,3 +5875,668 @@ EOF"""
                 "last_deep_scrub_stamp": last_deep_scrub_stamp,
             }
         return pg_scrub_details
+
+    def scan_daemon_logs_for_crashes(
+        self,
+        start_time: str,
+        end_time: str,
+        daemon_types: list = None,
+        context_lines: int = 15,
+    ) -> dict:
+        """
+        Scan daemon logs (mon, mgr, osd) for crash-related patterns within
+        a given time frame.
+
+        This method is useful because crashes are not always reported in
+        'ceph status' or 'ceph crash ls'. By scanning the actual daemon logs,
+        we can detect crashes that may have occurred but weren't captured by
+        the crash module.
+
+        Log files scanned (in /var/log/ceph/{fsid}/):
+        - OSD: ceph-osd.{osd_id}.log              (e.g., ceph-osd.10.log)
+        - MON: ceph-mon.{hostname}.log            (e.g., ceph-mon.node1-installer.log)
+        - MGR: ceph-mgr.{hostname}.{suffix}.log   (e.g., ceph-mgr.node1-installer.kuwnur.log)
+
+        Also scans rotated/compressed log files (.gz) to catch crashes that
+        occurred before log rotation (e.g., ceph-osd.10.log-20251211.gz).
+
+        Common crash indicators searched:
+        - Signal-based crashes: SIGSEGV, SIGABRT, SIGBUS, SIGFPE, SIGILL
+        - Assertion failures: assert, ceph_assert, ceph_abort
+        - Fatal errors: fatal, abort, terminate, core dumped
+        - Stack traces: backtrace, stack trace
+        - Exception handling: exception, std::terminate
+
+        Args:
+            start_time: Start time for log analysis
+                        Format: 'YYYY-MM-DDTHH:MM:SS.mmm+0000'
+                        Use osd_utils.get_cluster_timestamp(node) to get correct format
+            end_time: End time for log analysis
+                      Format: 'YYYY-MM-DDTHH:MM:SS.mmm+0000'
+                      Use osd_utils.get_cluster_timestamp(node) to get correct format
+            daemon_types: List of daemon types to scan. Default: ['mon', 'mgr', 'osd']
+            context_lines: Number of lines to capture around each crash occurrence
+
+        Returns:
+            Dictionary containing:
+            {
+                "crashes_found": bool,
+                "total_crash_events": int,
+                "daemons_scanned": int,
+                "scan_duration_seconds": float,
+                "daemon_crashes": {
+                    "mon": {
+                        "<daemon_id>": {
+                            "host": str,
+                            "crash_count": int,
+                            "crash_events": [
+                                {
+                                    "keyword": str,
+                                    "line_number": str,
+                                    "line": str,
+                                    "context": [str, ...]
+                                }
+                            ]
+                        }
+                    },
+                    "mgr": {...},
+                    "osd": {...}
+                },
+                "summary": str  # Human-readable summary
+            }
+
+        Note: All daemons registered with the orchestrator are scanned,
+        regardless of their running state (running, stopped, error, etc.).
+
+        Example usage:
+            # Get timestamps using get_cluster_timestamp()
+            from ceph.rados import utils as osd_utils
+            start_time = osd_utils.get_cluster_timestamp(rados_obj.node)
+            # ... run tests ...
+            end_time = osd_utils.get_cluster_timestamp(rados_obj.node)
+
+            crash_report = rados_obj.scan_daemon_logs_for_crashes(
+                start_time=start_time,
+                end_time=end_time
+            )
+            if crash_report["crashes_found"]:
+                log.error("Crashes detected in daemon logs!")
+                log.error(crash_report["summary"])
+        """
+        if daemon_types is None:
+            daemon_types = ["mon", "mgr", "osd"]
+
+        # Common crash-related keywords/patterns to search for
+        # These patterns indicate daemon crashes, assertions, and fatal errors
+        # Patterns are designed to be specific to avoid false positives
+        crash_patterns = [
+            # Signal-based crashes (highly specific)
+            r"SIGSEGV",
+            r"SIGABRT",
+            r"SIGBUS",
+            r"SIGFPE",
+            r"SIGILL",
+            r"[Ss]egmentation [Ff]ault",
+            r"segfault at",
+            # Assertion failures (Ceph-specific)
+            r"ceph_assert",
+            r"ceph_abort",
+            r"ceph_abort_msg",
+            r"FAILED ceph_assert",
+            r"__ceph_assert_fail",
+            r"Assertion.*failed",
+            # Fatal/abort/terminate (more specific patterns)
+            r"FATAL:",
+            r"std::terminate",
+            r"terminate called",
+            r"\(core dumped\)",
+            # Stack traces (indicates crash dump)
+            r"[Bb]acktrace:",
+            r"ceph_stacktrace",
+            r"Dumping core",
+            # Exception indicators (more specific)
+            r"uncaught exception",
+            r"unhandled exception",
+            r"std::exception",
+            # Common crash log prefixes (very specific)
+            r"\*\*\* Caught signal",
+            r"\*\*\* Aborted at",
+            r"--- crashed:",
+            r"--- SIGABRT",
+            r"--- SIGSEGV",
+        ]
+
+        # Compile all patterns into a single regex for efficiency
+        combined_pattern = "|".join(crash_patterns)
+
+        # Initialize result with daemon_crashes keys for all requested daemon types
+        result = {
+            "crashes_found": False,
+            "total_crash_events": 0,
+            "daemon_crashes": {dt: {} for dt in daemon_types},
+            "summary": "",
+            "scan_duration_seconds": 0,
+            "daemons_scanned": 0,
+        }
+
+        # Validate timestamp format (basic check)
+        # Expected format: 'YYYY-MM-DDTHH:MM:SS' or 'YYYY-MM-DDTHH:MM:SS.mmm+0000'
+        def _validate_timestamp(ts: str, name: str) -> bool:
+            """Validate timestamp has expected format."""
+            if not ts or not isinstance(ts, str):
+                log.error(f"{name} is invalid: {ts}")
+                return False
+            # Must contain date portion at minimum (YYYY-MM-DD)
+            if len(ts) < 10 or ts[4] != "-" or ts[7] != "-":
+                log.error(f"{name} has invalid format (expected YYYY-MM-DD...): {ts}")
+                return False
+            return True
+
+        if not _validate_timestamp(start_time, "start_time"):
+            result["summary"] = "Invalid start_time format"
+            return result
+        if not _validate_timestamp(end_time, "end_time"):
+            result["summary"] = "Invalid end_time format"
+            return result
+
+        try:
+            fsid = self.run_ceph_command(cmd="ceph fsid")["fsid"]
+        except Exception as e:
+            log.error(f"Failed to get cluster fsid: {e}")
+            return result
+
+        # Extract date portion for initial filtering
+        # Handle both formats: 'YYYY-MM-DDTHH:MM:SS' and 'YYYY-MM-DD HH:MM:SS'
+        start_date = start_time.split("T")[0].split(" ")[0]
+        end_date = end_time.split("T")[0].split(" ")[0]
+
+        # Build date pattern for grep (handles same-day or midnight-crossing spans)
+        # For typical 4-5 hour test runs: either 1 date or 2 dates (if crossing midnight)
+        # Format: "2024-12-10" or "2024-12-10|2024-12-11"
+        if start_date == end_date:
+            date_pattern = start_date
+        else:
+            date_pattern = f"{start_date}|{end_date}"
+
+        log.info(
+            f"Scanning daemon logs for crashes between {start_time} and {end_time}"
+        )
+        log.debug(f"Daemon types to scan: {daemon_types}")
+        log.debug(f"Date pattern for grep: {date_pattern}")
+
+        # Collect all daemons to scan using 'ceph orch ps'
+        # Log file naming patterns in /var/log/ceph/{fsid}/:
+        #   OSD: ceph-osd.{osd_id}.log           (e.g., ceph-osd.10.log)
+        #   MON: ceph-mon.{daemon_id}.log        (e.g., ceph-mon.node1-installer.log)
+        #   MGR: ceph-mgr.{daemon_id}.log        (e.g., ceph-mgr.node1-installer.kuwnur.log)
+        # Note: daemon_id from 'ceph orch ps' matches the log filename component
+        daemons_to_scan = []
+
+        for daemon_type in daemon_types:
+            try:
+                # Use 'ceph orch ps' for all daemon types (mon, mgr, osd)
+                # This captures all daemons regardless of their running state
+                cmd = f"ceph orch ps --daemon_type {daemon_type}"
+                daemons = self.run_ceph_command(cmd=cmd)
+
+                # Handle None or empty result
+                if not daemons:
+                    log.debug(f"No {daemon_type} daemons returned from 'ceph orch ps'")
+                    continue
+
+                daemon_count = 0
+                for daemon in daemons:
+                    daemon_id = daemon.get("daemon_id")
+                    daemon_host = daemon.get("hostname")
+                    daemon_status = daemon.get("status_desc", "unknown")
+
+                    if daemon_id and daemon_host:
+                        # Build log path based on daemon type
+                        log_path = (
+                            f"/var/log/ceph/{fsid}/ceph-{daemon_type}.{daemon_id}.log"
+                        )
+                        daemons_to_scan.append(
+                            {
+                                "type": daemon_type,
+                                "id": daemon_id,
+                                "host": daemon_host,
+                                "log_path": log_path,
+                                "status": daemon_status,
+                            }
+                        )
+                        daemon_count += 1
+
+                log.debug(
+                    f"Found {daemon_count} {daemon_type} daemon(s) from 'ceph orch ps'"
+                )
+
+            except Exception as e:
+                log.warning(f"Failed to enumerate {daemon_type} daemons: {e}")
+                continue
+
+        log.info(f"Found {len(daemons_to_scan)} daemons to scan")
+
+        # Early return if no daemons to scan
+        if not daemons_to_scan:
+            log.warning("No daemons found to scan. Check daemon_types parameter.")
+            result["summary"] = "No daemons found to scan"
+            return result
+
+        # Pre-cache host objects to avoid repeated lookups for same host
+        host_cache = {}
+        unique_hosts = set(d["host"] for d in daemons_to_scan)
+        for hostname in unique_hosts:
+            host_obj = self.get_host_object(hostname=hostname)
+            if host_obj:
+                host_cache[hostname] = host_obj
+            else:
+                log.warning(f"Could not get host object for {hostname}")
+        log.debug(f"Cached {len(host_cache)} unique host objects")
+
+        # Filter out daemons whose hosts couldn't be resolved (optimization)
+        scannable_daemons = [d for d in daemons_to_scan if d["host"] in host_cache]
+        if len(scannable_daemons) < len(daemons_to_scan):
+            skipped = len(daemons_to_scan) - len(scannable_daemons)
+            log.warning(f"Skipping {skipped} daemon(s) due to unreachable hosts")
+        daemons_to_scan = scannable_daemons
+
+        # Re-check if any daemons left to scan
+        if not daemons_to_scan:
+            log.warning("No scannable daemons remaining after host validation.")
+            result["summary"] = "No scannable daemons (host connectivity issues)"
+            return result
+
+        # Generate unique suffix for temp files to avoid conflicts
+        scan_id = int(time.time() * 1000) % 100000
+
+        # Pre-compute rotated log file date patterns (YYYYMMDD format)
+        # Rotated files are named like: ceph-osd.10.log-20251211.gz
+        gz_date_start = start_date.replace("-", "")
+        gz_date_end = end_date.replace("-", "")
+
+        # Helper function to scan a single daemon's logs (for parallel execution)
+        def _scan_single_daemon(daemon_info: dict) -> dict:
+            """
+            Scan a single daemon's log file for crash patterns.
+            Optimized to minimize SSH roundtrips by combining commands.
+
+            Args:
+                daemon_info: Dict with type, id, host, log_path
+
+            Returns:
+                Dict with daemon_type, daemon_id, host, crash_events
+            """
+            d_type = daemon_info["type"]
+            d_id = daemon_info["id"]
+            d_host = daemon_info["host"]
+            d_log_path = daemon_info["log_path"]
+
+            scan_result = {
+                "daemon_type": d_type,
+                "daemon_id": d_id,
+                "host": d_host,
+                "crash_events": [],
+            }
+
+            # Use cached host object
+            host_obj = host_cache.get(d_host)
+
+            # Unique temp file name to avoid conflicts in parallel execution
+            temp_log = f"/tmp/crash_scan_{d_type}_{d_id}_{scan_id}.log"
+
+            # Maximum crash events to collect per daemon (prevents slowdown)
+            max_events_per_daemon = 50
+
+            try:
+                # OPTIMIZATION: Combine file check + time filter + crash grep into single command
+                # Also checks rotated log files (.gz) in case logs were rotated during test
+                # Rotated file pattern: {log_path}-YYYYMMDD.gz (e.g., ceph-osd.10.log-20251211.gz)
+                #
+                # Strategy:
+                # 1. Scan current log file if it exists
+                # 2. Check for rotated .gz files only for dates in time range
+                # 3. Use zcat to decompress and grep rotated files
+                # 4. Combine results into temp_log for crash pattern matching
+
+                # Build list of rotated files to check (only dates in our range)
+                # Uses gz_date_start/gz_date_end computed in outer scope
+                gz_files_to_check = f"{d_log_path}-{gz_date_start}.gz"
+                if gz_date_start != gz_date_end:
+                    gz_files_to_check += f" {d_log_path}-{gz_date_end}.gz"
+
+                combined_cmd = f"""
+                rm -f {temp_log} 2>/dev/null
+                touch {temp_log}
+                LOG_FOUND=0
+
+                # Scan current log file
+                if [ -f {d_log_path} ]; then
+                    LOG_FOUND=1
+                    grep -E '{date_pattern}' {d_log_path} 2>/dev/null | \\
+                    awk -v start='{start_time}' -v end='{end_time}' '$1 >= start && $1 <= end' >> {temp_log} 2>/dev/null
+                fi
+
+                # Scan rotated log files (.gz) only for dates in our time range
+                for gz_file in {gz_files_to_check}; do
+                    if [ -f "$gz_file" ]; then
+                        LOG_FOUND=1
+                        zcat "$gz_file" 2>/dev/null | grep -E '{date_pattern}' 2>/dev/null | \\
+                        awk -v start='{start_time}' -v end='{end_time}' \\
+                        '$1 >= start && $1 <= end' >> {temp_log} 2>/dev/null
+                    fi
+                done
+
+                # Check if we found any log files at all
+                if [ "$LOG_FOUND" -eq 0 ]; then
+                    echo "LOGFILE_MISSING"
+                elif [ -s {temp_log} ]; then
+                    grep -n -E '{combined_pattern}' {temp_log} 2>/dev/null | head -n {max_events_per_daemon} || true
+                fi
+                """
+                crash_matches, _ = host_obj.exec_command(
+                    cmd=combined_cmd, sudo=True, check_ec=False
+                )
+
+                if not crash_matches or "LOGFILE_MISSING" in crash_matches:
+                    if "LOGFILE_MISSING" in str(crash_matches):
+                        log.debug(
+                            f"Log file not found for {d_type}.{d_id}: {d_log_path}"
+                        )
+                    return scan_result
+
+                if crash_matches.strip():
+                    matched_lines = crash_matches.strip().split("\n")
+
+                    # Collect all crash events first (for batch context collection)
+                    crash_data = []
+                    seen_lines = set()  # Deduplication
+
+                    for match in matched_lines:
+                        if not match.strip():
+                            continue
+                        parts = match.split(":", 1)
+                        if len(parts) < 2:
+                            continue
+
+                        line_num_str = parts[0].strip()
+                        line_content = parts[1].strip()
+
+                        # Validate line number is numeric (grep -n output format)
+                        if not line_num_str.isdigit():
+                            continue
+
+                        # Deduplicate: skip if we've seen similar content
+                        # (same crash often produces multiple similar log lines)
+                        content_key = line_content[:100]  # First 100 chars
+                        if content_key in seen_lines:
+                            continue
+                        seen_lines.add(content_key)
+
+                        line_num = int(line_num_str)
+
+                        # Identify which keyword matched
+                        matched_keyword = "unknown"
+                        for pattern in crash_patterns:
+                            if re.search(pattern, line_content, re.IGNORECASE):
+                                # Clean up regex escape chars for readable display
+                                # e.g., r"\*\*\* Caught signal" -> "*** Caught signal"
+                                matched_keyword = (
+                                    pattern.replace("\\", "")
+                                    .replace("[", "")
+                                    .replace("]", "")
+                                    .replace("(", "")
+                                    .replace(")", "")
+                                )
+                                break
+
+                        crash_data.append(
+                            {
+                                "keyword": matched_keyword,
+                                "line_number": line_num,
+                                "line": line_content,
+                            }
+                        )
+
+                    # Collect context from ORIGINAL log file (not temp filtered log)
+                    # This is important because crash stack traces don't have timestamps
+                    # and would be filtered out from temp_log
+                    if crash_data and context_lines > 0:
+                        # For each crash, find its line in the original log and get context
+                        for cd in crash_data:
+                            try:
+                                crash_line = cd["line"]
+                                # Escape special characters for grep
+                                escaped_line = crash_line.replace("'", "'\\''").replace(
+                                    "\\", "\\\\"
+                                )
+
+                                # Find line number in ORIGINAL log file and get context
+                                # Use grep -n to find line, then sed to get surrounding lines
+                                # Increase context for stack traces (use 3x normal context)
+                                stack_context = context_lines * 3
+
+                                context_cmd = f"""
+                                ORIG_LINE=$(grep -n -F '{escaped_line}' {d_log_path} \
+                                    2>/dev/null | head -1 | cut -d: -f1)
+                                if [ -n "$ORIG_LINE" ]; then
+                                    START=$((ORIG_LINE - {stack_context}))
+                                    END=$((ORIG_LINE + {stack_context}))
+                                    [ $START -lt 1 ] && START=1
+                                    sed -n "${{START}},${{END}}p" {d_log_path} 2>/dev/null
+                                fi
+                                """
+                                context_output, _ = host_obj.exec_command(
+                                    cmd=context_cmd, sudo=True, check_ec=False
+                                )
+
+                                if context_output and context_output.strip():
+                                    cd["context"] = context_output.strip().split("\n")
+                                else:
+                                    # Fallback to temp log context
+                                    ln = cd["line_number"]
+                                    start_ln = max(1, ln - context_lines)
+                                    end_ln = ln + context_lines
+                                    fallback_cmd = (
+                                        f"sed -n '{start_ln},{end_ln}p' {temp_log}"
+                                    )
+                                    fallback_out, _ = host_obj.exec_command(
+                                        cmd=fallback_cmd, sudo=True, check_ec=False
+                                    )
+                                    if fallback_out:
+                                        cd["context"] = fallback_out.strip().split("\n")
+                                    else:
+                                        cd["context"] = []
+                            except Exception:
+                                cd["context"] = []
+                    else:
+                        for cd in crash_data:
+                            cd["context"] = []
+
+                    # Add events to result
+                    for cd in crash_data:
+                        scan_result["crash_events"].append(
+                            {
+                                "keyword": cd["keyword"],
+                                "line_number": str(cd["line_number"]),
+                                "line": cd["line"],
+                                "context": cd["context"],
+                            }
+                        )
+
+            except Exception as e:
+                log.warning(f"Failed to scan logs for {d_type}.{d_id}: {e}")
+            finally:
+                # Always cleanup temp file
+                try:
+                    host_obj.exec_command(
+                        cmd=f"rm -f {temp_log}", sudo=True, check_ec=False
+                    )
+                except Exception:
+                    pass  # Ignore cleanup errors
+
+            return scan_result
+
+        # Scan daemon logs in parallel using ThreadPoolExecutor
+        # Using max 10 workers to avoid overwhelming the cluster
+        max_workers = min(10, len(daemons_to_scan)) if daemons_to_scan else 1
+        scan_start_time = time.time()
+        log.info(
+            f"Scanning {len(daemons_to_scan)} daemon logs in parallel "
+            f"(max_workers={max_workers})"
+        )
+
+        with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Submit all scanning tasks
+            future_to_daemon = {
+                executor.submit(_scan_single_daemon, daemon_info): daemon_info
+                for daemon_info in daemons_to_scan
+            }
+
+            # Collect results as they complete
+            for future in cf.as_completed(future_to_daemon):
+                daemon_info = future_to_daemon[future]
+                try:
+                    scan_result = future.result()
+                    if scan_result and scan_result["crash_events"]:
+                        d_type = scan_result["daemon_type"]
+                        d_id = scan_result["daemon_id"]
+                        d_host = scan_result["host"]
+                        crash_events = scan_result["crash_events"]
+
+                        result["crashes_found"] = True
+                        result["total_crash_events"] += len(crash_events)
+                        result["daemon_crashes"][d_type][d_id] = {
+                            "host": d_host,
+                            "crash_count": len(crash_events),
+                            "crash_events": crash_events,
+                        }
+
+                        log.warning(
+                            f"Found {len(crash_events)} crash event(s) in "
+                            f"{d_type}.{d_id} logs on {d_host}"
+                        )
+                except Exception as exc:
+                    d_type = daemon_info["type"]
+                    d_id = daemon_info["id"]
+                    log.warning(f"Daemon {d_type}.{d_id} scan raised exception: {exc}")
+
+        # Calculate scan duration and record stats
+        scan_duration = time.time() - scan_start_time
+        result["scan_duration_seconds"] = round(scan_duration, 2)
+        result["daemons_scanned"] = len(daemons_to_scan)
+        log.info(
+            f"Completed scanning {len(daemons_to_scan)} daemon logs in "
+            f"{scan_duration:.2f} seconds"
+        )
+
+        # Generate summary
+        if result["crashes_found"]:
+            summary_parts = [
+                f"CRASH DETECTED: Found {result['total_crash_events']} crash event(s) "
+                f"in daemon logs between {start_time} and {end_time}"
+            ]
+
+            for daemon_type, daemons in result["daemon_crashes"].items():
+                if daemons:
+                    daemon_summary = []
+                    for daemon_id, info in daemons.items():
+                        daemon_summary.append(
+                            f"{daemon_type}.{daemon_id} ({info['crash_count']} events)"
+                        )
+                    summary_parts.append(
+                        f"  {daemon_type.upper()}: {', '.join(daemon_summary)}"
+                    )
+
+            result["summary"] = "\n".join(summary_parts)
+            log.error(result["summary"])
+
+            # Print detailed crash information in a formatted way
+            self._print_crash_details(result, start_time, end_time)
+        else:
+            result["summary"] = (
+                f"No crashes detected in daemon logs between "
+                f"{start_time} and {end_time}"
+            )
+            log.info(result["summary"])
+
+        return result
+
+    def _print_crash_details(
+        self, crash_result: dict, start_time: str, end_time: str
+    ) -> None:
+        """
+        Print crash details in a nicely formatted way for easy reading.
+
+        The crash stack trace is printed as a single block so it appears
+        exactly as it would in the original log file (without logger prefix
+        on each line).
+
+        Args:
+            crash_result: The result dictionary from scan_daemon_logs_for_crashes()
+            start_time: Scan start time
+            end_time: Scan end time
+        """
+        separator = "=" * 80
+        sub_separator = "-" * 80
+
+        # Build the entire crash report as a single string for clean output
+        report_lines = []
+        report_lines.append("")
+        report_lines.append(separator)
+        report_lines.append("DAEMON CRASH REPORT")
+        report_lines.append(separator)
+        report_lines.append(f"Time Range     : {start_time} to {end_time}")
+        report_lines.append(f"Total Events   : {crash_result['total_crash_events']}")
+        report_lines.append(
+            f"Daemons Scanned: {crash_result.get('daemons_scanned', 'N/A')}"
+        )
+        report_lines.append(
+            f"Scan Duration  : {crash_result.get('scan_duration_seconds', 'N/A')}s"
+        )
+        report_lines.append(separator)
+
+        for daemon_type, daemons in crash_result["daemon_crashes"].items():
+            if not daemons:
+                continue
+
+            report_lines.append("")
+            report_lines.append(f"{daemon_type.upper()} CRASHES:")
+            report_lines.append(sub_separator)
+
+            for daemon_id, info in daemons.items():
+                report_lines.append("")
+                report_lines.append(f"  Daemon: {daemon_type}.{daemon_id}")
+                report_lines.append(f"  Host  : {info['host']}")
+                report_lines.append(f"  Events: {info['crash_count']}")
+
+                for idx, event in enumerate(info["crash_events"], 1):
+                    report_lines.append("")
+                    report_lines.append(f"  --- Event {idx} ---")
+                    report_lines.append(
+                        f"  Trigger  : {event.get('keyword', 'unknown')}"
+                    )
+                    report_lines.append(
+                        f"  Line#    : {event.get('line_number', 'N/A')}"
+                    )
+                    report_lines.append(f"  Crash Log: {event.get('line', 'N/A')}")
+
+                    # Print context lines if available
+                    context = event.get("context", [])
+                    if context:
+                        report_lines.append("")
+                        report_lines.append(
+                            f"  CRASH STACK TRACE ({len(context)} lines):"
+                        )
+                        report_lines.append(sub_separator)
+                        # Add context lines directly (no truncation for stack traces)
+                        for ctx_line in context:
+                            report_lines.append(ctx_line)
+                        report_lines.append(sub_separator)
+
+        report_lines.append("")
+        report_lines.append(separator)
+        report_lines.append("END OF CRASH REPORT")
+        report_lines.append(separator)
+
+        # Print as a single multi-line log message for clean output
+        log.error("\n".join(report_lines))
