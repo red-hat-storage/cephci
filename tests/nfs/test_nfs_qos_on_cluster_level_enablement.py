@@ -17,7 +17,7 @@ def capture_copy_details(client, nfs_mount, file_name, size="100"):
     :param size: The size of the file to create (default is "100M").
     :return: A tuple containing (stdout, stderr) from the dd command.
     """
-
+    drop_cache_cmd = "echo 3 > /proc/sys/vm/drop_caches"
     write_speed, read_speed = "", ""
     cmd = "touch {0}/{1}".format(nfs_mount, file_name)
     client.exec_command(
@@ -25,7 +25,12 @@ def capture_copy_details(client, nfs_mount, file_name, size="100"):
         cmd=cmd,
     )
 
-    write_cmd = "dd if=/dev/urandom of={0}/{1} bs={2}M count=1".format(
+    client.exec_command(
+        sudo=True,
+        cmd=drop_cache_cmd,
+    )
+    log.info("Cache dropped successfully")
+    write_cmd = "dd if=/dev/urandom of={0}/{1} bs={2}M count=1 oflag=direct".format(
         nfs_mount, file_name, size
     )
     write_results = client.exec_command(sudo=True, cmd=write_cmd)[1]
@@ -42,8 +47,6 @@ def capture_copy_details(client, nfs_mount, file_name, size="100"):
         log.info("File created successfully on {0}".format(client.hostname))
         log.info("write speed is {0}".format(write_speed))
 
-    # dropping cache
-    drop_cache_cmd = "echo 3 > /proc/sys/vm/drop_caches"
     client.exec_command(
         sudo=True,
         cmd=drop_cache_cmd,
