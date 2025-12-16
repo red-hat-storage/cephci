@@ -3452,8 +3452,8 @@ EOF"""
                             log.warning(e)
                 if success_count == len(daemon_status_ls):
                     break
-                log.info("Sleeping for 120 secs")
-                time.sleep(120)
+                log.info("Sleeping for 60 secs")
+                time.sleep(60)
             else:
                 log.error(
                     f"All the daemons part of the service {service} did not restart within "

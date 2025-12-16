@@ -700,6 +700,8 @@ def run(ceph_cluster, **kw):
         return 0
 
     # Blocked with bug : https://bugzilla.redhat.com/show_bug.cgi?id=2172795. Bug fixed.
+    # new bug for app not enabled, affects tentacle only : https://bugzilla.redhat.com/show_bug.cgi?id=2400389
+    # new config : mon_warn_on_pool_no_app_grace introduced in tentacle
     if config.get("verify_pool_warnings"):
         """
         Warnings Verified:
@@ -756,6 +758,10 @@ def run(ceph_cluster, **kw):
                 log.debug(
                     f"autoscale status on pools: \n{rados_obj.node.shell(['ceph osd pool autoscale-status'])}"
                 )
+                if float(rhbuild.split("-")[0]) > 8.1:
+                    mon_obj.set_config(
+                        section="global", name="mon_warn_on_pool_no_app_grace", value=60
+                    )
 
                 if float(rhbuild.split("-")[0]) >= 7.1:
                     log.debug("Bug fixed only in 7.1.")
@@ -1001,6 +1007,9 @@ def run(ceph_cluster, **kw):
                 log.debug(f"Completed deletion of pool {pool}")
             # reverting default pg autoscaler mode to ON
             rados_obj.configure_pg_autoscaler(default_mode="on")
+            mon_obj.remove_config(
+                section="global", name="mon_warn_on_pool_no_app_grace"
+            )
             time.sleep(60)
             # log cluster health
             rados_obj.log_cluster_health()

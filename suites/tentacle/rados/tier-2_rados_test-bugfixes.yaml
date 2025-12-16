@@ -118,6 +118,7 @@ tests:
         node: node7                       # client node
         install_packages:
           - ceph-common
+          - ceph-fuse
         copy_admin_keyring: true          # Copy admin keyring to node
         caps:                             # authorize client capabilities
           mon: "allow *"
@@ -247,22 +248,46 @@ tests:
       polarion-id: CEPH-83616882
       desc: Ensures watchers do not persist after client disconnects or interruptions
 
-  # max run time for this test is 3 mins
+  # max run time for this test is 4 mins
   - test:
-      name: CephFS file flush with replicated pools
+      name: CephFS flush kernel mnt with RE pools
       module: test_bug_fixes.py
       config:
         cephfs_file_flush_issue: true
         pool_type: replicated
+        mount_type: kernel
       polarion-id: CEPH-83632223
       desc: Verify file contents are preserved after unmount-remount with kernel client using replicated pools
 
-  # max run time for this test is 3 mins
+  # max run time for this test is 4 mins
   - test:
-      name: CephFS file flush with EC pools
+      name: CephFS flush kernel mnt with EC pools
       module: test_bug_fixes.py
       config:
         cephfs_file_flush_issue: true
         pool_type: ec
+        mount_type: kernel
       polarion-id: CEPH-83632223
       desc: Verify file contents are preserved after unmount-remount with kernel client using EC pools
+
+  # max run time for this test is 4 mins
+  - test:
+      name: CephFS flush fuse mnt with RE pools
+      module: test_bug_fixes.py
+      config:
+        cephfs_file_flush_issue: true
+        pool_type: replicated
+        mount_type: fuse
+      polarion-id: CEPH-83632223
+      desc: Verify file contents are preserved after unmount-remount with fuse client using replicated pools
+
+  # max run time for this test is 4 mins
+  - test:
+      name: CephFS flush fuse mnt with EC pools
+      module: test_bug_fixes.py
+      config:
+        cephfs_file_flush_issue: true
+        pool_type: ec
+        mount_type: fuse
+      polarion-id: CEPH-83632223
+      desc: Verify file contents are preserved after unmount-remount with fuse client using EC pools
