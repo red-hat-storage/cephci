@@ -955,8 +955,13 @@ def create_multiple_nfs_instance_via_spec_file(
                 "spec": {
                     "port": port,
                     "monitoring_port": monitoring_port,
+                    "kmip_cert": spec["kmip_cert"][0],
+                    "kmip_key": spec["kmip_key"][0],
+                    "kmip_ca_cert": spec["kmip_ca_cert"][0],
+                    "kmip_host_list": spec["kmip_host_list"],
                 },
             }
+
             new_objects.append(new_object)
 
             log.debug(

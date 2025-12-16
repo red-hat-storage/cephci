@@ -10,7 +10,6 @@ from tests.nfs.byok.byok_tools import (
     clean_up_gklm,
     create_in_file_certs,
     get_enctag,
-    get_gklm_ca_certificate,
     load_gklm_config,
     perform_io_operations_and_validate_fuse,
     setup_gklm_infrastructure,
@@ -157,8 +156,6 @@ def run(ceph_cluster, **kw):
     gklm_ip = gklm_params["gklm_ip"]
     gklm_user = gklm_params["gklm_user"]
     gklm_password = gklm_params["gklm_password"]
-    gklm_node_username = gklm_params["gklm_node_username"]
-    gklm_node_password = gklm_params["gklm_node_password"]
     gklm_hostname = gklm_params["gklm_hostname"]
 
     gkml_client_name = "automation"
@@ -167,11 +164,9 @@ def run(ceph_cluster, **kw):
 
     try:
         log.info("Step 1: Setting up GKLM infrastructure")
-        exe_node = setup_gklm_infrastructure(
+        setup_gklm_infrastructure(
             nfs_nodes=nfs_servers,
             gklm_ip=gklm_ip,
-            gklm_node_username=gklm_node_username,
-            gklm_node_password=gklm_node_password,
             gklm_hostname=gklm_hostname,
         )
 
@@ -183,13 +178,8 @@ def run(ceph_cluster, **kw):
         log.info(
             "Step 3: Generating certificates and keys, and CA certificate from GKLM"
         )
-        ca_cert = get_gklm_ca_certificate(
-            gklm_ip=gklm_ip,
-            gklm_node_username=gklm_node_username,
-            gklm_node_password=gklm_node_password,
-            exe_node=exe_node,
-            gklm_rest_client=gklm_rest_client,
-            gkml_servering_cert_name=gklm_hostname,
+        ca_cert = gklm_rest_client.certificates.get_system_certificate(
+            cert_name=gklm_hostname
         )
 
         log.info("Step 4: Creating client certificates and encryption tags")
