@@ -3792,8 +3792,15 @@ EOF"""
             init_pool_pg_dump = pg_dump
 
         log.info("Dumping scrub stats before starting scrub")
-        log.info(f"last_scrub : {init_pool_pg_dump['last_scrub']}")
-        log.info(f"last_scrub_stamp: {init_pool_pg_dump['last_scrub_stamp']}")
+        log.info("=" * 70)
+        log.info("state : %s" % init_pool_pg_dump["state"])
+        log.info("last_scrub : %s " % init_pool_pg_dump["last_scrub"])
+        log.info("last_scrub_stamp: %s " % init_pool_pg_dump["last_scrub_stamp"])
+        log.info("last_scrub_duration: %s" % init_pool_pg_dump["last_scrub_duration"])
+        log.info("objects_scrubbed : %s" % init_pool_pg_dump["objects_scrubbed"])
+        log.info("scrub_schedule : %s" % init_pool_pg_dump["scrub_schedule"])
+        log.info("scrub_duration : %s" % init_pool_pg_dump["scrub_duration"])
+        log.info("=" * 70)
 
         # Parse the timestamp string into a datetime object
         init_scrub_stamp = datetime.datetime.strptime(
@@ -3812,6 +3819,15 @@ EOF"""
             seconds=wait_time
         ):
             pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
+            log.debug("=" * 70)
+            log.debug("state : %s" % pool_pg_dump["state"])
+            log.debug("last_scrub : %s " % pool_pg_dump["last_scrub"])
+            log.debug("last_scrub_stamp: %s " % pool_pg_dump["last_scrub_stamp"])
+            log.debug("last_scrub_duration: %s" % pool_pg_dump["last_scrub_duration"])
+            log.debug("objects_scrubbed : %s" % pool_pg_dump["objects_scrubbed"])
+            log.debug("scrub_schedule : %s" % pool_pg_dump["scrub_schedule"])
+            log.debug("scrub_duration : %s" % pool_pg_dump["scrub_duration"])
+            log.debug("=" * 70)
             current_scrub_stamp = datetime.datetime.strptime(
                 pool_pg_dump["last_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
             )
@@ -3861,8 +3877,17 @@ EOF"""
             init_pool_pg_dump = pg_dump
 
         log.info("Dumping deep-scrub stats before starting deep-scrub")
-        log.info(f"last_deep_scrub : {init_pool_pg_dump['last_deep_scrub']}")
-        log.info(f"last_deep_scrub_stamp: {init_pool_pg_dump['last_deep_scrub_stamp']}")
+        log.info("=" * 70)
+        log.info("state : %s" % init_pool_pg_dump["state"])
+        log.info("last_deep_scrub : %s " % init_pool_pg_dump["last_deep_scrub"])
+        log.info(
+            "last_deep_scrub_stamp: %s " % init_pool_pg_dump["last_deep_scrub_stamp"]
+        )
+        log.info("last_scrub_duration: %s" % init_pool_pg_dump["last_scrub_duration"])
+        log.info("objects_scrubbed : %s" % init_pool_pg_dump["objects_scrubbed"])
+        log.info("scrub_schedule : %s" % init_pool_pg_dump["scrub_schedule"])
+        log.info("scrub_duration : %s" % init_pool_pg_dump["scrub_duration"])
+        log.info("=" * 70)
 
         # Parse the timestamp string into a datetime object
         init_scrub_stamp = datetime.datetime.strptime(
@@ -3882,12 +3907,24 @@ EOF"""
             seconds=wait_time
         ):
             pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
+            log.debug("=" * 70)
+            log.debug("state : %s" % pool_pg_dump["state"])
+            log.debug("last_deep_scrub : %s " % pool_pg_dump["last_deep_scrub"])
+            log.debug(
+                "last_deep_scrub_stamp: %s " % pool_pg_dump["last_deep_scrub_stamp"]
+            )
+            log.debug("last_scrub_duration: %s" % pool_pg_dump["last_scrub_duration"])
+            log.debug("objects_scrubbed : %s" % pool_pg_dump["objects_scrubbed"])
+            log.debug("scrub_schedule : %s" % pool_pg_dump["scrub_schedule"])
+            log.debug("scrub_duration : %s" % pool_pg_dump["scrub_duration"])
+            log.debug("=" * 70)
             # Parse the timestamp string into a datetime object
             current_scrub_stamp = datetime.datetime.strptime(
                 pool_pg_dump["last_deep_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
             )
             if current_scrub_stamp > init_scrub_stamp:
                 log.info(f"Scrubbing complete on the PG: {pg_id}")
+
                 log.debug(f"Final last_deep_scrub: {pool_pg_dump['last_deep_scrub']}")
                 log.debug(
                     f"Final last_deep_scrub_stamp: {pool_pg_dump['last_deep_scrub_stamp']}"
@@ -6557,7 +6594,7 @@ EOF"""
         recovery_thread: bool = True,
     ) -> bool:
         """
-        # duplicate of the method with same name under 'tests/rados/stretch_cluster.py'
+        # duplicate of
         Waiting for up to 2.5 hours for the PG's to enter active + Clean state.
         If pool name is provided, just checks the PGs of that pool for active + clean
         Automation for bug : [1] & [2]
