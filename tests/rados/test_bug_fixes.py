@@ -35,6 +35,7 @@ def run(ceph_cluster, **kw):
     - CEPH-83590689 | BZ-2011756: Verify ceph config show and get for all daemons
     - CEPH-83590688 | BZ-2229651: Induce Slow OSD heartbeat warning by controlled network delay
     - CEPH-83590688 | BZ-2229651: Verify auto removal of slow osd heartbeat warning after 15 mins of OSD node restart
+    - CEPH-83632223 | BZ-2421457: Verify CephFS file flush issue reproduction
     """
 
     log.info(run.__doc__)
@@ -829,3 +830,393 @@ def run(ceph_cluster, **kw):
             "Verification that OSDs can be added/moved to new spec has been completed"
         )
         return 0
+
+    if config.get("cephfs_file_flush_issue"):
+        doc = (
+            "\n# CEPH-83632223"
+            "\n Bugzilla tracker:"
+            "\n\t- https://bugzilla.redhat.com/show_bug.cgi?id=2421457"
+            "\n Upstream tracker:"
+            "\n\t- https://tracker.ceph.com/issues/73997"
+            "\n Verify file contents are preserved after unmount/remount with kernel client"
+            "\n\t This test reproduces the CephFS file flush issue where file contents fail to"
+            "\n\t get flushed between container/mount restarts when using kernel client with"
+            "\n\t read_from_replica=localize mount option."
+            "\n\t Supports both Replicated and EC pool workflows:"
+            "\n\t 1. Create CephFS filesystem (replicated or EC) and subvolume"
+            "\n\t 2. Mount subvolume with kernel client using read_from_replica=localize"
+            "\n\t 3. Write test data to a file and sync"
+            "\n\t 4. Unmount and remount the subvolume"
+            "\n\t 5. Verify file contents are preserved (not all NUL bytes)"
+            "\n\t 6. Check kernel logs for -EINVAL errors if bug is present"
+            "\n\t Config: pool_type = 'replicated' or 'ec' (default: 'replicated')"
+        )
+
+        log.info(doc)
+        log.info("Running test to verify CephFS file flush issue reproduction")
+
+        try:
+
+            # Get pool type from config (default replicated)
+            pool_type = config.get("pool_type", "replicated").lower()
+            if pool_type not in ["replicated", "ec"]:
+                log.error(
+                    f"Invalid pool_type: {pool_type}. Must be 'replicated' or 'ec'"
+                )
+                raise Exception(f"Invalid pool_type: {pool_type}")
+
+            log.info(f"Using {pool_type.upper()} pool workflow")
+
+            fs_name = f"cephfs-{pool_type}"
+            subvol_name = f"test-flush-subvol-{pool_type}"
+            mount_point = f"/mnt/cephfs-flush-test-{pool_type}"
+            test_file = f"{mount_point}/test"
+            test_data = "checking data persist"
+
+            # Step 1: Create CephFS filesystem based on pool type
+            log.info(f"Creating CephFS filesystem with {pool_type} pools...")
+            fs_list = rados_obj.run_ceph_command(cmd="ceph fs ls", client_exec=True)
+            fs_exists = (
+                any(fs.get("name") == fs_name for fs in fs_list) if fs_list else False
+            )
+
+            if not fs_exists:
+                if pool_type == "replicated":
+                    create_replicated_cephfs(client_node, rados_obj, fs_name, pool_type)
+                else:  # EC pool
+                    create_ec_cephfs(client_node, rados_obj, fs_name, pool_type)
+
+                # Verify filesystem was created successfully
+                log.info(f"Verifying filesystem {fs_name} was created...")
+                time.sleep(2)  # Wait for filesystem to be registered
+                fs_list_after = rados_obj.run_ceph_command(
+                    cmd="ceph fs ls", client_exec=True
+                )
+                fs_created = any(
+                    fs.get("name") == fs_name for fs in fs_list_after if fs_list_after
+                )
+                if not fs_created:
+                    raise Exception(
+                        f"Filesystem {fs_name} was not found in 'ceph fs ls' after creation"
+                    )
+                log.info(
+                    f"CephFS filesystem {fs_name} created and verified successfully"
+                )
+            else:
+                log.info(f"CephFS filesystem {fs_name} already exists")
+
+            # Step 2: Create subvolume
+            log.debug(f"Creating subvolume: {subvol_name}")
+            client_node.exec_command(
+                sudo=True, cmd=f"ceph fs subvolume create {fs_name} {subvol_name}"
+            )
+
+            # Step 3: Get subvolume path
+            log.debug("Getting subvolume path...")
+            subvol_path_out, _ = client_node.exec_command(
+                sudo=True, cmd=f"ceph fs subvolume getpath {fs_name} {subvol_name}"
+            )
+            subvol_path = subvol_path_out.strip()
+            log.info(f"Subvolume path: {subvol_path}")
+
+            # Step 4: Get monitor address
+            log.debug("Getting monitor address...")
+            mon_dump = rados_obj.run_ceph_command(cmd="ceph mon dump", client_exec=True)
+            # Extract monitor address from rank 0 monitor
+            mon_info = mon_dump["mons"][0]
+            mon_addr = mon_info["public_addr"].split("/")[0]
+            log.info(f"Monitor address: {mon_addr}")
+
+            # Step 5: Use existing admin client for mounting
+            log.debug("Using admin client for mounting...")
+            client_name = "admin"
+            # Write admin key directly to file using ceph auth get-key -o (most reliable method)
+            key_file_path = "/tmp/ceph-flush.key"
+            client_node.exec_command(
+                sudo=True, cmd=f"ceph auth get-key client.admin -o {key_file_path}"
+            )
+            # Set proper permissions on key file (readable by owner only)
+            client_node.exec_command(sudo=True, cmd=f"chmod 600 {key_file_path}")
+            log.debug("Admin key file created successfully")
+
+            # Step 6: Create mount point
+            log.debug(f"Creating mount point: {mount_point}")
+            client_node.exec_command(sudo=True, cmd=f"mkdir -p {mount_point}")
+
+            # Step 7: Mount with kernel client (problematic mount options)
+            log.info(
+                "Mounting CephFS with kernel client  with read_from_replica=localize"
+            )
+            mount_cmd = (
+                f"mount -t ceph {mon_addr}:{subvol_path} {mount_point} "
+                f"-o fs={fs_name},name={client_name},secretfile=/tmp/ceph-flush.key,"
+                f"read_from_replica=localize,crush_location=region:east\\|zone:east-zone1,_netdev"
+            )
+            client_node.exec_command(sudo=True, cmd=mount_cmd, long_running=True)
+
+            # Verify mount
+            mount_check, _ = client_node.exec_command(
+                sudo=True, cmd=f"mount | grep {mount_point}"
+            )
+            if mount_point not in mount_check:
+                raise Exception(f"Mount verification failed for {mount_point}")
+            log.info("Mount successful")
+
+            # Step 8: Write test data
+            log.debug(f"Writing test data to {test_file}...")
+            client_node.exec_command(
+                sudo=True, cmd=f"echo -n '{test_data}' > {test_file}"
+            )
+            # Step 8.1: Sync the file to ensure data is flushed
+            log.debug(f"Syncing file {test_file}...")
+            client_node.exec_command(sudo=True, cmd=f"sync {test_file}")
+
+            # Verify initial write and collect checksums
+            file_content_out, _ = client_node.exec_command(
+                sudo=True, cmd=f"cat {test_file}"
+            )
+            file_content = file_content_out.strip()
+            if file_content != test_data:
+                raise Exception(
+                    f"Initial write failed! Expected: '{test_data}', Got: '{file_content}'"
+                )
+            log.debug("Initial write successful")
+
+            # Collect MD5 before unmount for comparison
+            log.info("Collecting file checksum before unmount...")
+            md5_before_out, _ = client_node.exec_command(
+                sudo=True, cmd=f"md5sum {test_file}"
+            )
+            md5_before = md5_before_out.strip().split()[0]
+            log.info(f"MD5 checksum before unmount: {md5_before}")
+
+            # Step 9: Unmount
+            log.info("Unmounting CephFS...")
+            client_node.exec_command(sudo=True, cmd=f"umount {mount_point}")
+            time.sleep(2)
+
+            # Step 10: Remount
+            log.info("Remounting CephFS...")
+            client_node.exec_command(sudo=True, cmd=mount_cmd)
+
+            # Step 11: Verify file contents after remount
+            log.info("Verifying file contents after remount...")
+            file_content_out, _ = client_node.exec_command(
+                sudo=True, cmd=f"cat {test_file}"
+            )
+            file_content_after = file_content_out.strip()
+
+            # Check file size
+            file_size_out, _ = client_node.exec_command(
+                sudo=True, cmd=f"stat -c%s {test_file}"
+            )
+            file_size = int(file_size_out.strip())
+
+            # Collect MD5 after remount for comparison
+            log.info("Collecting file checksum after remount...")
+            md5_after_out, _ = client_node.exec_command(
+                sudo=True, cmd=f"md5sum {test_file}"
+            )
+            md5_after = md5_after_out.strip().split()[0]
+            log.info(f"MD5 checksum after remount: {md5_after}")
+
+            log.info(f"File size after remount: {file_size} bytes")
+            log.info(f"File content after remount: '{file_content_after}'")
+            log.info(f"MD5 comparison: before={md5_before}, after={md5_after}")
+
+            # Step 12: Check if bug is reproduced
+            # Bug: File size is correct but contents are all NUL bytes
+            if file_content_after != test_data:
+                # Check if all bytes are NUL (bug manifestation)
+                non_nul_check, _ = client_node.exec_command(
+                    sudo=True, cmd=f"cat {test_file} | tr -d '\\0' | wc -c"
+                )
+                non_nul_count = int(non_nul_check.strip())
+
+                if non_nul_count == 0 and file_size > 0:
+                    log.error(
+                        "CephFS file flush bug detected: File size is correct but contents are all NUL bytes"
+                    )
+                    log.error(f"Expected content: '{test_data}'")
+                    log.error(
+                        f"Actual content: NUL bytes (file size: {file_size} bytes)"
+                    )
+                    raise Exception(
+                        "CephFS file flush bug detected: File contents are all NUL bytes after remount"
+                    )
+
+            # Verify MD5 checksums match (catches any content mismatch)
+            if md5_before != md5_after:
+                log.error(
+                    f"MD5 checksum mismatch: before={md5_before}, after={md5_after}"
+                )
+                raise Exception(
+                    "File integrity check failed: MD5 checksums do not match"
+                )
+
+            log.info("SUCCESS: File contents are preserved after remount")
+            log.info(f"MD5 checksum verified: {md5_before} == {md5_after}")
+
+        except Exception as e:
+            log.error(f"Failed with exception: {e.__doc__}")
+            log.exception(e)
+            # log cluster health
+            rados_obj.log_cluster_health()
+            return 1
+        finally:
+            log.info(
+                "\n \n ************** Execution of finally block begins here *************** \n \n"
+            )
+
+            # Cleanup: Remove all created resources
+            try:
+                # Unmount if mounted
+                client_node.exec_command(
+                    sudo=True, cmd=f"umount {mount_point}", check_ec=False
+                )
+
+                # Remove mount point & key file
+                client_node.exec_command(
+                    sudo=True,
+                    cmd=f"rm -rf {mount_point} /tmp/ceph-flush.key",
+                    check_ec=False,
+                )
+
+                # Remove subvolume
+                if "subvol_name" in locals() and "fs_name" in locals():
+                    client_node.exec_command(
+                        sudo=True,
+                        cmd=f"ceph fs subvolume rm {fs_name} {subvol_name}",
+                        check_ec=False,
+                    )
+
+                # Remove filesystem
+                if "fs_name" in locals():
+                    client_node.exec_command(
+                        sudo=True,
+                        cmd=f"ceph fs fail {fs_name}",
+                        check_ec=False,
+                    )
+                    time.sleep(2)
+                    client_node.exec_command(
+                        sudo=True,
+                        cmd=f"ceph fs rm {fs_name} --yes-i-really-mean-it",
+                        check_ec=False,
+                    )
+
+                # Remove pools
+                if "pool_type" in locals():
+                    metadata_pool = f"cephfs_{pool_type}_metadata"
+                    data_pool = f"cephfs_{pool_type}_data"
+
+                    existing_pools = rados_obj.list_pools()
+                    if metadata_pool in existing_pools:
+                        rados_obj.delete_pool(pool=metadata_pool)
+                    if data_pool in existing_pools:
+                        rados_obj.delete_pool(pool=data_pool)
+
+            except Exception as e:
+                log.warning(f"Error during cleanup: {e}")
+
+            # WA for bug : https://bugzilla.redhat.com/show_bug.cgi?id=2422606
+            rados_obj.restart_daemon_services(daemon="mgr")
+            time.sleep(20)
+            # log cluster health
+            rados_obj.log_cluster_health()
+            # check for crashes after test execution
+            if rados_obj.check_crash_status():
+                log.error("Test failed due to crash at the end of test")
+                return 1
+
+        log.info(
+            "Verification of CephFS file flush issue reproduction has been completed"
+        )
+        return 0
+
+
+def create_replicated_cephfs(client_node, rados_obj, fs_name, pool_type):
+    """
+    Create CephFS filesystem with replicated pools
+
+    Args:
+        client_node: Client node to execute commands
+        rados_obj: RadosOrchestrator object
+        fs_name: Filesystem name
+        pool_type: Pool type identifier (for logging)
+
+    Returns:
+        None (raises exception on failure)
+    """
+    log.info(f"Creating replicated pools for CephFS: {fs_name}")
+    metadata_pool = f"cephfs_{pool_type}_metadata"
+    data_pool = f"cephfs_{pool_type}_data"
+
+    # Create metadata pool (replicated)
+    assert rados_obj.create_pool(
+        pool_name=metadata_pool, app_name="cephfs"
+    ), f"Failed to create metadata pool {metadata_pool}"
+    log.debug(f"Created metadata pool: {metadata_pool}")
+
+    # Create data pool (replicated)
+    assert rados_obj.create_pool(
+        pool_name=data_pool,
+        app_name="cephfs",
+        bulk=True,
+        pg_num_max=128,
+    ), f"Failed to create data pool {data_pool}"
+    log.debug(f"Created data pool: {data_pool}")
+
+    # Create filesystem
+    client_node.exec_command(
+        sudo=True, cmd=f"ceph fs new {fs_name} {metadata_pool} {data_pool} --force"
+    )
+    log.info(f"Created CephFS filesystem: {fs_name} with replicated pools")
+
+
+def create_ec_cephfs(client_node, rados_obj, fs_name, pool_type):
+    """
+    Create CephFS filesystem with EC data pool and replicated metadata pool
+
+    Args:
+        client_node: Client node to execute commands
+        rados_obj: RadosOrchestrator object
+        fs_name: Filesystem name
+        pool_type: Pool type identifier (for logging)
+
+    Returns:
+        None (raises exception on failure)
+    """
+    log.info(f"Creating EC pools for CephFS: {fs_name}")
+    ec_data_pool = f"cephfs_{pool_type}_data"
+    metadata_pool = f"cephfs_{pool_type}_metadata"
+
+    # Create EC data pool with cephfs app
+    log.debug(f"Creating EC data pool: {ec_data_pool}")
+    ec_config = {
+        "pool_name": ec_data_pool,
+        "profile_name": f"ec_profile_{fs_name}",
+        "k": 2,
+        "m": 2,
+        "app_name": "cephfs",
+        "erasure_code_use_overwrites": "true",
+        "bulk": True,
+        "pg_num_max": 128,
+        "stripe_unit": 16384,
+    }
+    assert rados_obj.create_erasure_pool(
+        **ec_config
+    ), f"Failed to create EC pool {ec_data_pool}"
+    log.debug(f"Created EC data pool: {ec_data_pool}")
+
+    # Create metadata pool (replicated)
+    log.info(f"Creating metadata pool: {metadata_pool}")
+    assert rados_obj.create_pool(pool_name=metadata_pool, app_name="cephfs")
+    log.debug(f"Created metadata pool: {metadata_pool}")
+
+    # Create CephFS with EC data pool and replicated metadata pool
+    log.debug(f"Creating CephFS: {fs_name} with EC data pool")
+    client_node.exec_command(
+        sudo=True,
+        cmd=f"ceph fs new {fs_name} {metadata_pool} {ec_data_pool} --force",
+    )
+    log.info(f"Created CephFS filesystem: {fs_name} with EC data pool")

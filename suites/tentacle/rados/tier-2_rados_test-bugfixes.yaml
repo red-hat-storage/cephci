@@ -23,6 +23,7 @@
 #     16.https://bugzilla.redhat.com/show_bug.cgi?id=2336885
 #     17.https://bugzilla.redhat.com/show_bug.cgi?id=2336886
 #     18.https://bugzilla.redhat.com/show_bug.cgi?id=2336352
+#     19.https://bugzilla.redhat.com/show_bug.cgi?id=2421457
 #===============================================================================================
 # RHOS-d run duration: 330 mins
 tests:
@@ -246,3 +247,22 @@ tests:
       polarion-id: CEPH-83616882
       desc: Ensures watchers do not persist after client disconnects or interruptions
 
+  # max run time for this test is 3 mins
+  - test:
+      name: CephFS file flush with replicated pools
+      module: test_bug_fixes.py
+      config:
+        cephfs_file_flush_issue: true
+        pool_type: replicated
+      polarion-id: CEPH-83632223
+      desc: Verify file contents are preserved after unmount-remount with kernel client using replicated pools
+
+  # max run time for this test is 3 mins
+  - test:
+      name: CephFS file flush with EC pools
+      module: test_bug_fixes.py
+      config:
+        cephfs_file_flush_issue: true
+        pool_type: ec
+      polarion-id: CEPH-83632223
+      desc: Verify file contents are preserved after unmount-remount with kernel client using EC pools
