@@ -4,6 +4,7 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
@@ -106,7 +107,8 @@ def run(ceph_cluster, **kw):
         log.info("Running test case to verify BlueStore checksum algorithms")
         checksum_list = config.get("checksums")
         pool_type = config.get("pool_type", "erasure")
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # verify default checksum value
             out, _ = cephadm.shell(["ceph config get osd bluestore_csum_type"])
@@ -161,7 +163,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -183,7 +191,8 @@ def run(ceph_cluster, **kw):
         log.info(doc)
         log.info("Running test case to verify BlueStore Cache size tuning")
         pool_type = config.get("pool_type", None)
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # verify default value for bluestore cache
             out = mon_obj.get_config(section="osd", param="bluestore_cache_size")
@@ -246,7 +255,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 

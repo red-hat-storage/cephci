@@ -12,6 +12,7 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.rados_bench import RadosBench
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
+from ceph.rados.utils import get_cluster_timestamp
 from cli.utilities.utils import reboot_node
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.rados_test_util import (
@@ -62,7 +63,8 @@ def run(ceph_cluster, **kw):
 
         log.info(doc)
         log.info("Running test to verify ceph config show and get command outputs")
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             if float(rhbuild.split("-")[0]) < 7.1:
                 log.info("Passing without execution, BZ yet to be backported")
@@ -142,7 +144,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -163,7 +171,8 @@ def run(ceph_cluster, **kw):
 
         log.info(doc)
         log.info("Running test to verify slow OSD heartbeat warning")
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # check the default value of network threshold
             mgr_dump = rados_obj.run_ceph_command(cmd="ceph mgr dump", client_exec=True)
@@ -236,7 +245,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         log.info(
@@ -256,7 +271,8 @@ def run(ceph_cluster, **kw):
 
         log.info(doc)
         log.info("Running test to verify slow OSD heartbeat warning on baremetal")
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # check the default value of network threshold
             mgr_dump = rados_obj.run_ceph_command(cmd="ceph mgr dump", client_exec=True)
@@ -317,7 +333,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         log.info(
@@ -350,7 +372,8 @@ def run(ceph_cluster, **kw):
             "Running test to verify OSD resiliency when 'bluefs_shared_alloc_size'"
             " is below 'bluestore_min_alloc_size'"
         )
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             _pool_name = "test-bluefs-shared"
 
@@ -478,7 +501,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         log.info(
@@ -510,7 +539,8 @@ def run(ceph_cluster, **kw):
         log.info(
             "Running test to verify that there are no CEPHADM_STRAY_DAEMON warnings while replacing the OSD"
         )
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             osd_devices = {}
 
@@ -704,7 +734,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         log.info(
@@ -722,7 +758,8 @@ def run(ceph_cluster, **kw):
             "\n\t 4. Note the OSD service created for the new OSD is unmanaged"
             "\n\t 5. Move the OSD to the older managed service"
         )
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         log.info(doc)
         log.info("Running test to Verify that OSDs can be added/moved to new spec")
 
@@ -822,7 +859,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -854,7 +897,8 @@ def run(ceph_cluster, **kw):
 
         log.info(doc)
         log.info("Running test to verify CephFS file flush issue reproduction")
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
 
             # Get pool type from config (default replicated)
@@ -1124,7 +1168,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 

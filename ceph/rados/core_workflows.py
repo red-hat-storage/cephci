@@ -5216,14 +5216,28 @@ EOF"""
         )["summary"]["total_kb"]
         return total_size_osd
 
-    def check_crash_status(self):
+    def check_crash_status(self, check_logs=True, start_time=None, end_time=None):
         """
-        Module to check crashes on the cluster
+        Module to check crashes on the cluster using multiple methods:
+        1. Standard crash detection via 'ceph crash ls' command
+        2. Optional daemon log scanning for crash patterns
+        Note: Format: 'YYYY-MM-DDTHH:MM:SS.mmm+0000'
+            Use osd_utils.get_cluster_timestamp(node) to get correct format
+
+        Args:
+            check_logs: If True, also scan daemon logs for crash patterns
+                       (requires both start_time and end_time to be provided)
+            start_time: Start time for log analysis
+            end_time: End time for log analysis
+
         Returns:
-            True -> crash detected
+            True -> crash detected (in either crash ls or log scan)
             False -> No crashes observed
         """
-        # logging any existing crashes on the cluster
+        crash_detected = False
+
+        # Method 1: Check crashes via 'ceph crash ls' command
+        log.info("Checking for crashes using 'ceph crash ls' command")
         crash_list = self.do_crash_ls()
         if crash_list:
             log.error("!!!ERROR: Crash exists in the cluster \n\n:" f"{crash_list}")
@@ -5238,8 +5252,23 @@ EOF"""
             log.info("Archiving all the existing crashes on the cluster")
             out, _ = self.node.shell(["ceph crash archive-all"])
             log.info(out)
-            return True
-        return False
+            crash_detected = True
+        else:
+            log.info("No crashes found via 'ceph crash ls'")
+
+        # Method 2: Scan daemon logs for crash patterns (if requested and timestamps provided)
+        if check_logs and start_time and end_time:
+            try:
+                crash_report = self.scan_daemon_logs_for_crashes(
+                    start_time=start_time, end_time=end_time
+                )
+                if crash_report.get("crashes_found", False):
+                    crash_detected = True
+            except Exception as e:
+                log.error(
+                    f"Error occurred while scanning daemon logs for crashes: {e}",
+                )
+        return crash_detected
 
     def list_obj_snaps(self, pool_name: str, obj_name: str):
         """

@@ -18,6 +18,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 
@@ -112,7 +113,8 @@ def run(ceph_cluster, **kw):
             "app_name": "rbd",
             "erasure_code_use_overwrites": "true",
         }
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # Step 1: Check default value of osd_pool_default_flag_ec_optimizations
             log.info(
@@ -556,7 +558,13 @@ def run(ceph_cluster, **kw):
             rados_obj.log_cluster_health()
 
             # Check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -583,7 +591,8 @@ def run(ceph_cluster, **kw):
         - Case 5 ONLY runs if NO MDS are upgraded to 9.x (validates backward compatibility)
         """
         log.info("Running test to verify Fast EC optimizations during partial upgrade")
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             version_info = get_daemon_versions(rados_obj)
             log.info("Daemon version distribution:")
@@ -935,7 +944,13 @@ def run(ceph_cluster, **kw):
             rados_obj.log_cluster_health()
 
             # Check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -985,7 +1000,8 @@ def run(ceph_cluster, **kw):
             "16384"  # 16KB chunk size per data shard (recommended for Fast EC pools)
         )
         test_failed = False
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # Step 1: Disable global optimizations to create pool without EC optimizations
             log.info("Step 1: Disabling global EC optimizations")
@@ -1574,7 +1590,13 @@ def run(ceph_cluster, **kw):
             rados_obj.log_cluster_health()
 
             # Check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 test_failed = True
 

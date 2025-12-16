@@ -20,6 +20,7 @@ from ceph.rados.bluestoretool_workflows import BluestoreToolWorkflows
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
+from ceph.rados.utils import get_cluster_timestamp
 from ceph.utils import get_node_by_id
 from tests.misc_env.lvm_deployer import create_lvms
 from tests.rados.rados_test_util import get_device_path, wait_for_device_rados
@@ -64,7 +65,8 @@ def run(ceph_cluster, **kw):
         df_config = config.get("verify_cephdf_stats")
         pool_name = df_config["pool_name"]
         obj_nums = df_config["obj_nums"]
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # create pool with given config
             if df_config["create_pool"]:
@@ -173,7 +175,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -204,7 +212,8 @@ def run(ceph_cluster, **kw):
         df_config = config.get("verify_cephdf_max_avail")
         pool_name = df_config["pool_name"]
         obj_nums = df_config["obj_nums"]
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # create pool with given config
             if df_config["create_pool"]:
@@ -320,7 +329,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -352,6 +367,8 @@ def run(ceph_cluster, **kw):
         df_config = config.get("cephdf_max_avail_osd_expand")
         pool_name = "test-osd-expand"
         lvm_list = {"node12": [], "node13": []}
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
 
         def bytes_to_gb(val):
             return round(val / (1 << 30), 1)
@@ -564,7 +581,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -594,7 +617,8 @@ def run(ceph_cluster, **kw):
         log.info(desc)
         df_config = config.get("cephdf_max_avail_osd_rm")
         pool_name = "test-osd-rm-ec"
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # create default pool with given name
             rados_obj.create_erasure_pool(pool_name=pool_name)
@@ -712,7 +736,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -739,7 +769,8 @@ def run(ceph_cluster, **kw):
         obj_nums = df_config["obj_nums"]
         size = df_config["size"]
         obj_name = df_config["obj_name"]
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # create pool with given config
             if df_config["create_pool"]:
@@ -779,7 +810,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 

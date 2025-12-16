@@ -9,6 +9,7 @@ import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 from utility.utils import method_should_succeed
@@ -45,6 +46,8 @@ def run(ceph_cluster, **kw):
 
     log_line = "preempted"
     pool_name = config["pool_name"]
+    start_time = get_cluster_timestamp(rados_object.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         # enable the file logging
         if not rados_object.enable_file_logging():
@@ -123,9 +126,20 @@ def run(ceph_cluster, **kw):
             method_should_succeed(rados_object.delete_pool, pool_name)
             log.info("deleted the pool successfully")
         unset_preempt_parameter_value(mon_obj, rados_object, pool_name)
-        rados_object.disable_file_logging()
+        # Commenting step added to disable file logging
+        # rados_object.disable_file_logging()
         # log cluster health
         rados_object.log_cluster_health()
+
+        test_end_time = get_cluster_timestamp(rados_object.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_object.check_crash_status(
+            start_time=start_time, end_time=test_end_time
+        ):
+            log.error("Test failed due to crash at the end of test")
+            return 1
 
     return 0
 

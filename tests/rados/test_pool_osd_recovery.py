@@ -22,6 +22,7 @@ from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
+from ceph.rados.utils import get_cluster_timestamp
 from ceph.utils import get_node_by_id
 from tests.rados.rados_test_util import (
     get_device_path,
@@ -72,6 +73,8 @@ def run(ceph_cluster, **kw) -> int:
 
     log.info("\n\n---- Starting All workflows ----\n\n")
     if not config.get("osd_host_fail", False):
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # rebooting one OSD and checking cluster health
             log.info(
@@ -352,7 +355,13 @@ def run(ceph_cluster, **kw) -> int:
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -362,6 +371,8 @@ def run(ceph_cluster, **kw) -> int:
         log.info(
             "---- Starting workflow ----\n---- 7. Replacement of a failed OSD host"
         )
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             osd_hosts = rados_obj.get_osd_hosts()
             fail_host = get_node_by_id(ceph_cluster, osd_hosts[0])
@@ -415,7 +426,13 @@ def run(ceph_cluster, **kw) -> int:
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         return 0

@@ -19,6 +19,7 @@ import yaml
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods, MonElectionStrategies
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_data_migration_bw_pools import create_given_pool
@@ -44,6 +45,8 @@ def run(ceph_cluster, **kw):
     client_node = ceph_cluster.get_nodes(role="client")[0]
 
     if config.get("ec_pool_recovery_improvement"):
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             ec_config = config.get("ec_pool_recovery_improvement")
             if not rados_obj.create_erasure_pool(name="recovery", **ec_config):
@@ -169,7 +172,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -187,7 +196,8 @@ def run(ceph_cluster, **kw):
         compression_config = config["Compression_tests"]["compression_config"]
         pool_1 = pool_config["pool-1"]
         pool_2 = pool_config["pool-2"]
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             if config["Compression_tests"]["pool_type"] == "replicated":
                 if not rados_obj.create_pool(pool_name=pool_1, **pool_config):
@@ -284,7 +294,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         return 0
@@ -299,6 +315,8 @@ def run(ceph_cluster, **kw):
         3. Verify the PG changes when the flag is set/unset
         Verifies bugs : https://bugzilla.redhat.com/show_bug.cgi?id=2049851
         """
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             regex = r"\s*(\d.\d)-rhel-\d"
             build = (
@@ -398,13 +416,21 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         log.info("Verified the workings of bulk flag")
         return 0
 
     if config.get("verify_pool_target_ratio"):
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             log.debug("Verifying target size ratio on pools")
             target_configs = config["verify_pool_target_ratio"]["configurations"]
@@ -515,7 +541,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -523,6 +555,8 @@ def run(ceph_cluster, **kw):
         return 0
 
     if config.get("verify_mon_target_pg_per_osd"):
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             pg_conf = config.get("verify_mon_target_pg_per_osd")
             if not mon_obj.set_config(**pg_conf):
@@ -542,13 +576,21 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         log.info("Set and verified the value for mon_target_pg_per_osd ")
         return 0
 
     if config.get("verify_pg_num_min"):
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         log.debug("Verifying pg_num_min on pools")
         target_configs = config["verify_pg_num_min"]["configurations"]
         try:
@@ -625,7 +667,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         log.info("pg_min_num tests completed")
@@ -642,6 +690,8 @@ def run(ceph_cluster, **kw):
            5. Set the pg number more than the limit that is more than 128
            6. Check the logs for the proper message
         """
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         # enable the file logging
         if not rados_obj.enable_file_logging():
             log.error("Error while setting config to enable logging into file")
@@ -692,7 +742,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -709,6 +765,8 @@ def run(ceph_cluster, **kw):
         4. POOL_PG_NUM_NOT_POWER_OF_TWO
         5. POOL_TOO_MANY_PGS
         """
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         log.debug(
             "Test to verify the warnings generated by autoscaler for PG count on pools"
         )
@@ -1005,7 +1063,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         return 0
@@ -1013,7 +1077,8 @@ def run(ceph_cluster, **kw):
     if config.get("Verify_pool_min_size_behaviour"):
         log.info("Test to verify that no Pools are able to serve clients at min_size")
         pool_name = config["Verify_pool_min_size_behaviour"]["pool_name"]
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             rados_obj.create_pool(pool_name=pool_name)
             rados_obj.bench_write(pool_name=pool_name)
@@ -1062,7 +1127,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         return 0
@@ -1071,6 +1142,8 @@ def run(ceph_cluster, **kw):
         log.info(
             "Test to verify that degraded Pools are not able to serve clients below min_size"
         )
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         pool_target_configs = config["Verify_degraded_pool_min_size_behaviour"][
             "pool_config"
         ]
@@ -1304,7 +1377,13 @@ def run(ceph_cluster, **kw):
                 # log cluster health
                 rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         return 0
@@ -1313,6 +1392,8 @@ def run(ceph_cluster, **kw):
         log.info(
             "Test to verify the behaviour of the OSD when it is marked out and back in to the cluster"
         )
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
             osd_list = []
@@ -1406,7 +1487,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         return 0
@@ -1416,6 +1503,8 @@ def run(ceph_cluster, **kw):
             "test to verify if the PG autoscaler would scale up the PGs on the pool to pg_num_min"
             "Bugzilla verified : 2244985"
         )
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         pools = []
         try:
             # Setting the global pg autoscale mode to on
@@ -1491,7 +1580,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
 
@@ -1503,6 +1598,8 @@ def run(ceph_cluster, **kw):
             "\nTest to verify the behavior of EC profiles when attempting to modify and delete them."
             f" \nTests running on RHCS version : {rhbuild}\n"
         )
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         profile_configs = config["Verify_ec_profile"]
         test_pass = True
 
@@ -1628,6 +1725,15 @@ def run(ceph_cluster, **kw):
             rados_obj.rados_pool_cleanup()
             time.sleep(30)
             rados_obj.log_cluster_health()
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
+                log.error("Test failed due to crash at the end of test")
+                return 1
 
         if test_pass:
             log.info("All tests related to EC profiles passed successfully.")
@@ -1640,6 +1746,8 @@ def run(ceph_cluster, **kw):
         """
         Workflow to enable 3 AZ stretch mode on all the pools on the cluster or on the pool names passed
         """
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             test_conf = config.get("enable_3AZ_stretch_pools")
             pool_name = test_conf.get("pool_name", "test_3az_stretch_io")
@@ -1799,7 +1907,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         log.info("Completed enabling stretch mode on all the pools of cluster")

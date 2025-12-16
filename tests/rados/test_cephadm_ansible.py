@@ -8,6 +8,7 @@ cephadm-ansible playbook.
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.mgr_workflows import MgrWorkflows
+from ceph.rados.utils import get_cluster_timestamp
 from cli.utilities.configure import SSH_ID_RSA_PUB, SSH_KEYGEN
 from cli.utilities.packages import Package
 from cli.utilities.utils import get_ip_from_node
@@ -45,7 +46,8 @@ def run(ceph_cluster, **kw):
     playbook_name = "test_bz_2213766.yaml"
     playbook_absolute_path = f"{ansible_dir}/{playbook_name}"
     ansible_package_name = "cephadm-ansible"
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
 
         log.info(f"Installing {ansible_package_name} package for test")
@@ -221,7 +223,11 @@ EOF"""
         rados_obj.log_cluster_health()
 
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
 

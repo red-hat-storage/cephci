@@ -18,6 +18,7 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
@@ -54,7 +55,8 @@ def run(ceph_cluster, **kw) -> int:
     pool_name = replicated_config["pool_name"]
     mon_workflow_obj = MonitorWorkflows(node=cephadm)
     objectstore_obj = objectstoreToolWorkflows(node=cephadm, nostart=True)
-
+    test_start_time = get_cluster_timestamp(rados_object.node)
+    log.debug(f"Test workflow started. Start time: {test_start_time}")
     try:
         mon_obj.set_config(
             section="mon", name="enable_availability_tracking", value="true"
@@ -841,6 +843,16 @@ def run(ceph_cluster, **kw) -> int:
         )
         rados_object.delete_pool(pool=pool_name)
         mon_obj.remove_config(section="mon", name="enable_availability_tracking")
+        rados_object.log_cluster_health()
+        test_end_time = get_cluster_timestamp(rados_object.node)
+        log.debug(
+            f"Test workflow completed. Start time: {test_start_time}, End time: {test_end_time}"
+        )
+        if rados_object.check_crash_status(
+            start_time=test_start_time, end_time=test_end_time
+        ):
+            log.error("Test failed due to crash at the end of test")
+            return 1
     return 0
 
 
