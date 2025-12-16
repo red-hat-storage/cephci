@@ -307,7 +307,7 @@ tests:
             cephadm: true
             commands:
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone secondary --master --default --read-only=false"
-              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin period update --rgw-realm india --commit --yes-i-really-mean-it"
               - "ceph orch restart {service_name:shared.sec}"
               - "sleep 120"
       desc: RGW multisite failover
@@ -339,7 +339,7 @@ tests:
               - "radosgw-admin zone modify --rgw-realm india --rgw-zonegroup shared --rgw-zone primary --master --default"
               - "ceph orch restart {service_name:shared.pri}"
               - "sleep 30"
-              - "radosgw-admin period update --rgw-realm india --commit"
+              - "radosgw-admin period update --rgw-realm india --commit --yes-i-really-mean-it"
               - "sleep 120"
       desc: RGW multisite failback
       module: exec.py
