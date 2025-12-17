@@ -1,6 +1,7 @@
 import json
 import random
 import string
+import time
 import traceback
 
 from ceph.ceph import CommandFailed
@@ -12,7 +13,19 @@ log = Log(__name__)
 
 def umount_fs(client, mounting_dir):
     log.info("Unmount the File sytem")
-    client.exec_command(sudo=True, cmd=f"umount {mounting_dir} -l")
+    client.exec_command(sudo=True, cmd=f"umount {mounting_dir}")
+    # Wait until kernel releases mount
+    for _ in range(10):
+        out, rc = client.exec_command(
+            sudo=True,
+            cmd=f"mount | grep {mounting_dir}",
+            check_ec=False,
+        )
+        if rc != 0:
+            return
+        time.sleep(1)
+
+    raise CommandFailed("Mount point still present after umount")
 
 
 def run(ceph_cluster, **kw):
@@ -233,19 +246,26 @@ def run(ceph_cluster, **kw):
         out, rc = clients[0].exec_command(
             sudo=True, cmd=f"ceph tell mds.{active_mds[0]} client ls -f json"
         )
+
         get_client_details = json.loads(out)
+
+        evict_client = None
         for kernel_client in get_client_details:
-            if "subvol_recover_session_no" in kernel_client.get("client_metadata").get(
-                "root"
-            ):
+            root = kernel_client.get("client_metadata", {}).get("root", "")
+            if "subvol_recover_session_no" in root:
                 evict_client = kernel_client
                 break
+        if not evict_client:
+            raise CommandFailed(
+                "Kernel client for subvol_recover_session_no not found in mds client ls output"
+            )
         log.info("write data to client before evicting")
         fs_util.create_file_data(
             clients[0], kernel_mounting_dir, 3, "snap1", "data_from_fuse_mount "
         )
         clients[0].exec_command(
-            sudo=True, cmd=f"ceph tell mds.0 client evict id={evict_client.get('id')}"
+            sudo=True,
+            cmd=f"ceph tell mds.{active_mds[0]} client evict id={evict_client.get('id')}",
         )
         out, rc = clients[0].exec_command(
             sudo=True,
@@ -283,8 +303,191 @@ def run(ceph_cluster, **kw):
         out, rc = clients[0].exec_command(
             sudo=True, cmd=f"touch {kernel_mounting_dir}/test_{mounting_dir}"
         )
-
         umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info("mount with read_from_replica=balance and validate persistence")
+        test_file = f"{kernel_mounting_dir}/rfr_balance_test_file"
+        test_content = [
+            "I am here to read from replica - balance",
+        ]
+
+        # Mount with read_from_replica=balance
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",read_from_replica=balance",
+            validate=True,
+        )
+
+        # Create file and write content
+        for line in test_content:
+            clients[0].exec_command(
+                sudo=True,
+                cmd=f'echo "{line}" > {test_file}',
+            )
+
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content before remount:\n{out}")
+
+        # Ensure data is flushed
+        clients[0].exec_command(sudo=True, cmd="sync")
+        time.sleep(1)
+
+        # Unmount
+        umount_fs(clients[0], kernel_mounting_dir)
+        time.sleep(1)
+
+        # Remount with same option
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",read_from_replica=balance",
+            validate=True,
+        )
+
+        # Validate file content
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content after remount:\n{out}")
+        for line in test_content:
+            if line not in out:
+                raise CommandFailed(
+                    "File content mismatch after remount with read_from_replica=balance"
+                )
+        log.info("File content persists after remount with read_from_replica=balance")
+
+        # Cleanup mount
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"rm -rf {test_file}",
+        )
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info("mount with read_from_replica=no and validate persistence")
+        test_file = f"{kernel_mounting_dir}/rfr_off_test_file"
+        test_content = [
+            "I am here to read from replica - no",
+        ]
+
+        # Mount with read_from_replica=off
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",read_from_replica=no",
+            validate=True,
+        )
+
+        # Create file and write content
+        for line in test_content:
+            clients[0].exec_command(
+                sudo=True,
+                cmd=f'echo "{line}" > {test_file}',
+            )
+
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content before remount:\n{out}")
+
+        # Ensure data is flushed
+        clients[0].exec_command(sudo=True, cmd="sync")
+        time.sleep(1)
+
+        # Unmount
+        umount_fs(clients[0], kernel_mounting_dir)
+        time.sleep(1)
+
+        # Remount with same option
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=",read_from_replica=no",
+            validate=True,
+        )
+
+        # Validate file content
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content after remount:\n{out}")
+        for line in test_content:
+            if line not in out:
+                raise CommandFailed(
+                    "File content mismatch after remount with read_from_replica=no"
+                )
+        log.info("File content persists after remount with read_from_replica=no")
+
+        # Cleanup mount
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"rm -rf {test_file}",
+        )
+        umount_fs(clients[0], kernel_mounting_dir)
+
+        log.info(
+            "mount with read_from_replica=localize and crush_location and validate persistence"
+        )
+        test_file = f"{kernel_mounting_dir}/rfr_localize_test_file"
+        test_content = [
+            "I am here to read from replica - localize",
+        ]
+
+        # Mount with read_from_replica=localize and crush_location
+        mount_options = "read_from_replica=localize,crush_location=zone:east-zone1|region=east,_netdev"
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=f",{mount_options}",
+            validate=True,
+        )
+
+        # Create file and write content
+        for line in test_content:
+            clients[0].exec_command(
+                sudo=True,
+                cmd=f'echo "{line}" > {test_file}',
+            )
+
+        # Log file content before unmount
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content before remount:\n{out}")
+
+        # Ensure data is flushed
+        clients[0].exec_command(sudo=True, cmd="sync")
+        time.sleep(1)
+
+        # Unmount
+        umount_fs(clients[0], kernel_mounting_dir)
+        time.sleep(1)
+
+        # Remount with same options
+        rc = fs_util.kernel_mount(
+            [clients[0]],
+            kernel_mounting_dir,
+            ",".join(mon_node_ips),
+            extra_params=f",{mount_options}",
+            validate=True,
+        )
+
+        # Validate file content after remount
+        out, rc = clients[0].exec_command(sudo=True, cmd=f"cat {test_file}")
+        log.info(f"File content after remount:\n{out}")
+        for line in test_content:
+            if line not in out:
+                raise CommandFailed(
+                    "File content mismatch after remount with read_from_replica=localize and crush_location"
+                )
+        log.info(
+            "File content persists after remount with read_from_replica=localize and crush_location"
+        )
+
+        # Cleanup mount
+        clients[0].exec_command(
+            sudo=True,
+            cmd=f"rm -rf {test_file}",
+        )
+        umount_fs(clients[0], kernel_mounting_dir)
+
         return 0
 
     except Exception as e:
