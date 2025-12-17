@@ -1,7 +1,6 @@
 import time
 
 from ceph.parallel import parallel
-from ceph.utils import hard_reboot
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
 from utility.log import Log
 
@@ -16,15 +15,22 @@ def test_9474(rbd_mirror, pool_type, **kw):
         pool = config[pool_type]["pool"]
         image = config[pool_type]["image"]
         imagespec = pool + "/" + image
-        osd_cred = config.get("osp_cred")
-
         with parallel() as p:
             p.spawn(
                 mirror1.benchwrite,
                 imagespec=imagespec,
                 io=config[pool_type].get("io_total"),
             )
-            p.spawn(hard_reboot, osd_cred, name="ceph-rbd2")
+            log.info("Rebooting all the nodes in the secondary cluster:")
+            with parallel() as p:
+                for node in mirror2.ceph_nodes:
+                    p.spawn(
+                        mirror2.exec_cmd,
+                        ceph_args=False,
+                        cmd="reboot",
+                        node=node,
+                        check_ec=False,
+                    )
         time.sleep(60)
         mirror1.check_data(peercluster=mirror2, imagespec=imagespec)
         return 0
