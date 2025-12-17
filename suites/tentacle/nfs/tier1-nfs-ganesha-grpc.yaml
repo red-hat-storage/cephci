@@ -124,6 +124,7 @@ tests:
       name: NFS gRPC - Verify Port 50051 Availability
       module: test_nfs_grpc.py
       desc: Verify gRPC service port 50051 is listening with ganesha.nfsd process
+      polarion-id: CEPH-83630609
       abort-on-fail: false
       config:
         operation: verify_port
@@ -141,6 +142,7 @@ tests:
       name: NFS gRPC - Verify Service Discovery
       module: test_nfs_grpc.py
       desc: Verify gRPC service discovery and list available methods
+      polarion-id: CEPH-83630610
       abort-on-fail: false
       config:
         operation: verify_discovery
@@ -158,6 +160,7 @@ tests:
       name: NFS gRPC - Start Grace Period (Event ID 0)
       module: test_nfs_grpc.py
       desc: Test starting NFS grace period via gRPC with Event ID 0
+      polarion-id: CEPH-83630611
       abort-on-fail: false
       config:
         operation: grace_event_0
@@ -176,6 +179,7 @@ tests:
       name: NFS gRPC - Release IP from Grace (Event ID 2)
       module: test_nfs_grpc.py
       desc: Test release IP from grace via gRPC with Event ID 2
+      polarion-id: CEPH-83630612
       abort-on-fail: false
       config:
         operation: grace_event_2
@@ -194,6 +198,7 @@ tests:
       name: NFS gRPC - Node Takeover (Event ID 4)
       module: test_nfs_grpc.py
       desc: Test node takeover event via gRPC with Event ID 4
+      polarion-id: CEPH-83630613
       abort-on-fail: false
       config:
         operation: grace_event_4
@@ -212,6 +217,7 @@ tests:
       name: NFS gRPC - IP Takeover (Event ID 5)
       module: test_nfs_grpc.py
       desc: Test IP takeover event via gRPC with Event ID 5
+      polarion-id: CEPH-83630614
       abort-on-fail: false
       config:
         operation: grace_event_5
@@ -230,6 +236,7 @@ tests:
       name: NFS gRPC - Verify Client and Session IDs (3 Clients)
       module: test_nfs_grpc.py
       desc: Mount export on 3 clients and verify unique client_ids and session_ids
+      polarion-id: CEPH-83630615
       abort-on-fail: false
       config:
         operation: verify_client_session_ids
@@ -248,6 +255,7 @@ tests:
       name: NFS gRPC - Verify ID Updates After Client Unmount
       module: test_nfs_grpc.py
       desc: Unmount from 1 client and verify client/session IDs are updated
+      polarion-id: CEPH-83630616
       abort-on-fail: false
       config:
         operation: verify_id_after_unmount
