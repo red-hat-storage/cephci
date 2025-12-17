@@ -63,7 +63,7 @@ def run(ceph_cluster, **kw):
     # Determine the NFS instances to restart
     if instances_to_restart is None:
         nfs_to_restart = []
-        for attempt in range(10):
+        for attempt in range(30):
             nfs_to_restart = Ceph(clients[0]).nfs.cluster.ls()
             if nfs_to_restart:
                 log.info(f"Found NFS instances to restart: {nfs_to_restart}")

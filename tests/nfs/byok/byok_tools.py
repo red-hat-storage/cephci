@@ -1,7 +1,9 @@
 import json
 import tempfile
+import time
 from concurrent.futures import ThreadPoolExecutor
 
+import requests
 import yaml
 
 from cli.ceph.ceph import Ceph
@@ -360,11 +362,7 @@ def load_gklm_config(custom_data, config, cephci_data):
     cloud_gklm = cephci_data.get("gklm_config", {}).get(lookup_type, {})
     if cloud_gklm:
         merged.update(cloud_gklm)
-        log.info(
-            "Loaded GKLM config from cephci_data for cloud '%s': %s",
-            lookup_type,
-            cloud_gklm,
-        )
+        log.info("Loaded GKLM config from cephci_data for cloud ")
     else:
         log.debug("No GKLM config in cephci_data for cloud '%s'", lookup_type)
 
@@ -838,3 +836,61 @@ def create_in_file_certs(certs_dict, node):
     )
 
     return temp_file.name
+
+
+def wait_for_gklm_server_restart(
+    gklm_rest_client,
+    timeout: int = 300,
+    check_interval: int = 5,
+    initial_wait: int = 10,
+) -> bool:
+    """
+    Wait for GKLM server to restart and become healthy.
+
+    This method waits for the server to go down (health check fails) and then
+    come back up (health check succeeds).
+
+    Args:
+        timeout: Maximum time to wait for server restart in seconds (default: 300)
+        check_interval: Interval between health checks in seconds (default: 5)
+        initial_wait: Initial wait time before starting checks in seconds (default: 10)
+
+    Returns:
+        True if server restarted successfully, False if timeout occurred
+
+    Raises:
+        RuntimeError: If server health check fails unexpectedly
+    """
+    log.info(
+        "Waiting for GKLM server to restart with timeout of {} seconds".format(timeout)
+    )
+
+    # Initial wait to allow server shutdown
+    log.info("Waiting {} seconds for server to initiate shutdown".format(initial_wait))
+    time.sleep(initial_wait)
+
+    start_time = time.time()
+    elapsed_time = 0
+
+    while elapsed_time < timeout:
+        try:
+            gklm_rest_client.login()  # Re-authenticate if needed
+            is_healthy = gklm_rest_client.server.health_check()
+
+            if is_healthy == '{"overall":true}':
+                log.info("Server has restarted successfully and is healthy")
+                time.sleep(10)  # Additional wait to ensure stability
+                return True
+            else:
+                log.debug("Server is still down, waiting for restart")
+
+        except requests.exceptions.RequestException as e:
+            log.debug(
+                "Connection error while waiting for server startup: {}".format(str(e))
+            )
+
+        elapsed_time = time.time() - start_time
+        time.sleep(check_interval)
+
+    log.error("Server restart timed out after {} seconds".format(timeout))
+    return False
