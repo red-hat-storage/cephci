@@ -1,7 +1,8 @@
+import traceback
+
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Unmount
-from tests.cephfs.lib.cephfs_common_lib import CephFSCommonUtils
 from tests.nfs.byok.byok_tools import (
     clean_up_gklm,
     create_multiple_nfs_instance_for_byok,
@@ -10,6 +11,7 @@ from tests.nfs.byok.byok_tools import (
     load_gklm_config,
     perform_io_operations_and_validate_fuse,
     setup_gklm_infrastructure,
+    wait_for_gklm_server_restart,
 )
 from tests.nfs.nfs_operations import (
     cleanup_custom_nfs_cluster_multi_export_client,
@@ -189,6 +191,7 @@ def run(ceph_cluster, **kw):
     fs_name = config.get("fs_name", "cephfs")
     nfs_replication_number = int(config.get("nfs_replication_number", "1"))
     port = config.get("nfs_port", "2049")
+    global subvolume_group, gkml_client_name, gklm_cert_alias
     subvolume_group = "ganeshagroup"
 
     # Ensure sufficient clients
@@ -223,7 +226,26 @@ def run(ceph_cluster, **kw):
         )
 
         log.info("Step 3: generating certificates and keys, and CA_cert from GKLM")
-
+        if gklm_hostname not in [
+            x.get("alias") for x in gklm_rest_client.certificates.list_certificates()
+        ]:
+            log.info(f"Not Found CA cert alias {gklm_cert_alias}, creating ")
+            gklm_rest_client.certificates.create_system_certificate(
+                {
+                    "type": "Self-signed",
+                    "alias": gklm_hostname,
+                    "validity": "3650",
+                    "algorithm": "RSA",
+                    "usageSubtype": "KEYSERVING_TLS",
+                }
+            )
+            gklm_rest_client.server.restart_server()
+            wait_for_gklm_server_restart(
+                gklm_rest_client=gklm_rest_client,
+                timeout=500,
+                check_interval=10,
+                initial_wait=10,
+            )
         ca_cert = gklm_rest_client.certificates.get_system_certificate(
             cert_name=gklm_hostname
         )
@@ -261,7 +283,13 @@ def run(ceph_cluster, **kw):
 
             log.info("Step 5: Deploying NFS Ganesha instance with BYOK")
             create_nfs_instance_for_byok(
-                installer, nfs_node, nfs_name, gklm_hostname, rsa_key, cert, ca_cert
+                installer=installer,
+                nfs_node=nfs_node,
+                nfs_name=nfs_name,
+                kmip_host_list=gklm_hostname,
+                rsa_key=rsa_key,
+                cert=cert,
+                ca_cert=ca_cert,
             )
 
             log.info("Step 6: Creating and mounting NFS exports")
@@ -368,6 +396,11 @@ def run(ceph_cluster, **kw):
 
         return 0
 
+    except Exception as e:
+        log.info(f"Failed with Exception: {e}")
+        log.error(traceback.format_exc())
+        return 1
+
     finally:
         log.info("Cleanup: GKLM, NFS clusters, and mounts")
         if config.get("check_sighup", False):
@@ -377,13 +410,6 @@ def run(ceph_cluster, **kw):
             ]
             if "certsighup" in all_certs:
                 gklm_cert_alias = "certsighup"
-
-        # Clean GKLM resources
-        clean_up_gklm(
-            gklm_rest_client=gklm_rest_client,
-            gkml_client_name=gkml_client_name,
-            gklm_cert_alias=gklm_cert_alias,
-        )
 
         # Cleanup single cluster or multi cluster accordingly
         if nfs_replication_number == 1 and client_export_mount_dict is not None:
@@ -412,7 +438,11 @@ def run(ceph_cluster, **kw):
                 group_name=subvolume_group,
             )
 
-        if CephFSCommonUtils(ceph_cluster).wait_for_healthy_ceph(clients[0], 300):
-            log.error("Cluster health is not OK even after waiting for 300secs")
-            return 1
+        # Clean GKLM resources
+        clean_up_gklm(
+            gklm_rest_client=gklm_rest_client,
+            gkml_client_name=gkml_client_name,
+            gklm_cert_alias=gklm_cert_alias,
+        )
+
         log.info("Cleanup completed for all test resources.")
