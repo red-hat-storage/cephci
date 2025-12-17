@@ -649,6 +649,7 @@ def remove_parameter_configuration(mon_obj):
     mon_obj.remove_config(section="osd", name="osd_scrub_auto_repair")
     mon_obj.remove_config(section="osd", name="osd_scrub_auto_repair_num_errors")
     mon_obj.remove_config(section="osd", name="osd_scrub_load_threshold")
+    mon_obj.remove_config(section="osd", name="osd_scrub_backoff_ratio")
 
 
 def set_scheduled_scrub_parameters(scrub_object, acting_pg_set):
