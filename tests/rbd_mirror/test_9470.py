@@ -1,3 +1,4 @@
+import re
 import time
 
 from ceph.utils import hard_reboot
@@ -17,8 +18,10 @@ def test_9470(rbd_mirror, pool_type, **kw):
         imagespec = pool + "/" + image
         osd_cred = config.get("osp_cred")
         state_after_demote = "up+stopped" if mirror1.ceph_version < 3 else "up+unknown"
-
-        hard_reboot(osd_cred, name="ceph-rbd1")
+        node = kw["ceph_nodes"].node_list[0]
+        name = getattr(node, "vmname", None)
+        node_prefix = re.sub(r"-node\d+.*$", "", name)
+        hard_reboot(osd_cred, name=node_prefix)
 
         mirror2.promote(imagespec=imagespec, force=True)
         mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
