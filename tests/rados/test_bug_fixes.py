@@ -838,18 +838,19 @@ def run(ceph_cluster, **kw):
             "\n\t- https://bugzilla.redhat.com/show_bug.cgi?id=2421457"
             "\n Upstream tracker:"
             "\n\t- https://tracker.ceph.com/issues/73997"
-            "\n Verify file contents are preserved after unmount/remount with kernel client"
+            "\n Verify file contents are preserved after unmount/remount with kernel or ceph-fuse client"
             "\n\t This test reproduces the CephFS file flush issue where file contents fail to"
             "\n\t get flushed between container/mount restarts when using kernel client with"
             "\n\t read_from_replica=localize mount option."
             "\n\t Supports both Replicated and EC pool workflows:"
             "\n\t 1. Create CephFS filesystem (replicated or EC) and subvolume"
-            "\n\t 2. Mount subvolume with kernel client using read_from_replica=localize"
+            "\n\t 2. Mount subvolume with kernel client (or ceph-fuse if configured)"
             "\n\t 3. Write test data to a file and sync"
             "\n\t 4. Unmount and remount the subvolume"
             "\n\t 5. Verify file contents are preserved (not all NUL bytes)"
             "\n\t 6. Check kernel logs for -EINVAL errors if bug is present"
             "\n\t Config: pool_type = 'replicated' or 'ec' (default: 'replicated')"
+            "\n\t Config: mount_type = 'kernel' or 'fuse' (default: 'kernel')"
         )
 
         log.info(doc)
@@ -867,11 +868,21 @@ def run(ceph_cluster, **kw):
 
             log.info(f"Using {pool_type.upper()} pool workflow")
 
+            # Get mount type from config (default kernel)
+            mount_type = config.get("mount_type", "kernel").lower()
+            if mount_type not in ["kernel", "fuse"]:
+                log.error(
+                    f"Invalid mount_type: {mount_type}. Must be 'kernel' or 'fuse'"
+                )
+                raise Exception(f"Invalid mount_type: {mount_type}")
+            log.info(f"Using {mount_type.upper()} mount workflow")
+
             fs_name = f"cephfs-{pool_type}"
             subvol_name = f"test-flush-subvol-{pool_type}"
             mount_point = f"/mnt/cephfs-flush-test-{pool_type}"
             test_file = f"{mount_point}/test"
             test_data = "checking data persist"
+            key_file_path = "/tmp/ceph-admin.key"
 
             # Step 1: Create CephFS filesystem based on pool type
             log.info(f"Creating CephFS filesystem with {pool_type} pools...")
@@ -930,8 +941,7 @@ def run(ceph_cluster, **kw):
             # Step 5: Use existing admin client for mounting
             log.debug("Using admin client for mounting...")
             client_name = "admin"
-            # Write admin key directly to file using ceph auth get-key -o (most reliable method)
-            key_file_path = "/tmp/ceph-flush.key"
+            # Write admin key directly to file using ceph auth get-key -o
             client_node.exec_command(
                 sudo=True, cmd=f"ceph auth get-key client.admin -o {key_file_path}"
             )
@@ -943,22 +953,34 @@ def run(ceph_cluster, **kw):
             log.debug(f"Creating mount point: {mount_point}")
             client_node.exec_command(sudo=True, cmd=f"mkdir -p {mount_point}")
 
-            # Step 7: Mount with kernel client (problematic mount options)
-            log.info(
-                "Mounting CephFS with kernel client  with read_from_replica=localize"
-            )
-            mount_cmd = (
-                f"mount -t ceph {mon_addr}:{subvol_path} {mount_point} "
-                f"-o fs={fs_name},name={client_name},secretfile=/tmp/ceph-flush.key,"
-                f"read_from_replica=localize,crush_location=region:east\\|zone:east-zone1,_netdev"
-            )
-            client_node.exec_command(sudo=True, cmd=mount_cmd, long_running=True)
+            # Step 7: Mount subvolume
+            if mount_type == "kernel":
+                log.info(
+                    "Mounting CephFS with kernel client with read_from_replica=localize"
+                )
+                mount_cmd = (
+                    f"mount -t ceph {mon_addr}:{subvol_path} {mount_point} "
+                    f"-o fs={fs_name},name={client_name},secretfile={key_file_path},"
+                    f"read_from_replica=localize,crush_location=region:east\\|zone:east-zone1,_netdev"
+                )
+                client_node.exec_command(sudo=True, cmd=mount_cmd, long_running=True)
+            else:
+                log.info("Mounting CephFS with ceph-fuse client")
+                mount_cmd = (
+                    f"ceph-fuse {mount_point} "
+                    f"--client_mountpoint={subvol_path} "
+                    f"--client_fs={fs_name} "
+                    f"--id {client_name} "
+                    f"--keyfile {key_file_path} "
+                )
+                client_node.exec_command(sudo=True, cmd=mount_cmd)
 
             # Verify mount
             mount_check, _ = client_node.exec_command(
-                sudo=True, cmd=f"mount | grep {mount_point}"
+                sudo=True, cmd=f"findmnt -T {mount_point}"
             )
-            if mount_point not in mount_check:
+            log.debug(f"Mount check output: {mount_check}")
+            if not mount_check.strip():
                 raise Exception(f"Mount verification failed for {mount_point}")
             log.info("Mount successful")
 
@@ -1078,7 +1100,7 @@ def run(ceph_cluster, **kw):
                 # Remove mount point & key file
                 client_node.exec_command(
                     sudo=True,
-                    cmd=f"rm -rf {mount_point} /tmp/ceph-flush.key",
+                    cmd=f"rm -rf {mount_point} {key_file_path}",
                     check_ec=False,
                 )
 
