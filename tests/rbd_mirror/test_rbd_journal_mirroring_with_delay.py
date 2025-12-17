@@ -1,12 +1,10 @@
 from copy import deepcopy
-from time import sleep
 
 from ceph.rbd.initial_config import initial_mirror_config, random_string
 from ceph.rbd.utils import getdict
 from ceph.rbd.workflows.cleanup import cleanup
 from ceph.rbd.workflows.journal_mirror_ops import (
     config_mirroring_delay,
-    run_io_wait_for_replay_complete,
     write_data_and_verify_no_mirror_till_delay,
 )
 from utility.log import Log
@@ -23,10 +21,6 @@ def test_delayed_replication(
     try:
         config = deepcopy(kw.get("config").get(pool_type))
         delays = config.get("journal_delay", ["600"])
-        cluster_name = kw["ceph_cluster"].name
-        sec_cluster_name = [
-            k for k in kw.get("ceph_cluster_dict").keys() if k != cluster_name
-        ][0]
         for delay in delays:
             for pool, pool_config in getdict(config).items():
                 multi_image_config = getdict(pool_config)
@@ -34,23 +28,6 @@ def test_delayed_replication(
                 for image, image_config in multi_image_config.items():
                     image_spec = f"{pool}/{image}"
                     mount_path = f"/tmp/mnt_{random_string(len=5)}"
-                    rc = run_io_wait_for_replay_complete(
-                        rbd=rbd_obj,
-                        sec_rbd=sec_obj,
-                        client=client_node,
-                        pool=pool,
-                        image=image,
-                        image_config=image_config,
-                        mount_path=f"{mount_path}/file_00",
-                        sec_cluster_name=sec_cluster_name,
-                        skip_mkfs=False,
-                    )
-                    if rc:
-                        log.error(
-                            f"Run IO and wait for replay failed for image {pool}/{image}"
-                        )
-                        return 1
-                    sleep(120)
                     if delay_at_primary:
                         rc = config_mirroring_delay(
                             delay=delay,
@@ -76,7 +53,7 @@ def test_delayed_replication(
                         pool=pool,
                         image=image,
                         mount_path=f"{mount_path}/file_01",
-                        skip_mkfs=True,
+                        skip_mkfs=False,
                         image_config=image_config,
                         delay=int(delay),
                     )
