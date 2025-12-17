@@ -231,6 +231,7 @@ def test_snapshot_visibility_clone():
             "client_respect_snapshot_visibility": "true",
             "nfs_server": nfs_server,
             "nfs_name": nfs_name,
+            "retry": True,
         }
     )
     mnt_client = mount_details[sv_obj["subvol_name"]]["nfs"]["mnt_client"]
