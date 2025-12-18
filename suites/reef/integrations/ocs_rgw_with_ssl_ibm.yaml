@@ -93,6 +93,7 @@ tests:
             placement:
               nodes:
                 - node2
+                - node4
               spec:
                 ssl: true
                 generate_cert: true
