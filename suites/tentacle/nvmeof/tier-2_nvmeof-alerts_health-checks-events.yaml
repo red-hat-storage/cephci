@@ -71,8 +71,9 @@ tests:
       config:
         gw_nodes:
           - node6
-          - node5
+          - node7
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         gw_group: gw_group1
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
@@ -83,7 +84,7 @@ tests:
             listener_port: 4420
             listeners:
               - node6
-              - node5
+              - node7
             allow_host: "*"
         test_case: CEPH-83610948
         cleanup:
@@ -107,13 +108,15 @@ tests:
           - gateway
         gw_groups:
           - gw_group: group1
-            gw_nodes:
-              - node3
-              - node4
-          - gw_group: group2
+            nvme_metadata_pool: rbd
             gw_nodes:
               - node6
-              - node5
+              - node7
+          - gw_group: group2
+            nvme_metadata_pool: rbd
+            gw_nodes:
+              - node8
+              - node9
       desc: Multinamespace over single RBD image warning
       destroy-cluster: false
       module: test_ceph_nvmeof_alerts_events.py
@@ -125,6 +128,7 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         test_case: CEPH-83611097
         time_to_fire: 600
         interval: 60
@@ -133,8 +137,8 @@ tests:
           - gateway
         gw_group: group1
         gw_nodes:
-          - node5
           - node6
+          - node7
       desc: NVMeoF Missing Listener warning alert
       destroy-cluster: false
       module: test_ceph_nvmeof_alerts_events.py
@@ -146,8 +150,9 @@ tests:
       config:
         gw_nodes:
           - node6
-          - node5
+          - node7
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         time_to_fire: 600
         interval: 120
         gw_group: gw_group1
@@ -166,9 +171,10 @@ tests:
       abort-on-fail: false
       config:
         gw_nodes:
-          - node4
-          - node5
+          - node6
+          - node7
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         time_to_fire: 300
         interval: 100
         gw_group: gw_group1
@@ -188,9 +194,10 @@ tests:
       abort-on-fail: false
       config:
         gw_nodes:
-          - node5
           - node6
+          - node7
         rbd_pool: nvme_of_pool
+        nvme_metadata_pool: nvme_of_pool
         gw_group: gw_group1
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
@@ -198,20 +205,22 @@ tests:
             bdevs:
             - count: 512
               size: 1G
+              ns_create_image: true
             listener_port: 4420
             listeners:
-              - node5
               - node6
+              - node7
             allow_host: "*"
           - nqn: nqn.2016-06.io.spdk:cnode2
             max_ns: 1024
             bdevs:
             - count: 512
               size: 1G
+              ns_create_image: true
             listener_port: 4420
             listeners:
-              - node5
               - node6
+              - node7
             allow_host: "*"
         test_case: CEPH-83611306
         cleanup:
@@ -227,9 +236,10 @@ tests:
       abort-on-fail: false
       config:
         gw_nodes:
-          - node5
           - node6
+          - node7
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         time_to_fire: 60
         interval: 60
         gw_group: gw_group1
@@ -242,9 +252,10 @@ tests:
               size: 5G
             listener_port: 4420
             listeners:
-              - node5
+              - node6
+              - node7
             allow_host: "*"
-        test_case: CEPH-83616917
+        test_case: CEPH-83616917s
         cleanup:
           - pool
           - gateway
@@ -258,15 +269,16 @@ tests:
       abort-on-fail: false
       config:
         gw_nodes:
-          - node2
-          - node3
-          - node4
           - node5
           - node6
           - node7
           - node8
           - node9
           - node10
+          - node11
+          - node12
+          - node13
+        nvme_metadata_pool: nvme_of_pool
         time_to_fire: 60
         interval: 60
         rbd_pool: nvme_of_pool
@@ -285,9 +297,10 @@ tests:
       abort-on-fail: false
       config:
         gw_nodes:
-          - node5
           - node6
+          - node7
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         time_to_fire: 300
         interval: 100
         gw_group: gw_group1
@@ -296,7 +309,8 @@ tests:
             serial: 1
             listener_port: 4420
             listeners:
-              - node5
+              - node6
+              - node7
             allow_host: "*"
         test_case: CEPH-83616916
         host: node10
@@ -317,20 +331,25 @@ tests:
         interval: 60
         gw_groups:
           - gw_group: group1
-            gw_nodes:
-              - node2
-          - gw_group: group2
-            gw_nodes:
-              - node3
-          - gw_group: group3
-            gw_nodes:
-              - node4
-          - gw_group: group4
-            gw_nodes:
-              - node5
-          - gw_group: group5
+            nvme_metadata_pool: rbd
             gw_nodes:
               - node6
+          - gw_group: group2
+            nvme_metadata_pool: rbd
+            gw_nodes:
+              - node7
+          - gw_group: group3
+            nvme_metadata_pool: rbd
+            gw_nodes:
+              - node8
+          - gw_group: group4
+            nvme_metadata_pool: rbd
+            gw_nodes:
+              - node9
+          - gw_group: group5
+            nvme_metadata_pool: rbd
+            gw_nodes:
+              - node10
         test_case: CEPH-83617404
         cleanup:
           - pool
@@ -345,9 +364,10 @@ tests:
       abort-on-fail: false
       config:
         gw_nodes:
-          - node5
           - node6
+          - node7
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         time_to_fire: 60
         interval: 60
         gw_group: gw_group1
@@ -367,22 +387,119 @@ tests:
       abort-on-fail: false
       config:
         gw_nodes:
-          - node5
           - node6
+          - node7
+          - node8
+          - node9
         rbd_pool: nvme_of_pool
+        nvme_metadata_pool: nvme_of_pool
         time_to_fire: 60
         interval: 60
         gw_group: gw_group1
         subsystems:                             # Configure subsystems with all sub-entities
           - nqn: nqn.2016-06.io.spdk:cnode1
-            max_ns: 1024
+            max_ns: 512
             bdevs:
-              - count: 1024
+              - count: 512
                 size: 1G
+                ns_create_image: true
             listener_port: 4420
             listeners:
-              - node5
               - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode2
+            max_ns: 512
+            bdevs:
+              - count: 512
+                size: 1G
+                ns_create_image: true
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode3
+            max_ns: 512
+            bdevs:
+              - count: 512
+                size: 1G
+                ns_create_image: true
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode4
+            max_ns: 512
+            bdevs:
+              - count: 512
+                size: 1G
+                ns_create_image: true
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode5
+            max_ns: 512
+            bdevs:
+              - count: 512
+                size: 1G
+                ns_create_image: true
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode6
+            max_ns: 512
+            bdevs:
+              - count: 512
+                size: 1G
+                ns_create_image: true
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode7
+            max_ns: 512
+            bdevs:
+              - count: 512
+                size: 1G
+                ns_create_image: true
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
+            allow_host: "*"
+          - nqn: nqn.2016-06.io.spdk:cnode8
+            max_ns: 512
+            bdevs:
+              - count: 512
+                size: 1G
+                ns_create_image: true
+            listener_port: 4420
+            listeners:
+              - node6
+              - node7
+              - node8
+              - node9
             allow_host: "*"
         test_case: CEPH-83617545
         cleanup:
@@ -399,9 +516,10 @@ tests:
       config:
         gw_nodes:
           - node6
-          - node5
-        nvme_diff_version: cp.stg.icr.io/cp/ibm-ceph/nvmeof-rhel9:1.4.11-2
+          - node7
+        nvme_diff_version: cp.stg.icr.io/cp/ibm-ceph/nvmeof-rhel9:v9.0-8318.20251206033148.381cff9
         rbd_pool: nvme_of_pool
+        nvme_metadata_pool: nvme_of_pool
         time_to_fire: 3600
         interval: 900
         gw_group: gw_group1
@@ -411,10 +529,11 @@ tests:
             bdevs:
               - count: 5
                 size: 1G
+                ns_create_image: true
             listener_port: 4420
             listeners:
               - node6
-              - node5
+              - node7
             allow_host: "*"
         test_case: CEPH-83617640
         cleanup:
