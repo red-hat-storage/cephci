@@ -233,6 +233,12 @@ def run(ceph_cluster, **kw):
         log.info("SETUP PHASE: Filling EC pool with comprehensive data patterns")
         log.info("=" * 70)
 
+        log.info("Install FIO on client nodes")
+        client_nodes = ceph_cluster.get_nodes(role="client")
+        cmd = "yum install fio -y"
+        for node in client_nodes:
+            node.exec_command(cmd=cmd, sudo=True)
+
         # Step 1: Performing rados bench writes on pool
         log.info("Setup Step 1: Running rados bench writes (5000 objects)...")
         if not rados_obj.bench_write(

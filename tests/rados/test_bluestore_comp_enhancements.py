@@ -75,6 +75,12 @@ def run(ceph_cluster, **kw):
             "\n\n ************ Execution begins for bluestore data compression scenarios ************ \n\n"
         )
 
+        log.info("Install FIO on client nodes")
+        client_nodes = ceph_cluster.get_nodes(role="client")
+        cmd = "yum install fio -y"
+        for node in client_nodes:
+            node.exec_command(cmd=cmd, sudo=True)
+
         if "scenario-1" in scenarios_to_run:
             log.info("STARTED: Scenario 1: Validate default compression values")
             bluestore_compression.validate_default_compression_values()
