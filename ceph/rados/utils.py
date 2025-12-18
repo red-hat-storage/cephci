@@ -314,23 +314,26 @@ def configure_osd_flag(ceph_cluster, action, flag):
 
 def get_cluster_timestamp(node) -> str:
     """
-    Get the current UTC timestamp from the cluster in ISO 8601 format.
+    Get the current UTC timestamp from the cluster in journalctl-compatible format.
 
     This function returns a timestamp in the exact format required for
-    log analysis methods like scan_daemon_logs_for_crashes() and
-    parse_ec_optimization_logs(). Using cluster time (not local time)
-    ensures consistency when analyzing daemon logs.
+    log analysis methods like scan_daemon_logs_for_crashes() which use
+    journalctl for log retrieval. Using cluster time (not local time)
+    ensures consistency when analyzing daemon logs via journalctl.
 
-    Format: YYYY-MM-DDTHH:MM:SS.mmm+0000
-    Example: 2024-12-11T10:30:45.123+0000
+    Format: YYYY-MM-DD HH:MM:SS
+    Example: 2024-12-11 10:30:45
+
+    This format is directly compatible with journalctl --since and --until
+    options, which accept timestamps in "YYYY-MM-DD HH:MM:SS" format.
 
     Args:
         node: CephAdmin object
 
     Returns:
-        str: UTC timestamp in ISO 8601 format with milliseconds
+        str: UTC timestamp in journalctl-compatible format (YYYY-MM-DD HH:MM:SS)
     """
-    cmd = "date -u '+%Y-%m-%dT%H:%M:%S.%3N+0000'"
+    cmd = "date -u '+%Y-%m-%d %H:%M:%S'"
     out, _ = node.shell([cmd])
     timestamp = out.strip().strip("'")
     log.debug(f"Collected cluster timestamp: {timestamp}")
