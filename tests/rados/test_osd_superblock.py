@@ -4,6 +4,7 @@ from ceph.ceph import CommandFailed
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
+from ceph.rados.utils import get_cluster_timestamp
 from utility.log import Log
 
 log = Log(__name__)
@@ -50,7 +51,8 @@ def run(ceph_cluster, **kw):
             "Passing test without execution, feature/fix has been merged in RHCS 7.1"
         )
         return 0
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         # choosing an OSD at random
         osd_list = rados_obj.get_osd_list(status="up")
@@ -162,7 +164,11 @@ def run(ceph_cluster, **kw):
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
     return 0

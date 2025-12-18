@@ -14,6 +14,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.rados_scrub import RadosScrubber
+from ceph.rados.utils import get_cluster_timestamp
 from utility.log import Log
 from utility.utils import method_should_succeed
 
@@ -36,7 +37,8 @@ def run(ceph_cluster, **kw):
 
     pool_target_configs = config["verify_osd_omap_entries"]["configurations"]
     omap_target_configs = config["verify_osd_omap_entries"]["omap_config"]
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         # Creating pools and starting the test
         for entry in pool_target_configs.values():
@@ -96,7 +98,11 @@ def run(ceph_cluster, **kw):
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
     if result == 0:

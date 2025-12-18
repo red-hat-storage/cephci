@@ -25,6 +25,7 @@ from test_osd_ecpool_inconsistency_scenario import get_pg_inconsistent_object_co
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.rados_scrub import RadosScrubber
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
@@ -46,7 +47,8 @@ def run(ceph_cluster, **kw):
     replicated_config = config.get("replicated_pool")
     pool_name = replicated_config["pool_name"]
     acting_pg_set = ""
-
+    start_time = get_cluster_timestamp(rados_object.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
 
         log_line_no_scrub = "'scrub_load_below_threshold:.* = no'"
@@ -626,6 +628,16 @@ def run(ceph_cluster, **kw):
         configure_log_level(mon_obj, acting_pg_set, set_to_default=True)
         method_should_succeed(rados_object.delete_pool, pool_name)
         remove_parameter_configuration(mon_obj)
+        test_end_time = get_cluster_timestamp(rados_object.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_object.check_crash_status(
+            start_time=start_time, end_time=test_end_time
+        ):
+            log.error("Test failed due to crash at the end of test")
+            return 1
+        rados_object.log_cluster_health()
     log.info(
         "========== Validation of the osd_scrub_load_threshold is success ============="
     )

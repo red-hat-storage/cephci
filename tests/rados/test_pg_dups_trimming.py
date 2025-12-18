@@ -16,6 +16,7 @@ from ceph.ceph_admin.orch import Orch
 from ceph.parallel import parallel
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.test_data_migration_bw_pools import create_given_pool
 from utility.log import Log
@@ -46,7 +47,8 @@ def run(ceph_cluster, **kw) -> int:
     log.debug(f"Verifying pglog dups trimming on OSDs, test img : {test_image}")
     flag_set_cmds = ["ceph osd set noout", "ceph osd set pause"]
     flag_unset_cmds = ["ceph osd unset noout", "ceph osd unset pause"]
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         with open(pool_configs_path, "r") as fd:
             pool_conf_file = yaml.safe_load(fd)
@@ -226,7 +228,11 @@ def run(ceph_cluster, **kw) -> int:
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
 

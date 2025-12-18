@@ -9,6 +9,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 from utility.utils import method_should_succeed
@@ -54,7 +55,8 @@ def run(ceph_cluster, **kw):
     mon_daemon_obj = MonitorWorkflows(node=cephadm)
 
     test_config = config.get("mon_compaction_config", {})
-
+    test_start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {test_start_time}")
     try:
         # Get current MON leader
         current_leader = mon_daemon_obj.get_mon_quorum_leader()
@@ -154,7 +156,13 @@ def run(ceph_cluster, **kw):
         rados_obj.log_cluster_health()
 
         # Check for crashes
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {test_start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(
+            start_time=test_start_time, end_time=test_end_time
+        ):
             log.error("Test failed due to crash at the end of test")
             return 1
 

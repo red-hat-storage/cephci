@@ -27,6 +27,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
 from ceph.rados.rados_scrub import RadosScrubber
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
@@ -51,7 +52,8 @@ def run(ceph_cluster, **kw):
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     client_node = ceph_cluster.get_nodes(role="client")[0]
     wait_time = 45
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         # set global autoscaler to off
         rados_obj.configure_pg_autoscaler(**{"default_mode": "off"})
@@ -501,6 +503,14 @@ def run(ceph_cluster, **kw):
             log.info("deleted the pool successfully")
         set_ecpool_inconsistent_default_param_value(mon_obj, scrub_object)
         time.sleep(30)
+
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
+            log.error("Test failed due to crash at the end of test")
+            return 1
         # log cluster health
         rados_obj.log_cluster_health()
     return 0

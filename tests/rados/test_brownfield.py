@@ -10,6 +10,7 @@ import json
 from api import Api
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.utils import get_cluster_timestamp
 from utility.log import Log
 
 log = Log(__name__)
@@ -49,7 +50,8 @@ def run(ceph_cluster, **kw):
         out, _ = cephadm.shell(["ceph version"])
         ceph_version = out.strip()
         log.info(f"Ceph version: {ceph_version}")
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         try:
             # Get prometheus api host
             url, _ = cephadm.shell(["ceph dashboard get-prometheus-api-host"])
@@ -111,7 +113,13 @@ def run(ceph_cluster, **kw):
             # log cluster health
             rados_obj.log_cluster_health()
             # check for crashes after test execution
-            if rados_obj.check_crash_status():
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
                 log.error("Test failed due to crash at the end of test")
                 return 1
         return 0

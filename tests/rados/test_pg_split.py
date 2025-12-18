@@ -7,6 +7,7 @@ from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.rados_test_util import (
     create_pools,
     get_device_path,
@@ -46,7 +47,8 @@ def run(ceph_cluster, **kw):
     cluster_nodes = ceph_cluster.get_nodes()
     timeout = config.get("timeout", 10800)
     add_network_delay = config.get("add_network_delay", False)
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         if add_network_delay:
             for host in cluster_nodes:
@@ -353,7 +355,11 @@ def run(ceph_cluster, **kw):
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
     return 0

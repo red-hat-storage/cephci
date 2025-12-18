@@ -13,6 +13,7 @@ from ceph.rados import utils
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.rados_bench import RadosBench
+from ceph.rados.utils import get_cluster_timestamp
 from ceph.utils import get_node_by_id
 from tests.ceph_installer.test_cephadm import run as add_osd
 from tests.cephadm.test_host import run as deploy_host
@@ -152,7 +153,8 @@ def run(ceph_cluster, **kw):
         config = config["pg_autoscaling"]
         log.info("Running pg rebalance with full OSDs test case")
         pool_target_configs = config["pool_config"]
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         for entry in pool_target_configs.values():
             try:
                 rados_obj.configure_pg_autoscaler(**{"default_mode": "off"})
@@ -397,7 +399,13 @@ def run(ceph_cluster, **kw):
                 # log cluster health
                 rados_obj.log_cluster_health()
                 # check for crashes after test execution
-                if rados_obj.check_crash_status():
+                test_end_time = get_cluster_timestamp(rados_obj.node)
+                log.debug(
+                    f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+                )
+                if rados_obj.check_crash_status(
+                    start_time=start_time, end_time=test_end_time
+                ):
                     log.error("Test failed due to crash at the end of test")
                     return 1
 
@@ -431,7 +439,8 @@ def run(ceph_cluster, **kw):
             "Running test for PG rebalancing with full OSDs when new OSDs are added"
         )
         pool_target_configs = config["pool_config"]
-
+        start_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(f"Test workflow started. Start time: {start_time}")
         for entry in pool_target_configs.values():
             try:
                 rados_obj.configure_pg_autoscaler(**{"default_mode": "off"})
@@ -762,7 +771,13 @@ def run(ceph_cluster, **kw):
                     # log cluster health
                     rados_obj.log_cluster_health()
                     # check for crashes after test execution
-                    if rados_obj.check_crash_status():
+                    test_end_time = get_cluster_timestamp(rados_obj.node)
+                    log.debug(
+                        f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+                    )
+                    if rados_obj.check_crash_status(
+                        start_time=start_time, end_time=test_end_time
+                    ):
                         log.error("Test failed due to crash at the end of test")
                         return 1
             log.info(

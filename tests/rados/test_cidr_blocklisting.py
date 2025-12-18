@@ -5,6 +5,7 @@ import yaml
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.test_data_migration_bw_pools import create_given_pool
 from utility.log import Log
 
@@ -26,7 +27,8 @@ def run(ceph_cluster, **kw):
     image_count = config.get("image_count", 2)
     pool_configs_path = config["pool_configs_path"]
     log.debug("Verifying CIDR Blocklisting of ceph clients")
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         with open(pool_configs_path, "r") as fd:
             pool_conf = yaml.safe_load(fd)
@@ -284,7 +286,11 @@ def run(ceph_cluster, **kw):
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
     log.info("Completed testing CIDR blocklisting of ceph clients. Pass!")

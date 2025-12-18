@@ -27,6 +27,7 @@ from typing import Dict, List
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.utils import get_cluster_timestamp
 from utility.log import Log
 
 log = Log(__name__)
@@ -81,7 +82,8 @@ def run(ceph_cluster, **kw):
 
     # List to keep track of all images created for final cleanup
     all_created_images: List[str] = []
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         log.info("Creating test pool: %s" % pool)
         # Passing app_name="rbd" here, so create_pool handles the rbd pool init
@@ -410,10 +412,13 @@ def run(ceph_cluster, **kw):
         except Exception as e:
             log.error("Critical error during final cleanup of pool: %s" % e)
             log.exception(e)
-        if rados_obj.check_crash_status():
-            log.error(
-                "Test finished, but crash detected during or after test execution."
-            )
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
+            log.error("Test failed due to crash at the end of test")
+            return 1
 
 
 # e.g., ("/mnt/img_single_client_test_0", "/dev/rbd0")

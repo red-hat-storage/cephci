@@ -17,6 +17,7 @@ import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.utils import get_cluster_timestamp
 from utility.log import Log
 
 log = Log(__name__)
@@ -31,6 +32,8 @@ def run(ceph_cluster, **kw):
     client = ceph_cluster.get_nodes(role="client")[0]
 
     mon_hosts = []
+    test_start_time = get_cluster_timestamp(rados_object.node)
+    log.debug(f"Test workflow started. Start time: {test_start_time}")
     try:
         for node in ceph_nodes:
             if node.role == "mon":
@@ -72,7 +75,13 @@ def run(ceph_cluster, **kw):
         # log cluster health
         rados_object.log_cluster_health()
         # check for crashes after test execution
-        if rados_object.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_object.node)
+        log.debug(
+            f"Test workflow completed. Start time: {test_start_time}, End time: {test_end_time}"
+        )
+        if rados_object.check_crash_status(
+            start_time=test_start_time, end_time=test_end_time
+        ):
             log.error("Test failed due to crash at the end of test")
             return 1
     return 0

@@ -7,6 +7,7 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonElectionStrategies
 from utility.log import Log
 
@@ -38,7 +39,8 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonElectionStrategies(rados_obj=rados_obj)
     log.info("Running test case to verify Mgr stability when Mon weights are modified")
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         if rhbuild.startswith("5"):
             log.info("Test is not valid for Pacific, BZ yet to be back-ported")
@@ -152,7 +154,11 @@ def run(ceph_cluster, **kw):
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
 

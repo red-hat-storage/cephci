@@ -12,6 +12,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.test_stretch_site_down import (
     get_stretch_site_hosts,
     post_site_down_checks,
@@ -38,7 +39,8 @@ def run(ceph_cluster, **kw):
     pool_name = config.get("pool_name", "test_stretch_io")
     affected_site = config.get("affected_site", "DC1")
     tiebreaker_mon_site_name = config.get("tiebreaker_mon_site_name", "tiebreaker")
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         if not stretch_enabled_checks(rados_obj=rados_obj):
             log.error(
@@ -215,7 +217,11 @@ def run(ceph_cluster, **kw):
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
 

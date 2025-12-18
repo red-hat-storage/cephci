@@ -9,6 +9,7 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.rados_scrub import RadosScrubber
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
@@ -30,6 +31,8 @@ def run(ceph_cluster, **kw):
 
     test_scenarios = ["scrub", "deep-scrub"]
     # test_scenarios = ["deep-scrub"]
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
 
     for test_input in test_scenarios:
         # Creating replicated pool
@@ -212,6 +215,16 @@ def run(ceph_cluster, **kw):
                 log.error(
                     "The cluster did not reach active + Clean state after add capacity"
                 )
+                return 1
+
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            log.debug(
+                f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+            )
+            if rados_obj.check_crash_status(
+                start_time=start_time, end_time=test_end_time
+            ):
+                log.error("Test failed due to crash at the end of test")
                 return 1
             # log cluster health
             rados_obj.log_cluster_health()

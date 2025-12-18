@@ -14,6 +14,7 @@ import time
 from ceph.ceph_admin import CephAdmin
 from ceph.rados import utils as rados_utils
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from utility.log import Log
 
@@ -46,7 +47,8 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     osd_nodes = ceph_cluster.get_nodes(role="osd")
     rgw_node = ceph_cluster.get_nodes(role="rgw")[0]
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         # start background IOs using RGW
         rados_obj.run_background_iops(ceph_client="rgw", duration=600)
@@ -135,7 +137,11 @@ def run(ceph_cluster, **kw):
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
     return 0

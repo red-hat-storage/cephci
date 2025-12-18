@@ -30,6 +30,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.kvstoretool_workflows import kvstoreToolWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
+from ceph.rados.utils import get_cluster_timestamp
 from utility.log import Log
 
 log = Log(__name__)
@@ -378,6 +379,8 @@ def run(ceph_cluster, **kw):
             for entry in entries:
                 assert entry in out
 
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         if config.get("bluestore-enospc"):
             log.info(
@@ -585,7 +588,13 @@ def run(ceph_cluster, **kw):
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
-        if rados_obj.check_crash_status() and not config.get("bluestore-enospc"):
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(
+            start_time=start_time, end_time=test_end_time
+        ) and not config.get("bluestore-enospc"):
             log.error("Test failed due to crash at the end of test")
             return 1
 

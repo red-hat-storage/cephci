@@ -17,6 +17,7 @@ from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.monitor_workflows import MonitorWorkflows
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.serviceability_workflows import ServiceabilityMethods
+from ceph.rados.utils import get_cluster_timestamp
 from cli.utilities.operations import wait_for_cluster_health
 from tests.rados.monitor_configurations import MonElectionStrategies
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
@@ -73,6 +74,8 @@ def run(ceph_cluster, **kw):
         "client_node": client_node,
         "mon_obj": mon_obj,
     }
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
 
         STRETCH_MODE = False
@@ -475,7 +478,11 @@ def run(ceph_cluster, **kw):
         rados_obj.log_cluster_health()
 
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
 

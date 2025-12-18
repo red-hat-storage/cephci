@@ -5,6 +5,7 @@ import traceback
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 
@@ -26,7 +27,8 @@ def run(ceph_cluster, **kw):
     rados_obj = RadosOrchestrator(node=cephadm)
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
     installer = ceph_cluster.get_nodes(role="installer")[0]
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         log.info("Running slow op requests tests")
         _pool_name = config.pop("pool_name", "slow-op-pool")
@@ -141,7 +143,11 @@ def run(ceph_cluster, **kw):
         # log cluster health
         rados_obj.log_cluster_health()
         # check for crashes after test execution
-        if rados_obj.check_crash_status():
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
             log.error("Test failed due to crash at the end of test")
             return 1
     return 0
