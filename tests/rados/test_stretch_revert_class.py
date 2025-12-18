@@ -14,6 +14,7 @@ from utility.retry import retry
 log = Log(__name__)
 
 Hosts = namedtuple("Hosts", ["dc_1_hosts", "dc_2_hosts", "tiebreaker_hosts"])
+from typing import List
 
 
 class StretchMode:
@@ -81,7 +82,7 @@ class StretchMode:
                 tiebreaker_mon = mon["name"]
         return tiebreaker_mon
 
-    def enable_stretch_mode(self, tiebreaker_mon):
+    def enable_stretch_mode(self, tiebreaker_mon, crush_rule="stretch_rule"):
         """
         Enables stretch mode in the Ceph cluster using the specified tiebreaker monitor.
 
@@ -95,7 +96,7 @@ class StretchMode:
             When command `ceph mon enable_stretch_mode {tiebreaker_mon} stretch_rule datacenter` fails
         """
         stretch_enable_cmd = (
-            f"ceph mon enable_stretch_mode {tiebreaker_mon} stretch_rule datacenter"
+            f"ceph mon enable_stretch_mode {tiebreaker_mon} {crush_rule} datacenter"
         )
         if (
             self.rados_obj.run_ceph_command(
@@ -115,11 +116,8 @@ class StretchMode:
             err_msg = f"Failed to create pool : {pool_name}"
             log.error(err_msg)
             raise Exception(err_msg)
-        if (
-            self.pool_obj.do_rados_put(
-                client=client_node, pool=pool_name, nobj=400, timeout=100
-            )
-            == 1
+        if not self.rados_obj.bench_write(
+            pool_name=pool_name, byte_size="64KB", max_objs=400
         ):
             err_msg = f"Failed to write IO using rados put command to pool {pool_name}"
             log.error(err_msg)
@@ -174,11 +172,11 @@ class StretchMode:
             rados_obj=self.rados_obj,
             tiebreaker_mon_site_name=self.tiebreaker_mon_site_name,
         )
-        self.site_1_hosts = all_hosts.dc_1_hosts
-        self.site_2_hosts = all_hosts.dc_2_hosts
+        self.site_1_hosts = all_hosts.dc_2_hosts
+        self.site_2_hosts = all_hosts.dc_1_hosts
         self.tiebreaker_hosts = all_hosts.tiebreaker_hosts
-        self.site_1_name = dc_1_name
-        self.site_2_name = dc_2_name
+        self.site_2_name = dc_1_name
+        self.site_1_name = dc_2_name
         log.debug(
             f"Hosts present in Datacenter : {self.site_1_name} : {self.site_1_hosts}"
         )
@@ -186,7 +184,7 @@ class StretchMode:
             f"Hosts present in Datacenter : {self.site_2_name} : {self.site_2_hosts}"
         )
         log.debug(
-            f"Hosts present in Datacenter : {self.tiebreaker_mon_site_name} : { self.tiebreaker_hosts}"
+            f"Hosts present in Datacenter : {self.tiebreaker_mon_site_name} : {self.tiebreaker_hosts}"
         )
 
     def write_io_and_validate_objects(
@@ -296,6 +294,14 @@ class StretchMode:
             When stretch mode is not in the expected status after the retry limit is reached
         """
         stretch_details = self.rados_obj.get_stretch_mode_dump()
+
+        log.info("checking cluster health status...")
+        status_report = self.rados_obj.run_ceph_command(
+            cmd="ceph report", client_exec=True
+        )
+        ceph_health_status = list(status_report["health"]["checks"].keys())
+        log.info(f"Cluster health status: {ceph_health_status}")
+
         if status == "recovering":
             if stretch_details["recovering_stretch_mode"] == 0:
                 err_msg = (
@@ -360,6 +366,27 @@ class StretchMode:
         ):
             raise Exception("All mons are not in 'running' state")
         log.info("all mons daemons are in 'running' state")
+
+    def set_mon_location(
+        self, location_name: str, location_type: str, hostnames: List[str]
+    ):
+        log.info(
+            f"Setting mon location {location_type}={location_name} for hosts: {hostnames}"
+        )
+        for hostname in hostnames:
+            cmd = f"ceph mon set_location {hostname} {location_type}={location_name}"
+            try:
+                self.rados_obj.run_ceph_command(cmd=cmd, client_exec=True)
+                log.info(
+                    f"Successfully added mon location to {hostname} as {location_name}"
+                )
+            except Exception as err:
+                raise Exception(
+                    f"Failed to add mon location to {hostname} as {location_name}: {err}"
+                )
+        log.info(
+            f"Successfully added mon location {location_type}={location_name} to all hosts: {hostnames}"
+        )
 
 
 class RevertStretchModeFunctionalities(StretchMode):
@@ -598,3 +625,24 @@ def flush_ip_table_rules_on_all_hosts(rados_obj, hosts):
         host.exec_command(sudo=True, cmd="reboot", check_ec=False)
         time.sleep(20)
     log.info("Completed flushing IP table rules on all hosts")
+
+
+def wait_till_host_status_reaches(
+    rados_obj: RadosOrchestrator, status: str, hostnames: List[str], duration: int = 600
+):
+    start_time = time.time()
+    while time.time() - start_time < duration:
+        try:
+            for hostname in hostnames:
+                if (
+                    rados_obj.check_host_status(hostname=hostname, status=status)
+                    is False
+                ):
+                    raise Exception(f"Host {hostname} is not offline")
+            log.info(f"All hosts {hostnames} reached {status} in {duration} seconds")
+            return
+        except Exception as err:
+            log.info(f"Host {err} is not {status}, sleeping for {10} seconds")
+            time.sleep(10)
+
+    raise Exception(f"Hosts {hostnames} did not reach {status} in {duration} seconds")

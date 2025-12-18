@@ -19,8 +19,10 @@ includes:
 15. Negative: Incorrect command usage for disabling stretch mode commands
 16. Negative: Disable stretch mode without --yes-i-really-mean-it
 17. Negative: Revert stretch mode by passing non-existing crush rule
+18. Revert from a degraded stretch mode and enable stretch mode with a new datacenter
 """
 
+import random
 import time
 from collections import namedtuple
 
@@ -37,6 +39,7 @@ from tests.rados.test_stretch_revert_class import (
     RevertStretchModeFunctionalities,
     flush_ip_table_rules_on_all_hosts,
     simulate_netsplit_between_hosts,
+    wait_till_host_status_reaches,
 )
 from tests.rados.test_stretch_site_down import stretch_enabled_checks
 from tests.rados.test_stretch_site_reboot import get_host_obj_from_hostname
@@ -72,6 +75,7 @@ def run(ceph_cluster, **kw):
         15. Negative: Incorrect command usage for disabling stretch mode commands
         16. Negative: Disable stretch mode without --yes-i-really-mean-it
         17. Negative: Revert stretch mode by passing non-existing crush rule
+        18. Revert from a degraded stretch mode and enable stretch mode with a new datacenter
     """
 
     log.info(run.__doc__)
@@ -109,6 +113,7 @@ def run(ceph_cluster, **kw):
             "scenario15",
             "scenario16",
             "scenario17",
+            "scenario18",
         ],
     )
     config = {
@@ -227,6 +232,15 @@ def run(ceph_cluster, **kw):
         if "scenario17" in scenarios_to_run:
             log.info(test_seprator)
             revert_stretch_mode_scenarios.scenario17()
+            log.info(test_seprator)
+
+        if "scenario18" in scenarios_to_run:
+            log.info(test_seprator)
+            revert_stretch_mode_scenarios.scenario18(
+                ceph_cluster=ceph_cluster,
+                config=config,
+                crush_rule=default_crush_rule,
+            )
             log.info(test_seprator)
 
     except Exception as e:
@@ -1055,7 +1069,7 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
         5) Validate stretch mode related configs are reset in MON map
         6) Validate PGs reach active+clean
         """
-
+        log.info(self.scenario12.__doc__)
         if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
             raise Exception(
                 "PG did not reach active+clean before start of site down scenario"
@@ -1094,7 +1108,7 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
             7) Unset recovery flags and wait for recovery to complete
             8) Re-enter stretch mode for next scenario
         """
-        log.info(self.scenario12.__doc__)
+        log.info(self.scenario13.__doc__)
         log.info(
             "Step 1 -> Wait for clean PGs before starting scenario and Check stretch mode is enabled"
         )
@@ -1172,7 +1186,7 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
             5) Verify error message
             6) Re-enter stretch mode for next scenario
         """
-        log.info(self.scenario13.__doc__)
+        log.info(self.scenario14.__doc__)
         log.info(
             "Step 1 -> Wait for clean PGs before starting scenario and Check stretch mode is enabled"
         )
@@ -1245,7 +1259,7 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
             3) Verify error message
             4) Verify stretch mode is still enabled
         """
-        log.info(self.scenario14.__doc__)
+        log.info(self.scenario15.__doc__)
         log.info(
             "Step 1 -> Wait for clean PGs before starting scenario and Check stretch mode is enabled"
         )
@@ -1322,7 +1336,7 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
             3) Verify error message
             4) Verify stretch mode is still enabled
         """
-        log.info(self.scenario15.__doc__)
+        log.info(self.scenario16.__doc__)
         log.info(
             "Step 1 -> Wait for clean PGs before starting scenario and Check stretch mode is enabled"
         )
@@ -1386,7 +1400,7 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
             3) Verify error message
             4) Verify stretch mode is still enabled
         """
-        log.info(self.scenario16.__doc__)
+        log.info(self.scenario17.__doc__)
         log.info(
             "Step 1 -> Wait for clean PGs before starting scenario and Check stretch mode is enabled"
         )
@@ -1442,3 +1456,408 @@ class RevertStretchModeScenarios(RevertStretchModeFunctionalities):
                 "Stretch mode should still be enabled with non-existing rule"
             )
         log.info("Stretch mode is still enabled as expected")
+
+    def scenario18(self, ceph_cluster, config, crush_rule, shutdown=True):
+        """
+        Scenario 18:- Revert from a degraded stretch mode and enable stretch mode with a new datacenter
+        Steps:-
+            1) Wait for clean PGs before starting scenario and verify stretch mode is enabled
+            2) Create a pool and write IO
+            3) Simulate Datacenter DC2 failure by shutting down all hosts in DC2 (or skip if shutdown=False)
+            4) Revert stretch mode to regular cluster
+            5) Validate pool configurations are reset
+            6) Validate OSD configurations are reset
+            7) Validate MON configurations are reset
+            8) Remove failed hosts from the cluster
+            9) Wait for PGs to reach active+clean after host removal
+            10) Add new bucket DC3 of type datacenter and move it under root
+            11) Restart the stopped hosts and remove the cluster from those nodes
+            12) Add new hosts to the cluster and move them under DC3
+            13) Modify the site-affinity CRUSH rule to remove DC2 and include DC3
+            14) Remove DC2 from the CRUSH map
+            15) Enable stretch mode with surviving datacenter DC1 and new datacenter DC3
+            16) Wait for PGs to reach active+clean
+            17) Perform stretch mode checks
+            18) Write IO to the cluster post stretch mode enable
+        """
+        log.info(self.scenario18.__doc__)
+        log.info("=" * 80)
+        log.info(
+            "Starting Scenario 18: Revert from degraded stretch mode and enable with new datacenter"
+        )
+        log.info("=" * 80)
+        log.info(self.scenario18.__doc__)
+        log.info("=" * 80)
+
+        # Step 1: Wait for clean PGs and verify stretch mode is enabled
+        log.info("")
+        log.info("=" * 80)
+        log.info(
+            "Step 1): Wait for clean PGs before starting scenario and verify stretch mode is enabled"
+        )
+        log.info("=" * 80)
+        log.info("Checking if PGs are in active+clean state...")
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            log.error("PGs did not reach active+clean before start of scenario")
+            raise Exception("PG did not reach active+clean before start of scenario")
+        log.info("All PGs are in active+clean state")
+
+        log.info("Verifying stretch mode pre-checks...")
+        if not stretch_enabled_checks(self.rados_obj):
+            log.error(
+                "The cluster has not cleared the pre-checks to run stretch tests. Exiting..."
+            )
+            raise Exception("Test pre-execution checks failed")
+        log.info("Stretch mode pre-checks passed successfully")
+        log.info("Step 1) completed successfully")
+        log.info("")
+
+        # Step 2: Create a pool and write IO
+        log.info("=" * 80)
+        log.info("Step 2): Create a pool and write IO")
+        log.info("=" * 80)
+        pool_name = "rados_scenario18_pool_" + generate_unique_id(3)
+        log.info(f"Creating pool: {pool_name}")
+        self.create_pool_and_write_io(pool_name, client_node=self.client_node)
+        log.info(f"Pool {pool_name} created and IO written successfully")
+        log.info("Waiting 10 seconds for IO to stabilize...")
+        time.sleep(10)
+        init_objects = self.rados_obj.get_cephdf_stats(pool_name=pool_name)["stats"][
+            "objects"
+        ]
+        log.info(f"Initial object count in pool {pool_name}: {init_objects}")
+        log.info("Step 2) completed successfully")
+        log.info("")
+
+        # Step 3: Simulate Datacenter DC2 failure
+        log.info("=" * 80)
+        log.info(
+            "Step 3): Simulate Datacenter DC2 failure by shutting down all hosts in DC2"
+        )
+        log.info("=" * 80)
+        dc2_hosts_to_remove = self.site_2_hosts
+        log.info(f"Hosts in DC2 to be shut down: {dc2_hosts_to_remove}")
+        log.info(f"Shutdown parameter: {shutdown}")
+
+        if shutdown:
+            log.info("Shutting down all hosts in DC2...")
+            for host in dc2_hosts_to_remove:
+                log.info(f"Shutting down host: {host}")
+                target_node = find_vm_node_by_hostname(ceph_cluster, host)
+                target_node.shutdown(wait=True)
+                log.info(f"Host {host} has been shut down successfully")
+            log.info(f"Completed shutdown of all hosts in DC2: {dc2_hosts_to_remove}")
+
+            log.info("Waiting for stretch mode to reach degraded status...")
+            self.wait_till_stretch_mode_status_reaches(status="degraded")
+            log.info("Stretch mode has reached degraded status")
+        else:
+            log.info(
+                "Skipping shutdown step - testing with healthy stretch mode cluster"
+            )
+        log.info("Step 3) completed successfully")
+        log.info("")
+
+        # Step 4: Revert stretch mode to regular cluster
+        log.info("=" * 80)
+        log.info("Step 4): Revert stretch mode to regular cluster")
+        log.info("=" * 80)
+        if crush_rule["id"] == 0:
+            log.info("Reverting stretch mode to default crush rule (id=0)...")
+            self.revert_stretch_mode()
+        else:
+            log.info(
+                f"Reverting stretch mode to custom crush rule: {crush_rule['name']}"
+            )
+            self.revert_stretch_mode(crush_rule_name=crush_rule["name"])
+        log.info("Stretch mode reverted successfully")
+        log.info("Step 4) completed successfully")
+        log.info("")
+
+        # Step 5: Validate pool configurations are reset
+        log.info("=" * 80)
+        log.info("Step 5): Validate pool configurations are reset")
+        log.info("=" * 80)
+        self.expected_pool_properties["crush_rule"] = crush_rule["id"]
+        log.info(f"Expected pool properties: {self.expected_pool_properties}")
+        self.validate_pool_configurations_post_revert(self.expected_pool_properties)
+        log.info("Pool configurations validated successfully")
+        log.info("Step 5) completed successfully")
+        log.info("")
+
+        # Step 6: Validate OSD configurations are reset
+        log.info("=" * 80)
+        log.info("Step 6): Validate OSD configurations are reset")
+        log.info("=" * 80)
+        log.info(f"Expected OSD map values: {self.expected_osd_map_values}")
+        self.validate_osd_configurations_post_revert(self.expected_osd_map_values)
+        log.info("OSD configurations validated successfully")
+        log.info("Step 6) completed successfully")
+        log.info("")
+
+        # Step 7: Validate MON configurations are reset
+        log.info("=" * 80)
+        log.info("Step 7): Validate MON configurations are reset")
+        log.info("=" * 80)
+        log.info(f"Expected MON map values: {self.expected_mon_map_values}")
+        self.validate_mon_configurations_post_revert(self.expected_mon_map_values)
+        log.info("MON configurations validated successfully")
+        log.info("Step 7) completed successfully")
+        log.info("")
+
+        # Step 8: Remove failed hosts from the cluster
+        log.info("=" * 80)
+        log.info("Step 8): Remove failed hosts from the cluster")
+        log.info("=" * 80)
+        serviceability_methods = ServiceabilityMethods(cluster=ceph_cluster, **config)
+        if shutdown:
+            log.info("Waiting for hosts to reach Offline status (timeout: 600s)...")
+            wait_till_host_status_reaches(
+                rados_obj=self.rados_obj,
+                status="Offline",
+                hostnames=dc2_hosts_to_remove,
+                duration=600,
+            )
+            log.info(f"All hosts {dc2_hosts_to_remove} are now Offline")
+            log.info("Removing offline hosts from the cluster...")
+            for host_name in dc2_hosts_to_remove:
+                log.info(f"Removing offline host: {host_name}")
+                serviceability_methods.remove_offline_host(
+                    host_node_name=host_name, rm_crush_entry=True
+                )
+                log.info(f"Successfully removed offline host: {host_name}")
+        else:
+            log.info("Removing custom hosts from the cluster (shutdown=False)...")
+            for host_name in dc2_hosts_to_remove:
+                log.info(f"Removing custom host: {host_name}")
+                serviceability_methods.remove_custom_host(
+                    host_node_name=host_name, rm_crush_entry=True
+                )
+                log.info(f"Successfully removed custom host: {host_name}")
+        log.info(f"All hosts {dc2_hosts_to_remove} have been removed from the cluster")
+        log.info("Step 8) completed successfully")
+        log.info("")
+
+        # Step 9: Wait for PGs to reach active+clean after host removal
+        log.info("=" * 80)
+        log.info("Step 9): Wait for PGs to reach active+clean after host removal")
+        log.info("=" * 80)
+        log.info("Waiting for PGs to stabilize after host removal...")
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            log.error("PGs did not reach active+clean post revert")
+            raise Exception("PGs did not reach active+clean post revert")
+        log.info("All PGs are in active+clean state")
+        log.info("Step 9) completed successfully")
+        log.info("")
+
+        # Step 10: Add new bucket DC3 of type datacenter and move it under root
+        log.info("=" * 80)
+        log.info(
+            "Step 10): Add new bucket DC3 of type datacenter and move it under root"
+        )
+        log.info("=" * 80)
+        dc3_name = "DC3"
+        log.info(f"Adding new bucket {dc3_name} of type datacenter...")
+        cmd = f"ceph osd crush add-bucket {dc3_name} datacenter"
+        if self.rados_obj.run_ceph_command(cmd=cmd) is None:
+            log.error(f"Failed to add bucket {dc3_name}")
+            raise Exception(f"Failed to add bucket {dc3_name}")
+        log.info(f"Successfully added bucket {dc3_name}")
+
+        log.info(f"Moving bucket {dc3_name} under root=default...")
+        cmd = f"ceph osd crush move {dc3_name} root=default"
+        if self.rados_obj.run_ceph_command(cmd=cmd) is None:
+            log.error(f"Failed to move bucket {dc3_name} under root")
+            raise Exception(f"Failed to move bucket {dc3_name} under root")
+        log.info(f"Successfully moved bucket {dc3_name} under root")
+        log.info("Step 10) completed successfully")
+        log.info("")
+
+        # Step 11: Restart the stopped hosts and remove the cluster from those nodes
+        log.info("=" * 80)
+        log.info(
+            "Step 11): Restart the stopped hosts and remove the cluster from those nodes"
+        )
+        log.info("=" * 80)
+        log.info("Retrieving cluster FSID...")
+        fsid = self.rados_obj.run_ceph_command(cmd="ceph fsid", client_exec=True)[
+            "fsid"
+        ]
+        log.info(f"Cluster FSID: {fsid}")
+
+        for host in dc2_hosts_to_remove:
+            if shutdown:
+                log.info(f"Powering on host: {host}")
+                target_node = find_vm_node_by_hostname(ceph_cluster, host)
+                target_node.power_on()
+                log.info(f"Host {host} restarted successfully")
+                log.info("Waiting 60 seconds for host to stabilize...")
+                time.sleep(60)
+
+            log.info(f"Removing cluster from host: {host}")
+            host_obj = get_host_obj_from_hostname(
+                hostname=host, rados_obj=self.rados_obj
+            )
+            cmd = f"cephadm rm-cluster --force --zap-osds --fsid {fsid}"
+            host_obj.exec_command(cmd=cmd, sudo=True)
+            log.info(f"Cluster removed from host {host} successfully")
+        log.info(
+            f"Completed restart and cluster removal from all hosts: {dc2_hosts_to_remove}"
+        )
+        log.info("Step 11) completed successfully")
+        log.info("")
+
+        # Step 12: Add new hosts to the cluster and move them under DC3
+        log.info("=" * 80)
+        log.info("Step 12): Add new hosts to the cluster and move them under DC3")
+        log.info("=" * 80)
+        log.info("Setting OSD service to unmanaged mode...")
+
+        for host in dc2_hosts_to_remove:
+            self.rados_obj.set_service_managed_type(service_type="osd", unmanaged=True)
+            log.info(f"Adding host {host} back to the cluster with OSD deployment...")
+            serviceability_methods.add_new_hosts(
+                add_nodes=[host], deploy_osd=True, osd_label="osd"
+            )
+            log.info(f"Successfully added host {host} to the cluster")
+        log.info("Setting OSD service back to managed mode...")
+        self.rados_obj.set_service_managed_type(service_type="osd", unmanaged=False)
+        log.info("Waiting 60 seconds for OSDs to stabilize...")
+        time.sleep(60)
+
+        log.info(f"Moving hosts into DC3 bucket ({dc3_name}) in CRUSH map...")
+        for host in self.site_2_hosts:
+            log.info(f"Moving host {host} to {self.stretch_bucket}={dc3_name}...")
+            cmd = f"ceph osd crush move {host} {self.stretch_bucket}={dc3_name}"
+            if self.rados_obj.run_ceph_command(cmd=cmd) is None:
+                log.error(f"Failed to move host {host} under bucket {dc3_name}")
+                raise Exception(f"Failed to move host {host} under bucket {dc3_name}")
+            log.info(f"Successfully moved host {host} under bucket {dc3_name}")
+
+        log.info(f"Adding mon crush location for DC3 ({dc3_name})...")
+        log.info(f"MON hosts to configure: {self.site_2_mon_hosts}")
+        self.set_mon_location(
+            location_name=dc3_name,
+            hostnames=self.site_2_mon_hosts,
+            location_type="datacenter",
+        )
+        log.info(f"Successfully configured mon crush location for {dc3_name}")
+        log.info("Step 12) completed successfully")
+        log.info("")
+
+        # Step 13: Modify the site-affinity CRUSH rule to remove DC2 and include DC3
+        log.info("=" * 80)
+        log.info(
+            "Step 13): Modify the site-affinity CRUSH rule to remove DC2 and include DC3"
+        )
+        log.info("=" * 80)
+        log.info(f"Creating new CRUSH rule with {self.site_1_name} and {dc3_name}...")
+
+        rules = f"""id {random.randint(10, 100)}
+type replicated
+min_size 1
+max_size 10
+step take {self.site_1_name}
+step chooseleaf firstn 2 type host
+step emit
+step take {dc3_name}
+step chooseleaf firstn 2 type host
+step emit"""
+
+        # Add the modified rule
+        new_stretch_rule_name = "stretch_rule_" + str(random.randint(10, 100))
+        log.info(f"New stretch rule name: {new_stretch_rule_name}")
+        log.debug(f"CRUSH rule definition:\n{rules}")
+        if not self.rados_obj.add_custom_crush_rules(
+            rule_name=new_stretch_rule_name, rules=rules
+        ):
+            log.error("Failed to add modified stretch rule")
+            raise Exception("Failed to add modified stretch rule")
+        log.info(
+            f"Successfully created modified "
+            f"stretch rule {new_stretch_rule_name} using {self.site_1_name} and {dc3_name}"
+        )
+        log.info("Step 13) completed successfully")
+        log.info("")
+
+        # Step 14: Remove DC2 from the CRUSH map
+        log.info("=" * 80)
+        log.info("Step 14): Remove DC2 from the CRUSH map")
+        log.info("=" * 80)
+        log.info("Removing old stretch_rule from CRUSH map...")
+        cmd = "ceph osd crush rule rm stretch_rule"
+        if self.rados_obj.run_ceph_command(cmd=cmd) is None:
+            log.error("Failed to remove crush rule stretch_rule")
+            raise Exception("Failed to remove crush rule stretch_rule")
+        log.info("Successfully removed old stretch_rule")
+
+        log.info(f"Removing bucket {self.site_2_name} from CRUSH map...")
+        cmd = f"ceph osd crush remove {self.site_2_name}"
+        if self.rados_obj.run_ceph_command(cmd=cmd) is None:
+            log.error(f"Failed to remove bucket {self.site_2_name}")
+            raise Exception(f"Failed to remove bucket {self.site_2_name}")
+        log.info(f"Successfully removed bucket {self.site_2_name} from CRUSH map")
+        log.info("Step 14) completed successfully")
+        log.info("")
+
+        # Step 15: Enable stretch mode with DC1 and DC3
+        log.info("=" * 80)
+        log.info("Step 15): Enable stretch mode with DC1 and DC3")
+        log.info("=" * 80)
+        log.info(f"Enabling stretch mode with tiebreaker mon: {self.tiebreaker_mon}")
+        log.info(f"Using stretch rule: {new_stretch_rule_name}")
+        self.enable_stretch_mode(self.tiebreaker_mon, new_stretch_rule_name)
+        log.info("Stretch mode enabled successfully")
+        log.info("Step 15) completed successfully")
+        log.info("")
+
+        # Step 16: Wait for PGs to reach active+clean
+        log.info("=" * 80)
+        log.info("Step 16): Wait for PGs to reach active+clean")
+        log.info("=" * 80)
+        log.info(
+            "Waiting for PGs to reach active+clean state after enabling stretch mode..."
+        )
+        if wait_for_clean_pg_sets(rados_obj=self.rados_obj) is False:
+            log.error(
+                "PGs did not reach active+clean post enabling stretch mode with DC1 and DC3"
+            )
+            raise Exception(
+                "PGs did not reach active+clean post enabling stretch mode with DC2 and DC3"
+            )
+        log.info("All PGs are in active+clean state")
+        log.info("Step 16) completed successfully")
+        log.info("")
+
+        # Step 17: Perform stretch mode checks
+        log.info("=" * 80)
+        log.info("Step 17): Perform stretch mode checks")
+        log.info("=" * 80)
+        log.info("Running stretch mode validation checks...")
+        if not stretch_enabled_checks(self.rados_obj):
+            log.error(
+                "The cluster has not cleared the pre-checks after enabling stretch mode. Exiting..."
+            )
+            raise Exception("Stretch mode checks failed")
+        log.info("All stretch mode checks passed successfully")
+        log.info("Step 17) completed successfully")
+        log.info("")
+
+        # Step 18: Write IO to the cluster post stretch mode enable
+        log.info("=" * 80)
+        log.info("Step 18): Write IO to the cluster post stretch mode enable")
+        log.info("=" * 80)
+        log.info(f"Writing IO to pool {pool_name}...")
+        log.info(f"Initial object count: {init_objects}")
+        self.write_io_and_validate_objects(
+            pool_name=pool_name,
+            init_objects=init_objects,
+            obj_name="post_stretch_enable",
+        )
+        log.info("IO written and validated successfully")
+        log.info("Step 18) completed successfully")
+        log.info("")
+
+        log.info("=" * 80)
+        log.info("Scenario 18 completed successfully!")
+        log.info("=" * 80)
