@@ -18,7 +18,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.ceph_admin.orch import Orch
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.utils import get_cluster_timestamp
-from ceph.utils import get_node_by_id
+from ceph.utils import get_node_by_id, remove_repos
 from cephci.utils.build_info import CephTestManifest
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
@@ -176,12 +176,8 @@ def run(ceph_cluster, **kw):
         cluster_obj = Orch(cluster=ceph_cluster, **config)
 
         # Remove existing repos
-        rm_repo_cmd = (
-            "find /etc/yum.repos.d/ -type f ! -name hashicorp.repo ! -name redhat.repo -delete ;"
-            " yum clean all"
-        )
         for node in ceph_cluster.get_nodes():
-            node.exec_command(sudo=True, cmd=rm_repo_cmd)
+            remove_repos(ceph_node=node)
 
         # Set repo to newer RPMs
         cluster_obj.set_tool_repo()

@@ -660,6 +660,35 @@ def setup_repos(
         inst_file.flush()
 
 
+def remove_repos(
+    ceph_node,
+    exclude_repos=[
+        "hashicorp.repo",
+        "redhat.repo",
+        "appstream.repo",
+        "baseos.repo",
+        "crb.repo",
+    ],
+    repo_dir="/etc/yum.repos.d/",
+):
+    """Method to remove all repos from a desired directory except 'exclude_repos' entries
+    This method can also be used to remove general files from any directory on input node
+    Args:
+        ceph_node: node on which repos should be removed
+        exclude_repos: list of repos that will be excluded and retained
+        repo_dir: repo directory defaulted to '/etc/yum.repos.d/'
+    """
+    rm_repo_cmd = f"find {repo_dir} -type f -delete"
+    if exclude_repos:
+        rm_repo_cmd = (
+            f"find {repo_dir} -type f ! -name "
+            + " ! -name ".join(exclude_repos)
+            + " -delete"
+        )
+    for _cmd in [rm_repo_cmd, "yum clean all"]:
+        ceph_node.exec_command(sudo=True, cmd=_cmd)
+
+
 def check_ceph_healthly(
     ceph_mon, num_osds, num_mons, build, mon_container=None, timeout=300
 ):
