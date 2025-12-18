@@ -216,7 +216,16 @@ class CephTestManifest:
 
         try:
             yml_data: Dict[str, Any] = yaml.safe_load(data.text)
-            return yml_data[self.build_type]
+            build_data = yml_data[self.build_type]
+
+            # Convert image digests from '@sha256:<digest>' format to ':<digest>' format if datacenter is 'eu-de'
+            if self.datacenter == "eu-de":
+                images = build_data.get("images", {})
+                for k, v in images.items():
+                    images[k] = v.replace("@sha256:", ":")
+
+            return build_data
+
         except yaml.YAMLError:
             raise RuntimeError("Unable to process the Ceph QE manifest file")
         except KeyError:
