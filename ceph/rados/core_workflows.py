@@ -1623,6 +1623,10 @@ class RadosOrchestrator:
         profile_name = kwargs.get("profile_name", f"ecp_{pool_name}")
         rule_name = f"rule_{pool_name}"
         enable_fast_ec_features = kwargs.get("enable_fast_ec_features", False)
+        # enable allow_ec_overwrites by default
+        kwargs["erasure_code_use_overwrites"] = kwargs.get(
+            "erasure_code_use_overwrites", True
+        )
 
         # Creating an erasure coded profile with the options provided
         cmd = (
