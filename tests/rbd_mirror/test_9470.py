@@ -1,7 +1,6 @@
-import re
 import time
 
-from ceph.utils import hard_reboot
+from ceph.parallel import parallel
 from tests.rbd_mirror.rbd_mirror_utils import rbd_mirror_config
 from utility.log import Log
 
@@ -16,13 +15,17 @@ def test_9470(rbd_mirror, pool_type, **kw):
         pool = config[pool_type]["pool"]
         image = config[pool_type]["image"]
         imagespec = pool + "/" + image
-        osd_cred = config.get("osp_cred")
         state_after_demote = "up+stopped" if mirror1.ceph_version < 3 else "up+unknown"
-        node = kw["ceph_nodes"].node_list[0]
-        name = getattr(node, "vmname", None)
-        node_prefix = re.sub(r"-node\d+.*$", "", name)
-        hard_reboot(osd_cred, name=node_prefix)
-
+        log.info("Rebooting all the nodes in the primary cluster:")
+        with parallel() as p:
+            for node in mirror1.ceph_nodes:
+                p.spawn(
+                    mirror1.exec_cmd,
+                    ceph_args=False,
+                    cmd="reboot",
+                    node=node,
+                    check_ec=False,
+                )
         mirror2.promote(imagespec=imagespec, force=True)
         mirror2.wait_for_status(imagespec=imagespec, state_pattern="up+stopped")
         mirror2.benchwrite(imagespec=imagespec, io=config[pool_type].get("io_total"))
