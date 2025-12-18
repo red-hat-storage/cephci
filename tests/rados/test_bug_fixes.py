@@ -937,9 +937,13 @@ def run(ceph_cluster, **kw):
 
             if not fs_exists:
                 if pool_type == "replicated":
-                    create_replicated_cephfs(client_node, rados_obj, fs_name, pool_type)
+                    rados_obj.create_cephfs_pools(
+                        client_node, fs_name, pool_type="replicated"
+                    )
                 else:  # EC pool
-                    create_ec_cephfs(client_node, rados_obj, fs_name, pool_type)
+                    rados_obj.create_cephfs_pools(
+                        client_node, fs_name, pool_type="erasure"
+                    )
 
                 # Verify filesystem was created successfully
                 log.info(f"Verifying filesystem {fs_name} was created...")
@@ -1204,91 +1208,3 @@ def run(ceph_cluster, **kw):
             "Verification of CephFS file flush issue reproduction has been completed"
         )
         return 0
-
-
-def create_replicated_cephfs(client_node, rados_obj, fs_name, pool_type):
-    """
-    Create CephFS filesystem with replicated pools
-
-    Args:
-        client_node: Client node to execute commands
-        rados_obj: RadosOrchestrator object
-        fs_name: Filesystem name
-        pool_type: Pool type identifier (for logging)
-
-    Returns:
-        None (raises exception on failure)
-    """
-    log.info(f"Creating replicated pools for CephFS: {fs_name}")
-    metadata_pool = f"cephfs_{pool_type}_metadata"
-    data_pool = f"cephfs_{pool_type}_data"
-
-    # Create metadata pool (replicated)
-    assert rados_obj.create_pool(
-        pool_name=metadata_pool, app_name="cephfs"
-    ), f"Failed to create metadata pool {metadata_pool}"
-    log.debug(f"Created metadata pool: {metadata_pool}")
-
-    # Create data pool (replicated)
-    assert rados_obj.create_pool(
-        pool_name=data_pool,
-        app_name="cephfs",
-        bulk=True,
-        pg_num_max=128,
-    ), f"Failed to create data pool {data_pool}"
-    log.debug(f"Created data pool: {data_pool}")
-
-    # Create filesystem
-    client_node.exec_command(
-        sudo=True, cmd=f"ceph fs new {fs_name} {metadata_pool} {data_pool} --force"
-    )
-    log.info(f"Created CephFS filesystem: {fs_name} with replicated pools")
-
-
-def create_ec_cephfs(client_node, rados_obj, fs_name, pool_type):
-    """
-    Create CephFS filesystem with EC data pool and replicated metadata pool
-
-    Args:
-        client_node: Client node to execute commands
-        rados_obj: RadosOrchestrator object
-        fs_name: Filesystem name
-        pool_type: Pool type identifier (for logging)
-
-    Returns:
-        None (raises exception on failure)
-    """
-    log.info(f"Creating EC pools for CephFS: {fs_name}")
-    ec_data_pool = f"cephfs_{pool_type}_data"
-    metadata_pool = f"cephfs_{pool_type}_metadata"
-
-    # Create EC data pool with cephfs app
-    log.debug(f"Creating EC data pool: {ec_data_pool}")
-    ec_config = {
-        "pool_name": ec_data_pool,
-        "profile_name": f"ec_profile_{fs_name}",
-        "k": 2,
-        "m": 2,
-        "app_name": "cephfs",
-        "erasure_code_use_overwrites": "true",
-        "bulk": True,
-        "pg_num_max": 128,
-        "stripe_unit": 16384,
-    }
-    assert rados_obj.create_erasure_pool(
-        **ec_config
-    ), f"Failed to create EC pool {ec_data_pool}"
-    log.debug(f"Created EC data pool: {ec_data_pool}")
-
-    # Create metadata pool (replicated)
-    log.info(f"Creating metadata pool: {metadata_pool}")
-    assert rados_obj.create_pool(pool_name=metadata_pool, app_name="cephfs")
-    log.debug(f"Created metadata pool: {metadata_pool}")
-
-    # Create CephFS with EC data pool and replicated metadata pool
-    log.debug(f"Creating CephFS: {fs_name} with EC data pool")
-    client_node.exec_command(
-        sudo=True,
-        cmd=f"ceph fs new {fs_name} {metadata_pool} {ec_data_pool} --force",
-    )
-    log.info(f"Created CephFS filesystem: {fs_name} with EC data pool")

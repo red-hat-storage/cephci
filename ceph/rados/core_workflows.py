@@ -6970,3 +6970,185 @@ EOF"""
             "The cluster/Pool did not reach active + Clean state within the specified timeout"
         )
         return False
+
+    def create_cephfs_pools(self, client_node, fs_name: str, pool_type: str) -> None:
+        """
+        Create CephFS filesystem with EC/replicated data pool and replicated metadata pool
+
+        Args:
+            client_node: Client node to execute commands
+            fs_name: Filesystem name
+            pool_type: Pool type identifier
+
+        Returns:
+            None (raises exception on failure)
+        """
+        log.info(f"Creating EC pools for CephFS: {fs_name}")
+        data_pool = f"cephfs_{pool_type}_{fs_name}_data"
+        metadata_pool = f"cephfs_{pool_type}_{fs_name}_metadata"
+
+        if pool_type.lower() == "replicated":
+            log.debug(f"creating replicated data pool : {data_pool}")
+            # Create data pool (replicated)
+            assert self.create_pool(
+                pool_name=data_pool,
+                app_name="cephfs",
+                bulk=True,
+                pg_num_max=128,
+            ), f"Failed to create data pool {data_pool}"
+            log.debug(f"Created data pool: {data_pool}")
+
+        else:
+            log.debug(f"Creating EC data pool: {data_pool}")
+            ec_config = {
+                "pool_name": data_pool,
+                "profile_name": f"ec_profile_{fs_name}",
+                "k": 2,
+                "m": 2,
+                "app_name": "cephfs",
+                "erasure_code_use_overwrites": "true",
+                "bulk": True,
+                "pg_num_max": 128,
+                "stripe_unit": 16384,
+            }
+            assert self.create_erasure_pool(
+                **ec_config
+            ), f"Failed to create EC pool {data_pool}"
+            log.debug(f"Created EC data pool: {data_pool}")
+
+        # Create metadata pool (replicated)
+        log.info(f"Creating metadata pool: {metadata_pool}")
+        assert self.create_pool(pool_name=metadata_pool, app_name="cephfs")
+        log.debug(f"Created metadata pool: {metadata_pool}")
+
+        # Create CephFS with EC data pool and replicated metadata pool
+        log.debug(f"Creating CephFS: {fs_name} with EC data pool")
+        client_node.exec_command(
+            sudo=True,
+            cmd=f"ceph fs new {fs_name} {metadata_pool} {data_pool} --force",
+        )
+        log.info(f"Created CephFS filesystem: {fs_name} with EC data pool")
+
+    def create_cephfs_filesystem_mount(
+        self, client_node, fs_name: str = "cephfs-thrash", pool_type: str = "erasure"
+    ) -> tuple:
+        """
+        Create CephFS filesystem, mount it, and return mount path.
+
+        Args:
+            client_node: Client node to execute commands
+            fs_name: Filesystem name (default: "cephfs-thrash")
+            pool_type: Pool type - "erasure" or "replicated"
+
+        Returns:
+            Tuple of (fs_name, mount_path, list of created pool configs)
+        """
+        mount_path = f"/mnt/{fs_name}"
+
+        log.info(f"Creating CephFS with {pool_type} data pool: {fs_name}")
+
+        self.create_cephfs_pools(client_node, fs_name, pool_type=pool_type)
+
+        log.info(f"Mounting CephFS at {mount_path}")
+        client_node.exec_command(
+            cmd=f"mkdir -p {mount_path}", sudo=True, check_ec=False
+        )
+        client_node.exec_command(
+            cmd=f"mount -t ceph admin@.{fs_name}=/ {mount_path}", sudo=True
+        )
+        log.info(f"Mounted CephFS at {mount_path}")
+
+        # Return created pool names
+        created_pools = [
+            {
+                "pool_name": f"cephfs_{pool_type}_{fs_name}_data",
+                "pool_type": pool_type,
+                "client": "cephfs",
+            },
+            {
+                "pool_name": f"cephfs_{pool_type}_{fs_name}_metadata",
+                "pool_type": "replicated",
+                "client": "cephfs",
+            },
+        ]
+
+        return fs_name, mount_path, created_pools
+
+    def create_ec_rbd_pools(
+        self,
+        rbd_ec_data_pool: str = "rbd-ec-thrash-data",
+        rbd_metadata_pool: str = "rbd-thrash-metadata",
+        image_name: str = "thrash-test-image",
+        image_size: str = "10G",
+    ) -> tuple:
+        """
+        Create EC RBD pools, image, and mount it.
+
+        Args:
+            rbd_ec_data_pool: EC data pool name (default: "rbd-ec-thrash-data")
+            rbd_metadata_pool: Metadata pool name (default: "rbd-thrash-metadata")
+            image_name: RBD image name (default: "thrash-test-image")
+            image_size: Image size (default: "10G")
+
+        Returns:
+            Tuple of (mount_path, device_path, list of created pool configs)
+        """
+        log.info("Creating RBD pools (EC data + replicated metadata)")
+
+        # Create EC data pool for RBD
+        ec_config = {
+            "pool_name": rbd_ec_data_pool,
+            "profile_name": "rbd-ec-profile",
+            "k": 2,
+            "m": 2,
+            "app_name": "rbd",
+            "crush-failure-domain": "host",
+            "enable_fast_ec_features": True,
+            "stripe_unit": 16384,
+        }
+
+        if not self.create_erasure_pool(**ec_config):
+            raise Exception(f"Failed to create RBD EC data pool {rbd_ec_data_pool}")
+        log.info(f"Created RBD EC data pool: {rbd_ec_data_pool}")
+
+        # Create replicated metadata pool for RBD
+        if not self.create_pool(pool_name=rbd_metadata_pool, app_name="rbd"):
+            raise Exception(f"Failed to create RBD metadata pool {rbd_metadata_pool}")
+        log.info(f"Created RBD metadata pool: {rbd_metadata_pool}")
+
+        # Create RBD image with EC data pool
+        log.info(f"Creating RBD image: {image_name}")
+        cmd = f"rbd create --size {image_size} --data-pool {rbd_ec_data_pool} {rbd_metadata_pool}/{image_name}"
+        self.client.exec_command(cmd=cmd, sudo=True)
+        log.info(f"Created RBD image: {rbd_metadata_pool}/{image_name}")
+
+        # Mount the image
+        log.info("Mounting RBD image...")
+        mount_result = self.mount_image_on_client(
+            pool_name=rbd_metadata_pool,
+            img_name=image_name,
+            client_obj=self.client,
+            mount_path="/mnt/rbd-thrash/",
+        )
+
+        if not mount_result:
+            raise Exception("Failed to mount RBD image")
+
+        mount_path, device_path = mount_result
+        log.info(f"Mounted RBD image at {mount_path} (device: {device_path})")
+
+        created_pools = [
+            {
+                "pool_name": rbd_ec_data_pool,
+                "pool_type": "erasure",
+                "profile_name": "rbd-ec-profile",
+                "client": "rbd",
+            },
+            {
+                "pool_name": rbd_metadata_pool,
+                "pool_type": "replicated",
+                "client": "rbd",
+            },
+        ]
+
+        return mount_path, device_path, created_pools
