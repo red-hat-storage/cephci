@@ -18,7 +18,7 @@ import re
 import time
 from collections import namedtuple
 
-from ceph.ceph import CommandFailed
+from ceph.ceph import CommandFailed, SocketTimeoutException, TimeoutException
 from ceph.ceph_admin import CephAdmin
 from ceph.parallel import parallel
 from ceph.rados import utils as osd_utils
@@ -182,7 +182,7 @@ class RadosOrchestrator:
                 out, err = self.node.shell([cmd], timeout=timeout, print_output=False)
         except Exception as er:
             log.error(f"Exception hit while command execution. {er}")
-            return None
+            raise
         if out.isspace():
             return {}
         status = json.loads(out)
@@ -484,6 +484,9 @@ class RadosOrchestrator:
                 assert new_objs > 0
                 assert new_objs > org_objs
             return True
+        except (SocketTimeoutException, TimeoutException):
+            log.error("rados bench command failed due to timeout")
+            raise
         except Exception as err:
             log.error(f"Error running rados bench write on pool : {pool_name}")
             log.error(err)
@@ -1768,9 +1771,10 @@ class RadosOrchestrator:
             daemon_type="osd", daemon_id=target
         )
 
-        if ((osd_status == 0 or status_desc == "stopped") and action == "stop") or (
-            (osd_status == 1 or status_desc == "running") and action == "start"
-        ):
+        if (
+            (osd_status == 0 or status_desc == "stopped" or status_desc == "error")
+            and action == "stop"
+        ) or ((osd_status == 1 or status_desc == "running") and action == "start"):
             log.info(f"OSD {target} already in desired state: {action}")
             return True
 
@@ -3384,7 +3388,7 @@ EOF"""
         log.error(f"Pool ID {pool_id} not found in 'ceph pg dump pools' output")
         raise KeyError(f"Pool ID {pool_id} not found in 'ceph pg dump pools' output")
 
-    def restart_daemon_services(self, daemon: str, timeout: int = 300):
+    def restart_daemon_services(self, daemon: str, timeout: int = 600):
         """Module to restart all Orchestrator services belonging to the input
         daemon.
         Args:
@@ -3733,9 +3737,13 @@ EOF"""
                     msg_osd_start = f"Could not start OSD.{osd_id}"
                     log.error(msg_osd_start)
                     raise Exception("OSD not started")
+            log.info("Wait for PGs of pool %s to become active+clean" % pool_name)
+            self.wait_for_clean_pg_sets(
+                timeout=120, sleep_interval=15, test_pool=pool_name
+            )
             log.info("Starting user initiated deep-scrub")
             self.run_deep_scrub(pool=pool_name)
-            log.info("The user initiated deep scrub is completed")
+            log.info("The user initiated deep scrub has been triggered")
             assert self.check_inconsistent_health(inconsistent_present=True)
 
             inconsistent_obj_count = 0
@@ -3784,8 +3792,15 @@ EOF"""
             init_pool_pg_dump = pg_dump
 
         log.info("Dumping scrub stats before starting scrub")
-        log.info(f"last_scrub : {init_pool_pg_dump['last_scrub']}")
-        log.info(f"last_scrub_stamp: {init_pool_pg_dump['last_scrub_stamp']}")
+        log.info("=" * 70)
+        log.info("state : %s" % init_pool_pg_dump["state"])
+        log.info("last_scrub : %s " % init_pool_pg_dump["last_scrub"])
+        log.info("last_scrub_stamp: %s " % init_pool_pg_dump["last_scrub_stamp"])
+        log.info("last_scrub_duration: %s" % init_pool_pg_dump["last_scrub_duration"])
+        log.info("objects_scrubbed : %s" % init_pool_pg_dump["objects_scrubbed"])
+        log.info("scrub_schedule : %s" % init_pool_pg_dump["scrub_schedule"])
+        log.info("scrub_duration : %s" % init_pool_pg_dump["scrub_duration"])
+        log.info("=" * 70)
 
         # Parse the timestamp string into a datetime object
         init_scrub_stamp = datetime.datetime.strptime(
@@ -3804,6 +3819,15 @@ EOF"""
             seconds=wait_time
         ):
             pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
+            log.debug("=" * 70)
+            log.debug("state : %s" % pool_pg_dump["state"])
+            log.debug("last_scrub : %s " % pool_pg_dump["last_scrub"])
+            log.debug("last_scrub_stamp: %s " % pool_pg_dump["last_scrub_stamp"])
+            log.debug("last_scrub_duration: %s" % pool_pg_dump["last_scrub_duration"])
+            log.debug("objects_scrubbed : %s" % pool_pg_dump["objects_scrubbed"])
+            log.debug("scrub_schedule : %s" % pool_pg_dump["scrub_schedule"])
+            log.debug("scrub_duration : %s" % pool_pg_dump["scrub_duration"])
+            log.debug("=" * 70)
             current_scrub_stamp = datetime.datetime.strptime(
                 pool_pg_dump["last_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
             )
@@ -3853,8 +3877,17 @@ EOF"""
             init_pool_pg_dump = pg_dump
 
         log.info("Dumping deep-scrub stats before starting deep-scrub")
-        log.info(f"last_deep_scrub : {init_pool_pg_dump['last_deep_scrub']}")
-        log.info(f"last_deep_scrub_stamp: {init_pool_pg_dump['last_deep_scrub_stamp']}")
+        log.info("=" * 70)
+        log.info("state : %s" % init_pool_pg_dump["state"])
+        log.info("last_deep_scrub : %s " % init_pool_pg_dump["last_deep_scrub"])
+        log.info(
+            "last_deep_scrub_stamp: %s " % init_pool_pg_dump["last_deep_scrub_stamp"]
+        )
+        log.info("last_scrub_duration: %s" % init_pool_pg_dump["last_scrub_duration"])
+        log.info("objects_scrubbed : %s" % init_pool_pg_dump["objects_scrubbed"])
+        log.info("scrub_schedule : %s" % init_pool_pg_dump["scrub_schedule"])
+        log.info("scrub_duration : %s" % init_pool_pg_dump["scrub_duration"])
+        log.info("=" * 70)
 
         # Parse the timestamp string into a datetime object
         init_scrub_stamp = datetime.datetime.strptime(
@@ -3874,12 +3907,24 @@ EOF"""
             seconds=wait_time
         ):
             pool_pg_dump = self.get_ceph_pg_dump(pg_id=pg_id)
+            log.debug("=" * 70)
+            log.debug("state : %s" % pool_pg_dump["state"])
+            log.debug("last_deep_scrub : %s " % pool_pg_dump["last_deep_scrub"])
+            log.debug(
+                "last_deep_scrub_stamp: %s " % pool_pg_dump["last_deep_scrub_stamp"]
+            )
+            log.debug("last_scrub_duration: %s" % pool_pg_dump["last_scrub_duration"])
+            log.debug("objects_scrubbed : %s" % pool_pg_dump["objects_scrubbed"])
+            log.debug("scrub_schedule : %s" % pool_pg_dump["scrub_schedule"])
+            log.debug("scrub_duration : %s" % pool_pg_dump["scrub_duration"])
+            log.debug("=" * 70)
             # Parse the timestamp string into a datetime object
             current_scrub_stamp = datetime.datetime.strptime(
                 pool_pg_dump["last_deep_scrub_stamp"], "%Y-%m-%dT%H:%M:%S.%f%z"
             )
             if current_scrub_stamp > init_scrub_stamp:
                 log.info(f"Scrubbing complete on the PG: {pg_id}")
+
                 log.debug(f"Final last_deep_scrub: {pool_pg_dump['last_deep_scrub']}")
                 log.debug(
                     f"Final last_deep_scrub_stamp: {pool_pg_dump['last_deep_scrub_stamp']}"
@@ -6569,3 +6614,106 @@ EOF"""
 
         # Print as a single multi-line log message for clean output
         log.error("\n".join(report_lines))
+
+    def wait_for_clean_pg_sets(
+        self,
+        timeout: int = 10000,
+        sleep_interval: int = 120,
+        test_pool: str = None,
+        recovery_thread: bool = True,
+    ) -> bool:
+        """
+        # duplicate of
+        Waiting for up to 2.5 hours for the PG's to enter active + Clean state.
+        If pool name is provided, just checks the PGs of that pool for active + clean
+        Automation for bug : [1] & [2]
+        Args:
+            timeout: timeout in seconds or "unlimited"
+            sleep_interval: sleep timeout in seconds (default: 120)
+            test_pool: name of the test pool, whose PG states need to be monitored.
+            recovery_thread: flag to control if recovery threads are to be modified
+        Returns:  True -> pass, False -> fail
+        """
+        if recovery_thread:
+            log.debug(
+                "Updating recovery thread and osd_op_queue to assist faster recovery"
+            )
+            self.change_recovery_threads(config={}, action="set")
+
+        end_time = None
+        if timeout == "unlimited":
+            condition = lambda: True
+        elif isinstance(timeout, int):
+            end_time = datetime.datetime.utcnow() + datetime.timedelta(seconds=timeout)
+            condition = lambda: datetime.datetime.utcnow() < end_time
+
+        while condition():
+            health_warnings = (
+                "remapped",
+                "backfilling",
+                "degraded",
+                "incomplete",
+                "peering",
+                "recovering",
+                "recovery_wait",
+                "undersized",
+                "backfilling_wait",
+            )
+            all_pg_active_clean = True
+            if test_pool:
+                log.debug(f"Checking for active + clean PGs on pool: {test_pool}")
+                pool_pg_ids = self.get_pgid(pool_name=test_pool)
+                for pg_id in pool_pg_ids:
+                    try:
+                        pg_state = self.get_pg_state(pg_id=pg_id)
+                    except Exception as err:
+                        log.error(f"PGID : {pg_id} was not found, err: {err}")
+                        continue
+                    if any(key in health_warnings for key in pg_state.split("+")):
+                        all_pg_active_clean = False
+                        log.debug(
+                            f"PG: {pg_id} in states: {pg_state}"
+                            f"Waiting for active + clean. "
+                        )
+                        break
+                    log.info(
+                        f" PG: {pg_id} in state: {pg_state}."
+                        f" Checking status on next PG in the pool"
+                    )
+            else:
+                try:
+                    status_report = self.run_ceph_command(
+                        cmd="ceph report", client_exec=True
+                    )
+                    for entry in status_report["num_pg_by_state"]:
+                        if any(
+                            key in health_warnings for key in entry["state"].split("+")
+                        ):
+                            all_pg_active_clean = False
+                            log.debug(f"PG state: {entry['state']}")
+                        log.info(
+                            f"Waiting for active + clean. Active alerts: {status_report['health']['checks'].keys()},"
+                            f" PG States: {status_report['num_pg_by_state']}."
+                            f" Checking status again in {sleep_interval} seconds"
+                        )
+                        log.info(
+                            f"\nceph status : {self.run_ceph_command(cmd='ceph -s', client_exec=True)}\n"
+                        )
+                except Exception as e:
+                    log.error(f"Error occurred while fetching status report: {e}")
+
+            if all_pg_active_clean:
+                if recovery_thread:
+                    log.debug("Removing recovery thread settings")
+                    self.change_recovery_threads(config={}, action="rm")
+                log.info("The recovery and back-filling of the OSDs/Pool is completed")
+                return True
+            time.sleep(sleep_interval)
+
+        if recovery_thread:
+            log.debug("Removing recovery thread settings")
+            self.change_recovery_threads(config={}, action="rm")
+        log.error(
+            "The cluster/Pool did not reach active + Clean state within the specified timeout"
+        )
+        return False

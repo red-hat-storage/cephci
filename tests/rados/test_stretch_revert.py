@@ -201,7 +201,7 @@ def run(ceph_cluster, **kw):
 
         if "scenario12" in scenarios_to_run:
             log.info(test_seprator)
-            revert_stretch_mode_scenarios.scenario12(default_crush_rule, ceph_cluster)
+            revert_stretch_mode_scenarios.scenario12(default_crush_rule)
             log.info(test_seprator)
 
         if "scenario13" in scenarios_to_run:
