@@ -7,6 +7,7 @@ import time
 
 from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from utility.log import Log
 
@@ -30,7 +31,8 @@ def run(ceph_cluster, **kw):
     mon_obj = MonConfigMethods(rados_obj=rados_obj)
 
     log.info("Test to verify crash warning upon inducing a crash for OSD and MON")
-
+    start_time = get_cluster_timestamp(rados_obj.node)
+    log.debug(f"Test workflow started. Start time: {start_time}")
     try:
         # 1. Crash an OSD daemon and inject crash manually
         osd_list = rados_obj.get_osd_list(status="up")
@@ -98,6 +100,15 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("\n\n ********* Executing finally block ******** \n\n")
         time.sleep(30)
+
+        rados_obj.log_cluster_health()
+        test_end_time = get_cluster_timestamp(rados_obj.node)
+        log.debug(
+            f"Test workflow completed. Start time: {start_time}, End time: {test_end_time}"
+        )
+        if rados_obj.check_crash_status(start_time=start_time, end_time=test_end_time):
+            log.error("Test failed due to crash at the end of test")
+
         # fetch crash list
         crash_ls_json = rados_obj.run_ceph_command("ceph crash ls")
         # clear all the crashes

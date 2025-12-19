@@ -5964,6 +5964,9 @@ EOF"""
         end_time: str,
         daemon_types: list = None,
         context_lines: int = 15,
+        use_journalctl_fallback: bool = True,
+        use_journalctl_only: bool = False,
+        scan_both_sources: bool = False,
     ) -> dict:
         """
         Scan daemon logs (mon, mgr, osd) for crash-related patterns within
@@ -5998,6 +6001,12 @@ EOF"""
                       Use osd_utils.get_cluster_timestamp(node) to get correct format
             daemon_types: List of daemon types to scan. Default: ['mon', 'mgr', 'osd']
             context_lines: Number of lines to capture around each crash occurrence
+            use_journalctl_fallback: If True, falls back to journalctl when log files
+                                    are missing or empty. Default: True
+            use_journalctl_only: If True, skip log file scanning and use only journalctl.
+                                Default: False. Overrides use_journalctl_fallback when True.
+            scan_both_sources: If True, scan both log files AND journalctl,
+                              merging unique crashes from both sources. Default: False.
 
         Returns:
             Dictionary containing:
@@ -6236,6 +6245,167 @@ EOF"""
         gz_date_start = start_date.replace("-", "")
         gz_date_end = end_date.replace("-", "")
 
+        # Pre-compute journalctl timestamp format (YYYY-MM-DD HH:MM:SS)
+        journal_start = start_time.replace("T", " ").split(".")[0].split("+")[0]
+        journal_end = end_time.replace("T", " ").split(".")[0].split("+")[0]
+
+        # Pre-compiled regex to detect journalctl log line with timestamp
+        # Matches: "Dec 19 04:21:10" or "2025-12-19T04:21:10"
+        journal_timestamp_pattern = re.compile(
+            r"^(?:[A-Z][a-z]{2}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2}|"
+            r"\d{4}-\d{2}-\d{2}[T\s]\d{2}:\d{2}:\d{2})"
+        )
+
+        # Pre-compiled regex for time extraction (HH:MM from HH:MM:SS) - used in merge
+        time_extract_pattern = re.compile(r"(\d{2}:\d{2}):\d{2}")
+
+        # Helper function to scan via journalctl when log files are missing
+        def _scan_daemon_via_journalctl(daemon_info: dict) -> dict:
+            """
+            Scan daemon logs via journalctl (fallback or when use_journalctl_only=True).
+
+            Args:
+                daemon_info: Dict with type, id, host
+
+            Returns:
+                Dict with daemon_type, daemon_id, host, crash_events
+            """
+            d_type = daemon_info["type"]
+            d_id = daemon_info["id"]
+            d_host = daemon_info["host"]
+
+            scan_result = {
+                "daemon_type": d_type,
+                "daemon_id": d_id,
+                "host": d_host,
+                "crash_events": [],
+            }
+
+            host_obj = host_cache.get(d_host)
+            if not host_obj:
+                return scan_result
+
+            # Build systemd service name
+            # MON uses hostname, others use daemon_id
+            if d_type == "mon":
+                service_name = f"ceph-{fsid}@{d_type}.{d_host}.service"
+            else:
+                service_name = f"ceph-{fsid}@{d_type}.{d_id}.service"
+
+            max_events = 50
+
+            try:
+                # Build grep pattern from crash_patterns
+                grep_pattern = "|".join(crash_patterns)
+                # Escape single quotes for shell
+                grep_pattern_escaped = grep_pattern.replace("'", "'\\''")
+
+                # OPTIMIZED: Single SSH command - journalctl piped to grep with context
+                # Uses grep -B/-A for context, avoiding temp file for simple cases
+                # Use 3x context for stack traces (same as log file scanning)
+                stack_context = context_lines * 3
+                journalctl_cmd = f"""
+                journalctl -u '{service_name}' \\
+                  --since "{journal_start}" \\
+                  --until "{journal_end}" \\
+                  --no-pager 2>/dev/null | \\
+                grep -E '{grep_pattern_escaped}' -B {stack_context} -A {stack_context} 2>/dev/null | \\
+                head -n 1000 || true
+                """
+
+                crash_output, _ = host_obj.exec_command(
+                    cmd=journalctl_cmd, sudo=True, check_ec=False
+                )
+
+                if not crash_output or not crash_output.strip():
+                    log.debug(
+                        f"No crash patterns found in journalctl for {d_type}.{d_id}"
+                    )
+                    return scan_result
+
+                # Parse grep output with context (groups separated by --)
+                # First, split into context blocks, then find crash lines in each block
+                raw_lines = crash_output.strip().split("\n")
+                crash_events = []
+                seen_timestamps = (
+                    set()
+                )  # Dedupe by timestamp (same second = same crash)
+
+                # Split output into blocks (separated by --)
+                # Each block contains a crash line with before/after context
+                blocks = []
+                current_block = []
+                for line in raw_lines:
+                    if line.strip() == "--":
+                        if current_block:
+                            blocks.append(current_block)
+                        current_block = []
+                    else:
+                        current_block.append(line)
+                if current_block:
+                    blocks.append(current_block)
+
+                # Process each block to find crash lines
+                for block in blocks:
+                    # Find crash lines in this block (only lines with timestamps)
+                    for line in block:
+                        # Skip lines that don't start with a timestamp
+                        if not journal_timestamp_pattern.match(line):
+                            continue
+
+                        # Check if this line matches a crash pattern
+                        matched_keyword = None
+                        for pattern in crash_patterns:
+                            if re.search(pattern, line, re.IGNORECASE):
+                                matched_keyword = (
+                                    pattern.replace("\\", "")
+                                    .replace("[", "")
+                                    .replace("]", "")
+                                    .replace("(", "")
+                                    .replace(")", "")
+                                )
+                                break
+
+                        if matched_keyword:
+                            # Extract timestamp for deduplication
+                            ts_match = journal_timestamp_pattern.match(line)
+                            timestamp_key = ts_match.group(0) if ts_match else line[:20]
+
+                            # Skip if we've seen a crash at this exact timestamp
+                            if timestamp_key in seen_timestamps:
+                                continue
+                            seen_timestamps.add(timestamp_key)
+
+                            crash_events.append(
+                                {
+                                    "keyword": matched_keyword,
+                                    "line_number": 0,
+                                    "line": line,
+                                    "context": list(
+                                        block
+                                    ),  # Full block (before + after)
+                                    "source": "journalctl",
+                                }
+                            )
+
+                            if len(crash_events) >= max_events:
+                                break
+
+                    if len(crash_events) >= max_events:
+                        break
+
+                scan_result["crash_events"] = crash_events
+                if crash_events:
+                    log.info(
+                        f"Found {len(crash_events)} crash event(s) via journalctl "
+                        f"for {d_type}.{d_id}"
+                    )
+
+            except Exception as e:
+                log.warning(f"Failed to scan journalctl for {d_type}.{d_id}: {e}")
+
+            return scan_result
+
         # Helper function to scan a single daemon's logs (for parallel execution)
         def _scan_single_daemon(daemon_info: dict) -> dict:
             """
@@ -6248,6 +6418,10 @@ EOF"""
             Returns:
                 Dict with daemon_type, daemon_id, host, crash_events
             """
+            # If journalctl-only mode is enabled, skip file scanning entirely
+            if use_journalctl_only:
+                return _scan_daemon_via_journalctl(daemon_info)
+
             d_type = daemon_info["type"]
             d_id = daemon_info["id"]
             d_host = daemon_info["host"]
@@ -6259,6 +6433,19 @@ EOF"""
                 "host": d_host,
                 "crash_events": [],
             }
+
+            # When scan_both_sources is True, scan both log files and journalctl
+            # and merge unique crashes from both sources
+            _journal_result_cache = None  # Store for later merge
+            if scan_both_sources:
+                log.debug(f"Scanning both sources for {d_type}.{d_id}")
+                # Scan journalctl first and cache result
+                _journal_result_cache = _scan_daemon_via_journalctl(daemon_info)
+                journal_crashes = len(_journal_result_cache.get("crash_events", []))
+                if journal_crashes > 0:
+                    log.debug(
+                        f"Journalctl found {journal_crashes} crash(es) for {d_type}.{d_id}"
+                    )
 
             # Use cached host object
             host_obj = host_cache.get(d_host)
@@ -6311,7 +6498,9 @@ EOF"""
                 # Check if we found any log files at all
                 if [ "$LOG_FOUND" -eq 0 ]; then
                     echo "LOGFILE_MISSING"
-                elif [ -s {temp_log} ]; then
+                elif [ ! -s {temp_log} ]; then
+                    echo "LOGFILE_EMPTY"
+                else
                     grep -n -E '{combined_pattern}' {temp_log} 2>/dev/null | head -n {max_events_per_daemon} || true
                 fi
                 """
@@ -6319,131 +6508,156 @@ EOF"""
                     cmd=combined_cmd, sudo=True, check_ec=False
                 )
 
-                if not crash_matches or "LOGFILE_MISSING" in crash_matches:
-                    if "LOGFILE_MISSING" in str(crash_matches):
-                        log.debug(
-                            f"Log file not found for {d_type}.{d_id}: {d_log_path}"
+                # Check if log file is missing or empty - fallback to journalctl if enabled
+                crash_matches_str = str(crash_matches) if crash_matches else ""
+                if (
+                    "LOGFILE_MISSING" in crash_matches_str
+                    or "LOGFILE_EMPTY" in crash_matches_str
+                ):
+                    reason = (
+                        "not found"
+                        if "LOGFILE_MISSING" in crash_matches_str
+                        else "empty"
+                    )
+                    log.debug(f"Log file {reason} for {d_type}.{d_id}: {d_log_path}")
+                    if use_journalctl_fallback:
+                        log.info(
+                            f"Falling back to journalctl for {d_type}.{d_id} "
+                            f"(log file {reason})"
                         )
+                        # Reuse cached result if scan_both_sources already called journalctl
+                        if _journal_result_cache is not None:
+                            return _journal_result_cache
+                        return _scan_daemon_via_journalctl(daemon_info)
                     return scan_result
 
-                if crash_matches.strip():
-                    matched_lines = crash_matches.strip().split("\n")
+                if not crash_matches or not crash_matches.strip():
+                    # No crashes in log file, but continue to merge logic
+                    # if scan_both_sources is enabled (journalctl may have crashes)
+                    if scan_both_sources and _journal_result_cache is not None:
+                        # Return journalctl results directly (file had no crashes)
+                        return _journal_result_cache
+                    return scan_result
 
-                    # Collect all crash events first (for batch context collection)
-                    crash_data = []
-                    seen_lines = set()  # Deduplication
+                # Process crash matches
+                matched_lines = crash_matches.strip().split("\n")
 
-                    for match in matched_lines:
-                        if not match.strip():
-                            continue
-                        parts = match.split(":", 1)
-                        if len(parts) < 2:
-                            continue
+                # Collect all crash events first (for batch context collection)
+                crash_data = []
+                seen_lines = set()  # Deduplication
 
-                        line_num_str = parts[0].strip()
-                        line_content = parts[1].strip()
+                for match in matched_lines:
+                    if not match.strip():
+                        continue
+                    parts = match.split(":", 1)
+                    if len(parts) < 2:
+                        continue
 
-                        # Validate line number is numeric (grep -n output format)
-                        if not line_num_str.isdigit():
-                            continue
+                    line_num_str = parts[0].strip()
+                    line_content = parts[1].strip()
 
-                        # Deduplicate: skip if we've seen similar content
-                        # (same crash often produces multiple similar log lines)
-                        content_key = line_content[:100]  # First 100 chars
-                        if content_key in seen_lines:
-                            continue
-                        seen_lines.add(content_key)
+                    # Validate line number is numeric (grep -n output format)
+                    if not line_num_str.isdigit():
+                        continue
 
-                        line_num = int(line_num_str)
+                    # Deduplicate: skip if we've seen similar content
+                    # (same crash often produces multiple similar log lines)
+                    content_key = line_content[:100]  # First 100 chars
+                    if content_key in seen_lines:
+                        continue
+                    seen_lines.add(content_key)
 
-                        # Identify which keyword matched
-                        matched_keyword = "unknown"
-                        for pattern in crash_patterns:
-                            if re.search(pattern, line_content, re.IGNORECASE):
-                                # Clean up regex escape chars for readable display
-                                # e.g., r"\*\*\* Caught signal" -> "*** Caught signal"
-                                matched_keyword = (
-                                    pattern.replace("\\", "")
-                                    .replace("[", "")
-                                    .replace("]", "")
-                                    .replace("(", "")
-                                    .replace(")", "")
-                                )
-                                break
+                    line_num = int(line_num_str)
 
-                        crash_data.append(
-                            {
-                                "keyword": matched_keyword,
-                                "line_number": line_num,
-                                "line": line_content,
-                            }
-                        )
+                    # Identify which keyword matched
+                    matched_keyword = "unknown"
+                    for pattern in crash_patterns:
+                        if re.search(pattern, line_content, re.IGNORECASE):
+                            # Clean up regex escape chars for readable display
+                            # e.g., r"\*\*\* Caught signal" -> "*** Caught signal"
+                            matched_keyword = (
+                                pattern.replace("\\", "")
+                                .replace("[", "")
+                                .replace("]", "")
+                                .replace("(", "")
+                                .replace(")", "")
+                            )
+                            break
 
-                    # Collect context from ORIGINAL log file (not temp filtered log)
-                    # This is important because crash stack traces don't have timestamps
-                    # and would be filtered out from temp_log
-                    if crash_data and context_lines > 0:
-                        # For each crash, find its line in the original log and get context
-                        for cd in crash_data:
-                            try:
-                                crash_line = cd["line"]
-                                # Escape special characters for grep
-                                escaped_line = crash_line.replace("'", "'\\''").replace(
-                                    "\\", "\\\\"
-                                )
+                    crash_data.append(
+                        {
+                            "keyword": matched_keyword,
+                            "line_number": line_num,
+                            "line": line_content,
+                        }
+                    )
 
-                                # Find line number in ORIGINAL log file and get context
-                                # Use grep -n to find line, then sed to get surrounding lines
-                                # Increase context for stack traces (use 3x normal context)
-                                stack_context = context_lines * 3
-
-                                context_cmd = f"""
-                                ORIG_LINE=$(grep -n -F '{escaped_line}' {d_log_path} \
-                                    2>/dev/null | head -1 | cut -d: -f1)
-                                if [ -n "$ORIG_LINE" ]; then
-                                    START=$((ORIG_LINE - {stack_context}))
-                                    END=$((ORIG_LINE + {stack_context}))
-                                    [ $START -lt 1 ] && START=1
-                                    sed -n "${{START}},${{END}}p" {d_log_path} 2>/dev/null
-                                fi
-                                """
-                                context_output, _ = host_obj.exec_command(
-                                    cmd=context_cmd, sudo=True, check_ec=False
-                                )
-
-                                if context_output and context_output.strip():
-                                    cd["context"] = context_output.strip().split("\n")
-                                else:
-                                    # Fallback to temp log context
-                                    ln = cd["line_number"]
-                                    start_ln = max(1, ln - context_lines)
-                                    end_ln = ln + context_lines
-                                    fallback_cmd = (
-                                        f"sed -n '{start_ln},{end_ln}p' {temp_log}"
-                                    )
-                                    fallback_out, _ = host_obj.exec_command(
-                                        cmd=fallback_cmd, sudo=True, check_ec=False
-                                    )
-                                    if fallback_out:
-                                        cd["context"] = fallback_out.strip().split("\n")
-                                    else:
-                                        cd["context"] = []
-                            except Exception:
-                                cd["context"] = []
-                    else:
-                        for cd in crash_data:
-                            cd["context"] = []
-
-                    # Add events to result
+                # Collect context from ORIGINAL log file (not temp filtered log)
+                # This is important because crash stack traces don't have timestamps
+                # and would be filtered out from temp_log
+                if crash_data and context_lines > 0:
+                    # For each crash, find its line in the original log and get context
                     for cd in crash_data:
-                        scan_result["crash_events"].append(
-                            {
-                                "keyword": cd["keyword"],
-                                "line_number": str(cd["line_number"]),
-                                "line": cd["line"],
-                                "context": cd["context"],
-                            }
-                        )
+                        try:
+                            crash_line = cd["line"]
+                            # Escape special characters for grep
+                            escaped_line = crash_line.replace("'", "'\\''").replace(
+                                "\\", "\\\\"
+                            )
+
+                            # Find line number in ORIGINAL log file and get context
+                            # Use grep -n to find line, then sed to get surrounding lines
+                            # Increase context for stack traces (use 3x normal context)
+                            stack_context = context_lines * 3
+
+                            context_cmd = f"""
+                            ORIG_LINE=$(grep -n -F '{escaped_line}' {d_log_path} \
+                                2>/dev/null | head -1 | cut -d: -f1)
+                            if [ -n "$ORIG_LINE" ]; then
+                                START=$((ORIG_LINE - {stack_context}))
+                                END=$((ORIG_LINE + {stack_context}))
+                                [ $START -lt 1 ] && START=1
+                                sed -n "${{START}},${{END}}p" {d_log_path} 2>/dev/null
+                            fi
+                            """
+                            context_output, _ = host_obj.exec_command(
+                                cmd=context_cmd, sudo=True, check_ec=False
+                            )
+
+                            if context_output and context_output.strip():
+                                cd["context"] = context_output.strip().split("\n")
+                            else:
+                                # Fallback to temp log context
+                                ln = cd["line_number"]
+                                start_ln = max(1, ln - context_lines)
+                                end_ln = ln + context_lines
+                                fallback_cmd = (
+                                    f"sed -n '{start_ln},{end_ln}p' {temp_log}"
+                                )
+                                fallback_out, _ = host_obj.exec_command(
+                                    cmd=fallback_cmd, sudo=True, check_ec=False
+                                )
+                                if fallback_out:
+                                    cd["context"] = fallback_out.strip().split("\n")
+                                else:
+                                    cd["context"] = []
+                        except Exception:
+                            cd["context"] = []
+                else:
+                    for cd in crash_data:
+                        cd["context"] = []
+
+                # Add events to result
+                for cd in crash_data:
+                    scan_result["crash_events"].append(
+                        {
+                            "keyword": cd["keyword"],
+                            "line_number": str(cd["line_number"]),
+                            "line": cd["line"],
+                            "context": cd["context"],
+                            "source": "log_file",  # Indicate source
+                        }
+                    )
 
             except Exception as e:
                 log.warning(f"Failed to scan logs for {d_type}.{d_id}: {e}")
@@ -6455,6 +6669,37 @@ EOF"""
                     )
                 except Exception:
                     pass  # Ignore cleanup errors
+
+            # Merge journalctl results if scan_both_sources is enabled
+            if scan_both_sources and _journal_result_cache is not None:
+                file_crashes = len(scan_result.get("crash_events", []))
+                if file_crashes > 0:
+                    log.debug(
+                        f"Log file found {file_crashes} crash(es) for {d_type}.{d_id}"
+                    )
+                # Merge results - add journalctl crashes not found in file results
+                # Use keyword + time-based deduplication (same minute = same crash)
+                existing_keys = set()
+                for ce in scan_result["crash_events"]:
+                    # Extract time (HH:MM) from line for matching
+                    time_match = time_extract_pattern.search(ce["line"])
+                    time_key = time_match.group(1) if time_match else ""
+                    existing_keys.add(f"{ce['keyword']}_{time_key}")
+                added = 0
+                for jce in _journal_result_cache.get("crash_events", []):
+                    time_match = time_extract_pattern.search(jce["line"])
+                    time_key = time_match.group(1) if time_match else ""
+                    merge_key = f"{jce['keyword']}_{time_key}"
+                    if merge_key not in existing_keys:
+                        jce["keyword"] = f"[JOURNALCTL] {jce['keyword']}"
+                        scan_result["crash_events"].append(jce)
+                        existing_keys.add(merge_key)
+                        added += 1
+                if added > 0:
+                    log.info(
+                        f"Added {added} unique crash(es) from journalctl "
+                        f"for {d_type}.{d_id}"
+                    )
 
             return scan_result
 
