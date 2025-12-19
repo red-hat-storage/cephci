@@ -488,3 +488,19 @@ tests:
         clients: 2
         total_num_exports: 4
       comments: cthon tests for NFS ganesha - BZ-2418561
+
+  - test:
+      name: NFS gRPC - Verify ID Updates After Client Unmount
+      module: test_nfs_grpc.py
+      desc: Unmount from 1 client and verify client/session IDs are updated
+      polarion-id: CEPH-83630616
+      abort-on-fail: false
+      config:
+        operation: verify_id_after_unmount
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 3
+        nfs_version: 4.1
+        port: 2049
