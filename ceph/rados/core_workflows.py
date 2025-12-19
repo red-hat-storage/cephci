@@ -603,11 +603,15 @@ class RadosOrchestrator:
             )
             self.node.shell([enable_app_cmd])
 
+        allow_ec_overwrites = (
+            "true" if kwargs.get("erasure_code_use_overwrites") else "false"
+        )
+
         cmd_map = {
             "min_size": f"ceph osd pool set {pool_name} min_size {kwargs.get('min_size')}",
             "size": f"ceph osd pool set {pool_name} size {kwargs.get('size')}",
             "erasure_code_use_overwrites": f"ceph osd pool set {pool_name} "
-            f"allow_ec_overwrites {str(kwargs.get('erasure_code_use_overwrites')).lower}",
+            f"allow_ec_overwrites {allow_ec_overwrites}",
             "disable_pg_autoscale": f"ceph osd pool set {pool_name} pg_autoscale_mode off",
             "pool_quota": f"ceph osd pool set-quota {pool_name} {kwargs.get('pool_quota')}",
         }
