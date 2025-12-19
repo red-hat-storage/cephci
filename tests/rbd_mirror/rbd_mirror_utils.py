@@ -2,6 +2,7 @@ import datetime
 import json
 import random
 import string
+import sys
 import time
 from importlib import import_module
 from typing import List
@@ -51,8 +52,24 @@ class RbdMirror:
             else:
                 self.ec_profile = ""
 
+    def readable(self, out):
+        try:
+            if isinstance(out, str):
+                out = out.strip()
+                if not out:
+                    return "<no output>"
+                out = json.loads(out)
+            return json.dumps(out, indent=2, ensure_ascii=False)
+        except Exception:
+            return str(out)
+
     def exec_cmd(self, **kw):
         try:
+            caller = sys._getframe(1)
+            caller_file = caller.f_code.co_filename
+            caller_func = caller.f_code.co_name
+            caller_line = caller.f_lineno
+
             cmd = kw.get("cmd")
             node = kw.get("node") if kw.get("node") else self.ceph_client
 
@@ -73,7 +90,14 @@ class RbdMirror:
                 cmd=cmd,
                 check_ec=kw.get("check_ec", True),
             )
-            log.info(f"Output of command {cmd}: {out}")
+            log.info(
+                "%s:%s:%s: \n Output of command: %s:\n%s",
+                caller_file,
+                caller_func,
+                caller_line,
+                cmd,
+                self.readable(out),
+            )
 
             if kw.get("output", False):
                 if isinstance(out, tuple):
@@ -398,7 +422,7 @@ class RbdMirror:
                     out = self.mirror_status("pool", kw.get("poolname"), "health")
                     log.info(
                         "Health of {} pool in {} cluster: {}".format(
-                            kw.get("poolname"), self.cluster_name, out
+                            kw.get("poolname"), self.cluster_name, self.readable(out)
                         )
                     )
                     if kw.get("health_pattern") in out:
@@ -428,7 +452,7 @@ class RbdMirror:
                     if kw.get("state_pattern"):
                         out = self.mirror_status("image", kw.get("imagespec"), "state")
                         log.info(
-                            f"State of image {kw['imagespec']} : {out}, \
+                            f"State of image {kw['imagespec']} : {self.readable(out)}, \
                             waiting for {kw['state_pattern']}"
                         )
                         if kw["state_pattern"] in out:
@@ -440,7 +464,9 @@ class RbdMirror:
                         )
                         log.info(
                             "Description of {} image in {} cluster: {}".format(
-                                kw.get("imagespec"), self.cluster_name, out
+                                kw.get("imagespec"),
+                                self.cluster_name,
+                                self.readable(out),
                             )
                         )
                         return out
@@ -1046,7 +1072,7 @@ class RbdMirror:
         self.exec_cmd(cmd=cmd1)
         cmd2 = f"rbd info {pool_name}/{dest_imagespec} --format=json"
         out1 = self.exec_cmd(cmd=cmd2)
-        log.info(out1)
+        log.info(self.readable(out1))
 
     def create_mirror_snapshot(self, imagespec):
         """
