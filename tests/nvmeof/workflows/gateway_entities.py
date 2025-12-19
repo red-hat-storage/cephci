@@ -74,6 +74,8 @@ def configure_subsystems(nvme_service):
 
         # Configure subsystem using nvmegwcli
         sub_args = {"subsystem": nqn}
+        if sub_cfg.get("serial"):
+            sub_args["serial-number"] = sub_cfg.get("serial")
 
         # Add Subsystem
         gateway.subsystem.add(
