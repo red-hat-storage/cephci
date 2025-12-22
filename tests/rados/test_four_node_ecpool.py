@@ -2665,6 +2665,7 @@ def create_comprehensive_test_objects(
     rados_obj,
     pool_name: str,
     stripe_unit: int,
+    obj_prefix: str = None,
 ) -> bool:
     """
     Create objects with various sizes for comprehensive coverage.
@@ -2690,7 +2691,7 @@ def create_comprehensive_test_objects(
     5. Store checksum and metadata as xattr (user.checksum)
 
     Objects with checksums (for verify_data_integrity):
-    - ec_size_exact_chunk_obj
+    - ec_size_exact_chunk_obj (or ec_size_exact_chunk_obj_<prefix> if obj_prefix provided)
     - ec_size_chunk_plus_1
     - ec_size_chunk_plus_half
     - ec_size_two_chunks_obj
@@ -2703,6 +2704,7 @@ def create_comprehensive_test_objects(
         rados_obj: RadosOrchestrator object
         pool_name: Pool name
         stripe_unit: EC stripe_unit in bytes
+        obj_prefix: Optional prefix to add as suffix to object names for uniqueness
 
     Returns:
         True on success, False on failure
@@ -2770,7 +2772,11 @@ def create_comprehensive_test_objects(
         temp_files = []  # Collect all temp files for cleanup at end
 
         for pattern in size_patterns:
-            obj_name = f"ec_size_{pattern['name']}"
+            # Create object name with optional prefix suffix for uniqueness
+            if obj_prefix:
+                obj_name = f"ec_size_{pattern['name']}_{obj_prefix}"
+            else:
+                obj_name = f"ec_size_{pattern['name']}"
             obj_size = pattern["size"]
 
             if obj_size == 0:
