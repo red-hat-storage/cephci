@@ -248,7 +248,10 @@ def run(ceph_cluster, **kw):
         if mount_type == "nfs":
             source_clients[0].exec_command(
                 sudo=True,
-                cmd=f"ceph fs subvolume snapshot create {source_fs} {subvol} {snapshot_name} --group_name subvolgroup_1",
+                cmd=(
+                    f"ceph fs subvolume snapshot create {source_fs} {subvol} "
+                    f"{snapshot_name} --group_name subvolgroup_1"
+                ),
             )
         else:
             source_clients[0].exec_command(
@@ -427,6 +430,10 @@ def run(ceph_cluster, **kw):
 
             log.info("Delete the mounted paths")
             source_clients[0].exec_command(sudo=True, cmd=f"rm -rf {mounting_dir_1}")
+
+            log.info("Delete directories created for rsync")
+            target_clients[0].exec_command(sudo=True, cmd=f"rm -rf {from_live_head}")
+            target_clients[0].exec_command(sudo=True, cmd=f"rm -rf {from_snap_directory}")
 
             log.info("Cleanup Target Client")
             fs_mirroring_utils.cleanup_target_client(

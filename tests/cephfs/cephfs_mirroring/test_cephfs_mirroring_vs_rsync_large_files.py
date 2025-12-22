@@ -236,9 +236,12 @@ def run(ceph_cluster, **kw):
         cmd = (
             f"mkdir -p {full_subvolume_path}/{mounting_dir}; "
             f"for i in {{1..{no_of_large_files}}}; do "
-            f"dd if=/dev/urandom of={full_subvolume_path}/{mounting_dir}/{file_name}_$i bs={file_block_size} count={file_block_counts}; "
+            f"dd if=/dev/urandom "
+            f"of={full_subvolume_path}/{mounting_dir}/{file_name}_$i "
+            f"bs={file_block_size} count={file_block_counts}; "
             f"done"
         )
+
         source_clients[0].exec_command(sudo=True, cmd=cmd)
         snapshot_name = f"snap_{mount_type}_{no_of_large_files}_large_file"
 
@@ -247,7 +250,10 @@ def run(ceph_cluster, **kw):
         if mount_type == "nfs":
             source_clients[0].exec_command(
                 sudo=True,
-                cmd=f"ceph fs subvolume snapshot create {source_fs} {subvol} {snapshot_name} --group_name subvolgroup_1",
+                cmd=(
+                    f"ceph fs subvolume snapshot create {source_fs} {subvol} "
+                    f"{snapshot_name} --group_name subvolgroup_1"
+                    ),
             )
         else:
             source_clients[0].exec_command(
@@ -426,6 +432,10 @@ def run(ceph_cluster, **kw):
 
             log.info("Delete the mounted paths")
             source_clients[0].exec_command(sudo=True, cmd=f"rm -rf {mounting_dir_1}")
+
+            log.info("Delete directories created for rsync")
+            target_clients[0].exec_command(sudo=True, cmd=f"rm -rf {from_live_head}")
+            target_clients[0].exec_command(sudo=True, cmd=f"rm -rf {from_snap_directory}")
 
             log.info("Cleanup Target Client")
             fs_mirroring_utils.cleanup_target_client(

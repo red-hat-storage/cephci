@@ -234,19 +234,20 @@ def run(ceph_cluster, **kw):
         )
 
         cmd = f"""
-                mkdir -p {full_subvolume_path}/{mounting_dir}
-                bash -c '
-                target=$(({target_size_GiB}*1024))
-                written=0
-                idx=1
-                while [ $written -lt $target ]; do
-                    size=$((RANDOM % {max_file_size} + 1))
-                    dd if=/dev/zero of="{full_subvolume_path}/{mounting_dir}/file_${{idx}}_${{size}}M.bin" bs={file_block_size} count=$size
-                    written=$((written + size))
-                    idx=$((idx + 1))
-                done
-                '
-                """
+        mkdir -p {full_subvolume_path}/{mounting_dir}
+        bash -c '
+        target=$(({target_size_GiB}*1024))
+        written=0
+        idx=1
+        while [ $written -lt $target ]; do
+            size=$((RANDOM % {max_file_size} + 1))
+            dd if=/dev/zero of="{full_subvolume_path}/{mounting_dir}/file_${{idx}}_${{size}}M.bin" \
+            bs={file_block_size} count=$size status=none
+            written=$((written + size))
+            idx=$((idx + 1))
+        done
+        '
+        """
         source_clients[0].exec_command(sudo=True, cmd=cmd)
         snapshot_name = f"snap_{mount_type}_1m_{max_file_size}m_sized_files"
 
@@ -255,7 +256,10 @@ def run(ceph_cluster, **kw):
         if mount_type == "nfs":
             source_clients[0].exec_command(
                 sudo=True,
-                cmd=f"ceph fs subvolume snapshot create {source_fs} {subvol} {snapshot_name} --group_name subvolgroup_1",
+                cmd=(
+                    f"ceph fs subvolume snapshot create {source_fs} {subvol} "
+                    f"{snapshot_name} --group_name subvolgroup_1"
+                    ),
             )
         else:
             source_clients[0].exec_command(
@@ -434,6 +438,10 @@ def run(ceph_cluster, **kw):
 
             log.info("Delete the mounted paths")
             source_clients[0].exec_command(sudo=True, cmd=f"rm -rf {mounting_dir_1}")
+
+            log.info("Delete directories created for rsync")
+            target_clients[0].exec_command(sudo=True, cmd=f"rm -rf {from_live_head}")
+            target_clients[0].exec_command(sudo=True, cmd=f"rm -rf {from_snap_directory}")
 
             log.info("Cleanup Target Client")
             fs_mirroring_utils.cleanup_target_client(
