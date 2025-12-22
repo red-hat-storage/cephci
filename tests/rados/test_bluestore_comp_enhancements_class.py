@@ -14,10 +14,10 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.objectstoretool_workflows import objectstoreToolWorkflows
 from ceph.rados.rados_scrub import RadosScrubber
+from ceph.rados.utils import get_cluster_timestamp
 from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.rados_test_util import wait_for_daemon_status
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
-from tests.rados.test_bluestore_data_compression import get_pool_stats
 from utility.log import Log
 from utility.retry import retry
 
@@ -93,6 +93,7 @@ class BluestoreDataCompression:
         mon_obj: MonConfigMethods,
         client_node: CephNode,
         ceph_cluster,
+        pool_type: str = "replicated",
     ):
         self.rados_obj = rados_obj
         self.cephadm = cephadm
@@ -105,6 +106,7 @@ class BluestoreDataCompression:
         self.MAX_BLOB_SIZE_SSD = 65536
         self.MIN_BLOB_SIZE_HDD = 8192
         self.MAX_BLOB_SIZE_HDD = 65536
+        self.pool_type = pool_type
 
     def validate_osd_compression_value(self, osd_id, parameter, default_value):
         parameter_dict = self.mon_obj.daemon_config_get(
@@ -299,6 +301,7 @@ class BluestoreDataCompression:
         compression_required_ratio=0.875,
         pool_level_compression=True,
         pool_name=None,
+        compression_min_blob_size=None,
     ):
         """
         Enable compression on a pool or cluster-wide at the OSD level.
@@ -326,22 +329,41 @@ class BluestoreDataCompression:
 
         if pool_level_compression:
             log.info("Enabling compression at pool level %s " % pool_name)
-            if (
-                self.rados_obj.pool_inline_compression(
-                    pool_name=pool_name,
-                    compression_mode=compression_mode,
-                    compression_algorithm=compression_algorithm,
-                    compression_required_ratio=(
-                        0.875
-                        if compression_required_ratio is None
-                        else compression_required_ratio
-                    ),
-                )
-                is False
-            ):
-                err_msg = f"Error enabling compression on pool : {pool_name}"
-                log.error(err_msg)
-                raise Exception(err_msg)
+            if compression_min_blob_size is not None:
+                if (
+                    self.rados_obj.pool_inline_compression(
+                        pool_name=pool_name,
+                        compression_mode=compression_mode,
+                        compression_algorithm=compression_algorithm,
+                        compression_required_ratio=(
+                            0.875
+                            if compression_required_ratio is None
+                            else compression_required_ratio
+                        ),
+                        compression_min_blob_size=compression_min_blob_size,
+                    )
+                    is False
+                ):
+                    err_msg = f"Error enabling compression on pool : {pool_name}"
+                    log.error(err_msg)
+                    raise Exception(err_msg)
+            else:
+                if (
+                    self.rados_obj.pool_inline_compression(
+                        pool_name=pool_name,
+                        compression_mode=compression_mode,
+                        compression_algorithm=compression_algorithm,
+                        compression_required_ratio=(
+                            0.875
+                            if compression_required_ratio is None
+                            else compression_required_ratio
+                        ),
+                    )
+                    is False
+                ):
+                    err_msg = f"Error enabling compression on pool : {pool_name}"
+                    log.error(err_msg)
+                    raise Exception(err_msg)
         else:
             log.info("Enabling compression on OSD level")
             if (
@@ -485,7 +507,7 @@ class BluestoreDataCompression:
         log_info_msg = f"---4. Validate compression mode on pool {pool_name}---"
         log.info(log_info_msg)
 
-        pool_stats = get_pool_stats(rados_obj=self.rados_obj, pool_name=pool_name)
+        pool_stats = self.get_pool_stats(pool_name=pool_name)
         log.info(json.dumps(pool_stats))
         compress_under_bytes = pool_stats["compress_under_bytes"]
 
@@ -912,33 +934,15 @@ class BluestoreDataCompression:
             Exception: If the pool's pg_num does not reach 1 within 600 seconds.
         """
         assert self.rados_obj.create_pool(
-            pool_name=pool_name, pg_num=1, disable_pg_autoscale=True, app_name="rbd"
+            pool_name=pool_name,
+            disable_pg_autoscale=True,
+            app_name="rbd",
+            pg_num_max=1,
         )
-
         pg_num_on_pool = int(
             self.rados_obj.get_pool_property(pool=pool_name, props="pg_num")["pg_num"]
         )
-        log.debug("PG num on pool : %s", pg_num_on_pool)
-        end_time = datetime.datetime.now() + datetime.timedelta(seconds=600)
-        while end_time > datetime.datetime.now():
-            cmd = f"ceph osd pool set {pool_name} pg_num 1; ceph osd pool set {pool_name} pgp_num 1"
-            self.rados_obj.run_ceph_command(
-                cmd=cmd, client_exec=True, print_output=True
-            )
-            pg_num_on_pool = int(
-                self.rados_obj.get_pool_property(pool=pool_name, props="pg_num")[
-                    "pg_num"
-                ]
-            )
-            log.debug("PG num on pool : %s", pg_num_on_pool)
-            if pg_num_on_pool == 1:
-                log.debug("PG num on pool %s reached 1", pg_num_on_pool)
-                break
-            log.debug("Sleeping for 10 seconds")
-            time.sleep(10)
-        else:
-            raise Exception("Pool PG num did not reach 1")
-        log.info("Pool pg num is 1")
+        log.info(f"PG num on the pool: {pg_num_on_pool}")
 
     def partial_overwrite(self, **kwargs):
         """
@@ -1193,7 +1197,7 @@ class BluestoreDataCompression:
         - compression_mode (str, optional): Compression mode (default: "force").
         - min_alloc_size (int, optional): Value to set for bluestore_min_alloc_size (default: 4096).
         """
-        log.info(self.min_alloc_size_test.__doc__)
+        log.info(self.__doc__)
         compression_algorithm = kwargs.get("compression_algorithm", "snappy")
         compression_required_ratio = kwargs.get("compression_required_ratio", "0.875")
         compression_mode = kwargs.get("compression_mode", "force")
@@ -1370,8 +1374,12 @@ class BluestoreDataCompression:
             log.info(info_msg)
 
     def fetch_blobs_from_osd(
-        self, osd_id: str, objectstore_obj: objectstoreToolWorkflows, pool_name: str
-    ):
+        self,
+        osd_id: str,
+        objectstore_obj: objectstoreToolWorkflows,
+        pool_name: str,
+        obj_name: object = "rbd_data",
+    ) -> object:
         """
         Fetch blobs from the specified OSD for the given pool.
 
@@ -1397,7 +1405,7 @@ class BluestoreDataCompression:
             )
 
             for object in out.split("\n"):
-                if "rbd_data" in object:
+                if obj_name in object:
                     object_name = object
                     break
 
@@ -1433,3 +1441,171 @@ class BluestoreDataCompression:
             if not (int(blob["blob"]["compressed_length"]) > 0):
                 return False
         return True
+
+    def get_pool_stats(self, pool_name: str):
+        """
+        Retrieves the default value of the Bluestore compression required ratio for a given pool.
+
+        Args:
+            rados_obj (object): RadosOrchestrator object
+            mon_obj (object): MonConfigMethods object
+            pool_name (str): The name of the pool for which the compression ratio is required.
+
+        Returns:
+            str: bluestore_compression_required_ratio
+        """
+        try:
+            pool_stats = self.rados_obj.run_ceph_command(cmd="ceph df detail")["pools"]
+            pool_stats_after_compression = [
+                detail for detail in pool_stats if detail["name"] == pool_name
+            ][0]["stats"]
+            return pool_stats_after_compression
+        except KeyError as e:
+            err_msg = f"No stats about the pools requested found on the cluster {e}"
+            log.error(err_msg)
+            raise Exception(err_msg)
+
+
+class CompressionIO:
+    def __init__(
+        self,
+        rados_obj,
+        mon_obj,
+        client_node,
+        cephadm,
+        workload_type,
+        rgw_endpoint,
+        rgw_secret,
+        rgw_key,
+    ):
+        self.rados_obj = rados_obj
+        self.mon_obj = mon_obj
+        self.client_node = client_node
+        self.cephadm = cephadm
+        self.workload_type = workload_type
+        self.rgw_endpoint = rgw_endpoint
+        self.rgw_key = rgw_key
+        self.rgw_secret = rgw_secret
+
+    def write(
+        self,
+        file_size: str,
+        compression_percentage: str,
+        file_full_path: str,
+        offset: str,
+        rbd_cephfs_folder_full_path: str,
+        rgw_bucket_name: str,
+    ):
+        timestamp = get_cluster_timestamp(self.rados_obj.node)
+        fio_test_name = "fio_test_" + str(timestamp)
+        log.info("== performing write operation ==")
+        cmd = f"fio \
+          --name={fio_test_name} \
+          --ioengine=libaio \
+          --iodepth=1 \
+          --rw=write \
+          --size={file_size} \
+          --nrfiles=1 \
+          --offset={offset} \
+          --filename={file_full_path} \
+          --direct=1 \
+          --group_reporting=1 \
+          --zero_buffers=0 \
+          --refill_buffers=1 \
+          --buffer_compress_percentage={compression_percentage} \
+          --verify=md5 \
+          --do_verify=0 \
+          --verify_dump=1"
+
+        self.rados_obj.client.exec_command(cmd=cmd, sudo=True, check_ec=True)
+
+        if self.workload_type == "rbd" or self.workload_type == "cephfs":
+            cmd = f"cp {file_full_path} {rbd_cephfs_folder_full_path}"
+            self.rados_obj.client.exec_command(cmd=cmd, sudo=True, check_ec=True)
+        elif self.workload_type == "rgw":
+            cmd = (
+                f"aws s3 cp {file_full_path} s3://{rgw_bucket_name}/ "
+                f"--endpoint-url http://{self.rgw_endpoint} --acl private"
+            )
+            self.rados_obj.client.exec_command(cmd=cmd, sudo=True, check_ec=True)
+        time.sleep(60)  # waiting for ceph df to settle down
+        log.info("== completed write operation ==")
+        return fio_test_name
+
+    def clean(
+        self,
+        rbd_cephfs_folder_full_path,
+        rgw_bucket_name,
+        pool_name,
+        compression_obj: BluestoreDataCompression,
+    ):
+        if self.workload_type == "rbd" or self.workload_type == "cephfs":
+            cmd = f"rm -rf {rbd_cephfs_folder_full_path}/*"
+            self.rados_obj.client.exec_command(cmd=cmd, sudo=True)
+        elif self.workload_type == "rgw":
+            cmd = f"radosgw-admin bucket list --bucket={rgw_bucket_name}"
+            out = self.rados_obj.client.exec_command(
+                cmd=cmd, sudo=True, pretty_print=True, check_ec=True
+            )
+            out = json.loads(out[0])
+            for obj in out:
+                obj_name = obj["name"]
+                cmd = f"radosgw-admin object rm --bucket={rgw_bucket_name} --object={obj_name}"
+                self.rados_obj.client.exec_command(cmd=cmd, sudo=True, check_ec=True)
+            cmd = "radosgw-admin gc process --include-all"
+            self.rados_obj.client.exec_command(cmd=cmd, sudo=True, check_ec=True)
+
+        # rbd pools do not delete the objects
+        # If the files in the filesystem are deleted from mount point.
+        cmd = f"rados purge {pool_name} --yes-i-really-really-mean-it"
+
+        # Waiting till objects reaches 0.
+        for _ in range(10):
+            self.rados_obj.client.exec_command(
+                cmd=cmd, sudo=True, check_ec=True, pretty_print=True, verbose=True
+            )
+            pool_stats = compression_obj.get_pool_stats(pool_name)
+            if pool_stats["objects"] == 0:
+                log.info("Objects reached 0")
+                break
+            else:
+                log.info("sleeping for 20 seconds...")
+                time.sleep(20)
+        else:
+            raise Exception("Objects did not reach 0 within timeout")
+
+    def read_and_verify_checksum(
+        self,
+        fio_job_name: str,
+        file_size: str,
+        compression_percentage: str,
+        file_full_path: str,
+        offset: str,
+        rbd_cephfs_folder_full_path: str,
+        rgw_bucket_name: str,
+    ):
+        log.info("== performing read integrity test ==")
+        cmd = f"fio \
+          --name={fio_job_name} \
+          --ioengine=libaio \
+          --iodepth=1 \
+          --rw=read \
+          --size={file_size} \
+          --nrfiles=1 \
+          --offset={offset} \
+          --filename={file_full_path} \
+          --direct=1 \
+          --group_reporting=1 \
+          --zero_buffers=0 \
+          --refill_buffers=1 \
+          --buffer_compress_percentage={compression_percentage} \
+          --verify=md5 \
+          --do_verify=1 \
+          --verify_fatal=1 \
+          --verify_state_load=1"
+
+        # Raises exception if error code != 0
+        self.rados_obj.client.exec_command(
+            cmd=cmd, sudo=True, check_ec=True, pretty_print=True
+        )
+        log.info("== completed read integrity test ==")
