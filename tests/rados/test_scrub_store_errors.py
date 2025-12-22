@@ -130,65 +130,64 @@ def run(ceph_cluster, **kw):
             obj_pg_id = ast.literal_eval(obj_str)[0]
             json_data = json.dumps(ast.literal_eval(obj_str)[1])
 
-            match value:
-                case "set-bytes":
-                    log.info(
-                        "==========1.Verification of scrub and deep-scrub messages after modifying the object "
-                        "bytes============"
-                    )
-                    objectstore_obj.set_bytes(
-                        osd_id=primary_osd,
-                        obj=json_data,
-                        pgid=obj_pg_id,
-                        in_file=sample_file_name,
-                    )
-                case "omap_key_corrupt":
-                    log.info(
-                        "==========2.Verification of deep-scrub messages after omap key corruption ============"
-                    )
-                    omap_key = f"key-{obj_name}"
-                    objectstore_obj.set_omap(
-                        osd_id=primary_osd,
-                        obj=json_data,
-                        pgid=obj_pg_id,
-                        key=omap_key,
-                        in_file=sample_file_name,
-                    )
-                    only_deep_scrub = True
-                case "remove_omap":
-                    log.info(
-                        "==========3.Verification of deep-scrub messages after removing omap key ============"
-                    )
-                    omap_key = f"key-{obj_name}"
-                    objectstore_obj.remove_omap(
-                        osd_id=primary_osd, pgid=pg_id, obj=json_data, key=omap_key
-                    )
-                    only_deep_scrub = True
-                case "add_additional_key":
-                    log.info(
-                        "==========4.Verification of deep-scrub messages after addiing additional omap key to "
-                        "the object ============"
-                    )
-                    omap_key = f"key2-{obj_name}"
-                    objectstore_obj.set_omap(
-                        osd_id=primary_osd,
-                        obj=json_data,
-                        pgid=obj_pg_id,
-                        key=omap_key,
-                        in_file=sample_file_name,
-                    )
-                    only_deep_scrub = True
-                case "set_omap_header":
-                    log.info(
-                        "==========5.Verification of deep-scrub messages after modifying the omap header ============"
-                    )
-                    objectstore_obj.set_omap_header(
-                        osd_id=primary_osd,
-                        obj=json_data,
-                        pgid=obj_pg_id,
-                        in_file=sample_file_name,
-                    )
-                    only_deep_scrub = True
+            if value == "set-bytes":
+                log.info(
+                    "==========1.Verification of scrub and deep-scrub messages after modifying the object "
+                    "bytes============"
+                )
+                objectstore_obj.set_bytes(
+                    osd_id=primary_osd,
+                    obj=json_data,
+                    pgid=obj_pg_id,
+                    in_file=sample_file_name,
+                )
+            elif value == "omap_key_corrupt":
+                log.info(
+                    "==========2.Verification of deep-scrub messages after omap key corruption ============"
+                )
+                omap_key = f"key-{obj_name}"
+                objectstore_obj.set_omap(
+                    osd_id=primary_osd,
+                    obj=json_data,
+                    pgid=obj_pg_id,
+                    key=omap_key,
+                    in_file=sample_file_name,
+                )
+                only_deep_scrub = True
+            elif value == "remove_omap":
+                log.info(
+                    "==========3.Verification of deep-scrub messages after removing omap key ============"
+                )
+                omap_key = f"key-{obj_name}"
+                objectstore_obj.remove_omap(
+                    osd_id=primary_osd, pgid=pg_id, obj=json_data, key=omap_key
+                )
+                only_deep_scrub = True
+            elif value == "add_additional_key":
+                log.info(
+                    "==========4.Verification of deep-scrub messages after addiing additional omap key to "
+                    "the object ============"
+                )
+                omap_key = f"key2-{obj_name}"
+                objectstore_obj.set_omap(
+                    osd_id=primary_osd,
+                    obj=json_data,
+                    pgid=obj_pg_id,
+                    key=omap_key,
+                    in_file=sample_file_name,
+                )
+                only_deep_scrub = True
+            elif value == "set_omap_header":
+                log.info(
+                    "==========5.Verification of deep-scrub messages after modifying the omap header ============"
+                )
+                objectstore_obj.set_omap_header(
+                    osd_id=primary_osd,
+                    obj=json_data,
+                    pgid=obj_pg_id,
+                    in_file=sample_file_name,
+                )
+                only_deep_scrub = True
             log.info("===========Performing the scrub operation============")
             if not perform_scrub_operation(
                 rados_object, pg_id=pg_id, operation="scrub"
