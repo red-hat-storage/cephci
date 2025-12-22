@@ -14,6 +14,7 @@ globals:
           - alertmanager
           - grafana
           - prometheus
+          - mds
       node2:
         role:
           - mon

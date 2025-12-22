@@ -61,6 +61,7 @@ globals:
           - rgw
           - node-exporter
           - crash
+          - mds
       node9:
         role:
           - osd
