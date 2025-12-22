@@ -253,7 +253,7 @@ def run(ceph_cluster, **kw):
                 cmd=(
                     f"ceph fs subvolume snapshot create {source_fs} {subvol} "
                     f"{snapshot_name} --group_name subvolgroup_1"
-                    ),
+                ),
             )
         else:
             source_clients[0].exec_command(
