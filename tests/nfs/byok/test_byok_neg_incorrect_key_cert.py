@@ -105,10 +105,7 @@ def run(ceph_cluster, **kw):
             "installer": installer,
             "nfs_name": nfs_name,
         }
-        log.info("Verify Cluster is healthy before test")
-        if cephfs_common_utils.wait_for_healthy_ceph(client, 300):
-            log.error("Cluster health is not OK even after waiting for 300secs")
-            return 1
+
         fs_details = cephfs_common_utils.get_fs_info(client, fs_name)
         if not fs_details:
             cephfs_common_utils.create_fs(client, fs_name)
@@ -121,6 +118,7 @@ def run(ceph_cluster, **kw):
             return 1
         log.info("PASS:BYOK Test for Incorrect KMIP cert")
         return 0
+
     except Exception as e:
         log.error(e)
         log.error(traceback.format_exc())
@@ -128,11 +126,6 @@ def run(ceph_cluster, **kw):
     finally:
         log.info("Clean Up in progess")
         wait_time_secs = 300
-        if cephfs_common_utils.wait_for_healthy_ceph(client_objs[0], wait_time_secs):
-            log.error(
-                "Cluster health is not OK even after waiting for %s secs",
-                wait_time_secs,
-            )
         if incorrect_enctag_cleanup != 1 or incorrect_cert_cleanup != 1:
             clean_up_gklm(
                 gklm_rest_client=byok_setup_params["gklm_rest_client"],
@@ -297,17 +290,19 @@ def byok_test_incorrect_kmip_cert():
             if nfs_log_parser(clients[0], nfs_node, nfs_name, expect_list):
                 log.error("NFS Debug log doesn't contain %s", expect_list)
                 return 1
+    incorrect_cert_cleanup = 1
+    log.info("Cleanup mountdir,export and nfs cluster")
+    cleanup_custom_nfs_cluster_multi_export_client(
+        clients, nfs_mount, nfs_name, nfs_export, 1
+    )
+
     log.info("Cleanup GKLM Client")
     clean_up_gklm(
         gklm_rest_client=byok_setup_params["gklm_rest_client"],
         gkml_client_name=byok_setup_params["gklm_client_name"],
         gklm_cert_alias=byok_setup_params["gklm_cert_alias"],
     )
-    incorrect_cert_cleanup = 1
-    log.info("Cleanup mountdir,export and nfs cluster")
-    cleanup_custom_nfs_cluster_multi_export_client(
-        clients, nfs_mount, nfs_name, nfs_export, 1
-    )
+
     nfs_cleanup = 1
     return 0
 

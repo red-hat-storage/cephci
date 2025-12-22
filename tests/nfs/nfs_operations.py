@@ -1079,7 +1079,7 @@ def dynamic_cleanup_common_names(
 
     # Step 3: Delete all CephFS subvolumes associated with the exports
     subvols = json.loads(
-        Ceph(client).fs.sub_volume.ls(volume="cephfs", group=group_name)
+        Ceph(client).fs.sub_volume.ls(volume="cephfs", group_name=group_name)
     )
     for cluster in clusters:
         exports = json.loads(Ceph(client).nfs.export.ls(cluster))
@@ -1092,7 +1092,7 @@ def dynamic_cleanup_common_names(
         sub_vols_infos = []
         for subvol in subvols:
             subvol_info = Ceph(client).fs.sub_volume.info(
-                volume="cephfs", subvolume=subvol["name"], group=group_name
+                volume="cephfs", subvolume=subvol["name"], group_name=group_name
             )
             sub_vols_infos.append(subvol_info)
             for export in exports:
@@ -1102,7 +1102,7 @@ def dynamic_cleanup_common_names(
                     Ceph(client).fs.sub_volume.rm(
                         volume="cephfs",
                         subvolume=subvol["name"],
-                        group=group_name,
+                        group_name=group_name,
                         force=True,
                     )
                     log.info(

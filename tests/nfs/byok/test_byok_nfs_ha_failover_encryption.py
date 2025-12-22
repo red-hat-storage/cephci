@@ -311,14 +311,7 @@ def run(ceph_cluster, **kw):
             return 0
 
     finally:
-        log.info("Step 9: Cleanup - GKLM, NFS clusters, and mounts")
-
-        # Clean GKLM resources
-        clean_up_gklm(
-            gklm_rest_client=gklm_rest_client,
-            gkml_client_name=gkml_client_name,
-            gklm_cert_alias=gklm_cert_alias,
-        )
+        log.info(" Cleanup - GKLM, NFS clusters, and mounts")
 
         # Cleanup single cluster or multi cluster accordingly
         if client_export_mount_dict is not None:
@@ -343,6 +336,13 @@ def run(ceph_cluster, **kw):
             clients,
             mounts_common_name=config.get("nfs_mount_common_name", "nfs_byok"),
             group_name=subvolume_group,
+        )
+
+        # Clean GKLM resources
+        clean_up_gklm(
+            gklm_rest_client=gklm_rest_client,
+            gkml_client_name=gkml_client_name,
+            gklm_cert_alias=gklm_cert_alias,
         )
 
         log.info("Cleanup completed for all test resources.")
