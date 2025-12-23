@@ -10,7 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 from ceph.ceph import Ceph
 from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.gateway_entities import configure_gw_entities, teardown
-from tests.nvmeof.workflows.ha import HighAvailability
+from tests.nvmeof.workflows.initiator import prepare_io_execution
 from tests.nvmeof.workflows.nvme_service import NVMeService
 from tests.nvmeof.workflows.nvme_utils import (
     check_and_set_nvme_cli_image,
@@ -112,10 +112,10 @@ def run_io_and_validate_qos(ceph_cluster, config, key, qos_args, nvmegwcli):
 
     initiators = config["initiators"]
 
-    ha = HighAvailability(ceph_cluster, [config["gw_node"]], **config)
-    ha.initialize_gateways()
-    ha.prepare_io_execution(initiators)
-    devices_dict = ha.clients[0].fetch_lsblk_nvme_devices_dict()
+    clients = prepare_io_execution(
+        initiators, gateways=[nvmegwcli], cluster=ceph_cluster, return_clients=True
+    )
+    devices_dict = clients[0].fetch_lsblk_nvme_devices_dict()
     lsblk_devs = [device["name"] for device in devices_dict]
     io_mode = {
         "r-megabytes-per-second": "read",
@@ -127,12 +127,12 @@ def run_io_and_validate_qos(ceph_cluster, config, key, qos_args, nvmegwcli):
     # Start IO Execution
     io_tasks = []
     try:
-        paths = ha.clients[0].list_spdk_drives()
+        paths = clients[0].list_spdk_drives()
         if not paths:
-            raise Exception(f"NVMe Targets not found on {ha.clients[0].hostname}")
+            raise Exception(f"NVMe Targets not found on {clients[0].hostname}")
         LOG.debug(paths)
 
-        io_tasks.append(executor.submit(trigger_fio, ha.clients[0], io_mode, key))
+        io_tasks.append(executor.submit(trigger_fio, clients[0], io_mode, key))
         time.sleep(20)
 
         for initiator in initiators:

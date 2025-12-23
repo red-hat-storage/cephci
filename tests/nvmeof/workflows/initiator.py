@@ -3,12 +3,15 @@ import json
 from ceph.ceph import CommandFailed
 from ceph.nvmeof.initiators.linux import Initiator
 from ceph.parallel import parallel
+from ceph.utils import get_node_by_id
 from tests.nvmeof.workflows.exceptions import NoDevicesFound
 from utility.log import Log
 from utility.retry import retry
 from utility.utils import log_json_dump, run_fio
 
 LOG = Log(__name__)
+Initiators = {}
+Clients = []
 
 
 class NVMeInitiator(Initiator):
@@ -441,3 +444,34 @@ def validate_initiator(clients, gateway, namespaces_gw, failed_gw=None):
     LOG.info(
         f"All namespaces are optimized for all initiators for gateway {gateway.node.ip_address}"
     )
+
+
+def get_or_create_initiator(node_id, nqn, cluster):
+    """Get existing NVMeInitiator or create a new one for each (node_id, nqn)."""
+    key = (node_id, nqn)  # Use both as dictionary key
+
+    if key not in Initiators:
+        node = get_node_by_id(cluster, node_id)
+        Initiators[key] = NVMeInitiator(node, nqn)
+
+    return Initiators[key]
+
+
+def prepare_io_execution(io_clients, gateways=None, cluster=None, return_clients=False):
+    """Prepare FIO Execution.
+
+    initiators:                             # Configure Initiators with all pre-req
+        - nqn: connect-all
+        listener_port: 4420
+        node: node10
+    """
+    for io_client in io_clients:
+        nqn = io_client.get("nqn")
+        if io_client.get("subnqn"):
+            nqn = io_client.get("subnqn")
+        client = get_or_create_initiator(io_client["node"], nqn, cluster)
+        client.connect_targets(gateways[0], io_client)
+        if client not in Clients:
+            Clients.append(client)
+    if return_clients:
+        return Clients
