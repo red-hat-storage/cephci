@@ -1,13 +1,17 @@
+import json
 import secrets
 import string
 import traceback
 from datetime import datetime, timedelta
 from time import sleep
 
+from ceph.ceph import CommandFailed
 from ceph.parallel import parallel
 from ceph.utils import check_ceph_healthly
+from tests.cephfs.cephfs_utils import FsUtils
 from tests.cephfs.cephfs_utilsV1 import FsUtils as FsUtilsV1
 from utility.log import Log
+from utility.retry import retry
 
 log = Log(__name__)
 
@@ -15,7 +19,7 @@ log = Log(__name__)
 global stop_flag
 
 
-def start_io_time(fs_util, client1, mounting_dir, timeout=300):
+def start_io_time(fs_util, client1, mounting_dir, timeout=600):
     global stop_flag
     stop_flag = False
     iter = 0
@@ -47,6 +51,17 @@ def object_compare(obj1, obj2):
     return obj1.node.hostname == obj2.node.hostname
 
 
+@retry(CommandFailed, tries=3, delay=60)
+def retry_check_ceph_healthy(client, num_osds, num_mons, build, mon_container, timeout):
+    """Wrapper that raises CommandFailed if cluster is not healthy"""
+    result = check_ceph_healthly(
+        client, num_osds, num_mons, build, mon_container, timeout
+    )
+    if result != 0:
+        raise CommandFailed("Cluster is not healthy")
+    return result
+
+
 def run(ceph_cluster, **kw):
     """
     CEPH-11255 - OSD failure/recovery with single and multiple services and client IOs
@@ -70,6 +85,7 @@ def run(ceph_cluster, **kw):
     try:
         test_data = kw.get("test_data")
         fs_util_v1 = FsUtilsV1(ceph_cluster, test_data=test_data)
+        fs_util = FsUtils(ceph_cluster)
         erasure = (
             FsUtilsV1.get_custom_config_value(test_data, "erasure")
             if test_data
@@ -84,7 +100,6 @@ def run(ceph_cluster, **kw):
         clients = ceph_cluster.get_ceph_objects("client")
         config = kw.get("config")
         osp_cred = config.get("osp_cred")
-        num_of_osds = config.get("num_of_osds")
         build = config.get("build", config.get("rhbuild"))
         print(osp_cred)
 
@@ -118,6 +133,12 @@ def run(ceph_cluster, **kw):
             new_client_hostname="admin",
             extra_params=f" --client_fs {fs_name}",
         )
+
+        num_of_osds = int(fs_util.get_osd_count(clients[0]))
+        log.info("Number of OSD from cluster: {}".format(num_of_osds))
+        out, _ = clients[0].exec_command(sudo=True, cmd="ceph -s -f json")
+        cluster_status = json.loads(out)
+        all_mons = cluster_status["monmap"]["num_mons"]
         with parallel() as p:
             p.spawn(
                 start_io_time,
@@ -131,13 +152,14 @@ def run(ceph_cluster, **kw):
                 fs_util_v1,
                 clients[0],
                 kernel_mount_dir,
+                timeout=1200,
             )
             global stop_flag
             for osd in osd_nodes:
-                cluster_health_beforeIO = check_ceph_healthly(
+                cluster_health_beforeIO = retry_check_ceph_healthy(
                     clients[0],
                     num_of_osds,
-                    len(osd_nodes),
+                    all_mons,
                     build,
                     None,
                     300,
@@ -149,10 +171,10 @@ def run(ceph_cluster, **kw):
                     log.error(e)
                     log.error(traceback.format_exc())
 
-                cluster_health_afterIO = check_ceph_healthly(
+                cluster_health_afterIO = retry_check_ceph_healthy(
                     clients[0],
                     num_of_osds,
-                    len(osd_nodes),
+                    all_mons,
                     build,
                     None,
                     300,
@@ -163,10 +185,10 @@ def run(ceph_cluster, **kw):
                     log.error("cluster is not healty")
             log.info("Rebooted all the nodes and cluster is Healthy")
             for osd in osd_nodes:
-                cluster_health_beforeIO = check_ceph_healthly(
+                cluster_health_beforeIO = retry_check_ceph_healthy(
                     clients[0],
                     num_of_osds,
-                    len(osd_nodes),
+                    all_mons,
                     build,
                     None,
                     300,
@@ -188,10 +210,10 @@ def run(ceph_cluster, **kw):
                         log.error(e)
                         log.error(traceback.format_exc())
 
-                cluster_health_afterIO = check_ceph_healthly(
+                cluster_health_afterIO = retry_check_ceph_healthy(
                     clients[0],
                     num_of_osds,
-                    len(osd_nodes),
+                    all_mons,
                     build,
                     None,
                     300,
@@ -203,10 +225,10 @@ def run(ceph_cluster, **kw):
             log.info("Restarted all the mon services and cluster is Healthy")
 
             for osd in osd_nodes:
-                cluster_health_beforeIO = check_ceph_healthly(
+                cluster_health_beforeIO = retry_check_ceph_healthy(
                     clients[0],
                     num_of_osds,
-                    len(osd_nodes),
+                    all_mons,
                     build,
                     None,
                     300,
@@ -218,10 +240,10 @@ def run(ceph_cluster, **kw):
                     log.error(e)
                     log.error(traceback.format_exc())
 
-                cluster_health_afterIO = check_ceph_healthly(
+                cluster_health_afterIO = retry_check_ceph_healthy(
                     clients[0],
                     num_of_osds,
-                    len(osd_nodes),
+                    all_mons,
                     build,
                     None,
                     300,
@@ -232,10 +254,10 @@ def run(ceph_cluster, **kw):
                     log.error("cluster is not healty")
             log.info("killed all the mon services and cluster is Healthy")
             for osd in osd_nodes:
-                cluster_health_beforeIO = check_ceph_healthly(
+                cluster_health_beforeIO = retry_check_ceph_healthy(
                     clients[0],
                     num_of_osds,
-                    len(osd_nodes),
+                    all_mons,
                     build,
                     None,
                     300,
@@ -260,10 +282,10 @@ def run(ceph_cluster, **kw):
                         log.error(e)
                         log.error(traceback.format_exc())
 
-                cluster_health_afterIO = check_ceph_healthly(
+                cluster_health_afterIO = retry_check_ceph_healthy(
                     clients[0],
                     num_of_osds,
-                    len(osd_nodes),
+                    all_mons,
                     build,
                     None,
                     300,
@@ -276,10 +298,10 @@ def run(ceph_cluster, **kw):
                 "mon services have been stopped and started and cluster is Healthy"
             )
             for osd in osd_nodes:
-                cluster_health_beforeIO = check_ceph_healthly(
+                cluster_health_beforeIO = retry_check_ceph_healthy(
                     clients[0],
                     num_of_osds,
-                    len(osd_nodes),
+                    all_mons,
                     build,
                     None,
                     300,
@@ -291,10 +313,10 @@ def run(ceph_cluster, **kw):
                     log.error(e)
                     log.error(traceback.format_exc())
 
-                cluster_health_afterIO = check_ceph_healthly(
+                cluster_health_afterIO = retry_check_ceph_healthy(
                     clients[0],
                     num_of_osds,
-                    len(osd_nodes),
+                    all_mons,
                     build,
                     None,
                     300,

@@ -83,9 +83,9 @@ class XfsTestSetup:
 
         # Install dependencies
         packages = (
-            "acl attr automake bc dbench dump e2fsprogs fio gawk gcc gdbm-devel git "
+            "acl attr automake bc dbench e2fsprogs fio gawk gcc gdbm-devel git "
             "indent kernel-devel libacl-devel libaio-devel libcap-devel libtool libuuid-devel "
-            "lvm2 make psmisc python3 quota sed sqlite udftools xfsprogs xfsprogs-devel"
+            "lvm2 make psmisc python3 quota sed sqlite xfsprogs xfsprogs-devel"
         )
         log.info("Installing required packages for xfstests...")
         self.client.exec_command(sudo=True, cmd=f"yum install -y {packages}")

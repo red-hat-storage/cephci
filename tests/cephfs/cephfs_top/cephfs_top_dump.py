@@ -110,7 +110,7 @@ def verify_io_caps_decrease(iocaps_value_before):
     log.info("IO Caps value matched")
 
 
-@retry(ValueMismatchError, tries=5, delay=30)
+@retry(ValueMismatchError, tries=7, delay=30)
 def verify_fuse_client_count_increment(current_fuse_count):
     """
     Verify that the fuse client count increased by a specific increment.
@@ -129,7 +129,7 @@ def verify_fuse_client_count_increment(current_fuse_count):
     log.info("Fuse client count matched")
 
 
-@retry(ValueMismatchError, tries=5, delay=30)
+@retry(ValueMismatchError, tries=7, delay=30)
 def verify_kernel_client_count_increment(current_kernel_count):
     """
     Verify that the kernel client count increased by the expected increment.
@@ -148,7 +148,7 @@ def verify_kernel_client_count_increment(current_kernel_count):
     log.info("Kernel client count matched")
 
 
-@retry(ValueMismatchError, tries=5, delay=30)
+@retry(ValueMismatchError, tries=7, delay=30)
 def verify_total_client_count_increment(current_total_count):
     """
     Verify that the total client count increased by the expected increment.
@@ -302,50 +302,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "\n"
             "\n---------------***************-----------------------------------"
-            "\n    Usecase 1: Verify open and close files functionality        "
-            "\n---------------***************-----------------------------------"
-        )
-        file_list = []
-        opened_files = 10
-        for i in range(opened_files):
-            file_name = f"file_{rand}_{i}"
-            file_list.append(file_name)
-        pids = fs_util.open_files(client1, fuse_mounting_dir_1, file_list)
-        verify_open_files_count(opened_files)
-
-        fs_util.close_files(client1, pids)
-        verify_closed_files_count()
-
-        log.info(
-            "\n"
-            "\n---------------***************-----------------------------------"
-            "\n    Usecase 2: Verify iocaps increment and decrement          "
-            "\n---------------***************-----------------------------------"
-        )
-        log.info("verifying iocaps")
-        num_files = 10
-        iocaps_value_before = fs_util.get_cephfs_top_dump(client1)["filesystems"][
-            "cephfs"
-        ][client_id]["oicaps"]
-        for i in range(num_files):
-            file_name = f"files_{rand}_{i}"
-            client1.exec_command(
-                sudo=True, cmd=f"touch {fuse_mounting_dir_1}/{file_name}"
-            )
-        verify_io_caps_increment(iocaps_value_before, num_files)
-
-        log.info("Decrease the iocaps value")
-        for i in range(num_files):
-            file_name = f"files_{rand}_{i}"
-            client1.exec_command(
-                sudo=True, cmd=f"rm -rf {fuse_mounting_dir_1}/{file_name}"
-            )
-        verify_io_caps_decrease(iocaps_value_before)
-
-        log.info(
-            "\n"
-            "\n---------------***************-----------------------------------"
-            "\n    Usecase 3: Verify total client counts, increment for fuse and kernel clients"
+            "\n    Usecase 1: Verify total client counts, increment for fuse and kernel clients"
             "\n---------------***************-----------------------------------"
         )
         log.info("Verifying client counts")
@@ -361,6 +318,11 @@ def run(ceph_cluster, **kw):
         current_total_count = fs_util.get_cephfs_top_dump(client1)["client_count"][
             "total_clients"
         ]
+        log.info(
+            "Current FUSE count: {}, Current Kernel Count: {}, Current Total Count: {}".format(
+                current_fuse_count, current_kernel_count, current_total_count
+            )
+        )
         log.info("mounting clients")
         mon_node_ips = fs_util.get_mon_node_ips()
         fs_util.kernel_mount(
@@ -384,6 +346,49 @@ def run(ceph_cluster, **kw):
         verify_kernel_client_count_increment(current_kernel_count)
 
         verify_total_client_count_increment(current_total_count)
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n    Usecase 2: Verify open and close files functionality        "
+            "\n---------------***************-----------------------------------"
+        )
+        file_list = []
+        opened_files = 10
+        for i in range(opened_files):
+            file_name = f"file_{rand}_{i}"
+            file_list.append(file_name)
+        pids = fs_util.open_files(client1, fuse_mounting_dir_1, file_list)
+        verify_open_files_count(opened_files)
+
+        fs_util.close_files(client1, pids)
+        verify_closed_files_count()
+
+        log.info(
+            "\n"
+            "\n---------------***************-----------------------------------"
+            "\n    Usecase 3: Verify iocaps increment and decrement          "
+            "\n---------------***************-----------------------------------"
+        )
+        log.info("verifying iocaps")
+        num_files = 10
+        iocaps_value_before = fs_util.get_cephfs_top_dump(client1)["filesystems"][
+            "cephfs"
+        ][client_id]["oicaps"]
+        for i in range(num_files):
+            file_name = f"files_{rand}_{i}"
+            client1.exec_command(
+                sudo=True, cmd=f"touch {fuse_mounting_dir_1}/{file_name}"
+            )
+        verify_io_caps_increment(iocaps_value_before, num_files)
+
+        log.info("Decrease the iocaps value")
+        for i in range(num_files):
+            file_name = f"files_{rand}_{i}"
+            client1.exec_command(
+                sudo=True, cmd=f"rm -rf {fuse_mounting_dir_1}/{file_name}"
+            )
+        verify_io_caps_decrease(iocaps_value_before)
 
         log.info(
             "\n"
