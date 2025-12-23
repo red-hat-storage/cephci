@@ -136,7 +136,6 @@ def run(ceph_cluster, **kw):
             source_clients[0], source_fs, subvol_path
         )
         full_subvolume_path = f"{mounting_dir_1}{subvol_path}"
-        log.info("full_subvolume_path is: %s", full_subvolume_path)
 
         if mount_type == "nfs":
             source_nfs_servers = ceph_cluster_dict.get("ceph1").get_ceph_objects("nfs")
@@ -204,7 +203,8 @@ def run(ceph_cluster, **kw):
                 path=export_path,
             )
             log.info(source_nfs_export_name)
-
+            full_subvolume_path = f"{mounting_dir_1}"
+        log.info("full_subvolume_path is: %s", full_subvolume_path)
         if mount_type == "kernel":
             fs_util_ceph1.kernel_mount(
                 [source_clients[0]],
@@ -435,7 +435,9 @@ def run(ceph_cluster, **kw):
 
             log.info("Delete directories created for rsync")
             target_clients[0].exec_command(sudo=True, cmd=f"rm -rf {from_live_head}")
-            target_clients[0].exec_command(sudo=True, cmd=f"rm -rf {from_snap_directory}")
+            target_clients[0].exec_command(
+                sudo=True, cmd=f"rm -rf {from_snap_directory}"
+            )
 
             log.info("Cleanup Target Client")
             fs_mirroring_utils.cleanup_target_client(
