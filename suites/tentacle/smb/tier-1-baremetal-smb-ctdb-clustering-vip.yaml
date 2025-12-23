@@ -36,3 +36,40 @@ tests:
               subvolumegroup: smb
               subvolume: sv1
               path: /
+
+  - test:
+      name: (Clustering - Public Address)Verify Samba deployment using auth_mode=AD
+      desc: (Clustering - Public Address)Verify Samba deployment using auth_mode=AD
+      module: smb_deployment_declarative_method.py
+      polarion-id: CEPH-83597460
+      config:
+        file_type: yaml
+        file_mount: /tmp
+        spec:
+          - resource_type: ceph.smb.cluster
+            cluster_id: smb1
+            auth_mode: active-directory
+            domain_settings:
+              realm: samba.qe
+              join_sources:
+                - source_type: resource
+                  ref: join1-admin
+            custom_dns:
+              - 10.243.96.96
+            placement:
+              label: smb
+            public_addrs:
+              - address: 10.8.131.254/21
+          - resource_type: ceph.smb.join.auth
+            auth_id: join1-admin
+            auth:
+              username: Administrator
+              password: Redhat@123
+          - resource_type: ceph.smb.share
+            cluster_id: smb1
+            share_id: share1
+            cephfs:
+              volume: cephfs
+              subvolumegroup: smb
+              subvolume: sv1
+              path: /
