@@ -3415,14 +3415,19 @@ EOF"""
             daemon_status_ls = self.run_ceph_command(
                 cmd=f"ceph orch ps --service_name {service} --refresh"
             )
-            # TODO: current system time to be used when
-            # daemon is stopped/unknown since 'started' key will
-            # not exist in ceph orch ps --service_name {service} output
             for entry in daemon_status_ls:
-                start_time, _ = self.client.exec_command(
-                    cmd=f"date -d {entry.get('started')} +'%Y%m%d%H%M%S'"
-                )
-                daemon_map[entry["daemon_name"]] = start_time
+                daemon_name = entry.get("daemon_name")
+                if not daemon_name:
+                    continue
+                started = entry.get("started")
+                if started:
+                    start_time, _ = self.client.exec_command(
+                        cmd=f"date -d {started} +'%Y%m%d%H%M%S'"
+                    )
+                else:
+                    # Daemon is stopped/unknown - use current time as baseline
+                    start_time, _ = self.client.exec_command(cmd="date +'%Y%m%d%H%M%S'")
+                daemon_map[daemon_name] = start_time.strip()
 
         # restart each service for the input daemon
         for service in daemon_services:
@@ -3437,35 +3442,34 @@ EOF"""
                 )
                 success_count = 0
                 for entry in daemon_status_ls:
+                    daemon_name = entry.get("daemon_name")
+                    if not daemon_name:
+                        continue
                     try:
+                        started = entry.get("started")
+                        if not started:
+                            raise ValueError("Daemon not started yet")
                         restart_time, _ = self.client.exec_command(
-                            cmd=f"date -d {entry['started']} +'%Y%m%d%H%M%S'"
+                            cmd=f"date -d {started} +'%Y%m%d%H%M%S'"
                         )
-                        assert restart_time > daemon_map[entry["daemon_name"]]
-                        assert entry["status_desc"] != "stopped"
-                        log.info(f"{entry['daemon_name']} has started")
+                        assert restart_time.strip() > daemon_map[daemon_name]
+                        assert entry.get("status_desc") != "stopped"
+                        log.info(f"{daemon_name} has started")
                         success_count += 1
                     except Exception:
-                        log.info(
-                            f"{daemon} daemon {entry['daemon_name']} is yet to restart. "
-                        )
-                        """
-                        Adding "ceph orch daemon restart" in try except block, Since restarting OSDs throws below error,
-                        If all the OSDs of acting set are attempted to restart
-                        error -> "Error EINVAL: Unable to restart daemon osd.0: unsafe to stop osd(s) at this
-                         time (1 PGs are or would become offline). Warnings can be bypassed with the --force flag"
-                        """
+                        log.info(f"{daemon} daemon {daemon_name} is yet to restart.")
+                        # Retry individual daemon restart if service restart didn't work
                         try:
                             self.client.exec_command(
-                                cmd=f"ceph orch daemon restart {entry['daemon_name']}",
+                                cmd=f"ceph orch daemon restart {daemon_name}",
                                 sudo=True,
                             )
                         except CommandFailed as e:
                             log.warning(e)
                 if success_count == len(daemon_status_ls):
                     break
-                log.info("Sleeping for 60 secs")
-                time.sleep(60)
+                log.info("Sleeping for 30 secs")
+                time.sleep(30)
             else:
                 log.error(
                     f"All the daemons part of the service {service} did not restart within "
@@ -7007,6 +7011,7 @@ EOF"""
                 "m": 2,
                 "app_name": "cephfs",
                 "erasure_code_use_overwrites": "true",
+                "enable_fast_ec_features": True,
                 "bulk": True,
                 "pg_num_max": 128,
                 "stripe_unit": 16384,
