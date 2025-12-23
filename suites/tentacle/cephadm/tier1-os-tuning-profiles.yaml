@@ -334,11 +334,12 @@ tests:
             hosts:
               - hostx
           settings:
-            fs.filex: 100000
+            fs.file-max: 100000
         result: "Please check 'ceph orch host ls' for available hosts"
   - test:
       name: no_profile_name
       desc: Verify cephadm gives error if profile_name is not mentioned in YAML spec.
+      comments: Known issue BZ 2423855
       polarion-id: CEPH-83575327
       module: test_os_tuning_profile.py
       config:
@@ -350,5 +351,5 @@ tests:
               - node1
               - node2
           settings:
-            fs.filex: 100000
+            fs.file-max: 100000
         result: "Failed to apply tuned profile"

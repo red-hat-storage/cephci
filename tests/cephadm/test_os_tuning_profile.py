@@ -2,7 +2,6 @@ import tempfile
 
 import yaml
 
-from ceph.ceph import CommandFailed
 from ceph.waiter import WaitUntil
 from cli.cephadm.cephadm import CephAdm
 from utility.log import Log
@@ -89,17 +88,28 @@ def run(ceph_cluster, **kw):
             hosts = [ceph_cluster.get_nodes()[int(node[-1])].hostname for node in nodes]
         config["specs"]["placement"]["hosts"] = hosts
         spec_file = generate_tuned_profile_spec(installler_node, config.get("specs"))
+        # Execute the command directly to get the actual output
+        cmd = f"cephadm shell --mount {mount}:{mount} -- ceph orch tuned-profile apply -i {spec_file}"
+        log.info(f"Executing command directly: {cmd}")
+
         try:
-            result = CephAdm(
-                installler_node, mount=mount
-            ).ceph.orch.tuned_profile.apply(spec_file, True)
-            if config.get("result") not in result:
-                raise OsTuningProfileError("Fail to apply tuned profile")
-        except CommandFailed as err:
-            if config.get("result") not in str(err):
-                raise OsTuningProfileError(
-                    "apply command did not fail with the expected error"
+            # Capture both stdout and stderr
+            out, err = installler_node.exec_command(sudo=True, cmd=cmd, check_ec=False)
+            combined_output = f"{out}\n{err}".strip()
+
+            # Check if expected result is in any part of the output
+            if config.get("result") in combined_output:
+                log.info(
+                    f"Found expected result '{config.get('result')}' in combined output"
                 )
+            else:
+                raise OsTuningProfileError(
+                    f"Expected '{config.get('result')}' not found in output: '{combined_output}'"
+                )
+
+        except Exception as e:
+            log.error(f"Direct command execution failed: {str(e)}")
+            raise OsTuningProfileError(f"Failed to execute command: {str(e)}")
 
     if config.get("action") == "verify":
         hosts = [
