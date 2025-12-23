@@ -591,12 +591,43 @@ def test_mirror_group_snapshot_consistency(
                     "Failed to verify Snapshot creation as per %s schedule", interval
                 )
 
-            log.info("Waiting for 160 sec")
-            time.sleep(160)
-            snap_list, err = rbd_secondary.group.snap.list(
+            # Remove snapshot schedule
+            snap_schedule_rm_config = deepcopy(snap_schedule_config)
+            snap_schedule_rm_config.update({"interval": interval})
+            snap_schedule_rm_config.pop("level")
+            out, err = rbd_primary.mirror.group.snapshot.schedule.remove_(
+                **snap_schedule_rm_config
+            )
+            if err:
+                raise Exception(
+                    "Failed to remove group snapshot schedule of %s", interval
+                )
+            log.info("Removed group snapshot schedule of %s", interval)
+
+            snap_list_primary, err = rbd_primary.group.snap.list(
                 **{"group-spec": group_spec, "format": "json"}
             )
-            log.info(snap_list)
+            log.info(snap_list_primary)
+            snapshot_id = json.loads(snap_list_primary)[-1].get("id")
+
+            time.sleep(10)
+            snap_state = get_mirror_group_snap_copied_status(
+                rbd_secondary,
+                snapshot_id,
+                **{"group-spec": group_spec, "format": "json"},
+            )
+            log.info("Mirror group snapshot copied status on site-B is %s", snap_state)
+            while snap_state is not True:
+                time.sleep(5)
+                snap_state = get_mirror_group_snap_copied_status(
+                    rbd_secondary,
+                    snapshot_id,
+                    **{"group-spec": group_spec, "format": "json"},
+                )
+                log.info(
+                    "Mirror group snapshot copied status on site-B is %s", snap_state
+                )
+            log.info("Mirror group snapshot synced on site-B after schedule snapshot")
 
             md5sum_after_first_snap_site_b = []
             for image in image_spec:
@@ -637,18 +668,6 @@ def test_mirror_group_snapshot_consistency(
                 "Successfully verified that site-B data is consistent "
                 "with site-A after group snapshot created by scheduler"
             )
-
-            snap_schedule_rm_config = deepcopy(snap_schedule_config)
-            snap_schedule_rm_config.update({"interval": interval})
-            snap_schedule_rm_config.pop("level")
-            out, err = rbd_primary.mirror.group.snapshot.schedule.remove_(
-                **snap_schedule_rm_config
-            )
-            if err:
-                raise Exception(
-                    "Failed to remove group snapshot schedule of %s", interval
-                )
-            log.info("Removed group snapshot schedule of %s", interval)
 
             image_spec_copy = deepcopy(image_spec)
             for dev_name in [file_random1, file_random2]:
@@ -775,19 +794,24 @@ def test_mirror_group_snapshot_consistency(
                 "Data replay state is idle for all images in the group. Syncing completed"
             )
 
-            log.info("Waiting for 120 seconds")
-            time.sleep(120)
-            snap_list, err = rbd_secondary.group.snap.list(
-                **{"group-spec": group_spec, "format": "json"}
+            time.sleep(10)
+            snap_state = get_mirror_group_snap_copied_status(
+                rbd_secondary,
+                mirror_snap_id,
+                **{"group-spec": group_spec, "format": "json"},
             )
-            log.info(snap_list)
-            for snap in json.loads(snap_list):
-                if snap.get("state") != "complete":
-                    raise Exception(
-                        "Snapshot is not complete on the secondary: "
-                        + snap.get("state")
-                    )
-            log.info("All Snapshots are complete on secondary")
+            log.info("Mirror group snapshot copied status on site-B is %s", snap_state)
+            while snap_state is not True:
+                time.sleep(5)
+                snap_state = get_mirror_group_snap_copied_status(
+                    rbd_secondary,
+                    mirror_snap_id,
+                    **{"group-spec": group_spec, "format": "json"},
+                )
+                log.info(
+                    "Mirror group snapshot copied status on site-B is %s", snap_state
+                )
+            log.info("Mirror group manual snapshot synced on site-B")
 
             md5sum_second_write_site_a = []
             for image in image_spec:
