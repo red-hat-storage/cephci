@@ -274,6 +274,9 @@ def run(ceph_cluster, **kw):
     # Check Smb Port
     smb_port = config.get("smb_port", "445")
 
+    # Check Smb Port
+    disable_qos = config.get("disable_qos", False)
+
     try:
         # deploy smb services
         if deployment_method == "imperative":
@@ -460,6 +463,23 @@ def run(ceph_cluster, **kw):
                 sudo=True,
                 cmd="rm -rf /mnt/*",
             )
+
+        # disable qos value
+        if disable_qos:
+            # Update qos value
+            if deployment_method == "imperative":
+                for smb_share in smb_shares:
+                    if smb_share in aio_rate_limit_conf:
+                        CephAdm(installer).ceph.smb.share.update_cephfs_qos(
+                            smb_cluster_id,
+                            smb_share,
+                            read_iops_limit=0,
+                            write_iops_limit=0,
+                            read_bw_limit=0,
+                            write_bw_limit=0,
+                            read_delay_max=0,
+                            write_delay_max=0,
+                        )
 
     except Exception as e:
         log.error(f"Failed to deploy samba with auth_mode 'user' : {e}")
