@@ -75,6 +75,7 @@ tests:
       config:
         gw_node: node6
         rbd_pool: rbd
+        nvme_metadata_pool: rbd
         gw_group: gw_group1
         do_not_create_image: true
         rep-pool-only: true
@@ -91,7 +92,8 @@ tests:
             serial: 1
             bdevs:
               count: 1
-              size: 2G
+              size: 8G
+              ns_create_image: true
               qos:
                 - subsystem: nqn.2016-06.io.spdk:cnode1
                   nsid: 1
@@ -99,11 +101,11 @@ tests:
                   r-megabytes-per-second: 90
                   rw-megabytes-per-second: 50
                   # rw-ios-per-second: 100
-            listener_port: 5001
+            listener_port: 4420
             allow_host: "*"
         initiators:                             # Configure Initiators with all pre-req
-          - nqn: connect-all
-            listener_port: 5001
+          - nqn: nqn.2016-06.io.spdk:cnode1
+            listener_port: 4420
             node: node10
       desc: E2E-Test NVMEoF Gateway on node and validate QoS on targets
       destroy-cluster: false
