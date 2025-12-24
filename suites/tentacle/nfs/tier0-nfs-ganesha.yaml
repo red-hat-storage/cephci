@@ -311,6 +311,34 @@ tests:
         nfs_version: 4.1
         clients: 1
 
+  # - test:
+  #     name: cthon tests for NFS ganesha
+  #     module: test_cthon.py
+  #     desc: cthon tests for NFS ganesha - running all testcases basic, general, special and lock
+  #     polarion-id: CEPH-83617827
+  #     abort-on-fail: false
+  #     config:
+  #       nfs_version: 4.2
+  #       clients: 2
+  #       total_num_exports: 4
+  #     comments: cthon tests for NFS ganesha - BZ-2418561
+
+  - test:
+      name: NFS gRPC - Verify ID Updates After Client Unmount
+      module: test_nfs_grpc.py
+      desc: Unmount from 1 client and verify client/session IDs are updated
+      polarion-id: CEPH-83630616
+      abort-on-fail: false
+      config:
+        operation: verify_id_after_unmount
+        nfs_name: cephfs-nfs
+        nfs_export: /export
+        nfs_mount: /mnt/nfs
+        fs_name: cephfs
+        clients: 3
+        nfs_version: 4.1
+        port: 2049
+
   - test:
       name: Qos PerShare enablement on Cluster level with nfs with service restart
       module: test_nfs_qos_on_cluster_level_enablement.py
@@ -341,22 +369,6 @@ tests:
         max_client_write_bw: 8MB
         max_client_read_bw: 8MB
         qos_type: PerClient
-        operation: restart
-
-  - test:
-      name: Qos PerShare_PerClient enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerShare_PerClient enablement on cluster level
-      polarion-id: CEPH-83614247
-      abort-on-fail: false
-      config:
-        cephfs_volume: cephfs
-        cluster_name: cephfs-nfs
-        max_export_write_bw: 8MB
-        max_export_read_bw: 8MB
-        max_client_write_bw: 8MB
-        max_client_read_bw: 8MB
-        qos_type: PerShare_PerClient
         operation: restart
 
   - test:
@@ -438,19 +450,6 @@ tests:
         operation: restart
 
   - test:
-      name: Qos PerShare-combined_bw enablement on Cluster level with nfs with service restart
-      module: test_nfs_qos_on_cluster_level_enablement.py
-      desc: Verify qos PerShare-combined_bw enablement on cluster level
-      polarion-id: CEPH-83616910
-      abort-on-fail: false
-      config:
-        cephfs_volume : cephfs
-        cluster_name : cephfs-nfs
-        max_export_combined_bw: 8MB
-        qos_type : PerShare
-        operation : restart
-
-  - test:
       name: Qos PerClient-combined_bw enablement on Cluster level with nfs with service restart
       module: test_nfs_qos_on_cluster_level_enablement.py
       desc: Verify qos PerClient-combined_bw enablement on cluster level
@@ -478,29 +477,30 @@ tests:
         operation: restart
 
   - test:
-      name: cthon tests for NFS ganesha
-      module: test_cthon.py
-      desc: cthon tests for NFS ganesha - running all testcases basic, general, special and lock
-      polarion-id: CEPH-83617827
+      name: Qos PerShare_PerClient enablement on Cluster level with nfs with service restart
+      module: test_nfs_qos_on_cluster_level_enablement.py
+      desc: Verify qos PerShare_PerClient enablement on cluster level
+      polarion-id: CEPH-83614247
       abort-on-fail: false
       config:
-        nfs_version: 4.2
-        clients: 2
-        total_num_exports: 4
-      comments: cthon tests for NFS ganesha - BZ-2418561
+        cephfs_volume: cephfs
+        cluster_name: cephfs-nfs
+        max_export_write_bw: 8MB
+        max_export_read_bw: 8MB
+        max_client_write_bw: 8MB
+        max_client_read_bw: 8MB
+        qos_type: PerShare_PerClient
+        operation: restart
 
   - test:
-      name: NFS gRPC - Verify ID Updates After Client Unmount
-      module: test_nfs_grpc.py
-      desc: Unmount from 1 client and verify client/session IDs are updated
-      polarion-id: CEPH-83630616
+      name: Qos PerShare-combined_bw enablement on Cluster level with nfs with service restart
+      module: test_nfs_qos_on_cluster_level_enablement.py
+      desc: Verify qos PerShare-combined_bw enablement on cluster level
+      polarion-id: CEPH-83616910
       abort-on-fail: false
       config:
-        operation: verify_id_after_unmount
-        nfs_name: cephfs-nfs
-        nfs_export: /export
-        nfs_mount: /mnt/nfs
-        fs_name: cephfs
-        clients: 3
-        nfs_version: 4.1
-        port: 2049
+        cephfs_volume : cephfs
+        cluster_name : cephfs-nfs
+        max_export_combined_bw: 8MB
+        qos_type : PerShare
+        operation : restart

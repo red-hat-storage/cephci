@@ -590,7 +590,8 @@ def run(ceph_cluster, **kw):
             Ceph(client).orch.restart(service_name)
             if cluster_name not in [x["service_name"] for x in data]:
                 sleep(1)
-
+            # Waiting for QoS settings to load after cluster restart
+            sleep(20)
             qos_data_after_restart = ceph_nfs_client.cluster.qos.get(
                 cluster_id=cluster_name, format="json"
             )

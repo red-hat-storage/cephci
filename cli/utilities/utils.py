@@ -1,6 +1,7 @@
 import os
 import random
 import re
+import shlex
 import string
 import tempfile
 from datetime import datetime
@@ -631,6 +632,11 @@ def check_coredump_generated(node, coredump_path, created_after):
     # If the path is empty / not created, return False as no coredump has been generated
     if file_name == "":
         return False
+
+    # Sometimes coredump filenames have scpecial characters
+    # eg: core.ganesha\x2enfsd.0.6e2930c3611b4d0e8354cafca94c3b0f.86780.1766206231000000.zst
+    # So, properly escape the filename for shell execution to handle special characters like \x2e
+    file_name = shlex.quote(file_name.strip())
 
     # Get the file creation time
     cmd = f"stat -c '%w' {coredump_path}/{file_name}"
