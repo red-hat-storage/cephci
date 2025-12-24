@@ -678,21 +678,9 @@ def check_nfs_daemons_removed(client):
     """
     Check if NFS daemons are removed.
     Wait until there are no NFS daemons listed by 'ceph orch ls'.
+    Uses retry decorator with timeout (30 tries * 10 seconds = 300 seconds max).
     """
-    while True:
-        try:
-            cmd = "ceph orch ls | grep nfs"
-            out = client.exec_command(sudo=True, cmd=cmd)
-
-            if out:
-                print("NFS daemons are still present. Waiting...")
-                sleep(10)  # Wait before checking again
-            else:
-                print("All NFS daemons have been removed.")
-                break
-        except Exception as e:
-            print(f"Unexpected error: {e}")
-            break
+    check_nfs_daemons_removed_retry(client)
 
 
 def create_nfs_via_file_and_verify(installer_node, nfs_objects, timeout):
@@ -872,6 +860,26 @@ def fuse_mount_retry(client, mount, **kwargs):
         client_hostname=client.hostname, mount_point=mount, **kwargs
     ):
         raise OperationFailedError("Failed to fuse mount nfs on %s" % client.hostname)
+    return True
+
+
+@retry(OperationFailedError, tries=30, delay=10, backoff=1)
+def check_nfs_daemons_removed_retry(client):
+    """
+    Helper function to check if NFS daemons are removed.
+    Raises OperationFailedError if daemons are still present (to trigger retry).
+    Returns True if all daemons are removed.
+    """
+    try:
+        out = client.exec_command(sudo=True, cmd="ceph orch ls | grep nfs")
+        # if there are no nfs daemons, then grep exit code is 1
+        # hence we check if not err, and not if err
+        if out:
+            raise OperationFailedError("NFS daemons are still present")
+    except Exception as e:
+        log.info(f"Caugt Exception: {e}")
+
+    log.info("All NFS daemons have been removed.")
     return True
 
 
