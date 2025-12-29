@@ -325,3 +325,12 @@ tests:
           - scenario-6
           - scenario-7
       desc: Test mon and mgr serviceability scenarios in 3 AZ stretch cluster
+
+  - test:
+      name: N az stretch revert holistic test
+      module: test_n_az_revert_stretch_holistic_test.py
+      polarion-id: CEPH-83620034
+      config:
+        rule_name: 3az_rule
+        stretch_bucket: datacenter
+      desc: N az stretch revert holistic test

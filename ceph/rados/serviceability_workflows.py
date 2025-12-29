@@ -166,7 +166,7 @@ class ServiceabilityMethods:
             log.exception(e)
             raise
 
-    def remove_offline_host(self, host_node_name: str):
+    def remove_offline_host(self, host_node_name: str, rm_crush_entry=True):
         """
         Method to remove a specific offline host from the cluster
         Args:
@@ -194,7 +194,11 @@ class ServiceabilityMethods:
                 raise Exception(err_msg)
 
             log.info("Removing offline host %s from the cluster" % rm_host.hostname)
-            self.remove_custom_host(host_node_name=host_node_name, offline=True)
+            self.remove_custom_host(
+                host_node_name=host_node_name,
+                offline=True,
+                rm_crush_entry=rm_crush_entry,
+            )
 
             # removing empty spec definition for OSD post host removal
             # will not fail if there were no empty specs present
@@ -210,7 +214,9 @@ class ServiceabilityMethods:
             + rm_host.hostname
         )
 
-    def remove_custom_host(self, host_node_name: str, offline=False):
+    def remove_custom_host(
+        self, host_node_name: str, offline=False, rm_crush_entry=True
+    ):
         """
         Method to remove a specific online host from the cluster
         Args:
@@ -262,6 +268,8 @@ class ServiceabilityMethods:
             rm_cmd = f"ceph orch host rm {rm_host.hostname} --force"
             if offline:
                 rm_cmd += " --offline"
+            if rm_crush_entry:
+                rm_cmd += " --rm-crush-entry"
             self.cephadm.shell([rm_cmd])
 
             # wait for 120 secs for host to be removed from the cluster

@@ -473,3 +473,16 @@ tests:
           - scenario16
           - scenario17
       desc: Performs tests related to reverting from stretch mode
+
+  # Cluster will have DC1 and DC3 as data centers
+  - test:
+      name: Revert stretch mode holistic tests
+      module: test_stretch_revert.py
+      polarion-id: CEPH-83620034
+      config:
+        stretch_bucket: datacenter
+        tiebreaker_mon_site_name: tiebreaker
+        delete_pool: true
+        scenarios_to_run:
+          - scenario18
+      desc: Performs tests related to reverting from stretch mode

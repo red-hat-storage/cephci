@@ -160,6 +160,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "Proceeding to perform Check (1) PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2"
         )
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         method_should_succeed(validate_acting_set)
 
         services_list = rados_obj.list_orch_services(service_type="osd")
@@ -280,14 +281,14 @@ def run(ceph_cluster, **kw):
                 raise Exception("Warning present on cluster")
 
         log.info(
-            "Proceeding to perform Check (1) PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2"
-        )
-        method_should_succeed(validate_acting_set)
-
-        log.info(
             "Proceeding to perform Check (4) PGs should reach active+clean state post OSD removal and addition"
         )
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
+
+        log.info(
+            "Proceeding to perform Check - PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2"
+        )
+        method_should_succeed(validate_acting_set)
 
         log.info(
             "Proceeding to perform Check (5) Pool sanity checks should be successful post OSD removal and addition"
@@ -376,6 +377,7 @@ def run(ceph_cluster, **kw):
         log.info(
             "Proceeding to perform Check (1) PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2"
         )
+        method_should_succeed(wait_for_clean_pg_sets, rados_obj)
         method_should_succeed(validate_acting_set)
 
         log.info(
@@ -515,11 +517,6 @@ def run(ceph_cluster, **kw):
         )
 
         log.info(
-            "Proceeding to perform Check (1) PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2"
-        )
-        method_should_succeed(validate_acting_set)
-
-        log.info(
             "Proceeding to perform Check (3) No inactive PGs on the pool post OSD Host addition"
         )
         # Waiting for recovery to post OSD host Addition
@@ -530,6 +527,11 @@ def run(ceph_cluster, **kw):
             "Proceeding to perform Check (4) PGs should reach active+clean state post OSD addition"
         )
         method_should_succeed(wait_for_clean_pg_sets, rados_obj, timeout=12000)
+
+        log.info(
+            "Proceeding to perform Check - PG has 2 OSD from datacenter DC1 and 2 OSD from datacenter DC2"
+        )
+        method_should_succeed(validate_acting_set)
 
         log.info(
             "Proceeding to perform Check (5) Pool sanity checks should be successful post OSD addition"
