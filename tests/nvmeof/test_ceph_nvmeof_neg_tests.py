@@ -22,7 +22,6 @@ from ceph.utils import get_node_by_id, get_nodes_by_ids
 from cli.cephadm.cephadm import CephAdm
 from cli.utilities.utils import get_running_containers, reboot_node
 from tests.cephadm import test_nvmeof, test_orch
-from tests.nvmeof.test_ceph_nvmeof_gateway import initiators
 from tests.nvmeof.workflows.gateway_entities import (
     configure_gw_entities,
     configure_hosts,
@@ -75,7 +74,11 @@ def test_ceph_83575812(ceph_cluster, rbd, nvme_service, pool, config):
         if config.get("initiators"):
             with parallel() as p:
                 for initiator in config["initiators"]:
-                    p.spawn(initiators, ceph_cluster, nvmegwcli, initiator)
+                    client = get_node_by_id(ceph_cluster, initiator["node"])
+                    initiator_obj = NVMeInitiator(client)
+                    initiator_obj.connect_targets(nvmegwcli, initiator)
+                    paths = initiator_obj.list_devices()
+                    p.spawn(lambda: initiator_obj.start_fio(paths=paths, **initiator))
                     sleep(20)
                     out, err = rbd.remove_image(
                         pool, rbd_image_name, **{"all": True, "check_ec": False}
@@ -115,7 +118,13 @@ def test_ceph_83575467(ceph_cluster, rbd, nvme_service, pool, config):
 
         sub_args = {"base_cmd_args": {"format": "json"}}
         for initiator in config["initiators"]:
-            initiators(ceph_cluster, nvmegwcli, initiator)
+            client = get_node_by_id(ceph_cluster, initiator["node"])
+            initiator_obj = NVMeInitiator(client)
+            initiator_obj.connect_targets(nvmegwcli, initiator)
+            paths = initiator_obj.list_devices()
+            i = initiator_obj.start_fio(paths=paths, **initiator)
+            LOG.info(f"FIO Result: {i}")
+
         gw_info_bkp = list_subsystems(**sub_args)
         gw_info_bkp = json.loads(gw_info_bkp.strip())["subsystems"]
 
@@ -168,7 +177,12 @@ def test_ceph_83575813(ceph_cluster, rbd, nvme_service, pool, config):
         # Run IOS on nvme namespaces
         initiator.disconnect_all()
         for i in config["initiators"]:
-            initiators(ceph_cluster, nvmegwcli, i)
+            client = get_node_by_id(ceph_cluster, i["node"])
+            initiator_obj = NVMeInitiator(client)
+            initiator_obj.connect_targets(nvmegwcli, i)
+            paths = initiator_obj.list_devices()
+            result = initiator_obj.start_fio(paths=paths, **i)
+            LOG.info(f"FIO Result: {result}")
 
         def check(_node, _size):
             out, _ = _node.exec_command(sudo=True, cmd="lsblk -bJ")
@@ -224,7 +238,12 @@ def test_ceph_83575813(ceph_cluster, rbd, nvme_service, pool, config):
             check(client, img["provisioned_size"])
         initiator.disconnect_all()
         for i in config["initiators"]:
-            initiators(ceph_cluster, nvmegwcli, i)
+            client = get_node_by_id(ceph_cluster, i["node"])
+            initiator_obj = NVMeInitiator(client)
+            initiator_obj.connect_targets(nvmegwcli, i)
+            paths = initiator_obj.list_devices()
+            result = initiator_obj.start_fio(paths=paths, **i)
+            LOG.info(f"FIO Result: {result}")
         LOG.info("Validation of CEPH-83575813 is successful.")
 
     except Exception as err:
@@ -233,6 +252,9 @@ def test_ceph_83575813(ceph_cluster, rbd, nvme_service, pool, config):
 
 def test_ceph_83575455(ceph_cluster, rbd, nvme_service, pool, config):
     """CEPH-83575455: Validate Host access failures"""
+    client = get_node_by_id(ceph_cluster, config["initiator_node"])
+    initiator = NVMeInitiator(client)
+    initiator_nqn = initiator.initiator_nqn()
     try:
         # Deploy NVMe Service
         if config.get("install"):
@@ -242,25 +264,17 @@ def test_ceph_83575455(ceph_cluster, rbd, nvme_service, pool, config):
         nvme_service.init_gateways()
         nvmegwcli = nvme_service.gateways[0]
 
-        # Configure Subsystem, listeners, namespaces
+        # Configure Subsystem, listeners, host, namespaces
         if config.get("subsystems"):
-            configure_gw_entities(nvme_service, rbd_obj=rbd)
+            configure_gw_entities(nvme_service, rbd_obj=rbd, cluster=ceph_cluster)
 
-        # Configure hosts
-        client = get_node_by_id(ceph_cluster, config["initiator_node"])
-        initiator = NVMeInitiator(client)
-        initiator_nqn = initiator.initiator_nqn()
-        host_args = {
-            "args": {
-                "subsystem": config["initiators"][0]["nqn"],
-                "host": initiator_nqn,
-            }
-        }
-        nvmegwcli.host.add(**host_args)
-
-        # Connect the initiator to the subsystem
-        initiators = config.get("initiators")
-        initiator.connect_targets(nvmegwcli, initiators[0])
+        for i in config["initiators"]:
+            client = get_node_by_id(ceph_cluster, i["node"])
+            initiator_obj = NVMeInitiator(client)
+            initiator_obj.connect_targets(nvmegwcli, i)
+            paths = initiator_obj.list_devices()
+            result = initiator_obj.start_fio(paths=paths, **i)
+            LOG.info(f"FIO Result: {result}")
 
         targets = initiator.list_devices()
 
@@ -277,6 +291,13 @@ def test_ceph_83575455(ceph_cluster, rbd, nvme_service, pool, config):
         # Create a file to check IO failure on mount point
         LOG.info("Remove client host access to the namespaces")
         try:
+            host_args = {
+                "args": {
+                    "subsystem": config["initiators"][0]["nqn"],
+                    "host": initiator_nqn,
+                }
+            }
+            time.sleep(20)
             nvmegwcli.host.delete(**host_args)
         except Exception as host_del_err:
             if (
@@ -306,6 +327,12 @@ def test_ceph_83575455(ceph_cluster, rbd, nvme_service, pool, config):
                 f"Command execution failure as expected with timeout"
                 f" as IO fails on inaccessible mount point : {timeout}"
             )
+        except Exception as io_err:
+            if "Command exceed the allocated execution time" in str(io_err):
+                LOG.info(
+                    f"Command execution failure as expected with timeout"
+                    f" as IO fails on inaccessible mount point : {str(io_err)}"
+                )
 
         # Add client host access
         # Check the existence of the NVMe namespaces
@@ -315,7 +342,9 @@ def test_ceph_83575455(ceph_cluster, rbd, nvme_service, pool, config):
         if not targets:
             raise Exception(f"NVMe Targets not found on {client.hostname}")
         client.exec_command(
-            sudo=True, cmd=f"dd if=/dev/zero of={_file}_test bs=1M count=1000"
+            sudo=True,
+            cmd=f"dd if=/dev/zero of={_file}_test bs=1M count=1000",
+            timeout=30,
         )
         client.exec_command(sudo=True, cmd=f"ls -ltrh {_file}_test")
         LOG.info("Validation of CEPH-83575455 is successful.")
@@ -642,7 +671,11 @@ def test_ceph_83575814(ceph_cluster, rbd, nvme_service, pool, config):
         mon_host = ceph_cluster.get_nodes(role="mon")[0]
         with parallel() as p:
             for initiator in config["initiators"]:
-                p.spawn(initiators, ceph_cluster, nvmegwcli, initiator)
+                client = get_node_by_id(ceph_cluster, initiator["node"])
+                initiator_obj = NVMeInitiator(client)
+                initiator_obj.connect_targets(nvmegwcli, initiator)
+                paths = initiator_obj.list_devices()
+                p.spawn(lambda: initiator_obj.start_fio(paths=paths, **initiator))
 
             LOG.info("Removing mon service from the cluster")
             p.spawn(operation, mon_obj, "remove_mon_service", host=mon_host.hostname)

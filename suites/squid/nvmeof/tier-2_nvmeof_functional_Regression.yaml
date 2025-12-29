@@ -286,7 +286,7 @@ tests:
             listener_port: 4420
             allow_host: "*"
         initiators: # Configure Initiators with all pre-req
-          - subnqn: nqn.2016-06.io.spdk:negative
+          - nqn: nqn.2016-06.io.spdk:negative
             listener_port: 4420
             node: node10
         operation: CEPH-83575812
@@ -325,7 +325,7 @@ tests:
             listener_port: 4420
             allow_host: "*"
         initiators: # Configure Initiators with all pre-req
-          - subnqn: nqn.2016-06.io.spdk:ceph-83575467
+          - nqn: nqn.2016-06.io.spdk:ceph-83575467
             listener_port: 4420
             node: node10
         cleanup:
@@ -365,7 +365,7 @@ tests:
             listener_port: 4420
             allow_host: "*"
         initiators: # Configure Initiators with all pre-req
-          - subnqn: nqn.2016-06.io.spdk:ceph-83575813
+          - nqn: nqn.2016-06.io.spdk:ceph-83575813
             listener_port: 4420
             node: node10
         cleanup:
@@ -401,8 +401,10 @@ tests:
               count: 1
               size: 5G
             listener_port: 4420
+            hosts:
+              node: node10
         initiators: # Configure Initiators with all pre-req
-          - subnqn: nqn.2016-06.io.spdk:ceph-83575455
+          - nqn: nqn.2016-06.io.spdk:ceph-83575455
             listener_port: 4420
             node: node10
         cleanup:
