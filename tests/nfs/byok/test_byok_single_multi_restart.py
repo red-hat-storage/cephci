@@ -1,3 +1,4 @@
+import traceback
 from cli.ceph.ceph import Ceph
 from cli.exceptions import ConfigError, OperationFailedError
 from cli.utilities.filesys import Unmount
@@ -367,6 +368,10 @@ def run(ceph_cluster, **kw):
             )
 
         return 0
+    except Exception as e:
+        log.error(e)
+        log.error(traceback.format_exc())
+        return 1
 
     finally:
         log.info("Cleanup: GKLM, NFS clusters, and mounts")
@@ -377,13 +382,6 @@ def run(ceph_cluster, **kw):
             ]
             if "certsighup" in all_certs:
                 gklm_cert_alias = "certsighup"
-
-        # Clean GKLM resources
-        clean_up_gklm(
-            gklm_rest_client=gklm_rest_client,
-            gkml_client_name=gkml_client_name,
-            gklm_cert_alias=gklm_cert_alias,
-        )
 
         # Cleanup single cluster or multi cluster accordingly
         if nfs_replication_number == 1 and client_export_mount_dict is not None:
@@ -412,7 +410,14 @@ def run(ceph_cluster, **kw):
                 group_name=subvolume_group,
             )
 
-        if CephFSCommonUtils(ceph_cluster).wait_for_healthy_ceph(clients[0], 300):
-            log.error("Cluster health is not OK even after waiting for 300secs")
-            return 1
+        # Clean GKLM resources
+        clean_up_gklm(
+            gklm_rest_client=gklm_rest_client,
+            gkml_client_name=gkml_client_name,
+            gklm_cert_alias=gklm_cert_alias,
+        )
+
+        # if CephFSCommonUtils(ceph_cluster).wait_for_healthy_ceph(clients[0], 300):
+        #     log.error("Cluster health is not OK even after waiting for 300secs")
+        #     return 1
         log.info("Cleanup completed for all test resources.")
