@@ -1,0 +1,250 @@
+# =============================================================================
+# OSD Thrashing and Bug Reproduction Test Suite
+# =============================================================================
+# This suite performs aggressive OSD thrashing with concurrent I/O workloads
+# to verify cluster stability under stress conditions. It also includes
+# specific bug reproduction tests.
+#
+# To be run with conf: 9-node-ec-cluster-1-client.yaml
+# THRASHING OPERATIONS:
+# ---------------------
+# - OSD out/in cycling with daemon stop/start
+# - CRUSH weight modifications (reduce to 50%, restore)
+# - PG count thrashing via bulk flag + scrub/deep-scrub
+# - CephFS/RBD/EC pool snapshot thrashing with clone operations
+# - Parallel I/O: rados bench, FIO, comprehensive object operations
+# =============================================================================
+
+tests:
+  - test:
+      name: setup install pre-requisites
+      desc: Setup phase to deploy the required pre-requisites for running the tests.
+      module: install_prereq.py
+      abort-on-fail: true
+
+  - test:
+      name: cluster deployment
+      desc: Execute the cluster deployment workflow.
+      module: test_cephadm.py
+      abort-on-fail: true
+      config:
+        verify_cluster_health: true
+        steps:
+          - config:
+              command: bootstrap
+              service: cephadm
+              base_cmd_args:
+                verbose: true
+              args:
+                mon-ip: node1
+
+  - test:
+      name: Add host
+      desc: Add new host node with IP address
+      module: test_host.py
+      config:
+        command: add_hosts
+        service: host
+        args:
+          nodes:
+            - node1
+            - node2
+            - node3
+            - node4
+            - node5
+            - node6
+            - node8
+            - node9
+          attach_ip_address: true
+          labels: apply-all-labels
+      destroy-cluster: false
+      abort-on-fail: true
+
+  - test:
+      name: Mgr and Mon deployment
+      desc: Add Mgr and Mon daemons
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply
+              service: mgr
+              args:
+                placement:
+                  label: mgr
+          - config:
+              command: apply
+              service: mon
+              args:
+                placement:
+                  label: mon
+
+  - test:
+      name: OSD deployment
+      desc: Add OSD services using spec file.
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: true
+      config:
+        steps:
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: osd
+                  service_id: osds
+                  encrypted: "true"
+                  placement:
+                    label: osd
+                  spec:
+                    data_devices:
+                      all: "true"
+
+  - test:
+      name: Configure client admin
+      desc: Configures client admin node on cluster
+      module: test_client.py
+      polarion-id: CEPH-83573758
+      abort-on-fail: true
+      config:
+        command: add
+        id: client.1
+        node: node7
+        install_packages:
+          - ceph-common
+        copy_admin_keyring: true
+        caps:
+          mon: "allow *"
+          osd: "allow *"
+          mds: "allow *"
+          mgr: "allow *"
+
+  - test:
+      name: Enable logging to file
+      module: rados_prep.py
+      config:
+        log_to_file: true
+      desc: Change config options to enable logging to file
+
+  # ===========================================================================
+  # OSD Thrashing Tests
+  # ===========================================================================
+  - test:
+      name: OSD thrashing test with concurrent IO - with compression
+      desc: Aggressive OSD thrashing with compression enabled
+      module: test_osd_thrashing.py
+      polarion-id: CEPH-83632230
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: erasure
+            sample_pool_id: sample-pool-9
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 30
+        duration: 600
+        aggressive: true
+        enable_crush_thrashing: true
+        enable_pg_thrashing: true
+        compression: true
+        cleanup_pools: true
+        enable_debug_logs: false
+        inject_errors: true
+
+  - test:
+      name: OSD thrashing test with concurrent IO - no compression
+      desc: Aggressive OSD thrashing without compression
+      module: test_osd_thrashing.py
+      polarion-id: CEPH-83632230
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: erasure
+            sample_pool_id: sample-pool-9
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 20
+        duration: 600
+        aggressive: true
+        enable_crush_thrashing: true
+        enable_pg_thrashing: true
+        compression: false
+        cleanup_pools: true
+        enable_debug_logs: false
+        inject_errors: false
+
+  - test:
+      name: OSD thrashing with EC error injection
+      desc: OSD thrashing with EC write error injection to trigger divergent logs
+      module: test_osd_thrashing.py
+      polarion-id: CEPH-83632230
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: erasure
+            sample_pool_id: sample-pool-9
+        iterations: 25
+        duration: 900
+        aggressive: true
+        enable_crush_thrashing: true
+        enable_pg_thrashing: true
+        compression: false
+        cleanup_pools: true
+        enable_debug_logs: true
+        inject_errors: true
+        num_osds_to_inject: 3
+        num_writes_to_inject: 1000
+
+  - test:
+      name: OSD thrashing - minimal (quick validation)
+      desc: Quick OSD thrashing test for basic validation
+      module: test_osd_thrashing.py
+      polarion-id: CEPH-83632230
+      config:
+        pool_configs:
+          - pool_type: erasure
+            sample_pool_id: sample-pool-7
+          - pool_type: replicated
+            sample_pool_id: sample-pool-2
+        iterations: 10
+        duration: 900
+        aggressive: false
+        enable_crush_thrashing: false
+        enable_pg_thrashing: false
+        compression: false
+        cleanup_pools: true
+        enable_debug_logs: false
+        inject_errors: false
+
+  # ===========================================================================
+  # Bug #2423971 EC Divergent Log Reproduction Tests
+  # ===========================================================================
+  - test:
+      name: Bug 2423971 EC Divergent Log - Short Run
+      desc: Attempts to reproduce the Fast EC divergent log bug with 5 iterations
+      module: test_bug_2423971_ec_divergent.py
+      polarion-id: CEPH-83632231
+      config:
+        iterations: 5
+        duration: 600
+        pool_name: bug-2423971-short
+        cleanup_pool: true
+        fail_on_crash: false
+
+  - test:
+      name: Bug 2423971 EC Divergent Log - Long Run
+      desc: Extended bug reproduction - continues even after crash detected
+      module: test_bug_2423971_ec_divergent.py
+      polarion-id: CEPH-83632231
+      config:
+        iterations: 40
+        duration: 900
+        pool_name: bug-2423971-long
+        cleanup_pool: true
+        fail_on_crash: false

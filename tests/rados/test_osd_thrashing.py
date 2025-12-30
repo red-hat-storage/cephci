@@ -1,40 +1,75 @@
 """
 Test Module: OSD Thrashing Test with Concurrent I/O
+====================================================
 
 This module performs aggressive OSD thrashing with concurrent I/O workload to verify
 cluster stability under stress conditions. It tests both EC and replicated pools,
 and checks for any crashes or issues during OSD state transitions.
 
-Test Workflow:
+TEST WORKFLOW:
+==============
+
     ├── Crash archive at start
+    │
     ├── SETUP PHASE
-    │   ├── Create pools from suite file configuration
-    │   │   - Supports both EC and replicated pools
-    │   │   - Multiple pools with different configurations
+    │   ├── Create pools (RADOS EC/replicated, CephFS, RBD) in parallel
     │   ├── Enable EC optimizations for EC pools
-    │   └── Configure aggressive recovery settings
-    ├── THRASHING PHASE
-    │   ├── Concurrent I/O workload (rados bench in bursts)
-    │   ├── Comprehensive I/O (various sizes with overwrites, appends, truncates)
-    │   ├── FIO workloads on CephFS and RBD
-    │   ├── OSD thrashing (mark out → wait → mark in)
-    │   ├── CRUSH weight modifications (configurable, default: enabled)
-    │   └── PG count thrashing (bulk flag enable/disable, configurable, default: enabled)
+    │   ├── Enable compression (if configured)
+    │   ├── Configure aggressive recovery settings
+    │   ├── Enable debug logging: debug_osd=20/20, debug_bluestore=20/20 (if configured)
+    │   └── Inject EC write errors on random OSDs (if configured)
+    │       ├── bluestore_debug_inject_read_err=true
+    │       └── ceph daemon osd.$id injectecwriteerr <pool> '*' 2 1 0 1
+    │
+    ├── THRASHING PHASE (11 parallel threads)
+    │   ├── io_workload_burst: rados bench 30s write bursts (64K blocks)
+    │   ├── comprehensive_io_workload: Various object sizes + overwrites + appends
+    │   ├── monitor_cluster_health: Periodic ceph health detail + ceph -s logging
+    │   ├── _run_fio_workload (CephFS): FIO with snapshots on work directory
+    │   ├── _run_fio_workload (RBD): FIO on mounted RBD image
+    │   ├── thrash_cephfs_snapshots: 5 snaps/iter, parallel writes, ~20% deletion
+    │   ├── thrash_rbd_snapshots: 4 snaps/iter, protect, clone, flatten, ~20% deletion
+    │   ├── thrash_ec_pool_snapshots: RADOS-level snapshots + partial writes + OSD down
+    │   │   └── { partial_write } & ceph osd down <osd> (synchronized timing)
+    │   ├── thrash_osds: Mark out → orch daemon stop → wait → mark in → orch daemon start
+    │   ├── thrash_crush_weights: Reduce to 50% → restore (if enabled)
+    │   └── thrash_pg_count: Bulk flag toggle + scrub/deep-scrub (if enabled)
+    │
     ├── VALIDATION PHASE
-    │   ├── Wait for cluster stabilization
+    │   ├── Wait for cluster stabilization (active+clean PGs)
     │   ├── Check cluster health
-    │   ├── Check PG states (active+clean)
-    │   ├── Check for ANY crashes (ceph crash ls-new)
+    │   ├── Analyze OSD logs for divergent patterns
+    │   ├── Check for crashes (ceph crash ls-new)
     │   └── Report findings and fail if crashes detected
+    │
     └── CLEANUP PHASE
-        └── Delete test pools and profiles
+        ├── Reset recovery settings
+        ├── Remove debug logging configs (if enabled)
+        ├── Remove error injection configs (if enabled)
+        ├── Force log rotation on all OSD hosts
+        ├── Unmount and cleanup CephFS and RBD
+        └── Delete test pools and EC profiles
+
+CONFIGURATION OPTIONS:
+======================
+- iterations: Number of OSD thrash iterations (default: 20)
+- duration: Total test duration in seconds (default: 600)
+- aggressive: Enable aggressive mode with longer waits (default: True)
+- enable_crush_thrashing: Enable CRUSH weight modifications (default: True)
+- enable_pg_thrashing: Enable PG count thrashing via bulk flag (default: True)
+- compression: Enable pool compression with mode=force (default: False)
+- cleanup_pools: Delete pools after test (default: True)
+- enable_debug_logs: Enable debug logging for OSD peering and BlueStore (default: False)
+- inject_errors: Inject EC write errors on random OSDs (default: False)
+- num_osds_to_inject: Number of OSDs to inject errors on (default: 3)
 
 """
 
 import concurrent.futures as cf
 import random
 import time
-from typing import Dict, List
+from datetime import datetime
+from typing import Any, Dict, List
 
 import yaml
 
@@ -42,6 +77,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.utils import get_cluster_timestamp
+from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_four_node_ecpool import create_comprehensive_test_objects
 from utility.log import Log
@@ -66,16 +102,20 @@ def run(ceph_cluster, **kw):
     Test Args (in config):
         pool_configs (list): List of pool configurations to create (REQUIRED)
             - pool_type (str): "erasure" or "replicated"
-            - sample_pool_id (str): Pool ID from conf/tentacle/rados/test-confs/pool-configurations.yaml
+            - sample_pool_id (str): Pool ID from pool-configurations.yaml
             - Any additional parameters will override file config
 
         iterations (int): Number of OSD thrash iterations (default: 20)
         duration (int): Test duration in seconds (default: 600)
-        aggressive (bool): Enable aggressive mode (default: True)
+        aggressive (bool): Enable aggressive mode with longer waits (default: True)
         enable_crush_thrashing (bool): Enable CRUSH weight thrashing (default: True)
-        enable_pg_thrashing (bool): Enable PG count thrashing via bulk flag and scrubbing (default: True)
+        enable_pg_thrashing (bool): Enable PG count thrashing via bulk flag (default: True)
         compression (bool): Enable pool compression with mode=force (default: False)
         cleanup_pools (bool): Delete pools after test (default: True)
+        enable_debug_logs (bool): Enable debug logging for OSD/BlueStore (default: True)
+        inject_errors (bool): Inject EC write errors on random OSDs (default: True)
+        num_osds_to_inject (int): Number of OSDs to inject errors on (default: 3)
+        num_writes_to_inject (int): Number of writes to inject errors per OSD (default: 1000)
 
     Returns:
         0: Test passed - No crashes detected, cluster remained stable
@@ -88,6 +128,7 @@ def run(ceph_cluster, **kw):
     cephadm = CephAdmin(cluster=ceph_cluster, **config)
     rados_obj = RadosOrchestrator(node=cephadm)
     pool_obj = PoolFunctions(node=cephadm)
+    mon_obj = MonConfigMethods(rados_obj=rados_obj)
     client_node = ceph_cluster.get_nodes(role="client")[0]
 
     # Test parameters
@@ -97,8 +138,19 @@ def run(ceph_cluster, **kw):
     enable_crush_thrashing = config.get("enable_crush_thrashing", True)
     enable_pg_thrashing = config.get("enable_pg_thrashing", True)
     compression = config.get("compression", False)
+    enable_debug_logs = config.get("enable_debug_logs", True)
+    inject_errors = config.get("inject_errors", True)
+    num_osds_to_inject = config.get("num_osds_to_inject", 3)
+    num_writes_to_inject = config.get("num_writes_to_inject", 1000)
+    compression_algorithms = ["snappy", "zlib"]
 
-    # Log test parameters in a single block for efficiency
+    up_osds = rados_obj.get_osd_list(status="up")
+    inject_osds = random.sample(up_osds, min(num_osds_to_inject, len(up_osds)))
+    log.info(
+        f"Injecting EC write errors on {len(inject_osds)} OSDs: "
+        f"{', '.join(str(osd) for osd in inject_osds)} if enabled in config"
+    )
+
     test_params = (
         f"\n{'=' * 60}\n"
         f"OSD THRASHING TEST WITH CONCURRENT I/O\n"
@@ -110,19 +162,23 @@ def run(ceph_cluster, **kw):
         f"  CRUSH thrashing: {enable_crush_thrashing}\n"
         f"  PG thrashing via bulk flag and scrubbing: {enable_pg_thrashing}\n"
         f"  Compression (mode=force): {compression}\n"
+        f"  Debug logs: {enable_debug_logs}\n"
         f"  RADOS pools from config: {len(config.get('pool_configs', []))}\n"
-        f"  Additional pools: CephFS (2 pools) + RBD (2 pools)"
+        f"  Additional pools: CephFS (2 pools) + RBD (2 pools)\n"
+        f"  Inject errors: {inject_errors}\n"
+        f"  Snapshot thrashing: CephFS + RBD (create, clone, flatten, delete)"
+        f"  OSDs to inject errors: {len(inject_osds)}"
+        f"  Writes to inject per OSD: {num_writes_to_inject}"
+        f"{'=' * 60}\n"
     )
     log.info(test_params)
 
-    # Archive existing crashes at start
     log.info("Archiving existing crashes...")
     rados_obj.run_ceph_command(cmd="ceph crash archive-all", client_exec=True)
     time.sleep(5)
     start_time = get_cluster_timestamp(rados_obj.node)
     log.debug(f"Test workflow started. Start time: {start_time}")
 
-    # Variables to track created resources
     created_pools = []
     test_failed = False
     fs_name = None
@@ -134,15 +190,12 @@ def run(ceph_cluster, **kw):
         # POOL CREATION PHASE - RADOS, CephFS, RBD (Parallel)
         log.info(f"\n{'=' * 60}\nSETUP PHASE\n{'=' * 60}")
 
-        # Get OSD list
         osd_list = rados_obj.get_osd_list(status="up")
         log.info(f"\nPool Creation Phase - RADOS, CephFS & RBD (Parallel)\n{'-' * 60}")
 
-        # Launch pool creation tasks in parallel
         with cf.ThreadPoolExecutor(max_workers=3) as pool_executor:
             log.info("Creating pools in parallel...")
 
-            # Submit all pool creation tasks
             rados_future = pool_executor.submit(create_rados_pools, rados_obj, config)
             cephfs_future = pool_executor.submit(
                 rados_obj.create_cephfs_filesystem_mount,
@@ -171,10 +224,6 @@ def run(ceph_cluster, **kw):
         log.info(f"\nTotal pools created: {len(created_pools)}")
         log.info("Pool creation phase completed (parallel execution)")
 
-        # Define compression algorithms for display
-        compression_algorithms = ["snappy", "zlib"]
-
-        # Enable compression on all pools if configured
         if compression:
             log.info("\n\nEnabling compression on all pools (mode=force)...\n")
             for idx, pool in enumerate(created_pools):
@@ -189,7 +238,6 @@ def run(ceph_cluster, **kw):
                 )
             log.info("\n\nCompression enabled on all pools\n")
 
-        # Print Pool Configuration Details
         log.info("=" * 70)
         log.info("POOL CONFIGURATION SUMMARY")
         log.info("=" * 70)
@@ -209,31 +257,86 @@ def run(ceph_cluster, **kw):
             log.info("")
 
         log.info("=" * 70)
-        # Wait for PGs to be active+clean after pool creation
         log.info("Checking PG states post pool creation...")
-        if not wait_for_clean_pg_sets(rados_obj, timeout=600):
+        if not wait_for_clean_pg_sets(rados_obj, timeout=600, recovery_thread=False):
             log.error("Not all PGs are active+clean")
             raise Exception("Not all PGs are active+clean post creation")
 
-        # Configure recovery settings for aggressive recovery
         log.info("Configuring aggressive recovery settings...")
         recovery_config = {"osd_max_backfills": 15, "osd_recovery_max_active": 20}
         rados_obj.change_recovery_threads(config=recovery_config, action="set")
 
+        if enable_debug_logs:
+            log.debug("Enabling debug logging for divergent log analysis...")
+            mon_obj.set_config(section="osd", name="debug_osd", value="20/20")
+            # mon_obj.set_config(section="osd", name="debug_bluestore", value="20/20")
+            # mon_obj.set_config(section="mgr", name="debug_mgr", value="20/20")
+            # mon_obj.set_config(section="mon", name="debug_mon", value="20/20")
+            # mon_obj.set_config(section="mds", name="debug_mds", value="20/20")
+            log.info("Debug logging enabled for daemons")
+
+        if inject_errors:
+            mon_obj.set_config(
+                section="global", name="bluestore_debug_inject_read_err", value="true"
+            )
+            # Get EC pools for injection
+            ec_pool_names = [
+                p["pool_name"] for p in created_pools if p.get("pool_type") == "erasure"
+            ]
+            if ec_pool_names:
+                for ec_pool in ec_pool_names:
+                    for osd_id in inject_osds:
+                        # injectecwriteerr <pool> <obj> <shard> <type> <skip> <inject>
+                        # shard=2, type=1 (drop sub write), skip=0
+                        inject_cmd = (
+                            f"cephadm shell -- ceph daemon osd.{osd_id} injectecwriteerr "
+                            f"{ec_pool} '*' 2 1 0 {num_writes_to_inject}"
+                        )
+                        try:
+                            osd_host = rados_obj.fetch_host_node(
+                                daemon_type="osd", daemon_id=str(osd_id)
+                            )
+                            out, _ = osd_host.exec_command(
+                                cmd=inject_cmd, sudo=True, check_ec=False
+                            )
+                            if "ok" in out.lower():
+                                log.info(
+                                    f"Injected on OSD.{osd_id} for {ec_pool}: {out.strip()}"
+                                )
+                            else:
+                                log.warning(
+                                    f"Injection failed on OSD.{osd_id} for {ec_pool}: {out.strip()}"
+                                )
+                        except Exception as e:
+                            log.warning(
+                                f"Failed to inject on OSD.{osd_id} for {ec_pool}: {e}"
+                            )
+                log.info(
+                    f"Injected EC write errors on {len(inject_osds)} OSDs "
+                    f"for {len(ec_pool_names)} pools: "
+                    f"{', '.join(str(osd) for osd in inject_osds)}"
+                )
+
+        mon_obj.set_config(
+            section="global", name="osd_max_markdown_count", value="99999999"
+        )
+
         log.info("Setup phase completed successfully")
 
-        # THRASHING PHASE
         log.info(f"\n{'=' * 60}\nTHRASHING PHASE\n{'=' * 60}")
 
         # Stop flag for coordinated shutdown of background threads
         stop_flag = {"stop": False}
-
-        # Launch background workload threads
         log.info("Launching background I/O workload threads...")
 
-        # Calculate worker count: 5 base threads + optional CRUSH + optional PG
+        reboot_osd = False if inject_errors else True
+
+        # Calculate worker count: 9 base threads + optional CRUSH + optional PG
+        # Base threads: rados bench, comprehensive I/O, CephFS FIO, RBD FIO,
+        #               OSD thrashing, CephFS snapshots, RBD snapshots, EC pool snapshots,
+        #               cluster health monitoring
         max_workers = (
-            5 + (1 if enable_crush_thrashing else 0) + (1 if enable_pg_thrashing else 0)
+            9 + (1 if enable_crush_thrashing else 0) + (1 if enable_pg_thrashing else 0)
         )
 
         with cf.ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -242,7 +345,11 @@ def run(ceph_cluster, **kw):
             # I/O workload burst thread (rados bench) - RADOS pools
             futures.append(
                 executor.submit(
-                    io_workload_burst, rados_obj, created_pools, duration, stop_flag
+                    io_workload_burst,
+                    rados_obj=rados_obj,
+                    pools=created_pools,
+                    duration=duration,
+                    stop_flag=stop_flag,
                 )
             )
 
@@ -250,10 +357,22 @@ def run(ceph_cluster, **kw):
             futures.append(
                 executor.submit(
                     comprehensive_io_workload,
-                    rados_obj,
-                    created_pools,
-                    duration,
-                    stop_flag,
+                    rados_obj=rados_obj,
+                    pools=created_pools,
+                    duration=duration,
+                    stop_flag=stop_flag,
+                )
+            )
+
+            # Cluster health monitoring thread
+            futures.append(
+                executor.submit(
+                    monitor_cluster_health,
+                    client_node=client_node,
+                    start_time=start_time,
+                    duration=duration,
+                    stop_flag=stop_flag,
+                    interval=30,
                 )
             )
 
@@ -261,11 +380,11 @@ def run(ceph_cluster, **kw):
             futures.append(
                 executor.submit(
                     _run_fio_workload,
-                    client_node,
-                    cephfs_mount_path,
-                    "cephfs",
-                    duration,
-                    stop_flag,
+                    client_node=client_node,
+                    mount_path=cephfs_mount_path,
+                    workload_name="cephfs",
+                    duration=duration,
+                    stop_flag=stop_flag,
                 )
             )
 
@@ -273,18 +392,61 @@ def run(ceph_cluster, **kw):
             futures.append(
                 executor.submit(
                     _run_fio_workload,
-                    client_node,
-                    rbd_mount_path,
-                    "rbd",
-                    duration,
-                    stop_flag,
+                    client_node=client_node,
+                    mount_path=rbd_mount_path,
+                    workload_name="rbd",
+                    duration=duration,
+                    stop_flag=stop_flag,
+                )
+            )
+
+            # CephFS snapshot thrashing (create, modify, rollback)
+            futures.append(
+                executor.submit(
+                    thrash_cephfs_snapshots,
+                    client_node=client_node,
+                    mount_path=cephfs_mount_path,
+                    duration=duration,
+                    stop_flag=stop_flag,
+                )
+            )
+
+            # RBD snapshot thrashing (create, clone, write to clones)
+            futures.append(
+                executor.submit(
+                    thrash_rbd_snapshots,
+                    client_node=client_node,
+                    pool_name="rbd-thrash-metadata",
+                    image_name="thrash-test-image",
+                    duration=duration,
+                    stop_flag=stop_flag,
+                )
+            )
+
+            # EC pool snapshot thrashing
+            # Uses RADOS-level snapshots + partial writes to trigger BlueStore clones
+            # Clone log → ALL shards, write data → SOME shards
+            futures.append(
+                executor.submit(
+                    thrash_ec_pool_snapshots,
+                    rados_obj=rados_obj,
+                    pools=created_pools,
+                    duration=duration,
+                    stop_flag=stop_flag,
+                    reboot_osd=reboot_osd,
                 )
             )
 
             # OSD thrashing thread (main thrashing operation)
             futures.append(
                 executor.submit(
-                    thrash_osds, rados_obj, osd_list, iterations, aggressive, stop_flag
+                    thrash_osds,
+                    rados_obj=rados_obj,
+                    osd_list=osd_list,
+                    iterations=iterations,
+                    aggressive=aggressive,
+                    stop_flag=stop_flag,
+                    reboot_osd=reboot_osd,
                 )
             )
 
@@ -294,10 +456,10 @@ def run(ceph_cluster, **kw):
                 futures.append(
                     executor.submit(
                         thrash_crush_weights,
-                        rados_obj,
-                        osd_list,
-                        iterations // 2,
-                        stop_flag,
+                        rados_obj=rados_obj,
+                        osd_list=osd_list,
+                        iterations=iterations // 2,
+                        stop_flag=stop_flag,
                     )
                 )
 
@@ -307,18 +469,15 @@ def run(ceph_cluster, **kw):
                 futures.append(
                     executor.submit(
                         thrash_pg_count,
-                        rados_obj,
-                        pool_obj,
-                        created_pools,
-                        iterations // 3,
-                        stop_flag,
+                        rados_obj=rados_obj,
+                        pool_obj=pool_obj,
+                        pools=created_pools,
+                        iterations=iterations // 3,
+                        stop_flag=stop_flag,
                     )
                 )
 
-            # Monitor thrashing operations with efficient waiting
             log.info(f"Thrashing operations in progress (max duration: {duration}s)...")
-
-            # Use as_completed with timeout for efficient monitoring
             try:
                 for future in cf.as_completed(futures, timeout=duration):
                     log.debug("A thrashing thread completed")
@@ -348,23 +507,35 @@ def run(ceph_cluster, **kw):
                     result = future.result()
                     log.debug(f"Thread completed with result: {result}")
                 except Exception as e:
-                    log.error(f"Thread failed with exception: {e}")
-                    test_failed = True
+                    log.warning(f"Thread had exception (non-fatal): {e}")
 
         log.info("Thrashing phase completed")
-
-        # VALIDATION PHASE
         log.info(f"\n{'=' * 60}\nVALIDATION PHASE\n{'=' * 60}")
 
-        # Wait for PGs to be active+clean (this includes stabilization time)
         log.info("Waiting for PGs to reach active+clean state...")
-        if not wait_for_clean_pg_sets(rados_obj, timeout=600):
+        if not wait_for_clean_pg_sets(rados_obj, timeout=600, recovery_thread=False):
             log.error("Not all PGs are active+clean")
             raise Exception("Not all PGs are active+clean")
 
-        # Check cluster health
-        log.info("Checking cluster health and PG states...")
         rados_obj.log_cluster_health()
+
+        if enable_debug_logs:
+            # Analyze OSD logs for divergent PG log patterns
+            log.info("Analyzing OSD logs for divergent PG log patterns...")
+            test_end_time = get_cluster_timestamp(rados_obj.node)
+            divergent_results = analyze_osd_logs_for_divergent_patterns(
+                rados_obj, start_time, test_end_time
+            )
+            if divergent_results.get("merge_divergent_entries", 0) > 0:
+                log.warning(
+                    "Detected %s divergent entry merge operations!",
+                    divergent_results["merge_divergent_entries"],
+                )
+            if divergent_results.get("clone_operations", 0) > 0:
+                log.info(
+                    "Detected %s clone operations (good for divergent log testing)",
+                    divergent_results["clone_operations"],
+                )
 
         log.info("\nValidation phase completed")
 
@@ -375,19 +546,53 @@ def run(ceph_cluster, **kw):
 
     finally:
         # CLEANUP PHASE
-        log.info(f"\n{'=' * 60}\nCLEANUP PHASE\n{'=' * 60}")
+        log.info(f"\n{'=' * 60}\n----------IN FINALLY BLOCK----------\n{'=' * 60}")
 
         # Reset recovery settings to defaults
         log.info("Resetting recovery settings to defaults...")
         rados_obj.change_recovery_threads(config={}, action="rm")
 
-        # Clean up resources (if configured)
+        if enable_debug_logs:
+            # Remove debug logging configs
+            log.info("Removing debug logging configs...")
+            mon_obj.remove_config(section="osd", name="debug_osd")
+            # mon_obj.remove_config(section="osd", name="debug_bluestore")
+            # mon_obj.remove_config(section="mgr", name="debug_mgr")
+            # mon_obj.remove_config(section="mon", name="debug_mon")
+            # mon_obj.remove_config(section="mds", name="debug_mds")
+            log.info("Debug logging configs removed")
+
+        if inject_errors:
+            log.info("Removing EC write error injection config...")
+            mon_obj.remove_config(
+                section="global", name="bluestore_debug_inject_read_err"
+            )
+
+        # Restore any OSDs that are out or down
+        log.info("Checking for OSDs that need restoration...")
+        try:
+            osd_tree = rados_obj.run_ceph_command(cmd="ceph osd tree")
+            osds_to_restore = [
+                node.get("id")
+                for node in osd_tree.get("nodes", [])
+                if node.get("type") == "osd"
+                and (node.get("reweight", 1.0) == 0 or node.get("status") == "down")
+            ]
+            mon_obj.remove_config(
+                section="global",
+                name="osd_max_markdown_count",
+                verify_rm=False,
+            )
+            if osds_to_restore:
+                _restore_osds_to_in(rados_obj, osds_to_restore)
+            else:
+                log.info("All OSDs are healthy, no restoration needed")
+        except Exception as e:
+            log.warning(f"Failed to check/restore OSDs: {e}")
+
         if config.get("cleanup_pools", True) and created_pools:
             log.debug("Cleaning up test resources...")
-
-            # Parallel cleanup of CephFS and RBD
             with cf.ThreadPoolExecutor(max_workers=2) as cleanup_executor:
-                # Submit cleanup tasks
                 cephfs_cleanup = (
                     cleanup_executor.submit(
                         _cleanup_cephfs, client_node, cephfs_mount_path, fs_name
@@ -417,7 +622,6 @@ def run(ceph_cluster, **kw):
                     except Exception as e:
                         log.warning(f"RBD cleanup failed: {e}")
 
-            # Clean up rados pools sequentially (depends on CephFS/RBD cleanup)
             log.info(f"Deleting {len(created_pools)} pool(s)...")
             failed_pools = []
 
@@ -441,7 +645,6 @@ def run(ceph_cluster, **kw):
         test_end_time = get_cluster_timestamp(rados_obj.node)
         log.debug(f"Test completed. Start: {start_time}, End: {test_end_time}")
 
-        # Final crash check - fail if any crashes detected
         try:
             if rados_obj.check_crash_status(
                 start_time=start_time, end_time=test_end_time
@@ -452,9 +655,36 @@ def run(ceph_cluster, **kw):
             log.error(f"Crash check failed: {e}")
             test_failed = True
 
+        if enable_debug_logs:
+            log.info("Forcing log rotation on OSD nodes...")
+            try:
+                fsid_result = rados_obj.run_ceph_command(cmd="ceph fsid")
+                fsid = (
+                    fsid_result.get("fsid")
+                    if isinstance(fsid_result, dict)
+                    else fsid_result
+                )
+                if fsid:
+                    logrotate_cmd = f"logrotate -f /etc/logrotate.d/ceph-{fsid}"
+                    osd_hosts = rados_obj.get_osd_hosts()
+                    for host in osd_hosts:
+                        try:
+                            host.exec_command(
+                                cmd=logrotate_cmd,
+                                sudo=True,
+                                check_ec=False,
+                                long_running=True,
+                            )
+                            time.sleep(10)
+                            log.debug(f"Log rotation completed on {host.hostname}")
+                        except Exception:
+                            pass
+                    log.info(f"Log rotation triggered on {len(osd_hosts)} OSD host(s)")
+            except Exception as e:
+                log.warning(f"Failed to rotate logs: {e}")
+
         log.info("Cleanup phase completed")
 
-    # TEST RESULT
     log.info(f"\n{'=' * 60}\nTEST RESULT\n{'=' * 60}")
 
     if test_failed:
@@ -611,7 +841,17 @@ def comprehensive_io_workload(
     """
     Run comprehensive I/O with various object sizes and operations on RADOS pools.
 
-    Creates objects with unique names per iteration to avoid conflicts.
+    Uses create_comprehensive_test_objects() which creates objects with:
+    - Sub-chunk writes (4KB, 8KB, 12KB objects)
+    - Single chunk writes (16KB, 32KB objects)
+    - Multi-chunk writes (48KB, 64KB objects)
+    - Full stripe writes (96KB, 128KB objects)
+    - Multi-stripe writes (192KB, 256KB objects)
+    - Overwrites and appends on existing objects
+    - Truncate operations
+
+    These operations create partial writes that trigger BlueStore clones
+    when snapshots exist on the pool.
 
     Args:
         rados_obj: RadosOrchestrator object
@@ -660,58 +900,172 @@ def comprehensive_io_workload(
     return iteration
 
 
+def monitor_cluster_health(
+    client_node, start_time: str, duration: int, stop_flag: dict, interval: int = 30
+) -> int:
+    """
+    Periodically log `ceph health detail` and `ceph -s` with elapsed time.
+
+    Args:
+        client_node: Client node to execute ceph commands
+        start_time: Test start timestamp (from get_cluster_timestamp)
+        duration: Total duration in seconds
+        stop_flag: Dict with 'stop' key to signal early termination
+        interval: Seconds between health checks (default: 30)
+
+    Returns:
+        Number of health checks completed
+    """
+    log.info(f"Starting cluster health monitoring (interval: {interval}s)")
+
+    # Parse start_time for elapsed calculation
+    try:
+        fmt = "%Y-%m-%dT%H:%M:%S" if "T" in start_time else "%Y-%m-%d %H:%M:%S"
+        test_start_dt = datetime.strptime(start_time.split(".")[0], fmt)
+    except ValueError:
+        test_start_dt = datetime.now()
+
+    check_count, end_time, commands = (
+        0,
+        time.time() + duration,
+        ("ceph health detail", "ceph -s"),
+    )
+
+    while time.time() < end_time and not stop_flag.get("stop"):
+        now = datetime.now()
+        elapsed = str(now - test_start_dt).split(".")[0]
+
+        log.info(
+            f"\n{'=' * 60}\n"
+            f"HEALTH STATUS: #{check_count + 1} | {now:%Y-%m-%d %H:%M:%S} | "
+            f"Elapsed: {elapsed}\n"
+        )
+
+        for cmd in commands:
+            try:
+                out, _ = client_node.exec_command(cmd=cmd, sudo=True, timeout=60)
+                log.info(f"[{cmd}]\n{out.strip()}")
+            except Exception as e:
+                log.warning(f"Failed '{cmd}': {e}")
+
+        log.info(f"\n{'=' * 60}\n")
+        check_count += 1
+
+        # Wait for next interval, checking stop_flag every 5s
+        for _ in range(interval // 5):
+            if stop_flag.get("stop") or time.time() >= end_time:
+                break
+            time.sleep(5)
+
+    log.info(f"Cluster health monitoring completed: {check_count} checks")
+    return check_count
+
+
 def _run_fio_workload(
     client_node, mount_path: str, workload_name: str, duration: int, stop_flag: Dict
 ) -> int:
     """
-    Run FIO workload with file creation and deletion on a pre-mounted filesystem.
+    Run comprehensive FIO workload with writes, overwrites, partial writes, reads.
+
+    Performs multiple phases per iteration:
+    1. Initial writes (create files)
+    2. Create snapshot (CephFS only - enables clone-on-write)
+    3. Overwrites AFTER snapshot (triggers BlueStore clones)
+    4. Partial writes AFTER snapshot (triggers BlueStore clones)
+    5. Mixed read/write (reads expose corruption)
+    6. Delete ~20% of files
+    7. Delete ~20% of snapshots (CephFS only)
+
+    Note: For RBD, clone-on-write is handled by thrash_rbd_snapshots which
+    creates RBD-level snapshots on the image. FIO writes to the mounted
+    RBD image will trigger clones when those snapshots exist.
 
     Args:
         client_node: Client node to execute FIO
         mount_path: Mount path
-        workload_name: Name for the workload (for logging)
+        workload_name: Name for the workload (for logging) - "cephfs" or "rbd"
         duration: Total duration in seconds
         stop_flag: Dict with 'stop' key to signal early termination
 
     Returns:
         Number of FIO runs completed
     """
-    log.info(
-        f"Starting FIO workload ({workload_name}) with file create/delete on: {mount_path}"
-    )
-    runs = 0
-    end_time = time.time() + duration
+    log.info(f"Starting FIO workload ({workload_name}) on: {mount_path}")
+    runs, end_time = 0, time.time() + duration
+    work_dir = f"{mount_path}/fio_{workload_name}"
+    is_cephfs = workload_name == "cephfs"
+    snap_dir, all_snaps = (f"{work_dir}/.snap", []) if is_cephfs else (None, [])
 
-    # FIO command with file creation and deletion
-    # - create_on_open=1: Create files on open
-    # - unlink=1: Delete files after completion
-    # - nrfiles=10: Use 10 files per job
-    # - file_service_type=random: Random file selection for more churn
-    fio_cmd = (
-        f"fio --name={workload_name}-thrash --directory={mount_path} "
-        "--rw=randrw --bs=4k --size=100M --numjobs=4 --ioengine=libaio --direct=1 "
-        "--runtime=30 --time_based --group_reporting "
-        "--create_on_open=1 --unlink=1 --nrfiles=10 --file_service_type=random"
+    client_node.exec_command(cmd=f"mkdir -p {work_dir}", sudo=True, check_ec=False)
+
+    # FIO commands with shared base options
+    base = (
+        f"--directory={work_dir} --size=50M --numjobs=4 --ioengine=libaio "
+        "--direct=1 --time_based --group_reporting --nrfiles=20"
     )
+    fio_cmds = [
+        f"fio --name={workload_name}-write {base} --rw=write --bs=64k --runtime=15 --create_on_open=1",
+        f"fio --name={workload_name}-overwrite {base} --rw=write --bs=64k --runtime=10 --overwrite=1",
+        f"fio --name={workload_name}-partial {base} --rw=randwrite --bs=4k --runtime=15 --overwrite=1",
+        f"fio --name={workload_name}-mixed {base} --rw=randrw --rwmixread=70 --bs=4k --runtime=15 --overwrite=1",
+    ]
 
     try:
-        # Run FIO in loop (each run creates and deletes files)
-        while time.time() < end_time:
-            if stop_flag.get("stop"):
-                break
-
+        while time.time() < end_time and not stop_flag.get("stop"):
             runs += 1
-            client_node.exec_command(cmd=fio_cmd, sudo=True, check_ec=False)
+            log.debug(f"FIO {workload_name} iteration {runs}")
+
+            # Phase 1: Initial writes (create files)
+            client_node.exec_command(cmd=fio_cmds[0], sudo=True, check_ec=False)
+            if stop_flag.get("stop"):
+                break
+
+            # Phase 2: Create CephFS snapshot (enables clone-on-write for subsequent writes)
+            if is_cephfs:
+                snap_name = f"fio_snap_{runs}_{int(time.time())}"
+                client_node.exec_command(
+                    cmd=f"mkdir -p {snap_dir}/{snap_name}", sudo=True, check_ec=False
+                )
+                all_snaps.append(snap_name)
+                log.debug(f"Created CephFS snapshot: {snap_name}")
+
+            # Phases 3-5: Overwrites, partial writes, mixed I/O (trigger clones after snapshot)
+            for cmd in fio_cmds[1:]:
+                if stop_flag.get("stop"):
+                    break
+                client_node.exec_command(cmd=cmd, sudo=True, check_ec=False)
 
             if stop_flag.get("stop"):
                 break
-            time.sleep(random.uniform(5, 10))
 
-        log.info(f"FIO {workload_name} workload completed: {runs} runs")
+            # Phase 6: Delete ~20% of files
+            delete_cmd = (
+                f"find {work_dir} -maxdepth 1 -type f 2>/dev/null | "
+                "awk 'BEGIN{srand()} {if(rand()<0.2) print}' | xargs -r rm -f"
+            )
+            client_node.exec_command(
+                cmd=delete_cmd,
+                sudo=True,
+                check_ec=False,
+            )
+
+            # Phase 7: Delete ~20% of snapshots (CephFS only)
+            if is_cephfs and all_snaps and random.random() < 0.2:
+                snap = random.choice(all_snaps)
+                client_node.exec_command(
+                    cmd=f"rmdir {snap_dir}/{snap} 2>/dev/null || true",
+                    sudo=True,
+                    check_ec=False,
+                )
+                all_snaps.remove(snap)
+
+            time.sleep(random.uniform(2, 5))
+
+        snap_info = f", {len(all_snaps)} snapshots" if is_cephfs else ""
+        log.info(f"FIO {workload_name} completed: {runs} iterations{snap_info}")
         return runs
-
     except Exception as e:
-        log.warning(f"FIO {workload_name} workload error: {e}")
+        log.warning(f"FIO {workload_name} error: {e}")
         return runs
 
 
@@ -724,6 +1078,9 @@ def _restore_osds_to_in(rados_obj: RadosOrchestrator, osd_ids: List[int]) -> Non
     for osd_id in osd_ids:
         try:
             rados_obj.update_osd_state_on_cluster(osd_id=osd_id, state="in")
+            rados_obj.client.exec_command(
+                cmd=f"ceph orch daemon start osd.{osd_id}", sudo=True
+            )
             time.sleep(5)
         except Exception as e:
             log.error(f"Failed to restore OSD.{osd_id}: {e}")
@@ -735,16 +1092,28 @@ def thrash_osds(
     iterations: int,
     aggressive: bool,
     stop_flag: Dict,
+    reboot_osd: bool = False,
 ) -> int:
     """
-    Thrash OSDs by marking out/in to trigger PG remapping.
-    Ensures all OSDs are marked back 'in' when stop signal is received.
+    Thrash OSDs by marking out/in and stopping/starting to trigger peering events.
+
+    Per iteration:
+    1. Select 1-3 random OSDs
+    2. Mark each OSD out (ceph osd out)
+    3. Stop each OSD daemon (ceph orch daemon stop)
+    4. Wait (3-6s normal, 8-15s aggressive)
+    5. Mark each OSD in (ceph osd in)
+    6. Start each OSD daemon (ceph orch daemon start)
+
+    The OSD state transitions during active I/O create peering events. When
+    combined with EC pool snapshots (thrash_ec_pool_snapshots), this creates
+    conditions for divergent PG logs that can trigger the bug.
 
     Args:
         rados_obj: RadosOrchestrator object
         osd_list: List of OSD IDs
         iterations: Number of thrashing iterations
-        aggressive: Enable aggressive mode (long waits between iterations)
+        aggressive: Enable aggressive mode (longer waits for recovery stress)
         stop_flag: Dict with 'stop' key to signal early termination
 
     Returns:
@@ -754,9 +1123,9 @@ def thrash_osds(
         f"Starting OSD thrashing (iterations: {iterations}, aggressive: {aggressive})"
     )
 
-    # Pre-calculate sleep ranges and max OSDs to thrash
-    sleep_duration = (8, 15) if aggressive else (3, 6)
-    max_to_thrash = max(1, min(3, len(osd_list) // 3))
+    # Pre-calculate parameters
+    sleep_duration = (2, 4) if aggressive else (3, 6)
+    max_to_thrash = min(random.choice([1, 2]), len(osd_list))
 
     completed = 0
     osds_currently_out = []
@@ -766,36 +1135,60 @@ def thrash_osds(
             if stop_flag.get("stop"):
                 break
 
-            # Select random OSDs to thrash
-            osds_to_thrash = random.sample(osd_list, random.randint(1, max_to_thrash))
+            # Select random OSDs to thrash (ensure we don't sample more than available)
+            num_to_thrash = random.randint(1, max_to_thrash)
+            osds_to_thrash = random.sample(osd_list, num_to_thrash)
             log.info(
                 f"Iteration {iteration + 1}/{iterations}: Thrashing {osds_to_thrash}"
             )
 
+            # Mark OSDs out and stop them
             for osd_id in osds_to_thrash:
+                # Add to tracking list BEFORE making changes
+                if osd_id not in osds_currently_out:
+                    osds_currently_out.append(osd_id)
+
                 rados_obj.update_osd_state_on_cluster(osd_id=osd_id, state="out")
-                osds_currently_out.append(osd_id)
+                if reboot_osd:
+                    rados_obj.client.exec_command(
+                        cmd=f"ceph orch daemon stop osd.{osd_id}", sudo=True
+                    )
 
-                # Sleep after marking out
-                time.sleep(random.uniform(*sleep_duration))
+                if stop_flag.get("stop"):
+                    break
 
-                # Mark in
-                rados_obj.update_osd_state_on_cluster(osd_id=osd_id, state="in")
-                osds_currently_out.remove(osd_id)
-
-                # Short sleep after marking in
-                time.sleep(random.uniform(*sleep_duration))
-
-            completed += 1
-
-            # Sleep between iterations
+            # Wait while OSDs are down (allows I/O to continue on degraded PGs)
             time.sleep(random.uniform(*sleep_duration))
 
+            # Bring OSDs back in - ALWAYS restore all OSDs that were marked out this iteration
+            for osd_id in osds_to_thrash:
+                try:
+                    rados_obj.update_osd_state_on_cluster(osd_id=osd_id, state="in")
+                    if reboot_osd:
+                        rados_obj.client.exec_command(
+                            cmd=f"ceph orch daemon start osd.{osd_id}", sudo=True
+                        )
+                    if osd_id in osds_currently_out:
+                        osds_currently_out.remove(osd_id)
+                except Exception as e:
+                    log.warning(f"Failed to restore OSD.{osd_id} in iteration: {e}")
+
+            # Check stop flag AFTER restoration, not during
+            if stop_flag.get("stop"):
+                break
+
+            # Wait for recovery to start
+            time.sleep(random.uniform(1, 3))
+
+            completed += 1
+            time.sleep(random.uniform(2, 5))
+
     finally:
-        # restore any OSDs still marked out
+        # Restore any OSDs still marked out
         if osds_currently_out:
             log.info(f"Restoring {len(osds_currently_out)} OSD(s) to 'in' state...")
             _restore_osds_to_in(rados_obj, osds_currently_out)
+            osds_currently_out.clear()
 
     log.info(f"OSD thrashing completed: {completed} iterations")
     return completed
@@ -819,8 +1212,16 @@ def thrash_crush_weights(
     rados_obj: RadosOrchestrator, osd_list: List[int], iterations: int, stop_flag: Dict
 ) -> int:
     """
-    Thrash CRUSH weights to force data movement.
-    Fetches original weights and restores them when stop signal is received.
+    Thrash CRUSH weights to force data movement and trigger backfill/recovery.
+
+    Per iteration:
+    1. Select random OSD
+    2. Reduce CRUSH weight to 50% (triggers data migration)
+    3. Wait 30-60 seconds
+    4. Restore original weight (triggers reverse migration)
+
+    This creates additional stress by forcing data movement during other
+    thrashing operations, increasing chances of catching race conditions.
 
     Args:
         rados_obj: RadosOrchestrator object
@@ -860,12 +1261,16 @@ def thrash_crush_weights(
             )
 
             # Reduce weight to 50%
-            rados_obj.run_ceph_command(
-                cmd=f"ceph osd crush reweight osd.{osd_id} {original_weight * 0.5}",
-                client_exec=True,
-            )
-            current_modified_osd = osd_id
-            current_original_weight = original_weight
+            try:
+                rados_obj.run_ceph_command(
+                    cmd=f"ceph osd crush reweight osd.{osd_id} {original_weight * 0.5}",
+                    client_exec=True,
+                )
+                current_modified_osd = osd_id
+                current_original_weight = original_weight
+            except Exception as e:
+                log.warning(f"Failed to reduce weight for OSD.{osd_id}: {e}")
+                continue
 
             # Sleep with reduced weight
             time.sleep(random.uniform(30, 60))
@@ -899,10 +1304,20 @@ def thrash_pg_count(
     stop_flag: Dict,
 ) -> int:
     """
-    Thrash PG count by enabling/disabling bulk flag to trigger PG splits/merges.
-    Removes bulk flag when stop signal is received.
+    Thrash PG count via bulk flag and trigger scrubbing to detect inconsistencies.
 
-    Also triggers scrubbing & deep scrubbing on all pools
+    Per iteration:
+    1. Enable bulk flag on all pools (triggers PG split)
+    2. Run cluster-wide deep-scrub
+    3. Wait 90-120 seconds for splits and deep-scrub
+    4. Remove bulk flag from all pools (triggers PG merge)
+    5. Run cluster-wide scrub
+    6. Wait 90-120 seconds for merges and scrub
+
+    Deep-scrub and scrub operations are critical for detecting:
+    - Missing EC shard objects (from bug #74221)
+    - Data inconsistencies from incorrect clones
+    - Object mismatches between shards
 
     Args:
         rados_obj: RadosOrchestrator object
@@ -948,14 +1363,15 @@ def thrash_pg_count(
                 f"Iteration {iteration + 1}/{iterations}: PG thrashing and deep scrubbing on all pools"
             )
 
-            # Phase 1: Enable bulk flag and deep scrub on ALL pools
+            # Phase 1: Enable bulk flag on ALL pools
             for pool in rados_pools:
                 pool_name = pool["pool_name"]
                 pool_obj.set_bulk_flag(pool_name=pool_name)
                 bulk_enabled_pools.append(pool_name)
-                rados_obj.run_deep_scrub(pool=pool_name)
 
+            # Trigger cluster-wide deep scrub once (not per-pool)
             if bulk_enabled_pools:
+                rados_obj.run_deep_scrub()
                 pool_count = len(bulk_enabled_pools)
                 log.info(
                     f"  Enabled bulk on {pool_count} pool(s), sleeping for PG splits and deep scrubbing..."
@@ -964,14 +1380,16 @@ def thrash_pg_count(
                 # Phase 2: Sleep while ALL pools split PGs simultaneously and deep scrubbing
                 time.sleep(random.uniform(90, 120))
 
-                # Phase 3: Remove bulk flag from ALL pools and scrub PGs
+                # Phase 3: Remove bulk flag from ALL pools
                 log.info(
-                    f"  Removing bulk from {pool_count} pool(s) and scrubbing PGs..."
+                    f"  Removing bulk from {pool_count} pool(s) and triggering scrub..."
                 )
                 for pool_name in bulk_enabled_pools:
                     pool_obj.rm_bulk_flag(pool_name=pool_name)
-                    rados_obj.run_scrub(pool=pool_name)
                 bulk_enabled_pools.clear()
+
+                # Trigger cluster-wide scrub once (not per-pool)
+                rados_obj.run_scrub()
 
                 # Phase 4: Sleep for PG merges and scrubbing
                 log.info(
@@ -996,6 +1414,624 @@ def thrash_pg_count(
 
     log.info(f"PG count thrashing and scrubbing completed: {completed} iterations")
     return completed
+
+
+def thrash_cephfs_snapshots(
+    client_node, mount_path: str, duration: int, stop_flag: Dict
+) -> int:
+    """
+    Thrash CephFS snapshots with parallel operations to amplify clone triggers.
+
+    Creates MULTIPLE snapshots per iteration, then performs parallel writes
+    (each write triggers clone for EACH existing snapshot). Deletes ~20% of
+    snapshots to add variety.
+
+    Args:
+        client_node: Client node to execute commands
+        mount_path: CephFS mount path
+        duration: Total duration in seconds
+        stop_flag: Dict with 'stop' key to signal early termination
+
+    Returns:
+        Number of snapshot operations completed
+    """
+    log.info(f"Starting CephFS snapshot thrashing on: {mount_path}")
+    ops_completed, end_time, iteration = 0, time.time() + duration, 0
+    all_snaps = []  # Track (test_dir, snap_name) tuples
+
+    try:
+        while time.time() < end_time and not stop_flag.get("stop"):
+            iteration += 1
+            ts = int(time.time())
+            test_dir = f"{mount_path}/snap_test_{iteration}_{ts}"
+            snap_dir = f"{test_dir}/.snap"
+
+            # Create test directory and files in parallel
+            client_node.exec_command(
+                cmd=f"mkdir -p {test_dir}", sudo=True, check_ec=False
+            )
+            with cf.ThreadPoolExecutor(max_workers=5) as executor:
+                futures = [
+                    executor.submit(
+                        client_node.exec_command,
+                        cmd=f"dd if=/dev/urandom of={test_dir}/file{i}.dat bs=1M count=3 conv=fsync 2>/dev/null",
+                        sudo=True,
+                        check_ec=False,
+                    )
+                    for i in range(5)
+                ]
+                for f in futures:
+                    try:
+                        f.result(timeout=60)
+                        ops_completed += 1
+                    except Exception:
+                        pass
+
+            if stop_flag.get("stop"):
+                break
+
+            # Create 5 snapshots with writes between them (triggers clones)
+            snap_names = []
+            for s in range(5):
+                snap_name = f"snap{s}_{iteration}_{ts}"
+                try:
+                    client_node.exec_command(
+                        cmd=f"mkdir -p {snap_dir}/{snap_name}",
+                        sudo=True,
+                        check_ec=False,
+                    )
+                    snap_names.append(snap_name)
+                    all_snaps.append((test_dir, snap_name))
+                    ops_completed += 1
+                except Exception:
+                    pass
+                # Write between snapshots (triggers clone for previous snaps)
+                if s < 4:
+                    try:
+                        write_cmd = (
+                            f"dd if=/dev/urandom of={test_dir}/file{s}.dat "
+                            "bs=64K count=1 conv=notrunc,fsync 2>/dev/null"
+                        )
+                        client_node.exec_command(
+                            cmd=write_cmd,
+                            sudo=True,
+                            check_ec=False,
+                        )
+                        ops_completed += 1
+                    except Exception:
+                        pass
+
+            if stop_flag.get("stop"):
+                break
+
+            # Parallel operations: writes, truncate, append
+            with cf.ThreadPoolExecutor(max_workers=8) as executor:
+                cmds = [
+                    *[
+                        f"dd if=/dev/urandom of={test_dir}/file{i}.dat bs=32K count=1 conv=notrunc,fsync 2>/dev/null"
+                        for i in range(5)
+                    ],
+                    f"truncate -s 512K {test_dir}/file0.dat",
+                    f"dd if=/dev/urandom bs=8K count=1 >> {test_dir}/file1.dat 2>/dev/null",
+                    f"dd if=/dev/urandom of={test_dir}/file2.dat bs=16K count=1 conv=notrunc,fsync 2>/dev/null",
+                ]
+                futures = [
+                    executor.submit(
+                        client_node.exec_command, cmd=c, sudo=True, check_ec=False
+                    )
+                    for c in cmds
+                ]
+                for f in futures:
+                    try:
+                        f.result(timeout=30)
+                        ops_completed += 1
+                    except Exception:
+                        pass
+
+            # Rollback from random snapshot
+            if snap_names:
+                snap = random.choice(snap_names)
+                try:
+                    client_node.exec_command(
+                        cmd=f"cp {snap_dir}/{snap}/file0.dat {test_dir}/file0_restored.dat",
+                        sudo=True,
+                        check_ec=False,
+                    )
+                    ops_completed += 1
+                except Exception:
+                    pass
+
+            # Parallel reads + list snapshots
+            with cf.ThreadPoolExecutor(max_workers=6) as executor:
+                read_cmds = [
+                    f"cat {test_dir}/file{i}.dat > /dev/null" for i in range(5)
+                ]
+                read_cmds.append(f"ls -la {snap_dir}/")
+                futures = [
+                    executor.submit(
+                        client_node.exec_command, cmd=c, sudo=True, check_ec=False
+                    )
+                    for c in read_cmds
+                ]
+                for f in futures:
+                    try:
+                        f.result(timeout=30)
+                        ops_completed += 1
+                    except Exception:
+                        pass
+
+            # Delete ~20% of snapshots
+            if all_snaps and random.random() < 0.2:
+                snap_to_delete = random.choice(all_snaps)
+                try:
+                    client_node.exec_command(
+                        cmd=f"rmdir {snap_to_delete[0]}/.snap/{snap_to_delete[1]}",
+                        sudo=True,
+                        check_ec=False,
+                    )
+                    all_snaps.remove(snap_to_delete)
+                    ops_completed += 1
+                    log.debug(f"Deleted snapshot: {snap_to_delete[1]}")
+                except Exception:
+                    pass
+
+            log.debug(
+                f"Iteration {iteration}: {len(snap_names)} new snaps, {len(all_snaps)} total"
+            )
+            time.sleep(random.uniform(1, 3))
+
+    except Exception as e:
+        log.warning(f"CephFS snapshot thrashing error: {e}")
+
+    log.info(
+        f"CephFS snapshot thrashing completed: {ops_completed} ops, {len(all_snaps)} snapshots"
+    )
+    return ops_completed
+
+
+def thrash_rbd_snapshots(
+    client_node,
+    pool_name: str,
+    image_name: str,
+    duration: int,
+    stop_flag: Dict,
+) -> int:
+    """
+    Thrash RBD snapshots with parallel operations to amplify clone triggers.
+
+    Creates MULTIPLE snapshots per iteration, performs parallel writes (each
+    write triggers clone for ALL existing snapshots), creates clones from
+    snapshots, and deletes ~20% of snapshots.
+
+    Args:
+        client_node: Client node to execute commands
+        pool_name: RBD pool name (metadata pool)
+        image_name: Existing RBD image name
+        duration: Total duration in seconds
+        stop_flag: Dict with 'stop' key to signal early termination
+
+    Returns:
+        Number of snapshot operations completed
+    """
+    log.info(f"Starting RBD snapshot thrashing on {pool_name}/{image_name}")
+    ops_completed, end_time, iteration = 0, time.time() + duration, 0
+    all_clones, all_snaps = [], []  # clones list, (snap_name, is_protected) tuples
+
+    try:
+        while time.time() < end_time and not stop_flag.get("stop"):
+            iteration += 1
+            ts = int(time.time())
+
+            # Create 4 snapshots with writes between them (triggers clones)
+            new_snaps = []
+            for s in range(4):
+                if stop_flag.get("stop"):
+                    break
+                snap_name = f"snap{s}_{iteration}_{ts}"
+                try:
+                    client_node.exec_command(
+                        cmd=f"rbd snap create {pool_name}/{image_name}@{snap_name}",
+                        sudo=True,
+                        check_ec=False,
+                    )
+                    new_snaps.append(snap_name)
+                    all_snaps.append((snap_name, False))
+                    ops_completed += 1
+                except Exception:
+                    pass
+                # Write between snapshots (triggers clone for previous snaps)
+                if s < 3:
+                    try:
+                        client_node.exec_command(
+                            cmd=f"rbd bench {pool_name}/{image_name} --io-type write --io-size 4K --io-total 256K",
+                            sudo=True,
+                            check_ec=False,
+                        )
+                        ops_completed += 1
+                    except Exception:
+                        pass
+
+            if stop_flag.get("stop"):
+                break
+
+            # Parallel writes after all snapshots (each write triggers clone for all snaps)
+            with cf.ThreadPoolExecutor(max_workers=4) as executor:
+                cmd = f"rbd bench {pool_name}/{image_name} --io-type write --io-size 4K --io-total 512K"
+                futures = [
+                    executor.submit(
+                        client_node.exec_command, cmd=cmd, sudo=True, check_ec=False
+                    )
+                    for _ in range(4)
+                ]
+                for f in futures:
+                    try:
+                        f.result(timeout=60)
+                        ops_completed += 1
+                    except Exception:
+                        pass
+
+            # Protect random snapshots and create clones
+            unprotected = [(s, p) for s, p in all_snaps if not p]
+            if len(unprotected) >= 2:
+                for snap_name, _ in random.sample(
+                    unprotected, min(2, len(unprotected))
+                ):
+                    try:
+                        client_node.exec_command(
+                            cmd=f"rbd snap protect {pool_name}/{image_name}@{snap_name}",
+                            sudo=True,
+                            check_ec=False,
+                        )
+                        all_snaps = [
+                            (s, True) if s == snap_name else (s, p)
+                            for s, p in all_snaps
+                        ]
+                        ops_completed += 1
+                        # Create clone from protected snapshot
+                        clone_name = f"clone_{snap_name}"
+                        client_node.exec_command(
+                            cmd=f"rbd clone {pool_name}/{image_name}@{snap_name} {pool_name}/{clone_name}",
+                            sudo=True,
+                            check_ec=False,
+                        )
+                        all_clones.append(clone_name)
+                        ops_completed += 1
+                    except Exception:
+                        pass
+
+            if stop_flag.get("stop"):
+                break
+
+            # Parallel writes to clones (triggers copy-on-write)
+            if all_clones:
+                with cf.ThreadPoolExecutor(max_workers=3) as executor:
+                    clones_to_write = random.sample(all_clones, min(3, len(all_clones)))
+                    futures = [
+                        executor.submit(
+                            client_node.exec_command,
+                            cmd=f"rbd bench {pool_name}/{c} --io-type write --io-size 4K --io-total 1M",
+                            sudo=True,
+                            check_ec=False,
+                        )
+                        for c in clones_to_write
+                    ]
+                    for f in futures:
+                        try:
+                            f.result(timeout=60)
+                            ops_completed += 1
+                        except Exception:
+                            pass
+
+            # Read + list snapshots
+            try:
+                client_node.exec_command(
+                    cmd=f"rbd bench {pool_name}/{image_name} --io-type read --io-size 4K --io-total 256K",
+                    sudo=True,
+                    check_ec=False,
+                )
+                ops_completed += 1
+            except Exception:
+                log.debug(f"Read failed on {pool_name}/{image_name}")
+
+            try:
+                client_node.exec_command(
+                    cmd=f"rbd snap ls {pool_name}/{image_name}",
+                    sudo=True,
+                    check_ec=False,
+                )
+                ops_completed += 1
+            except Exception:
+                pass
+
+            # Delete ~20% of unprotected snapshots
+            unprotected = [(s, p) for s, p in all_snaps if not p]
+            if unprotected and random.random() < 0.2:
+                snap_to_delete = random.choice(unprotected)[0]
+                try:
+                    client_node.exec_command(
+                        cmd=f"rbd snap rm {pool_name}/{image_name}@{snap_to_delete}",
+                        sudo=True,
+                        check_ec=False,
+                    )
+                    all_snaps = [(s, p) for s, p in all_snaps if s != snap_to_delete]
+                    ops_completed += 1
+                    log.debug(f"Deleted RBD snapshot: {snap_to_delete}")
+                except Exception:
+                    pass
+
+            log.debug(
+                f"Iteration {iteration}: {len(new_snaps)} new snaps, {len(all_snaps)} total, {len(all_clones)} clones"
+            )
+            time.sleep(random.uniform(1, 3))
+
+    except Exception as e:
+        log.warning(f"RBD snapshot thrashing error: {e}")
+
+    log.info(
+        f"RBD snapshot thrashing completed: {ops_completed} ops, {len(all_snaps)} snapshots, {len(all_clones)} clones"
+    )
+    return ops_completed
+
+
+def thrash_ec_pool_snapshots(
+    rados_obj: RadosOrchestrator,
+    pools: List[Dict],
+    duration: int,
+    stop_flag: Dict,
+    reboot_osd: bool = False,
+) -> int:
+    """
+    Thrash EC pools with MULTIPLE RADOS-level snapshots and parallel partial writes
+    to maximize BlueStore clone operations (Tracker #74221 bug trigger).
+
+    1. Create MULTIPLE pool-level snapshots
+    2. Partial write + OSD down SIMULTANEOUSLY (background &)
+       - Get acting set for object
+       - Run: partial_write & ; ceph osd down <acting_osd>
+       - OSD goes down during write, comes back automatically
+    3. Clone log → ALL shards, write → SOME shards → divergent log → CRASH
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        pools: List of pool configurations (filters EC pools only)
+        duration: Total duration in seconds
+        stop_flag: Dict with 'stop' key to signal early termination
+        reboot_osd: Whether to reboot the OSD
+
+    Returns:
+        Number of operations completed
+    """
+    ec_pools = [p for p in pools if p.get("pool_type") == "erasure"]
+    if not ec_pools:
+        log.info("No EC pools found, skipping EC pool snapshot thrashing")
+        return 0
+
+    log.info(f"Starting EC pool snapshot thrashing on {len(ec_pools)} EC pool(s)")
+    ops_completed, end_time, iteration = 0, time.time() + duration, 0
+    all_snaps = {}  # pool_name -> list of snap_names
+
+    def _partial_write_with_osd_down(
+        pool_name: str, obj_name: str, offset: int, size: int = 4096
+    ):
+        """Partial write + OSD down simultaneously (matches dev script)."""
+        try:
+            write_cmd = (
+                f"dd if=/dev/urandom bs={size} count=1 2>/dev/null | "
+                f"rados -p {pool_name} put {obj_name} - --offset {offset}"
+            )
+            osd_map = rados_obj.get_osd_map(pool=pool_name, obj=obj_name)
+            acting = osd_map.get("acting", []) if osd_map else []
+
+            if not acting or not reboot_osd:
+                rados_obj.client.exec_command(cmd=write_cmd, sudo=True)
+                return True
+
+            target_osd = acting[1] if len(acting) > 1 else acting[0]
+            cmd = f"{{ {write_cmd}; }} & ceph osd down {target_osd};ceph orch daemon restart osd.{target_osd}"
+            rados_obj.client.exec_command(cmd=cmd, sudo=True, check_ec=False)
+            log.debug(
+                f"Partial write + OSD.{target_osd} restart: {pool_name}/{obj_name}"
+            )
+            return True
+        except Exception:
+            return False
+
+    try:
+        while time.time() < end_time and not stop_flag.get("stop"):
+            iteration += 1
+            ts = int(time.time())
+
+            for pool in ec_pools:
+                if stop_flag.get("stop"):
+                    break
+
+                pool_name = pool["pool_name"]
+                if pool_name not in all_snaps:
+                    all_snaps[pool_name] = []
+
+                obj_names = [f"ec_snap_obj_{iteration}_{ts}_{i}" for i in range(3)]
+
+                # Step 1: Create base objects in parallel (full stripe writes)
+                with cf.ThreadPoolExecutor(max_workers=3) as executor:
+                    futures = [
+                        executor.submit(
+                            rados_obj.client.exec_command,
+                            cmd=f"dd if=/dev/urandom bs=65536 count=2 2>/dev/null | rados -p {pool_name} put {oname} -",
+                            sudo=True,
+                        )
+                        for oname in obj_names
+                    ]
+                    created_objs = []
+                    for oname, f in zip(obj_names, futures):
+                        try:
+                            f.result(timeout=60)
+                            created_objs.append(oname)
+                            ops_completed += 1
+                        except Exception:
+                            pass
+
+                if not created_objs:
+                    continue
+
+                # Step 2: Create 4 snapshots with partial writes between them
+                new_snaps = []
+                for s in range(4):
+                    snap_name = f"snap{s}_{iteration}_{ts}"
+                    try:
+                        rados_obj.client.exec_command(
+                            cmd=f"rados -p {pool_name} mksnap {snap_name}", sudo=True
+                        )
+                        new_snaps.append(snap_name)
+                        all_snaps[pool_name].append(snap_name)
+                        ops_completed += 1
+                    except Exception:
+                        pass
+                    # Partial write between snapshots (with OSD down)
+                    if s < 3 and _partial_write_with_osd_down(
+                        pool_name, created_objs[0], s * 4096
+                    ):
+                        ops_completed += 1
+
+                if stop_flag.get("stop"):
+                    break
+
+                # Step 3: Parallel partial writes + OSD down on all objects
+                with cf.ThreadPoolExecutor(max_workers=18) as executor:
+                    futures = [
+                        executor.submit(
+                            _partial_write_with_osd_down, pool_name, oname, offset
+                        )
+                        for oname in created_objs
+                        for offset in [0, 4096, 8192, 16384, 32768, 49152]
+                    ]
+                    for f in futures:
+                        try:
+                            if f.result(timeout=30):
+                                ops_completed += 1
+                        except Exception:
+                            pass
+
+                # Step 4: Append and truncate on all objects
+                with cf.ThreadPoolExecutor(max_workers=6) as executor:
+                    cmds = []
+                    for oname in created_objs:
+                        cmds.append(
+                            f"dd if=/dev/urandom bs=8192 count=1 2>/dev/null | rados -p {pool_name} append {oname} -"
+                        )
+                        cmds.append(f"rados -p {pool_name} truncate {oname} 32768")
+                    futures = [
+                        executor.submit(rados_obj.client.exec_command, cmd=c, sudo=True)
+                        for c in cmds
+                    ]
+                    for f in futures:
+                        try:
+                            f.result(timeout=30)
+                            ops_completed += 1
+                        except Exception:
+                            pass
+
+                # Step 5: Rollback all objects to random snapshot
+                if new_snaps:
+                    random_snap = random.choice(new_snaps)
+                    with cf.ThreadPoolExecutor(
+                        max_workers=len(created_objs)
+                    ) as executor:
+                        futures = [
+                            executor.submit(
+                                rados_obj.client.exec_command,
+                                cmd=f"rados -p {pool_name} rollback {oname} {random_snap}",
+                                sudo=True,
+                            )
+                            for oname in created_objs
+                        ]
+                        for f in futures:
+                            try:
+                                f.result(timeout=30)
+                                ops_completed += 1
+                            except Exception:
+                                pass
+
+                # Step 6: More partial writes + OSD down after rollback
+                with cf.ThreadPoolExecutor(max_workers=9) as executor:
+                    futures = [
+                        executor.submit(
+                            _partial_write_with_osd_down, pool_name, oname, offset
+                        )
+                        for oname in created_objs
+                        for offset in [0, 8192, 16384]
+                    ]
+                    for f in futures:
+                        try:
+                            if f.result(timeout=30):
+                                ops_completed += 1
+                        except Exception:
+                            pass
+
+                # Step 7: Read + listsnaps + lssnap
+                with cf.ThreadPoolExecutor(
+                    max_workers=len(created_objs) * 2 + 1
+                ) as executor:
+                    # Reads use check_ec=False
+                    read_futures = [
+                        executor.submit(
+                            rados_obj.client.exec_command,
+                            cmd=f"rados -p {pool_name} get {o} /dev/null",
+                            sudo=True,
+                            check_ec=False,
+                        )
+                        for o in created_objs
+                    ]
+                    listsnaps_futures = [
+                        executor.submit(
+                            rados_obj.client.exec_command,
+                            cmd=f"rados -p {pool_name} listsnaps {o}",
+                            sudo=True,
+                        )
+                        for o in created_objs
+                    ]
+                    lssnap_future = executor.submit(
+                        rados_obj.client.exec_command,
+                        cmd=f"rados -p {pool_name} lssnap",
+                        sudo=True,
+                    )
+                    for f in read_futures + listsnaps_futures + [lssnap_future]:
+                        try:
+                            f.result(timeout=30)
+                            ops_completed += 1
+                        except Exception:
+                            pass
+
+                # Step 8: Delete ~20% of snapshots
+                pool_snaps = all_snaps.get(pool_name, [])
+                if pool_snaps and random.random() < 0.2:
+                    snap_to_delete = random.choice(pool_snaps)
+                    try:
+                        rados_obj.client.exec_command(
+                            cmd=f"rados -p {pool_name} rmsnap {snap_to_delete}",
+                            sudo=True,
+                        )
+                        all_snaps[pool_name].remove(snap_to_delete)
+                        ops_completed += 1
+                        log.debug(
+                            f"Deleted RADOS snapshot: {pool_name}@{snap_to_delete}"
+                        )
+                    except Exception:
+                        pass
+
+            total_snaps = sum(len(s) for s in all_snaps.values())
+            log.debug(
+                f"EC pool snapshot iteration {iteration}: {total_snaps} total snaps"
+            )
+            time.sleep(random.uniform(0.1, 0.5))
+
+    except Exception as e:
+        log.warning(f"EC pool snapshot thrashing error: {e}")
+
+    total_snaps = sum(len(s) for s in all_snaps.values())
+    log.info(
+        f"EC pool snapshot thrashing completed: {ops_completed} ops, {total_snaps} snapshots"
+    )
+    return ops_completed
 
 
 def _cleanup_cephfs(client_node, mount_path: str, fs_name: str) -> None:
@@ -1066,3 +2102,152 @@ def _cleanup_rbd(client_node, mount_path: str, device_path: str) -> None:
             log.debug(f"RBD unmounted from {mount_path}")
         except Exception as e:
             log.warning(f"Failed to unmount RBD: {e}")
+
+
+def analyze_osd_logs_for_divergent_patterns(
+    rados_obj: RadosOrchestrator,
+    start_time: str,
+    end_time: str,
+    samples_per_osd: int = 5,
+) -> Dict[str, Any]:
+    """
+    Analyze OSD logs for divergent log patterns indicating bug #74221 conditions.
+
+    Args:
+        rados_obj: RadosOrchestrator object
+        start_time: Start timestamp
+        end_time: End timestamp
+        samples_per_osd: Number of sample log lines to store per OSD (default: 5)
+
+    Returns:
+        Dictionary with pattern counts and sample entries per OSD
+    """
+    # Pattern config: (grep_pattern, result_key, exclude_pattern, sample_key)
+    pattern_config = [
+        (
+            "_merge_object_divergent_entries",
+            "merge_divergent_entries",
+            None,
+            "sample_divergent_entries",
+        ),
+        (
+            "proc_replica_log:.*divergent",
+            "proc_replica_log_divergent",
+            "not looking for divergent",
+            None,
+        ),
+        ("clear_divergent_priors: 1", "clear_divergent_priors", None, None),
+        (
+            "written_shards shard_info",
+            "written_shards_partial",
+            "written={}",
+            "sample_partial_writes",
+        ),
+        ("shard_versions=", "shard_versions_found", "shard_versions={}", None),
+        ("bluestore.*_do_clone", "clone_operations", None, "sample_clone_ops"),
+        ("bluestore.*_remove", "bluestore_removes", None, None),
+    ]
+
+    results = {cfg[1]: 0 for cfg in pattern_config}
+    results.update(
+        {
+            "sample_divergent_entries": {},
+            "sample_partial_writes": {},
+            "sample_clone_ops": {},
+        }
+    )
+
+    try:
+        # Get cluster FSID
+        fsid_result = rados_obj.run_ceph_command(cmd="ceph fsid")
+        fsid = fsid_result.get("fsid") if isinstance(fsid_result, dict) else fsid_result
+        if not fsid:
+            log.warning("Could not get cluster FSID for log analysis")
+            return results
+
+        # Extract date pattern for filtering
+        start_date = start_time.split("T")[0].split(" ")[0]
+        end_date = end_time.split("T")[0].split(" ")[0]
+        date_pattern = (
+            start_date if start_date == end_date else f"{start_date}|{end_date}"
+        )
+
+        log.debug("Analyzing OSD logs for divergent patterns...")
+
+        for osd_id in rados_obj.get_osd_list(status="up")[:8]:
+            osd_host = rados_obj.fetch_host_node(daemon_type="osd", daemon_id=osd_id)
+            if not osd_host:
+                continue
+
+            log_path = f"/var/log/ceph/{fsid}/ceph-osd.{osd_id}.log"
+
+            for grep_pattern, result_key, exclude, sample_key in pattern_config:
+                try:
+                    cmd = (
+                        f"grep -E '{date_pattern}' {log_path} 2>/dev/null | "
+                        f"grep -i '{grep_pattern}' 2>/dev/null | head -{samples_per_osd * 2}"
+                    )
+                    output, _ = osd_host.exec_command(
+                        cmd=cmd, sudo=True, check_ec=False
+                    )
+
+                    if not output or not output.strip():
+                        continue
+
+                    lines = [l for l in output.strip().split("\n") if l.strip()]
+
+                    # Apply exclusion filter if specified
+                    if exclude:
+                        lines = [l for l in lines if exclude not in l]
+
+                    results[result_key] += len(lines)
+
+                    # Store samples if sample_key is defined
+                    if sample_key and lines:
+                        results[sample_key][osd_id] = lines[:samples_per_osd]
+
+                except Exception:
+                    pass
+
+    except Exception as e:
+        log.warning("OSD log analysis failed: %s", e)
+
+    # Log summary
+    if any(
+        results[k] for k in results if isinstance(results[k], int) and results[k] > 0
+    ):
+        log.info("OSD log analysis results:")
+        log.info("  - Divergent entry merges: %s", results["merge_divergent_entries"])
+        log.info(
+            "  - proc_replica_log divergent: %s", results["proc_replica_log_divergent"]
+        )
+        log.info(
+            "  - clear_divergent_priors set: %s", results["clear_divergent_priors"]
+        )
+        log.info("  - Partial writes: %s", results["written_shards_partial"])
+        log.info("  - Non-empty shard_versions: %s", results["shard_versions_found"])
+        log.info("  - Clone operations: %s", results["clone_operations"])
+        log.info("  - BlueStore removes: %s", results["bluestore_removes"])
+
+        if results["sample_divergent_entries"]:
+            log.info("  Sample divergent entries:")
+            for osd_id, entries in results["sample_divergent_entries"].items():
+                log.info("    OSD.%s (%d samples):", osd_id, len(entries))
+                for i, entry in enumerate(entries, 1):
+                    log.info("      [%d] %s", i, entry)
+
+        if results["sample_partial_writes"]:
+            log.info("  Sample partial writes:")
+            for osd_id, entries in results["sample_partial_writes"].items():
+                log.info("    OSD.%s (%d samples):", osd_id, len(entries))
+                for i, entry in enumerate(entries, 1):
+                    log.info("      [%d] %s", i, entry)
+
+        if results["sample_clone_ops"]:
+            log.info("  Sample clone operations:")
+            for osd_id, entries in results["sample_clone_ops"].items():
+                log.info("    OSD.%s (%d samples):", osd_id, len(entries))
+                for i, entry in enumerate(entries, 1):
+                    log.info("      [%d] %s", i, entry)
+
+    return results
