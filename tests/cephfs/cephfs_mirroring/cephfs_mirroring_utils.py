@@ -636,7 +636,7 @@ class CephfsMirroringUtils(object):
         log.error("last synced Snapshot not found or not synced")
         raise CommandFailed("last synced Snapshot not found or not synced")
 
-    @retry(CommandFailed, tries=5, delay=30)
+    @retry(CommandFailed, tries=10, delay=60)
     def validate_snapshot_sync_status(
         self,
         cephfs_mirror_node,
@@ -1812,3 +1812,16 @@ class CephfsMirroringUtils(object):
                     snap_info,
                     csv_file,
                 )
+
+    def get_rsync_command(
+        self, source_path, target_path, target_ip, target_user="root"
+    ):
+        source_path = source_path.strip()
+        target_path = target_path.strip()
+
+        cmd = (
+            f"time rsync -av "
+            f'-e "ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null" '
+            f'"{source_path}" {target_user}@{target_ip}:"{target_path}"'
+        )
+        return cmd
