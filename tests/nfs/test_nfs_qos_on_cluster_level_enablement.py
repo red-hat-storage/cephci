@@ -10,6 +10,43 @@ from utility.log import Log
 log = Log(__name__)
 
 
+def _dd_speed_to_mbps(dd_output: str):
+    """Parse dd throughput and return MB/s (decimal) as float.
+
+    Supports common dd units: B/s, kB/s, KB/s, KiB/s, MB/s, MiB/s, GB/s, GiB/s.
+    Returns None if no throughput token is found.
+    """
+
+    matches = re.findall(
+        r"(\d+(?:\.\d+)?)\s*(B/s|kB/s|KB/s|KiB/s|MB/s|MiB/s|GB/s|GiB/s)",
+        dd_output,
+    )
+    if not matches:
+        return None
+
+    value_str, unit = matches[-1]
+    value = float(value_str)
+
+    if unit == "B/s":
+        bytes_per_sec = value
+    elif unit in ("kB/s", "KB/s"):
+        bytes_per_sec = value * 1000
+    elif unit == "KiB/s":
+        bytes_per_sec = value * 1024
+    elif unit == "MB/s":
+        bytes_per_sec = value * 1_000_000
+    elif unit == "MiB/s":
+        bytes_per_sec = value * 1_048_576
+    elif unit == "GB/s":
+        bytes_per_sec = value * 1_000_000_000
+    elif unit == "GiB/s":
+        bytes_per_sec = value * 1_073_741_824
+    else:
+        return None
+
+    return bytes_per_sec / 1_000_000
+
+
 def capture_copy_details(client, nfs_mount, file_name, size="100"):
     """
     Captures the output of the dd command executed remotely.
@@ -35,15 +72,9 @@ def capture_copy_details(client, nfs_mount, file_name, size="100"):
     )
     write_results = client.exec_command(sudo=True, cmd=write_cmd)[1]
 
-    if (
-        re.search(r"(\d+\.\d+ MB/s)$", write_results)
-        or re.findall(r"(\d+ MB/s)$", write_results)[0]
-    ):
-        write_speed = (
-            re.findall(r"(\d+\.\d+ MB/s)$", write_results)[0]
-            if re.search(r"(\d+\.\d+ MB/s)$", write_results)
-            else re.findall(r"(\d+ MB/s)$", write_results)[0]
-        )
+    write_mbps = _dd_speed_to_mbps(write_results)
+    if write_mbps is not None:
+        write_speed = f"{write_mbps:.3f} MB/s"
         log.info("File created successfully on {0}".format(client.hostname))
         log.info("write speed is {0}".format(write_speed))
 
@@ -53,18 +84,13 @@ def capture_copy_details(client, nfs_mount, file_name, size="100"):
     )
     log.info("Cache dropped successfully")
 
-    read_cmd = "dd if={0}/{1} of=/dev/urandom".format(nfs_mount, file_name)
+    # Use /dev/null as sink for read throughput; /dev/urandom can distort timing.
+    read_cmd = "dd if={0}/{1} of=/dev/null iflag=direct".format(nfs_mount, file_name)
     read_results = client.exec_command(sudo=True, cmd=read_cmd)[1]
 
-    if (
-        re.search(r"(\d+\.\d+ MB/s)$", read_results)
-        or re.findall(r"(\d+ MB/s)$", read_results)[0]
-    ):
-        read_speed = (
-            re.findall(r"(\d+\.\d+ MB/s)$", read_results)[0]
-            if re.search(r"(\d+\.\d+ MB/s)$", read_results)
-            else re.findall(r"(\d+ MB/s)$", read_results)[0]
-        )
+    read_mbps = _dd_speed_to_mbps(read_results)
+    if read_mbps is not None:
+        read_speed = f"{read_mbps:.3f} MB/s"
         log.info("read speed is {0}".format(read_speed))
 
     rm_cmd = "rm -rf {0}/{1}".format(nfs_mount, file_name)
@@ -222,6 +248,61 @@ def _parse_exec_result(res):
     except Exception:
         rc = 0
     return rc, (stdout or ""), (stderr or "")
+
+
+def _wait_for_orch_service_running(client, service_name, timeout=180, interval=5):
+    """Wait until `ceph orch ps --service_name <service>` reports all daemons as running."""
+    remaining = int(timeout)
+    while remaining > 0:
+        cmd = f"ceph orch ps --service_name {service_name} --format json"
+        rc, stdout, stderr = _parse_exec_result(client.exec_command(sudo=True, cmd=cmd))
+        payload = (stdout or "").strip() or (stderr or "").strip()
+        try:
+            ps = json.loads(payload) if payload else []
+        except Exception:
+            ps = []
+
+        if (
+            rc == 0
+            and ps
+            and all(
+                str(d.get("status_desc", "")).strip().lower() == "running" for d in ps
+            )
+        ):
+            log.info(f"Service {service_name} is running: {ps}")
+            return True
+
+        sleep(interval)
+        remaining -= interval
+
+    raise OperationFailedError(
+        f"Timed out waiting for {service_name} to become running via 'ceph orch ps'"
+    )
+
+
+def _wait_for_qos_persisted(
+    ceph_nfs_client, cluster_name, qos_type, timeout=120, interval=5
+):
+    """Poll `ceph nfs cluster qos get` until QoS is enabled and matches expected qos_type."""
+    remaining = int(timeout)
+    while remaining > 0:
+        qos_data = ceph_nfs_client.cluster.qos.get(
+            cluster_id=cluster_name, format="json"
+        )
+        try:
+            qos = json.loads(qos_data)
+        except Exception:
+            qos = {}
+
+        if qos.get("enable_bw_control") is True and qos.get("qos_type") == qos_type:
+            return qos
+
+        sleep(interval)
+        remaining -= interval
+
+    raise OperationFailedError(
+        f"Timed out waiting for QoS to persist after restart: cluster={cluster_name}, qos_type={qos_type}"
+    )
 
 
 def _format_cli_cmd(base, *args):
@@ -595,7 +676,6 @@ def run(ceph_cluster, **kw):
             qos_data_after_restart = ceph_nfs_client.cluster.qos.get(
                 cluster_id=cluster_name, format="json"
             )
-            qos_data_after_restart = json.loads(qos_data_after_restart)
             if qos_data_after_restart["qos_type"] == qos_type:
                 log.info(
                     "Qos data for {0} persists even after the nfs cluster restarted".format(
