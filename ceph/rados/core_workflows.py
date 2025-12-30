@@ -7080,6 +7080,9 @@ EOF"""
         rbd_metadata_pool: str = "rbd-thrash-metadata",
         image_name: str = "thrash-test-image",
         image_size: str = "10G",
+        pool_type: str = "erasure",
+        mount_path: str = "/mnt/rbd-thrash/",
+        crush_failure_domain: str = "host",
     ) -> tuple:
         """
         Create EC RBD pools, image, and mount it.
@@ -7093,62 +7096,104 @@ EOF"""
         Returns:
             Tuple of (mount_path, device_path, list of created pool configs)
         """
-        log.info("Creating RBD pools (EC data + replicated metadata)")
+        if pool_type.lower() == "replicated":
+            log.info("Creating RBD pools (replicated data)")
+            log.debug(f"creating replicated data pool : {rbd_ec_data_pool}")
+            # Create data pool (replicated)
+            assert self.create_pool(
+                pool_name=rbd_ec_data_pool,
+                app_name="rbd",
+            ), f"Failed to create data pool {rbd_ec_data_pool}"
+            log.debug(f"Created data pool: {rbd_ec_data_pool}")
 
-        # Create EC data pool for RBD
-        ec_config = {
-            "pool_name": rbd_ec_data_pool,
-            "profile_name": "rbd-ec-profile",
-            "k": 2,
-            "m": 2,
-            "app_name": "rbd",
-            "crush-failure-domain": "host",
-            "enable_fast_ec_features": True,
-            "stripe_unit": 16384,
-        }
+            # Create RBD image with replicated data pool
+            log.info(f"Creating RBD image: {image_name}")
+            cmd = f"rbd create {rbd_ec_data_pool}/{image_name} --size {image_size}"
+            self.client.exec_command(cmd=cmd, sudo=True)
+            log.info(f"Created RBD image: {rbd_ec_data_pool}/{image_name}")
 
-        if not self.create_erasure_pool(**ec_config):
-            raise Exception(f"Failed to create RBD EC data pool {rbd_ec_data_pool}")
-        log.info(f"Created RBD EC data pool: {rbd_ec_data_pool}")
+            # Mount the image
+            log.info("Mounting RBD image...")
+            mount_result = self.mount_image_on_client(
+                pool_name=rbd_ec_data_pool,
+                img_name=image_name,
+                client_obj=self.client,
+                mount_path=mount_path,
+            )
 
-        # Create replicated metadata pool for RBD
-        if not self.create_pool(pool_name=rbd_metadata_pool, app_name="rbd"):
-            raise Exception(f"Failed to create RBD metadata pool {rbd_metadata_pool}")
-        log.info(f"Created RBD metadata pool: {rbd_metadata_pool}")
+            if not mount_result:
+                raise Exception("Failed to mount RBD image")
 
-        # Create RBD image with EC data pool
-        log.info(f"Creating RBD image: {image_name}")
-        cmd = f"rbd create --size {image_size} --data-pool {rbd_ec_data_pool} {rbd_metadata_pool}/{image_name}"
-        self.client.exec_command(cmd=cmd, sudo=True)
-        log.info(f"Created RBD image: {rbd_metadata_pool}/{image_name}")
+            mount_path, device_path = mount_result
+            log.info(f"Mounted RBD image at {mount_path} (device: {device_path})")
 
-        # Mount the image
-        log.info("Mounting RBD image...")
-        mount_result = self.mount_image_on_client(
-            pool_name=rbd_metadata_pool,
-            img_name=image_name,
-            client_obj=self.client,
-            mount_path="/mnt/rbd-thrash/",
-        )
+            created_pools = [
+                {
+                    "pool_name": rbd_ec_data_pool,
+                    "pool_type": pool_type,
+                    "client": "rbd",
+                },
+            ]
 
-        if not mount_result:
-            raise Exception("Failed to mount RBD image")
+        else:
+            # Create EC data pool for RBD
+            log.info("Creating RBD pools (EC data + replicated metadata)")
 
-        mount_path, device_path = mount_result
-        log.info(f"Mounted RBD image at {mount_path} (device: {device_path})")
-
-        created_pools = [
-            {
+            ec_config = {
                 "pool_name": rbd_ec_data_pool,
-                "pool_type": "erasure",
                 "profile_name": "rbd-ec-profile",
-                "client": "rbd",
-            },
-            {
-                "pool_name": rbd_metadata_pool,
-                "pool_type": "replicated",
-                "client": "rbd",
-            },
-        ]
+                "k": 2,
+                "m": 2,
+                "app_name": "rbd",
+                "crush-failure-domain": crush_failure_domain,
+                "enable_fast_ec_features": True,
+                "stripe_unit": 16384,
+            }
+
+            if not self.create_erasure_pool(**ec_config):
+                raise Exception(f"Failed to create RBD EC data pool {rbd_ec_data_pool}")
+            log.info(f"Created RBD EC data pool: {rbd_ec_data_pool}")
+
+            # Create replicated metadata pool for RBD
+            if not self.create_pool(pool_name=rbd_metadata_pool, app_name="rbd"):
+                raise Exception(
+                    f"Failed to create RBD metadata pool {rbd_metadata_pool}"
+                )
+            log.info(f"Created RBD metadata pool: {rbd_metadata_pool}")
+
+            # Create RBD image with EC data pool
+            log.info(f"Creating RBD image: {image_name}")
+            cmd = f"rbd create --size {image_size} --data-pool {rbd_ec_data_pool} {rbd_metadata_pool}/{image_name}"
+            self.client.exec_command(cmd=cmd, sudo=True)
+            log.info(f"Created RBD image: {rbd_metadata_pool}/{image_name}")
+
+            # Mount the image
+            log.info("Mounting RBD image...")
+            mount_result = self.mount_image_on_client(
+                pool_name=rbd_metadata_pool,
+                img_name=image_name,
+                client_obj=self.client,
+                mount_path=mount_path,
+            )
+
+            if not mount_result:
+                raise Exception("Failed to mount RBD image")
+
+            mount_path, device_path = mount_result
+            log.info(f"Mounted RBD image at {mount_path} (device: {device_path})")
+
+            created_pools = [
+                {
+                    "pool_name": rbd_ec_data_pool,
+                    "pool_type": pool_type,
+                    "profile_name": "rbd-ec-profile",
+                    "client": "rbd",
+                },
+                {
+                    "pool_name": rbd_metadata_pool,
+                    "pool_type": "replicated",
+                    "client": "rbd",
+                },
+            ]
 
         return mount_path, device_path, created_pools

@@ -181,6 +181,8 @@ def run(ceph_cluster, **kw):
 
     # Creating the EC pool
     ec_config = config.get("ec_pool")
+    compression = config.get("compression")
+    compression_v2 = config.get("compression_v2")
     pool_name = ec_config["pool_name"]
     # Due to below tracker, suppressing few heath warnings when fast ec is enabled on pools.
     # Bugzillas fixed. No need to suppress warnings anymore.
@@ -223,6 +225,26 @@ def run(ceph_cluster, **kw):
         ):
             log.error("Failed to create the EC Pool")
             return 1
+
+        if compression or compression_v2:
+            if compression_v2:
+                log.info("\n\nEnabling compression v2 on pool (mode=force)...\n")
+                mon_obj.set_config(
+                    section="global",
+                    name="bluestore_write_v2",
+                    value="true",
+                )
+                assert rados_obj.restart_daemon_services(daemon="osd")
+            else:
+                log.info("\n\nEnabling compression v1 on pool (mode=force)...\n")
+            algorithm = "snappy"
+            log.info(f"  Enabling {algorithm} compression on {pool_name}")
+            rados_obj.pool_inline_compression(
+                pool_name=pool_name,
+                compression_mode="force",
+                compression_algorithm=algorithm,
+            )
+            log.info("\n\nCompression enabled on all pools\n")
 
         time.sleep(5)
 

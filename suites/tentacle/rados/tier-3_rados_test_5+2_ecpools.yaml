@@ -637,3 +637,289 @@ tests:
           - ec52_pool15
           - ec52_pool16
 
+#        scenario-1: Test the effects of bulk flag and no IO stoppage
+#        scenario-2: Perform rolling reboot of all the OSDs on a particular host.
+#        scenario-3: OSD operations (stop/start 1 OSD from each host)
+#        scenario-4: Stopping all OSDs of 1 host
+#        scenario-5: Reboot all OSD hosts
+#        scenario-6: Add new host and OSDs into the cluster
+#        scenario-7: Remove 1 OSD from 1 host and add back
+#        scenario-8: Remove 1 host from the cluster
+#        scenario-9: Create EC pools with all supported profiles while OSDs moving in-out
+#        scenario-10: Acting set based OSD failure tests with IO verification
+#        scenario-11: Object copy and read pattern verification
+#        scenario-12: Reboot same host during recovery/backfill
+#        scenario-13: Reboot different host during recovery/backfill
+  - test:
+      name: Scenario 1 - Bulk flag effects
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          enable_fast_ec_features: true
+          force: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-1
+      desc: Test the effects of bulk flag and no IO stoppage on 5+2 EC pool
+
+  - test:
+      name: Scenario 2 - Rolling OSD reboot
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          enable_fast_ec_features: true
+          force: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-2
+      desc: Perform rolling reboot of all OSDs on a particular host
+
+  - test:
+      name: Scenario 3 - OSD stop-start operations
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          enable_fast_ec_features: true
+          force: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-3
+      desc: Stop and start 1 OSD from each host and verify no inactive PGs
+
+  - test:
+      name: Scenario 4 - Stop all OSDs on 1 host
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-4
+      desc: Stop all OSDs of 1 host and verify cluster recovery
+
+  - test:
+      name: Scenario 5 - Reboot all OSD hosts
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-5
+      desc: Reboot all OSD hosts one by one and verify cluster recovery
+
+  - test:
+      name: Scenario 6 - Add new host and OSDs
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-6
+      desc: Add new host and OSDs into the cluster and verify recovery
+
+  - test:
+      name: Scenario 7 - Remove and add back OSD
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-7
+      desc: Remove 1 OSD from 1 host and add it back
+
+  - test:
+      name: Scenario 8 - Remove host from cluster
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-8
+      desc: Remove 1 host from the cluster and verify recovery
+
+  - test:
+      name: Scenario 9 - EC profiles with OSD in-out
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-9
+      desc: Create EC pools with various profiles while OSDs moving in-out
+
+  - test:
+      name: Scenario 10 - Acting set OSD failure
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-10
+      desc: Acting set based OSD failure tests with IO verification
+
+  - test:
+      name: Scenario 11 - Object copy and read patterns
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-11
+      desc: Object copy and read pattern verification on EC pool
+
+  - test:
+      name: Scenario 12 - Double reboot same host
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-12
+      desc: Reboot same host during recovery/backfill and verify recovery completes
+
+  - test:
+      name: Scenario 13 - Cascading host reboots
+      module: test_four_node_ecpool.py
+      polarion-id: CEPH-83620449
+      abort-on-fail: true
+      config:
+        ec_pool:
+          profile_name: ec52_profile
+          pool_name: test_ec_pool
+          k: 5
+          m: 2
+          force: true
+          enable_fast_ec_features: true
+          crush-failure-domain: host
+        compression: true
+        delete_pools:
+          - test_ec_pool
+        scenarios_to_run:
+          - scenario-13
+      desc: Reboot different host during recovery/backfill and verify recovery completes
+

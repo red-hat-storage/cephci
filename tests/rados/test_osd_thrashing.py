@@ -42,6 +42,7 @@ from ceph.ceph_admin import CephAdmin
 from ceph.rados.core_workflows import RadosOrchestrator
 from ceph.rados.pool_workflows import PoolFunctions
 from ceph.rados.utils import get_cluster_timestamp
+from tests.rados.monitor_configurations import MonConfigMethods
 from tests.rados.stretch_cluster import wait_for_clean_pg_sets
 from tests.rados.test_four_node_ecpool import create_comprehensive_test_objects
 from utility.log import Log
@@ -97,6 +98,8 @@ def run(ceph_cluster, **kw):
     enable_crush_thrashing = config.get("enable_crush_thrashing", True)
     enable_pg_thrashing = config.get("enable_pg_thrashing", True)
     compression = config.get("compression", False)
+    compression_v2 = config.get("compression_v2", False)
+    mon_obj = MonConfigMethods(rados_obj=rados_obj)
 
     # Log test parameters in a single block for efficiency
     test_params = (
@@ -149,7 +152,10 @@ def run(ceph_cluster, **kw):
                 client_node,
                 pool_type="erasure",
             )
-            rbd_future = pool_executor.submit(rados_obj.create_ec_rbd_pools)
+            rbd_future = pool_executor.submit(
+                rados_obj.create_ec_rbd_pools,
+                pool_type="erasure",
+            )
 
             # Collect results (order: RADOS, CephFS, RBD)
             try:
@@ -175,7 +181,17 @@ def run(ceph_cluster, **kw):
         compression_algorithms = ["snappy", "zlib"]
 
         # Enable compression on all pools if configured
-        if compression:
+        if compression or compression_v2:
+            if compression_v2:
+                log.info("\n\nEnabling compression v2 on pool (mode=force)...\n")
+                mon_obj.set_config(
+                    section="global",
+                    name="bluestore_write_v2",
+                    value="true",
+                )
+                assert rados_obj.restart_daemon_services(daemon="osd")
+            else:
+                log.info("\n\nEnabling compression v1 on pool (mode=force)...\n")
             log.info("\n\nEnabling compression on all pools (mode=force)...\n")
             for idx, pool in enumerate(created_pools):
                 pool_name = pool["pool_name"]
