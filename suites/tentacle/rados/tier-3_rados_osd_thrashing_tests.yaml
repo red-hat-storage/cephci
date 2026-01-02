@@ -12,6 +12,7 @@
 # - CRUSH weight modifications (reduce to 50%, restore)
 # - PG count thrashing via bulk flag + scrub/deep-scrub
 # - CephFS/RBD/EC pool snapshot thrashing with clone operations
+# - RGW S3 operations (PUT, GET, DELETE, multipart, versioning)
 # - Parallel I/O: rados bench, FIO, comprehensive object operations
 # =============================================================================
 
@@ -104,6 +105,52 @@ tests:
                       all: "true"
 
   - test:
+      name: MDS Service deployment with spec
+      desc: Add MDS services using spec file
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: shell
+              args:               # arguments to ceph orch
+                - ceph
+                - fs
+                - volume
+                - create
+                - cephfs
+          - config:
+              command: apply_spec
+              service: orch
+              validate-spec-services: true
+              specs:
+                - service_type: mds
+                  service_id: cephfs
+                  placement:
+                    label: mds
+          # Adding below WA to set bulk flag to false until bug fix : 2308623
+          - config:
+              command: shell
+              args: # arguments to ceph orch
+                - "ceph osd pool set cephfs.cephfs.data bulk false"
+
+  - test:
+      name: RGW Service deployment
+      desc: RGW Service deployment
+      module: test_cephadm.py
+      polarion-id: CEPH-83574728
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              pos_args:
+                - rgw.1
+              args:
+                placement:
+                  label: rgw
+
+  - test:
       name: Configure client admin
       desc: Configures client admin node on cluster
       module: test_client.py
@@ -115,6 +162,9 @@ tests:
         node: node7
         install_packages:
           - ceph-common
+          - rbd-nbd
+          - fio
+          - ceph-fuse
         copy_admin_keyring: true
         caps:
           mon: "allow *"
@@ -146,14 +196,15 @@ tests:
           - pool_type: replicated
             sample_pool_id: sample-pool-2
         iterations: 30
-        duration: 600
+        duration: 1200
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_rgw_thrashing: true
         compression: true
         cleanup_pools: true
         enable_debug_logs: false
-        inject_errors: true
+        inject_errors: false
 
   - test:
       name: OSD thrashing test with concurrent IO - no compression
@@ -168,11 +219,12 @@ tests:
             sample_pool_id: sample-pool-9
           - pool_type: replicated
             sample_pool_id: sample-pool-2
-        iterations: 20
-        duration: 600
+        iterations: 30
+        duration: 1200
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_rgw_thrashing: true
         compression: false
         cleanup_pools: true
         enable_debug_logs: false
@@ -197,6 +249,7 @@ tests:
         compression: false
         cleanup_pools: true
         enable_debug_logs: true
+        enable_rgw_thrashing: true
         inject_errors: true
         num_osds_to_inject: 3
         num_writes_to_inject: 1000
@@ -217,6 +270,7 @@ tests:
         aggressive: false
         enable_crush_thrashing: false
         enable_pg_thrashing: false
+        enable_rgw_thrashing: false
         compression: false
         cleanup_pools: true
         enable_debug_logs: false
