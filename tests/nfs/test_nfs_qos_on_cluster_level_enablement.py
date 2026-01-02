@@ -676,6 +676,7 @@ def run(ceph_cluster, **kw):
             qos_data_after_restart = ceph_nfs_client.cluster.qos.get(
                 cluster_id=cluster_name, format="json"
             )
+            qos_data_after_restart = json.loads(qos_data_after_restart)
             if qos_data_after_restart["qos_type"] == qos_type:
                 log.info(
                     "Qos data for {0} persists even after the nfs cluster restarted".format(
