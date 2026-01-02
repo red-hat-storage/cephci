@@ -298,6 +298,17 @@ def install_cephadm(node, build_type):
 
     return True
 
+def _ensure_supported_locale(nodes):
+    nodes = nodes if isinstance(nodes, list) else [nodes]
+    for node in nodes:
+        node.exec_command(
+            sudo=True,
+            cmd=(
+                "dnf install -y glibc-langpack-en && "
+                "localectl set-locale LANG=en_US.utf8"
+            ),
+            check_ec=True,
+        )
 
 def setup_installer_node(
     installer, nodes, rhbuild, tools_repo, build_type, ibm_build, ansible_preflight
@@ -330,12 +341,14 @@ def setup_installer_node(
             "Ceph tools repo is required for installing CephAdm"
         )
 
-    # Install license for IBM builds
-    if ibm_build:
-        setup_ibm_licence(nodes, build_type)
-
     # Setup ssh keys
     setup_ssh_keys(installer, nodes)
+
+    _ensure_supported_locale([installer])
+    _ensure_supported_locale(nodes)
+
+    if ibm_build:
+        setup_ibm_licence(nodes, build_type)
 
     # Check for ansible preflight
     if not ansible_preflight:
@@ -343,12 +356,6 @@ def setup_installer_node(
         install_cephadm(installer, build_type)
 
         return True
-
-    # Install cephadm ansible preflight
-    install_cephadm_ansible(installer, ceph_version, platform, tools_repo, build_type)
-
-    # Configure cephadm ansible inventory hosts
-    configure_cephadm_ansible_inventory(nodes)
 
     installer.exec_command(
         sudo=True,
@@ -358,6 +365,12 @@ def setup_installer_node(
             "chown -R cephuser:cephuser /home/cephuser/ansible"
         ),
     )
+
+    # Install cephadm ansible preflight
+    install_cephadm_ansible(installer, ceph_version, platform, tools_repo, build_type)
+
+    # Configure cephadm ansible inventory hosts
+    configure_cephadm_ansible_inventory(nodes)
 
     # Execute cephadm ansible preflight playbook
     exec_cephadm_preflight(installer, build_type, ibm_build, tools_repo)
