@@ -12,6 +12,7 @@
 # - CRUSH weight modifications (reduce to 50%, restore)
 # - PG count thrashing via bulk flag + scrub/deep-scrub
 # - CephFS/RBD/EC pool snapshot thrashing with clone operations
+# - RGW S3 operations (PUT, GET, DELETE, multipart, versioning)
 # - Parallel I/O: rados bench, FIO, comprehensive object operations
 # =============================================================================
 
@@ -129,6 +130,23 @@ tests:
         log_to_file: true
       desc: Change config options to enable logging to file
 
+  - test:
+      name: RGW deployment
+      desc: Deploy RGW service for S3 thrashing tests
+      module: test_cephadm.py
+      polarion-id: CEPH-83573746
+      abort-on-fail: false
+      config:
+        steps:
+          - config:
+              command: apply
+              service: rgw
+              args:
+                placement:
+                  nodes:
+                    - node4
+                    - node5
+
   # ===========================================================================
   # OSD Thrashing Tests
   # ===========================================================================
@@ -146,14 +164,15 @@ tests:
           - pool_type: replicated
             sample_pool_id: sample-pool-2
         iterations: 30
-        duration: 600
+        duration: 1200
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_rgw_thrashing: true
         compression: true
         cleanup_pools: true
         enable_debug_logs: false
-        inject_errors: true
+        inject_errors: false
 
   - test:
       name: OSD thrashing test with concurrent IO - no compression
@@ -168,11 +187,12 @@ tests:
             sample_pool_id: sample-pool-9
           - pool_type: replicated
             sample_pool_id: sample-pool-2
-        iterations: 20
-        duration: 600
+        iterations: 30
+        duration: 1200
         aggressive: true
         enable_crush_thrashing: true
         enable_pg_thrashing: true
+        enable_rgw_thrashing: true
         compression: false
         cleanup_pools: true
         enable_debug_logs: false
@@ -197,6 +217,7 @@ tests:
         compression: false
         cleanup_pools: true
         enable_debug_logs: true
+        enable_rgw_thrashing: true
         inject_errors: true
         num_osds_to_inject: 3
         num_writes_to_inject: 1000
@@ -217,6 +238,7 @@ tests:
         aggressive: false
         enable_crush_thrashing: false
         enable_pg_thrashing: false
+        enable_rgw_thrashing: false
         compression: false
         cleanup_pools: true
         enable_debug_logs: false
