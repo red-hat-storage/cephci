@@ -2071,6 +2071,24 @@ def clone_the_repo(config, node, path_to_clone):
     node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")
 
 
+def clone_configs_repo(node, path_to_clone):
+    """clone the repo on to test node.
+
+    Args:
+        node: ceph node
+        path_to_clone: the path to clone the repo
+
+    TODO: if path_to_clone is not given, make temporary dir on test
+          node and clone the repo in it.
+    """
+    repo_url = get_cephci_config().get("rgw_configs_repo_url")
+    oauth_token = get_cephci_config().get("rgw_configs_repo_oauth_token")
+    log.info(f"cloning the repo {repo_url}")
+    repo_url = repo_url.replace("https://", f"https://oauth2:{oauth_token}@")
+    git_clone_cmd = f"git clone {repo_url}"
+    node.exec_command(cmd=f"cd {path_to_clone} ; {git_clone_cmd}")
+
+
 def calculate_available_storage(node):
     """
     Calculate maximum storage that is available to be used.
