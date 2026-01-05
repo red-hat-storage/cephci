@@ -157,7 +157,6 @@ tests:
           runtime: 60
           numjobs: 1
 
-
   - test:
       name: Verify SMB QoS using CLI with two shares - one configured with QoS and one without. (Imperative Style)
       desc: Verify SMB QoS using CLI with two shares - one configured with QoS and one without. (Imperative Style)
@@ -585,3 +584,86 @@ tests:
           runtime: 60
           numjobs: 1
         disable_qos: True
+
+  - test:
+      name: Delete limit during active IO and confirm traffic returns to full speed
+      desc: Delete limit during active IO and confirm traffic returns to full speed
+      module: test_smb_qos.py
+      polarion-id: CEPH-83627427
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        parllel_actions: [io, disable]
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 1
+          size: 10M
+          runtime: 60
+          numjobs: 1
+        disable_qos: True
+
+  - test:
+      name: Change throughput limit during workload and verify dynamic adjustment
+      desc: Change throughput limit during workload and verify dynamic adjustment
+      module: test_smb_qos.py
+      polarion-id: CEPH-83627426
+      config:
+        cephfs_volume: cephfs
+        smb_subvolume_group: smb
+        smb_subvolumes: [sv1]
+        smb_subvolume_mode: '0777'
+        smb_cluster_id: smb1
+        auth_mode: user
+        smb_user_name: user1
+        smb_user_password: passwd
+        smb_shares: [share1]
+        path: "/"
+        parllel_actions: [io, change]
+        aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 300
+            write_iops_limit: 300
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
+        mount_type: cifs
+        io_tool: fio
+        fio:
+          rw: randrw
+          rwmixread: 50
+          bs: 4k
+          ioengine: libaio
+          iodepth: 1
+          size: 10M
+          runtime: 60
+          numjobs: 1
+        change_aio_rate_limit_conf:
+          share1:
+            read_iops_limit: 500
+            write_iops_limit: 500
+            read_bw_limit: 1048576
+            write_bw_limit: 2097152
+            read_delay_max: 30
+            write_delay_max: 30
