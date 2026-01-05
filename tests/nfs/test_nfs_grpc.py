@@ -665,19 +665,7 @@ def run(ceph_cluster, **kw):
             nfs_log_parser(client=client, nfs_node=nfs_nodes, nfs_name=nfs_name)
 
             # Cleanup cluster
-            if operation in ["verify_port", "verify_discovery"]:
-                # Manual cleanup for tests that didn't use setup_nfs_cluster
-                try:
-                    Ceph(client).nfs.export.delete(nfs_name, f"{nfs_export}_0")
-                    Ceph(client).nfs.cluster.delete(nfs_name)
-                    sleep(10)
-                except Exception as cleanup_err:
-                    log.warning(f"Manual cleanup error: {cleanup_err}")
-            else:
-                cleanup_cluster(
-                    client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node
-                )
-
+            cleanup_cluster(client, nfs_mount, nfs_name, nfs_export, nfs_nodes=nfs_node)
             log.info("Cleanup completed")
         except Exception as cleanup_error:
             log.warning(f"Cleanup error (non-fatal): {cleanup_error}")
