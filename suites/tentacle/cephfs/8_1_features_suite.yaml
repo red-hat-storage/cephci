@@ -177,3 +177,10 @@ tests:
       module: cephfs_fscrypt.test_fscrypt_negative.py
       name: "fscrypt_negative"
       polarion-id: CEPH-83607406
+  - test:
+      abort-on-fail: false
+      desc: "Verify fscrypt interop tests - fscrypt_snap_restore,fscrypt_mds_failover"
+      destroy-cluster: false
+      module: cephfs_fscrypt.test_fscrypt_interop.py
+      name: "fscrypt_interop"
+      polarion-id: CEPH-83607408
