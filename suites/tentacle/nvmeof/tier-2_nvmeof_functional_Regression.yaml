@@ -461,7 +461,8 @@ tests:
       abort-on-fail: false
       config:
         rbd_pool: pool1
-        gw_group: gw_group1
+        gw_group: pool1
+        nvme_metadata_pool: pool1
         install: true  # Run SPDK with all pre-requisites
         test_case: CEPH-83627178
         cleanup:

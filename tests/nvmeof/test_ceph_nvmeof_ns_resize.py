@@ -5,21 +5,19 @@ Test E2E nvmeof namespace resize
 import json
 
 from ceph.ceph import Ceph
-from ceph.parallel import parallel
-from tests.nvmeof.test_ceph_nvmeof_high_availability import (
-    HighAvailability,
+from ceph.ceph_admin.orch import Orch
+from tests.nvmeof.workflows.gateway_entities import (
+    configure_hosts,
+    configure_listeners,
     configure_subsystems,
-    deploy_nvme_service,
-    get_node_by_id,
     teardown,
 )
-from tests.nvmeof.workflows.initiator import NVMeInitiator
-from tests.nvmeof.workflows.nvme_utils import (
-    check_and_set_nvme_cli_image,
-)
+from tests.nvmeof.workflows.initiator import prepare_io_execution
+from tests.nvmeof.workflows.nvme_service import NVMeService
+from tests.nvmeof.workflows.nvme_utils import check_and_set_nvme_cli_image
 from tests.rbd.rbd_utils import initial_rbd_config, verify_image_size
 from utility.log import Log
-from utility.utils import generate_unique_id, run_fio
+from utility.utils import generate_unique_id
 
 LOG = Log(__name__)
 
@@ -159,59 +157,48 @@ def verfiy_namespace_size(ns_data, nvmegwcli, size_to_verify):
                 )
 
 
-def execute_io(config, ha, ceph_cluster, ns_data):
+def execute_io(config, nvmegwcli, ceph_cluster, ns_data, io_type="write"):
+    """Connect to the initiators and write or read IO"""
     initiators = config.get("initiators")
     results = []
-    for io_client in initiators:
-        nqn = io_client.get("nqn")
-        if io_client.get("subnqn"):
-            nqn = io_client.get("subnqn")
-        node_id = io_client["node"]
-        node = get_node_by_id(ceph_cluster, node_id)
-        client = NVMeInitiator(node, nqn)
-        # Before connect disconnect
-        client.connect_targets(ha.gateways[0], io_client)
-        paths = client.list_devices()
-        for path in paths:
-            client.node.exec_command(cmd="blkdiscard " + path, sudo=True)
-        LOG.info("Paths found are %s", paths)
-        if len(ns_data.keys()) != len(paths):
-            images = ns_data.keys()
-            raise Exception(
-                "Namespaces are missing !!! paths found are %s and actual images are %s",
-                paths,
-                images,
-            )
-        io_args = {"size": "100%"}
-        with parallel() as p:
-            for path in paths:
-                _io_args = {}
-                if io_args.get("test_name"):
-                    test_name = io_args["test_name"] + "-" + path.replace("/", "_")
-                    _io_args.update({"test_name": test_name})
-                _io_args.update(
-                    {
-                        "device_name": path,
-                        "client_node": client.node,
-                        "long_running": True,
-                        "cmd_timeout": "notimeout",
-                        "io_type": "write",
-                    }
-                )
-                _io_args = {**io_args, **_io_args}
-                p.spawn(run_fio, **_io_args)
-            for op in p:
-                if op != 0:
-                    raise RuntimeError("FIO failed with exit code : %s", str(op))
-                results.append(op)
-        return results
+    # Prepare IO execution
+    LOG.info("Prepare IO execution")
+    clients = prepare_io_execution(
+        initiators, gateways=[nvmegwcli], cluster=ceph_cluster, return_clients=True
+    )
+    if not clients:
+        raise Exception("Failed to prepare IO execution")
+
+    # Get paths from initiators
+    LOG.info("Get paths from initiators")
+    paths = clients[0].list_spdk_drives()
+    if not paths:
+        raise Exception("Failed to get paths from initiators")
+    LOG.info(f"Paths found are {paths}")
+
+    # Check if the number of paths is equal to the number of namespaces
+    if len(ns_data.keys()) != len(paths):
+        images = ns_data.keys()
+        raise Exception(
+            f"Namespaces are missing !!! paths found are {paths} and actual images are {images}"
+        )
+    LOG.info("All namespaces are listed at Client(s)")
+    # Run FIO
+    LOG.info("Run FIO")
+    results = clients[0].start_fio(io_size="100%", paths=paths, io_type=io_type)
+    for op in results:
+        if int(op[2]) != 0:
+            raise RuntimeError(f"FIO failed with exit code : {op}")
+        else:
+            print("IO write is successful")
+    return results
 
 
-def check_io_percent(ns_data, ha, io_size):
+def check_io_percent(ns_data, ceph, io_size):
     for image in ns_data.keys():
         pool = ns_data[image]["rbd_pool_name"]
 
-        out, _ = ha.orch.shell(
+        out, _ = ceph.shell(
             args=["rbd --format json du " + str(pool) + "/" + str(image)], timeout=600
         )
         out = json.loads(out)["images"][0]
@@ -228,30 +215,25 @@ def check_io_percent(ns_data, ha, io_size):
             )
 
 
-def test_ceph_83627178(ceph_cluster, config):
+def test_ceph_83627178(ceph_cluster, config, nvme_service):
     rbd_obj = config["rbd_obj"]
     rbd_pool = config["rbd_pool"]
-    # Deploy nvmeof service
-    LOG.info("deploy nvme service")
-    print(deploy_nvme_service(ceph_cluster, config))
-    ha = HighAvailability(ceph_cluster, config["gw_nodes"], **config)
-    ha.initialize_gateways()
-    nvmegwcli = ha.gateways[0]
+    nvmegwcli = nvme_service.gateways[0]
+    ceph = Orch(ceph_cluster, **{})
 
-    # Configure subsystems
+    # Configure subsystems and listeners
     LOG.info("Configure subsystems, listeners")
-    with parallel() as p:
-        for subsys_args in config["subsystems"]:
-            subsys_args["ceph_cluster"] = ceph_cluster
-            p.spawn(configure_subsystems, rbd_pool, ha, subsys_args)
+    configure_subsystems(nvme_service)
+    configure_listeners(nvme_service.gateways, nvme_service.config)
+    configure_hosts(nvmegwcli, nvme_service.config)
 
     # Configure namespaces
     ns_data = configure_ns(config, rbd_pool, rbd_obj, nvmegwcli)
 
     # Run IO here and check size is reached to 100%
     LOG.info("RUN IO and check 100% IO is filled")
-    execute_io(config, ha, ceph_cluster, ns_data)
-    check_io_percent(ns_data, ha, "2")
+    execute_io(config, nvmegwcli, ceph_cluster, ns_data)
+    check_io_percent(ns_data, ceph, "2")
 
     # Turn OFF auto-resize for the namespaces
     LOG.info("Turn OFF auto-resize for the namespaces")
@@ -272,8 +254,8 @@ def test_ceph_83627178(ceph_cluster, config):
     verfiy_namespace_size(ns_data, nvmegwcli, "2G")
 
     # Run IO here and check IO is filled with 2G only
-    execute_io(config, ha, ceph_cluster, ns_data)
-    check_io_percent(ns_data, ha, "2")
+    execute_io(config, nvmegwcli, ceph_cluster, ns_data)
+    check_io_percent(ns_data, ceph, "2")
 
     #  Manually refresh namespace size
     LOG.info("Manually refresh namespace size")
@@ -289,8 +271,8 @@ def test_ceph_83627178(ceph_cluster, config):
     verfiy_namespace_size(ns_data, nvmegwcli, "3G")
     # RUN IO here and make sure IO is reached to 3G
     LOG.info("RUN IO and check 100% IO is filled")
-    execute_io(config, ha, ceph_cluster, ns_data)
-    check_io_percent(ns_data, ha, "3")
+    execute_io(config, nvmegwcli, ceph_cluster, ns_data)
+    check_io_percent(ns_data, ceph, "3")
 
     # Turn ON auto-resize for the namespace
     LOG.info("Turn ON auto-resize for the namespaces")
@@ -311,8 +293,8 @@ def test_ceph_83627178(ceph_cluster, config):
     verfiy_namespace_size(ns_data, nvmegwcli, "5G")
 
     # RUN IO here and make sure IO is reached to 5G
-    execute_io(config, ha, ceph_cluster, ns_data)
-    check_io_percent(ns_data, ha, "5")
+    execute_io(config, nvmegwcli, ceph_cluster, ns_data)
+    check_io_percent(ns_data, ceph, "5")
 
     LOG.info("Execution of CEPH-83627178 test case is successful")
 
@@ -323,7 +305,7 @@ testcases = {
 
 
 def run(ceph_cluster: Ceph, **kwargs) -> int:
-    """Return the status of the Ceph NVMEof HA test execution.
+    """Return the status of the Ceph NVMEof test execution.
 
     - Configure Gateways
     - Configures Initiators and Run FIO on NVMe targets.
@@ -349,18 +331,24 @@ def run(ceph_cluster: Ceph, **kwargs) -> int:
     rbd_obj = initial_rbd_config(**kwargs)["rbd_reppool"]
 
     custom_config = kwargs.get("test_data", {}).get("custom-config")
+    LOG.info("Check and set NVMe CLI image")
     check_and_set_nvme_cli_image(ceph_cluster, config=custom_config)
+    nvme_service = NVMeService(config, ceph_cluster)
+    LOG.info("Deploy NVMe service")
+    nvme_service.deploy()
+    LOG.info("Initialize gateways")
+    nvme_service.init_gateways()
 
     try:
         if config.get("test_case"):
             test_case_run = testcases[config["test_case"]]
             config.update({"rbd_obj": rbd_obj})
-            test_case_run(ceph_cluster, config)
+            test_case_run(ceph_cluster, config, nvme_service)
         return 0
     except Exception as err:
         LOG.error(err)
     finally:
         if config.get("cleanup"):
-            teardown(ceph_cluster, rbd_obj, config)
+            teardown(nvme_service, rbd_obj)
 
     return 1
