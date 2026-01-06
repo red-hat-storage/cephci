@@ -1,4 +1,6 @@
 import json
+import threading
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from smb_operations import (
@@ -194,6 +196,134 @@ def verify_qos_values(installer, aio_rate_limit_conf, smb_cluster_id, smb_nodes)
     verify_qos_with_testparm(aio_rate_limit_conf, smb_cluster_id, smb_nodes)
 
 
+def update_qos_value(
+    deployment_method, smb_shares, installer, aio_rate_limit_conf, smb_cluster_id
+):
+    try:
+        if deployment_method == "imperative":
+            for smb_share in smb_shares:
+                if smb_share in aio_rate_limit_conf:
+                    CephAdm(installer).ceph.smb.share.update_cephfs_qos(
+                        smb_cluster_id,
+                        smb_share,
+                        read_iops_limit=aio_rate_limit_conf[smb_share][
+                            "read_iops_limit"
+                        ],
+                        write_iops_limit=aio_rate_limit_conf[smb_share][
+                            "write_iops_limit"
+                        ],
+                        read_bw_limit=aio_rate_limit_conf[smb_share]["read_bw_limit"],
+                        write_bw_limit=aio_rate_limit_conf[smb_share]["write_bw_limit"],
+                        read_delay_max=aio_rate_limit_conf[smb_share]["read_delay_max"],
+                        write_delay_max=aio_rate_limit_conf[smb_share][
+                            "write_delay_max"
+                        ],
+                    )
+    except Exception as e:
+        raise ConfigError(f"Fail to update qos value, Error {e}")
+
+
+def run_io(
+    config,
+    mount_type,
+    smb_shares,
+    smb_nodes,
+    client,
+    smb_user_name,
+    smb_user_password,
+    auth_mode,
+    domain_realm,
+    io_tool,
+    aio_rate_limit_conf,
+):
+    try:
+        # Mount smb shares and run io
+        if mount_type == "cifs":
+            # Mount shares
+            for smb_share in smb_shares:
+                cifs_mount_point = f"/mnt/{smb_share}"
+                smb_cifs_mount(
+                    smb_nodes[0],
+                    client,
+                    smb_share,
+                    smb_user_name,
+                    smb_user_password,
+                    auth_mode,
+                    domain_realm,
+                    cifs_mount_point,
+                )
+            if io_tool == "fio":
+                # Run FIO
+                rw = config.get("fio")["rw"]
+                rwmixread = config.get("fio")["rwmixread"]
+                bs = config.get("fio")["bs"]
+                ioengine = config.get("fio")["ioengine"]
+                iodepth = config.get("fio")["iodepth"]
+                size = config.get("fio")["size"]
+                runtime = config.get("fio")["runtime"]
+                numjobs = config.get("fio")["numjobs"]
+                fio_perf_data = run_fio_parallel(
+                    client,
+                    smb_shares,
+                    rw,
+                    rwmixread,
+                    bs,
+                    ioengine,
+                    iodepth,
+                    size,
+                    runtime,
+                    numjobs,
+                )
+
+                # Compare IOs values after setting qos limits
+                compare_io_limit_values(aio_rate_limit_conf, fio_perf_data)
+
+                # Cleaup fio report
+                client.exec_command(
+                    sudo=True,
+                    cmd="rm -rf /root/fio_output_share*",
+                )
+
+            # share cleanup
+            for smb_share in smb_shares:
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"rm -rf /mnt/{smb_share}/*",
+                )
+                client.exec_command(
+                    sudo=True,
+                    cmd=f"umount /mnt/{smb_share}/",
+                )
+            client.exec_command(
+                sudo=True,
+                cmd="rm -rf /mnt/*",
+            )
+    except Exception as e:
+        raise ConfigError(f"Fail to run io, Error {e}")
+
+
+def disable_qos_values(
+    deployment_method, smb_shares, aio_rate_limit_conf, installer, smb_cluster_id
+):
+    try:
+        # disable qos value
+        if deployment_method == "imperative":
+            for smb_share in smb_shares:
+                if smb_share in aio_rate_limit_conf:
+                    CephAdm(installer).ceph.smb.share.update_cephfs_qos(
+                        smb_cluster_id,
+                        smb_share,
+                        read_iops_limit=0,
+                        write_iops_limit=0,
+                        read_bw_limit=0,
+                        write_bw_limit=0,
+                        read_delay_max=0,
+                        write_delay_max=0,
+                    )
+    except Exception as e:
+        raise ConfigError(f"Fail to disable qos, Error {e}")
+
+
 def run(ceph_cluster, **kw):
     """Deploy samba with auth_mode 'user' using imperative style(CLI Commands)
     Args:
@@ -254,7 +384,7 @@ def run(ceph_cluster, **kw):
     clustering = config.get("clustering", "default")
 
     # Check aio rate limit conf
-    aio_rate_limit_conf = config.get("aio_rate_limit_conf")
+    aio_rate_limit_conf = config.get("aio_rate_limit_conf", [])
 
     # Check mount type
     mount_type = config.get("mount_type", "cifs")
@@ -276,6 +406,9 @@ def run(ceph_cluster, **kw):
 
     # Check Smb Port
     disable_qos = config.get("disable_qos", False)
+
+    # Check Parllel Scenario
+    parllel_actions = config.get("parllel_actions", False)
 
     try:
         # deploy smb services
@@ -378,108 +511,113 @@ def run(ceph_cluster, **kw):
             public_addrs,
         )
 
-        # Update qos value
-        if deployment_method == "imperative":
-            for smb_share in smb_shares:
-                if smb_share in aio_rate_limit_conf:
-                    CephAdm(installer).ceph.smb.share.update_cephfs_qos(
-                        smb_cluster_id,
-                        smb_share,
-                        read_iops_limit=aio_rate_limit_conf[smb_share][
-                            "read_iops_limit"
-                        ],
-                        write_iops_limit=aio_rate_limit_conf[smb_share][
-                            "write_iops_limit"
-                        ],
-                        read_bw_limit=aio_rate_limit_conf[smb_share]["read_bw_limit"],
-                        write_bw_limit=aio_rate_limit_conf[smb_share]["write_bw_limit"],
-                        read_delay_max=aio_rate_limit_conf[smb_share]["read_delay_max"],
-                        write_delay_max=aio_rate_limit_conf[smb_share][
-                            "write_delay_max"
-                        ],
-                    )
-
-        # Verify qos values updated as expected
-        verify_qos_values(installer, aio_rate_limit_conf, smb_cluster_id, smb_nodes)
-
-        # Mount smb shares and run io
-        if mount_type == "cifs":
-            # Mount shares
-            for smb_share in smb_shares:
-                cifs_mount_point = f"/mnt/{smb_share}"
-                smb_cifs_mount(
-                    smb_nodes[0],
-                    client,
-                    smb_share,
-                    smb_user_name,
-                    smb_user_password,
-                    auth_mode,
-                    domain_realm,
-                    cifs_mount_point,
-                )
-            if io_tool == "fio":
-                # Run FIO
-                rw = config.get("fio")["rw"]
-                rwmixread = config.get("fio")["rwmixread"]
-                bs = config.get("fio")["bs"]
-                ioengine = config.get("fio")["ioengine"]
-                iodepth = config.get("fio")["iodepth"]
-                size = config.get("fio")["size"]
-                runtime = config.get("fio")["runtime"]
-                numjobs = config.get("fio")["numjobs"]
-                fio_perf_data = run_fio_parallel(
-                    client,
-                    smb_shares,
-                    rw,
-                    rwmixread,
-                    bs,
-                    ioengine,
-                    iodepth,
-                    size,
-                    runtime,
-                    numjobs,
-                )
-
-                # Compare IOs values after setting qos limits
-                compare_io_limit_values(aio_rate_limit_conf, fio_perf_data)
-
-                # Cleaup fio report
-                client.exec_command(
-                    sudo=True,
-                    cmd="rm -rf /root/fio_output_share*",
-                )
-
-            # share cleanup
-            for smb_share in smb_shares:
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"rm -rf /mnt/{smb_share}/*",
-                )
-                client.exec_command(
-                    sudo=True,
-                    cmd=f"umount /mnt/{smb_share}/",
-                )
-            client.exec_command(
-                sudo=True,
-                cmd="rm -rf /mnt/*",
+        # Execute parllel scenario
+        if parllel_actions:
+            # Update qos value
+            update_qos_value(
+                deployment_method,
+                smb_shares,
+                installer,
+                aio_rate_limit_conf,
+                smb_cluster_id,
             )
 
-        # disable qos value
-        if disable_qos:
-            # Update qos value
-            if deployment_method == "imperative":
-                for smb_share in smb_shares:
-                    if smb_share in aio_rate_limit_conf:
-                        CephAdm(installer).ceph.smb.share.update_cephfs_qos(
+            # Verify qos values updated as expected
+            verify_qos_values(installer, aio_rate_limit_conf, smb_cluster_id, smb_nodes)
+
+            # Executing parllel actions
+            threads = []
+            for parllel_action in parllel_actions:
+                if parllel_action == "io":
+                    t = threading.Thread(
+                        target=run_io,
+                        args=(
+                            config,
+                            mount_type,
+                            smb_shares,
+                            smb_nodes,
+                            client,
+                            smb_user_name,
+                            smb_user_password,
+                            auth_mode,
+                            domain_realm,
+                            io_tool,
+                            aio_rate_limit_conf,
+                        ),
+                    )
+                    t.start()
+                    threads.append(t)
+                elif parllel_action == "disable":
+                    time.sleep(6)
+                    t = threading.Thread(
+                        target=disable_qos_values,
+                        args=(
+                            deployment_method,
+                            smb_shares,
+                            aio_rate_limit_conf,
+                            installer,
                             smb_cluster_id,
-                            smb_share,
-                            read_iops_limit=0,
-                            write_iops_limit=0,
-                            read_bw_limit=0,
-                            write_bw_limit=0,
-                            read_delay_max=0,
-                            write_delay_max=0,
-                        )
+                        ),
+                    )
+                    t.start()
+                    threads.append(t)
+                elif parllel_action == "change":
+                    # wait before updating qos
+                    aio_rate_limit_conf = config.get("change_aio_rate_limit_conf")
+                    time.sleep(6)
+
+                    t = threading.Thread(
+                        target=update_qos_value,
+                        args=(
+                            deployment_method,
+                            smb_shares,
+                            installer,
+                            aio_rate_limit_conf,
+                            smb_cluster_id,
+                        ),
+                    )
+                    t.start()
+                    threads.append(t)
+            for t in threads:
+                t.join()
+
+        else:
+            # Update qos value
+            update_qos_value(
+                deployment_method,
+                smb_shares,
+                installer,
+                aio_rate_limit_conf,
+                smb_cluster_id,
+            )
+
+            # Verify qos values updated as expected
+            verify_qos_values(installer, aio_rate_limit_conf, smb_cluster_id, smb_nodes)
+
+            # Run IO
+            run_io(
+                config,
+                mount_type,
+                smb_shares,
+                smb_nodes,
+                client,
+                smb_user_name,
+                smb_user_password,
+                auth_mode,
+                domain_realm,
+                io_tool,
+                aio_rate_limit_conf,
+            )
+
+            # Disable qos value
+            if disable_qos:
+                disable_qos_values(
+                    deployment_method,
+                    smb_shares,
+                    aio_rate_limit_conf,
+                    installer,
+                    smb_cluster_id,
+                )
 
     except Exception as e:
         log.error(f"Failed to deploy samba with auth_mode 'user' : {e}")
