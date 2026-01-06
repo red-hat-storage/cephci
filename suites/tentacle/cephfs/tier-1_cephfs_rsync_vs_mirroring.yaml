@@ -183,7 +183,7 @@ tests:
             subvol: subvol_1
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_large_files.py
       name: Perform rsync vs mirroring test for single large file with kernel mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
   - test:
       abort-on-fail: false
       desc: "Perform rsync vs mirroring test for single large file -> fuse mount"
@@ -195,7 +195,7 @@ tests:
             subvol: subvol_2
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_large_files.py
       name: Perform rsync vs mirroring test for single large file with fuse mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
 
   - test:
       abort-on-fail: false
@@ -208,7 +208,7 @@ tests:
             subvol: subvol_3
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_large_files.py
       name: Perform rsync vs mirroring test for single large file with nfs mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
   - test:
       abort-on-fail: false
       desc: "Perform rsync vs mirroring test for multiple large file -> kernel mount"
@@ -222,7 +222,7 @@ tests:
             file_block_counts: 1024
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_large_files.py
       name: Perform rsync vs mirroring test for multiple large file with kernel mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
   - test:
       abort-on-fail: false
       desc: "Perform rsync vs mirroring test for multiple large file -> fuse mount"
@@ -236,7 +236,7 @@ tests:
             file_block_counts: 1024
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_large_files.py
       name: Perform rsync vs mirroring test for multiple large file with fuse mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
   - test:
       abort-on-fail: false
       desc: "Perform rsync vs mirroring test for multiple large file -> nfs mount"
@@ -250,7 +250,7 @@ tests:
             file_block_counts: 1024
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_large_files.py
       name: Perform rsync vs mirroring test for multiple large file with nfs mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
   - test:
       abort-on-fail: false
       desc: "Perform rsync vs mirroring test for 1M to 10M sized files -> kernel mount"
@@ -262,7 +262,7 @@ tests:
             subvol: subvol7
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_mib_files.py
       name: Perform rsync vs mirroring test for 1M to 10M sized files with kernel mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
   - test:
       abort-on-fail: false
       desc: "Perform rsync vs mirroring test for 1M to 10M sized files -> fuse mount"
@@ -274,7 +274,7 @@ tests:
             subvol: subvol8
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_mib_files.py
       name: Perform rsync vs mirroring test for 1M to 10M sized files with fuse mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
   - test:
       abort-on-fail: false
       desc: "Perform rsync vs mirroring test for 1M to 10M sized files -> nfs mount"
@@ -286,7 +286,7 @@ tests:
             subvol: subvol9
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_mib_files.py
       name: Perform rsync vs mirroring test for 1M to 10M sized files with nfs mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
   - test:
       abort-on-fail: false
       desc: "Perform rsync vs mirroring test for 1K to 64K sized files -> kernel mount"
@@ -298,7 +298,7 @@ tests:
             subvol: subvol_10
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_kib_files.py
       name: Perform rsync vs mirroring test for 1K to 64K sized files with kernel mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
   - test:
       abort-on-fail: false
       desc: "Perform rsync vs mirroring test for 1K to 64K sized files -> fuse mount"
@@ -310,7 +310,7 @@ tests:
             subvol: subvol_11
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_kib_files.py
       name: Perform rsync vs mirroring test for 1K to 64K sized files with fuse mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
   - test:
       abort-on-fail: false
       desc: "Perform rsync vs mirroring test for 1K to 64K sized files -> nfs mount"
@@ -322,4 +322,4 @@ tests:
             subvol: subvol_12
       module: cephfs_mirroring.test_cephfs_mirroring_vs_rsync_kib_files.py
       name: Perform rsync vs mirroring test for 1K to 64K sized files with nfs mount
-      polarion-id: "CEPH-"
+      polarion-id: "CEPH-83632239"
