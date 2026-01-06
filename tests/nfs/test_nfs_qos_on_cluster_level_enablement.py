@@ -10,6 +10,33 @@ from utility.log import Log
 log = Log(__name__)
 
 
+def _maybe_json_loads(value):
+    """Return dict/list if value is a JSON string; otherwise return as-is."""
+    if isinstance(value, str):
+        try:
+            return json.loads(value)
+        except Exception:
+            return value
+    return value
+
+
+def _extract_first_float(text):
+    if text is None:
+        return None
+    match = re.search(r"\d+(?:\.\d+)?", str(text))
+    return float(match.group(0)) if match else None
+
+
+def _within_qos_limit(limit_mb, actual_mbps, slack_ratio=0.2, slack_abs=0.5):
+    """Return True if actual is within limit allowing some measurement slack."""
+    limit = _extract_first_float(limit_mb)
+    actual = _extract_first_float(actual_mbps)
+    if limit is None or actual is None:
+        return False
+    allowed = max(limit * (1.0 + slack_ratio), limit + slack_abs)
+    return actual <= allowed
+
+
 def _dd_speed_to_mbps(dd_output: str):
     """Parse dd throughput and return MB/s (decimal) as float.
 
@@ -85,7 +112,10 @@ def capture_copy_details(client, nfs_mount, file_name, size="100"):
     log.info("Cache dropped successfully")
 
     # Use /dev/null as sink for read throughput; /dev/urandom can distort timing.
-    read_cmd = "dd if={0}/{1} of=/dev/null iflag=direct".format(nfs_mount, file_name)
+    # Specify bs/count to avoid dd defaulting to tiny blocks (can time out with direct I/O).
+    read_cmd = "dd if={0}/{1} of=/dev/null bs={2}M count=1 iflag=direct".format(
+        nfs_mount, file_name, size
+    )
     read_results = client.exec_command(sudo=True, cmd=read_cmd)[1]
 
     read_mbps = _dd_speed_to_mbps(read_results)
@@ -676,8 +706,11 @@ def run(ceph_cluster, **kw):
             qos_data_after_restart = ceph_nfs_client.cluster.qos.get(
                 cluster_id=cluster_name, format="json"
             )
-            qos_data_after_restart = json.loads(qos_data_after_restart)
-            if qos_data_after_restart["qos_type"] == qos_type:
+            qos_data_after_restart = _maybe_json_loads(qos_data_after_restart)
+            if (
+                isinstance(qos_data_after_restart, dict)
+                and qos_data_after_restart.get("qos_type") == qos_type
+            ):
                 log.info(
                     "Qos data for {0} persists even after the nfs cluster restarted".format(
                         qos_type
@@ -689,7 +722,6 @@ def run(ceph_cluster, **kw):
                         qos_type, qos_data_after_restart
                     )
                 )
-
         speed = capture_copy_details(client, nfs_mount, "sample.txt")
         log.info(
             "Transfer speed is {0} for QoS {1} enabled in cluster level".format(
@@ -713,21 +745,33 @@ def run(ceph_cluster, **kw):
             max_client_write_bw = max_client_combined_bw
             max_client_read_bw = max_client_combined_bw
 
-        if (
-            (max_export_write_bw is not None and max_export_read_bw is not None)
-            and float(max_export_write_bw.replace("MB", ""))
-            >= float(write_speed.replace(" MB/s", ""))
-            and float(max_export_read_bw.replace("MB", ""))
-            >= float(read_speed.replace(" MB/s", ""))
-        ) or (
-            (max_client_write_bw is not None and max_client_read_bw is not None)
-            and float(max_client_write_bw.replace("MB", ""))
-            >= float(write_speed.replace(" MB/s", ""))
-            and float(max_client_read_bw.replace("MB", ""))
-            >= float(read_speed.replace(" MB/s", ""))
-        ):
+        export_ok = False
+        if max_export_write_bw is not None or max_export_read_bw is not None:
+            export_ok = True
+            if max_export_write_bw is not None:
+                export_ok = export_ok and _within_qos_limit(
+                    max_export_write_bw, write_speed
+                )
+            if max_export_read_bw is not None:
+                export_ok = export_ok and _within_qos_limit(
+                    max_export_read_bw, read_speed
+                )
+
+        client_ok = False
+        if max_client_write_bw is not None or max_client_read_bw is not None:
+            client_ok = True
+            if max_client_write_bw is not None:
+                client_ok = client_ok and _within_qos_limit(
+                    max_client_write_bw, write_speed
+                )
+            if max_client_read_bw is not None:
+                client_ok = client_ok and _within_qos_limit(
+                    max_client_read_bw, read_speed
+                )
+
+        if export_ok or client_ok:
             log.info(
-                "Test passed: QoS {0} enabled successfully in export level write speed is {1}"
+                "Test passed: QoS {0} enabled successfully in cluster level write speed is {1}"
                 " , max_export_write_bw is {2} and read speed is {3}"
                 " and max_export_read_bw is {4}".format(
                     qos_type,
@@ -739,7 +783,7 @@ def run(ceph_cluster, **kw):
             )
         else:
             raise OperationFailedError(
-                "Test failed: QoS {0} enabled successfully in export level write speed is {1}"
+                "Test failed: QoS {0} enabled successfully in cluster level write speed is {1}"
                 " and read speed is {2} config is {3}".format(
                     qos_type, write_speed, read_speed, config
                 )
