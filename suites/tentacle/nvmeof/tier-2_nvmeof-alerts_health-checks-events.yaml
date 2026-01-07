@@ -255,7 +255,7 @@ tests:
               - node6
               - node7
             allow_host: "*"
-        test_case: CEPH-83616917s
+        test_case: CEPH-83616917
         cleanup:
           - pool
           - gateway
